@@ -133,6 +133,19 @@ Tab steps over it too. It has no keyboard control. A column keeps a usable width
 
 ## Widgets
 
+Library and Lookup rank equal names the same way: campaign entries, book and package
+entries, then character sheet copies. File paths shorten before their file actions wrap;
+the full path stays on hover. All save rows call their discard action `Discard`. A clean
+Library editor shows `No changes` in the left status slot.
+
+Creature vitals come from `splat_stats` and appear once in the reader. The editor warns
+when a prose AC or HP line disagrees and offers `Use <value>` with Undo. Missing creature
+replacements use the shared search row, with CR, HP, AC and `Use`. Replace all matching
+rows is on by default; it keeps their names and starting values, with one Undo.
+
+World uses labelled `Stat block`, `In` and `Status` rows with `Change` actions. New NPCs
+show their future path below the name. A missing place stays visible as `Not found`.
+
 `theme::install` sets one global `egui::Style`, so any plain egui widget still fits: hover,
 active, focus ring, disabled, text selection, text edit, solid scroll bars, windows,
 tooltips, and separators. Text cursors do not blink, because motion draws the eye (brief,
@@ -183,7 +196,7 @@ When one cause blocks several controls, state the reason once at the cause: the 
 
 Every icon comes from `design::icons`. Do not pass a raw symbol as widget text. The `missing-glyph` ergonomics check reads painted text and fails if the selected font and its fallbacks lack a character. Its unit test seeds an unassigned character.
 
-Empty readers use `No entry open` or `No note open`, then “Choose one from the list, or make a new one.”
+Empty readers use `No entry open` or `No note open`, then “Choose one from the list, or make a new one.” Library omits the creation offer when no campaign or package is available.
 
 Icons support words. They replace a word only where the meaning is universal, and then the
 control still has an accessible name and a tooltip.
@@ -194,7 +207,7 @@ control still has an accessible name and a tooltip.
 discard` stays until the next edit. It stands apart from `Save`, and it shows only when
 there is something to discard. A session note changed on disk shows the draft and disk text side by side in the Write view’s styled source face. Text wraps at word boundaries. A selected surface and a line mark identify differing lines. The choices stay above the comparison, which uses the whole session body while the plan is hidden. A file that changed on disk stops saving and asks: the run
 offers `Replace the file with this run` and `Save as a new run`, and a Library note offers `Overwrite with my
-draft` and the separate red `Reload and lose my draft`. Library uses the same side-by-side comparison, with `N lines differ` and `Next difference` only for two or more differing lines. Both comparisons open with the first difference and two lines of context in view. A missing line says `No line`. Neither choice has an accent fill. One message says: “This note changed on disk. Your draft is safe until you choose.” These messages cannot be dismissed.
+draft` and the separate red `Reload and lose my draft`. Library uses the same side-by-side comparison, with `N lines differ` and `Next difference` only for two or more differing lines. Both comparisons open with the first difference and two lines of context in view. A missing line says `No line`. Neither choice has an accent fill. One message says: “This note changed on disk. Your draft is safe until you choose.” Library calls the item an entry in this message. These messages cannot be dismissed.
 
 ## The Reader
 
@@ -458,7 +471,7 @@ and save stages all files without replacing an existing file, saves the settings
 then removes unchanged originals. Save without moving keeps the files in the old
 folder. Saving run settings is blocked while a run is open.
 
-New entry, Create package and Copy to a package keep Use in this campaign on by default. The help says what selection will be saved. A package entry shows its package and Used here or Not used here; Use in this campaign saves the missing choice. Clean save rows show only the blocked save action with No changes to save. Unsaved, Saved and errors keep their left status.
+New entry, Create package and Copy to a package keep Use in this campaign on by default. The help says what selection will be saved. A package entry shows its package and Used here or Not used here; Use in this campaign saves the missing choice. The clean Library save row shows No changes at the left; blocked Save gives No changes to save on hover. Other clean save rows keep their existing blocked save reason. Unsaved, Saved and errors keep their left status.
 
 Every reader resolves `[[Name]]`, `[[Name#Heading]]` and `[[Name|text]]` against World notes and the entries the campaign can use. Duplicate names open a chooser. Missing names keep their words, with a dotted underline and Not found in this campaign on hover. Reference keys keep working. The shared resolver is `ContentIndex::resolve_link`; Markdown readers call `reader_markdown` through the current index.
 

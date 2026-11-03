@@ -615,7 +615,32 @@ pub(crate) fn entry_file_actions(ui: &mut egui::Ui, root: &Path, relative: &str,
 
 pub(crate) fn entry_file_parts(ui: &mut egui::Ui, root: &Path, relative: &str, obsidian: bool) {
     let path = root.join(relative);
-    ui.label(Type::Small.rich(ui, relative).color(colors().muted));
+    let action_width = design::number_width(ui, "Show file", &Type::Body.font(ui))
+        + if obsidian {
+            design::number_width(ui, "Edit in Obsidian", &Type::Body.font(ui)) + design::S
+        } else {
+            0.0
+        };
+    let budget = (ui.available_width() - action_width - design::L).max(0.0);
+    let font = Type::Small.font(ui);
+    let mut shown = relative.to_owned();
+    if design::number_width(ui, &shown, &font) > budget {
+        let filename = relative.rsplit('/').next().unwrap_or(relative);
+        shown = format!("…/{filename}");
+        if design::number_width(ui, &shown, &font) > budget {
+            shown = design::words_that_fit(ui, filename, &font, budget);
+            shown = shown.trim_end_matches('…').to_owned();
+            while !shown.is_empty()
+                && design::number_width(ui, &format!("{shown}…"), &font) > budget
+            {
+                shown.pop();
+            }
+            shown.push('…');
+        }
+    }
+    let response = ui.label(Type::Small.rich(ui, shown).color(colors().muted));
+    design::named(ui, &response, &path.display().to_string());
+    response.on_hover_text(path.display().to_string());
     if obsidian && design::link(ui, "Edit in Obsidian").clicked() {
         ui.ctx()
             .open_url(egui::OpenUrl::new_tab(obsidian_url(&path)));
@@ -1039,7 +1064,6 @@ impl Reader {
             };
             ui.push_id(key, |ui| {
                 ui.horizontal_wrapped(|ui| {
-                    ui.add_space(design::S);
                     ui.allocate_ui_with_layout(
                         egui::vec2(design::XXL * 3.0, design::Density::Read.control()),
                         egui::Layout::left_to_right(egui::Align::Center),
@@ -1056,6 +1080,22 @@ impl Reader {
                         if design::link(ui, &index.items[at].entry.name).clicked() {
                             go = Some(Go::Item(at, None));
                         }
+                    } else if let Some(value) = world_field(&item.entry, key) {
+                        ui.label(
+                            Type::Small
+                                .rich(
+                                    ui,
+                                    format!(
+                                        "{} · Not found",
+                                        value
+                                            .as_str()
+                                            .map(str::to_owned)
+                                            .unwrap_or_else(|| "Entry".into())
+                                            .trim_matches(['[', ']'])
+                                    ),
+                                )
+                                .color(colors().result.warning),
+                        );
                     } else {
                         ui.label(Type::Small.rich(ui, "none").color(colors().muted));
                     }
@@ -1209,6 +1249,18 @@ impl Reader {
                     }
                 }
             });
+            if index.place_of(item.entry.id).is_none()
+                && let Some(place) = world_field(&item.entry, "in").and_then(Value::as_str)
+            {
+                ui.label(
+                    Type::Small
+                        .rich(
+                            ui,
+                            format!("In {} · Not found", place.trim_matches(['[', ']'])),
+                        )
+                        .color(colors().result.warning),
+                );
+            }
             if go.is_some() {
                 return go;
             }
@@ -1220,8 +1272,30 @@ impl Reader {
         }
         ui.add_space(design::XS);
         if !self.compact {
-            if !self.status_editing && Action::quiet("Edit status").show(ui).clicked() {
-                self.status_editing = true;
+            if !self.status_editing {
+                ui.horizontal(|ui| {
+                    ui.allocate_ui_with_layout(
+                        egui::vec2(design::XXL * 3.0, design::Density::Read.control()),
+                        egui::Layout::left_to_right(egui::Align::Center),
+                        |ui| {
+                            ui.set_min_width(design::XXL * 3.0);
+                            ui.label(Type::Small.rich(ui, "Status:").color(colors().muted));
+                        },
+                    );
+                    let value = status(&item.entry);
+                    ui.label(
+                        Type::Small
+                            .rich(ui, if value.is_empty() { "not set" } else { value })
+                            .color(colors().muted),
+                    );
+                    if Action::quiet("Change")
+                        .name("Change status")
+                        .show(ui)
+                        .clicked()
+                    {
+                        self.status_editing = true;
+                    }
+                });
             }
             if self.status_editing {
                 let response = design::text_field(ui, "Status", &mut self.status, None, None);
@@ -1346,10 +1420,16 @@ fn related(ui: &mut egui::Ui, item: &Item, index: &ContentIndex) -> Option<Go> {
         style::section_heading(ui, "Here");
         for position in here {
             let entry = &index.items[position].entry;
-            let label = format!("{} ({})", entry.name, type_label(world_type(entry)));
-            if design::link(ui, &label).clicked() {
-                go = Some(Go::Item(position, None));
-            }
+            ui.horizontal(|ui| {
+                if design::link(ui, &entry.name).clicked() {
+                    go = Some(Go::Item(position, None));
+                }
+                ui.label(
+                    Type::Small
+                        .rich(ui, type_label(world_type(entry)))
+                        .color(colors().muted),
+                );
+            });
         }
     }
     let mentions = index.mentions_of(item.entry.id);

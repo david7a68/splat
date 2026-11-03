@@ -858,28 +858,26 @@ fn draw_with_links(
         if matches!(destination, LinkTarget::Missing) {
             let mut byte_at = 0;
             for row in &galley.rows {
-                let mut x = position.x + row.pos.x;
+                let mut run: Option<(f32, f32, f32)> = None;
                 for glyph in &row.glyphs {
-                    let length = glyph.chr.len_utf8();
                     if range.contains(&byte_at) {
-                        let y = position.y + row.pos.y + row.size.y;
-                        let mut dot = x;
-                        while dot < x + glyph.advance_width {
-                            ui.painter().line_segment(
-                                [
-                                    egui::pos2(dot, y),
-                                    egui::pos2(
-                                        (dot + design::HAIRLINE_WIDTH).min(x + glyph.advance_width),
-                                        y,
-                                    ),
-                                ],
-                                egui::Stroke::new(design::HAIRLINE_WIDTH, colors().muted),
-                            );
-                            dot += design::XS;
-                        }
+                        let x = position.x + row.pos.x + glyph.pos.x;
+                        let y = position.y + row.pos.y + glyph.pos.y + design::HAIRLINE_WIDTH * 2.0;
+                        let start = run.map_or(x, |(start, _, _)| start);
+                        run = Some((start, x + glyph.advance_width, y));
                     }
-                    byte_at += length;
-                    x += glyph.advance_width;
+                    byte_at += glyph.chr.len_utf8();
+                }
+                if let Some((start, end, y)) = run {
+                    let mut dot = start;
+                    while dot < end {
+                        ui.painter().circle_filled(
+                            egui::pos2(dot, y),
+                            design::HAIRLINE_WIDTH / 2.0,
+                            colors().muted,
+                        );
+                        dot += design::XS;
+                    }
                 }
                 if row.ends_with_newline {
                     byte_at += 1;
@@ -1018,6 +1016,40 @@ mod tests {
                 "the last column must be readable after horizontal scrolling at {width}px: {last_column:?}"
             );
         }
+    }
+
+    #[test]
+    fn missing_links_have_even_dots_below_the_baseline() {
+        let context = egui::Context::default();
+        design::theme::install(&context);
+        let output = context.run(egui::RawInput::default(), |ctx| {
+            egui::CentralPanel::default().show(ctx, |ui| {
+                show(ui, "[Missing place](splat-missing:Gone)");
+            });
+        });
+        let dots: Vec<_> = output
+            .shapes
+            .iter()
+            .filter_map(|shape| match shape.shape {
+                egui::Shape::Circle(ref circle) => Some(circle.center),
+                _ => None,
+            })
+            .collect();
+        assert!(dots.len() > 10, "missing underline: {dots:?}");
+        for pair in dots.windows(2) {
+            assert_eq!(pair[1].x - pair[0].x, design::XS);
+        }
+        let text = output
+            .shapes
+            .iter()
+            .find_map(|shape| match &shape.shape {
+                egui::Shape::Text(text) if text.galley.job.text == "Missing place" => Some(text),
+                _ => None,
+            })
+            .unwrap();
+        let row = &text.galley.rows[0];
+        let baseline = text.pos.y + row.pos.y + row.glyphs[0].pos.y;
+        assert_eq!(dots[0].y, baseline + design::HAIRLINE_WIDTH * 2.0);
     }
 
     /// Click the first letter of these words in the actual laid-out paragraph.

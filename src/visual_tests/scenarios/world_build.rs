@@ -21,6 +21,17 @@ fn reload(d: &mut Driver<'_>) {
     d.settle();
 }
 
+fn reveal_editor_passage(d: &mut Driver<'_>, words: &str) {
+    d.scroll_up_at(READER, 200);
+    for _ in 0..200 {
+        if d.visible_passage(words) {
+            return;
+        }
+        d.scroll_at(READER, 1);
+    }
+    panic!("The editor did not show {words}");
+}
+
 pub fn broken(d: &mut Driver<'_>) {
     let path = root(d).join("Notes/Broken.md");
     fs::write(&path, "---\nsplat_schema: 1\nsplat_id: [\n---\n").unwrap();
@@ -150,7 +161,7 @@ pub fn places(d: &mut Driver<'_>) {
     d.click("Ashfall Keep");
     d.observe(
         "World places",
-        d.has("Rook Ambry (NPC)") && d.has("Visitors"),
+        d.has("Rook Ambry") && d.has("Visitors"),
         "Here and Mentioned in show the people and notes at a place",
     );
     d.state("place-here-and-mentions", Sizes::All);
@@ -331,7 +342,7 @@ pub fn npc_in_lookup(d: &mut Driver<'_>) {
     d.state("npc-stat-block-link", Sizes::All);
     d.click("Back");
     d.click("Watch House");
-    d.wait_for_text("Rook Ambry (NPC)");
+    d.wait_for_text("Rook Ambry");
     d.state("npc-place-link", Sizes::All);
 }
 
@@ -460,7 +471,7 @@ pub fn package_file_changed(d: &mut Driver<'_>) {
     fs::write(&path, changed.replace("Cinder Bite.", "Ash Bite.")).unwrap();
     d.focus_window(false);
     d.focus_window(true);
-    d.wait_for_text("This note changed on disk. Your draft is safe until you choose.");
+    d.wait_for_text("This entry changed on disk. Your draft is safe until you choose.");
     d.expect("Overwrite with my draft");
     d.state("package-draft-changed-on-disk", Sizes::All);
     d.click("Reload and lose my draft");
@@ -521,11 +532,14 @@ pub fn package_delete_entry(d: &mut Driver<'_>) {
         "Options: starting HP, temporary HP, initiative group and changes",
     );
     d.expect("Replacement creature");
+    d.expect("Replace all 2 Cinder Wolf rows");
     d.type_into("Replacement creature", "Guard");
     d.expect("Use Guard");
     d.state("deleted-package-entry-choose-replacement", Sizes::All);
     d.click("Use Guard");
-    d.expect("Guard");
+    d.expect("as\u{a0}Guard");
+    d.expect("Undo replacement");
+    assert!(!d.has_containing("Not found. Its package entry was deleted."));
     let dirty = d.app_mut().encounters.draft_dirty();
     d.observe(
         "Replace deleted creature",
@@ -533,6 +547,9 @@ pub fn package_delete_entry(d: &mut Driver<'_>) {
         "Choosing a replacement edits the draft; it does not save it",
     );
     d.state("deleted-package-entry-replaced", Sizes::All);
+    d.click("Undo replacement");
+    d.expect("Not found. Its package entry was deleted.");
+    d.state("deleted-package-entry-replacement-undone", Sizes::All);
 }
 
 /// Copy a book creature into a shared package, then change its HP.
@@ -552,11 +569,19 @@ pub fn book_to_package(d: &mut Driver<'_>) {
     d.click("Edit the copy");
     d.expect("Markdown editor");
     let original = d.editor_text().unwrap();
-    let changed = original
-        .replace("| ` max_hp ` | ` 150 ` |", "| ` max_hp ` | ` 180 ` |")
-        .replace("150 (20d10 + 40)", "180 (20d10 + 70)");
+    let changed = original.replace("150 (20d10 + 40)", "180 (20d10 + 70)");
     assert_ne!(original, changed);
     d.replace_text_in("Markdown editor", &changed);
+    d.expect("Hit Points line says 180, but max_hp is 150. The fight uses max_hp.");
+    reveal_editor_passage(d, "HP 180 (20d10 + 70)");
+    d.state("book-creature-stat-check", Sizes::All);
+    d.click("Use 180");
+    d.expect("Undo stat change");
+    reveal_editor_passage(d, "| ` max_hp ` | ` 180 ` |");
+    d.state("book-creature-stats-updated", Sizes::All);
+    d.click("Undo stat change");
+    d.expect("Use 180");
+    d.click("Use 180");
     d.click("Save");
     d.click("Read");
     d.expect("Watch Aboleth");
@@ -571,4 +596,28 @@ pub fn book_to_package(d: &mut Driver<'_>) {
         .contains("# Watch Aboleth")
     );
     d.state("book-creature-changed-in-package", Sizes::All);
+}
+
+pub fn world_note_deleted(d: &mut Driver<'_>) {
+    entry(d, "Locations/Watch House.md", "Watch House", "location", "");
+    entry(
+        d,
+        "NPCs/Watchkeeper.md",
+        "Watchkeeper",
+        "npc",
+        "  in: '[[Watch House]]'\n",
+    );
+    reload(d);
+    d.click(NAV_WORLD);
+    d.click_containing("Watchkeeper · ");
+    d.wait_for_text("Watch House");
+    d.state("npc-before-place-deleted", Sizes::All);
+    fs::remove_file(root(d).join("Locations/Watch House.md")).unwrap();
+    d.focus_window(false);
+    d.focus_window(true);
+    d.wait_for_text("Watch House · Not found");
+    d.state("npc-place-deleted-in-world", Sizes::All);
+    look_up(d, "Watchkeeper");
+    d.wait_for_text("In Watch House · Not found");
+    d.state("npc-place-deleted-in-lookup", Sizes::All);
 }

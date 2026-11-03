@@ -89,7 +89,7 @@ impl Repair {
         ui.horizontal(|ui| {
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 let reason = if self.draft == self.baseline {
-                    Some("No changes yet")
+                    Some("No changes to save.")
                 } else {
                     problem.as_deref()
                 };
@@ -126,9 +126,7 @@ impl Repair {
                 }
                 ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
                     if self.draft != self.baseline
-                        && design::Action::quiet("Discard repair draft")
-                            .show(ui)
-                            .clicked()
+                        && design::Action::quiet("Discard").show(ui).clicked()
                     {
                         self.discarded = Some(self.draft.clone());
                         self.draft = self.baseline.clone();
@@ -152,7 +150,7 @@ impl Repair {
                     } else {
                         ui.label(
                             design::Type::Small
-                                .rich(ui, "No changes yet")
+                                .rich(ui, "No changes to save.")
                                 .color(colors().muted),
                         );
                     }

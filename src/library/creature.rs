@@ -39,6 +39,119 @@ fn stat(entry: &Entry, key: &str) -> Option<i64> {
         .get("value")?
         .as_i64()
 }
+
+/// Printed vital lines are prose. Only splat_stats supplies fight values.
+fn body_vital(line: &str) -> Option<(&'static str, &'static str, i64)> {
+    let plain = line.trim().replace('*', "");
+    for (prefix, key, label) in [
+        ("Hit Points", "max_hp", "Hit Points"),
+        ("HP", "max_hp", "Hit Points"),
+        ("Armor Class", "armor_class", "Armor Class"),
+        ("AC", "armor_class", "Armor Class"),
+    ] {
+        if let Some(rest) = plain.strip_prefix(prefix)
+            && rest.starts_with([' ', ':'])
+            && let Some(value) = rest
+                .trim_start_matches([' ', ':'])
+                .split_whitespace()
+                .next()
+                .and_then(|number| number.parse().ok())
+        {
+            return Some((key, label, value));
+        }
+    }
+    None
+}
+
+pub(super) fn vital_checks(entry: &Entry) -> Vec<(&'static str, i64, String)> {
+    if !has_stats(entry) {
+        return Vec::new();
+    }
+    vital_lines(&entry.body)
+        .into_iter()
+        .filter_map(|range| body_vital(&entry.body[range]))
+        .filter_map(|(key, label, printed)| {
+            let value = stat(entry, key)?;
+            (value != printed).then(|| {
+                (
+                    key,
+                    printed,
+                    format!(
+                        "{label} line says {printed}, but {key} is {value}. The fight uses {key}."
+                    ),
+                )
+            })
+        })
+        .collect()
+}
+
+fn vital_lines(body: &str) -> Vec<std::ops::Range<usize>> {
+    let mut lines = Vec::new();
+    for (event, range) in Parser::new_ext(body, Options::ENABLE_TABLES).into_offset_iter() {
+        if matches!(event, Event::Start(Tag::Paragraph)) {
+            let mut start = range.start;
+            for line in body[range].split_inclusive('\n') {
+                if body_vital(line).is_some() {
+                    lines.push(start..start + line.len());
+                }
+                start += line.len();
+            }
+        }
+    }
+    lines
+}
+
+pub(super) fn without_vitals(entry: &Entry, body: &str) -> String {
+    let mut output = String::new();
+    let mut start = 0;
+    for range in vital_lines(body) {
+        if body_vital(&body[range.clone()]).is_some_and(|(key, _, _)| stat(entry, key).is_some()) {
+            output.push_str(&body[start..range.start]);
+            start = range.end;
+        }
+    }
+    output.push_str(&body[start..]);
+    output
+}
+
+pub(super) fn use_vital(
+    text: &str,
+    entry: &Entry,
+    key: &str,
+    value: i64,
+) -> Result<String, String> {
+    // Book copies keep stats in a marked Markdown map. Change its value cell only.
+    let mut in_stats = false;
+    let mut offset = 0;
+    for line in text.split_inclusive('\n') {
+        if line.starts_with("<!-- splat:") {
+            in_stats = line.contains("path=splat_stats ");
+        }
+        if line.starts_with('#') {
+            in_stats = false;
+        }
+        if in_stats && line.starts_with('|') {
+            let cells: Vec<_> = line.split('|').collect();
+            if cells
+                .get(1)
+                .is_some_and(|cell| cell.trim().trim_matches('`').trim() == key)
+                && let Some(cell) = cells.get(2)
+            {
+                let start = offset + cells[0].len() + cells[1].len() + 2;
+                let mut changed = text.to_owned();
+                changed.replace_range(start..start + cell.len(), &format!(" ` {value} ` "));
+                Entry::parse(&entry.path, &changed)?;
+                return Ok(changed);
+            }
+        }
+        offset += line.len();
+    }
+    let mut stats = entry.fields["splat_stats"].clone();
+    stats[key]["value"] = value.into();
+    let changed = splat::content::patch_fields(text, &[("splat_stats", Some(stats))])?;
+    Entry::parse(&entry.path, &changed)?;
+    Ok(changed)
+}
 fn value(entry: &Entry, key: &str) -> String {
     stat(entry, key).map_or_else(|| "—".into(), |v| v.to_string())
 }
@@ -291,6 +404,12 @@ fn cell(ui: &mut egui::Ui, width: f32, text: &str, role: Type, color: egui::Colo
 /// Armor class, hit points and initiative, under capital labels. Only what the entry has.
 fn vital_rows(entry: &Entry) -> Vec<(&'static str, String)> {
     let hp = field(entry, "hit_points_text")
+        .filter(|text| {
+            text.split_whitespace()
+                .next()
+                .and_then(|n| n.parse::<i64>().ok())
+                == stat(entry, "max_hp")
+        })
         .map(str::to_owned)
         .or_else(|| {
             hit_points_line(entry).and_then(|line| {
@@ -300,6 +419,12 @@ fn vital_rows(entry: &Entry) -> Vec<(&'static str, String)> {
         })
         .or_else(|| stat(entry, "max_hp").map(|hp| hp.to_string()));
     let armor_class = field(entry, "armor_class_text")
+        .filter(|text| {
+            text.split_whitespace()
+                .next()
+                .and_then(|n| n.parse::<i64>().ok())
+                == stat(entry, "armor_class")
+        })
         .map(str::to_owned)
         .or_else(|| stat(entry, "armor_class").map(|ac| ac.to_string()));
     [
@@ -553,6 +678,38 @@ pub(super) fn show(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn prose_vitals_warn_and_use_updates_the_fight_source() {
+        let text = format!(
+            "{}\n**Hit Points** 45\n\n**Armor Class** 17\n",
+            crate::library::note_text("Guard", "creature", None)
+        );
+        let entry = Entry::parse("Guard.md", &text).unwrap();
+        let checks = vital_checks(&entry);
+        assert_eq!(checks.len(), 2);
+        assert_eq!(
+            checks[0].2,
+            "Hit Points line says 45, but max_hp is 1. The fight uses max_hp."
+        );
+        let changed = use_vital(&text, &entry, "max_hp", 45).unwrap();
+        let entry = Entry::parse("Guard.md", &changed).unwrap();
+        assert_eq!(stat(&entry, "max_hp"), Some(45));
+        assert!(!without_vitals(&entry, &entry.body).contains("**Hit Points**"));
+        assert!(!crate::library::note_text("New", "creature", None).contains("**Hit Points**"));
+    }
+
+    #[test]
+    fn book_stat_action_updates_the_marked_map_and_reader_uses_its_value() {
+        let text =
+            splat::content::definitions::source_file("definitions/creatures/aboleth.md").unwrap();
+        let entry = Entry::parse("Aboleth.md", text).unwrap();
+        let changed = use_vital(text, &entry, "max_hp", 180).unwrap();
+        let changed = Entry::parse("Aboleth.md", &changed).unwrap();
+        assert_eq!(stat(&changed, "max_hp"), Some(180));
+        assert!(vital_rows(&changed).contains(&("HIT POINTS", "180".into())));
+        assert!(without_vitals(&changed, &changed.body).contains("Mucus Cloud"));
+    }
 
     #[test]
     fn a_hand_written_creature_reads_as_a_stat_block_with_only_what_it_has() {

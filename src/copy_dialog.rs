@@ -285,17 +285,25 @@ impl CopyDialog {
                 design::rule(ui);
 
                 ui.add(
-                    egui::Label::new(format!(
-                        "Will create {}",
-                        plan.root.join(&plan.relative).display()
-                    ))
+                    egui::Label::new(
+                        Type::Small
+                            .rich(
+                                ui,
+                                format!("Will create {}", plan.root.join(&plan.relative).display()),
+                            )
+                            .color(colors().muted),
+                    )
                     .wrap(),
                 );
                 for dependency in &plan.shared {
                     ui.label(format!("Also copies {}", dependency.relative));
                 }
                 if plan.dependencies.is_empty() {
-                    ui.label("No required dependencies");
+                    ui.label(
+                        Type::Small
+                            .rich(ui, "No required dependencies")
+                            .color(colors().muted),
+                    );
                 } else {
                     design::section(
                         ui,

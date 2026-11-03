@@ -1,8 +1,8 @@
 {
   "violations": {
     "accessible-name/egui-chrome": {
-      "book-to-package": 22,
-      "campaign-content": 59,
+      "book-to-package": 50,
+      "campaign-content": 58,
       "column-resize": 91,
       "dialogs": 45,
       "empty": 15,
@@ -22,10 +22,10 @@
       "npc-in-encounter": 20,
       "npc-in-lookup": 22,
       "package-about": 41,
-      "package-delete-entry": 49,
+      "package-delete-entry": 61,
       "package-file-changed": 41,
       "package-rename": 34,
-      "package-to-table": 21,
+      "package-to-table": 30,
       "party": 43,
       "party-from-run": 31,
       "prep-to-table": 37,
@@ -56,6 +56,7 @@
       "world": 52,
       "world-broken-note": 23,
       "world-edit-round-trip": 24,
+      "world-note-deleted": 21,
       "world-places": 30
     },
     "no-overlap/egui-chrome": {
@@ -74,8 +75,8 @@
       "world": 4
     },
     "target-size/egui-chrome": {
-      "book-to-package": 22,
-      "campaign-content": 59,
+      "book-to-package": 50,
+      "campaign-content": 58,
       "column-resize": 91,
       "dialogs": 44,
       "empty": 15,
@@ -95,10 +96,10 @@
       "npc-in-encounter": 20,
       "npc-in-lookup": 22,
       "package-about": 41,
-      "package-delete-entry": 49,
+      "package-delete-entry": 61,
       "package-file-changed": 41,
       "package-rename": 34,
-      "package-to-table": 21,
+      "package-to-table": 30,
       "party": 43,
       "party-from-run": 31,
       "prep-to-table": 36,
@@ -129,6 +130,7 @@
       "world": 51,
       "world-broken-note": 23,
       "world-edit-round-trip": 24,
+      "world-note-deleted": 21,
       "world-places": 30
     }
   },

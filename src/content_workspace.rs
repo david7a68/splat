@@ -204,8 +204,8 @@ impl PackageSelection {
             .collect()
     }
 
-    pub fn unavailable_message(&self, catalogue: &Catalogue) -> String {
-        let mut message = if self
+    pub fn unavailable_message(&self) -> String {
+        if self
             .name
             .as_deref()
             .is_some_and(|name| !name.trim().is_empty())
@@ -213,38 +213,7 @@ impl PackageSelection {
             format!("{} is no longer on this computer.", self.display_name())
         } else {
             format!("{}.", self.display_name())
-        };
-        match &self.selection {
-            Selection::Selected { entries } => {
-                let references: Vec<_> = entries
-                    .iter()
-                    .filter_map(|entry| entry.reference().ok())
-                    .collect();
-                let uses = catalogue
-                    .entries
-                    .values()
-                    .filter(|entry| entry.private)
-                    .filter(|entry| {
-                        content::required_references(&entry.entry).is_ok_and(|required| {
-                            required
-                                .iter()
-                                .any(|reference| references.contains(reference))
-                        })
-                    })
-                    .count();
-                message.push_str(&format!(
-                    " {} in this campaign {} it.",
-                    if uses == 0 {
-                        "No entries".into()
-                    } else {
-                        crate::design::count(uses, "entry", "entries")
-                    },
-                    if uses == 1 { "uses" } else { "use" }
-                ));
-            }
-            Selection::All => message.push_str(" This campaign uses the whole package."),
         }
-        message
     }
 }
 
@@ -1974,7 +1943,7 @@ mod tests {
         let old = format!("package: {{id: {id}}}\nselection: {{mode: all}}\n");
         let mut selection: PackageSelection = serde_yaml_ng::from_str(&old).unwrap();
         assert_eq!(selection.name, None);
-        let message = selection.unavailable_message(&Catalogue::default());
+        let message = selection.unavailable_message();
         assert!(message.starts_with("A package that is no longer on this computer."));
         assert!(!message.contains(&id.to_string()));
         selection.name = Some("Ashen Marches".into());
@@ -2019,9 +1988,10 @@ mod tests {
                 .unwrap();
         }
         assert_eq!(
-            selection.unavailable_message(&catalogue),
-            "Ashen Marches is no longer on this computer. 3 entries in this campaign use it."
+            selection.unavailable_message(),
+            "Ashen Marches is no longer on this computer."
         );
+        assert_eq!(selection.campaign_users(&catalogue).len(), 3);
         assert!(
             catalogue
                 .closure(&[selection], Uuid::nil())
