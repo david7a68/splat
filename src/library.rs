@@ -395,7 +395,17 @@ const SEARCH_NAME: &str = "Search the Library";
 
 // Fixed height keeps the virtual scroll position independent of label length.
 fn entry_row(ui: &mut egui::Ui, name: &str, subtitle: &str, selected: bool) -> egui::Response {
-    design::two_line_row(ui, ENTRY_ROW_HEIGHT, selected, name, subtitle)
+    let width = ui.available_width() - design::S * 2.0;
+    let title = design::words_that_fit(
+        ui,
+        name,
+        &if selected { Type::Strong } else { Type::Body }.font(ui),
+        width,
+    );
+    let detail = design::words_that_fit(ui, subtitle, &Type::Small.font(ui), width);
+    let response = design::two_line_row(ui, ENTRY_ROW_HEIGHT, selected, &title, &detail);
+    design::named(ui, &response, &format!("{name} · {subtitle}"));
+    response
 }
 
 pub(crate) fn local_module(path: &Path) -> Result<Module, String> {
@@ -972,6 +982,7 @@ pub struct Library {
     package_not_used: bool,
     focus_package_name: bool,
     package_path: Option<PathBuf>,
+    package_folder_changed: bool,
     pub use_entry: Option<(Uuid, Uuid)>,
     source: bool,
     message: Option<String>,
@@ -2217,6 +2228,7 @@ impl Library {
                             let mut path = parent.display().to_string();
                             if design::text_field(ui, "Folder", &mut path, None, None).changed() {
                                 *parent = PathBuf::from(path);
+                                self.package_folder_changed = true;
                             }
                         },
                     );
@@ -2229,6 +2241,7 @@ impl Library {
                             && let Some(chosen) = crate::hermetic::pick_folder()
                         {
                             *parent = chosen;
+                            self.package_folder_changed = true;
                         }
                     });
                 });
@@ -2327,7 +2340,7 @@ impl Library {
                     }
                     design::blocked_reason(ui, reason);
                     ui.add_space(design::L);
-                    if (!self.name.is_empty() || self.package_path.is_some())
+                    if (!self.name.is_empty() || self.package_folder_changed)
                         && Action::quiet("Clear")
                             .name("Clear the new package fields")
                             .show(ui)
@@ -2335,6 +2348,7 @@ impl Library {
                     {
                         self.name.clear();
                         self.package_path = None;
+                        self.package_folder_changed = false;
                     }
                 });
                 ui.add_space(design::M);

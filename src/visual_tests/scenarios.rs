@@ -565,6 +565,7 @@ pub mod campaign_content {
 
         d.click(&format!("Use {UNSELECTED_ENTRY}"));
         d.expect(CHANGED);
+        d.expect("Include future additions");
         d.state("selection-changed", Sizes::Default);
         d.click(DISCARD_SELECTION);
         d.goal("change and discard a selection");
@@ -2673,6 +2674,7 @@ pub mod party_from_run {
         d.click("Correct");
         d.expect("DEATH SAVES");
         d.click("Add a death save success");
+        d.expect("1 success · 0 failures");
         d.observe(
             "Death saves",
             !d.has("DEATH SAVES (MANUAL)"),
@@ -4952,7 +4954,7 @@ pub mod session_notes {
         d.click("Death saves");
         d.observe(
             "T11.8",
-            !d.has("Close notes") && d.has("Death saves"),
+            !d.has("Close notes") && d.has("DEATH SAVES"),
             "Death saves show, in place of the notes, when both have no room",
         );
         d.click_containing("Undo: 99 damage");
@@ -6384,7 +6386,7 @@ pub mod session_plan_groups {
         d.goal("assemble a group in the session's plan");
         d.observe(
             "T14.6",
-            d.has_containing("2 creatures") && !d.has("Back to the plan"),
+            d.has_containing("2 × Wolf") && !d.has("Back to the plan"),
             "A group saved from the plan is linked in it, with what it holds",
         );
         go_library(d);

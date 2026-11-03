@@ -1238,14 +1238,7 @@ impl CampaignContent {
                     if !all
                         && Action::secondary(
                             if entry_ids.iter().all(|id| {
-                                selection_index.is_some_and(|i| {
-                                    match &document.selections[i].selection {
-                                        Selection::All => true,
-                                        Selection::Selected { entries } => entries
-                                            .iter()
-                                            .any(|r| catalogue.resolve_ref(r).ok() == Some(*id)),
-                                    }
-                                })
+                                closure.direct.contains(id) || closure.required.contains_key(id)
                             }) {
                                 "Include future additions"
                             } else {

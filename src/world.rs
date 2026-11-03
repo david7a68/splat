@@ -1233,10 +1233,7 @@ impl Reader {
                                         format!(
                                             "{} {} · Not found",
                                             design::icons::WARN,
-                                            value
-                                                .as_str()
-                                                .unwrap_or("Entry")
-                                                .trim_matches(['[', ']'])
+                                            link_name(value, label)
                                         ),
                                     )
                                     .color(colors().result.warning),

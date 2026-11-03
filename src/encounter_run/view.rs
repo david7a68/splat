@@ -3084,9 +3084,13 @@ impl Run {
                     .rich(
                         ui,
                         format!(
-                            "{} · {}",
-                            design::count(successes as usize, "success", "successes"),
-                            design::count(failures as usize, "failure", "failures")
+                            "{successes} {} · {failures} {}",
+                            if successes == 1 {
+                                "success"
+                            } else {
+                                "successes"
+                            },
+                            if failures == 1 { "failure" } else { "failures" }
                         ),
                     )
                     .color(c.text),

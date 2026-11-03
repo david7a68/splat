@@ -642,11 +642,11 @@ impl Campaigns {
         let c = colors();
         ui.set_max_width(ui.available_width().min(design::LIST_MEASURE));
         self.remove_dialog(ui.ctx());
-        if let Some(added) = self.added.clone() {
-            if design::message_with_action(ui, Tone::Success, &added, "Build an encounter") {
-                self.wants_encounters = true;
-                self.added = None;
-            }
+        if let Some(added) = self.added.clone()
+            && design::message_with_action(ui, Tone::Success, &added, "Build an encounter")
+        {
+            self.wants_encounters = true;
+            self.added = None;
         }
         ui.horizontal(|ui| {
             design::group_heading(ui, "Campaigns", self.data.campaigns.len());
