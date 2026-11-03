@@ -337,6 +337,9 @@ the panel, those words open the second line instead, so that a name is never cut
 - **Row height:** the scale sets the type, and spare room goes to the rows, up to 1.4 times
   the scale's height. When rows cannot fit, name-only rows shrink to 25 px before anything
   scrolls.
+  Shortening bonuses never changes a row's columns, picture size or height policy.
+  Every row in one list shares its columns and picture size. Natural rows keep at least
+  the scale's row height.
 - **Header:** the round and the current turn in bold sans, larger than any row's name, and
   `Next turn`. The header always has two lines. Line two keeps the notice at the left
   and Undo at the right. Measure the notice first; Undo takes the remaining width, less an L gap.
@@ -586,7 +589,7 @@ stands for further conditions when space is short. Compact live rows put sync la
 after an S gap, separate from conditions. The dock ends a cut name with an ellipsis and
 drops a trailing joining word, while keeping a copy's final number or letter.
 
-Every tied arrival offers Move before with the target's name. A shared roll is one block;
+Every tied arrival offers Move before with both the arrival's and target's names. A shared roll is one block;
 the arrival moves before its first member. The message says acts next round when that
 place has passed. Tie details stay in Arrivals and the log, outside the Undo label.
 An open run with other unfinished copies names its copy beside Saved and in the rail hover.
@@ -653,6 +656,21 @@ warning on hover and in its accessible name. A stalled row omits its session nam
 Processing destinations show beside Process and Continue processing, and in the
 Process again confirmation. Continue processing names the raw transcript and session
 context when transcription is complete, and says that the audio is not sent again. A saved key field invites a replacement key.
+With a partial transcript, Continue processing names the remaining audio parts and
+their destination. Recording silence puts the recorded duration in the detail, outside
+the bold status. Added transcript markers use the same On the timeline link as events.
+
+Run panel titles stay on one line and keep copy numbers when cut. Rail details never
+end on a separator; a short rail shows Ended or Paused and keeps the full state on hover.
+The run footer uses an error status when saving stops. Close lists each lost change on
+its own line, up to three, then the remaining count. Deleted runs with unsent changes
+use a warning. Finished note-link updates use success.
+
+Plan row actions align with the name line. In notes ends at the button text's inner
+edge. Timeline detail headers end at the form fields' right edge. Campaign details put
+state and Cancel at the left and Save details at the right. A folder change names a
+hidden unfinished run and its state. Sync stopped links to Party and states how to recover.
+Compact Party rows omit a missing spell save DC; wide tables keep their empty cell.
 
 
 ## Library and preparation audit, iteration 9

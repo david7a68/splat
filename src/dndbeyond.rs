@@ -412,7 +412,6 @@ impl DndBeyond {
                     self.refresh(session, ui.ctx());
                 }
             }
-            crate::design::blocked_reason(ui, blocked);
         });
         if selected != current {
             match local.link(selected.clone()) {

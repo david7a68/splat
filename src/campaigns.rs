@@ -532,18 +532,19 @@ impl Campaigns {
                 }
             });
         });
+        let link_blocked = blocked.map(|reason| {
+            if reason == "Close the run to change campaigns." {
+                "Close the run to change the folder or the link."
+            } else {
+                reason
+            }
+        });
+        design::blocked_reason(ui, link_blocked);
         ui.add(egui::Label::new(campaign.path.display().to_string()).wrap());
         Self::folder_status(ui, &campaign);
         ui.add_space(design::S);
         design::rule(ui);
         ui.add_space(design::S);
-        let link_blocked = blocked.map(|reason| {
-            if reason == "Close the run to change campaigns." {
-                "Close the run to change the link."
-            } else {
-                reason
-            }
-        });
         dndbeyond.show(ui, session, self, link_blocked);
         ui.add_space(design::S);
         design::quiet_section(ui, "Technical details", |ui| {
@@ -823,13 +824,6 @@ impl Campaigns {
         ui.scope_builder(egui::UiBuilder::new().id(form_scope), |ui| {
             let mut added = false;
             let direct = editing || self.remote.is_some() || self.data.campaigns.is_empty();
-            let title = if editing {
-                "Details".to_owned()
-            } else if let Some((_, name)) = &self.remote {
-                format!("Add {name}")
-            } else {
-                "Add campaign".to_owned()
-            };
             let editing_id = self.editing;
             let focus = self.focus_name;
             let empty = self.data.campaigns.is_empty();
@@ -887,18 +881,28 @@ impl Campaigns {
                         (false, false) => None,
                     };
                     let missing = reason.is_some();
-                    let action = if primary {
-                        Action::primary(submit)
-                    } else {
-                        Action::secondary(submit)
+                    let action = || {
+                        if primary {
+                            Action::primary(submit)
+                        } else {
+                            Action::secondary(submit)
+                        }
                     };
-                    if unchanged {
+                    if editing {
                         design::save_row_state(
                             ui,
                             design::Status {
-                                icon: design::icons::OK,
-                                word: "No changes",
-                                color: colors().muted,
+                                icon: if unchanged {
+                                    design::icons::OK
+                                } else {
+                                    design::icons::DRAFT
+                                },
+                                word: if unchanged { "No changes" } else { "Unsaved" },
+                                color: if unchanged {
+                                    colors().muted
+                                } else {
+                                    colors().document.unsaved
+                                },
                             },
                             false,
                             None,
@@ -906,9 +910,9 @@ impl Campaigns {
                     } else {
                         design::blocked_reason(ui, reason);
                     }
-                    if action.blocked(reason).show(ui).clicked() {
+                    if !editing && action().blocked(reason).show(ui).clicked() {
                         match self.save_form() {
-                            Ok(()) => added = !editing,
+                            Ok(()) => added = true,
                             Err(error) => self.error = Some(error),
                         }
                     }
@@ -917,15 +921,21 @@ impl Campaigns {
                     {
                         self.clear_form();
                     }
+                    if editing {
+                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                            if action().blocked(reason).show(ui).clicked()
+                                && let Err(error) = self.save_form()
+                            {
+                                self.error = Some(error);
+                            }
+                        });
+                    }
                 });
                 if let Some(error) = &self.error {
                     design::message(ui, Tone::Error, error);
                 }
             };
             let form = if direct {
-                if editing {
-                    design::group_heading(ui, &title, 0);
-                }
                 fields(ui);
                 None
             } else {

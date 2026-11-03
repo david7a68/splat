@@ -820,6 +820,7 @@ impl Splat {
             for mut state in statuses {
                 let full = match state.word {
                     "Signed out" => "Signed out of D&D Beyond",
+                    "Sync stopped" => "Party sync stopped when D&D Beyond disconnected. Connect, then turn sync on in Party.",
                     _ => state.word,
                 };
                 if state.word == "Connected · not remembered"
@@ -830,7 +831,14 @@ impl Splat {
                 {
                     state.word = "Connected";
                 }
-                let response = design::wrapped_status(ui, state).on_hover_text(full);
+                let response = if state.word == "Sync stopped" {
+                    let response = design::status_link(ui, state);
+                    if response.clicked() {
+                        self.party.wants_combat_sync = true;
+                        self.page = Page::Party;
+                    }
+                    response
+                } else { design::wrapped_status(ui, state) }.on_hover_text(full);
                 if full != state.word {
                     design::named(ui, &response, full);
                 }

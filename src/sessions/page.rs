@@ -343,7 +343,18 @@ fn recording_destination(settings: &ProcessingSettings, recording: &Recording) -
             processing_llm(settings)
         )
     } else {
-        processing_destination(settings)
+        let destination = processing_destination(settings);
+        if let Some((done, total)) = processing::transcript_short_of(&recording.path) {
+            destination.replacen(
+                "Process sends the audio",
+                &format!(
+                    "Continue processing sends the rest of the audio (parts {done} to {total})"
+                ),
+                1,
+            )
+        } else {
+            destination
+        }
     }
 }
 
@@ -523,7 +534,7 @@ fn plan_row(
         ui.vertical(|ui| {
             let left = ui.cursor().min;
             let title_width = (ui.available_width() - widths[1] - design::S).max(design::XL);
-            let text = ui.allocate_ui_with_layout(
+            ui.allocate_ui_with_layout(
                 egui::vec2(title_width, 0.0),
                 egui::Layout::top_down(egui::Align::Min),
                 |ui| {
@@ -535,10 +546,7 @@ fn plan_row(
             );
             let action_rect = egui::Rect::from_min_size(
                 egui::pos2(ui.max_rect().right() - widths[1], left.y),
-                egui::vec2(
-                    widths[1],
-                    text.response.rect.height().max(Density::Read.control()),
-                ),
+                egui::vec2(widths[1], Density::Read.control()),
             );
             let mut action_ui = ui.new_child(
                 egui::UiBuilder::new()
@@ -1706,7 +1714,7 @@ impl Sessions {
         if self.updated_links.is_some()
             && design::message_with_action(
                 ui,
-                Tone::Info,
+                Tone::Success,
                 "Links updated in notes.",
                 "Undo update links",
             )
@@ -2268,16 +2276,16 @@ impl Sessions {
                                 .rich(
                                     ui,
                                     format!(
-                                        "{} {} {time}",
+                                        "{} {}",
                                         if *health == Health::Silent {
                                             icons::WARN
                                         } else {
                                             icons::RECORD
                                         },
                                         if *health == Health::Silent {
-                                            "Recording silence"
+                                            "Recording silence".to_owned()
                                         } else {
-                                            "Recording"
+                                            format!("Recording {time}")
                                         }
                                     ),
                                 )
@@ -2287,7 +2295,12 @@ impl Sessions {
                                     c.recording
                                 }),
                         );
-                        ui.label(Type::Small.rich(ui, word).color(color));
+                        let detail = if *health == Health::Silent {
+                            format!("{word} · {time} recorded")
+                        } else {
+                            word.to_owned()
+                        };
+                        ui.label(Type::Small.rich(ui, detail).color(color));
                         if *health == Health::Silent
                             && Action::quiet("Check the input in Settings")
                                 .density(Density::Read)
@@ -3653,7 +3666,10 @@ impl Sessions {
                                 });
                                 if !running && event.run.is_none() {
                                     let linked = body.contains(&format!("^{}", event.id));
-                                    if linked { design::status(ui, Status { icon: icons::OK, word: "In notes", color: c.document.saved }); }
+                                    if linked {
+                                        ui.add_space(design::S);
+                                        design::status(ui, Status { icon: icons::OK, word: "In notes", color: c.document.saved });
+                                    }
                                     else if Action::quiet("Add to notes").name(&format!("Add to notes: {label}"))
                                         .density(Density::Read).show(ui).clicked() { insert = Some(timeline::reference(event, day)); }
                                 }
@@ -3933,7 +3949,11 @@ impl Sessions {
             let words = deleted.message();
             if design::message_with_action(
                 ui,
-                Tone::Info,
+                if deleted.unsent.is_empty() {
+                    Tone::Info
+                } else {
+                    Tone::Warning
+                },
                 &words,
                 crate::encounter_run::DeletedRun::UNDO_LABEL,
             ) {
@@ -4875,15 +4895,19 @@ impl Sessions {
                                     body[at..].find('\n').map_or(body.len(), |end| at + end);
                                 ui.horizontal_wrapped(|ui| {
                                     markdown_view::show_reader(ui, &body[at..line_end]);
-                                    if book.event_of_marker(key).is_some() {
-                                        design::status(
+                                    if let Some(event) = book.event_of_marker(key) {
+                                        if design::status_link(
                                             ui,
                                             Status {
                                                 icon: icons::OK,
                                                 word: "On the timeline",
-                                                color: c.document.saved,
+                                                color: c.result.success,
                                             },
-                                        );
+                                        )
+                                        .clicked()
+                                        {
+                                            self.wants_event = Some(event.id.clone());
+                                        }
                                     } else if Action::secondary("Add")
                                         .name("Add this event to the timeline")
                                         .blocked_if(
@@ -6005,6 +6029,12 @@ impl Sessions {
         self.notice_session = None;
         let session = self.selected.expect("an open session");
         let path = self.recordings[0].path.clone();
+        if let processing::Progress::Transcribing { part, of } = &progress {
+            fs::write(processing::transcript_path(&path), format!(
+                "---\ntranscript_parts_done: {part}\ntranscript_parts: {of}\n---\n\nThe party held the bridge.\n"
+            )).expect("a partial raw transcript before cancellation");
+            self.refresh_recordings();
+        }
         if matches!(progress, processing::Progress::Asking { .. }) {
             let transcript = processing::transcript_path(&path);
             fs::write(transcript,

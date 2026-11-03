@@ -2273,7 +2273,11 @@ impl Encounters {
         let words = deleted.message();
         if design::message_with_action(
             ui,
-            Tone::Info,
+            if deleted.unsent.is_empty() {
+                Tone::Info
+            } else {
+                Tone::Warning
+            },
             &words,
             crate::encounter_run::DeletedRun::UNDO_LABEL,
         ) {
@@ -3631,8 +3635,16 @@ impl Encounters {
                 else if folder_changed && left.is_err() { Some("Could not read saved runs. Check the old run folder before saving.") }
                 else if !changed { Some("No changes to save.") } else { None };
             if run_files > 0 {
-                design::message(ui, Tone::Warning, &format!("{} {} in {}. Splat will not show {} from the new folder.",
-                    design::count(run_files, "saved run", "saved runs"), if run_files == 1 { "stays" } else { "stay" }, snapshot.saved_options.folder, if run_files == 1 { "it" } else { "them" }));
+                let runs: Vec<_> = left.as_ref().ok().into_iter().flatten()
+                    .filter_map(|path| crate::encounter_run::Run::open(path, active.id).ok())
+                    .filter(|run| !run.state_words(true).starts_with("Ended"))
+                    .collect();
+                let words = if run_files == 1 && let Some(run) = runs.first() {
+                    format!("{} ({}) stays in {}. From the new folder, Splat will not show it or resume it.", run.name, run.state_words(true), snapshot.saved_options.folder)
+                } else {
+                    format!("{} {} in {}. {} are unfinished. From the new folder, Splat will not show these runs or resume them.", design::count(run_files, "saved run", "saved runs"), if run_files == 1 { "stays" } else { "stay" }, snapshot.saved_options.folder, runs.len())
+                };
+                design::message(ui, Tone::Warning, &words);
             }
             ui.horizontal(|ui| {
                 let save_key = changed && blocked.is_none() && run_files == 0

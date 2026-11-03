@@ -29,6 +29,8 @@ pub struct Party {
     sync_turned_off: bool,
     /// Sync was on when the connection ended, so it stopped. The rail says so.
     pub sync_stopped: bool,
+    /// Open the combat sync control when the rail links here.
+    pub wants_combat_sync: bool,
     /// The DM asked to go where this campaign's D&D Beyond link is set.
     pub wants_link_page: bool,
     pub wants_settings: bool,
@@ -526,7 +528,10 @@ impl Party {
                 format!("{} Combat sync · Off", icons::SYNC_OFF)
             };
             let was = self.combat.enabled;
-            design::section(ui, state, |ui| self.combat.show(ui));
+            egui::CollapsingHeader::new(state)
+                .icon(design::section_icon)
+                .open(std::mem::take(&mut self.wants_combat_sync).then_some(true))
+                .show(ui, |ui| self.combat.show(ui));
             if was != self.combat.enabled {
                 self.sync_turned_off = !self.combat.enabled;
             }
@@ -945,6 +950,7 @@ fn member_row(
     let compared = COMPARE
         .iter()
         .zip(&compare)
+        .filter(|((_, word), value)| *word != "DC" || value.as_str() != "—")
         .map(|((_, word), value)| format!("{word} {value}"))
         .collect::<Vec<_>>()
         .join(" · ");
