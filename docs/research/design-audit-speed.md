@@ -1195,3 +1195,118 @@ not a claim of byte-identical full-suite pixels. `git diff --check` passed.
 Raw logs, temporary probe scripts and instrumentation diffs are under ignored
 `artifacts/screenshots/audit-speed-8/`. Saved executables remain under `target/`;
 no large files were put in `/tmp`, and no design-audit artifacts are committed.
+
+
+## Ninth scan: overlap checks with test execution
+
+2026-11-03. Fetched and merged `origin/main` first; base
+`f22eb2922d2a481b3996c6bad2f62b67c303bf6f`. Used the lead's reflinked warm
+`target/`; never set `CARGO_TARGET_DIR`. Same 16-core, 31 GiB host and pinned
+toolchain. This scan measures gate scheduling, not the earlier cache, renderer,
+fixture or capture-scheduling ideas.
+
+### Retained change
+
+`audit-gate` starts the unchanged `check` command in the background, runs the
+unchanged full `cargo test --locked -- --nocapture`, then waits for `check`.
+It checks both exit statuses before the existing optional contact sheet. A
+Clippy failure still fails the gate; tests/captures can now finish even when
+lint fails. If both fail, the check status takes precedence. Labels and inherited
+feedback settings are still validated/cleared before either command starts.
+Video still defaults to on.
+
+Cargo's shared target-directory lock prevents Clippy and the test build from
+compiling together. In the measured trial, the test build acquires that lock
+while `check` runs formatting; Clippy waits for compilation, then overlaps the
+library tests. The full binary runner already runs its ordinary tests beside
+`visual_suite`; no second capture invocation or extra visual slot is needed.
+The change adds no build directory, test filter, result cache or new process
+inside the app. The exact checks, test targets, ignored tests, scenarios, sizes,
+frames, captures, renderer, baseline and tolerance remain unchanged.
+
+### Measurements
+
+All paired commands enter a fresh `devenv shell --` from the worktree root.
+Timers use `date +%s` after shell entry. Each run first touches `src/main.rs`
+without changing its contents, so both sides must recheck/rebuild the same warm
+incremental source. Order is serial, overlap, serial, overlap. The serial command
+is the original generated gate body, saved unchanged before editing. Small PATH
+wrappers record each unchanged check/Cargo command's start, end and status.
+Only one of our gates runs at a time. Host load is recorded in the raw logs;
+these observations do not establish multi-implementer throughput.
+
+| Run, in order | Full gate | Check, including Cargo lock wait | Full Cargo test command | Visual suite (built-in timer) |
+| --- | ---: | ---: | ---: | ---: |
+| Serial 1 (`before-2`) | 75 s | 6 s | 69 s | 56.10 s |
+| Overlap 1 (`after-1`) | 69 s | 8 s | 69 s | 55.55 s |
+| Serial 2 (`before-3`) | 73 s | 6 s | 67 s | 53.94 s |
+| Overlap 2 (`after-2`) | 67 s | 8 s | 67 s | 53.84 s |
+
+Median gate time falls from **74 s to 68 s**, a **6 s / 8.1%** saving.
+Each pair saves six seconds; the full Cargo test-command times match within each
+pair. Check time includes its queue behind the 2.6–2.8 s test build. Formatting
+takes about one second and Clippy about five seconds once admitted; compilation
+stays serial, while these checks no longer add six seconds before test execution.
+Library tests take 7.0–7.4 s, enough to cover Clippy here. The capture-suite
+differences are 0.55 s and 0.10 s, not evidence of a renderer improvement.
+A scheduler could admit Clippy first under other load; no fixed speedup is
+promised for every gate.
+
+The initial reflink/setup run took 109 s, including 17.96 s of Clippy, a 21.23 s
+test build and a 58.31 s visual suite. It passed, but is excluded from the paired
+comparison because copying a warm target still required dependency/path work.
+
+### Fidelity and final gate
+
+`SPLAT_VISUAL_VIDEO=0 devenv shell -- audit-gate speed-9` passed in **67 s**,
+including fresh shell entry. It ran formatting, warnings-denied all-target Clippy,
+all 742 tests (188 library + 554 binary), the same 12 ignored opt-in tests,
+other binary/documentation targets, and the complete 58-scenario / 1,253-PNG
+suite. The final warm test build and Clippy each reported 0.22 s; the visual
+suite reported 56.96 s. This final warm proof is separate from the source-touch
+paired timings above. Nix formatting and `git diff --check` passed.
+
+All six full runs print the same multiset of 755 test names (including the
+isolated suite child and ignored tests), with identical successful result counts.
+Every full capture inventory has 496 images at 960×640, 494 at 1200×800,
+246 at 1920×1080 and 17 at 2400×1600. Every manifest hash matches its PNG.
+Full ergonomics JSON/Markdown and chrome observations are byte-identical across
+all six runs. No required check or capture is removed or repeated by the gate.
+
+The app's existing pixel variation remains, using the unchanged channel tolerance
+of two:
+
+| Original setup run versus | Byte-identical PNGs | Within tolerance | Above tolerance |
+| --- | ---: | ---: | ---: |
+| Original serial repeat 1 | 1,234 | 2 | 17 |
+| Original serial repeat 2 | 1,228 | 10 | 15 |
+| Overlap 1 | 1,233 | 3 | 17 |
+| Overlap 2 | 1,234 | 4 | 15 |
+| Final `speed-9` gate | 1,229 | 3 | 21 |
+
+Every above-tolerance file in both paired overlap runs also varies in an original
+serial repeat. The final gate additionally catches eleven recording captures
+before the existing eight-second “Recording saved” rail notice expires. A control
+through the unchanged standalone `visual-test --only session-recording` command
+passes all its checks and 84 captures; all eleven additional final-gate variants
+match that control pixel for pixel. The other varying files are in the already
+documented copied-content, dialogs, equal-row ordering and session states.
+No mask, allowance, clock or tolerance changes. The unchanged repository
+`visual-compare speed-9-before-1 speed-9` agrees: 1,253 pairs, three within
+tolerance and 21 above, with expected failure status 101. These comparisons
+prove matching coverage/reports and existing varying states, not byte-identical
+screenshots from independent runs.
+
+Failure probes confirm that check-only failure, test-only failure and simultaneous
+failure all fail the gate, both commands are awaited, and the optional sheet runs
+last. Invalid labels/extra arguments still exit 2 before either command starts.
+Inherited partial, update, diagnostic and report settings are cleared; the fake
+Cargo probe also verifies the exact full-test arguments, capture directory,
+baseline enforcement and video default of 1.
+
+Raw logs, second-resolution traces, the unchanged original gate and temporary
+probes/comparison scripts are under ignored
+`artifacts/screenshots/audit-speed-9/`; captures use sibling `speed-9-*` labels.
+No Rust source, lockfile, profile or app behavior changes. Builds and captures
+stay on disk in the worktree; no large files went into `/tmp`, and no
+`artifacts/design-audit/` files are committed.
