@@ -834,7 +834,10 @@ impl Snapshot {
                     Some(Arc::new(crate::encounter_run::RunCreature {
                         entry: Arc::new(catalogue.entries.get(&creature.id)?.entry.clone()),
                         lower: creature.lower.clone(),
-                        detail: creature.detail.clone(),
+                        detail: crate::library::presentation::list_subtitle(
+                            &creature.detail,
+                            creature.source.as_deref(),
+                        ),
                     }))
                 })
                 .collect(),

@@ -513,6 +513,10 @@ pub fn npc_group(npc: &Entry, stat_block: &Entry, side: &str) -> Arc<RunGroup> {
         )),
         Ok(_) => None,
     };
+    let mut frozen = stat_block.clone();
+    frozen
+        .fields
+        .insert("splat_run_npc_name".into(), npc.name.clone().into());
     Arc::new(RunGroup {
         id: npc.id,
         path: npc.path.clone(),
@@ -521,7 +525,7 @@ pub fn npc_group(npc: &Entry, stat_block: &Entry, side: &str) -> Arc<RunGroup> {
         encounter: None,
         encounter_name: None,
         members: vec![GroupMember {
-            entry: Arc::new(stat_block.clone()),
+            entry: Arc::new(frozen),
             count: 1,
             overrides,
         }],

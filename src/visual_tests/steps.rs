@@ -116,7 +116,12 @@ pub fn resume_run_from_cold_start(d: &mut Driver<'_>) {
 }
 
 pub fn resume_run(d: &mut Driver<'_>, name: &str) {
-    d.click_beside(&format!("{name} · Round"), RESUME);
+    let state = if d.has_containing(&format!("{name} · Setup")) {
+        "Setup"
+    } else {
+        "Round"
+    };
+    d.click_beside(&format!("{name} · {state}"), RESUME);
     d.expect(&format!("{RUN_HEADING}{name}"));
 }
 

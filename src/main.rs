@@ -500,8 +500,12 @@ impl Splat {
             usize::from(self.sessions.recording()) + usize::from(self.sessions.processing());
         let (title, keep_label, discard_label, advice) = if items.len() == background {
             (
-                "Work in progress",
-                "Keep working",
+                if self.sessions.recording() {
+                    "Recording has not finished"
+                } else {
+                    "Processing has not finished"
+                },
+                "Keep running",
                 "Stop and close",
                 "Nothing already saved is lost either way.",
             )
@@ -526,22 +530,35 @@ impl Splat {
         } else {
             (
                 "Unsaved changes",
-                "Keep editing",
+                "Keep running",
                 "Discard and close",
                 "Return and save, or close and lose these changes.",
             )
+        };
+        let title = if items.len() == background {
+            self.sessions
+                .recording_label()
+                .map(|label| format!("{label} is recording"))
+                .or_else(|| {
+                    self.sessions
+                        .processing_label()
+                        .map(|label| format!("{label} is processing"))
+                })
+                .unwrap_or_else(|| title.to_owned())
+        } else {
+            title.to_owned()
         };
         let mut keep = ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Escape));
         let mut save_close = false;
         let mut discard = false;
         let mut save_new = false;
-        design::dialog(ctx, "unsaved_on_close", title, |ui| {
+        design::dialog(ctx, "unsaved_on_close", &title, |ui| {
             for (item, _) in &items {
                 ui.add(egui::Label::new(item.as_str()).wrap());
             }
             ui.label(Type::Small.rich(ui, advice).color(colors().muted));
             ui.add_space(design::S);
-            let loses = !only_sync || sync_loss;
+            let loses = items.len() != background && (!only_sync || sync_loss);
             ui.horizontal(|ui| {
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     if only_run_unsaved {
@@ -1618,11 +1635,20 @@ impl Splat {
                 self.settings_tab = SettingsTab::default();
                 self.settings.focus_sign_in();
             }
+            let new_group = std::mem::take(&mut run.wants_new_group);
+            if std::mem::take(&mut run.wants_packages) {
+                self.page = Page::Campaign;
+                self.campaign_tab = CampaignTab::Packages;
+            }
             let group = run.wants_group_editor.take();
             if let Some(path) = group
                 && let Some(campaign) = &active
             {
                 self.encounters.open_group_in_plan(&path, campaign);
+                self.page = Page::Encounters;
+            }
+            if new_group {
+                self.encounters.new_group_in_plan();
                 self.page = Page::Encounters;
             }
         }

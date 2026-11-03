@@ -1279,7 +1279,7 @@ pub mod dialogs {
     const CLOSE_WINDOW: &str = "Cancel";
     const NOTE: &str = "Ash Exposure";
     const CLOSE_PROMPT: &str = "has unsaved changes.";
-    const KEEP_EDITING: &str = "Keep editing";
+    const KEEP_EDITING: &str = "Keep running";
 
     pub fn run(d: &mut Driver<'_>) {
         go_library(d);
@@ -1750,6 +1750,16 @@ pub mod prep_to_table {
         d.state("run-setup", Sizes::All);
         d.goal_within("T4.1", "cold start to run setup", 3);
         d.review("T4.5", "the setup view, to compare with the live view");
+        d.click("More actions for Brannoch Vale");
+        d.state("setup-row-menu", Sizes::Default);
+        d.click("Correct…");
+        d.state("correct-in-setup", Sizes::All);
+        d.observe(
+            "Setup corrections",
+            d.has("Current HP") && !d.has("Resolve ties"),
+            "The row menu opens that participant's correction fields; ties stay on the roster",
+        );
+        d.click("Prep");
 
         // A player who did not arrive can be marked, in Setup, and marked back.
         d.begin_task();
@@ -1843,9 +1853,41 @@ pub mod prep_to_table {
             "Rows do not move during initiative entry",
         );
         d.state("all-initiative-entered", Sizes::Default);
+        for size in [SMALL, DEFAULT] {
+            let (aligned, compact) = d.at_size(size, |d| {
+                let nodes = d.nodes();
+                let aligned = nodes
+                    .iter()
+                    .filter(|node| node.name.starts_with("Initiative for "))
+                    .all(|field| {
+                        let name = field.name.trim_start_matches("Initiative for ");
+                        let controls = [
+                            format!("Roll for {name}"),
+                            format!("Absent: {name}"),
+                            format!("More actions for {name}"),
+                        ];
+                        controls.iter().all(|name| {
+                            nodes.iter().filter(|node| node.name == *name).all(|node| {
+                                (node.rect.center().y - field.rect.center().y).abs() <= 1.0
+                                    && node.rect.left() > field.rect.right()
+                            })
+                        })
+                    });
+                let compact = nodes.iter().any(|node| {
+                    node.name.starts_with("Brannoch Vale · ")
+                        && node.rect.height() <= crate::design::RUN_REGULAR.row
+                });
+                (aligned, compact)
+            });
+            d.observe(
+                "Setup row controls",
+                aligned && compact,
+                format!(
+                    "At {size:?}, controls share the initiative centre and an untied row fits RUN_REGULAR: aligned {aligned}, compact {compact}"
+                ),
+            );
+        }
         d.goal("enter the other players' initiative");
-        d.click("Correct");
-        d.click("Resolve ties");
         d.state("resolve-ties", Sizes::Default);
         // Tied rows keep their arrows in two fixed places, so that a second click on one lands
         // on the same arrow.
@@ -2338,7 +2380,7 @@ pub mod party_from_run {
         ["Blinded", "Charmed", "Grappled", "Paralyzed", "Restrained"];
     const END_ENCOUNTER: &str = "End encounter…";
     const END_NOW: &str = "End encounter";
-    const ENDED: &str = "Ended: ";
+    const ENDED: &str = "Outcome: ";
     const UNDO_ENDING: &str = "Undo: end encounter";
 
     pub fn run(d: &mut Driver<'_>) {
@@ -2391,8 +2433,14 @@ pub mod party_from_run {
 
         // The hardest rows: 0 HP, absent, and many conditions. Words, not only colour.
         d.click_row(MEMBER);
+        let correct_y = d.place_of("Correct").map(|rect| rect.min.y);
         d.type_text(ZERO_DAMAGE);
         d.press(Key::Enter);
+        d.observe(
+            "Stable death saves",
+            correct_y == d.place_of("Correct").map(|rect| rect.min.y),
+            "The panel tabs stay in place when HP reaches zero",
+        );
         d.expect("0 HP");
         d.click_row(ABSENT_ROW);
         d.click(ABSENT);
@@ -2418,6 +2466,15 @@ pub mod party_from_run {
         );
         d.click_row(MEMBER);
         d.state("zero-hp-selected", Sizes::Default);
+        d.click("Correct");
+        d.expect("Death save successes");
+        d.click("Add a death save success");
+        d.observe(
+            "Death saves",
+            !d.has("DEATH SAVES (MANUAL)"),
+            "Editable counts below the tabs replace the duplicate manual fields",
+        );
+        d.state("death-saves-under-correct", Sizes::Default);
 
         // The third view of a run. It reads differently, and undo can reopen it.
         d.click(END_ENCOUNTER);
@@ -3022,6 +3079,20 @@ pub mod run_edge_states {
             "Save as a new run and close keeps the other file and closes the run",
         );
         d.state("saved-new-run-and-closed", Sizes::Default);
+        d.observe("Recovery selection", d.has_containing("Changed elsewhere") && d.has_containing("saved "),
+            "Recovery copies show their save time, and the preserved file is marked Changed elsewhere");
+        d.click(RESUME);
+        let resumed_copy = d
+            .app_mut()
+            .encounters
+            .run()
+            .is_some_and(|run| run.path().is_some_and(|path| path != new_path));
+        d.observe(
+            "Recovery selection",
+            resumed_copy,
+            "Resume opens the recovery copy closed last",
+        );
+        d.state("resumed-last-closed-copy", Sizes::Default);
         d.unreached(
             "HP unknown on a live row",
             "the setup view, because a live run requires known HP (Run::open and Begin refuse otherwise)",
@@ -3267,6 +3338,15 @@ pub mod run_roster_conflict {
                 "At 960x640 with a long message, it takes one line and every row stays: {cut:?}"
             ),
         );
+        d.click("Read all conditions");
+        d.observe(
+            "Condition summary",
+            d.has("Kestrel Dunmoor") && d.has("Restrained"),
+            "The crowded row's count link opens every condition for that participant",
+        );
+        d.state("all-conditions-from-summary", Sizes::Default);
+        d.click_row(ONE_MORE_LINE);
+        d.click(CONDITIONS);
         d.click(ONE_MORE_CONDITION);
         d.click_row(LOADED_ROW);
         let errored = LOADED_CONDITIONS.len() + 1;
@@ -3508,7 +3588,7 @@ pub mod signed_in {
             ),
         );
         d.state("session-ended-during-run", Sizes::All);
-        d.click("Sign in again");
+        d.click("Connect to sync");
         d.observe(
             "Sign in recovery",
             d.focused_name().as_deref() == Some("Paste session cookie"),
@@ -4500,7 +4580,7 @@ pub mod session_notes {
         d.click("Death saves");
         d.observe(
             "T11.8",
-            !d.has("Close notes") && d.has_containing("0 successes"),
+            !d.has("Close notes") && d.has("Death save successes"),
             "Death saves show, in place of the notes, when both have no room",
         );
         d.click_containing("Undo: 99 damage");
@@ -4670,13 +4750,13 @@ pub mod session_notes {
         }
         d.observe(
             "T11.8",
-            d.has_containing("Everyone is ready. 2 tied."),
+            d.has_containing("Everyone is ready · 2 tied"),
             "Notes hide the order of ties, so setup says that there are ties",
         );
-        d.click("Open Correct");
+        d.click("Close notes");
         d.observe(
             "T11.8",
-            !d.has("Close notes") && d.has_containing(" ties"),
+            !d.has("Close notes") && d.has_containing(" tied"),
             "What Notes hide in setup is one click away",
         );
     }
@@ -4806,9 +4886,9 @@ pub mod session_recording {
         d.state("recording-on-another-page", Sizes::Default);
         // A close does not end it by surprise.
         d.request_close();
-        d.expect("Keep working");
+        d.expect("Keep running");
         d.state("recording-close-prompt", Sizes::Default);
-        d.click("Keep working");
+        d.click("Keep running");
         d.observe(
             "T11.5",
             d.page_title().as_deref() == Some("Library"),
@@ -4907,7 +4987,7 @@ pub mod session_recording {
         d.request_close();
         d.expect("processing it again goes on from there");
         d.state("processing-close-prompt", Sizes::Default);
-        d.click("Keep working");
+        d.click("Keep running");
         d.app_mut()
             .sessions
             .simulate_job_end(Err(CANCELLED.to_owned()));
@@ -5235,10 +5315,8 @@ pub mod encounter_groups {
         d.observe(
             "T13.1",
             d.visible_text("XP not known")
-                && d.has_containing(
-                    "Member 1, an unknown creature: not in this campaign's packages",
-                )
-                && d.visible_text("1 × unknown creature"),
+                && d.has_containing("Member 1, Unknown creature: not in this campaign's packages")
+                && d.visible_text("1 × Unknown creature"),
             "A broken member has a readable name in both its summary and its fault",
         );
         d.observe(
@@ -5682,7 +5760,8 @@ pub mod run_overrides {
         );
         d.observe(
             "T13.3",
-            d.has_containing(BASE_AND_CHANGED)
+            !d.has_containing(BASE_AND_CHANGED)
+                && d.visible_text("printed 33")
                 && d.has_containing("Attack bonus: As printed → +1 on each attack")
                 && d.has_containing("add\u{a0}by\u{a0}hand")
                 && d.has_containing("Speed: 30 ft → 40 ft")
@@ -5720,7 +5799,7 @@ pub mod run_overrides {
         d.state("setup-with-a-changed-row", Sizes::Default);
         d.observe(
             "T13.3",
-            d.has_containing("Changed · ◆ Enemies · HP 43/43 · AC 15"),
+            d.has_containing("Changed ·") && d.has_containing("Enemies · HP 43/43 · AC 15"),
             "A new run starts with the slot's changes, and its setup row says so",
         );
         d.goal("start a run with a changed creature");
@@ -5734,7 +5813,7 @@ pub mod run_no_groups {
     pub fn run(d: &mut Driver<'_>) {
         resume_run(d, RUN);
         fight_tab(d, "Arrivals");
-        d.expect("No encounter groups yet");
+        d.expect("No groups yet. Make one on Encounters with");
         d.state("no-groups", Sizes::Default);
         d.goal("see that a campaign has no groups");
     }
@@ -5878,7 +5957,7 @@ pub mod session_plan_groups {
         d.state("arrivals-tonight-first", Sizes::All);
         d.observe(
             "T14.6",
-            d.has("FOR ANY ENCOUNTER"),
+            d.has_containing("FOR ANY ENCOUNTER"),
             "The groups in tonight's plan come first in the run's panel",
         );
 
@@ -6136,7 +6215,7 @@ pub mod session_plan {
         d.click("End encounter…");
         d.type_text("Held the bridge");
         d.press(Key::Enter);
-        d.expect("Ended: Held the bridge");
+        d.expect("Outcome: Held the bridge");
         d.begin_task();
         d.click(CLOSE_RUN);
         d.goal_within("T12.1", "go back from a finished fight", 1);

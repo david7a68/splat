@@ -375,6 +375,15 @@ impl Run {
             .map_or_else(|_| "this creature".to_owned(), |it| it.name.clone());
         // Says what it adds. A long name stays in the accessible name, whole.
         let short: String = name.chars().take(BUTTON_NAME).collect();
+        let short = checked.as_ref().ok().filter(|it| it.count > 1).map_or_else(
+            || short.clone(),
+            |it| {
+                format!(
+                    "{} × {short}",
+                    design::count(it.count as usize, "", "").trim()
+                )
+            },
+        );
         let label = match total {
             Some(total) => format!("Add {short} at {total}"),
             None if may_roll => format!("Add {short} and roll"),
