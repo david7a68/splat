@@ -439,7 +439,7 @@ pub fn messages(ui: &mut egui::Ui) {
     design_group(ui, "Reader");
     style::measure(ui, |ui| {
         style::title(ui, "Entry title");
-        style::subtitle(ui, "Spell · Level 3 · Built-in");
+        style::subtitle(ui, "Spell · Level 3 · D&D 2024");
         style::identity(ui, "Medium humanoid, unaligned");
         style::facts(
             ui,

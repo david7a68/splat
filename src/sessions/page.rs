@@ -20,7 +20,9 @@ use crate::{
     recording::{Health, Recorder},
     timeline::{
         self, Book, Kind,
-        page::{SessionLink, problems, quick_add, undo_removed},
+        page::{
+            SessionLink, long_rest_added_message, problems, quick_add, rest_ruling, undo_removed,
+        },
     },
 };
 use eframe::egui::{self, Color32};
@@ -3474,16 +3476,8 @@ impl Sessions {
                     self.group_menu(ui, plan);
                 });
                 if let Some(id) = &added {
-                    // A long rest and its HP ruling are one operation and one Undo.
                     if let Some(event) = book.events.iter_mut().find(|event| event.id == *id) {
                         event.title = event.kind.word().to_owned();
-                    }
-                    let next_order = book.next_order();
-                    if let Some(event) = book.events.iter_mut().find(|event| event.id == *id)
-                        && event.kind == Kind::LongRest
-                    {
-                        event.restores = true;
-                        event.played_order = next_order;
                     }
                     let days = timeline::day_numbers(&book.events);
                     let index = book.events.iter().position(|event| event.id == *id);
@@ -3563,6 +3557,8 @@ impl Sessions {
         let mut undo_row_remove = false;
         let event_count = book.events.len();
         let open_event = self.open_event.clone();
+        let ruling_undo = book.rest_undo_id().map(str::to_owned);
+        let mut ruling = None;
         egui::CentralPanel::default().frame(egui::Frame::new()).show_inside(ui, |ui| {
             egui::ScrollArea::vertical().id_salt(("session_plan", session))
                 .auto_shrink([false, false]).show(ui, |ui| {
@@ -3662,10 +3658,8 @@ impl Sessions {
                                 self.fight_block(ui, run, &event.id, plan);
                             } else {
                                 changed |= event_fields(ui, event);
-                                if event.kind == Kind::LongRest && event.restores
-                                    && design::link(ui, "Not at full").clicked() {
-                                    event.restores = false;
-                                    changed = true;
+                                if let Some(action) = rest_ruling(ui, event, ruling_undo.as_ref() == Some(&event.id)) {
+                                    ruling = Some((event.id.clone(), action));
                                 }
                                 if design::link(ui, "Timeline").clicked() { self.wants_event = Some(event.id.clone()); }
                             }
@@ -3837,6 +3831,10 @@ impl Sessions {
         if changed {
             book.touch();
         }
+        if let Some((id, action)) = ruling {
+            action.apply(book, &id);
+            self.added = None;
+        }
         if let Some(saved) = delete_run {
             match crate::encounter_run::DeletedRun::delete(&saved) {
                 Ok(deleted) => {
@@ -3995,16 +3993,8 @@ impl Sessions {
                                     !plan_saved_status(saved).starts_with("Setup")
                                 })
                             })
-                            .map(|fight| format!("{} keeps its saved HP.", fight.name))
-                            .collect::<Vec<_>>();
-                    if names.is_empty() {
-                        "Long rest added. Everyone starts the next fight at full.".to_owned()
-                    } else {
-                        format!(
-                            "Long rest added. New fights start at full. {}",
-                            names.join(" ")
-                        )
-                    }
+                            .map(|fight| fight.name.clone());
+                    long_rest_added_message(names)
                 } else {
                     format!("{} added{to}.", just.label)
                 },
@@ -6100,6 +6090,11 @@ impl Sessions {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn long_rest_added_on_plan_restores_and_undo_removes_its_ruling() {
+        timeline::page::check_long_rest_add(&PLAN_KINDS);
+    }
 
     #[test]
     fn plan_summary_stays_below_both_wrapped_title_and_action() {
