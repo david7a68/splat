@@ -118,8 +118,15 @@ Every control the app draws is at least 24 px (WCAG 2.5.8, and the `target-size`
 The exception is egui's own scroll bar, which is 8 px. The check reports it as chrome.
 It stays 8 px because egui paints the handle at the width it senses, and the wheel and
 the page keys also scroll. Tab steps over it (`Splat::skip_unnamed_focus`). The check
-counts a node as a bar only if it has no role and no name, lies outside a scroll
-surface, and matches the full length of that surface's edge.
+counts a node as a bar only if it has no role and no name and matches the full
+length of a scroll surface's edge. A nested horizontal bar can float up to the
+reader's visible bottom edge. It stays hidden while its table is below view.
+
+Reader tables keep each column at least as wide as its longest word. A table
+that cannot fit scrolls sideways and says how to do that. Ordinary wheel
+scrolling still moves down the note. The ergonomics check permits side clipping
+only where a real horizontal scroll bar can reveal the text; it still rejects
+clipping in ordinary readers and text cut to an ellipsis.
 
 A column's drag handle is the same kind of chrome: 10 px wide and as tall as the column.
 Tab steps over it too. It has no keyboard control. A column keeps a usable width without a drag.

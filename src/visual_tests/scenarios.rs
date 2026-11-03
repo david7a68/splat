@@ -406,6 +406,57 @@ pub mod library_navigation {
     }
 }
 
+/// A homebrewer reads a wide table in the Library, then beside a live fight.
+pub mod reader_tables {
+    use super::*;
+
+    pub fn run(d: &mut Driver<'_>) {
+        go_library(d);
+        d.click("New entry");
+        d.type_into("Entry name", "Spell Progression");
+        d.open_combo_at(2);
+        d.click("rule");
+        d.click("Create entry");
+        d.type_into_editor(
+            "| Level | Proficiency Bonus | Features | Cantrips | Prepared Spells | 1st | 2nd | 3rd | 4th | 5th | 6th | 7th | 8th | 9th |\n\
+             | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |\n\
+             | 5 | +3 | Memorize Spell | 4 | 9 | 4 | 3 | 2 | 0 | 0 | 0 | 0 | 0 | Ninth-slot |\n\n\
+             The table leaves this note readable.\n",
+        );
+        d.click("Save");
+        d.click("Read");
+        d.state("wide-table-in-library", Sizes::All);
+        let table = d.place_of("Memorize Spell").expect("feature cell");
+        d.scroll_at(table.center(), 1);
+        d.observe(
+            "Vertical scrolling",
+            d.visible_text("Level"),
+            "An ordinary wheel gesture does not scroll the table sideways",
+        );
+        d.scroll_sideways_at(table.center(), 20);
+        d.observe(
+            "Wide tables",
+            d.visible_text("Ninth-slot"),
+            "The last column is readable after scrolling across the Library table",
+        );
+        d.state("last-column-in-library", Sizes::All);
+
+        go_encounters(d);
+        resume_run_from_cold_start(d);
+        look_up(d, "Spell Progression");
+        d.expect("Memorize Spell");
+        d.state("wide-table-beside-run", Sizes::All);
+        let table = d.place_of("Memorize Spell").expect("feature cell");
+        d.scroll_sideways_at(table.center(), 20);
+        d.observe(
+            "Wide tables",
+            d.visible_text("Ninth-slot") && d.in_view(NEXT_TURN),
+            "The last column is readable in Lookup while the current fight stays visible",
+        );
+        d.state("last-column-beside-run", Sizes::All);
+    }
+}
+
 /// W9: choose what a campaign uses, then edit a campaign-owned entry.
 pub mod campaign_content {
     use super::*;
