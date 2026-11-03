@@ -2781,28 +2781,6 @@ impl Run {
     }
 }
 
-/// Shared words for a run's state on Session, Encounters and the rail.
-pub fn run_state_words(round: u64, paused: bool, ended: bool) -> String {
-    if ended {
-        if round == 0 {
-            "Ended · Setup".to_owned()
-        } else {
-            format!("Ended · Round {round}")
-        }
-    } else {
-        let state = if round == 0 {
-            "Setup".to_owned()
-        } else {
-            format!("Round {round}")
-        };
-        if paused {
-            format!("{state} · Paused")
-        } else {
-            state
-        }
-    }
-}
-
 /// Where a saved run stands, as the Encounters page sorts it.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Standing {
@@ -2826,19 +2804,6 @@ pub struct SavedRunInfo {
     pub saved_at: Option<u64>,
     /// Who holds values not sent to D&D Beyond.
     pub unsent: Vec<String>,
-}
-
-impl SavedRunInfo {
-    pub fn state_words(&self, paused: bool) -> String {
-        let round = self
-            .label
-            .split("Round ")
-            .nth(1)
-            .and_then(|tail| tail.split_whitespace().next())
-            .and_then(|round| round.parse().ok())
-            .unwrap_or(0);
-        run_state_words(round, paused, self.standing == Standing::Ended)
-    }
 }
 
 /// A run file the DM deleted, kept in memory for one step of undo.

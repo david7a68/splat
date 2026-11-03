@@ -93,7 +93,7 @@ pub struct Plan<'a> {
     pub blocked: Option<&'a str>,
     pub run_directory: Option<PathBuf>,
     pub open_run: Option<Uuid>,
-    pub open_round: u64,
+    pub open_state: String,
     pub open_encounter: Option<&'a str>,
 }
 
@@ -369,7 +369,7 @@ fn plan_row(
 
 /// A paused run needs its state here; the whole saved-run record stays in Encounters.
 fn plan_saved_status(saved: &crate::encounter_run::SavedRunInfo) -> String {
-    saved.state_words(true)
+    crate::encounters::run_state_word(saved, true)
 }
 
 fn plan_link(ui: &mut egui::Ui, label: &str, open: bool) -> egui::Response {
@@ -2937,7 +2937,7 @@ impl Sessions {
                             if plan_link(ui, &label, is_open).clicked() { toggle = Some(event.id.clone()); }
                             if running {
                                 if design::status_link(ui, Status { icon: icons::RUN,
-                                    word: &crate::encounter_run::run_state_words(plan.open_round, false, false), color: c.text }).clicked() {
+                                    word: &plan.open_state, color: c.text }).clicked() {
                                     self.wants_back_to_run = true;
                                 }
                             } else if let Some(saved) = saved {
@@ -3019,7 +3019,7 @@ impl Sessions {
                             }
                             if running {
                                 if design::status_link(ui, Status { icon: icons::RUN,
-                                    word: &crate::encounter_run::run_state_words(plan.open_round, false, false), color: c.text }).clicked() {
+                                    word: &plan.open_state, color: c.text }).clicked() {
                                     self.wants_back_to_run = true;
                                 }
                             } else if let Some(saved) = &fight.saved {

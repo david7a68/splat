@@ -1265,6 +1265,12 @@ impl Splat {
                     let group_discarded = self.encounters.group_discarded_in_plan();
                     let arrivals_open = self.encounters.run_takes_arrivals();
                     let run_directory = self.encounters.run_directory(campaign);
+                    let open_state = self
+                        .encounters
+                        .run()
+                        .and_then(crate::encounter_run::Run::live_info)
+                        .map(|run| crate::encounters::run_state_word(&run, false))
+                        .unwrap_or_default();
                     let (encounters, campaigns) = (&mut self.encounters, &self.campaigns);
                     let mut group_editor = |ui: &mut egui::Ui| {
                         encounters.group_in_plan_view(ui, campaign, campaigns);
@@ -1280,7 +1286,7 @@ impl Splat {
                         blocked,
                         run_directory,
                         open_run: self.run_fact.as_ref().map(|fact| fact.id),
-                        open_round: self.run_fact.as_ref().map_or(0, |fact| fact.round),
+                        open_state,
                         open_encounter: self.run_fact.as_ref().map(|fact| fact.name.as_str()),
                     };
                     self.sessions
