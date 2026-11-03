@@ -3756,9 +3756,6 @@ impl Run {
         if let Some((icon, word, _)) = hp_word(&p) {
             numbers.push_str(&format!(" · {icon} {word}"));
         }
-        if p.npc_identity() {
-            numbers.push_str(&format!(" · as {}", p.definition.name));
-        }
         let selected = self.panel == Panel::Record && self.selected == index;
         let (name, npc, mode, bonus, initiative, present) = (
             p.name.clone(),
@@ -3805,7 +3802,6 @@ impl Run {
                     format!("{absent}{changed} · {numbers}")
                 }
             };
-            let row_name = format!("{name} · {detail}");
             let width = name_width - 2.0 * design::S;
             let title =
                 ui.painter()
@@ -3833,6 +3829,7 @@ impl Run {
             if p.npc_identity() {
                 detail.push_str(&format!(" · as {}", p.definition.name));
             }
+            let row_name = format!("{name} · {detail}");
             let detail = detail
                 .split(" · ")
                 .map(|part| part.replace(' ', "\u{a0}"))

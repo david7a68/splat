@@ -6878,6 +6878,12 @@ pub mod npc_in_encounter {
         d.click(RUN_ENCOUNTER);
         d.expect("Initiative for Rook Ambry");
         d.state("npc-in-setup", Sizes::All);
+        d.observe_both("P5", "Setup names the NPC's creature once", |d| {
+            d.painted_in(egui::Rect::EVERYTHING)
+                .matches("as\u{a0}Guard")
+                .count()
+                == 1
+        });
         let cost = d.interaction_count() - started;
         d.observe("W6", cost <= 8, format!("Prepare an encounter with a named NPC and start setup: {cost} interactions, target 8"));
     }
