@@ -212,6 +212,8 @@ pub const RAIL_WIDE_WIDTH: f32 = 188.0;
 pub const RAIL_WIDE_FROM: f32 = 1400.0;
 /// A drag can take the rail this far, in a window with room for it.
 pub const RAIL_DRAG_MAX_WIDTH: f32 = 320.0;
+pub const CONDITION_THREE_COLUMNS_FROM: f32 = 400.0;
+pub const CONDITION_COLUMN_MIN: f32 = 90.0;
 pub const PANEL_MIN_WIDTH: f32 = 340.0;
 pub const PANEL_MAX_WIDTH: f32 = 560.0;
 /// A drag can take a side panel past the width it has by itself.

@@ -527,7 +527,7 @@ such as `2d6 + 3`, and shows the total beside it. The roll also goes in the log.
 
 **Arrivals** adds what joins a fight after it starts. To add one creature, find it in the campaign,
 or type a new name and its HP to make one up. A value you type replaces the creature's own for this
-fight, and the card shows the change. A creature you make up stays in this run, and has no note.
+fight, and the card shows the change. A creature you make up stays in this run, and has no note. Its card shows current and maximum HP and the initiative total you typed, with no printed values. A tied arrival offers **Move before** with the tied creature or shared group's name. Shared rolls stay together; a move before the current turn says **acts next round**.
 Below that, the panel lists this encounter's own groups, then the groups tonight's plan links, then
 the other groups for any encounter, with their members and total XP. Drag a group's
 name onto the initiative list, or press its **Add** button. Type a total beside it to use that for every
@@ -667,3 +667,13 @@ Settings imports a D&D Beyond campaign directly below its row and suggests a new
 Library shows **Back** with **Alt+Left** whenever an earlier entry is available. Both ordinary and wiki links open in place. The draft and disk comparison opens at the first changed line, with two context lines above it; a missing line says **No line**. Lookup has **Clear** beside search. An NPC read beside a run shows linked **Fights as** and **In** values. New packages start beside the last registered package. **Folder** accepts a new folder or suggests an existing one.
 
 The visual suite includes `npc-in-lookup`, `package-rename` and `package-about`. `share-to-package` checks the new references after **Share both**, and Library navigation checks the dependency copy action and its Undo.
+
+The run header keeps two lines after each action. Undo has a fixed slot; hover gives the
+full action. Recording silence stays ahead of connection notices, while a sync conflict
+comes first. Keys keeps its word beside each panel. When several unfinished copies of
+one encounter exist, the save word and the rail hover identify the open copy.
+
+Recording and processing keep one linked rail slot above the account state. An open
+recording row owns its error message. Other pages show the banner. A live row has
+**Stop recording** before **Process**. A processed row keeps **Process again…** in its
+menu above **Delete…**, with confirmation before it replaces results.

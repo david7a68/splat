@@ -209,6 +209,7 @@ fn prose(
             && let Some(values) = values
             && !values.by_hand.is_empty()
         {
+            ui.add_space(-design::L + design::XS);
             ui.add(
                 egui::Label::new(
                     Type::Small
@@ -217,6 +218,7 @@ fn prose(
                 )
                 .wrap(),
             );
+            ui.add_space(design::L);
         }
         if paragraph.starts_with("Spellcasting.") {
             spell_links(ui, paragraph);
