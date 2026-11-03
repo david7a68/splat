@@ -1094,9 +1094,11 @@ impl Reader {
         }
         width.min(
             (ui.available_width()
-                - design::XXL * 3.0
-                - Action::quiet("Change").natural_width(ui)
-                - design::L)
+                - (design::XXL * 3.0 + design::S)
+                - Action::quiet("Change")
+                    .density(Density::Scan)
+                    .natural_width(ui)
+                - ui.spacing().item_spacing.x * 2.0)
                 .max(design::XXL),
         )
     }
@@ -1106,44 +1108,87 @@ impl Reader {
         label: &str,
         width: f32,
         value: impl FnOnce(&mut egui::Ui),
-    ) -> bool {
+        notice: Option<&str>,
+    ) -> (bool, bool) {
         let name = format!("Change {label}");
         let change = Action::quiet("Change")
             .density(design::Density::Scan)
             .name(&name);
-        if ui.available_width() < design::READER_MEASURE {
-            let clicked = ui
-                .horizontal(|ui| {
-                    ui.label(Type::Small.rich(ui, label).color(colors().muted));
-                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        change.show(ui).clicked()
-                    })
-                    .inner
+        let mut undo = false;
+        let clicked = ui
+            .horizontal(|ui| {
+                ui.with_layout(egui::Layout::left_to_right(egui::Align::TOP), |ui| {
+                    ui.allocate_ui_with_layout(
+                        egui::vec2(
+                            design::XXL * 3.0 + design::S,
+                            design::Density::Scan.control(),
+                        ),
+                        egui::Layout::left_to_right(egui::Align::Center),
+                        |ui| {
+                            ui.set_min_width(design::XXL * 3.0 + design::S);
+                            ui.label(Type::Small.rich(ui, label).color(colors().muted));
+                        },
+                    );
+                    ui.allocate_ui_with_layout(
+                        egui::vec2(width, design::Density::Scan.control()),
+                        egui::Layout::top_down(egui::Align::Min),
+                        |ui| {
+                            ui.set_min_width(width);
+                            value(ui);
+                        },
+                    );
+                    let clicked = change.show(ui).clicked();
+                    if let Some(word) = notice {
+                        undo = Self::change_notice(ui, word);
+                    }
+                    clicked
                 })
-                .inner;
-            value(ui);
-            clicked
-        } else {
-            ui.horizontal(|ui| {
-                ui.allocate_ui_with_layout(
-                    egui::vec2(design::XXL * 3.0, design::Density::Scan.control()),
-                    egui::Layout::left_to_right(egui::Align::Center),
-                    |ui| {
-                        ui.set_min_width(design::XXL * 3.0);
-                        ui.label(Type::Small.rich(ui, label).color(colors().muted));
-                    },
-                );
-                ui.allocate_ui_with_layout(
-                    egui::vec2(width, design::Density::Scan.control()),
-                    egui::Layout::left_to_right(egui::Align::Center),
-                    |ui| {
-                        ui.set_min_width(width);
-                        value(ui);
-                    },
-                );
-                change.show(ui).clicked()
+                .inner
             })
-            .inner
+            .inner;
+        (clicked, undo)
+    }
+
+    fn notice_fits(ui: &egui::Ui, value_width: f32, word: &str) -> bool {
+        ui.available_width()
+            >= design::XXL * 3.0
+                + design::S
+                + value_width
+                + Action::quiet("Change")
+                    .density(Density::Scan)
+                    .natural_width(ui)
+                + design::number_width(ui, word, &Type::Small.font(ui))
+                + Type::Small.line()
+                + design::XS
+                + Action::quiet("Undo").natural_width(ui)
+                + ui.spacing().item_spacing.x * 4.0
+    }
+
+    fn change_notice(ui: &mut egui::Ui, word: &str) -> bool {
+        design::status(
+            ui,
+            design::Status {
+                icon: design::icons::INFO,
+                word,
+                color: colors().muted,
+            },
+        );
+        Action::quiet("Undo")
+            .name("Undo World change")
+            .show(ui)
+            .clicked()
+    }
+
+    fn undo_change(&mut self, campaign: &Campaign, id: Uuid) -> Option<Go> {
+        match self.undo.as_ref()?.undo(campaign) {
+            Ok(_) => {
+                self.undo = None;
+                Some(Go::Reload(id))
+            }
+            Err(error) => {
+                self.error = Some(error);
+                None
+            }
         }
     }
 
@@ -1165,65 +1210,65 @@ impl Reader {
             } else {
                 creature(&item.entry).and_then(|r| index.position_of(&r))
             };
+            let notice = self
+                .undo
+                .as_ref()
+                .filter(|change| {
+                    change.path == item.entry.path
+                        && change.word
+                            == if key == "in" {
+                                "Place changed."
+                            } else {
+                                "Stat block changed."
+                            }
+                        && Self::notice_fits(ui, value_width, &change.word)
+                })
+                .map(|change| change.word.clone());
             ui.push_id(key, |ui| {
-                if Self::relationship_row(ui, label, value_width, |ui| {
-                    if let Some(at) = target {
-                        if design::link(ui, &index.items[at].entry.name).clicked() {
-                            go = Some(Go::Item(at, None));
+                let (changed, undo) = Self::relationship_row(
+                    ui,
+                    label,
+                    value_width,
+                    |ui| {
+                        if let Some(at) = target {
+                            if design::wrapped_link(ui, &index.items[at].entry.name).clicked() {
+                                go = Some(Go::Item(at, None));
+                            }
+                        } else if let Some(value) = world_field(&item.entry, key) {
+                            ui.label(
+                                Type::Small
+                                    .rich(
+                                        ui,
+                                        if key == "creature" {
+                                            format!("{} Stat block not found", design::icons::WARN)
+                                        } else {
+                                            format!(
+                                                "{} {} · Not found",
+                                                design::icons::WARN,
+                                                value
+                                                    .as_str()
+                                                    .unwrap_or("Entry")
+                                                    .trim_matches(['[', ']'])
+                                            )
+                                        },
+                                    )
+                                    .color(colors().result.warning),
+                            );
+                        } else {
+                            ui.label(Type::Small.rich(ui, "none").color(colors().muted));
                         }
-                    } else if let Some(value) = world_field(&item.entry, key) {
-                        ui.label(
-                            Type::Small
-                                .rich(
-                                    ui,
-                                    if key == "creature" {
-                                        format!("{} Stat block not found", design::icons::WARN)
-                                    } else {
-                                        format!(
-                                            "{} {} · Not found",
-                                            design::icons::WARN,
-                                            value
-                                                .as_str()
-                                                .unwrap_or("Entry")
-                                                .trim_matches(['[', ']'])
-                                        )
-                                    },
-                                )
-                                .color(colors().result.warning),
-                        );
-                    } else {
-                        ui.label(Type::Small.rich(ui, "none").color(colors().muted));
-                    }
-                }) {
+                    },
+                    notice.as_deref(),
+                );
+                if changed {
                     self.picker = Some(Picker {
                         key,
                         focus: true,
                         ..Default::default()
                     });
                 }
-                if let Some(change) = &self.undo
-                    && change.path == item.entry.path
-                    && change.word
-                        == if key == "in" {
-                            "Place changed."
-                        } else {
-                            "Stat block changed."
-                        }
-                {
-                    ui.label(Type::Small.rich(ui, &change.word).color(colors().muted));
-                    if Action::quiet("Undo")
-                        .name("Undo World change")
-                        .show(ui)
-                        .clicked()
-                    {
-                        match change.undo(campaign) {
-                            Ok(_) => {
-                                self.undo = None;
-                                go = Some(Go::Reload(item.entry.id));
-                            }
-                            Err(error) => self.error = Some(error),
-                        }
-                    }
+                if undo {
+                    go = self.undo_change(campaign, item.entry.id);
                 }
             });
         }
@@ -1378,13 +1423,21 @@ impl Reader {
             let value_width = Self::relationship_width(ui, item, index);
             if !self.status_editing {
                 let value = status(&item.entry);
-                if Self::relationship_row(ui, "Status", value_width, |ui| {
-                    ui.label(
-                        Type::Small
-                            .rich(ui, if value.is_empty() { "not set" } else { value })
-                            .color(colors().muted),
-                    );
-                }) {
+                if Self::relationship_row(
+                    ui,
+                    "Status",
+                    value_width,
+                    |ui| {
+                        ui.label(
+                            Type::Small
+                                .rich(ui, if value.is_empty() { "not set" } else { value })
+                                .color(colors().muted),
+                        );
+                    },
+                    None,
+                )
+                .0
+                {
                     self.status_editing = true;
                 }
             }
@@ -1420,6 +1473,16 @@ impl Reader {
                     }
                 }
             }
+        }
+        if !self.compact
+            && let Some(change) = &self.undo
+            && change.path == item.entry.path
+            && !Self::notice_fits(ui, Self::relationship_width(ui, item, index), &change.word)
+            && ui
+                .horizontal(|ui| Self::change_notice(ui, &change.word))
+                .inner
+        {
+            return self.undo_change(campaign, item.entry.id);
         }
         if world_type(&item.entry) != "npc" {
             return None;
@@ -1548,11 +1611,8 @@ fn add_form(
     match adding.stat_block.map(|at| &index.items[at].entry) {
         Some(stat_block) => {
             ui.horizontal_wrapped(|ui| {
-                ui.label(
-                    Type::Stat
-                        .rich(ui, format!("Stat block: {}", stat_block.name))
-                        .color(colors().text),
-                );
+                ui.label(Type::Small.rich(ui, "Stat block").color(colors().muted));
+                ui.label(Type::Body.rich(ui, &stat_block.name).color(colors().text));
                 if design::link(ui, "Change").clicked() {
                     adding.search = stat_block.name.clone();
                     adding.stat_block = None;

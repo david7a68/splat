@@ -218,8 +218,14 @@ package name in Library. The kind line does not repeat it.
 
 New creatures store identity and CR in `splat_creature`, and speed and ability scores in
 `splat_stats`. The CR field takes precedence over a legacy body line on every surface.
+Each template stat uses one YAML line. Legacy CR and Speed lines appear only in their
+detail rows, without Markdown line breaks. An absent saving throw leaves its cell empty.
+Campaign spells use the book's fact order: Casting Time, Range, Components, Duration.
+Concentration and Ritual appear in those values only when true.
 The reader uses one L gap after the kind line and one M gap after a spell's fact table.
 World relationship rows use a 32 px pitch, with aligned values and Change actions.
+Values wrap inside their column, with Change on the first line. A change's message and
+Undo follow Change when they fit; otherwise they sit below the whole row block.
 Broken links have a warning icon, a list-row warning and a count in the World header.
 
 `design::reader` holds the typographic parts. `library::view::show` draws one entry and is

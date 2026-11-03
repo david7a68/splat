@@ -411,8 +411,9 @@ impl Campaigns {
     }
 
     /// The always-visible campaign switcher. `blocked` says why it cannot change now.
-    pub fn selector(&mut self, ui: &mut egui::Ui, blocked: Option<&str>) {
+    pub fn selector(&mut self, ui: &mut egui::Ui, blocked: Option<&str>) -> bool {
         let current = self.data.active_campaign_id;
+        let mut add = false;
         let mut selected = current;
         let label = self
             .data
@@ -420,7 +421,11 @@ impl Campaigns {
             .iter()
             .find(|p| Some(p.id) == current)
             .map(|p| p.name.as_str())
-            .unwrap_or("Select campaign");
+            .unwrap_or(if self.data.campaigns.is_empty() {
+                "No campaign"
+            } else {
+                "Select campaign"
+            });
         let reason = if self.writable {
             blocked
         } else {
@@ -453,7 +458,14 @@ impl Campaigns {
                     ui.add_space(design::L);
                 }
                 ui.add_enabled_ui(reason.is_none(), |ui| {
-                    ui.selectable_value(&mut selected, None, "No campaign");
+                    if self.data.campaigns.is_empty() {
+                        if ui.selectable_label(false, "Add campaign…").clicked() {
+                            add = true;
+                            ui.close();
+                        }
+                    } else {
+                        ui.selectable_value(&mut selected, None, "No campaign");
+                    }
                     for campaign in &self.data.campaigns {
                         ui.selectable_value(&mut selected, Some(campaign.id), &campaign.name);
                     }
@@ -470,6 +482,7 @@ impl Campaigns {
         if selected != current {
             self.select(selected);
         }
+        add
     }
 
     fn select(&mut self, id: Option<Uuid>) {

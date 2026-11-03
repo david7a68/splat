@@ -697,7 +697,11 @@ impl Splat {
             ui.add_space(design::XS);
             let blocked = self.blocked_switch();
             ui.spacing_mut().interact_size.y = Density::Read.control();
-            self.campaigns.selector(ui, blocked);
+            if self.campaigns.selector(ui, blocked) {
+                self.campaigns.focus_add();
+                self.settings_tab = SettingsTab::Account;
+                self.page = Page::Settings;
+            }
             ui.add_space(design::S);
             if !self.encounters.has_run() {
                 let fights = self.encounters.paused_run_count();

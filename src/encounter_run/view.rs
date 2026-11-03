@@ -2463,7 +2463,11 @@ impl Run {
         let reference = if is_sheet { "Sheet" } else { "Stat block" };
         self.panel_tabs(ui, Some(reference), true);
         design::rule(ui);
-        if hp == Some(0) {
+        if hp == Some(0)
+            && !(self.panel == Panel::Reference
+                && self.sheet_for == Some(index)
+                && self.sheet.is_some())
+        {
             self.death_saves(ui, index, successes, failures);
         }
         if let Some(sync) = self
@@ -3070,6 +3074,8 @@ impl Run {
     /// Recording only. Colour says nothing here, because nothing is wrong.
     fn death_saves(&mut self, ui: &mut egui::Ui, index: usize, successes: u8, failures: u8) {
         let c = colors();
+        ui.add_space(design::L);
+        design::group_heading(ui, "Death saves", 0);
         let mut command = None;
         ui.horizontal(|ui| {
             ui.set_min_height(Density::Read.control());
@@ -3138,11 +3144,7 @@ impl Run {
             return;
         }
         // A linked character shows the same sheet as the Party page, with its age.
-        if let Some(record) = self
-            .sheet
-            .as_ref()
-            .filter(|_| self.sheet_for == Some(index))
-        {
+        if let Some(record) = self.sheet.clone().filter(|_| self.sheet_for == Some(index)) {
             let live = crate::party::LiveValues {
                 hp: p.hp,
                 max_hp: p.max_hp,
@@ -3150,7 +3152,7 @@ impl Run {
                 conditions: p.conditions.clone(),
             };
             changes_block(ui, p, false);
-            let freshness = crate::party::freshness(record, self.connected);
+            let freshness = crate::party::freshness(&record, self.connected);
             // The sheet is older than what the DM just set here, so say which is which.
             // While sync reads this sheet, the copy's age says nothing about these values.
             let word = if self.syncs.get(&index).is_some_and(|sync| sync.ready()) {
@@ -3166,7 +3168,7 @@ impl Run {
             {
                 ui.horizontal_wrapped(|ui| {
                     if let Some(path) = self.storage.as_ref().and_then(|storage| {
-                        crate::party_sync::portrait_path(storage.campaign, record)
+                        crate::party_sync::portrait_path(storage.campaign, &record)
                     }) {
                         let (rect, _) = ui.allocate_exact_size(
                             egui::Vec2::splat(design::XXL),
@@ -3190,7 +3192,10 @@ impl Run {
                     );
                 });
             }
-            let spells = crate::party::has_spells(record);
+            if p.hp == Some(0) {
+                self.death_saves(ui, index, p.successes, p.failures);
+            }
+            let spells = crate::party::has_spells(&record);
             if !spells && self.sheet_page == 2 {
                 self.sheet_page = 0;
             }
@@ -3202,10 +3207,10 @@ impl Run {
             design::overflow_tabs_small(ui, &mut self.sheet_page, &pages);
             let page = self.sheet_page;
             egui::ScrollArea::vertical()
-                .id_salt(("run_sheet", definition.id, page))
+                .id_salt(("run_sheet", record.definition.splat_id, page))
                 .auto_shrink([false, false])
                 .show(ui, |ui| {
-                    crate::party::sheet_page(ui, record, page, "", Some(&live));
+                    crate::party::sheet_page(ui, &record, page, "", Some(&live));
                 });
             return;
         }
@@ -3345,6 +3350,7 @@ impl Run {
                     let field = format!("Initiative for {}", p.name);
                     let text = self.setup_inputs.entry(index).or_default();
                     let total = text.trim().parse::<i64>().ok();
+                    let mut reason_below = false;
                     ui.horizontal(|ui| {
                         correction_label(ui, "Initiative");
                         let response = design::number_field(
@@ -3362,7 +3368,9 @@ impl Run {
                             .blocked_if(total.is_none(), "Type a number first.")
                             .show(ui)
                             .clicked();
-                        design::blocked_reason(ui, total.is_none().then_some("Type a number first."));
+                        let reason = total.is_none().then_some("Type a number first.");
+                        reason_below = reason.is_some_and(|reason| design::number_width(ui, reason, &Type::Small.font(ui)) > ui.available_width());
+                        if !reason_below { design::blocked_reason(ui, reason); }
                         if (pressed || enter)
                             && let Some(total) = total
                         {
@@ -3371,6 +3379,12 @@ impl Run {
                             self.return_focus = self.lookup_open;
                         }
                     });
+                    if reason_below {
+                        ui.horizontal(|ui| {
+                            correction_label(ui, "");
+                            design::blocked_reason(ui, Some("Type a number first."));
+                        });
+                    }
                     ui.add(egui::Label::new(Type::Small.rich(ui, words).color(color)).wrap());
                 }
                 ui.add_space(design::L);

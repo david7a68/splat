@@ -105,6 +105,10 @@ keeps its state in the session list; a missing input offers **Choose an input**.
 
 Library has **New entry** in its header. Its form opens in the reader column and closes after creation. World has **New ▾** for a plain note, a note with a type, an NPC, a location, or a generated NPC. List headings use capitals and a count. Page headers show state or nonzero counts beside the title, with a rule and an `L` gap below. Counts use thousands separators.
 
+With no campaigns, the switcher says **No campaign** and offers **Add campaign…**.
+New entry and Copy entry use **Destination** and show a short path, with the full path
+on hover. Sharing required campaign entries lists the copies before **Share both**.
+
 The `gallery` scenario captures every design token and component, including page headers, blocked reasons, full rows with menus, save rows, discard recovery, the Add strip, paused runs and message actions. Each scroll capture adds a section to the evidence. The `missing-glyph` check rejects painted characters missing from the app fonts. The
 `clipped` check also catches text partly covered by a later opaque pane. `src/design/lint.rs` fails on raw
 colours, text sizes and raw icon text outside `src/design/`, and `src/design/tokens.rs` tests WCAG contrast.

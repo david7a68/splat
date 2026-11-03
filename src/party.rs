@@ -1361,6 +1361,7 @@ fn tiles(ui: &mut egui::Ui, add: impl FnOnce(&mut egui::Ui)) {
 /// One label line and one value line, so tiles in a row keep their values level.
 fn metric(ui: &mut egui::Ui, label: &str, value: impl ToString) {
     ui.allocate_ui(egui::vec2(TILE_WIDTH, 44.0), |ui| {
+        ui.set_min_height(design::XXL + design::M);
         ui.set_width(TILE_WIDTH - 4.0);
         design::stat_tile(ui, label, &value.to_string());
     });
@@ -1449,7 +1450,7 @@ pub(crate) fn overview(ui: &mut egui::Ui, record: &EntitySnapshot, live: Option<
     } else {
         2
     };
-    subsection_heading(ui, "Saving throws");
+    section_heading(ui, "Saving throws");
     ui.columns(across, |cols| {
         for (at, ability) in ABILITIES.iter().enumerate() {
             cols[at % across].horizontal(|ui| {

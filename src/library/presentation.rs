@@ -158,6 +158,7 @@ pub(crate) fn challenge_text(entry: &Entry) -> Option<&str> {
                 .body
                 .lines()
                 .find_map(|line| line.trim().strip_prefix("CR "))
+                .map(|text| text.trim_end().trim_end_matches('\\').trim_end())
         })
 }
 

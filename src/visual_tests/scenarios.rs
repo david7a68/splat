@@ -599,10 +599,29 @@ pub mod campaign_content {
         d.state("entry-edit", Sizes::Default);
         d.goal("open a campaign entry for editing");
 
+        let editor_top = |d: &Driver<'_>| {
+            d.nodes()
+                .into_iter()
+                .find(|node| node.role == egui::accesskit::Role::MultilineTextInput)
+                .unwrap()
+                .rect
+                .top()
+        };
+        let clean_top = editor_top(d);
         d.type_into_editor("Scarred by the fire at the bridge. ");
+        assert_eq!(
+            editor_top(d),
+            clean_top,
+            "Starting a draft must keep the editor's top edge"
+        );
         d.state("entry-dirty", Sizes::Default);
         d.click(SAVE_ENTRY);
         d.expect(SAVED);
+        assert_eq!(
+            editor_top(d),
+            clean_top,
+            "Saving must keep the editor's top edge"
+        );
         d.state("entry-saved", Sizes::Default);
         d.goal("save the campaign entry");
 
@@ -1452,6 +1471,14 @@ pub mod empty {
         );
         d.review("T10.1", "first launch shows one next step");
         d.state("first-launch", Sizes::Default);
+        d.click("Active campaign: No campaign");
+        d.expect("Add campaign…");
+        d.state("empty-campaign-switcher", Sizes::Default);
+        d.click("Add campaign…");
+        assert_eq!(d.current_page(), "Settings");
+        d.expect(NAME_FIELD);
+        go_library(d);
+        d.begin_task();
         go_campaign(d);
         d.expect(NO_CAMPAIGN);
         d.state("no-campaign", Sizes::All);
@@ -7078,11 +7105,13 @@ pub mod share_to_package {
         d.click(COPY_TO);
         d.click("Destination");
         d.click(&format!("Package · {MODULE}"));
-        d.wait_for_text("Watch Orders needs Captain Varra, which is in this campaign only.");
-        d.state("private-dependency-blocks-sharing", Sizes::All);
+        d.wait_for_text("Also copies Captain Varra, which Watch Orders needs.");
+        assert!(!d.visible_text("Required entries: 1"));
+        d.state("private-dependency-shared-together", Sizes::All);
         d.wait_for_text("Also copies");
         d.type_into("Folder", "Watch/Captains");
         d.wait_for_text("Watch/Captains/Watch Orders.md");
+        d.click("Review Markdown");
         d.state("share-to-new-folder", Sizes::All);
         d.click("Share both");
         d.wait_for_text(

@@ -215,25 +215,36 @@ fn structured_value(ui: &mut egui::Ui, value: &serde_yaml_ng::Value) {
     }
 }
 
+fn spell_facts(spell: &serde_yaml_ng::Value) -> Vec<(String, String)> {
+    ["casting_time", "range", "components", "duration"]
+        .into_iter()
+        .filter_map(|key| {
+            let mut value = display_value(spell.get(key)?);
+            if key == "casting_time" && spell.get("ritual").and_then(|v| v.as_bool()) == Some(true)
+            {
+                value.push_str(" or Ritual");
+            }
+            if key == "duration"
+                && spell.get("concentration").and_then(|v| v.as_bool()) == Some(true)
+            {
+                value = format!("Concentration, {value}");
+            }
+            Some((
+                if key == "casting_time" {
+                    "Casting Time".into()
+                } else {
+                    style::human_label(key)
+                },
+                value,
+            ))
+        })
+        .filter(|(_, value)| !value.is_empty() && value != "—")
+        .collect()
+}
+
 fn preparation_summary(ui: &mut egui::Ui, entry: &Entry, has_source: bool) {
     if !has_source && let Some(spell) = entry.fields.get("splat_spell") {
-        let facts = [
-            "level",
-            "school",
-            "casting_time",
-            "range",
-            "duration",
-            "concentration",
-            "ritual",
-        ]
-        .into_iter()
-        .filter_map(|key| Some((style::human_label(key), display_value(spell.get(key)?))))
-        .filter(|(_, value)| !value.is_empty() && value != "—")
-        .collect::<Vec<_>>();
-        style::facts(ui, &facts);
-        if let Some(components) = spell.get("components").filter(|value| !blank(value)) {
-            style::detail(ui, "Components", &display_value(components));
-        }
+        style::facts(ui, &spell_facts(spell));
     }
     if let Some(encounter) = entry.fields.get("splat_encounter") {
         let mut facts = Vec::new();
@@ -349,6 +360,26 @@ pub(super) fn show(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn campaign_spell_uses_the_book_fact_order_and_true_flags_only() {
+        let mut spell: serde_yaml_ng::Value = serde_yaml_ng::from_str("level: 3\nschool: evocation\ncasting_time: Action\nrange: 150 feet\ncomponents: [V, S, M]\nduration: up to 1 minute\nconcentration: false\nritual: false\n").unwrap();
+        let facts = spell_facts(&spell);
+        assert_eq!(
+            facts
+                .iter()
+                .map(|(label, _)| label.as_str())
+                .collect::<Vec<_>>(),
+            ["Casting Time", "Range", "Components", "Duration"]
+        );
+        assert_eq!(facts[0].1, "Action");
+        assert_eq!(facts[3].1, "up to 1 minute");
+        spell["concentration"] = true.into();
+        spell["ritual"] = true.into();
+        let facts = spell_facts(&spell);
+        assert_eq!(facts[0].1, "Action or Ritual");
+        assert_eq!(facts[3].1, "Concentration, up to 1 minute");
+    }
 
     #[test]
     fn source_facts_keep_wrapped_materials_and_unrecognised_prose() {
