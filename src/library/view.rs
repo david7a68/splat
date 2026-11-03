@@ -198,6 +198,13 @@ fn show_inner(
             .data_mut(|data| data.insert_temp(egui::Id::new("reader_document"), entry.id));
     }
     let reading = entry.and_then(|entry| entry.reading().ok().flatten());
+    let clean_body;
+    let body = if let Some(entry) = entry.filter(|entry| creature::has_stats(entry)) {
+        clean_body = creature::without_vitals(entry, body);
+        clean_body.as_str()
+    } else {
+        body
+    };
     let sections = presentation::reading_sections(body, name);
     let styled = entry.filter(|entry| reading.is_none() && creature::supports(entry, &sections));
     let reading = reading.as_ref();

@@ -50,6 +50,20 @@ pub fn names_word(text: &str, name: &str) -> bool {
     names_lower_word(&text.to_lowercase(), &name.to_lowercase())
 }
 
+pub(crate) fn name_rank(name: &str, query: &str) -> Option<u8> {
+    if name == query {
+        Some(0)
+    } else if name.starts_with(query) {
+        Some(1)
+    } else if names_lower_word(name, query) {
+        Some(2)
+    } else if name.contains(query) {
+        Some(3)
+    } else {
+        None
+    }
+}
+
 /// `names_word`, for words already in lower case.
 fn names_lower_word(text: &str, name: &str) -> bool {
     if name.is_empty() {
@@ -112,21 +126,34 @@ pub struct ContentIndex {
 
 /// Among equal matches: the DM's own entry, then the book, then a sheet's copy.
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
-enum Origin {
+pub(crate) enum Origin {
     Own,
     Book,
     Sheet,
 }
 
+pub(crate) fn entry_origin(entry: Option<&Entry>, private: bool) -> Origin {
+    let from_sheet = entry.is_some_and(|entry| {
+        std::path::Path::new(&entry.path)
+            .file_stem()
+            .is_some_and(|stem| Uuid::parse_str(&stem.to_string_lossy()).is_ok())
+    });
+    origin(private, from_sheet)
+}
+
+fn origin(private: bool, from_sheet: bool) -> Origin {
+    if from_sheet {
+        Origin::Sheet
+    } else if private {
+        Origin::Own
+    } else {
+        Origin::Book
+    }
+}
+
 impl Item {
     fn origin(&self) -> Origin {
-        if self.from_sheet {
-            Origin::Sheet
-        } else if self.private {
-            Origin::Own
-        } else {
-            Origin::Book
-        }
+        origin(self.private, self.from_sheet)
     }
 
     pub fn is_note(&self) -> bool {
@@ -768,16 +795,8 @@ impl ContentIndex {
                 if matches!(item.source, Source::Note(Role::Session | Role::Transcript)) {
                     return None;
                 }
-                let rank = if item.lower == query {
-                    0
-                } else if item.lower.starts_with(query) {
-                    1
-                } else if item.lower.contains(query) {
-                    if names_lower_word(&item.lower, query) {
-                        2
-                    } else {
-                        3
-                    }
+                let rank = if let Some(rank) = name_rank(&item.lower, query) {
+                    rank
                 } else if item.section.label().to_lowercase() == query {
                     4
                 } else if item.lower_body.contains(query) {

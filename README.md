@@ -676,9 +676,9 @@ The visual suite includes `npc-in-lookup`, `package-rename` and `package-about`.
 
 On window focus, Splat checks campaign notes and every registered package for disk changes. Library, Lookup and encounter search reload changed content. A changed draft opens the disk comparison. A package's About page counts its used entries and offers **Use every entry** with Undo. Removing an unavailable package also offers Undo and keeps links to the encounters that need its creatures.
 
-If a package creature is deleted on disk, its encounter row keeps the last known name or says **Missing creature**. The warning explains the deletion. **Edit** chooses a replacement; the row menu still removes it. The NPC **Add to run** form labels its side choice **SIDE** and uses the roster's side names.
+If a package creature is deleted on disk, its encounter row keeps the last known name or says **Missing creature**. **Edit** chooses a replacement with CR, HP and AC in view. **Replace all** is on by default for rows that use the same missing entry. The change keeps their names and starting values, with one Undo. The row menu still removes a row. The NPC **Add to run** form labels its side choice **SIDE** and uses the roster's side names.
 
-New creature entries start with AC 10 and HP 1, with the HP value selected in the editor. A renamed copy also renames its first H1 when it matches the source name. Package creation shows a **Folder** field and the full destination path. `package-file-changed`, `package-delete-entry` and `book-to-package` cover these disk and copy paths.
+New creature entries start with AC 10 and HP 1 in `splat_stats`, with the HP value selected in the editor. The reader shows each vital once. If a visible AC or HP line disagrees, the editor offers to use its value for the fight, with Undo. A renamed copy also renames its first H1 when it matches the source name. Package creation shows a **Folder** field and the destination path after you type a name. `package-file-changed`, `package-delete-entry`, `book-to-package` and `world-note-deleted` cover these disk and copy paths.
 
 The run header keeps two lines after each action. Undo uses the space after the notice.
 A short label keeps the action, amount and copy number; hover gives the full action.

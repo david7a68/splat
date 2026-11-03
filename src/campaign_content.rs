@@ -548,8 +548,9 @@ impl CampaignContent {
             let problem = problem
                 .as_deref()
                 .unwrap_or("The repair has not been saved");
-            let problem = problem.replace('[', "`[`").replace('{', "`{`");
-            design::message_with_code(
+            let id = egui::Id::new(("repair_open", path.as_str()));
+            let mut open = ui.data(|data| data.get_temp::<bool>(id)).unwrap_or(false);
+            if design::message_with_action(
                 ui,
                 Tone::Error,
                 &format!("{path} cannot be read. Fix it here or in World. {}.", {
@@ -559,13 +560,8 @@ impl CampaignContent {
                     }
                     text
                 }),
-            );
-            let id = egui::Id::new(("repair_open", path.as_str()));
-            let mut open = ui.data(|data| data.get_temp::<bool>(id)).unwrap_or(false);
-            if Action::quiet(if open { "Close repair" } else { "Repair" })
-                .show(ui)
-                .clicked()
-            {
+                if open { "Close repair" } else { "Repair" },
+            ) {
                 open = !open;
             }
             ui.data_mut(|data| data.insert_temp(id, open));
@@ -582,7 +578,7 @@ impl CampaignContent {
 
                     ui.horizontal(|ui| {
                         if draft != baseline
-                            && Action::quiet("Discard repair draft")
+                            && Action::quiet("Discard")
                                 .density(Density::Read)
                                 .show(ui)
                                 .clicked()
@@ -618,12 +614,12 @@ impl CampaignContent {
                         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                             let pressed = Action::secondary("Save repaired note")
                                 .density(Density::Read)
-                                .blocked_if(draft == baseline, "No changes yet.")
+                                .blocked_if(draft == baseline, "No changes to save.")
                                 .show(ui)
                                 .clicked();
                             design::blocked_reason(
                                 ui,
-                                (draft == baseline).then_some("No changes yet."),
+                                (draft == baseline).then_some("No changes to save."),
                             );
                             if pressed
                                 || (draft != baseline
@@ -694,7 +690,7 @@ impl CampaignContent {
                     },
                 );
                 self.discarded_selections = None;
-                if Action::quiet("Discard selection changes")
+                if Action::quiet("Discard")
                     .density(Density::Read)
                     .show(ui)
                     .clicked()
@@ -826,7 +822,13 @@ impl CampaignContent {
             .iter()
             .chain(closure.errors.iter())
             .collect();
-        if !errors.is_empty() && self.repairs.is_empty() {
+        let missing_package = document.selections.iter().any(|selection| {
+            catalogue
+                .resolve_ref(&selection.package)
+                .ok()
+                .is_none_or(|id| !catalogue.modules.iter().any(|module| module.id == id))
+        });
+        if !errors.is_empty() && self.repairs.is_empty() && !missing_package {
             design::section(
                 ui,
                 if affected.is_empty() {
@@ -897,20 +899,22 @@ impl CampaignContent {
         let mut remove = None;
         for (i, selection) in unavailable {
             ui.push_id(i, |ui| {
-                design::message(ui, Tone::Warning, &selection.unavailable_message(catalogue));
-                for (id, name) in selection.campaign_users(catalogue) {
-                    if design::link(ui, &name).clicked() {
-                        self.open_lookup = Some(id);
-                    }
-                }
                 ui.horizontal_wrapped(|ui| {
-                    if Action::quiet("Remove from this campaign")
-                        .density(Density::Read)
-                        .show(ui)
-                        .clicked()
-                    {
-                        remove = Some(i);
+                    design::message(ui, Tone::Warning, &selection.unavailable_message());
+                    let users = selection.campaign_users(catalogue);
+                    for (at, (id, name)) in users.iter().enumerate() {
+                        if at > 0 {
+                            ui.label(Type::Small.rich(ui, "and").color(c.muted));
+                        }
+                        if design::link(ui, name).clicked() {
+                            self.open_lookup = Some(*id);
+                        }
                     }
+                    if !users.is_empty() {
+                        ui.label(Type::Small.rich(ui, "use its creatures.").color(c.muted));
+                    }
+                });
+                ui.horizontal_wrapped(|ui| {
                     if Action::secondary("Find the folder…")
                         .blocked_if(
                             document.selections != self.saved_selections
@@ -929,6 +933,13 @@ impl CampaignContent {
                             Ok(module) => self.found_package = Some(module),
                             Err(error) => self.error = Some(error),
                         }
+                    }
+                    if Action::quiet("Remove from this campaign")
+                        .density(Density::Read)
+                        .show(ui)
+                        .clicked()
+                    {
+                        remove = Some(i);
                     }
                 });
                 design::quiet_section(ui, "Technical details", |ui| {
@@ -1045,7 +1056,7 @@ impl CampaignContent {
                                         &module.name,
                                         &if required > 0 {
                                             format!(
-                                                "{} of {} · {} required",
+                                                "{} of {} · {} needed",
                                                 design::count(count + required, "", "").trim(),
                                                 design::count(total, "", "").trim(),
                                                 design::count(required, "", "").trim()
@@ -1103,18 +1114,55 @@ impl CampaignContent {
             .show_inside(ui, |ui| {
                 if self.dependencies {
                     design::group_heading(ui, "Needed by your entries", closure.required.len());
-                    design::search_field(ui, "Find a needed entry", &mut self.search, "Find an entry…", ui.available_width());
+                    design::search_field(
+                        ui,
+                        "Find a needed entry",
+                        &mut self.search,
+                        "Find an entry…",
+                        ui.available_width(),
+                    );
                     let query = self.search.to_lowercase();
-                    let mut required: Vec<_> = closure.required.iter().filter(|(id, _)| catalogue.entries[id].entry.name.to_lowercase().contains(&query)).collect();
+                    let mut required: Vec<_> = closure
+                        .required
+                        .iter()
+                        .filter(|(id, _)| {
+                            catalogue.entries[id]
+                                .entry
+                                .name
+                                .to_lowercase()
+                                .contains(&query)
+                        })
+                        .collect();
                     required.sort_by_key(|(id, _)| catalogue.entries[id].entry.name.to_lowercase());
-                    egui::ScrollArea::vertical().id_salt("required_entries").auto_shrink([false, true]).show(ui, |ui| {
-                        for (id, reasons) in required {
-                            let entry = &catalogue.entries[id];
-                            let owner = if entry.private { "Campaign".to_owned() } else { catalogue.package_name(entry.owner) };
-                            let detail = format!("{} · {owner} · needed by {}", crate::design::reader::human_label(&entry.entry.kind), reasons.iter().cloned().collect::<Vec<_>>().join(", "));
-                            if design::two_line_row(ui, Density::Glance.row() + design::XS, false, &entry.entry.name, &detail).clicked() { self.open_lookup = Some(*id); }
-                        }
-                    });
+                    egui::ScrollArea::vertical()
+                        .id_salt("required_entries")
+                        .auto_shrink([false, true])
+                        .show(ui, |ui| {
+                            for (id, reasons) in required {
+                                let entry = &catalogue.entries[id];
+                                let owner = if entry.private {
+                                    "Campaign".to_owned()
+                                } else {
+                                    catalogue.package_name(entry.owner)
+                                };
+                                let detail = format!(
+                                    "{} · {owner} · needed by {}",
+                                    crate::design::reader::human_label(&entry.entry.kind),
+                                    reasons.iter().cloned().collect::<Vec<_>>().join(", ")
+                                );
+                                if design::two_line_row(
+                                    ui,
+                                    Density::Glance.row() + design::XS,
+                                    false,
+                                    &entry.entry.name,
+                                    &detail,
+                                )
+                                .clicked()
+                                {
+                                    self.open_lookup = Some(*id);
+                                }
+                            }
+                        });
                     return;
                 }
                 let Some(module) = catalogue
@@ -1236,26 +1284,36 @@ impl CampaignContent {
                                             || entry.name.clone(),
                                             |why| {
                                                 format!(
-                                                    "{} is required by {why}, so it stays selected.",
+                                                    "{} is needed by {why}, so it stays selected.",
                                                     entry.name
                                                 )
                                             },
-                                        ))
-                                        ;
+                                        ));
                                     design::named(ui, &response, &format!("Use {}", entry.name));
-                                    if crate::encounters::creature_name_link(ui, &entry.name).clicked() { self.open_lookup = Some(id); }
+                                    if crate::encounters::creature_name_link(ui, &entry.name)
+                                        .clicked()
+                                    {
+                                        self.open_lookup = Some(id);
+                                    }
                                     if response.changed() {
                                         toggled = Some((id, selected));
                                     }
                                     ui.label(
                                         Type::Small
-                                            .rich(ui, snapshot.subtitles.get(&id).cloned().unwrap_or_default())
+                                            .rich(
+                                                ui,
+                                                snapshot
+                                                    .subtitles
+                                                    .get(&id)
+                                                    .cloned()
+                                                    .unwrap_or_default(),
+                                            )
                                             .color(c.muted),
                                     );
                                     if let Some(why) = &why {
                                         ui.label(
                                             Type::Small
-                                                .rich(ui, format!("Required by {why}"))
+                                                .rich(ui, format!("Needed by {why}"))
                                                 .color(c.document.read_only),
                                         );
                                     }

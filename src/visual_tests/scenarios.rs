@@ -153,7 +153,7 @@ pub mod library_author {
     const OTHER_NOTE: &str = "Ashfall";
     const NOTE_FILE: &str = "modules/ashen-marches/Rules/Ash Exposure.md";
     const SAVE: &str = "Save";
-    const DISCARD: &str = "Discard changes";
+    const DISCARD: &str = "Discard";
     const DRAFT_WORDS: &str = "Rangers of the ash line are exempt. ";
     const SECOND_WORDS: &str = "Rangers carry spare cloth. ";
     const THIRD_WORDS: &str = "Cloth wears out in a week. ";
@@ -162,7 +162,7 @@ pub mod library_author {
     const RELOAD_DISK: &str = "Reload and lose my draft";
     const SHOW_DISK: &str = "Next difference";
     const UNDO_DISCARD: &str = "Undo discard";
-    const CHANGED_ON_DISK: &str = "This note changed on disk";
+    const CHANGED_ON_DISK: &str = "This entry changed on disk";
     const PACKAGE_ACTIONS: &str = "Packages";
     const MANAGE_PACKAGES: &str = "Manage packages…";
     const MANAGE_TITLE: &str = "MANAGE PACKAGES";
@@ -194,7 +194,7 @@ pub mod library_author {
         d.state("edit-markdown", Sizes::All);
         d.observe(
             "Clean word",
-            d.visible_text("No changes to save."),
+            d.visible_text("No changes"),
             "A clean document says so, in one word, as Encounters and Campaign do",
         );
         d.goal("open a note for editing");
@@ -500,7 +500,7 @@ pub mod campaign_content {
     const PARTIAL: &str = "5 of 6";
     const CHANGED: &str = "6 of 6";
     const UNSELECTED_ENTRY: &str = "Ash Wraith";
-    const DISCARD_SELECTION: &str = "Discard selection changes";
+    const DISCARD_SELECTION: &str = "Discard";
     const CAMPAIGN_ENTRY: &str = "Captain Varra";
     const SIBLING_ENTRY: &str = "Bridge Ambush";
     const SAVE_ENTRY: &str = "Save";
@@ -3860,7 +3860,7 @@ pub mod nav_table {
     const FILTER_TEXT: &str = "fire";
     const NOTE_ROW: &str = "Ash Exposure · ";
     const DRAFT_WORDS: &str = "Kept across pages. ";
-    const DISCARD: &str = "Discard changes";
+    const DISCARD: &str = "Discard";
     const DRAFT_NAME: &str = "Deep Ford";
     const FIRST_SLOT: &str = "1. Brannoch Vale";
     const LINKED_QUERY: &str = "bard subclass";
@@ -4140,8 +4140,9 @@ pub mod world {
         d.state("world-new-menu", Sizes::Default);
         d.click("NPC");
         d.expect("Type a name first.");
-        d.state("world-new-npc-form", Sizes::All);
         d.type_into("Name", "Watchkeeper");
+        d.wait_for_text("Will create NPCs/Watchkeeper.md");
+        d.state("world-new-npc-form", Sizes::All);
         d.click("Create NPC");
         d.expect("Watchkeeper");
         d.observe(
@@ -6920,6 +6921,11 @@ pub mod package_to_table {
             8,
         );
         d.state("new-package-at-the-table", Sizes::All);
+        go_library(d);
+        d.click("Read");
+        d.expect("ARMOR CLASS");
+        d.expect("HIT POINTS");
+        d.state("new-creature-read", Sizes::All);
     }
 }
 
@@ -7012,7 +7018,7 @@ pub mod remove_package_in_use {
         );
         go_campaign(d);
         d.click("Reload from disk");
-        d.expect("Ashen Marches is no longer on this computer. 2 entries in this campaign use it.");
+        d.expect("Ashen Marches is no longer on this computer.");
         d.expect("Remove from this campaign");
         d.expect("Find the folder…");
         d.observe(

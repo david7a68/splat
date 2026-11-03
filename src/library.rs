@@ -425,7 +425,7 @@ pub(crate) fn note_text(name: &str, kind: &str, namespace: Option<&str>) -> Stri
         yaml,
         name,
         if kind == "creature" {
-            "Medium Humanoid, Neutral\n\n**Armor Class** 10\n\n**Hit Points** 1\n\nSpeed 30 ft.\n\nStr 10 (+0) Dex 10 (+0) Con 10 (+0) Int 10 (+0) Wis 10 (+0) Cha 10 (+0)\n\nCR 1 (XP 200; PB +2)\n\n## Traits\n\n**Trait.** Describe the trait.\n\n## Actions\n\n**Attack.** Describe the attack.\n\n"
+            "Medium Humanoid, Neutral\n\nSpeed 30 ft.\n\nStr 10 (+0) Dex 10 (+0) Con 10 (+0) Int 10 (+0) Wis 10 (+0) Cha 10 (+0)\n\nCR 1 (XP 200; PB +2)\n\n## Traits\n\n**Trait.** Describe the trait.\n\n## Actions\n\n**Attack.** Describe the attack.\n\n"
         } else if kind == "spell" {
             "Level 1 Evocation\n\n**Casting Time:** Action\n\n**Range:** 60 feet\n\n**Components:** V, S\n\n**Duration:** Instantaneous\n\nDescribe the spell.\n"
         } else if kind == "item" {
@@ -508,14 +508,16 @@ pub(crate) fn folder_field(
                                 .frame(false)
                                 .margin(egui::Vec2::ZERO)
                                 .desired_width(width)
-                                .min_size(egui::vec2(width, design::Density::Read.control()))
+                                .min_size(egui::vec2(width, design::XL))
                                 .hint_text("Main folder"),
                         );
                         design::named(ui, &response, label);
-                        let response = Action::quiet("")
-                            .icon(icons::DOWN)
-                            .name(&format!("Suggestions for {label}"))
-                            .show(ui);
+                        let response = ui.add(
+                            egui::Button::new(Type::Body.rich(ui, icons::DOWN))
+                                .frame(false)
+                                .min_size(egui::vec2(design::XL, design::XL)),
+                        );
+                        design::named(ui, &response, &format!("Suggestions for {label}"));
                         egui::Popup::menu(&response).show(|ui| {
                             if ui
                                 .selectable_label(value.is_empty(), "Main folder")
@@ -874,6 +876,7 @@ pub struct Library {
     dependency_undo: Option<DependencyUndo>,
     selection_undo: Option<SelectionUndo>,
     link_choices: Vec<Uuid>,
+    vital_undo: Option<(String, String, String)>,
 }
 /// Sort so that "Level 2" comes before "Level 18".
 fn natural_key(name: &str) -> Vec<(String, u64)> {
@@ -898,7 +901,7 @@ fn natural_key(name: &str) -> Vec<(String, u64)> {
 }
 
 const EDITOR_MAX_WIDTH: f32 = 720.0;
-const NOTE_CHANGED: &str = "This note changed on disk.";
+const NOTE_CHANGED: &str = "This entry changed on disk.";
 /// What is on disk now, in place of what the draft started from.
 struct DiskChange {
     /// None when the file has gone.
@@ -1584,15 +1587,14 @@ impl Library {
                 // Best first: the exact name, then a prefix, then a whole word.
                 found.sort_by_key(|i| {
                     let name = loaded.notes[*i].name().to_lowercase();
-                    if name == query {
-                        0
-                    } else if name.starts_with(&query) {
-                        1
-                    } else if crate::lookup::names_word(&name, &query) {
-                        2
-                    } else {
-                        3
-                    }
+                    let rank = crate::lookup::name_rank(&name, &query).unwrap_or(4);
+                    (
+                        rank,
+                        crate::lookup::entry_origin(
+                            loaded.notes[*i].entry.as_ref(),
+                            matches!(loaded.notes[*i].owner, Owner::Campaign(_)),
+                        ),
+                    )
                 });
             }
             self.matches = Some((self.section, query.clone(), found));
@@ -2103,7 +2105,9 @@ impl Library {
                             .map(|parent| Ok(parent.join(&namespace)))
                             .unwrap_or_else(|| campaigns.package_folder(&namespace))
                     });
-                if let Ok(root) = &root {
+                if let Ok(root) = &root
+                    && !self.name.trim().is_empty()
+                {
                     ui.add(
                         egui::Label::new(
                             Type::Small
@@ -2288,6 +2292,7 @@ impl Library {
                 }
                 design::group_label(ui, "Kind");
                 let combo = egui::ComboBox::from_id_salt("new_kind")
+                    .width(ui.available_width())
                     .icon(design::combo_icon)
                     .selected_text(
                         self.new_kind
@@ -2308,7 +2313,7 @@ impl Library {
                 design::group_label(ui, "Where");
                 let combo = egui::ComboBox::from_id_salt("new_place")
                     .icon(design::combo_icon)
-                    .width(150.0)
+                    .width(ui.available_width())
                     .truncate()
                     .selected_text(places[place].label())
                     .show_ui(ui, |ui| {
@@ -2585,7 +2590,11 @@ impl Library {
                 ui,
                 icons::LIBRARY,
                 "No entry open",
-                "Choose one from the list, or make a new one.",
+                if campaigns.active_campaign().is_some() || !campaigns.modules().is_empty() {
+                    "Choose one from the list, or make a new one."
+                } else {
+                    "Choose one from the list."
+                },
                 |_| {},
             );
             return;
@@ -2788,17 +2797,6 @@ impl Library {
                 }
             }
             if let Owner::Package(module) = &note.owner
-                && about
-                && campaigns.active_campaign().is_some()
-                && package_word != "All entries used here"
-                && Action::quiet("Use every entry")
-                    .blocked(draft_reason)
-                    .show(ui)
-                    .clicked()
-            {
-                use_every = Some(module.clone());
-            }
-            if let Owner::Package(module) = &note.owner
                 && !about
                 && !self.loaded.as_ref().unwrap().in_scope(note, Scope::Uses)
                 && let Some(entry) = &note.entry
@@ -2815,7 +2813,20 @@ impl Library {
                 || root
                     .ancestors()
                     .any(|parent| parent.join(".obsidian").is_dir());
-            ui.horizontal_wrapped(|ui| {
+            let owner_word = match &note.owner {
+                Owner::Package(_) => package_word.as_str(),
+                _ => "Campaign · Editable",
+            };
+            let file_below = ui.available_width()
+                < design::number_width(ui, owner_word, &Type::Small.font(ui))
+                    + design::number_width(ui, "Show file", &Type::Body.font(ui))
+                    + design::XXL * 2.0
+                    + if obsidian {
+                        design::number_width(ui, "Edit in Obsidian", &Type::Body.font(ui))
+                    } else {
+                        0.0
+                    };
+            let owner_line = |ui: &mut egui::Ui| {
                 design::status(
                     ui,
                     Status {
@@ -2828,8 +2839,29 @@ impl Library {
                         color: d.clean,
                     },
                 );
-                crate::world::entry_file_parts(ui, root, &note.path, obsidian);
-            });
+                if let Owner::Package(module) = &note.owner
+                    && about
+                    && campaigns.active_campaign().is_some()
+                    && package_word != "All entries used here"
+                    && Action::quiet("Use every entry")
+                        .blocked(draft_reason)
+                        .show(ui)
+                        .clicked()
+                {
+                    use_every = Some(module.clone());
+                }
+                if !file_below {
+                    crate::world::entry_file_parts(ui, root, &note.path, obsidian);
+                }
+            };
+            if file_below {
+                ui.horizontal_wrapped(owner_line);
+            } else {
+                ui.horizontal(owner_line);
+            }
+            if file_below {
+                ui.horizontal(|ui| crate::world::entry_file_parts(ui, root, &note.path, obsidian));
+            }
         } else {
             design::status(
                 ui,
@@ -2860,16 +2892,11 @@ impl Library {
                     .key("Ctrl+S")
                     .show(ui)
                     .clicked();
-                    if !self.just_saved {
-                        design::blocked_reason(ui, blocked);
-                    }
                     ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
-                        if dirty || self.just_saved || note.error.is_some() {
-                            design::status(ui, state);
-                        }
+                        design::status(ui, state);
                         if dirty
                             && !conflict
-                            && Action::quiet("Discard changes")
+                            && Action::quiet("Discard")
                                 .density(Density::Read)
                                 .show(ui)
                                 .clicked()
@@ -2911,9 +2938,9 @@ impl Library {
                 ui,
                 Tone::Warning,
                 if change.text.is_some() {
-                    "This note changed on disk. Your draft is safe until you choose."
+                    "This entry changed on disk. Your draft is safe until you choose."
                 } else {
-                    "This note's file has gone from disk. Your draft is safe here until you choose."
+                    "This entry's file has gone from disk. Your draft is safe here until you choose."
                 },
             );
             ui.horizontal(|ui| {
@@ -2932,7 +2959,39 @@ impl Library {
             });
         }
         if let Some(error) = &note.error {
-            design::message(ui, Tone::Error, error);
+            design::message_with_code(ui, Tone::Error, error);
+        }
+        if self.source && !conflict {
+            if editable && let Ok(entry) = &parsed {
+                for (key, value, message) in creature::vital_checks(entry) {
+                    if design::message_with_action(
+                        ui,
+                        Tone::Warning,
+                        &message,
+                        &format!("Use {value}"),
+                    ) {
+                        match creature::use_vital(&self.draft, entry, key, value) {
+                            Ok(after) => {
+                                self.vital_undo =
+                                    Some((note.path.clone(), self.draft.clone(), after.clone()));
+                                self.draft = after;
+                            }
+                            Err(error) => self.error = Some(error),
+                        }
+                    }
+                }
+            }
+            if let Some((path, before, after)) = &self.vital_undo
+                && path == &note.path
+                && after == &self.draft
+                && Action::quiet("Undo stat change")
+                    .icon(icons::UNDO)
+                    .show(ui)
+                    .clicked()
+            {
+                self.draft = before.clone();
+                self.vital_undo = None;
+            }
         }
         let mut open_link = None;
         let mut copy_dependency = None;
@@ -2950,6 +3009,7 @@ impl Library {
                 if self.source {
                     let response = ui.add(
                         egui::TextEdit::multiline(&mut self.draft)
+                            .id_salt(("library_markdown", note.owner.id(), &note.path))
                             .font(egui::TextStyle::Monospace)
                             .margin(egui::vec2(design::S, design::S))
                             .desired_width(editor_width)
@@ -2974,14 +3034,9 @@ impl Library {
                             if !about {
                                 ui.label(Type::Small.rich(ui, format!("Library / {}", note.section().label())).color(colors().muted));
                             }
-                            let subtitle = reading_subtitle
-                                .strip_prefix(&format!(
-                                    "{} · ",
-                                    note.section().label().trim_end_matches('s')
-                                ))
-                                .unwrap_or(&reading_subtitle);
+                            let subtitle = reading_subtitle.as_str();
                             let subtitle = subtitle.strip_suffix(" · Campaign").unwrap_or(subtitle);
-                            let subtitle = if subtitle == "Campaign" { "" } else { subtitle };
+                            let subtitle = if subtitle == "Campaign" { note.section().label().trim_end_matches('s') } else { subtitle };
                             view::title_with_art(ui, title, subtitle, parsed.as_ref().ok());
                         });
                         open_link = view::show_with_related(

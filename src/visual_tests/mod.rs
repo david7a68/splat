@@ -51,7 +51,7 @@ const BASELINE_PATH: &str = "src/visual_tests/baseline.json";
 
 type Script = fn(&mut Driver<'_>);
 
-const SCENARIOS: [(&str, Seed, Script); 57] = [
+const SCENARIOS: [(&str, Seed, Script); 58] = [
     (
         "package-to-table",
         Seed::Campaign,
@@ -225,6 +225,11 @@ const SCENARIOS: [(&str, Seed, Script); 57] = [
         scenarios::world_build::book_to_package,
     ),
     ("world-places", Seed::World, scenarios::world_build::places),
+    (
+        "world-note-deleted",
+        Seed::World,
+        scenarios::world_build::world_note_deleted,
+    ),
     (
         "world-edit-round-trip",
         Seed::World,

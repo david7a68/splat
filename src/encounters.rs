@@ -805,30 +805,69 @@ fn roster_name(
     groups::shown_name(&slot.overrides, name)
 }
 
-fn replace_missing_creature(ui: &mut egui::Ui, slot: &mut Slot, snapshot: &Snapshot) -> bool {
-    let Some(creature) = choose_replacement_creature(ui, snapshot) else {
-        return false;
-    };
-    slot.creature = Some(creature);
-    slot.party_slot = None;
-    slot.overrides.clear();
-    true
+fn creature_result_row(
+    ui: &mut egui::Ui,
+    c: &Creature,
+    action: &str,
+    already: bool,
+) -> (bool, bool) {
+    let (mut chosen, mut read) = (false, false);
+    ui.horizontal(|ui| {
+        ui.set_min_height(RESULT_ROW);
+        ui.vertical(|ui| {
+            ui.spacing_mut().item_spacing.y = 0.0;
+            ui.set_max_width((ui.available_width() - design::S * 12.0).max(design::S * 10.0));
+            read = creature_name_link(ui, &c.name)
+                .on_hover_text("Read this entry in Lookup")
+                .clicked();
+            detail_columns(ui, &c.detail, c.source.as_deref());
+        });
+        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            if already {
+                ui.label(Type::Small.rich(ui, "In roster").color(colors().muted));
+            } else {
+                let name = if action == "Add" {
+                    action.into()
+                } else {
+                    format!("{action} {}", c.name)
+                };
+                chosen = Action::secondary(action)
+                    .name(&name)
+                    .density(Density::Read)
+                    .show(ui)
+                    .clicked();
+            }
+        });
+    });
+    (chosen, read)
 }
 
-fn choose_replacement_creature(ui: &mut egui::Ui, snapshot: &Snapshot) -> Option<EntryRef> {
+fn replace_missing_creature(
+    ui: &mut egui::Ui,
+    snapshot: &Snapshot,
+    count: usize,
+    name: &str,
+) -> Option<(Uuid, bool)> {
     let key = ui.id().with("replacement_creature");
     let mut search = ui
         .ctx()
         .data_mut(|data| data.get_temp::<String>(key))
         .unwrap_or_default();
-    let width = ui.available_width();
     design::search_field(
         ui,
         "Replacement creature",
         &mut search,
         "Choose another creature…",
-        width,
+        ui.available_width(),
     );
+    let all_key = key.with("all");
+    let mut all = ui
+        .ctx()
+        .data_mut(|data| data.get_temp::<bool>(all_key))
+        .unwrap_or(true);
+    if count > 1 {
+        ui.checkbox(&mut all, format!("Replace all {count} {name} rows"));
+    }
     let query = search.to_lowercase();
     let mut replaced = None;
     for creature in snapshot
@@ -837,15 +876,55 @@ fn choose_replacement_creature(ui: &mut egui::Ui, snapshot: &Snapshot) -> Option
         .filter(|c| !c.linked && c.lower.contains(&query))
         .take(5)
     {
-        if Action::secondary(&format!("Use {}", creature.name))
-            .show(ui)
-            .clicked()
-        {
-            replaced = Some(EntryRef::id(creature.id));
+        ui.push_id(creature.id, |ui| {
+            let (chosen, read) = creature_result_row(ui, creature, "Use", false);
+            if chosen {
+                replaced = Some((creature.id, all));
+            }
+            if read {
+                ui.ctx().data_mut(|data| {
+                    data.insert_temp(
+                        egui::Id::new("markdown_clicked_lookup"),
+                        creature.name.clone(),
+                    )
+                });
+            }
+        });
+    }
+    ui.ctx().data_mut(|data| {
+        data.insert_temp(key, search);
+        data.insert_temp(all_key, all);
+    });
+    replaced
+}
+
+// Group members use the same picker without the roster's bulk action.
+fn choose_replacement_creature(ui: &mut egui::Ui, snapshot: &Snapshot) -> Option<EntryRef> {
+    replace_missing_creature(ui, snapshot, 1, "").map(|(id, _)| EntryRef::id(id))
+}
+
+#[derive(Clone)]
+struct ReplacementUndo {
+    before: Vec<Slot>,
+    after: Vec<Slot>,
+}
+
+fn replace_roster(
+    roster: &mut [Slot],
+    selected: usize,
+    creature: Uuid,
+    all: bool,
+    snapshot: &Snapshot,
+) {
+    let missing = roster[selected].creature.clone();
+    for (i, slot) in roster.iter_mut().enumerate() {
+        if i == selected || (all && slot.creature == missing) {
+            let old_name = roster_name(slot, None, &snapshot.known_creature_names);
+            slot.creature = Some(EntryRef::id(creature));
+            slot.party_slot = None;
+            slot.overrides.insert("name".into(), old_name.into());
         }
     }
-    ui.ctx().data_mut(|data| data.insert_temp(key, search));
-    replaced
 }
 
 struct SearchRoster<'a> {
@@ -2376,7 +2455,7 @@ impl Encounters {
                         .show(ui)
                         .clicked();
                     create_group = Action::quiet("New group")
-                        .icon(icons::ADD)
+                        .line_start()
                         .blocked(group_blocked)
                         .hint("A reusable set of creatures to add to a running encounter")
                         .show(ui)
@@ -3089,40 +3168,14 @@ impl Encounters {
             .show_rows(ui, RESULT_ROW, matches.len(), |ui, range| {
                 for c in &matches[range] {
                     ui.push_id(c.id, |ui| {
-                        ui.horizontal(|ui| {
-                            ui.set_min_height(RESULT_ROW);
-                            // The name is what the eye looks for, so it comes first.
-                            ui.vertical(|ui| {
-                                ui.spacing_mut().item_spacing.y = 0.0;
-                                ui.set_max_width(
-                                    (ui.available_width() - design::S * 12.0).max(design::S * 10.0),
-                                );
-                                if creature_name_link(ui, &c.name)
-                                    .on_hover_text("Read this entry in Lookup")
-                                    .clicked()
-                                {
-                                    *peek = Some(c.id);
-                                }
-                                detail_columns(ui, &c.detail, c.source.as_deref());
-                            });
-                            ui.with_layout(
-                                egui::Layout::right_to_left(egui::Align::Center),
-                                |ui| {
-                                    if (roster.already)(c) {
-                                        ui.label(
-                                            Type::Small.rich(ui, "In roster").color(colors().muted),
-                                        );
-                                    } else if Action::secondary("Add")
-                                        .density(Density::Read)
-                                        .show(ui)
-                                        .clicked()
-                                    {
-                                        chosen = Some((c.id, c.party));
-                                        *focus_search = true;
-                                    }
-                                },
-                            );
-                        });
+                        let (add, read) = creature_result_row(ui, c, "Add", (roster.already)(c));
+                        if read {
+                            *peek = Some(c.id);
+                        }
+                        if add {
+                            chosen = Some((c.id, c.party));
+                            *focus_search = true;
+                        }
                     });
                 }
             });
@@ -3220,6 +3273,38 @@ impl Encounters {
             .collect();
         let (mut remove, mut duplicate, mut raise, mut lower) = (None, None, None, None);
         let count = draft.setup.roster.len();
+        let mut replacement = None;
+        let missing_counts: Vec<_> = draft
+            .setup
+            .roster
+            .iter()
+            .map(|slot| {
+                draft
+                    .setup
+                    .roster
+                    .iter()
+                    .filter(|other| other.creature == slot.creature)
+                    .count()
+            })
+            .collect();
+        let undo_key = ui.id().with(("replacement_undo", draft.id));
+        let undo = ui
+            .ctx()
+            .data_mut(|data| data.get_temp::<ReplacementUndo>(undo_key));
+        if let Some(undo) = undo {
+            if undo.after == draft.setup.roster {
+                if Action::quiet("Undo replacement")
+                    .icon(icons::UNDO)
+                    .show(ui)
+                    .clicked()
+                {
+                    draft.setup.roster = undo.before;
+                }
+            } else {
+                ui.ctx()
+                    .data_mut(|data| data.remove::<ReplacementUndo>(undo_key));
+            }
+        }
         for (i, slot) in draft.setup.roster.iter_mut().enumerate() {
             ui.push_id(slot.key.clone(), |ui| {
                 let resolved = slot
@@ -3263,7 +3348,7 @@ impl Encounters {
                     None => detail,
                 };
                 let side_icon = if slot.side == "party" { icons::PARTY } else if slot.side == "enemies" { icons::ENCOUNTERS } else { icons::GROUP };
-                let identity = definition.filter(|entry| snapshot.npc_name_for(entry, &slot.overrides).is_some()).map(|entry| format!(" · as {}", entry.name)).unwrap_or_default();
+                let identity = definition.filter(|_| slot.overrides.contains_key("name")).map(|entry| format!(" · as {}", entry.name)).unwrap_or_default();
                 let side = design::reader::human_label(&slot.side);
                 let detail = if missing {
                     format!("{side} · {MISSING_CREATURE}")
@@ -3341,7 +3426,7 @@ impl Encounters {
                     *expanded = Some(slot.key.clone());
                 }
                 if is_open && missing {
-                    if replace_missing_creature(ui, slot, snapshot) { *expanded = None; }
+                    if let Some((creature, all)) = replace_missing_creature(ui, snapshot, missing_counts[i], &name) { replacement = Some((i, creature, all)); *expanded = None; }
                 } else if is_open {
                     ui.horizontal(|ui| {
                         ui.label(Type::Small.rich(ui, "Side").color(colors().muted));
@@ -3421,6 +3506,19 @@ impl Encounters {
                     }
                 }
                 design::rule(ui);
+            });
+        }
+        if let Some((selected, creature, all)) = replacement {
+            let before = draft.setup.roster.clone();
+            replace_roster(&mut draft.setup.roster, selected, creature, all, snapshot);
+            ui.ctx().data_mut(|data| {
+                data.insert_temp(
+                    undo_key,
+                    ReplacementUndo {
+                        before,
+                        after: draft.setup.roster.clone(),
+                    },
+                )
             });
         }
         for side in draft.setup.roster.iter().flat_map(|slot| {
@@ -3688,6 +3786,37 @@ mod tests {
             ),
             "Cinder Wolf"
         );
+    }
+
+    #[test]
+    fn bulk_replacement_keeps_names_and_starting_values() {
+        let dir = tempfile::tempdir().unwrap();
+        let active = campaign(dir.path());
+        let wolf = creature(dir.path(), "Cinder Wolf", false);
+        let guard = creature(dir.path(), "Guard", false);
+        let snapshot = Snapshot::load(&active, &[]).unwrap();
+        let mut draft = Draft::new();
+        draft.add(wolf, false);
+        draft.add(wolf, false);
+        draft.setup.roster[0].initial.insert("hp".into(), 7.into());
+        let before = draft.setup.roster.clone();
+        replace_roster(&mut draft.setup.roster, 0, guard, true, &snapshot);
+        assert!(
+            draft
+                .setup
+                .roster
+                .iter()
+                .all(|slot| slot.creature == Some(EntryRef::id(guard)))
+        );
+        assert!(
+            draft
+                .setup
+                .roster
+                .iter()
+                .all(|slot| slot.overrides["name"] == Value::String("Cinder Wolf".into()))
+        );
+        assert_eq!(draft.setup.roster[0].initial, before[0].initial);
+        assert_eq!(draft.setup.roster[0].side, before[0].side);
     }
 
     #[test]

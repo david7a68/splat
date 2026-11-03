@@ -333,6 +333,19 @@ impl WorldPage {
                 },
             );
             design::text_field(ui, "Name", &mut self.new_name, None, None);
+            if kind == "npc" && !self.new_name.trim().is_empty() {
+                ui.label(
+                    Type::Small
+                        .rich(
+                            ui,
+                            format!(
+                                "Will create NPCs/{}.md",
+                                crate::sessions::file_safe(&self.new_name)
+                            ),
+                        )
+                        .color(colors().muted),
+                );
+            }
             if kind == "note" {
                 design::text_field(
                     ui,
