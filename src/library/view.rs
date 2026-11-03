@@ -278,13 +278,24 @@ fn reference(
     styled: bool,
     origin: &Origin<'_>,
 ) {
+    if entry.is_some_and(|entry| entry.reading().ok().flatten().is_some())
+        && let Some(source) = sections
+            .iter()
+            .find(|section| section.title == "Source text")
+    {
+        design::quiet_section(ui, "Source text", |ui| style::markdown(ui, source.body));
+    }
     let technical: Vec<_> = sections
         .iter()
         .filter(|section| splat::content::has_data_marker(section.body))
         .collect();
-    if !styled && !technical.is_empty() {
+    let item_details = entry.is_some_and(reader::has_item_details);
+    if (!styled && !technical.is_empty()) || item_details {
         ui.add_space(design::M);
         design::quiet_section(ui, "Technical details", |ui| {
+            if let Some(entry) = entry.filter(|_| item_details) {
+                reader::item_details(ui, entry);
+            }
             for section in technical {
                 design::quiet_section(ui, &section.title, |ui| {
                     style::compact_markdown(ui, section.body);

@@ -671,6 +671,7 @@ impl CampaignContent {
         let closure = &snapshot.closure.1;
         let mut reload = false;
         let c = colors();
+        let mut reason_below = None;
         ui.horizontal(|ui| {
             let dirty = document.selections != self.saved_selections || document.baseline.is_none();
             let repair_text = self
@@ -730,6 +731,15 @@ impl CampaignContent {
             }
             let pressed = ui
                 .with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    let reason_fits = repair.is_none_or(|reason| {
+                        design::number_width(ui, reason, &Type::Small.font(ui))
+                            + Action::primary("Save selections")
+                                .density(Density::Read)
+                                .key("Ctrl+S")
+                                .natural_width(ui)
+                            + design::S
+                            <= ui.available_width()
+                    });
                     let blocked = repair.or((!dirty).then_some("No changes to save."));
                     let pressed = (if self.run_open {
                         Action::secondary("Save selections")
@@ -741,7 +751,11 @@ impl CampaignContent {
                     .blocked(blocked)
                     .show(ui)
                     .clicked();
-                    design::blocked_reason(ui, repair);
+                    if reason_fits {
+                        design::blocked_reason(ui, repair);
+                    } else {
+                        reason_below = repair.map(str::to_owned);
+                    }
                     pressed
                 })
                 .inner;
@@ -766,6 +780,13 @@ impl CampaignContent {
                 }
             }
         });
+        if let Some(reason) = reason_below {
+            ui.horizontal(|ui| {
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    design::blocked_reason(ui, Some(&reason));
+                });
+            });
+        }
         let affected: Vec<_> = catalogue
             .entries
             .values()
