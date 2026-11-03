@@ -724,11 +724,6 @@ pub fn package_delete_entry(d: &mut Driver<'_>) {
     d.click("More actions for Bridge Ambush");
     d.click("Start another fight");
     d.expect("Begin combat");
-    d.observe_both(
-        "W2",
-        "Replaced wolves name their Guard source in setup",
-        |d| d.has_containing("Cinder Wolf 1 ·") && d.has_containing("as Guard"),
-    );
     d.state("replacement-starts-another-fight", Sizes::All);
     close_run(d);
     go_encounters(d);

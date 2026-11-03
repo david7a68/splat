@@ -236,12 +236,6 @@ impl Participant {
     pub(super) fn npc_identity(&self) -> bool {
         self.definition.fields.contains_key("splat_run_npc_name")
     }
-    pub(super) fn source_identity(&self) -> bool {
-        self.npc_identity()
-            || self.changes.as_ref().is_some_and(|change| {
-                change.overrides.name.is_some() && self.name != self.definition.name
-            })
-    }
     pub(super) fn stat_changes(&self) -> bool {
         self.changes.as_ref().is_some_and(|changes| {
             let mut overrides = changes.overrides.clone();
@@ -5770,23 +5764,6 @@ mod tests {
         assert_eq!(group.summary(), "3 members · Rivals · XP 0 · Changed");
     }
 
-    #[test]
-    fn replaced_creature_row_names_its_source_and_keeps_changed() {
-        let mut run = run();
-        run.apply(Command::AddCreature(
-            group_of(
-                "Replacement",
-                "enemies",
-                vec![(beast(), 1, changed("name: Cinder Wolf"))],
-            ),
-            None,
-        ))
-        .unwrap();
-        let participant = run.state.participants.last().unwrap();
-        let words = view::row_words_for_test(participant);
-        assert!(words.contains("as Beast"), "{words}");
-        assert!(words.contains("Changed"), "{words}");
-    }
     fn names(run: &Run, range: std::ops::Range<usize>) -> Vec<String> {
         run.state.participants[range]
             .iter()
