@@ -191,25 +191,7 @@ impl CampaignContent {
                 .iter()
                 .filter(|id| snapshot.catalogue.selectable(**id))
                 .count();
-            let needed = snapshot
-                .closure
-                .1
-                .required
-                .keys()
-                .filter(|id| snapshot.catalogue.selectable(**id))
-                .count();
-            let mut parts = Vec::new();
-            if chosen > 0 {
-                parts.push(design::count(chosen, "entry chosen", "entries chosen"));
-            }
-            if needed > 0 {
-                parts.push(design::count(
-                    needed,
-                    "needed by your entries",
-                    "needed by your entries",
-                ));
-            }
-            parts.join(" · ")
+            design::count(chosen, "entry chosen", "entries chosen")
         })
     }
     /// Runs on every frame, on any page, so the sidebar can say when the DM has moves to review.

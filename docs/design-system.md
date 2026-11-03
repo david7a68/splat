@@ -246,7 +246,7 @@ Here and Mentioned in stay above them, at the reader measure.
 
 Beside the note, the plan takes 40% of the page width, between 330 and 480 px.
 Fight summaries keep each part together and join a separator to the next part.
-Played and running fights use the empty action space for their second line, up to
+Planned, played and running fights use the empty action space for their second line, up to
 the menu. `Ended · Round 1` stays together.
 Group summaries shorten to one line with the full text on hover. A recording count
 sits inside its tab, in muted text and in the tab's accessible name. Notes saved
@@ -297,7 +297,7 @@ The side picker offers `Party`, `Enemies`, and `Other…` in every editor. Only 
 All editor section headings use `group_heading`. In the tabbed layout, Add participants has no repeated heading.
 
 A plan group editor takes the full notes column; the note stays behind its tab.
-Plan summaries sit directly below names, with actions centred beside both lines.
+Plan summaries sit below the taller of the name and action, up to the menu slot.
 Member counts and XP use one dot-separated line. Count stays at the left; Edit and
 the row menu sit together at the right. Encounter editors show one clean-state word.
 
@@ -703,3 +703,20 @@ Source text and structured item fields stay in the end group after related notes
 Fight and Packages use the same menu button, with the caret after the word.
 World relationship values use a 240 px column; Not found stays on one line.
 Empty fight prep offers Edit encounter while its encounter exists.
+
+## Run and session audit, iteration 11
+
+A live initiative change says who joins and at which total. A place before the current
+turn adds `acts next round`. Saved rows keep the close dialog's last-change wording.
+Setup uses the live list's overflow band and counts hidden missing initiatives and ties.
+Sync-panel choices stay in the Log and Undo; only sheet reads say `sheet changed`.
+
+Note editors keep all four frame edges visible and scroll only their text. Notes opens
+at `What happened`. Stacked Timeline uses `All events`. Removing an event uses Warning
+when notes still link to it. Template deletion and Undo stay under the template list.
+Recording-stop banners and rows share the same input-recovery sentence.
+
+Settings states a campaign lock reason below CAMPAIGNS. Link and folder names the
+campaign folder, session folder and link; locked folder controls show no clean-state
+reason. Campaign's header counts chosen entries only. Library's empty own-entry state
+links directly to Can use with `entry you can use`.

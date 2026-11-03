@@ -446,6 +446,8 @@ struct State {
     round: u64,
     phase: Phase,
     log: Vec<String>,
+    #[serde(default)]
+    last_change: Option<String>,
     random: Random,
 }
 /// Each carried player's place in the roster, and HP and temporary HP from their sheet.
@@ -774,6 +776,7 @@ impl Run {
                 log: vec![
                     "DM run prepared from saved encounter. Rules are resolved by the DM.".into(),
                 ],
+                last_change: None,
                 random: Random::seeded(seed),
             },
             history: Vec::new(),
@@ -894,6 +897,7 @@ impl Run {
         }
         self.history.push(before);
         self.history_labels.push("full HP after long rest".into());
+        self.state.last_change = Some("full HP after long rest".into());
         self.state
             .log
             .push("Party HP is full after the long rest.".into());
@@ -1209,6 +1213,12 @@ impl Run {
         // Work on a copy so failed commands cannot partly change the run or dice stream.
         let began = matches!(command, Command::Begin);
         let follow_turn = matches!(command, Command::Begin | Command::Next);
+        let live_initiative = match &command {
+            Command::Initiative(index, Some(total)) if self.state.phase == Phase::Running => {
+                Some((*index, *total))
+            }
+            _ => None,
+        };
         let mut next = self.state.clone();
         let label = match command {
             Command::RollNpcs(grouping) => {
@@ -1449,6 +1459,7 @@ impl Run {
             other => Self::participant_command(&mut next, other)?,
         };
         next.log.push(label);
+        next.last_change = Some(Self::change_with_result(&next, &undo_label));
         if self.history.len() == 100 {
             self.history.remove(0);
             self.history_labels.remove(0);
@@ -1460,6 +1471,20 @@ impl Run {
             self.panel = Panel::Reference;
         }
         self.history_labels.push(undo_label);
+        self.notice_summary = None;
+        if let Some((index, total)) = live_initiative {
+            let waits = self
+                .state
+                .order
+                .iter()
+                .position(|i| *i == index)
+                .is_some_and(|at| at < self.state.cursor);
+            self.notice = Some(format!(
+                "{} joins at {total}{}.",
+                self.state.participants[index].name,
+                if waits { " · acts next round" } else { "" }
+            ));
+        }
         self.last_initiative = initiative_edit;
         if follow_turn && let Some(current) = self.current() {
             self.selected = current;
@@ -2528,6 +2553,7 @@ impl Run {
                     crate::design::count(choices.len(), "character", "characters")
                 )
             };
+            self.state.last_change = Some(Self::change_with_result(&self.state, &label));
             self.history_labels.push(label);
             self.dm_steps += 1;
         }
@@ -2544,7 +2570,7 @@ impl Run {
         }
         let what = what.join(" ");
         let mut changes: Vec<String> = Vec::new();
-        for line in from_sheet.iter().chain(from_panel) {
+        for line in from_sheet {
             for (index, part) in line.split(", ").enumerate() {
                 if index == 0
                     || self
@@ -2597,10 +2623,12 @@ impl Run {
             .filter(|p| from_sheet.iter().any(|line| line.starts_with(&p.name)))
             .map(|p| format!("Undo for {} stops here", p.name))
             .collect();
-        self.notice = Some(if names.is_empty() {
-            what
-        } else {
-            format!("{what} {}.", names.join(". "))
+        self.notice = (!from_sheet.is_empty()).then(|| {
+            if names.is_empty() {
+                what
+            } else {
+                format!("{what} {}.", names.join(". "))
+            }
         });
         self.undo_stopped = true;
         let names: Vec<_> = self
@@ -3122,6 +3150,15 @@ impl Run {
         let saved_at = crate::hermetic::file_time(&path);
         Some(self.info(path, saved_at, false))
     }
+    fn change_with_result(state: &State, label: &str) -> String {
+        state
+            .participants
+            .iter()
+            .find(|p| label.ends_with(&format!("damage to {}", p.name)))
+            .and_then(|p| p.hp)
+            .map_or_else(|| label.to_owned(), |hp| format!("{label} ({hp} HP left)"))
+    }
+
     fn info(&self, path: PathBuf, saved_at: Option<u64>, paused: bool) -> SavedRunInfo {
         let saved = saved_at.map_or_else(String::new, |at| {
             format!(
@@ -3140,7 +3177,11 @@ impl Run {
                 label = format!("{outcome} · {label}");
             }
         } else if paused
-            && let Some(last) = self.history_labels.last().or_else(|| self.state.log.last())
+            && let Some(last) = self
+                .state
+                .last_change
+                .as_ref()
+                .or_else(|| self.state.log.last())
         {
             let round_prefix = format!("Round {}: ", self.state.round);
             let last = last.strip_prefix(&round_prefix).unwrap_or(last);
@@ -5189,6 +5230,46 @@ mod tests {
         run.also.insert(0);
         assert_eq!(run.targets().iter().filter(|at| **at == 1).count(), 1);
     }
+    #[test]
+    fn live_initiative_says_whether_the_place_has_passed() {
+        for (total, waits) in [(18, true), (8, false)] {
+            let mut run = run();
+            begin(&mut run);
+            run.apply(Command::Next).unwrap();
+            let current = run.current();
+            run.apply(Command::Initiative(0, Some(total))).unwrap();
+            let notice = run.notice.as_deref().unwrap();
+            assert!(notice.contains(&format!("joins at {total}")), "{notice}");
+            assert_eq!(notice.contains("acts next round"), waits, "{notice}");
+            assert_eq!(run.current(), current);
+        }
+    }
+
+    #[test]
+    fn saved_row_keeps_the_close_dialog_change_label() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut run = run();
+        begin(&mut run);
+        run.apply(Command::Damage(0, 3)).unwrap();
+        let expected = Run::change_with_result(&run.state, run.history_labels.last().unwrap());
+        let campaign = stored(&mut run, dir.path());
+        let reopened = close_and_reopen(&mut run, campaign);
+        assert!(reopened.history_labels.is_empty());
+        let info = reopened.info(PathBuf::new(), None, true);
+        assert!(info.label.contains(&expected), "{}", info.label);
+        assert!(expected.contains("HP left"));
+    }
+
+    #[test]
+    fn panel_choice_does_not_claim_the_sheet_changed() {
+        let mut run = run();
+        let line = format!("{}: HP 20 → 18", run.state.participants[0].name);
+        run.note_sync_changes(&[], std::slice::from_ref(&line));
+        assert!(run.notice.is_none());
+        assert!(run.notice_summary.is_none());
+        assert!(run.state.log.last().unwrap().contains(&line));
+    }
+
     #[test]
     fn a_wrong_initiative_moves_its_row_and_the_turn_stays_with_one_step_back() {
         let mut run = run();

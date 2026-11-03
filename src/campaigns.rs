@@ -534,7 +534,7 @@ impl Campaigns {
         });
         let link_blocked = blocked.map(|reason| {
             if reason == "Close the run to change campaigns." {
-                "Close the run to change the folder or the link."
+                "Close the run to change the folder, the session folder or the link."
             } else {
                 reason
             }
@@ -639,6 +639,7 @@ impl Campaigns {
         ui: &mut egui::Ui,
         session: Option<crate::auth::Session>,
         dndbeyond: &mut crate::dndbeyond::DndBeyond,
+        blocked: Option<&str>,
     ) {
         let c = colors();
         ui.set_max_width(ui.available_width().min(design::LIST_MEASURE));
@@ -654,6 +655,7 @@ impl Campaigns {
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 if !self.data.campaigns.is_empty()
                     && Action::quiet("Reload from disk")
+                        .blocked(blocked)
                         .icon(icons::REFRESH)
                         .density(Density::Read)
                         .hint("Reload campaign settings from disk")
@@ -664,10 +666,12 @@ impl Campaigns {
                 }
             });
         });
+        design::blocked_reason(ui, blocked);
         if let Some(error) = &self.error {
             design::message(ui, Tone::Error, error);
         }
-        let unwritable = (!self.writable).then_some("Reload valid campaign settings first.");
+        let unwritable =
+            blocked.or((!self.writable).then_some("Reload valid campaign settings first."));
         design::locked(ui, unwritable, |ui| {
             if self.data.campaigns.is_empty() {
                 ui.add_space(design::XS);
@@ -948,6 +952,9 @@ impl Campaigns {
                         .show(ui, fields),
                 )
             };
+            if let Some(form) = &form {
+                design::locked_control(ui, &form.header_response);
+            }
             self.form_open = !added
                 && (direct
                     || form

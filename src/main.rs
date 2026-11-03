@@ -1302,9 +1302,7 @@ impl Splat {
                             |ui: &mut egui::Ui,
                              campaigns: &mut campaigns::Campaigns,
                              dndbeyond: &mut dndbeyond::DndBeyond| {
-                                design::locked(ui, blocked, |ui| {
-                                    campaigns.show(ui, session.clone(), dndbeyond);
-                                });
+                                campaigns.show(ui, session.clone(), dndbeyond, blocked);
                             };
                         if ui.ctx().content_rect().width() >= 1000.0 {
                             // A clear gutter, so that the left column's text does not run on.
@@ -1520,7 +1518,7 @@ impl Splat {
                                 design::locked(ui, blocked, |ui| {
                                     self.campaigns.show_form_if_editing(ui);
                                     design::rule(ui);
-                                    self.sessions.folder_view(ui, &self.timeline);
+                                    self.sessions.folder_view(ui, &self.timeline, blocked);
                                 });
                             });
                     }

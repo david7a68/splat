@@ -760,9 +760,13 @@ impl Run {
                                         |ui| {
                                             ui.add(
                                                 egui::Label::new(
-                                                    Type::Small
-                                                        .rich(ui, shown)
-                                                        .color(colors().result.warning),
+                                                    Type::Small.rich(ui, shown).color(
+                                                        if self.notice_summary.is_some() {
+                                                            colors().result.warning
+                                                        } else {
+                                                            colors().result.success
+                                                        },
+                                                    ),
                                                 )
                                                 .wrap_mode(if self.notice_summary.is_some() {
                                                     egui::TextWrapMode::Extend
@@ -1571,6 +1575,22 @@ impl Run {
                     text.push_str(&format!(", {n} {label}"));
                 }
             }
+            if self.state.phase == Phase::Setup {
+                let missing = count(&|i| {
+                    self.state.participants[i].present
+                        && self.state.participants[i].initiative.is_none()
+                });
+                let tied = count(&|i| self.setup_tie_directions(i).is_some());
+                if missing > 0 {
+                    text.push_str(&format!(
+                        ", {missing} {} initiative",
+                        if missing == 1 { "needs" } else { "need" }
+                    ));
+                }
+                if tied > 0 {
+                    text.push_str(&format!(", {}", design::count(tied, "tie", "ties")));
+                }
+            }
             Some(text)
         };
         let text = [side("above", &above), side("below", &below)]
@@ -2361,14 +2381,7 @@ impl Run {
             .iter()
             .zip(&self.history_labels)
             .filter(|(state, _)| state.log.len() >= saved_lines)
-            .map(|(_, label)| {
-                self.state
-                    .participants
-                    .iter()
-                    .find(|p| label.ends_with(&format!("damage to {}", p.name)))
-                    .and_then(|p| p.hp)
-                    .map_or_else(|| label.clone(), |hp| format!("{label} ({hp} HP left)"))
-            })
+            .map(|(_, label)| Self::change_with_result(&self.state, label))
             .collect();
         if changes.is_empty() {
             vec!["Everything since the last save.".to_owned()]
@@ -3799,19 +3812,27 @@ impl Run {
             Layout::top_down(Align::LEFT),
             |ui| {
                 ui.set_min_height(room);
-                egui::ScrollArea::vertical()
+                let mut spans = Vec::new();
+                let output = egui::ScrollArea::vertical()
                     .id_salt("run_setup_rows")
+                    .max_height((room - OVERFLOW_LINE).max(0.0))
                     .auto_shrink([false, false])
                     .show(ui, |ui| {
                         // Each measured row includes its own padding and hairline.
                         ui.spacing_mut().item_spacing.y = 0.0;
+                        let origin = ui.cursor().min.y;
                         // Roster order. Rows hold still while the DM types (T4.3).
                         for index in 0..self.state.participants.len() {
-                            ui.push_id(index, |ui| {
+                            let row = ui.push_id(index, |ui| {
                                 if let Some(picked) = self.setup_row(ui, index) {
                                     command = Some(picked);
                                 }
                             });
+                            spans.push((
+                                row.response.rect.top() - origin,
+                                row.response.rect.bottom() - origin,
+                                index,
+                            ));
                         }
                         let mut shared: std::collections::BTreeMap<&str, Vec<Rect>> =
                             std::collections::BTreeMap::new();
@@ -3837,6 +3858,7 @@ impl Run {
                             ui.painter().hline(x..=x + design::XS, bottom, stroke);
                         }
                     });
+                self.overflow_note(ui, &output, &spans);
             },
         );
         self.group_drop_zone(ui, rows.response.rect);

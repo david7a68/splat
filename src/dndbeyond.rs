@@ -237,7 +237,7 @@ impl DndBeyond {
             });
             return;
         }
-        egui::CollapsingHeader::new("Add from D&D Beyond")
+        let header = egui::CollapsingHeader::new("Add from D&D Beyond")
             .icon(crate::design::section_icon)
             .icon(crate::design::section_icon)
             .default_open(local.all().is_empty())
@@ -294,6 +294,7 @@ impl DndBeyond {
                     local.show_import_form(ui, &remote.id);
                 }
             });
+        crate::design::locked_control(ui, &header.header_response);
     }
 
     pub fn show(

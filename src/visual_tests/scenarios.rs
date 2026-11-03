@@ -1468,7 +1468,7 @@ pub mod empty {
     const OPEN_CAMPAIGN: &str = "Add campaign";
     const NEW_CAMPAIGN: &str = "Ashes of Emberfall";
     const NEW_FOLDER: &str = "new-campaign";
-    const NO_ENTRIES: &str = "Use Copy to… from any entry, or make a new one here.";
+    const NO_ENTRIES: &str = "entry you can use";
     const OPEN_SETTINGS: &str = "Add campaign";
     const NO_CAMPAIGN_ENCOUNTERS: &str = "No campaign yet";
     const NO_CAMPAIGN_PARTY: &str = "No campaign yet";
@@ -1540,6 +1540,15 @@ pub mod empty {
         d.click(TAB_ENTRIES);
         d.expect(NO_ENTRIES);
         d.state("no-campaign-entries", Sizes::Default);
+        d.begin_task();
+        d.click("entry you can use");
+        d.expect("Can use");
+        d.state("entries-you-can-copy", Sizes::Default);
+        d.audit_goal_within(
+            "iter-11-U2",
+            "find an entry to copy from the empty state",
+            1,
+        );
         go_encounters(d);
         d.state("no-encounters", Sizes::Default);
         go_party(d);
@@ -1875,6 +1884,7 @@ pub mod run_absent_player {
             "A long initiative Undo does not move the roster down",
         );
         d.state("initiative-set-in-combat", Sizes::Default);
+        d.expect("Brannoch Vale joins at 20 · acts next round.");
         let order: Vec<String> = roster_places(d).into_iter().map(|row| row.0).collect();
         d.observe(
             "Absent player",
@@ -3732,7 +3742,8 @@ pub mod signed_in {
     const SYNC_PARTY: &str = "Sync party";
     const STOP_SYNC: &str = "Stop party sync";
     const LINK_TAB: &str = "Link and folder";
-    const BLOCKED_REASON: &str = "Close the run to change the folder or the link.";
+    const BLOCKED_REASON: &str =
+        "Close the run to change the folder, the session folder or the link.";
     const EDIT_DETAILS: &str = "Edit details";
     const CONFLICT: &str = "Conflict";
     const RAIL_FAILING: &str = "Sign-in failing";
@@ -3886,6 +3897,10 @@ pub mod signed_in {
             "Sign in again opens Settings with the cookie field focused",
         );
         d.state("sign-in-from-run", Sizes::Default);
+        d.scroll_up_at(pos2(800.0, 250.0), 8);
+        d.expect("Close the run to change campaigns.");
+        d.expect_same("At 1200x800 the campaign lock reason already fits. Scrolling changes only the 960x640 view.");
+        d.state("campaigns-locked-during-run", Sizes::Default);
         d.click(BACK_TO_RUN);
         d.click(CLOSE_RUN);
         d.observe(
@@ -5172,6 +5187,18 @@ pub mod session_notes {
             !d.has("Close notes") && d.has_containing(" tied"),
             "What Notes hide in setup is one click away",
         );
+        d.click(NAV_TIMELINE);
+        let campaign = d.app_mut().campaigns.active_campaign().unwrap();
+        let path = crate::sessions::folder(&campaign)
+            .unwrap()
+            .join("Timeline.md");
+        let disk = std::fs::read_to_string(&path).unwrap();
+        d.app_mut().timeline.touch();
+        std::fs::write(&path, format!("{disk}\n<!-- Changed outside Splat. -->\n")).unwrap();
+        d.app_mut().timeline.save();
+        d.settle();
+        d.expect("Timeline.md changed on disk. Your draft is safe until you choose.");
+        d.state("timeline-disk-conflict", Sizes::Default);
     }
 }
 
@@ -5919,6 +5946,12 @@ pub mod encounter_groups {
         d.click(&add_group(GROUP_GOBLINS));
         d.expect(FIRST_GOBLIN);
         d.state("group-added-in-setup", Sizes::Default);
+        let overflow = d.at_size((960.0, 640.0), |d| d.visible_text("2 below, 2 ties"));
+        d.observe(
+            "iter-11-F3",
+            overflow,
+            "Setup names rows below the visible list at 960x640",
+        );
         d.goal("add a group during setup");
         d.click("Edit group");
         d.expect("Group name: Lost Patrol");

@@ -1634,11 +1634,23 @@ impl Library {
             if self.new_form {
                 self.new_entry(ui, dirty, campaigns);
             } else {
-                design::empty_state(
+                let mut can_use = false;
+                design::empty_state_with_body(
                     ui,
                     icons::LIBRARY,
                     "No entries of your own yet",
-                    "Use Copy to… from any entry, or make a new one here.",
+                    |ui| {
+                        ui.horizontal_wrapped(|ui| {
+                            ui.spacing_mut().item_spacing.x = 0.0;
+                            ui.label(Type::Body.rich(ui, "Copy an ").color(colors().muted));
+                            can_use = design::link(ui, "entry you can use").clicked();
+                            ui.label(
+                                Type::Body
+                                    .rich(ui, ", or make a new one here.")
+                                    .color(colors().muted),
+                            );
+                        });
+                    },
                     |ui| {
                         if Action::primary("New entry")
                             .icon(icons::ADD)
@@ -1649,6 +1661,9 @@ impl Library {
                         }
                     },
                 );
+                if can_use {
+                    self.scope = Scope::Uses;
+                }
             }
             return;
         }

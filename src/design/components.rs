@@ -69,11 +69,37 @@ pub fn temp_hp_text(temp: i64) -> String {
 
 /// Controls that cannot be used for one reason, which each of them says on hover.
 pub fn locked<R>(ui: &mut Ui, reason: Option<&str>, add: impl FnOnce(&mut Ui) -> R) -> R {
+    let key = Id::new("locked_control_reason");
+    let previous = ui.data_mut(|data| {
+        let previous = data.get_temp::<String>(key);
+        if let Some(reason) = reason {
+            data.insert_temp(key, reason.to_owned());
+        }
+        previous
+    });
     let group = ui.add_enabled_ui(reason.is_none(), add);
+    ui.data_mut(|data| {
+        data.remove::<String>(key);
+        if let Some(previous) = previous {
+            data.insert_temp(key, previous);
+        }
+    });
     if let Some(reason) = reason {
         group.response.on_disabled_hover_text(reason);
     }
     group.inner
+}
+
+/// Keep the enclosing lock's reason on each disabled control.
+pub fn locked_control(ui: &Ui, response: &Response) {
+    if !ui.is_enabled()
+        && let Some(reason) =
+            ui.data(|data| data.get_temp::<String>(Id::new("locked_control_reason")))
+    {
+        ui.ctx()
+            .accesskit_node_builder(response.id, |node| node.set_description(reason.clone()));
+        response.clone().on_disabled_hover_text(reason);
+    }
 }
 
 /// The width of a number. IBM Plex Sans has tabular digits, so these do not jitter.
@@ -111,6 +137,7 @@ pub fn named(ui: &Ui, response: &Response, name: &str) {
     ui.ctx().accesskit_node_builder(response.id, |node| {
         node.set_label(name.to_owned());
     });
+    locked_control(ui, response);
 }
 
 /// A page title and one context line on the same baseline. Actions keep their room.
@@ -573,6 +600,7 @@ impl<'a> Action<'a> {
         if let Some(hint) = self.hint {
             response = response.on_hover_text(hint);
         }
+        locked_control(ui, &response);
         response
     }
 
@@ -747,6 +775,7 @@ pub fn icon_button(ui: &mut Ui, icon: &str, name: &str) -> Response {
     let (rect, response) =
         ui.allocate_exact_size(Vec2::splat(Density::Read.control()), Sense::click());
     response.widget_info(|| WidgetInfo::labeled(WidgetType::Button, ui.is_enabled(), name));
+    locked_control(ui, &response);
     if ui.is_rect_visible(rect) {
         let c = colors();
         if response.hovered() {
@@ -1337,13 +1366,32 @@ pub fn count(n: usize, one: &str, many: &str) -> String {
 
 /// What this place is, and the one next step.
 pub fn empty_state(ui: &mut Ui, icon: &str, title: &str, body: &str, action: impl FnOnce(&mut Ui)) {
+    empty_state_with_body(
+        ui,
+        icon,
+        title,
+        |ui| {
+            ui.label(Type::Body.rich(ui, body).color(colors().muted));
+        },
+        action,
+    );
+}
+
+/// An empty state whose next step can include a link in its sentence.
+pub fn empty_state_with_body(
+    ui: &mut Ui,
+    icon: &str,
+    title: &str,
+    body: impl FnOnce(&mut Ui),
+    action: impl FnOnce(&mut Ui),
+) {
     let c = colors();
     ui.vertical(|ui| {
         ui.set_max_width(ui.available_width().min(READER_MEASURE));
         ui.spacing_mut().item_spacing.y = S;
         ui.label(Type::Title.rich(ui, icon).color(c.muted));
         ui.label(Type::Title.rich(ui, title).color(c.text));
-        ui.label(Type::Body.rich(ui, body).color(c.muted));
+        body(ui);
         ui.add_space(XS);
         action(ui);
     });
@@ -1861,6 +1909,36 @@ pub fn draft_comparison(ui: &mut Ui, draft: &str, disk: &str, id: impl std::hash
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn enclosing_lock_describes_each_control_and_stays_inside_its_scope() {
+        let ctx = egui::Context::default();
+        super::super::theme::install(&ctx);
+        ctx.enable_accesskit();
+        let output = ctx.run(Default::default(), |ctx| {
+            egui::CentralPanel::default().show(ctx, |ui| {
+                locked(ui, Some("Close the run first."), |ui| {
+                    Action::quiet("Open").blocked(Some("Other reason")).show(ui);
+                    icon_button(ui, icons::EXPAND, "More actions");
+                    text_input(ui, "Folder", &mut String::new(), "", FORM_WIDTH);
+                });
+                Action::quiet("Outside").show(ui);
+            });
+        });
+        let nodes = output.platform_output.accesskit_update.unwrap().nodes;
+        for label in ["Open", "More actions", "Folder"] {
+            let (_, node) = nodes
+                .iter()
+                .find(|(_, node)| node.label() == Some(label))
+                .unwrap();
+            assert_eq!(node.description(), Some("Close the run first."));
+        }
+        let (_, outside) = nodes
+            .iter()
+            .find(|(_, node)| node.label() == Some("Outside"))
+            .unwrap();
+        assert!(outside.description().is_none());
+    }
 
     #[test]
     fn cut_words_end_with_an_ellipsis_and_no_joining_word() {

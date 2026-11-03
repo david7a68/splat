@@ -100,6 +100,11 @@ or set `SPLAT_VISUAL_CONTACT_SHEET=1` to make it with a full `visual-test` run.
   clears scenario filters and baseline-update mode, and enforces the baseline.
   Video and optional contact-sheet settings work as for `visual-test`.
 
+A live initiative change says `acts next round` when its place has passed. Setup counts
+rows below the visible list, including missing initiatives and ties. Session note boxes
+keep their edges visible while the text scrolls. Saved runs keep the last change in the
+same words as the close dialog.
+
 Live run rows keep their first condition and shorten change bonuses first. Setup
 shows places once every present participant has initiative. Recording recovery
 keeps its state in the session list; a missing input offers **Choose an input**.
