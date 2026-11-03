@@ -3123,7 +3123,8 @@ impl Sessions {
                 *played.entry(event.title.to_lowercase()).or_default() += 1;
             }
         }
-        let planned: Vec<&PlanFight> = each_linked_name(&body)
+        let fight_plan = section_text(&body, "Plan for tonight").unwrap_or_default();
+        let planned: Vec<&PlanFight> = each_linked_name(&fight_plan)
             .iter()
             .filter_map(|name| {
                 plan.fights
