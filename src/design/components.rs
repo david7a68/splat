@@ -972,6 +972,15 @@ pub struct Status<'a> {
 }
 
 pub fn status(ui: &mut Ui, state: Status<'_>) -> Response {
+    status_label(ui, state, false)
+}
+
+/// Rail notices wrap so their cause stays visible in a narrow column.
+pub fn wrapped_status(ui: &mut Ui, state: Status<'_>) -> Response {
+    status_label(ui, state, true)
+}
+
+fn status_label(ui: &mut Ui, state: Status<'_>, wrap: bool) -> Response {
     let mut job = LayoutJob::default();
     let format = egui::TextFormat {
         font_id: Type::Small.font(ui),
@@ -981,7 +990,9 @@ pub fn status(ui: &mut Ui, state: Status<'_>) -> Response {
     job.append(state.icon, 0.0, format.clone());
     job.append(" ", 0.0, format.clone());
     job.append(state.word, 0.0, format);
-    ui.add(egui::Label::new(job).wrap())
+    let label = egui::Label::new(job);
+    ui.add(if wrap { label.wrap() } else { label.truncate() })
+        .on_hover_text(state.word)
 }
 
 /// A status that also leads to where the DM can act on it. The line wraps, because the

@@ -750,7 +750,6 @@ impl Campaigns {
                 "Add campaign"
             })
             .icon(design::section_icon)
-            .icon(design::section_icon)
             .id_salt(("campaign_form", self.editing))
             .open((self.remote.is_some() || self.focus_name).then_some(true))
             .default_open(editing || self.data.campaigns.is_empty())

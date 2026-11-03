@@ -626,12 +626,11 @@ impl Splat {
             if !self.encounters.has_run() {
                 let fights = self.encounters.paused_run_count();
                 let paused = self.encounters.paused_run().map(|run| {
-                    let state = run
-                        .label
-                        .split(" · ")
-                        .find(|part| part.starts_with("Round ") && *part != "Round 0")
-                        .unwrap_or("Setup");
-                    (run.path.clone(), run.encounter.clone(), state.to_owned())
+                    (
+                        run.path.clone(),
+                        run.encounter.clone(),
+                        crate::encounters::run_state_word(run, false),
+                    )
                 });
                 if let Some((path, name, state)) = paused
                     && design::paused_run_nav(ui, fights, &name, &state).clicked()
@@ -729,7 +728,7 @@ impl Splat {
                 self.page = Page::Sessions;
             }
             for state in statuses {
-                design::status(ui, state);
+                design::wrapped_status(ui, state);
             }
             // Words that could not be saved lead to where the DM can choose.
             for (lost, word, target) in [
