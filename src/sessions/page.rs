@@ -4862,10 +4862,10 @@ impl Sessions {
                 })
                 .map(|(session, _)| *session)
             {
-                if design::message_with_action(ui, tone, &words, "Move it here") {
-                    if let Some(run) = plan.open_run {
-                        self.move_run_to_session(book, run, session);
-                    }
+                if design::message_with_action(ui, tone, &words, "Move it here")
+                    && let Some(run) = plan.open_run
+                {
+                    self.move_run_to_session(book, run, session);
                 }
             } else if self.moved_run.is_some() {
                 if design::message_with_action(ui, tone, &words, "Undo move") {

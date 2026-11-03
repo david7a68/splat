@@ -439,17 +439,16 @@ impl Party {
                 show_file(ui, path);
                 if waiting && connected {
                     ui.label(Type::Small.rich(ui, action).color(colors().muted));
-                } else if connected {
-                    if Action::quiet(action)
+                } else if connected
+                    && Action::quiet(action)
                         .density(Density::Read)
                         .show(ui)
                         .clicked()
-                    {
-                        if conflicts.len() == 1 {
-                            self.reader.force_read();
-                        } else {
-                            self.reader.force_read_character(id);
-                        }
+                {
+                    if conflicts.len() == 1 {
+                        self.reader.force_read();
+                    } else {
+                        self.reader.force_read_character(id);
                     }
                 }
             });
