@@ -29,6 +29,23 @@ Rust 1.95.0 and the Rust overlay follow the other local projects.
 The Linux shell includes the libraries needed for Wayland, X11, and OpenGL.
 It selects Nix Mesa for EGL so the app also starts on non-NixOS hosts.
 
+For parallel design work, run `devenv shell -- audit-warm` once in the seed worktree
+before copying its `target/` with `cp -a --reflink=always`. This builds the test
+binaries and warms the exact Clippy command used by `check`. A test-only seed does
+not contain all the metadata Clippy needs. Keep a separate `target/` in each
+worktree; a shared directory causes Cargo lock waits. Keep build output on disk,
+not in `/tmp` (a RAM filesystem on the audit machine).
+
+After a set of edits, run `check` first for fast compiler and lint feedback, then
+`cargo test --locked`. `cargo check --locked --tests` is also useful while editing,
+but does not replace either gate. Before merging, run both gates and a full
+`visual-test` run, and review all captures. `--only` is for local feedback.
+
+Splat's test profile keeps file and line information for backtraces, but omits
+local-variable debug information. Normal app builds keep full debug information.
+To debug a test with locals, use
+`cargo test --locked --config 'profile.test.package.splat.debug=2'`.
+
 ## Visual tests
 
 `cargo test --locked` runs every usage scenario on the real app, headlessly and with no
@@ -43,10 +60,12 @@ devenv shell -- visual-test work --only run-lookup,party
 ```
 
 This also writes to `artifacts/screenshots/iter-0/`: a PNG for each state at 960x640,
-1200x800 and 1920x1080, `contact-sheet.png`, `ergonomics.json`, `ergonomics.md`,
+1200x800 and 1920x1080, `ergonomics.json`, `ergonomics.md`,
 `manifest.txt`, and one `video/<scenario>.mp4` per scenario. Rendering uses Mesa's
-software Vulkan driver, so captures repeat between runs. Video and the contact sheet need
-the host's `ffmpeg` and `montage`.
+software Vulkan driver, so captures repeat between runs. Video needs the host's
+`ffmpeg`. The optional contact sheet needs `montage` and can use several GB of RAM.
+Use `devenv shell -- visual-contact-sheet iter-0` to make one from existing captures,
+or set `SPLAT_VISUAL_CONTACT_SHEET=1` to make it with a full `visual-test` run.
 
 - `SPLAT_VISUAL_ENFORCE=strict` fails on any violation. `report` never fails on a check.
 - `SPLAT_VISUAL_UPDATE_BASELINE=1` rewrites the baseline after a full run.
@@ -360,18 +379,18 @@ are in Settings and in **Campaign → Link and folder**.
 
 Open **Party** to read the linked D&D Beyond party. Select a character
 and browse Overview, Actions, Spells, Equipment, and Features. **Refresh party**
-gets the latest sheets. When signed out, **Connect to refresh** in the page header opens Settings with the cookie field focused. Saves and skills use two or three columns. A sheet list gets a filter only when it has more than eight entries. **Technical details** keeps source and rule checks out of the main sheet. Computed totals come directly from D&D Beyond. Local
+gets the latest sheets. When signed out, **Connect to refresh** in the page header opens Settings with the cookie field focused. An empty Party uses one **Open Settings** action instead. Saves and skills use two or three columns. A sheet list gets a filter only when it has more than eight entries. **Technical details** keeps source and rule checks out of the main sheet. Computed totals come directly from D&D Beyond. Local
 creature records remain available offline, and open sheets use the event stream
 with polling fallback. No character changes are sent to D&D Beyond. See [viewer details and streaming findings](docs/character-viewer.md).
 
 If you edit a generated campaign note, Splat keeps your edit and stops updating that character's notes. To
-get updates again, use **Show file** to inspect it or choose **Replace with D&D Beyond sheet** on the warning. Splat reads that character again and replaces its edited notes. Your version stays beside the note in a `.splat-archive` file. When signed out, **Open Settings** takes you to the connection. Personal notes carry over when Splat can still find them.
+get updates again, use **Show file** to inspect it or choose **Replace with D&D Beyond sheet** on the warning. Splat reads that character again and replaces its edited notes. Your version stays beside the note in a `.splat-archive` file. The row says **Local edits** until replacement. The result names the character and has **Show file** for the kept version and **Dismiss**. When signed out, **Open Settings** takes you to the connection. Personal notes carry over when Splat can still find them.
 
 ## Encounter builder
 
 Open **Encounters**, select **New encounter**, and type a name.
 Use **Add party**, or search the campaign's available creatures. Each result shows
-the CR, HP and AC it has. Select its name to open its stat block in Lookup, beside the draft.
+the CR, HP and AC it has. A source appears only when it differs from the main source, and campaign-owned creatures say **Campaign** in results and the roster. Select its name to open its stat block in Lookup, beside the draft.
 Add a creature for each participant and assign its side. The row’s **⋯** menu has
 **Move up**, **Move down**, **Duplicate**, **Make it yours**, and **Remove**. Optional starting HP and temporary HP apply to that
 participant only. With a value off, the creature's starting state applies.
@@ -379,6 +398,7 @@ The side menu offers **Party**, **Enemies**, and **Other…** for a side of your
 The default sides, Party and Enemies, are hostile to each other. The sync and
 repeat options sit below the roster. **Party in roster** means all party members are present.
 You can edit or create an encounter while a run is open. Close the run before you start another fight.
+An encounter with a paused run offers **Resume** in its editor and shows the paused round beside the save state. **Start another fight** stays in its menu. An empty roster cannot start.
 
 A roster slot can also build in changes to its creature: a display name, maximum HP,
 AC, initiative bonus, attack bonus, damage bonus, speed, starting conditions, and
@@ -405,19 +425,19 @@ Saving a template does not execute rules or start a combat run.
 
 A session's plan can assemble a group in place: choose **Group**, then **New group**. The editor uses
 the full column. The note stays behind its **Note** tab. The saved group is linked in the plan. **Edit** on its row opens it again. While a fight is open, the row has **Arrivals**, which goes to that
-panel in the run.
+panel in the run. Its **⋯ → Remove** removes it from this plan and keeps the note’s words. **Undo remove from plan** restores the link.
 
 An encounter group is a reusable, named set of creatures that you prepare once and add to a
 running encounter when it arrives. It is a note with `splat_kind: encounter_group`, saved under
 `Encounter Groups/` in the campaign folder, with its members and counts, a default side, and your
 notes as its text. **New group** on Encounters opens its editor, which searches creatures as the
 encounter editor does. Any creature from this campaign or a package it uses can be a member, and
-each member can carry the same changes as a roster slot. An empty group or an unavailable
+each member can carry the same changes as a roster slot. A one-line **Changed** summary opens those changes. An empty group or an unavailable
 creature is refused with a message.
 
 **Belongs to** chooses who the group is for. With **Any encounter**, a run of any encounter offers
 it. With one encounter, only runs of that encounter offer it, and the Encounters page keeps it in a
-closed **Groups for encounters** section.
+closed **Groups** section. Open it to see one heading for each encounter, with groups for any encounter first and groups whose encounter was deleted last. Saved group rows have **Edit** and **⋯ → Remove…**, with **Undo remove group** after removal.
 
 The encounter editor has a frame for each of its own groups, with its name, side, members and notes.
 The frame’s **⋯ → Remove** makes a saved group available for any encounter on the next save. **Undo remove group** restores its owner before that save.
@@ -490,7 +510,7 @@ An encounter with an unfinished run appears only in **In progress** and returns 
 **Keep in Ready during a run** also keeps its Ready row, with **Start fight** blocked and a reason.
 Empty list sections show one muted line and hide the zero count.
 The rail keeps a paused run in view and resumes it in one click. Its detail wraps below the Run label. **History** holds dated, ended runs under their session.
-An ended run opens read-only in place, with its final state and log. It leaves the live run open. Run changes never
+History rows show **Open** or **Close**, with **Start fight** and **Edit** in their menu. An ended run opens read-only in place, with its final state and log. It leaves the live run open. Run changes never
 write to templates or character copies.
 
 ### Run storage and campaign initiative

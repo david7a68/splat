@@ -582,6 +582,42 @@ fn detail_columns(ui: &mut egui::Ui, detail: &str, source: Option<&str>) {
     });
 }
 
+fn grouped(value: u64) -> String {
+    design::count(value as usize, "", "").trim().to_owned()
+}
+
+fn creature_name_link(ui: &mut egui::Ui, name: &str) -> egui::Response {
+    let galley = design::one_line(
+        ui,
+        name,
+        Type::Body.font(ui),
+        colors().text,
+        ui.available_width(),
+    );
+    let (rect, response) = ui.allocate_exact_size(
+        egui::vec2(galley.size().x, Density::Read.control() - design::XS),
+        egui::Sense::click(),
+    );
+    response
+        .widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Link, ui.is_enabled(), name));
+    if ui.is_rect_visible(rect) {
+        let y = rect.center().y - galley.size().y / 2.0;
+        if response.hovered() {
+            ui.painter().hline(
+                rect.x_range(),
+                y + galley.size().y - design::HAIRLINE_WIDTH,
+                egui::Stroke::new(design::HAIRLINE_WIDTH, colors().text),
+            );
+        }
+        ui.painter()
+            .galley(egui::pos2(rect.left(), y), galley, colors().text);
+        if response.has_focus() {
+            design::focus_ring(ui, rect);
+        }
+    }
+    response.on_hover_cursor(egui::CursorIcon::PointingHand)
+}
+
 /// `changed` holds this creature's values when a slot or member changes them.
 fn creature_detail(entry: &Entry, party: bool, changed: Option<&Resolved>) -> String {
     let stat = |name: &str| {
@@ -634,26 +670,47 @@ fn slot_sheet<'a>(
     let creature = snapshot.creatures.iter().find(|c| c.id == id)?;
     party.sheet(creature.character.as_deref()?)
 }
-fn roster_summary(setup: &Setup) -> String {
-    let side = |slot: &&Slot| {
-        slot.overrides
+fn roster_summary(setup: &Setup, catalogue: &Catalogue) -> String {
+    let mut party = 0;
+    let mut creatures = std::collections::BTreeMap::<String, usize>::new();
+    for slot in &setup.roster {
+        let side = slot
+            .overrides
             .get("side")
             .and_then(Value::as_str)
-            .unwrap_or(&slot.side)
-            .trim()
-            == "party"
-    };
-    let party = setup.roster.iter().filter(side).count();
-    let others = setup.roster.len() - party;
-    let changed = if setup.roster.iter().any(|slot| !slot.overrides.is_empty()) {
-        " · Changed"
-    } else {
-        ""
-    };
-    format!(
-        "{party} party · {}{changed}",
-        design::count(others, "other", "others")
-    )
+            .unwrap_or(&slot.side);
+        if side.trim() == "party" {
+            party += 1;
+        } else {
+            let name = slot
+                .creature
+                .as_ref()
+                .and_then(|reference| catalogue.resolve_ref(reference).ok())
+                .and_then(|id| catalogue.entries.get(&id))
+                .map_or_else(
+                    || "Unknown creature".to_owned(),
+                    |entry| entry.entry.name.clone(),
+                );
+            *creatures
+                .entry(groups::shown_name(&slot.overrides, name))
+                .or_default() += 1;
+        }
+    }
+    let mut parts = Vec::new();
+    if party > 0 {
+        parts.push(design::count(party, "party", "party"));
+    }
+    parts.extend(creatures.into_iter().map(|(name, count)| {
+        if count == 1 {
+            name
+        } else {
+            format!("{} × {name}", design::count(count, "", "").trim())
+        }
+    }));
+    if setup.roster.iter().any(|slot| !slot.overrides.is_empty()) {
+        parts.push("Changed".to_owned());
+    }
+    parts.join(" · ")
 }
 /// Keep a stat label with its value. A second line can break between facts.
 fn stat_line(text: &str) -> String {
@@ -693,6 +750,7 @@ impl Snapshot {
         let document = CampaignDocument::load(campaign)?;
         let catalogue = Catalogue::load(modules, Some(campaign))?;
         let closure = catalogue.closure(&document.selections, campaign.id);
+        let main_source = crate::content_workspace::builtin_manifest().id;
         let mut creatures: Vec<_> = catalogue
             .entries
             .iter()
@@ -720,6 +778,7 @@ impl Snapshot {
                     source: match (party, e.private) {
                         (true, _) => None,
                         (false, true) => Some("Campaign".to_owned()),
+                        (false, false) if e.owner == main_source => None,
                         (false, false) => Some(catalogue.package_name(e.owner)),
                     },
                     party,
@@ -750,7 +809,9 @@ impl Snapshot {
                     path: e.entry.path.clone(),
                     id: e.entry.id,
                     name: e.entry.name.clone(),
-                    summary: setup.as_ref().map(roster_summary),
+                    summary: setup
+                        .as_ref()
+                        .map(|setup| roster_summary(setup, &catalogue)),
                     repeatable: setup.is_some_and(|setup| setup.repeatable),
                 }
             })
@@ -848,6 +909,7 @@ pub struct Encounters {
     pub carry: Option<crate::encounter_run::Carry>,
     /// The saved run `Delete` last removed, for one step of undo.
     deleted_run: Option<crate::encounter_run::DeletedRun>,
+    removed_saved_group: Option<groups::RemovedGroup>,
 }
 /// One encounter, as a session's plan offers it.
 pub struct PlanFight {
@@ -870,6 +932,7 @@ enum ListAction {
     Edit(String),
     Run(String),
     OpenGroup(String),
+    RemoveGroup(String),
 }
 #[derive(Clone, Copy, Default, PartialEq)]
 enum EditorPane {
@@ -1242,6 +1305,7 @@ impl Encounters {
         }
         // Its path can be out of date after this, so undo could put it where nothing lists it.
         self.deleted_run = None;
+        self.removed_saved_group = None;
         self.active = Some(campaign.clone());
         self.draft = None;
         self.group_draft = None;
@@ -1358,7 +1422,7 @@ impl Encounters {
                         path: draft.path.clone(),
                         id: entry.id,
                         name: draft.name.clone(),
-                        summary: Some(roster_summary(&draft.setup)),
+                        summary: Some(roster_summary(&draft.setup, &s.catalogue)),
                         repeatable: draft.setup.repeatable,
                     });
                     s.templates
@@ -1941,11 +2005,18 @@ impl Encounters {
                     story.events,
                     story.sessions,
                 );
-                format!(
-                    "{} ready · {} in progress",
-                    page.ready.len(),
-                    page.in_progress.len()
-                )
+                let mut counts = Vec::new();
+                if !page.ready.is_empty() {
+                    counts.push(design::count(page.ready.len(), "ready", "ready"));
+                }
+                if !page.in_progress.is_empty() {
+                    counts.push(design::count(
+                        page.in_progress.len(),
+                        "in progress",
+                        "in progress",
+                    ));
+                }
+                counts.join(" · ")
             })
             .unwrap_or_else(|| "Reading encounters…".into());
         design::page_header(ui, "Encounters", Some(&context), |ui| {
@@ -2000,6 +2071,7 @@ impl Encounters {
         }
         self.results(ui);
         self.delete_undo(ui, active);
+        self.group_remove_undo(ui, active, campaigns.modules());
         if self.pending.is_some() && self.snapshot.is_none() {
             ui.horizontal(|ui| {
                 crate::design::spinner(ui);
@@ -2020,7 +2092,11 @@ impl Encounters {
                 Type::Small
                     .rich(
                         ui,
-                        format!("{} {} content issues", icons::WARN, snapshot.issues.len()),
+                        format!(
+                            "{} {}",
+                            icons::WARN,
+                            design::count(snapshot.issues.len(), "content issue", "content issues")
+                        ),
                     )
                     .color(colors().result.warning),
                 |ui| {
@@ -2120,6 +2196,14 @@ impl Encounters {
                 }
                 Err(e) => self.error = Some(e),
             },
+            ListAction::RemoveGroup(path) => match groups::RemovedGroup::remove(active, &path) {
+                Ok(removed) => {
+                    self.removed_saved_group = Some(removed);
+                    self.reload_snapshot(active, campaigns.modules());
+                    self.saved = true;
+                }
+                Err(error) => self.error = Some(error),
+            },
             ListAction::Resume(path) => self.open_saved_run(&path, active),
             ListAction::ReadHistory(path) => {
                 if self
@@ -2201,6 +2285,18 @@ impl Encounters {
         let has_run = self.has_run();
         let loading = self.pending.is_some();
         let saved_note = self.message.clone();
+        let unfinished = self
+            .draft
+            .as_ref()
+            .and_then(|draft| {
+                self.snapshot.as_ref()?.runs.iter().find(|run| {
+                    run.standing == crate::encounter_run::Standing::Unfinished
+                        && (run.source == Some(draft.id)
+                            || (run.source.is_none() && run.encounter == draft.saved_name))
+                })
+            })
+            .cloned();
+        let mut start_another = false;
         let draft_ref = self.draft.as_mut().expect("the editor has a draft");
         let focus_name = &mut self.focus_name;
         let focus_search_after_name = &mut self.focus_search;
@@ -2221,7 +2317,9 @@ impl Encounters {
                 )
                 .show(ui)
                 .clicked();
-            let width = (ui.available_width() - design::S * 33.0).max(Density::Scan.control());
+            let width = (ui.available_width()
+                - design::S * if unfinished.is_some() { 38.0 } else { 33.0 })
+            .max(Density::Scan.control());
             let response = ui.add(
                 egui::TextEdit::singleline(&mut draft_ref.name)
                     .id(design::focus_id(NAME_FIELD))
@@ -2238,7 +2336,7 @@ impl Encounters {
                 *focus_search_after_name = true;
             }
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                save = if dirty && !has_run {
+                save = if dirty && !has_run && unfinished.is_none() {
                     Action::primary("Save encounter")
                 } else {
                     Action::secondary("Save encounter")
@@ -2246,18 +2344,43 @@ impl Encounters {
                 .blocked_if(!dirty, "No changes to save.")
                 .show(ui)
                 .clicked();
-                run_it = if dirty || has_run {
-                    Action::secondary(START_FIGHT)
-                } else {
-                    Action::primary(START_FIGHT)
+                let start_blocked = has_run
+                    .then_some(BLOCKED_BY_RUN)
+                    .or(creature_dirty.then_some(BLOCKED_BY_CREATURE))
+                    .or(loading.then_some("Still reading this campaign."))
+                    .or(draft_ref
+                        .setup
+                        .roster
+                        .is_empty()
+                        .then_some("Add participants first"));
+                if unfinished.is_some() {
+                    row_menu(ui, &draft_ref.name, |ui| {
+                        start_another = menu_action(ui, "Start another fight", start_blocked);
+                    });
                 }
-                .blocked(
+                let word = if unfinished.is_some() {
+                    "Resume"
+                } else {
+                    START_FIGHT
+                };
+                run_it = if has_run || (dirty && unfinished.is_none()) {
+                    Action::secondary(word)
+                } else {
+                    Action::primary(word)
+                }
+                .blocked(if unfinished.is_some() {
                     has_run
                         .then_some(BLOCKED_BY_RUN)
                         .or(creature_dirty.then_some(BLOCKED_BY_CREATURE))
-                        .or(loading.then_some("Still reading this campaign.")),
-                )
-                .hint("Save this encounter and start a run.")
+                        .or(loading.then_some("Still reading this campaign."))
+                } else {
+                    start_blocked
+                })
+                .hint(if unfinished.is_some() {
+                    "Save this encounter and resume its unfinished run."
+                } else {
+                    "Save this encounter and start a run."
+                })
                 .show(ui)
                 .clicked();
             });
@@ -2277,13 +2400,35 @@ impl Encounters {
                 (icons::OK, "No changes", colors().muted)
             };
             design::status(ui, Status { icon, word, color });
+            if let Some(run) = &unfinished {
+                design::status(
+                    ui,
+                    Status {
+                        icon: icons::RUN,
+                        word: &run_state_word(
+                            run,
+                            self.run
+                                .as_ref()
+                                .and_then(|open| open.path())
+                                .is_none_or(|path| path != run.path),
+                        ),
+                        color: colors().muted,
+                    },
+                );
+            }
             blocked_reason(
                 ui,
-                has_run
-                    .then_some(BLOCKED_BY_RUN)
-                    .or(creature_dirty.then_some(BLOCKED_BY_CREATURE))
-                    .or(loading.then_some("Still reading this campaign.")),
+                creature_dirty
+                    .then_some(BLOCKED_BY_CREATURE)
+                    .or(loading.then_some("Still reading this campaign."))
+                    .or(
+                        (!has_run && unfinished.is_none() && draft_ref.setup.roster.is_empty())
+                            .then_some("Add participants first"),
+                    ),
             );
+            if dirty {
+                blocked_reason(ui, Some("Save or discard the draft first."));
+            }
         });
         design::rule(ui);
         if back {
@@ -2316,12 +2461,16 @@ impl Encounters {
         if save {
             self.save_draft(ui.ctx(), active, campaigns.modules());
         }
-        if run_it {
+        if run_it || start_another {
             if dirty {
                 self.save_draft(ui.ctx(), active, campaigns.modules());
             }
             if !self.draft_dirty() {
-                self.open_run(active, campaigns.modules());
+                if !start_another && let Some(run) = &unfinished {
+                    self.open_saved_run(&run.path, active);
+                } else {
+                    self.open_run(active, campaigns.modules());
+                }
                 // A fight started from the session goes back there, not to this editor.
                 if self.from_session && self.run.is_some() {
                     self.draft = None;
@@ -2354,7 +2503,11 @@ impl Encounters {
         let mut pane = self.editor_pane;
         if compact {
             // The count stays on screen, so that Add shows a result on the other tab.
-            let roster = format!("Roster ({})", draft.setup.roster.len());
+            let roster = if draft.setup.roster.is_empty() {
+                "Roster".to_owned()
+            } else {
+                format!("Roster ({})", grouped(draft.setup.roster.len() as u64))
+            };
             design::segmented(
                 ui,
                 &mut pane,
@@ -2391,7 +2544,9 @@ impl Encounters {
                 EditorPane::Add => {
                     match &mut self.creature {
                         Some(editor) => creature_step = Self::creature_pane(ui, editor),
-                        None => Self::add_pane(ui, draft, snapshot, search, focus_search, peek),
+                        None => {
+                            Self::add_pane(ui, draft, snapshot, search, focus_search, peek, compact)
+                        }
                     }
                     false
                 }
@@ -2422,7 +2577,7 @@ impl Encounters {
         }))
         .show_inside(ui, |ui| match creature {
             Some(editor) => creature_step = Self::creature_pane(ui, editor),
-            None => Self::add_pane(ui, draft, snapshot, search, focus_search, peek),
+            None => Self::add_pane(ui, draft, snapshot, search, focus_search, peek, compact),
         });
         egui::CentralPanel::default()
             // The panel's drag handle lies on this edge, so the roster stops short of it.
@@ -2457,20 +2612,21 @@ impl Encounters {
         search: &mut String,
         focus_search: &mut bool,
         peek: &mut Option<Uuid>,
+        compact: bool,
     ) {
-        ui.label(
-            Type::Heading
-                .rich(ui, "Add participants")
-                .color(colors().text),
-        );
-        ui.add(
-            egui::Label::new(
-                Type::Small
-                    .rich(ui, "Party members use the saved local character copies.")
-                    .color(colors().muted),
-            )
-            .wrap(),
-        );
+        if !compact {
+            design::group_heading(ui, "Add participants", 0);
+        }
+        if draft.add_to.is_none() {
+            ui.add(
+                egui::Label::new(
+                    Type::Small
+                        .rich(ui, "Party members use the saved local character copies.")
+                        .color(colors().muted),
+                )
+                .wrap(),
+            );
+        }
         groups::add_target(ui, draft, snapshot);
         if draft.target_group().is_some() {
             let chosen = Self::creature_search(
@@ -2576,14 +2732,20 @@ impl Encounters {
         if std::mem::take(focus_search) {
             design::focus_and_select(ui, response.id, search);
         }
-        if let Some(members) = &roster.members {
+        if let Some(members) = &roster.members
+            && !members.is_empty()
+        {
             ui.add(
                 egui::Label::new(Type::Small.rich(ui, members).color(colors().muted)).truncate(),
             )
             .on_hover_text(members);
         }
         let query = search.to_lowercase();
-        let mut matches: Vec<&Creature> = creatures.filter(|c| c.lower.contains(&query)).collect();
+        let mut matches: Vec<&Creature> = creatures
+            .filter(|c| {
+                c.lower.contains(&query) && (!query.is_empty() || !c.party || !(roster.already)(c))
+            })
+            .collect();
         // The plain name first, so "wolf" finds Wolf before Dire Wolf. The sort keeps the
         // list's order inside each rank.
         if !query.is_empty() {
@@ -2626,7 +2788,7 @@ impl Encounters {
                                 ui.set_max_width(
                                     (ui.available_width() - design::S * 12.0).max(design::S * 10.0),
                                 );
-                                if design::link(ui, &c.name)
+                                if creature_name_link(ui, &c.name)
                                     .on_hover_text("Read this entry in Lookup")
                                     .clicked()
                                 {
@@ -2672,16 +2834,12 @@ impl Encounters {
             .id_salt("encounter_editor")
             .auto_shrink([false, false])
             .show(ui, |ui| {
-                ui.label(
-                    Type::Heading
-                        .rich(ui, format!("Roster ({})", draft.setup.roster.len()))
-                        .color(colors().text),
-                );
+                design::group_heading(ui, "Roster", draft.setup.roster.len());
                 // Without a link there is no sheet to sync with, whatever the note says.
                 let live = linked_party.filter(|_| draft.setup.combat_sync);
                 if draft.setup.roster.is_empty() {
                     ui.add_space(design::S);
-                    design::empty_state(ui, icons::PARTY, "No participants yet", "Add the party and creatures from Add participants.", |_| {});
+                    blocked_reason(ui, Some("No participants yet. Add the party and creatures from Add participants."));
                 }
                 Self::roster(ui, draft, snapshot, focus_search, expanded, live, make_yours);
                 ui.add_space(design::M);
@@ -2690,7 +2848,7 @@ impl Encounters {
                 }
                 ui.checkbox(&mut draft.setup.repeatable, REPEATABLE_OPTION);
                 ui.add_space(design::M);
-                design::group_label(ui, "Read-aloud and notes");
+                design::group_heading(ui, "Read-aloud and notes", 0);
                 let response = ui.add(
                     egui::TextEdit::multiline(&mut draft.body)
                         .hint_text("What you read to the table, then your tactics. The run shows this before the first turn.")
@@ -2795,6 +2953,10 @@ impl Encounters {
                 let detail = detail
                     .strip_prefix("Party copy · ")
                     .map_or_else(|| detail.clone(), str::to_owned);
+                let detail = match creature.and_then(|creature| creature.source.as_deref()) {
+                    Some(source) => format!("{detail} · {source}"),
+                    None => detail,
+                };
                 let is_open = expanded.as_deref() == Some(slot.key.as_str());
                 ui.horizontal(|ui| {
                     ui.set_min_height(Density::Glance.row());
@@ -3081,6 +3243,7 @@ impl Encounters {
 /// The widest a list row grows, so that its actions stay near the name they belong to.
 use crate::design::LIST_MEASURE;
 mod list;
+pub(crate) use list::run_state_word;
 use list::{
     blocked_reason, group_list, history_list, in_progress_list, menu_action, ready_list, row_menu,
     side_control,
@@ -3312,7 +3475,7 @@ mod tests {
         assert_eq!(snapshot.creatures[0].id, local);
     }
     #[test]
-    fn creatures_name_the_package_they_came_from() {
+    fn creatures_show_campaign_ownership_and_omit_the_main_source() {
         let dir = tempfile::tempdir().unwrap();
         let campaign = campaign(dir.path());
         let hero = creature(dir.path(), "Hero", true);
@@ -3329,13 +3492,15 @@ mod tests {
         };
         assert_eq!(source(hero), None);
         assert_eq!(source(local), Some("Campaign"));
-        // A new campaign uses the built-in package.
-        assert!(
-            snapshot
-                .creatures
-                .iter()
-                .any(|c| c.source.as_deref() == Some("D&D 2024 · SRD 5.2.1"))
-        );
+        // A new campaign uses the built-in package, so those rows need no source suffix.
+        let builtin = crate::content_workspace::builtin_manifest().id;
+        let main: Vec<_> = snapshot
+            .creatures
+            .iter()
+            .filter(|creature| snapshot.catalogue.entries[&creature.id].owner == builtin)
+            .collect();
+        assert!(!main.is_empty());
+        assert!(main.iter().all(|creature| creature.source.is_none()));
     }
     #[test]
     fn editor_renders_at_supported_sizes_without_changing_the_draft() {
@@ -3620,9 +3785,15 @@ mod tests {
         d.add(id, false);
         slot_override(&mut d, 0, "{side: party}");
         d.save(&campaign, &[]).unwrap();
-        assert_eq!(roster_summary(&d.setup), "1 party · 0 others · Changed");
+        assert_eq!(
+            roster_summary(&d.setup, &Snapshot::load(&campaign, &[]).unwrap().catalogue),
+            "1 party · Changed"
+        );
         slot_override(&mut d, 0, "{side: ' party '}");
-        assert_eq!(roster_summary(&d.setup), "1 party · 0 others · Changed");
+        assert_eq!(
+            roster_summary(&d.setup, &Snapshot::load(&campaign, &[]).unwrap().catalogue),
+            "1 party · Changed"
+        );
         slot_override(&mut d, 0, "{side: party}");
         let editor = Encounters {
             active: Some(campaign.clone()),
