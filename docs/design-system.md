@@ -703,3 +703,22 @@ Source text and structured item fields stay in the end group after related notes
 Fight and Packages use the same menu button, with the caret after the word.
 World relationship values use a 240 px column; Not found stays on one line.
 Empty fight prep offers Edit encounter while its encounter exists.
+
+## Library and preparation audit, iteration 11
+
+Copied creature fields use the template's book order, with one flow line per stat.
+Library disk comparisons use the editor's monospace face and line height. Discard
+messages use the reserved draft-reason line. Reader end sections share one leading M gap.
+Copy to… requires a campaign or package destination and states that reason on hover.
+
+Unreadable rows name their kind and file line. Their owner line says Cannot be read.
+A moved draft shows its new path and its old folder; file actions use the new path.
+Let it go names entries that need the deleted note and keeps Undo.
+
+Duplicate identities keep both files visible with a warning. Saves write only the
+open file. Give the copy a new identity changes the open file and has Undo; the
+warning tells the DM to open the copy first. Encounters block ambiguous creatures
+and offer Open in Library. Validation messages update after encounter or group edits.
+Changed stays at the end of a roster row's second line; shorten muted detail first.
+Arrivals puts Changed before member names. Roster, Members and Recordings share
+an underlined tab with a muted, nonzero count.

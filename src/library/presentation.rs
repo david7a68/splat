@@ -51,7 +51,11 @@ impl Section {
     }
 
     pub fn for_entry(entry: &Entry) -> Self {
-        match category(entry) {
+        Self::for_kind(category(entry))
+    }
+
+    pub fn for_kind(kind: &str) -> Self {
+        match kind {
             "creature" => Self::Creatures,
             "spell" => Self::Spells,
             "item" | "magic_item" | "equipment" | "container" => Self::Items,

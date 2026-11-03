@@ -677,7 +677,7 @@ pub fn package_delete_entry(d: &mut Driver<'_>) {
     d.state("deleted-package-entry-reader-link", Sizes::All);
     go_encounters(d);
     d.click_beside(
-        "Cinder Wolf",
+        "6. Cinder Wolf",
         "Options: starting HP, temporary HP, initiative group and changes",
     );
     d.expect("Replacement creature");
@@ -689,6 +689,10 @@ pub fn package_delete_entry(d: &mut Driver<'_>) {
     d.expect("as\u{a0}Guard");
     d.expect("Undo replacement");
     assert!(!d.has_containing("Not found. Its package entry was deleted."));
+    assert!(
+        !d.has_containing("have no creature")
+            && !d.has_containing("Choose a replacement in the roster.")
+    );
     let dirty = d.app_mut().encounters.draft_dirty();
     d.observe(
         "Replace deleted creature",
@@ -696,6 +700,25 @@ pub fn package_delete_entry(d: &mut Driver<'_>) {
         "Choosing a replacement edits the draft; it does not save it",
     );
     d.state("deleted-package-entry-replaced", Sizes::All);
+    d.observe_both("W8", "Changed keeps the same roster row pitch", |d| {
+        let top = |name: &str| {
+            d.nodes()
+                .into_iter()
+                .find(|node| node.name.starts_with(name))
+                .unwrap()
+                .rect
+                .top()
+        };
+        let pitch = top("6. Cinder Wolf") - top("5. Sable Harrowgate");
+        (top("7. Cinder Wolf") - top("6. Cinder Wolf") - pitch).abs() < 1.0
+            && (top("8. Ember Cultist") - top("7. Cinder Wolf") - pitch).abs() < 1.0
+    });
+    d.click("More actions for Bridge Ambush");
+    d.click("Start another fight");
+    d.expect("Begin combat");
+    d.state("replacement-starts-another-fight", Sizes::All);
+    close_run(d);
+    go_encounters(d);
     d.click("Undo replacement");
     d.expect("Not found. Its package entry was deleted.");
     d.expect_same("Undo replacement restores the original missing-creature rows and warning.");
@@ -711,6 +734,7 @@ pub fn package_delete_entry(d: &mut Driver<'_>) {
     d.wait_for_text(
         "This entry's file has gone from disk. Your draft is safe here until you choose.",
     );
+    d.expect("Ember Cultist needs this entry.");
     d.state("draft-file-deleted-on-disk", Sizes::All);
     d.expect("YOUR DRAFT");
     d.click("Save my draft again");
@@ -732,6 +756,7 @@ pub fn package_delete_entry(d: &mut Driver<'_>) {
     d.wait_for_text("Let it go");
     d.click("Let it go");
     d.wait_for_text("No entry open");
+    d.expect("Ash Exposure let go. Ember Cultist now needs a missing entry.");
     assert!(!d.has_containing("Ash Exposure · "));
     d.expect("Undo discard");
     d.state("deleted-draft-let-go", Sizes::All);
@@ -747,6 +772,57 @@ pub fn package_delete_entry(d: &mut Driver<'_>) {
     assert!(!d.has_containing("Ash Exposure · "));
     d.expect_same("The deleted entry stays absent after focus returns.");
     d.state("deleted-draft-after-focus", Sizes::All);
+}
+
+/// A copied file keeps its own save target until the DM repairs its identity.
+pub fn package_duplicate_id(d: &mut Driver<'_>) {
+    let package = d.root.join("modules/ashen-marches");
+    let original = package.join("Creatures/Cinder Wolf.md");
+    let copy = package.join("Creatures/Cinder Wolf copy.md");
+    let before = fs::read_to_string(&original).unwrap();
+    let copy_text = before.replace("splat_name: Cinder Wolf", "splat_name: Cinder Wolf copy");
+    fs::write(&copy, &copy_text).unwrap();
+    go_library(d);
+    search_library(d, "Cinder Wolf");
+    d.wait_for_text("Duplicate identity");
+    d.state("duplicate-package-library-list", Sizes::All);
+    d.click_starting("Cinder Wolf · ");
+    d.expect("Give the copy a new identity");
+    d.click(EDIT_MARKDOWN);
+    d.state("duplicate-original-editor", Sizes::All);
+    d.type_into_editor("Saved only to the original.\n");
+    d.click("Save");
+    d.wait_for_text("Saved");
+    assert!(
+        fs::read_to_string(&original)
+            .unwrap()
+            .contains("Saved only to the original.")
+    );
+    assert_eq!(fs::read_to_string(&copy).unwrap(), copy_text);
+    go_encounters(d);
+    open_saved_encounter(d, "Bridge Ambush");
+    d.expect("Give the copy a new identity in Library.");
+    d.state("duplicate-package-in-roster", Sizes::All);
+    d.click("Open in Library");
+    d.expect("Give the copy a new identity");
+    d.click("Read");
+    search_library(d, "Cinder Wolf copy");
+    d.click_starting("Cinder Wolf copy · ");
+    d.state("duplicate-copy-reader", Sizes::All);
+    d.click("Give the copy a new identity");
+    d.wait_for_text("Undo new identity");
+    let original_id = crate::content_workspace::note_id(&fs::read_to_string(&original).unwrap());
+    let copy_id = crate::content_workspace::note_id(&fs::read_to_string(&copy).unwrap());
+    assert_ne!(original_id, copy_id);
+    d.state("duplicate-copy-new-identity", Sizes::All);
+    d.click("Undo new identity");
+    d.wait_for_text("Duplicate identity");
+    assert_eq!(
+        crate::content_workspace::note_id(&fs::read_to_string(&copy).unwrap()),
+        original_id
+    );
+    d.expect_same("Undo restores both identity warnings and the original copy reader.");
+    d.state("duplicate-identity-restored", Sizes::All);
 }
 
 /// Copy a book creature into a shared package, then change its HP.
@@ -774,6 +850,13 @@ pub fn book_to_package(d: &mut Driver<'_>) {
     d.state("book-creature-stat-check", Sizes::All);
     d.click("Use 180");
     d.expect("Undo stat change");
+    let edited = d.editor_text().unwrap();
+    assert!(
+        edited.contains("splat_stats:\n  max_hp: {value: 180}\n"),
+        "{}",
+        edited.chars().take(1800).collect::<String>()
+    );
+    assert!(!edited.contains("    value:"));
     reveal_editor_passage(d, "max_hp:");
     d.state("book-creature-stats-updated", Sizes::All);
     d.click("Undo stat change");
