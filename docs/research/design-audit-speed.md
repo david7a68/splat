@@ -658,3 +658,149 @@ Sources: PR bodies linked above; the repository's
 [`IndexedParallelIterator`](https://docs.rs/rayon/1.12.0/rayon/iter/trait.IndexedParallelIterator.html)
 and [indexed collection implementation](https://docs.rs/rayon/1.12.0/src/rayon/iter/collect/mod.rs.html).
 The installed Rayon 1.12.0 source was also inspected; no dependency update is made.
+
+## Fifth scan: isolate visual worlds and bound diagnostic text waits
+
+2026-11-03. Base: `b8232ef` (main, merged with `git fetch origin && git merge
+origin/main`). Same machine and pinned toolchain. The lead supplied a reflinked
+warm `target/`; `CARGO_TARGET_DIR` was never set. The suite now has 54 scenarios
+and 1,119 PNGs.
+
+### Changes retained
+
+- On Linux, the visual-suite test probes an unprivileged user/mount namespace,
+  then re-executes **only that test** inside it. A private temporary folder is
+  bind-mounted over the original temporary directory. The app still opens and
+  paints `/tmp/splat-visual-world/...`; no app/UI code or path allowance changes.
+  The existing world lock now lives in that private folder. A separate lock in
+  each worktree's `target/` still serializes commands from that worktree, including
+  commands that would write the same capture label.
+- The backing folder stays on the **original temporary filesystem**. Only the
+  synthetic fixtures go there, as before; a full tree measured about 40–43 MiB.
+  Builds, copied executables, captures and videos stay in the worktree. The
+  parent's temporary-directory guard removes the private folder after the child,
+  including failed runs. Mounts end with the child. Unsupported Linux hosts,
+  non-Linux hosts and builds/captures inside the temporary directory retain the
+  original shared lock. `SPLAT_VISUAL_ISOLATE=0` explicitly selects that old route.
+  Linux devenv shells now include the `unshare`/`mount` utilities.
+- `wait_for_text` retains 180 seconds in normal mode. Under the existing
+  `SPLAT_VISUAL_DIAGNOSE=1`, missing painted text fails after five seconds and
+  includes the current screen's accessible text. It still panics: it cannot turn
+  a missing phrase into a successful scenario or an eligible observation. A
+  genuinely slow diagnostic run can therefore fail sooner; use normal mode for
+  its full allowance. Idle-based failure was rejected: the existing busy/repaint
+  signal does not prove that a delayed poll or deferred action cannot paint text.
+- `audit-gate` clears diagnostic mode along with its other feedback-only settings.
+  Every normal gate retains the original text timeout, checks and capture plan.
+
+### Measurements
+
+Times use `date +%s`, in wall seconds. The two-folder trials launch saved linked
+executables together through one `devenv shell --` from the worktree root, with
+separate working/output folders. Both select `party,settings`, run every check
+and capture for those scenarios, and save all 60 PNGs each. They are a focused
+lock-contention measurement, not a claim about two full suites' memory or CPU
+scaling. The original missing-text probe overlapped the first baseline repeat
+and first two-folder trial; one short rebuild overlapped that first pair. The
+lock-wait durations directly identify serialization despite those overlaps.
+A memory sample during the full gate found the isolated suite at 21.6 GiB RSS
+and its parent at 1.7 GiB. Running several full suites concurrently on this
+31 GiB host can therefore be limited by memory; this change removes fixture
+serialization, not that resource limit. Scheduling and scenario concurrency
+remain unchanged. Use `SPLAT_VISUAL_ISOLATE=0` to retain machine-wide serialization.
+
+| Measurement | Before | After |
+| --- | ---: | ---: |
+| Two simultaneous two-scenario runs, total wall | 31 s | 17 s |
+| Individual runs in that pair | 16 s / 31 s | 17 s / 17 s |
+| Longest world-lock wait in that pair | 15.744 s | under 0.00001 s |
+| Controlled absent painted text in diagnostic mode | 181 s | 6 s |
+
+The text probe builds an actual empty-world `Driver`, waits for a deliberately
+absent phrase, catches its panic and asserts that diagnostic feedback returns
+within 15 seconds. The original implementation fails that regression after
+180.85 seconds; the changed implementation passes while still catching the
+missing-text panic. The six-second wall measurement includes driver setup.
+The normal timeout and all successful text checks remain unchanged.
+A repeat of the retained pair before the final per-worktree lock took 18 s;
+the final-source pair took 17 s, with world-lock waits of 3.40 and 2.25 µs
+and worktree-lock waits of 3.42 and 4.32 µs.
+
+The first baseline `visual-test speed-5-before` took 76 s including a 19.14 s
+Splat rebuild; its suite took 55.79 s. A second baseline capture using the saved
+executable took 61 s wall / 60.22 s in the suite. Compilation and seed preparation
+are excluded from the focused two-folder and text rows. These are separate
+measurements and must not be added as an end-to-end saving.
+
+### Fidelity and rejected trial
+
+The first namespace trial bound a folder under `target/` over `/tmp`. It passed
+all checks but **was rejected**: disk directory order made the party scenario's
+existing `read_dir(...).find(...)` edit Brannoch's sheet instead of Sable's.
+Six captures changed. Disk fsyncs also made the full suite take 102.99 s and its
+gate 161 s. Keeping the private fixtures on the same temporary filesystem fixes
+both without changing that scenario or adding any baseline allowance. The
+retained two-folder captures are byte-identical to both original 60-PNG sets;
+`ergonomics.json`, `ergonomics.md` and `chrome-observation.json` also match exactly.
+
+The two unchanged full baseline runs have 111 changed PNG hashes and 29 captures
+above the existing channel tolerance of 2. Those differences are in dialogs,
+session notes and recording states already covered by the earlier noise caveat.
+Full capture inventories have 451 images at 960×640, 449 at 1200×800, 202 at
+1920×1080 and 17 at 2400×1600. No masks or tolerance changes were made.
+
+Final validation: `SPLAT_VISUAL_VIDEO=0 devenv shell -- audit-gate speed-5`
+passed in 110 s, including a 12.54 s Clippy rebuild and 22.12 s test build.
+All 712 tests passed (187 library + 525 binary), with the same 12 opt-in tests
+ignored; other binary and documentation targets also passed. The isolated
+visual suite took 57.98 s, ran all 54 scenarios and wrote all 1,119 captures.
+A retained full repeat passed in 73 s wall / 71.91 s in the suite; it overlapped
+file-by-file image analysis and the repository comparer, so this is not an
+isolated standalone-speed estimate.
+
+Full reports and `chrome-observation.json` are byte-identical across the four
+baseline and two retained full runs. Capture names and dimensions match, and
+every manifest hash was checked against its PNG. The two retained focused
+60-PNG sets are also byte-identical to their original sets. The namespace
+regression verifies that a file at the same absolute path is private and the
+host file remains intact. Controlled child failure and unavailable-namespace
+probes both retain failure status 101; a child scenario failure is never retried
+through the fallback. Rust/Nix formatting and `git diff --check` pass.
+
+Full-image comparison uses the unchanged tolerance of 2. A/B/C are the original
+standalone captures; D runs every original binary test with captures (64 s wall,
+523 passed, 12 ignored). It excludes only the temporary failing text probe added
+for this measurement, not any original test. E is the retained full gate, F its
+full capture repeat.
+
+| Capture pair | Changed PNG hashes | Above existing tolerance |
+| --- | ---: | ---: |
+| Original A / B | 111 | 29 |
+| Original A / C | 100 | 43 |
+| Original A / D | 74 | 28 |
+| Original A / retained E | 196 | 13 |
+| Original B / retained E | 181 | 33 |
+| Original C / retained E | 156 | 47 |
+| Original D / retained E | 234 | 32 |
+| Retained E / F | 155 | 24 |
+
+Every above-tolerance file in the cross-version comparisons also differs in
+a same-version comparison, including an original `session-recording` focused
+control. That control passed in 7 s, with its full scenario/check/capture plan;
+its two `recording-delete` images match E within the existing tolerance. They
+differ from original A by the same 2,884 pixels each. Inspection shows only the
+existing “Recording saved” notice and the resulting rail layout. Its
+[eight-second lifetime](../../src/sessions/page.rs) uses real `Instant` time, so
+scenario load changes whether it is still visible. No timeout, notice, scenario
+or allowance was changed to conceal these pixels. This proves the existing
+transient variation, not byte-identical full runs.
+
+The repository `visual-compare speed-5-before speed-5` agrees with the independent
+image analysis: 1,119 pairs, 183 differences within tolerance, 13 above it, and
+expected failure status 101. The latter files are included in the demonstrated
+noise above; the comparator and its failure behavior remain unchanged.
+
+Raw logs, second-resolution timestamps,
+benchmark harnesses and file-by-file comparisons live under ignored
+`artifacts/screenshots/audit-speed-5/`; captures use sibling `speed-5-*` labels.
+No `artifacts/design-audit/` files are committed.
