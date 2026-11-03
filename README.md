@@ -118,7 +118,13 @@ the live row owns the sound state, recorded time and input help. Timeline and th
 Session plan use the same fight state words. Processing says **Processing**, with
 the full step on hover.
 
-Library has **New entry** in its header. Its form opens in the reader column and closes after creation. World has **New ▾** for a plain note, a note with a type, an NPC, a location, or a generated NPC. List headings use capitals and a count. Page headers show state or nonzero counts beside the title, with a rule and an `L` gap below. Counts use thousands separators.
+Library has **New entry** in its header. Its form opens in the reader column and closes after creation. World has **New ▾** for a plain note, a note with a type, an NPC, a location, or a generated NPC. Type headings use capitals and a count. World folder headings keep normal-case paths. Page headers show state or nonzero counts beside the title, with a rule and an `L` gap below. Counts use thousands separators.
+
+A broken or deleted `Package.md` keeps the package's entries available. Campaign
+names the manifest fault and opens an unreadable manifest in Library for repair.
+SRD copies no longer warn about hidden citation links. World lists table faults
+and offers its repair count in the header. New entries start in their kind folder.
+Named NPC search results say **In roster** after Add.
 
 An unreadable package creature offers **Open in Library** from the encounter roster.
 Library keeps a deleted file's draft until you choose **Save my draft again** or
@@ -723,7 +729,7 @@ The visual suite includes `npc-in-lookup`, `package-rename` and `package-about`.
 
 On window focus, Splat checks campaign notes and every registered package for disk changes. Library, Lookup and encounter search reload changed content. A changed draft opens the disk comparison. A package's About page counts its used entries and offers **Use every entry** with Undo. Removing an unavailable package also offers Undo and keeps links to the encounters that need its creatures.
 
-If a package creature is deleted on disk, its encounter row keeps the last known name or says **Missing creature**. **Edit** chooses a replacement with CR, HP and AC in view. **Replace all** is on by default for rows that use the same missing entry. The change keeps their names and starting values, with one Undo. The row menu still removes a row. The NPC **Add to run** form labels its side choice **SIDE** and uses the roster's side names.
+If a package creature is deleted on disk, its encounter row keeps the last known name or says **Missing creature**. **Replace…** chooses a replacement with CR, HP and AC in view. **Replace all** is on by default for rows that use the same missing entry. The change keeps their names and starting values, with one Undo. The row menu keeps **Edit** and can remove a row. The NPC **Add to run** form labels its side choice **SIDE** and uses the roster's side names.
 
 New creature entries start with AC 10, HP 1, speed and six ability scores in `splat_stats`, with the HP value selected in the editor. Size, type, alignment and CR are fields too. Library, Lookup, encounter search and XP use one CR rule. The reader shows each vital once. If a visible AC or HP line disagrees, the editor offers to use its value for the fight, with Undo. A renamed copy also renames its first H1 when it matches the source name. If the first heading differs from the entry name, Library offers to fix that heading, with Undo. Package creation shows a **Folder** field and the destination path after you type a name. `package-file-changed`, `package-delete-entry`, `book-to-package` and `world-note-deleted` cover these disk and copy paths.
 

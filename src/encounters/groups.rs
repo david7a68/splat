@@ -650,7 +650,7 @@ impl Encounters {
         let Some(removed) = &self.removed_saved_group else {
             return;
         };
-        if design::message_with_action(
+        if design::undo_message(
             ui,
             Tone::Info,
             &format!("Removed group {}.", removed.name),
@@ -749,7 +749,19 @@ pub(super) fn of_encounter(
                 .show(ui, |ui| {
                     ui.horizontal(|ui| {
                         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                            super::row_menu(ui, &group.name, |ui| {
+                            super::row_menu(ui, &group.name.clone(), |ui| {
+                                ui.menu_button("Move to…", |ui| {
+                                    if super::menu_action(ui, ANY_ENCOUNTER, None) {
+                                        discard = Some((index, false));
+                                    }
+                                    for (id, name) in
+                                        snapshot.encounter_choices().filter(|(id, _)| *id != this.0)
+                                    {
+                                        if super::menu_action(ui, name, None) {
+                                            group.setup.encounter = Some(EntryRef::id(id));
+                                        }
+                                    }
+                                });
                                 if super::menu_action(ui, "Make available to any encounter", None) {
                                     discard = Some((index, false));
                                 }
@@ -822,7 +834,7 @@ pub(super) fn of_encounter(
         } else {
             "New group removed."
         };
-        if design::message_with_action(ui, Tone::Info, words, "Undo remove group") {
+        if design::undo_message(ui, Tone::Info, words, "Undo remove group") {
             let (index, removed, delete) = removed_group.take().expect("a removed group");
             if delete {
                 deleted_groups.retain(|group| group.path != removed.path);
@@ -1752,7 +1764,9 @@ fn group_fields(
         );
         ui.add_space(design::S);
     }
-    belongs_to(ui, draft, snapshot, open);
+    if open.is_none_or(|(id, _)| !draft.belongs_to(id)) {
+        belongs_to(ui, draft, snapshot, open);
+    }
     ui.add_space(design::S);
     let count = draft
         .setup

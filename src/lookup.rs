@@ -583,9 +583,26 @@ impl ContentIndex {
 
     /// Prepare wiki links in any reader, retaining exactly the note's display words.
     pub(crate) fn broken_link_count(&self, body: &str, from: Uuid) -> usize {
-        world::links_in(body)
+        let visible = body
+            .lines()
+            .filter(|line| !presentation::hidden_provenance_line(line))
+            .collect::<Vec<_>>()
+            .join("\n");
+        world::links_in(&visible)
             .into_iter()
-            .filter(|target| matches!(self.resolve_link(target, Some(from)), Go::Missing(_)))
+            .filter(|target| {
+                let page = target
+                    .split(['|', '#'])
+                    .next()
+                    .unwrap_or(target)
+                    .trim()
+                    .trim_start_matches("../")
+                    .trim_end_matches(".md");
+                !splat::content::builtin::entries().iter().any(|entry| {
+                    entry.path.trim_end_matches(".md")
+                        == page.strip_prefix("srd-5.2.1/").unwrap_or(page)
+                }) && matches!(self.resolve_link(target, Some(from)), Go::Missing(_))
+            })
             .count()
     }
 
@@ -1998,6 +2015,29 @@ mod tests {
         let index = ContentIndex::load(&[], Some(&campaign)).unwrap();
         assert_eq!(
             index.broken_link_count("[[Gone]] and [[Twin]] and [[A/Twin]]", Uuid::nil()),
+            1
+        );
+    }
+
+    #[test]
+    fn campaign_aboleth_copy_has_no_false_broken_links() {
+        let source =
+            splat::content::definitions::source_file("definitions/creatures/aboleth.md").unwrap();
+        let mut entry = splat::content::Entry::parse("Creatures/Watch Aboleth.md", source).unwrap();
+        entry.id = Uuid::new_v4();
+        entry.key = None;
+        let (_dir, campaign) = campaign_with(&[]);
+        let index = ContentIndex::load(&[], Some(&campaign)).unwrap();
+        assert_eq!(index.broken_link_count(&entry.body, entry.id), 0);
+        assert_eq!(
+            index.broken_link_count("[[../../srd-5.2.1/pages/258|page 258]]", entry.id),
+            0
+        );
+        assert_eq!(
+            index.broken_link_count(
+                &format!("{}\n[[A truly missing note]]", entry.body),
+                entry.id
+            ),
             1
         );
     }

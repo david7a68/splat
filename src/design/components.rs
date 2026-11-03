@@ -1571,6 +1571,36 @@ pub fn message_with_action(ui: &mut Ui, tone: Tone, text: &str, action: &str) ->
     pressed
 }
 
+/// A recovery message whose action restores the previous state.
+pub fn undo_message(ui: &mut Ui, tone: Tone, text: &str, action: &str) -> bool {
+    let button = Action::quiet(action)
+        .icon(icons::UNDO)
+        .density(Density::Read);
+    let button_width = button.natural_width(ui);
+    let icon_width = number_width(ui, tone.parts().0, &Type::Body.font(ui));
+    let inset = S + 1.0 + icon_width + ui.spacing().item_spacing.x * 2.0 - XS;
+    let text_width = number_width(ui, text, &Type::Body.font(ui)) + inset;
+    let gap = ui.spacing().item_spacing.x;
+    let mut pressed = false;
+    if ui.available_width() < text_width + gap + button_width {
+        message(ui, tone, text);
+        ui.horizontal(|ui| {
+            ui.add_space((inset - gap).max(0.0));
+            pressed = button.line_start().show(ui).clicked();
+        });
+    } else {
+        ui.horizontal_top(|ui| {
+            let width = (ui.available_width() - button_width - gap).max(0.0);
+            ui.allocate_ui_with_layout(vec2(width, 0.0), Layout::top_down(Align::Min), |ui| {
+                ui.add_space((Density::Read.control() - Type::Body.line()) / 2.0);
+                message(ui, tone, text)
+            });
+            pressed = button.show(ui).clicked();
+        });
+    }
+    pressed
+}
+
 /// A focused dialog. Only the brief's three modal tasks use this. Escape is the caller's.
 pub fn dialog<R>(ctx: &egui::Context, id: &str, title: &str, add: impl FnOnce(&mut Ui) -> R) -> R {
     let c = colors();

@@ -265,7 +265,12 @@ pub fn tables(d: &mut Driver<'_>) {
     fs::write(root(d).join("Table Workshop.md"), body).unwrap();
     reload(d);
     d.click(NAV_WORLD);
-    d.click("Table Workshop · ");
+    d.click_containing("Table Workshop · ");
+    d.observe_both(
+        "W6",
+        "Table faults appear in the World list and warning count",
+        |d| d.has_containing("3 table faults") && d.visible_text("1 note needs fixing"),
+    );
     d.state("authored-table-validation", Sizes::All);
     d.observe_both(
         "World typed roll field",
@@ -523,6 +528,58 @@ pub fn package_about(d: &mut Driver<'_>) {
 }
 
 /// External edits refresh all catalogue users; a draft still needs a choice.
+pub fn package_manifest_broken(d: &mut Driver<'_>) {
+    let folder = d.root.join("modules/ashen-marches");
+    let path = folder.join("Package.md");
+    fs::rename(folder.join("Module.md"), &path).unwrap();
+    let valid = fs::read_to_string(&path).unwrap();
+    fs::write(&path, valid.replace("splat_kind: package", "splat_kind: [")).unwrap();
+    go_library(d);
+    open_local_package(d, MODULE);
+    search_library(d, "Cinder Wolf");
+    d.click_starting("Cinder Wolf · ");
+    d.expect("22 (4d8 + 4)");
+    d.state("manifest-invalid-library-keeps-entries", Sizes::All);
+    go_campaign(d);
+    d.click("Reload from disk");
+    d.expect("Package.md cannot be read (line 4)");
+    assert!(!d.has("Find the folder…"));
+    d.state("manifest-invalid-campaign", Sizes::All);
+    d.click("Open in Library");
+    d.expect("Markdown editor");
+    d.expect("line 4 opens a list");
+    d.state("manifest-opened-for-repair", Sizes::All);
+    go_encounters(d);
+    open_saved_encounter(d, "Bridge Ambush");
+    d.expect("Cinder Wolf");
+    assert!(!d.has_containing("Not found"));
+    d.state("manifest-invalid-encounter-keeps-creatures", Sizes::All);
+    fs::write(&path, &valid).unwrap();
+    d.focus_window(false);
+    d.focus_window(true);
+    go_campaign(d);
+    d.click("Reload from disk");
+    assert!(!d.has_containing("Package.md cannot be read"));
+    d.state("manifest-repaired", Sizes::All);
+    fs::remove_file(&path).unwrap();
+    d.focus_window(false);
+    d.focus_window(true);
+    d.click("Reload from disk");
+    d.expect("Package.md was deleted");
+    assert!(!d.has("Find the folder…"));
+    d.state("manifest-deleted-campaign", Sizes::All);
+    go_library(d);
+    search_library(d, "Cinder Wolf");
+    d.click_starting("Cinder Wolf · ");
+    d.expect("22 (4d8 + 4)");
+    d.state("manifest-deleted-library-keeps-entries", Sizes::All);
+    go_encounters(d);
+    d.expect("Cinder Wolf");
+    assert!(!d.has_containing("Not found"));
+    d.expect_same("Deleting the manifest keeps the encounter's creature entries as before.");
+    d.state("manifest-deleted-encounter-keeps-creatures", Sizes::All);
+}
+
 pub fn package_file_changed(d: &mut Driver<'_>) {
     let path = d
         .root
@@ -813,7 +870,7 @@ pub fn package_duplicate_id(d: &mut Driver<'_>) {
     assert_eq!(fs::read_to_string(&copy).unwrap(), copy_text);
     go_encounters(d);
     open_saved_encounter(d, "Bridge Ambush");
-    d.expect("Give the copy a new identity in Library.");
+    d.expect("Cinder Wolf copy.md and Cinder Wolf.md share an identity. Choose one in Library.");
     d.state("duplicate-package-in-roster", Sizes::All);
     d.click("Open in Library");
     d.expect("New identity for Cinder Wolf copy.md");
@@ -893,6 +950,11 @@ pub fn book_to_package(d: &mut Driver<'_>) {
     assert!(!edited.contains("    value:"));
     reveal_editor_passage(d, "max_hp:");
     d.state("book-creature-stats-updated", Sizes::All);
+    d.observe_both(
+        "W1/C1",
+        "A book copy has no false broken-link warning",
+        |d| !d.has_containing("broken link"),
+    );
     d.click("Undo stat change");
     d.expect("Use 180");
     d.click("Use 180");

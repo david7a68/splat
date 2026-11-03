@@ -979,6 +979,21 @@ impl Snapshot {
             .any(|c| c.id == stat)
             .then(|| (stat, npc.name.clone()))
     }
+    fn already_on_roster(&self, draft: &Draft, creature: &Creature) -> bool {
+        creature.party
+            && draft.setup.roster.iter().any(|slot| {
+                slot.creature.as_ref().and_then(|reference| reference.id) == Some(creature.id)
+            })
+            || self
+                .npc_stat_block(creature.id)
+                .is_some_and(|(stat, name)| {
+                    draft.setup.roster.iter().any(|slot| {
+                        slot.creature.as_ref().and_then(|reference| reference.id) == Some(stat)
+                            && slot.overrides.get("name").and_then(Value::as_str)
+                                == Some(name.as_str())
+                    })
+                })
+    }
     fn npc_name_for(&self, entry: &Entry, overrides: &Mapping) -> Option<String> {
         let name = overrides.get("name")?.as_str()?;
         self.catalogue.entries.values().find_map(|candidate| {
@@ -1071,7 +1086,7 @@ impl Snapshot {
             })
             .collect();
         creatures.extend(npcs);
-        creatures.sort_by_key(|c| (!c.party, c.name.to_lowercase(), c.id));
+        creatures.sort_by_key(|c| (!c.party, c.name.to_lowercase(), c.origin, c.id));
         let mut templates: Vec<_> = catalogue
             .entries
             .values()
@@ -3170,7 +3185,7 @@ impl Encounters {
             focus_search,
             peek,
             SearchRoster {
-                already: &|c: &Creature| c.party && on_roster(draft, c.id),
+                already: &|c: &Creature| snapshot.already_on_roster(draft, c),
             },
         );
         if let Some((id, party)) = chosen {
@@ -3470,6 +3485,7 @@ impl Encounters {
                     // Every slot is reserved, so columns line up between rows.
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         row_menu(ui, &name, |ui| {
+                            if menu_action(ui, "Edit", None) { *expanded = Some(slot.key.clone()); }
                             if menu_action(ui, "Move up", (i == 0).then_some("Already first.")) { raise = Some(i); }
                             if menu_action(ui, "Move down", (i + 1 == count).then_some("Already last.")) { lower = Some(i); }
                             if menu_action(ui, "Duplicate", None) { duplicate = Some(i); }
@@ -3483,7 +3499,7 @@ impl Encounters {
                             if Action::quiet("Open in Library").density(Density::Read).show(ui).clicked() {
                                 ui.ctx().data_mut(|data| data.insert_temp(egui::Id::new("open_library_repair"), note.path.clone()));
                             }
-                        } else if Action::quiet("Edit")
+                        } else if Action::quiet(if creature.is_none() { "Replace…" } else { "Edit" })
                             .density(Density::Read)
                             .name(groups::SLOT_OPTIONS)
                             .selected(is_open)
@@ -4143,6 +4159,13 @@ mod tests {
         );
         let mut draft = Draft::new();
         draft.add_selected(npc, false, &snapshot);
+        let result = snapshot
+            .creatures
+            .iter()
+            .find(|creature| creature.id == npc)
+            .unwrap();
+        assert!(snapshot.already_on_roster(&draft, result));
+        assert!(!snapshot.already_on_roster(&Draft::new(), result));
         assert_eq!(
             draft.setup.roster[0].creature.as_ref().unwrap().id,
             Some(stat)
@@ -4157,6 +4180,22 @@ mod tests {
             reopened.setup.roster[0].overrides,
             draft.setup.roster[0].overrides
         );
+    }
+
+    #[test]
+    fn empty_search_puts_campaign_creatures_before_equal_book_names() {
+        let dir = tempfile::tempdir().unwrap();
+        let active = campaign(dir.path());
+        let own = creature(dir.path(), "Aboleth", false);
+        let snapshot = Snapshot::load(&active, &[]).unwrap();
+        let matches: Vec<_> = snapshot
+            .creatures
+            .iter()
+            .filter(|creature| creature.name == "Aboleth")
+            .collect();
+        assert!(matches.len() >= 2);
+        assert_eq!(matches[0].id, own);
+        assert_eq!(matches[1].origin, crate::lookup::Origin::Book);
     }
 
     #[test]

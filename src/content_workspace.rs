@@ -250,6 +250,7 @@ pub struct Catalogue {
     pub entries: BTreeMap<Uuid, IndexedEntry>,
     keys: BTreeMap<String, Uuid>,
     pub errors: Vec<String>,
+    pub manifest_problems: BTreeMap<Uuid, String>,
     pub unreadable: BTreeMap<Uuid, UnreadableNote>,
     duplicate_ids: BTreeSet<Uuid>,
     files: BTreeMap<Uuid, (PathBuf, String)>,
@@ -327,14 +328,21 @@ impl Catalogue {
                 .get(&entry.id)
                 .map(|(path, _)| path)
                 .or_else(|| self.unreadable.get(&entry.id).map(|note| &note.path));
+            let mut names: Vec<_> = first
+                .into_iter()
+                .chain([&path])
+                .filter_map(|path| path.file_name())
+                .map(|name| name.to_string_lossy().into_owned())
+                .collect();
+            names.sort();
             let path = duplicate_repair_path(first.cloned().into_iter().chain([path])).unwrap();
             self.duplicate_ids.insert(entry.id);
             self.entries.remove(&entry.id);
             self.files.remove(&entry.id);
             self.keys.retain(|_, id| *id != entry.id);
             let word = format!(
-                "{} has a duplicate identity. Give the copy a new identity in Library.",
-                entry.name
+                "{} share an identity. Choose one in Library.",
+                names.join(" and ")
             );
             self.errors.push(word.clone());
             self.unreadable
@@ -458,13 +466,52 @@ impl Catalogue {
         });
         for module in modules {
             let read = content::read_directory(&module.path);
-            let (entries, errors) = match read {
+            let (mut entries, errors) = match read {
                 Ok(v) => v,
                 Err(e) => {
                     result.errors.push(format!("{}: {e}", module.name));
                     continue;
                 }
             };
+            if !entries.iter().any(|entry| entry.kind == "package")
+                && module.path.is_dir()
+                && (errors.iter().any(|error| error.path == "Package.md")
+                    || !module.path.join("Package.md").exists())
+            {
+                let problem = if let Ok(text) = fs::read_to_string(module.path.join("Package.md")) {
+                    let (_, line) = crate::campaign_content::repair_problem("Package.md", &text);
+                    format!(
+                        "Package.md cannot be read{}",
+                        line.map_or(String::new(), |line| format!(" (line {line})"))
+                    )
+                } else {
+                    "Package.md was deleted. Restore it from your backup.".into()
+                };
+                result.manifest_problems.insert(module.id, problem.clone());
+                result.errors.push(format!(
+                    "{}: {problem} Entries are still available.",
+                    module.name
+                ));
+                // The registration keeps ownership while the on-disk manifest is repaired.
+                // This stand-in is never written to disk.
+                let namespace = entries
+                    .iter()
+                    .filter_map(|entry| entry.key.as_deref())
+                    .find_map(|key| {
+                        key.split_once(':')
+                            .map(|(namespace, _)| namespace.to_owned())
+                    })
+                    .unwrap_or_else(|| format!("recovery_{}", module.id.simple()));
+                let mut manifest = builtin_manifest();
+                manifest.id = module.id;
+                manifest.key = None;
+                manifest.name = module.name.clone();
+                manifest
+                    .fields
+                    .insert("splat_namespace".into(), namespace.into());
+                manifest.body.clear();
+                entries.push(manifest);
+            }
             result.remember_unreadable(&module.path, &errors);
             result.errors.extend(
                 errors
@@ -493,7 +540,11 @@ impl Catalogue {
             let ids = entries.iter().map(|e| e.id).collect();
             let name = manifests[0].name.clone();
             for entry in entries {
-                result.insert_file(entry, module.id, false, &module.path)?;
+                if entry.kind == "package" && result.manifest_problems.contains_key(&module.id) {
+                    result.insert(entry, module.id, false)?;
+                } else {
+                    result.insert_file(entry, module.id, false, &module.path)?;
+                }
             }
             result.modules.push(ModuleIndex {
                 id: module.id,
@@ -1504,6 +1555,60 @@ impl CopyPlan {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn broken_or_deleted_package_manifest_keeps_entries_and_reports_repair() {
+        let temp = tempfile::tempdir().unwrap();
+        let module = Module {
+            id: Uuid::new_v4(),
+            name: "Test".into(),
+            path: temp.path().into(),
+        };
+        let text = note_text("Wolf", "creature", None);
+        let id = Entry::parse("Wolf.md", &text).unwrap().id;
+        fs::write(temp.path().join("Wolf.md"), text).unwrap();
+        let manifest = temp.path().join("Package.md");
+        let before = format!(
+            "---\nsplat_schema: 1\nsplat_id: {}\nsplat_kind: package\nsplat_name: Test\nsplat_namespace: test\n---\n",
+            module.id
+        );
+        fs::write(&manifest, "---\nsplat_id: [\n---\n").unwrap();
+        for deleted in [false, true] {
+            if deleted {
+                fs::remove_file(&manifest).unwrap();
+            }
+            let catalogue = Catalogue::load(std::slice::from_ref(&module), None).unwrap();
+            assert!(catalogue.entries.contains_key(&id));
+            assert_eq!(catalogue.entries[&id].owner, module.id);
+            assert!(
+                catalogue.manifest_problems[&module.id].contains(if deleted {
+                    "deleted"
+                } else {
+                    "cannot be read"
+                })
+            );
+            assert!(
+                catalogue
+                    .closure(
+                        &[PackageSelection {
+                            name: None,
+                            package: EntryRef::id(module.id),
+                            selection: Selection::All
+                        }],
+                        Uuid::new_v4()
+                    )
+                    .direct
+                    .contains(&id)
+            );
+        }
+        fs::write(&manifest, before).unwrap();
+        assert!(
+            Catalogue::load(&[module], None)
+                .unwrap()
+                .manifest_problems
+                .is_empty()
+        );
+    }
 
     #[test]
     fn unreadable_package_note_keeps_its_id_path_and_file_line() {

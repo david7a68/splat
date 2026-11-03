@@ -124,8 +124,8 @@ impl RunGroup {
     pub(crate) fn summary(&self) -> String {
         let mut summary = format!(
             "{} · {} · {}",
-            crate::design::count(self.creature_count() as usize, "member", "members"),
             crate::design::reader::human_label(&self.side),
+            crate::design::count(self.creature_count() as usize, "member", "members"),
             self.xp_label()
         );
         if self
@@ -134,6 +134,10 @@ impl RunGroup {
             .any(|member| !member.overrides.is_empty())
         {
             summary.push_str(" · Changed");
+        }
+        let members = self.member_summary();
+        if !members.is_empty() {
+            summary.push_str(&format!(" · {members}"));
         }
         summary
     }
@@ -5795,7 +5799,10 @@ mod tests {
             "rivals",
             vec![(beast(), 3, changed("armor_class: {add: 1}"))],
         );
-        assert_eq!(group.summary(), "3 members · Rivals · XP 0 · Changed");
+        assert_eq!(
+            group.summary(),
+            "Rivals · 3 members · XP 0 · Changed · 3 × Beast"
+        );
     }
 
     fn names(run: &Run, range: std::ops::Range<usize>) -> Vec<String> {

@@ -105,7 +105,10 @@ impl WorldPage {
                 .world_groups("")
                 .values()
                 .flatten()
-                .filter(|(at, _)| !super::broken_links(&index.items[*at], index).is_empty())
+                .filter(|(at, _)| {
+                    !super::broken_links(&index.items[*at], index).is_empty()
+                        || crate::roll_table::fault_count(&index.items[*at].entry.body) > 0
+                })
                 .count()
         });
         let mut create = None;
@@ -124,17 +127,32 @@ impl WorldPage {
                     new_menu,
                 );
                 if broken_links > 0 {
-                    design::status(
+                    let response = design::status_link(
                         ui,
                         design::Status {
                             icon: icons::WARN,
-                            word: &format!(
-                                "{} with broken links",
-                                design::count(broken_links, "note", "notes")
+                            word: &design::count(
+                                broken_links,
+                                "note needs fixing",
+                                "notes need fixing",
                             ),
                             color: colors().result.warning,
                         },
                     );
+                    egui::Popup::menu(&response).show(|ui| {
+                        if let Some(index) = index {
+                            for &(at, _) in index.world_groups("").values().flatten() {
+                                let item = &index.items[at];
+                                if (!super::broken_links(item, index).is_empty()
+                                    || crate::roll_table::fault_count(&item.entry.body) > 0)
+                                    && design::link(ui, &item.entry.name).clicked()
+                                {
+                                    self.selected = Some(item.entry.id);
+                                    ui.close();
+                                }
+                            }
+                        }
+                    });
                 }
                 if broken > 0 {
                     design::status(
@@ -456,14 +474,29 @@ impl WorldPage {
     }
 
     fn list(&mut self, ui: &mut egui::Ui, index: &ContentIndex, groups: &WorldGroups) {
-        for ((_, title), rows) in groups {
+        for ((kind, title), rows) in groups {
             ui.add_space(design::XS);
-            design::group_heading(ui, title, rows.len());
+            if *kind == 3 {
+                ui.label(
+                    Type::Small
+                        .rich(ui, format!("{} {title}/  {}", icons::DOCUMENT, rows.len()))
+                        .color(colors().muted),
+                );
+            } else {
+                design::group_heading(ui, title, rows.len());
+            }
             let spacing = std::mem::replace(&mut ui.spacing_mut().item_spacing.y, 0.0);
             for &(position, depth) in rows {
                 let entry = &index.items[position].entry;
                 let problems = super::broken_links(&index.items[position], index);
-                let detail = if !problems.is_empty() {
+                let faults = crate::roll_table::fault_count(&entry.body);
+                let detail = if faults > 0 {
+                    format!(
+                        "{} {}",
+                        icons::WARN,
+                        design::count(faults, "table fault", "table faults")
+                    )
+                } else if !problems.is_empty() {
                     format!(
                         "{} {}",
                         icons::WARN,
