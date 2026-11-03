@@ -130,6 +130,17 @@ fn looks(text: &str) -> Runs {
             _ => {}
         }
     }
+    let mut rest = 0;
+    while let Some(start) = text[rest..].find("{{") {
+        let start = rest + start;
+        let Some(end) = text[start..].find("}}") else {
+            break;
+        };
+        rest = start + end + 2;
+        bytes[start..rest]
+            .iter_mut()
+            .for_each(|look| look.markup = true);
+    }
     let mut runs = Vec::new();
     let mut start = 0;
     for at in 1..=bytes.len() {

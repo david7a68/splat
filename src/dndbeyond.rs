@@ -217,6 +217,9 @@ impl DndBeyond {
         local: &mut Campaigns,
     ) {
         if session.is_none() {
+            if ui.ctx().content_rect().width() >= 1000.0 {
+                return;
+            }
             ui.horizontal_wrapped(|ui| {
                 ui.label("To import from D&D Beyond,");
                 if crate::design::link(ui, "connect your account").clicked() {

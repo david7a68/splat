@@ -62,6 +62,30 @@ impl Campaigns {
     pub fn start_import(&mut self, id: &str, name: &str) {
         self.clear_form();
         self.name = name.into();
+        let parent = self
+            .data
+            .campaigns
+            .first()
+            .and_then(|campaign| campaign.path.parent())
+            .map(PathBuf::from)
+            .or_else(|| {
+                self.store
+                    .as_ref()
+                    .and_then(|store| store.path.parent().map(|path| path.join("campaigns")))
+            });
+        if let Some(parent) = parent {
+            let safe: String = name
+                .chars()
+                .map(|ch| if matches!(ch, '/' | '\\') { '-' } else { ch })
+                .collect();
+            let mut candidate = parent.join(&safe);
+            let mut suffix = 2;
+            while candidate.exists() {
+                candidate = parent.join(format!("{safe} {suffix}"));
+                suffix += 1;
+            }
+            self.path = candidate.to_string_lossy().into_owned();
+        }
         self.remote = Some((id.into(), name.into()));
     }
 
@@ -72,6 +96,10 @@ impl Campaigns {
     }
 
     fn save_form(&mut self) -> Result<(), String> {
+        if self.remote.is_some() && self.editing.is_none() {
+            std::fs::create_dir_all(self.path.trim())
+                .map_err(|error| format!("Could not create the campaign folder: {error}"))?;
+        }
         let path = PathBuf::from(self.path.trim())
             .canonicalize()
             .map_err(|_| "Choose an existing campaign folder.")?;
@@ -510,11 +538,14 @@ impl Campaigns {
         };
         let mut keep = ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Escape));
         let mut remove = false;
-        design::dialog(
-            ctx,
-            "remove_campaign",
-            &format!("Remove {}?", campaign.name),
-            |ui| {
+        egui::Modal::new(egui::Id::new("remove_campaign"))
+            .frame(egui::Frame::new().fill(colors().raised)
+                .stroke(egui::Stroke::new(design::HAIRLINE_WIDTH, colors().rule))
+                .inner_margin(egui::Margin::same(design::L as i8)))
+            .show(ctx, |ui| {
+                ui.set_width(design::FORM_WIDTH.min(ctx.content_rect().width() - design::XXL * 2.0));
+                ui.label(Type::Section.rich(ui, format!("Remove {}?", campaign.name)));
+                ui.add_space(design::XS);
                 ui.add(
                 egui::Label::new(
                     "Splat forgets this campaign. Its encounters, runs and D&D Beyond link stay in its folder. To use it again, add the folder back.",
@@ -535,8 +566,7 @@ impl Campaigns {
                     ui.add_space(design::L);
                     remove = Action::destructive("Remove from Splat").show(ui).clicked();
                 });
-            },
-        );
+            });
         if keep {
             self.confirm_remove = None;
         }
@@ -578,7 +608,8 @@ impl Campaigns {
             design::group_heading(ui, "Campaigns", self.data.campaigns.len());
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 if !self.data.campaigns.is_empty()
-                    && Action::quiet("Reload")
+                    && Action::quiet("Reload from disk")
+                        .icon(icons::REFRESH)
                         .density(Density::Read)
                         .hint("Reload campaign settings from disk")
                         .show(ui)
@@ -668,10 +699,11 @@ impl Campaigns {
                                     ui.close();
                                 }
                             });
-                            if Action::quiet("Edit details")
-                                .density(Density::Read)
-                                .show(ui)
-                                .clicked()
+                            if self.editing != Some(campaign.id)
+                                && Action::quiet("Edit details")
+                                    .density(Density::Read)
+                                    .show(ui)
+                                    .clicked()
                             {
                                 if self.editing.is_none() {
                                     self.add_name = self.name.clone();
@@ -704,15 +736,7 @@ impl Campaigns {
             }
             ui.add_space(design::S);
             dndbeyond.show_import(ui, session.clone(), self);
-            if self.editing.is_some() {
-                let editing = self.editing.take();
-                let name = std::mem::replace(&mut self.name, std::mem::take(&mut self.add_name));
-                let path = std::mem::replace(&mut self.path, std::mem::take(&mut self.add_path));
-                self.form(ui, false, false);
-                self.add_name = std::mem::replace(&mut self.name, name);
-                self.add_path = std::mem::replace(&mut self.path, path);
-                self.editing = editing;
-            } else if self.remote.is_none() {
+            if self.editing.is_none() && self.remote.is_none() {
                 self.form(ui, false, true);
             }
         });
@@ -746,16 +770,18 @@ impl Campaigns {
         let form_scope = egui::Id::new(("campaign_form", self.editing));
         ui.scope_builder(egui::UiBuilder::new().id(form_scope), |ui| {
             let mut added = false;
-            let form = egui::CollapsingHeader::new(if editing {
-                "Edit campaign details"
+            let direct = editing || self.remote.is_some();
+            let title = if editing {
+                "Details".to_owned()
+            } else if let Some((_, name)) = &self.remote {
+                format!("Add {name}")
             } else {
-                "Add campaign"
-            })
-            .icon(design::section_icon)
-            .id_salt(("campaign_form", self.editing))
-            .open((self.remote.is_some() || self.focus_name).then_some(true))
-            .default_open(editing || self.data.campaigns.is_empty())
-            .show(ui, |ui| {
+                "Add campaign".to_owned()
+            };
+            let editing_id = self.editing;
+            let focus = self.focus_name;
+            let empty = self.data.campaigns.is_empty();
+            let mut fields = |ui: &mut egui::Ui| {
                 ui.add_space(design::XS);
                 if let Some((id, name)) = &self.remote {
                     ui.label(format!("{name} · D&D Beyond ID {id}"));
@@ -792,21 +818,20 @@ impl Campaigns {
                     } else {
                         "Add campaign"
                     };
-                    let missing = self.name.trim().is_empty() || self.path.trim().is_empty();
+                    let reason = match (self.name.trim().is_empty(), self.path.trim().is_empty()) {
+                        (true, true) => Some("Enter a campaign name and a folder first."),
+                        (true, false) => Some("Enter a campaign name first."),
+                        (false, true) => Some("Choose a folder first."),
+                        (false, false) => None,
+                    };
+                    let missing = reason.is_some();
                     let action = if primary {
                         Action::primary(submit)
                     } else {
                         Action::secondary(submit)
                     };
-                    design::blocked_reason(
-                        ui,
-                        missing.then_some("Enter a campaign name and a folder first."),
-                    );
-                    if action
-                        .blocked_if(missing, "Enter a campaign name and a folder first.")
-                        .show(ui)
-                        .clicked()
-                    {
+                    design::blocked_reason(ui, reason);
+                    if action.blocked(reason).show(ui).clicked() {
                         match self.save_form() {
                             Ok(()) => added = !editing,
                             Err(error) => self.error = Some(error),
@@ -821,8 +846,22 @@ impl Campaigns {
                 if let Some(error) = &self.error {
                     design::message(ui, Tone::Error, error);
                 }
-            });
-            if added {
+            };
+            let form = if direct {
+                design::group_heading(ui, &title, 0);
+                fields(ui);
+                None
+            } else {
+                Some(
+                    egui::CollapsingHeader::new("Add campaign")
+                        .icon(design::section_icon)
+                        .id_salt(("campaign_form", editing_id))
+                        .open(focus.then_some(true))
+                        .default_open(empty)
+                        .show(ui, fields),
+                )
+            };
+            if added && let Some(form) = form {
                 let mut state = egui::collapsing_header::CollapsingState::load_with_default_open(
                     ui.ctx(),
                     form.header_response.id,

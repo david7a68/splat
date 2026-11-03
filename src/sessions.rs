@@ -842,6 +842,7 @@ pub enum DraftState {
 
 /// One file being edited. The prefix (frontmatter) stays as the file has it. Edits save
 /// shortly after they stop, and a change made elsewhere is never overwritten silently.
+#[derive(Clone)]
 pub struct Draft {
     pub path: PathBuf,
     prefix: String,

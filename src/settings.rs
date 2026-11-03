@@ -51,7 +51,7 @@ pub enum Account {
     RefreshFailing,
 }
 
-const SESSION_ENDED: &str = "Signed out of D&D Beyond. Check your connection, then select Connect.";
+const SESSION_ENDED: &str = "Check your connection, then select Connect.";
 
 /// 5, 10, 20, 40, then 60 seconds. Renewal starts a minute before the token ends at most,
 /// so a short drop gets several tries.
@@ -169,10 +169,6 @@ impl Settings {
 
     pub fn signed_out(&self) -> bool {
         self.error.as_deref() == Some(SESSION_ENDED)
-    }
-
-    pub fn connection_failed(&self) -> bool {
-        self.account() == Account::Failed && self.error.as_deref() != Some(SESSION_ENDED)
     }
 
     pub fn refresh_failing(&self) -> bool {
@@ -296,7 +292,7 @@ impl Settings {
         self.send(Action::Forget, ctx);
     }
 
-    pub fn show_compact(&mut self, ui: &mut egui::Ui) {
+    pub fn connection_status(&self) -> Status<'static> {
         let c = colors();
         let (icon, word, color) = match self.account() {
             Account::NotConnected => (icons::OFFLINE, "Not connected", c.connection.offline),
@@ -313,6 +309,11 @@ impl Settings {
             }
             Account::Connected => (icons::ONLINE, "Connected", c.connection.connected),
         };
+        Status { icon, word, color }
+    }
+
+    pub fn show_compact(&mut self, ui: &mut egui::Ui) {
+        let state = self.connection_status();
         let id = egui::Id::new("compact_account_open");
         let mut open = ui
             .ctx()
@@ -328,7 +329,7 @@ impl Settings {
             self.show_account(ui, false);
         } else {
             ui.horizontal(|ui| {
-                design::status(ui, Status { icon, word, color });
+                design::status(ui, state);
                 if design::Action::quiet(
                     if matches!(self.account(), Account::NotConnected | Account::Failed) {
                         "Connect…"
@@ -353,7 +354,13 @@ impl Settings {
     fn show_account(&mut self, ui: &mut egui::Ui, heading: bool) {
         let c = colors();
         if heading {
-            design::group_heading(ui, "D&D Beyond account", 0);
+            ui.allocate_ui_with_layout(
+                egui::vec2(ui.available_width(), Density::Read.control()),
+                egui::Layout::left_to_right(egui::Align::Center),
+                |ui| {
+                    design::group_heading(ui, "D&D Beyond account", 0);
+                },
+            );
         }
         let small = |ui: &mut egui::Ui, text: &str| {
             ui.add(egui::Label::new(Type::Small.rich(ui, text).color(c.muted)).wrap());
@@ -363,42 +370,7 @@ impl Settings {
                 .unwrap_or(false)
         });
         let account = self.account();
-        let state = match account {
-            Account::Busy => Status {
-                icon: "",
-                word: "Connecting to D&D Beyond",
-                color: c.connection.busy,
-            },
-            Account::Connected => Status {
-                icon: icons::ONLINE,
-                word: "Connected to D&D Beyond",
-                color: c.connection.connected,
-            },
-            Account::NotConnected => Status {
-                icon: icons::OFFLINE,
-                word: "Not connected",
-                color: c.connection.offline,
-            },
-            Account::Failed => Status {
-                icon: icons::ERROR,
-                word: if self.signed_out() {
-                    "Signed out of D&D Beyond"
-                } else {
-                    "Not connected"
-                },
-                color: c.result.error,
-            },
-            Account::KeyringWarning => Status {
-                icon: icons::WARN,
-                word: "Connected · not remembered",
-                color: c.result.warning,
-            },
-            Account::RefreshFailing => Status {
-                icon: icons::WARN,
-                word: "Connected, but renewing the sign-in failed",
-                color: c.result.warning,
-            },
-        };
+        let state = self.connection_status();
         {
             ui.horizontal(|ui| {
                 if account == Account::Busy {
@@ -519,7 +491,7 @@ impl Settings {
         ) {
             small(
                 ui,
-                "Disconnect removes Splat's saved session and clears local credentials. It does not sign your browser out of D&D Beyond.",
+                "Disconnect removes Splat's saved D&D Beyond sign-in and clears local credentials. It does not sign your browser out of D&D Beyond.",
             );
         }
         // Only when there is something to forget. It follows the trust text.
