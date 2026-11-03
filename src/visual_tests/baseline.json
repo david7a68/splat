@@ -1,7 +1,7 @@
 {
   "violations": {
     "accessible-name/egui-chrome": {
-      "campaign-content": 73,
+      "campaign-content": 72,
       "column-resize": 89,
       "dialogs": 45,
       "empty": 15,
@@ -38,7 +38,7 @@
       "session-notes": 131,
       "session-plan": 121,
       "session-plan-groups": 41,
-      "session-recording": 107,
+      "session-recording": 108,
       "settings": 27,
       "signed-in": 38,
       "world": 43
@@ -60,7 +60,7 @@
       "world": 3
     },
     "target-size/egui-chrome": {
-      "campaign-content": 73,
+      "campaign-content": 72,
       "column-resize": 89,
       "dialogs": 44,
       "empty": 15,
@@ -97,7 +97,7 @@
       "session-notes": 131,
       "session-plan": 118,
       "session-plan-groups": 41,
-      "session-recording": 103,
+      "session-recording": 104,
       "settings": 26,
       "signed-in": 38,
       "world": 42

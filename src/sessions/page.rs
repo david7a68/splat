@@ -2054,10 +2054,17 @@ impl Sessions {
                                     egui::Frame::new().fill(fill).show(&mut columns[at], |ui| {
                                         ui.horizontal_top(|ui| {
                                             if differs {
-                                                ui.label(
-                                                    Type::Small
-                                                        .rich(ui, "▎")
-                                                        .color(colors().accent),
+                                                let (mark, _) = ui.allocate_exact_size(
+                                                    egui::vec2(design::XS, Type::Small.line()),
+                                                    egui::Sense::hover(),
+                                                );
+                                                ui.painter().vline(
+                                                    mark.center().x,
+                                                    mark.y_range(),
+                                                    egui::Stroke::new(
+                                                        design::HAIRLINE_WIDTH,
+                                                        colors().accent,
+                                                    ),
                                                 );
                                             }
                                             let width = ui.available_width();
