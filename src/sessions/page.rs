@@ -481,14 +481,13 @@ fn plan_row(
         ui.vertical(|ui| {
             let left = ui.cursor().min;
             let title_width = (ui.available_width() - widths[1] - design::S).max(design::XL);
-            ui.allocate_ui_with_layout(
+            let title = ui.allocate_ui_with_layout(
                 egui::vec2(title_width, 0.0),
                 egui::Layout::top_down(egui::Align::Min),
                 |ui| {
                     ui.set_width(title_width);
                     ui.spacing_mut().item_spacing.y = 0.0;
                     words(ui);
-                    summary(ui);
                 },
             );
             let action_rect = egui::Rect::from_min_size(
@@ -501,6 +500,24 @@ fn plan_row(
                     .layout(egui::Layout::right_to_left(egui::Align::Center)),
             );
             action(&mut action_ui);
+            ui.advance_cursor_after_rect(
+                title
+                    .response
+                    .rect
+                    .union(action_rect)
+                    .union(action_ui.min_rect()),
+            );
+            ui.spacing_mut().item_spacing.y = 0.0;
+            ui.allocate_ui_with_layout(
+                egui::vec2(
+                    (ui.available_width() - Density::Read.control() - design::S).max(design::XL),
+                    0.0,
+                ),
+                egui::Layout::top_down(egui::Align::Min),
+                |ui| {
+                    summary(ui);
+                },
+            );
         });
     });
 }
@@ -918,6 +935,14 @@ fn session_row(
     )
 }
 
+fn recording_recovery(missing_input: bool) -> &'static str {
+    if missing_input {
+        "Choose an input, then record again."
+    } else {
+        "Check the microphone, then record again."
+    }
+}
+
 fn recording_detail(words: &str, missing_input: bool) -> String {
     if let Some(cancelled) = words.strip_prefix("Processing cancelled: ") {
         if let Some(tail) = cancelled.strip_prefix("Transcribing part ") {
@@ -931,11 +956,7 @@ fn recording_detail(words: &str, missing_input: bool) -> String {
         return format!(
             "{}. {}",
             words.trim_end_matches('.'),
-            if missing_input {
-                "Choose an input, then record again."
-            } else {
-                "Check the microphone, then record again."
-            }
+            recording_recovery(missing_input)
         );
     }
     let detail = words.strip_prefix("Failed: ").unwrap_or(words);
@@ -1003,7 +1024,8 @@ impl Sessions {
                     retry: None,
                     word: "Recording stopped",
                     words: format!(
-                        "The recording of {label} stopped by itself. {kept} Check the microphone, then record again. The recorder said: {}.", words.trim_end_matches(['.', '!', '?'])
+                        "The recording of {label} stopped by itself. {kept} The recorder said: {}.",
+                        words.trim_end_matches(['.', '!', '?'])
                     ),
                 });
             } else {
@@ -1153,11 +1175,16 @@ impl Sessions {
                     .enumerate()
                     .filter(|(_, alert)| !row_here(alert.session))
                 {
-                    design::message(ui, Tone::Error, &alert.words);
+                    let missing_input = alert.can_record
+                        && (settings.input_missing()
+                            || alert.words.to_lowercase().contains("no such device"));
+                    let words = if alert.word == "Recording stopped" {
+                        format!("{} {}", alert.words, recording_recovery(missing_input))
+                    } else {
+                        alert.words.clone()
+                    };
+                    design::message(ui, Tone::Error, &words);
                     ui.horizontal_wrapped(|ui| {
-                        let missing_input = alert.can_record
-                            && (settings.input_missing()
-                                || alert.words.to_lowercase().contains("no such device"));
                         if missing_input
                             && (if run_open {
                                 Action::secondary("Choose an input")
@@ -2399,7 +2426,7 @@ impl Sessions {
                 design::message(
                     ui,
                     Tone::Warning,
-                    "This file changed on disk while you were editing. Nothing is saved until you choose, and other sessions open after that.",
+                    "This note changed on disk. Your draft is safe until you choose. Other sessions open after that.",
                 );
                 ui.horizontal_wrapped(|ui| {
                     if Action::secondary("Overwrite with my draft")
@@ -2871,99 +2898,111 @@ impl Sessions {
             }
         }
         let heading_id = ui.id().with(("note_heading_offset", self.selected));
-        let editor_height = ui.available_height()
-            + if in_panel {
-                ui.data(|data| data.get_temp::<f32>(heading_id).unwrap_or(0.0))
-            } else {
-                0.0
-            };
-        egui::ScrollArea::vertical()
-            .id_salt(("session_editor", self.selected, in_panel))
-            .auto_shrink([false, false])
-            .show(ui, |ui| {
-                // Beside a page, Tab indents. It must not walk to `Next turn`, where the next
-                // space would press it. Escape still leaves the panel.
-                let mut layouter = crate::markdown_source::layouter;
-                let output = egui::TextEdit::multiline(&mut draft.body)
-                    .lock_focus(in_panel)
-                    .font(design::reader::prose_type(ui).font(ui))
-                    .layouter(&mut layouter)
-                    .margin(egui::vec2(design::S, design::S))
-                    .desired_width(ui.available_width())
-                    .min_size(egui::vec2(0.0, editor_height))
-                    .show(ui);
-                crate::markdown_source::paint_section_rules(ui, &output);
-                if in_panel && let Some(at) = draft.body.find("## What happened") {
-                    // Even a short note must scroll its repeated heading out of the panel.
-                    let heading = draft.body[..at].chars().count();
-                    let offset = output
-                        .galley
-                        .pos_from_cursor(egui::text::CCursor::new(heading))
-                        .top();
-                    ui.data_mut(|data| data.insert_temp(heading_id, offset.max(0.0)));
-                }
-                let response = output.response;
-                design::named(ui, &response, "Note text");
-                self.note_had_focus = response.has_focus();
-                self.note_editor_id = Some(response.id);
-                // A click chooses the place, so what is typed goes exactly there.
-                if focus || response.clicked() {
-                    self.break_before_words = false;
-                }
-                if std::mem::take(&mut self.refocus_note) {
-                    response.request_focus();
-                    let words = std::mem::take(&mut self.words_for_note);
-                    if !words.is_empty() {
-                        // These words had their break, and what follows goes on from them.
+        let heading_offset = if in_panel {
+            ui.data(|data| data.get_temp::<f32>(heading_id).unwrap_or(0.0))
+        } else {
+            0.0
+        };
+        let frame = egui::Frame::new()
+            .fill(colors().well)
+            .stroke(egui::Stroke::new(
+                design::HAIRLINE_WIDTH,
+                colors().field_border,
+            ))
+            .corner_radius(design::RADIUS_CONTROL)
+            .inner_margin(design::S);
+        frame.show(ui, |ui| {
+            let visible_height = ui.available_height().max(design::XL);
+            egui::ScrollArea::vertical()
+                .id_salt(("session_editor", self.selected, in_panel))
+                .max_height(visible_height)
+                .auto_shrink([false, false])
+                .show(ui, |ui| {
+                    // Beside a page, Tab indents. It must not walk to `Next turn`, where the next
+                    // space would press it. Escape still leaves the panel.
+                    let mut layouter = crate::markdown_source::layouter;
+                    let output = egui::TextEdit::multiline(&mut draft.body)
+                        .lock_focus(in_panel)
+                        .frame(false)
+                        .font(design::reader::prose_type(ui).font(ui))
+                        .layouter(&mut layouter)
+                        .margin(egui::Vec2::ZERO)
+                        .desired_width(ui.available_width())
+                        .min_size(egui::vec2(0.0, visible_height + heading_offset))
+                        .show(ui);
+                    crate::markdown_source::paint_section_rules(ui, &output);
+                    if in_panel && let Some(at) = draft.body.find("## What happened") {
+                        // Even a short note must scroll its repeated heading out of the panel.
+                        let heading = draft.body[..at].chars().count();
+                        let offset = output
+                            .galley
+                            .pos_from_cursor(egui::text::CCursor::new(heading))
+                            .top();
+                        ui.data_mut(|data| data.insert_temp(heading_id, offset.max(0.0)));
+                    }
+                    let response = output.response;
+                    design::named(ui, &response, "Note text");
+                    self.note_had_focus = response.has_focus();
+                    self.note_editor_id = Some(response.id);
+                    // A click chooses the place, so what is typed goes exactly there.
+                    if focus || response.clicked() {
                         self.break_before_words = false;
-                        let new_line = std::mem::take(&mut self.words_new_line);
-                        insert_at_caret(ui.ctx(), response.id, draft, &words, new_line);
                     }
-                }
-                if let Some(caret) = self.caret_to_show.take() {
-                    let rect = output
-                        .galley
-                        .pos_from_cursor(egui::text::CCursor::new(if in_panel {
-                            draft
-                                .body
-                                .find("## What happened")
-                                .map_or(caret, |at| draft.body[..at].chars().count())
-                        } else {
-                            caret
-                        }))
-                        .translate(output.galley_pos.to_vec2());
-                    ui.scroll_to_rect(
-                        rect,
-                        Some(if in_panel {
-                            egui::Align::TOP
-                        } else {
-                            egui::Align::Center
-                        }),
-                    );
-                }
-                if focus {
-                    response.request_focus();
-                    let (caret, changed) = fresh_line_in_note(&mut draft.body);
-                    if changed {
+                    if std::mem::take(&mut self.refocus_note) {
+                        response.request_focus();
+                        let words = std::mem::take(&mut self.words_for_note);
+                        if !words.is_empty() {
+                            // These words had their break, and what follows goes on from them.
+                            self.break_before_words = false;
+                            let new_line = std::mem::take(&mut self.words_new_line);
+                            insert_at_caret(ui.ctx(), response.id, draft, &words, new_line);
+                        }
+                    }
+                    if let Some(caret) = self.caret_to_show.take() {
+                        let rect = output
+                            .galley
+                            .pos_from_cursor(egui::text::CCursor::new(if in_panel {
+                                draft
+                                    .body
+                                    .find("## What happened")
+                                    .map_or(caret, |at| draft.body[..at].chars().count())
+                            } else {
+                                caret
+                            }))
+                            .translate(output.galley_pos.to_vec2());
+                        ui.scroll_to_rect(
+                            rect,
+                            Some(if in_panel {
+                                egui::Align::TOP
+                            } else {
+                                egui::Align::Center
+                            }),
+                        );
+                    }
+                    if focus {
+                        response.request_focus();
+                        let (caret, changed) = fresh_line_in_note(&mut draft.body);
+                        if changed {
+                            draft.edited();
+                        }
+                        self.caret_to_show = Some(caret);
+                        let end = egui::text::CCursor::new(caret);
+                        let mut state =
+                            egui::TextEdit::load_state(ui.ctx(), response.id).unwrap_or_default();
+                        state
+                            .cursor
+                            .set_char_range(Some(egui::text::CCursorRange::one(end)));
+                        egui::TextEdit::store_state(ui.ctx(), response.id, state);
+                    }
+                    if response.changed() {
                         draft.edited();
+                        if let Some(session) = self.selected {
+                            self.mentions
+                                .insert(session, timeline::referenced_ids(&draft.body));
+                        }
                     }
-                    self.caret_to_show = Some(caret);
-                    let end = egui::text::CCursor::new(caret);
-                    let mut state =
-                        egui::TextEdit::load_state(ui.ctx(), response.id).unwrap_or_default();
-                    state
-                        .cursor
-                        .set_char_range(Some(egui::text::CCursorRange::one(end)));
-                    egui::TextEdit::store_state(ui.ctx(), response.id, state);
-                }
-                if response.changed() {
-                    draft.edited();
-                    if let Some(session) = self.selected {
-                        self.mentions
-                            .insert(session, timeline::referenced_ids(&draft.body));
-                    }
-                }
-            });
+                });
+        });
     }
 
     pub fn fresh_focus_in_panel(&mut self) {
@@ -5443,25 +5482,6 @@ impl Sessions {
                     )
                     .wrap(),
                 ); }
-                if let Some((name, _)) = self.deleted_template.clone()
-                    && design::message_with_action(
-                        ui,
-                        Tone::Info,
-                        &format!("Deleted “{name}”."),
-                        "Undo delete",
-                    )
-                {
-                    let (name, body) = self.deleted_template.take().expect("just read");
-                    if let Some(folder) = &self.folder {
-                        match create_template(folder, &name, &body) {
-                            Ok(_) => {
-                                self.refresh();
-                                self.select_template(&name);
-                            }
-                            Err(error) => self.template_error = Some(error),
-                        }
-                    }
-                }
                 if let Some(error) = &self.template_error {
                     design::message(ui, Tone::Error, error);
                 }
@@ -5500,6 +5520,25 @@ impl Sessions {
                     .clicked()
                     {
                         *choose = Some(template.name.clone());
+                    }
+                }
+                if let Some((name, _)) = self.deleted_template.clone()
+                    && design::message_with_action(
+                        ui,
+                        Tone::Info,
+                        &format!("Deleted “{name}”."),
+                        "Undo delete",
+                    )
+                {
+                    let (name, body) = self.deleted_template.take().expect("just read");
+                    if let Some(folder) = &self.folder {
+                        match create_template(folder, &name, &body) {
+                            Ok(_) => {
+                                self.refresh();
+                                self.select_template(&name);
+                            }
+                            Err(error) => self.template_error = Some(error),
+                        }
                     }
                 }
             });
@@ -5681,7 +5720,7 @@ impl Sessions {
             });
     }
 
-    pub fn folder_view(&mut self, ui: &mut egui::Ui, book: &Book) {
+    pub fn folder_view(&mut self, ui: &mut egui::Ui, book: &Book, locked: Option<&str>) {
         let c = colors();
         let Some(campaign) = self.campaign.clone() else {
             return;
@@ -5811,7 +5850,9 @@ impl Sessions {
                         self.folder_error = None;
                     }
                 }
-                design::blocked_reason(ui, blocked);
+                if locked.is_none() {
+                    design::blocked_reason(ui, blocked);
+                }
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     if has_files {
                         move_files = Action::secondary("Move files and save")
@@ -6015,6 +6056,54 @@ impl Sessions {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn plan_summary_stays_below_both_wrapped_title_and_action() {
+        let ctx = egui::Context::default();
+        design::theme::install(&ctx);
+        let _ = ctx.run(Default::default(), |ctx| {
+            egui::CentralPanel::default().show(ctx, |ui| {
+                ui.set_width(design::LIST_MEASURE / 2.0);
+                for name in [
+                    "Bridge Ambush".to_owned(),
+                    "The very long battle at the bridge ".repeat(5),
+                ] {
+                    let mut title = egui::Rect::NOTHING;
+                    let mut action = egui::Rect::NOTHING;
+                    let mut summary = egui::Rect::NOTHING;
+                    plan_row(
+                        ui,
+                        &[design::FORM_WIDTH, design::FORM_WIDTH / 3.0],
+                        icons::RUN,
+                        |ui| {
+                            title = ui
+                                .add(egui::Label::new(Type::Body.rich(ui, &name)).wrap())
+                                .rect;
+                        },
+                        |ui| {
+                            summary = ui
+                                .label(Type::Small.rich(ui, "5 party · 2 × Cinder Wolf"))
+                                .rect;
+                        },
+                        |ui| {
+                            action = Action::secondary("Start fight")
+                                .density(Density::Read)
+                                .show(ui)
+                                .rect;
+                        },
+                    );
+                    assert!(
+                        summary.top() >= title.bottom(),
+                        "{name}: {title:?} {summary:?}"
+                    );
+                    assert!(
+                        summary.top() >= action.bottom(),
+                        "{name}: {action:?} {summary:?}"
+                    );
+                }
+            });
+        });
+    }
 
     #[test]
     fn narrow_plan_summaries_never_end_a_line_with_a_separator() {

@@ -142,7 +142,7 @@ pub fn problems(ui: &mut egui::Ui, book: &mut Book) {
         design::message(
             ui,
             Tone::Warning,
-            "Timeline.md changed on disk while you were editing. Nothing is saved until you choose.",
+            "Timeline.md changed on disk. Your draft is safe until you choose.",
         );
         ui.horizontal(|ui| {
             if Action::secondary("Overwrite with my timeline")
@@ -427,7 +427,12 @@ impl TimelinePage {
                     if mentions == 1 { "links" } else { "link" }
                 )
             };
-            if design::message_with_action(ui, Tone::Info, &words, "Undo remove") {
+            let tone = if mentions > 0 {
+                Tone::Warning
+            } else {
+                Tone::Info
+            };
+            if design::message_with_action(ui, tone, &words, "Undo remove") {
                 book.undo_remove();
             }
         }
@@ -1034,7 +1039,7 @@ impl TimelinePage {
         // Beside Lookup or Notes at a small window, two columns would crush the list.
         if narrow {
             if event_open {
-                if Action::quiet("Back to the list")
+                if Action::quiet("All events")
                     .icon(icons::BACK)
                     .density(Density::Read)
                     .show(ui)
