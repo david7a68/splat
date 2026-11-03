@@ -928,9 +928,7 @@ fn member_row(
     if record.is_none() {
         summary = "No local copy yet".into();
     }
-    if local_edits {
-        summary.push_str(" · Local edits");
-    }
+
     let hp = from_fights
         .map(|(hp, _)| hp)
         .or_else(|| record.map(|r| r.initial.hp));
@@ -944,8 +942,9 @@ fn member_row(
         .collect::<Vec<_>>()
         .join(" · ");
     let name = format!(
-        "{} · {summary} · {compared} · HP {}/{} · AC {}{}",
+        "{}{} · {summary} · {compared} · HP {}/{} · AC {}{}",
         member.name,
+        if local_edits { " · Local edits" } else { "" },
         hp.map_or_else(|| "?".to_owned(), |n| n.to_string()),
         max_hp.map_or_else(|| "?".to_owned(), |n| n.to_string()),
         ac.map_or_else(|| "?".to_owned(), |n| n.to_string()),
@@ -999,6 +998,17 @@ fn member_row(
                 ..Default::default()
             },
         );
+        if local_edits {
+            job.append(
+                &format!(" · {} Local edits", icons::DRAFT),
+                0.0,
+                egui::TextFormat {
+                    font_id: small.clone(),
+                    color: c.document.unsaved,
+                    ..Default::default()
+                },
+            );
+        }
         // The same word as the run's, so that colour is never all that says it.
         let state_word = match design::hp_state(hp, max_hp) {
             design::HpState::Zero => Some(("0 HP", c.hp.zero)),
@@ -1605,24 +1615,15 @@ fn sheet_entries(record: &EntitySnapshot, page: usize) -> Vec<SheetEntry> {
                     ""
                 }
             ),
-            2 => format!(
-                "{}{}",
-                def["level"]
-                    .as_u64()
-                    .map(|n| if n == 0 {
-                        "Cantrip".into()
-                    } else {
-                        format!("Level {n}")
-                    })
-                    .unwrap_or_default(),
+            2 => {
+                let mut words = Vec::new();
                 if def["level"].as_u64().is_some_and(|level| level > 0)
                     && (v["prepared"] == true || v["alwaysPrepared"] == true)
                 {
-                    " · Prepared"
-                } else {
-                    ""
+                    words.push("Prepared");
                 }
-            ),
+                words.join(" · ")
+            }
             _ => source.into(),
         };
         let mut extra = Vec::new();
@@ -1661,10 +1662,16 @@ fn sheet_entries(record: &EntitySnapshot, page: usize) -> Vec<SheetEntry> {
                 extra.push(format!("Casting time: {time} {unit}"));
             }
         }
-        let meta = if extra.is_empty() {
+        let meta = if page == 2 && def["level"].as_u64() == Some(0) {
+            String::new()
+        } else if extra.is_empty() {
             meta
         } else {
-            format!("{meta} · {}", extra.join(" · "))
+            [meta, extra.join(" · ")]
+                .into_iter()
+                .filter(|s| !s.is_empty())
+                .collect::<Vec<_>>()
+                .join(" · ")
         };
         entries.push((
             name.into(),

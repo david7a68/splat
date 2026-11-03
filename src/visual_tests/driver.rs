@@ -304,6 +304,35 @@ impl<'a> Driver<'a> {
             })
     }
 
+    /// The dock must identify exactly one row, including when Lookup hides the sheet.
+    pub fn dock_names_one_participant(&self) -> bool {
+        let nodes = self.nodes();
+        let Some(label) = nodes
+            .iter()
+            .find(|n| n.name.starts_with("Selected: ") && n.role == Role::Label)
+        else {
+            return false;
+        };
+        let shown = self.painted_in(label.rect);
+        let words: Vec<_> = shown
+            .split([' ', '…', '\n'])
+            .filter(|w| !w.is_empty())
+            .collect();
+        if words.is_empty() {
+            return false;
+        }
+        let candidates = nodes
+            .iter()
+            .filter(|n| n.name.contains(", HP ") || n.name.contains(", initiative "))
+            .filter(|n| {
+                let name = n.name.split(',').next().unwrap_or("");
+                let parts: Vec<_> = name.split_whitespace().collect();
+                words.iter().all(|word| parts.contains(word))
+            })
+            .count();
+        candidates == 1
+    }
+
     /// What the run's header paints: between the rail and `Next turn`, on its line.
     pub fn header_rect(&self) -> egui::Rect {
         let next = self

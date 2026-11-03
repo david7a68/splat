@@ -508,32 +508,61 @@ fn list_row(
     blocked: Option<&'static str>,
     action: &mut Option<super::ListAction>,
 ) {
-    super::list::list_row(ui, group.id, &group.name, &group.summary(), false, |ui| {
-        super::row_menu(ui, &group.name, |ui| {
-            if super::menu_action(ui, "Remove…", blocked) {
-                *action = Some(super::ListAction::RemoveGroup(group.path.clone()));
+    super::list::list_row(
+        ui,
+        group.id,
+        &group.name,
+        &format!(
+            "{}{}",
+            if group.encounter.is_some() && group.encounter_name.is_none() {
+                "Offered in no fight · "
+            } else {
+                ""
+            },
+            group.summary()
+        ),
+        false,
+        |ui| {
+            super::row_menu(ui, &group.name, |ui| {
+                if super::menu_action(ui, "Remove…", blocked) {
+                    *action = Some(super::ListAction::RemoveGroup(group.path.clone()));
+                }
+            });
+            if Action::quiet("Edit")
+                .density(Density::Read)
+                .name(&format!("Edit group {}", group.name))
+                .blocked(blocked)
+                .show(ui)
+                .clicked()
+            {
+                *action = Some(super::ListAction::OpenGroup(group.path.clone()));
             }
-        });
-        if Action::quiet("Edit")
-            .density(Density::Read)
-            .name(&format!("Edit group {}", group.name))
-            .blocked(blocked)
-            .show(ui)
-            .clicked()
-        {
-            *action = Some(super::ListAction::OpenGroup(group.path.clone()));
-        }
-    });
+        },
+    );
     if let Some(problem) = &group.problem {
         for fault in problem.lines() {
-            ui.add(
-                egui::Label::new(
-                    Type::Small
-                        .rich(ui, format!("{} {fault}", icons::WARN))
-                        .color(colors().result.warning),
-                )
-                .wrap(),
-            );
+            ui.horizontal_wrapped(|ui| {
+                ui.add(
+                    egui::Label::new(
+                        Type::Small
+                            .rich(
+                                ui,
+                                format!(
+                                    "{} {}",
+                                    icons::WARN,
+                                    fault.trim_end_matches(" Campaign → Packages.")
+                                ),
+                            )
+                            .color(colors().result.warning),
+                    )
+                    .wrap(),
+                );
+                if fault.contains("Campaign → Packages") && packages_link(ui) {
+                    ui.data_mut(|data| {
+                        data.insert_temp(egui::Id::new("open_campaign_packages"), true)
+                    });
+                }
+            });
         }
     }
 }
@@ -750,7 +779,8 @@ pub(super) fn of_encounter(
                                     discard = Some((index, true));
                                 }
                             });
-                            if Action::quiet("Add creatures")
+                            if Action::quiet(if adding { "Adding here" } else { "Add here" })
+                                .icon(if adding { icons::OK } else { icons::ADD })
                                 .density(Density::Read)
                                 .name(&format!("Add creatures to {}", group.name))
                                 .selected(adding)
@@ -1005,6 +1035,7 @@ fn change_row(
     value: &mut Option<Change>,
     set: Option<std::ops::RangeInclusive<i64>>,
     add: std::ops::RangeInclusive<i64>,
+    base: &Base,
 ) {
     ui.horizontal(|ui| {
         let (rect, _) = ui.allocate_exact_size(
@@ -1064,6 +1095,42 @@ fn change_row(
             }
             None => {}
         }
+        let mut preview = Overrides::default();
+        match label {
+            "Maximum HP" => preview.max_hp = *value,
+            "AC" => preview.armor_class = *value,
+            "Initiative bonus" => preview.initiative_bonus = *value,
+            "Speed" => preview.speed = *value,
+            "Attack bonus" => {
+                preview.attack_bonus = value.and_then(|c| {
+                    if let Change::Add(n) = c {
+                        Some(n)
+                    } else {
+                        None
+                    }
+                })
+            }
+            "Damage bonus" => {
+                preview.damage_bonus = value.and_then(|c| {
+                    if let Change::Add(n) = c {
+                        Some(n)
+                    } else {
+                        None
+                    }
+                })
+            }
+            _ => {}
+        }
+        if let Some(row) = preview.rows(base).first() {
+            ui.add(
+                egui::Label::new(
+                    Type::Small
+                        .rich(ui, crate::encounter_run::change_preview(row))
+                        .color(colors().muted),
+                )
+                .wrap(),
+            );
+        }
     });
 }
 
@@ -1098,7 +1165,7 @@ pub(super) fn overrides_form(
     entry: &Entry,
     side: &str,
     sides: Option<&[String]>,
-) {
+) -> bool {
     let mut overrides = match Overrides::parse(block) {
         Ok(overrides) => overrides,
         Err(error) => {
@@ -1107,16 +1174,29 @@ pub(super) fn overrides_form(
                 Tone::Error,
                 &format!("{error} Repair it in Campaign → Campaign entries."),
             );
-            return;
+            return false;
         }
     };
+    let base = Base::of(entry, side);
     let before = overrides.clone();
     let linked = entry.fields.contains_key("splat_external");
     ui.add_space(design::XS);
-    let heading = design::group_label(
-        ui,
-        &format!("Changes for {}", shown_name(block, entry.name.clone())),
-    );
+    let mut done = false;
+    let heading = ui
+        .horizontal(|ui| {
+            let heading = design::group_label(
+                ui,
+                &format!("Changes for {}", shown_name(block, entry.name.clone())),
+            );
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                done = Action::quiet("Done")
+                    .name("Done with changes")
+                    .show(ui)
+                    .clicked();
+            });
+            heading
+        })
+        .inner;
     if ui
         .data_mut(|data| data.remove_temp::<bool>(egui::Id::new(FORM_OPENED)))
         .is_some()
@@ -1142,6 +1222,7 @@ pub(super) fn overrides_form(
             &mut overrides.max_hp,
             Some(1..=1_000_000),
             -1_000_000..=1_000_000,
+            &base,
         );
     }
     change_row(
@@ -1150,6 +1231,7 @@ pub(super) fn overrides_form(
         &mut overrides.armor_class,
         Some(0..=1000),
         -1000..=1000,
+        &base,
     );
     change_row(
         ui,
@@ -1157,13 +1239,14 @@ pub(super) fn overrides_form(
         &mut overrides.initiative_bonus,
         Some(-1000..=1000),
         -1000..=1000,
+        &base,
     );
     for (label, bonus) in [
         ("Attack bonus", &mut overrides.attack_bonus),
         ("Damage bonus", &mut overrides.damage_bonus),
     ] {
         let mut value = bonus.map(Change::Add);
-        change_row(ui, label, &mut value, None, -1000..=1000);
+        change_row(ui, label, &mut value, None, -1000..=1000, &base);
         *bonus = match value {
             Some(Change::Add(amount)) => Some(amount),
             _ => None,
@@ -1175,6 +1258,7 @@ pub(super) fn overrides_form(
         &mut overrides.speed,
         Some(0..=1000),
         -1000..=1000,
+        &base,
     );
     match sides {
         Some(_) if overrides.side.is_none() => {}
@@ -1230,6 +1314,7 @@ pub(super) fn overrides_form(
     if overrides != before {
         *block = overrides.to_mapping();
     }
+    done
 }
 
 /// The same official names and local Other effect as the run.
@@ -1389,6 +1474,10 @@ impl Encounters {
         let has_run = self.has_run();
         // The Session page has no save of its own to give this key to.
         let save_key = in_plan
+            && self
+                .group_draft
+                .as_ref()
+                .is_some_and(|draft| !draft.setup.members.is_empty())
             && dirty
             && ui
                 .ctx()
@@ -1410,7 +1499,15 @@ impl Encounters {
                 .blocked_if(dirty, "Save or discard this group first.")
                 .show(ui)
                 .clicked();
-            let width = (ui.available_width() - design::S * 17.0).max(Density::Scan.control());
+            let width = (ui.available_width()
+                - design::S * 17.0
+                - if draft.setup.members.is_empty() {
+                    design::number_width(ui, "Add a creature first", &Type::Small.font(ui))
+                        + design::L
+                } else {
+                    0.0
+                })
+            .max(Density::Scan.control());
             let response = ui.add(
                 egui::TextEdit::singleline(&mut draft.name)
                     .id(design::focus_id(NAME_FIELD))
@@ -1429,9 +1526,23 @@ impl Encounters {
                 } else {
                     Action::secondary("Save group")
                 }
-                .blocked_if(!dirty, "No changes to save.")
+                .blocked(if draft.setup.members.is_empty() {
+                    Some("Add a creature first")
+                } else if !dirty {
+                    Some("No changes to save.")
+                } else {
+                    None
+                })
                 .show(ui)
                 .clicked();
+                super::blocked_reason(
+                    ui,
+                    draft
+                        .setup
+                        .members
+                        .is_empty()
+                        .then_some("Add a creature first"),
+                );
             });
         });
         ui.horizontal_wrapped(|ui| {
@@ -1446,8 +1557,8 @@ impl Encounters {
                 (icons::OK, "No changes", colors().muted)
             };
             design::status(ui, Status { icon, word, color });
-            if dirty {
-                super::blocked_reason(ui, Some("Save or discard the draft first."));
+            if dirty && in_plan {
+                super::blocked_reason(ui, Some(super::draft_switch_reason()));
             }
         });
         design::rule(ui);
@@ -1650,9 +1761,8 @@ fn group_fields(
 
 /// How many creatures will arrive, and what they are worth, as the list and the panel say it.
 fn members_heading(draft: &GroupDraft, snapshot: &Snapshot) -> String {
-    let (mut count, mut xp, mut unknown) = (0_u64, 0_u64, false);
+    let (mut xp, mut unknown) = (0_u64, false);
     for member in &draft.setup.members {
-        count = count.saturating_add(member.count);
         let each = snapshot
             .catalogue
             .resolve_ref(&member.creature)
@@ -1665,8 +1775,7 @@ fn members_heading(draft: &GroupDraft, snapshot: &Snapshot) -> String {
         }
     }
     format!(
-        "{} · XP {}{}",
-        design::count(count as usize, "creature", "creatures"),
+        "XP {}{}",
         crate::encounter_run::grouped_number(xp),
         if unknown { " + unknown" } else { "" }
     )
@@ -1708,7 +1817,7 @@ fn members(
                 .unwrap_or_default();
             let key = format!("{path}:member_{index}");
             let is_open = expanded.as_deref() == Some(key.as_str());
-            ui.label(Type::Strong.rich(ui, format!("{}. {name}", index + 1)).color(colors().text)).on_hover_text(&name);
+            let member_row = ui.label(Type::Strong.rich(ui, format!("{}. {name}", index + 1)).color(colors().text)).on_hover_text(&name).rect;
             if !detail.is_empty() {
                 let response = ui.add(egui::Label::new(Type::Small.rich(ui, super::stat_line(&detail)).color(colors().muted)).wrap());
                 design::named(ui, &response, &detail);
@@ -1738,7 +1847,7 @@ fn members(
                     "This campaign cannot find this creature. Check the packages it uses, or remove this member.",
                 )
                 .on_hover_text(member.creature.label());
-                if design::link(ui, "Campaign → Packages").clicked() {
+                if packages_link(ui) {
                     ui.data_mut(|data| data.insert_temp(egui::Id::new("open_campaign_packages"), true));
                 }
             }
@@ -1746,9 +1855,7 @@ fn members(
                 if changes_link(ui, &member.overrides, entry, &side, is_open) {
                     show_form_when_it_opens(ui); *expanded = Some(key.clone());
                 }
-                if is_open {
-                    overrides_form(ui, &mut member.overrides, entry, &side, None);
-                }
+                if is_open && overrides_form(ui, &mut member.overrides, entry, &side, None) { *expanded = None; ui.scroll_to_rect(member_row, Some(egui::Align::Min)); }
             }
             design::rule(ui);
         });
@@ -1764,6 +1871,18 @@ fn members(
     } else if let Some(index) = lower {
         draft.setup.members.swap(index, index + 1);
     }
+}
+
+fn packages_link(ui: &mut egui::Ui) -> bool {
+    design::status_link(
+        ui,
+        Status {
+            icon: icons::LIBRARY,
+            word: "Campaign → Packages",
+            color: colors().accent,
+        },
+    )
+    .clicked()
 }
 
 #[cfg(test)]

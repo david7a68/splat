@@ -310,7 +310,7 @@ fn vital_rows(entry: &Entry) -> Vec<(&'static str, String)> {
     .collect()
 }
 
-fn vitals(ui: &mut egui::Ui, entry: &Entry, values: Option<&super::view::RunValues>) {
+pub(super) fn vitals(ui: &mut egui::Ui, entry: &Entry, values: Option<&super::view::RunValues>) {
     let c = colors();
     ui.horizontal_wrapped(|ui| {
         ui.spacing_mut().item_spacing = egui::vec2(design::L, 2.0);

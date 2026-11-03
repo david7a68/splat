@@ -3066,15 +3066,6 @@ impl Sessions {
         if let Some(problem) = &self.rename_problem {
             design::message(ui, Tone::Warning, problem);
         }
-        design::group_heading(
-            ui,
-            if session == self.current() {
-                "Tonight"
-            } else {
-                "This session"
-            },
-            0,
-        );
         let mut added = None;
         egui::TopBottomPanel::bottom(egui::Id::new(("session_plan_add", session)))
             .resizable(false)
@@ -3153,6 +3144,20 @@ impl Sessions {
                     .cloned()
             })
             .collect();
+        design::group_heading(
+            ui,
+            if session == self.current() {
+                "Tonight"
+            } else {
+                "This session"
+            },
+            book.events
+                .iter()
+                .filter(|event| event.is_in(session))
+                .count()
+                + planned.len()
+                + planned_groups.len(),
+        );
         let mut insert = None;
         let mut remove = None;
         let mut remove_group = None;
@@ -3345,7 +3350,7 @@ impl Sessions {
                         let mut read_group = false;
                         plan_row(ui, &widths, icons::GROUP, |ui| {
                             if design::wrapped_link(ui, &group.name).clicked() { read_group = true; }
-                            let summary = group.summary().split(" · ").map(|part| part.replace(' ', "\u{a0}")).collect::<Vec<_>>().join(" · ");
+                            let summary = group.summary().split(" · ").map(|part| part.replace(' ', "\u{a0}")).collect::<Vec<_>>().join("\u{a0}· ");
                             wrapped_words(ui, Type::Small, summary, c.muted);
                             if let Some(problem) = &group.problem { wrapped_words(ui, Type::Small, problem, c.result.warning); }
                         }, |ui| {
@@ -3356,7 +3361,7 @@ impl Sessions {
                                 }
                             });
                             if plan.arrivals_open {
-                                if Action::secondary("Arrivals").icon(icons::GROUP)
+                                if Action::quiet("Arrivals").icon(icons::GROUP)
                                     .name(&format!("Go to Arrivals for {}", group.name)).density(Density::Read).show(ui).clicked() {
                                     self.wants_arrivals = true;
                                 }
