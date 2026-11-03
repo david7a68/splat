@@ -81,10 +81,12 @@ or set `SPLAT_VISUAL_CONTACT_SHEET=1` to make it with a full `visual-test` run.
   stay as they were. The run must finish without scenario, workflow or app regressions;
   the helper refuses a baseline that changed since the run. A started run clears any
   earlier observation; incomplete scenarios do not generate one. The full merge gates still run.
-- `SPLAT_VISUAL_DIAGNOSE=1` collects missing `d.expect(...)` text in one run and
-  still fails at the end, even in report mode. Missing controls, failed raw assertions
+- Targeted runs collect missing `d.expect(...)` text by default.
+  `SPLAT_VISUAL_DIAGNOSE=1` also enables collection for a full run. Missing text
+  still fails the suite at the end, even in report mode. Missing controls, failed raw assertions
   and async timeouts still stop that scenario. The terminal and `ergonomics.md` show
-  all measured baseline changes, even when another failure ends the test.
+  all measured baseline changes, even when another failure ends the test. Targeted
+  runs keep the normal 180-second painted-text wait; diagnosis uses five seconds.
 - `SPLAT_VISUAL_TIMINGS=1` prints world-lock wait, fixture setup, app/font/renderer
   setup, settling, PNG rendering and PNG encoding/writing times. Per-scenario times
   overlap because the scenarios run in parallel; do not add them as wall time.
