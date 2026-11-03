@@ -215,6 +215,7 @@ mod tests {
             restores: false,
             continued_in: None,
             played_order: 0,
+            extra: Default::default(),
         }
     }
     fn link(label: &str) -> SessionLink {

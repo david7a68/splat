@@ -190,7 +190,7 @@ pub fn fingerprint(root: &Path) -> u64 {
     walk(root, &mut files);
     let mut hasher = std::collections::hash_map::DefaultHasher::new();
     for path in files {
-        if path.extension().is_some_and(|e| e == "md")
+        if path.extension().is_some_and(|e| e == "md" || e == "json")
             && let Ok(meta) = fs::metadata(&path)
         {
             path.hash(&mut hasher);
@@ -1819,6 +1819,20 @@ fn add_form(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn integrity_d27_focus_checks_include_run_json_files() {
+        let dir = tempfile::tempdir().unwrap();
+        let runs = dir.path().join("Encounter Runs");
+        fs::create_dir_all(&runs).unwrap();
+        let before = fingerprint(dir.path());
+        let path = runs.join("fight.json");
+        fs::write(&path, "run").unwrap();
+        let saved = fingerprint(dir.path());
+        assert_ne!(saved, before);
+        fs::write(&path, "DM changed the run").unwrap();
+        assert_ne!(fingerprint(dir.path()), saved);
+    }
 
     fn note(dir: &Path, path: &str, text: &str) {
         let path = dir.join(path);

@@ -158,6 +158,8 @@ pub struct Event {
     /// When this was last played or ruled on, among the others. Zero is before any of them.
     #[serde(default, skip_serializing_if = "is_zero")]
     pub played_order: u64,
+    #[serde(flatten)]
+    pub extra: serde_yaml_ng::Mapping,
 }
 
 impl Event {
@@ -265,6 +267,7 @@ pub fn party_state(events: &[Event], session: Option<Uuid>) -> PartyState {
 #[derive(Clone, Debug, PartialEq)]
 pub struct RunFact {
     pub id: Uuid,
+    pub copied_from: Option<Uuid>,
     pub name: String,
     pub round: u64,
     pub state: RunState,
@@ -579,6 +582,11 @@ pub struct Book {
     path: Option<PathBuf>,
     pub events: Vec<Event>,
     baseline: Option<Vec<u8>>,
+    /// The generated body last written, even while frontmatter is edited elsewhere.
+    written_body: Option<String>,
+    body_changed: bool,
+    pending_run: Option<(RunFact, Option<Uuid>, bool)>,
+    pub duplicate: Option<String>,
     saved_events: Vec<Event>,
     pub renamed_links: BTreeMap<String, Vec<String>>,
     link_titles: BTreeMap<String, (String, String)>,
@@ -611,12 +619,30 @@ impl Book {
         }
         // An edit in its pause before saving goes with the file it belongs to.
         self.save();
+        if self.unsaved() {
+            self.error.get_or_insert_with(|| {
+                "Choose what to do with the unsaved timeline before changing folders.".into()
+            });
+            return;
+        }
         *self = Self {
             path,
             session_links: std::mem::take(&mut self.session_links),
             ..Default::default()
         };
         self.reload();
+    }
+
+    fn check_copies(&mut self) {
+        let Some(path) = &self.path else {
+            self.duplicate = None;
+            return;
+        };
+        self.duplicate = path.parent().and_then(|folder| fs::read_dir(folder).ok()).into_iter().flatten()
+            .filter_map(Result::ok).map(|file| file.path())
+            .filter(|other| other != path && other.extension().is_some_and(|ext| ext == "md"))
+            .find(|other| fs::read_to_string(other).is_ok_and(|text| text.lines().any(|line| line.starts_with("timeline_version:"))))
+            .map(|other| format!("Another timeline file exists: {}. Compare its events with Timeline.md before removing either file.", other.display()));
     }
 
     /// Read the file, and drop any edit not yet saved.
@@ -628,6 +654,7 @@ impl Book {
         self.error = None;
         self.unreadable = None;
         self.gone = false;
+        self.check_copies();
         let Some(path) = &self.path else {
             self.events.clear();
             return;
@@ -639,6 +666,14 @@ impl Book {
                     .and_then(parse)
                 {
                     Ok(events) => {
+                        let text = String::from_utf8_lossy(&bytes);
+                        let body = crate::sessions::body_of(&text).replace("\r\n", "\n");
+                        let generated = render(&events, &self.session_links).unwrap_or_default();
+                        let expected = self
+                            .written_body
+                            .as_deref()
+                            .unwrap_or_else(|| crate::sessions::body_of(&generated));
+                        self.body_changed = body != expected;
                         let days = day_numbers(&events);
                         self.link_titles = events
                             .iter()
@@ -704,15 +739,48 @@ impl Book {
 
     fn write(&mut self) -> Result<(), String> {
         let path = self.path.as_ref().ok_or("No campaign is open.")?;
-        let text = render(&self.events, &self.session_links)?;
+        let generated = render(&self.events, &self.session_links)?;
+        let body = crate::sessions::body_of(&generated);
+        let text = if let Some(bytes) = &self.baseline {
+            let source = std::str::from_utf8(bytes).map_err(|e| e.to_string())?;
+            let patched = crate::content_workspace::patch_fields(
+                source,
+                &[(
+                    "timeline",
+                    Some(serde_yaml_ng::to_value(&self.events).map_err(|e| e.to_string())?),
+                )],
+            )?;
+            let (front, _) =
+                crate::sessions::split_note(&patched).ok_or("Missing timeline properties.")?;
+            format!("{front}{body}")
+        } else {
+            generated.clone()
+        };
         let parent = path.parent().ok_or("Invalid timeline location.")?;
-        fs::create_dir_all(parent).map_err(|e| format!("Could not create the folder: {e}"))?;
+        if !parent.is_dir() {
+            return Err(format!(
+                "Session folder is gone: {}. Choose folder in Sessions.",
+                parent.display()
+            ));
+        }
         let mut temp = tempfile::NamedTempFile::new_in(parent).map_err(|e| e.to_string())?;
         temp.write_all(text.as_bytes())
             .and_then(|()| temp.as_file().sync_all())
             .map_err(|e| e.to_string())?;
-        temp.persist(path).map_err(|e| e.to_string())?;
+        if fs::read(path).ok() != self.baseline {
+            self.conflict = true;
+            return Err("Timeline.md changed again on disk. Compare it before saving.".into());
+        }
+        if self.baseline.is_some() {
+            temp.persist(path)
+        } else {
+            temp.persist_noclobber(path)
+        }
+        .map_err(|e| e.to_string())?;
+        crate::sessions::sync_folder(parent)?;
         self.baseline = Some(text.into_bytes());
+        self.written_body = Some(body.to_owned());
+        self.body_changed = false;
         self.saved_events.clone_from(&self.events);
         self.dirty = false;
         self.reordered.clear();
@@ -723,6 +791,10 @@ impl Book {
 
     pub fn save(&mut self) {
         if !self.dirty || self.conflict || self.unreadable.is_some() {
+            return;
+        }
+        if self.body_changed {
+            self.conflict = true;
             return;
         }
         let Some(path) = &self.path else {
@@ -740,6 +812,27 @@ impl Book {
 
     /// The file changed on disk, and the DM keeps this version.
     pub fn overwrite(&mut self) {
+        if let Some(path) = &self.path
+            && let Ok(bytes) = fs::read(path)
+        {
+            match std::str::from_utf8(&bytes)
+                .map_err(|e| e.to_string())
+                .and_then(parse)
+            {
+                Ok(events) => {
+                    for event in &mut self.events {
+                        if let Some(disk) = events.iter().find(|disk| disk.id == event.id) {
+                            event.extra.extend(disk.extra.clone());
+                        }
+                    }
+                    self.baseline = Some(bytes);
+                }
+                Err(error) => {
+                    self.error = Some(format!("Timeline.md could not be read. {error}"));
+                    return;
+                }
+            }
+        }
         if let Err(error) = self.write() {
             self.error = Some(format!("The timeline was not saved. {error}"));
         }
@@ -807,15 +900,21 @@ impl Book {
             let _ = SAVE_AFTER;
             ctx.request_repaint_after(SAVE_AFTER);
         } else if self.path.is_some()
-            && self.unreadable.is_none()
+            && !self.gone
             && self
                 .last_check
                 .is_none_or(|at| now.duration_since(at) >= CHECK_DISK_EVERY)
         {
             self.last_check = Some(now);
+            self.check_copies();
             let current = self.path.as_ref().and_then(|path| fs::read(path).ok());
             if current != self.baseline {
                 self.reload();
+                if self.unreadable.is_none()
+                    && let Some((fact, session, played)) = self.pending_run.take()
+                {
+                    self.apply_run(&fact, session, played);
+                }
             }
         }
     }
@@ -847,6 +946,7 @@ impl Book {
                 restores: false,
                 continued_in: None,
                 played_order: 0,
+                extra: Default::default(),
             },
         );
         self.touch();
@@ -972,7 +1072,10 @@ impl Book {
         session: Option<Uuid>,
     ) {
         // A new ID with a run already open is that run's copy, which keeps its place in the story.
-        let known = self.events.iter().any(|event| event.run == Some(fact.id));
+        let known = self.events.iter().any(|event| {
+            event.run == Some(fact.id)
+                || (fact.copied_from.is_some() && event.run == fact.copied_from)
+        });
         if before.is_none() && !known && matches!(fact.state, RunState::Ended(_)) {
             return;
         }
@@ -982,7 +1085,18 @@ impl Book {
 
     fn apply_run(&mut self, fact: &RunFact, session: Option<Uuid>, played: bool) {
         if self.unreadable.is_some() {
+            self.pending_run = Some((fact.clone(), session, played));
             return;
+        }
+        if !self.events.iter().any(|event| event.run == Some(fact.id))
+            && let Some(original) = fact.copied_from
+            && let Some(event) = self
+                .events
+                .iter_mut()
+                .find(|event| event.run == Some(original))
+        {
+            event.run = Some(fact.id);
+            self.touch();
         }
         let index = self
             .events
@@ -1128,11 +1242,121 @@ mod tests {
     fn fact(state: RunState) -> RunFact {
         RunFact {
             id: Uuid::from_u128(7),
+            copied_from: None,
             name: "Bridge Ambush".into(),
             round: 3,
             state,
             steps: 1,
         }
+    }
+
+    #[test]
+    fn integrity_d1_unknown_properties_and_event_fields_survive() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut book = book(dir.path());
+        book.add(Kind::Travel, None);
+        book.save();
+        let path = dir.path().join(FILE);
+        let text = fs::read_to_string(&path)
+            .unwrap()
+            .replacen(
+                "timeline_version:",
+                "# DM comment\ntags: [journey]\ntimeline_version:",
+                1,
+            )
+            .replacen("  kind:", "  weather: rain\n  kind:", 1);
+        fs::write(&path, text).unwrap();
+        book.reload();
+        book.events[0].title = "Road".into();
+        book.touch();
+        book.save();
+        let saved = fs::read_to_string(path).unwrap();
+        assert!(saved.contains("tags:"));
+        assert!(saved.contains("weather: rain"));
+        assert!(saved.contains("# DM comment"));
+    }
+
+    #[test]
+    fn integrity_d1_an_edited_body_opens_the_disk_conflict() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut book = book(dir.path());
+        book.add(Kind::Travel, None);
+        book.save();
+        let path = dir.path().join(FILE);
+        let text = format!("{}\nDM's paragraph.\n", fs::read_to_string(&path).unwrap());
+        fs::write(&path, &text).unwrap();
+        book.reload();
+        book.touch();
+        book.save();
+        assert!(book.conflict);
+        assert_eq!(fs::read_to_string(path).unwrap(), text);
+    }
+
+    #[test]
+    fn integrity_d17_a_repaired_timeline_is_polled_again() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join(FILE);
+        fs::write(&path, "broken").unwrap();
+        let mut book = book(dir.path());
+        assert!(book.unreadable.is_some());
+        book.record_change(None, &fact(RunState::Running), None);
+        let mut repaired = event(Kind::Travel, "1 hour");
+        repaired.id = "t-repaired".into();
+        fs::write(&path, render(&[repaired], &BTreeMap::new()).unwrap()).unwrap();
+        book.poll(&eframe::egui::Context::default());
+        assert!(book.unreadable.is_none());
+        assert_eq!(book.events.len(), 2);
+        assert_eq!(book.events[1].run, Some(fact(RunState::Running).id));
+    }
+
+    #[test]
+    fn integrity_d18_a_timeline_copy_is_named_and_kept() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut book = book(dir.path());
+        book.add(Kind::Travel, None);
+        book.save();
+        let copy = dir.path().join("Timeline (conflict).md");
+        fs::copy(dir.path().join(FILE), &copy).unwrap();
+        book.poll(&eframe::egui::Context::default());
+        assert!(
+            book.duplicate
+                .as_deref()
+                .unwrap()
+                .contains("Timeline (conflict).md")
+        );
+        assert!(copy.exists());
+    }
+
+    #[test]
+    fn integrity_d22_a_recovery_copy_keeps_one_event_and_its_notes() {
+        let mut book = Book::default();
+        let original = fact(RunState::Running);
+        book.record_change(None, &original, None);
+        let event = book.events[0].id.clone();
+        book.events[0].notes = "DM's account".into();
+        let copy = RunFact {
+            id: Uuid::new_v4(),
+            copied_from: Some(original.id),
+            ..original.clone()
+        };
+        book.record_change(Some(&original), &copy, None);
+        assert_eq!(book.events.len(), 1);
+        assert_eq!(book.events[0].id, event);
+        assert_eq!(book.events[0].notes, "DM's account");
+        assert_eq!(book.events[0].run, Some(copy.id));
+    }
+
+    #[test]
+    fn integrity_d19_a_folder_change_keeps_a_blocked_draft() {
+        let old = tempfile::tempdir().unwrap();
+        let new = tempfile::tempdir().unwrap();
+        let mut book = book(old.path());
+        book.add(Kind::Travel, None);
+        fs::write(old.path().join(FILE), "disk change").unwrap();
+        book.open(Some(new.path()));
+        assert_eq!(book.path, Some(old.path().join(FILE)));
+        assert!(book.not_saved());
+        assert_eq!(book.events.len(), 1);
     }
 
     #[test]
@@ -1253,6 +1477,7 @@ mod tests {
             restores: false,
             continued_in: None,
             played_order: 0,
+            extra: Default::default(),
         }
     }
 
@@ -1823,6 +2048,7 @@ mod tests {
             restores,
             continued_in: None,
             played_order: 0,
+            extra: Default::default(),
         };
         let first = Uuid::new_v4();
         let mut events = vec![event(Kind::ShortRest, None, false)];

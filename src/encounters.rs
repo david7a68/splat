@@ -22,6 +22,7 @@ use std::{
 };
 use uuid::Uuid;
 
+mod disk;
 mod groups;
 mod history;
 use groups::GroupDraft;
@@ -80,6 +81,7 @@ impl Default for Setup {
     }
 }
 struct Draft {
+    recovery: disk::Recovery,
     id: Uuid,
     path: String,
     baseline: Option<String>,
@@ -115,6 +117,7 @@ impl Draft {
             "---\nsplat_schema: 1\nsplat_id: {id}\nsplat_kind: encounter\nsplat_name: New encounter\nsplat_encounter: {{}}\n---\n\n"
         );
         Self {
+            recovery: Default::default(),
             id,
             path: format!("Encounters/{id}.md"),
             baseline: None,
@@ -146,6 +149,7 @@ impl Draft {
                 format!("This encounter needs repair in Campaign → Campaign entries: {e}")
             })?;
         Ok(Self {
+            recovery: Default::default(),
             id: entry.id,
             path: path.into(),
             baseline: Some(text.clone()),
@@ -259,19 +263,18 @@ impl Draft {
         }
     }
     fn save(&mut self, campaign: &Campaign, modules: &[Module]) -> Result<(), String> {
+        self.recovery
+            .check(&campaign.path, &mut self.path, self.baseline.as_deref())?;
         let snapshot = Snapshot::load(campaign, modules)?;
         self.validate(&snapshot)?;
         let text = self.text()?;
         let entry = Entry::parse(&self.path, &text)?;
-        if snapshot.catalogue.entries.values().any(|e| {
-            e.entry.id == entry.id && (e.owner != campaign.id || e.entry.path != self.path)
-        }) {
-            return Err("Another note uses this encounter identity.".into());
-        }
+        debug_assert_eq!(entry.id, self.id);
         // Nothing is written unless the encounter and every changed group can be.
         let mut group_texts = Vec::new();
-        for (index, group) in self.groups.iter().enumerate() {
+        for (index, group) in self.groups.iter_mut().enumerate() {
             if group.dirty() {
+                group.check_disk(campaign)?;
                 let text = group
                     .checked(&snapshot, campaign, Some(self.id))
                     .map_err(|e| match group.name().trim() {
@@ -293,35 +296,47 @@ impl Draft {
                 ));
             }
         }
-        // Create the manifest first so a new campaign keeps its module selections.
-        let mut document = CampaignDocument::load(campaign)?;
+        let document = CampaignDocument::load(campaign)?;
+        let mut changes = Vec::new();
         if document.baseline.is_none() {
-            document.save()?;
+            changes.push(crate::file_batch::Change::text(
+                note_path(&campaign.path, &document.path)?,
+                None,
+                Some(&document.text),
+            ));
         }
         let path = note_path(&campaign.path, &self.path)?;
         fs::create_dir_all(path.parent().ok_or("Missing encounter folder")?)
             .map_err(|e| e.to_string())?;
         // A change to a group alone leaves the encounter's note as it is.
         if self.baseline.as_deref() != Some(text.as_str()) {
-            write_note(&campaign.path, &self.path, self.baseline.as_deref(), &text)?;
+            changes.push(crate::file_batch::Change::text(
+                path,
+                self.baseline.as_deref(),
+                Some(&text),
+            ));
         }
+        for (index, text) in &group_texts {
+            changes.push(self.groups[*index].change(campaign, Some(text))?);
+        }
+        for group in &self.deleted_groups {
+            if group.has_file() {
+                changes.push(group.change(campaign, None)?);
+            }
+        }
+        crate::file_batch::apply(&changes)?;
         self.source = text.clone();
         self.baseline = Some(text);
         self.saved_name = self.name.clone();
         self.saved_setup = self.setup.clone();
         self.saved_body = self.body.clone();
+        self.recovery = Default::default();
         for (index, text) in group_texts {
             let group = &mut self.groups[index];
-            group.write(campaign, &text).map_err(|e| {
-                format!(
-                    "The encounter saved, but group {} did not: {e}",
-                    group.name()
-                )
-            })?;
+            group.saved_text(&text);
             self.groups_written = true;
         }
-        for group in &self.deleted_groups {
-            group.delete_saved(campaign)?;
+        for _ in &self.deleted_groups {
             self.groups_written = true;
         }
         self.deleted_groups.clear();
@@ -472,6 +487,7 @@ struct CreatureFields {
 
 /// A creature the DM made their own, open beside the roster.
 struct CreatureEditor {
+    recovery: disk::Recovery,
     path: String,
     baseline: String,
     fields: CreatureFields,
@@ -499,6 +515,7 @@ impl CreatureEditor {
             name: entry.name,
         };
         Ok(Self {
+            recovery: Default::default(),
             path: path.to_owned(),
             baseline: text,
             saved: fields.clone(),
@@ -567,11 +584,14 @@ impl CreatureEditor {
         Ok(with_body(&text, &body))
     }
     fn save(&mut self, root: &std::path::Path) -> Result<(), String> {
+        self.recovery
+            .check(root, &mut self.path, Some(&self.baseline))?;
         let text = self.text()?;
         Entry::parse(&self.path, &text)?;
         write_note(root, &self.path, Some(&self.baseline), &text)?;
         self.baseline = text;
         self.saved = self.fields.clone();
+        self.recovery = Default::default();
         Ok(())
     }
 }
@@ -1136,14 +1156,30 @@ impl Snapshot {
             })
             .collect();
         templates.sort_by_key(|template| template.name.to_lowercase());
-        let issues = catalogue
+        let mut issues: Vec<String> = catalogue
             .errors
             .iter()
             .chain(&closure.errors)
             .cloned()
             .collect();
         let options = crate::encounter_settings::Options::load(campaign, &catalogue)?;
-        let runs = crate::encounter_run::Run::list(&options.directory(campaign)?, campaign.id)?;
+        let runs = match crate::encounter_run::Run::list(&options.directory(campaign)?, campaign.id)
+        {
+            Ok(runs) => runs,
+            Err(error) => {
+                let folder = crate::sessions::folder(campaign).ok();
+                let timeline_names_runs = folder
+                    .and_then(|folder| fs::read_to_string(folder.join("Timeline.md")).ok())
+                    .is_some_and(|text| {
+                        text.lines()
+                            .any(|line| line.trim_start().starts_with("run:"))
+                    });
+                if timeline_names_runs {
+                    issues.push(error);
+                }
+                Vec::new()
+            }
+        };
         let groups = Arc::new(groups::load(&catalogue, &creatures, campaign.id));
         let run_creatures = Arc::new(
             creatures
@@ -1239,6 +1275,7 @@ pub struct Encounters {
     /// The open group draft goes back to the session's plan when it is saved.
     group_in_plan: bool,
     pub wants_session: bool,
+    pub wants_run_folder: bool,
     /// The run just opened began on the Session page, by way of this editor.
     pub run_from_session: bool,
     /// Where the party stands after the last fight of the session being played.
@@ -1510,6 +1547,7 @@ impl Encounters {
             Ok(_) if self.has_run() => self.error = Some(BLOCKED_BY_RUN.to_owned()),
             Ok(_) => match crate::encounter_run::Run::open(path, active.id) {
                 Ok(mut run) => {
+                    run.guard_campaign(&active.path);
                     if let Some(carry) = &self.carry {
                         run.rest_saved_setup(carry.rest_order);
                     }
@@ -2006,6 +2044,20 @@ impl Encounters {
     /// Beside the roster, in place of the search. It says what this creature is, and only the
     /// numbers a DM most often changes have fields of their own.
     fn creature_pane(ui: &mut egui::Ui, editor: &mut CreatureEditor) -> Option<CreatureStep> {
+        if editor.recovery.change.is_some() {
+            if let Some(keep) = editor.recovery.show(ui, &editor.text().unwrap_or_default()) {
+                if keep {
+                    if let Some(change) = editor.recovery.accept() {
+                        editor.path = change.path;
+                        editor.baseline = change.text.unwrap_or_default();
+                        editor.error = None;
+                    }
+                } else {
+                    return Some(CreatureStep::Close);
+                }
+            }
+            return None;
+        }
         let dirty = editor.dirty();
         let (mut save, mut close) = (false, false);
         ui.label(
@@ -2222,6 +2274,7 @@ impl Encounters {
             &snapshot.options.directory(campaign)?,
             snapshot.options.initiative,
         )?;
+        run.guard_campaign(&campaign.path);
         if fresh.setup.combat_sync && campaign.dndbeyond_campaign_id.is_some() {
             run.keep_party_synced();
         }
@@ -2248,12 +2301,13 @@ impl Encounters {
         }
     }
     /// Reopen a run after a restart, with its participants' sync turned back on.
-    pub fn restore_run(&mut self, path: &std::path::Path, campaign: uuid::Uuid, synced: &[String]) {
+    pub fn restore_run(&mut self, path: &std::path::Path, campaign: &Campaign, synced: &[String]) {
         if self.run.is_some() {
             return;
         }
-        match crate::encounter_run::Run::open(path, campaign) {
+        match crate::encounter_run::Run::open(path, campaign.id) {
             Ok(mut run) => {
+                run.guard_campaign(&campaign.path);
                 run.restore_sync(synced);
                 self.run = Some(run);
                 self.go_to_run = true;
@@ -2422,6 +2476,11 @@ impl Encounters {
         self.discard_undo(ui);
         if let Some(e) = &self.error {
             design::message(ui, Tone::Error, e);
+            if e.starts_with("Run folder not found")
+                && Action::secondary("Choose folder").show(ui).clicked()
+            {
+                self.wants_run_folder = true;
+            }
         }
         if let Some(m) = &self.message {
             design::message(ui, Tone::Success, m);
@@ -2563,6 +2622,15 @@ impl Encounters {
         let Some(snapshot) = &self.snapshot else {
             return;
         };
+        for issue in snapshot
+            .issues
+            .iter()
+            .filter(|issue| issue.starts_with("Run folder not found"))
+        {
+            if design::message_with_action(ui, Tone::Warning, issue, "Choose folder") {
+                self.wants_run_folder = true;
+            }
+        }
         if !snapshot.issues.is_empty() {
             design::section(
                 ui,
@@ -2775,6 +2843,9 @@ impl Encounters {
         campaigns: &Campaigns,
         party: &Party,
     ) {
+        if self.encounter_disk_view(ui, active, campaigns.modules()) {
+            return;
+        }
         let dirty = self.encounter_dirty();
         let creature_dirty = self.creature_dirty();
         let mut back = false;
@@ -4454,6 +4525,80 @@ mod tests {
         fs::remove_file(dir.path().join("Monster.md")).unwrap();
         assert!(d.save(&campaign, &[]).is_err());
         assert_eq!(fs::read_to_string(dir.path().join(&d.path)).unwrap(), saved);
+    }
+
+    #[test]
+    fn integrity_d8_a_moved_encounter_keeps_the_draft_and_identity() {
+        let dir = tempfile::tempdir().unwrap();
+        let campaign = campaign(dir.path());
+        let id = creature(dir.path(), "Monster", false);
+        let mut draft = Draft::new();
+        draft.add(id, false);
+        draft.save(&campaign, &[]).unwrap();
+        let old = draft.path.clone();
+        let moved = "Encounters/Moved.md";
+        fs::rename(dir.path().join(&old), dir.path().join(moved)).unwrap();
+        draft.body = "My unsaved draft".into();
+        draft.save(&campaign, &[]).unwrap();
+        assert_eq!(draft.path, moved);
+        assert!(!dir.path().join(old).exists());
+        assert!(
+            fs::read_to_string(dir.path().join(moved))
+                .unwrap()
+                .contains("My unsaved draft")
+        );
+    }
+
+    #[test]
+    fn integrity_d8_a_changed_encounter_compares_and_keeps_unknown_fields() {
+        let dir = tempfile::tempdir().unwrap();
+        let campaign = campaign(dir.path());
+        let mut draft = Draft::new();
+        draft.add(creature(dir.path(), "Monster", false), false);
+        draft.save(&campaign, &[]).unwrap();
+        let path = dir.path().join(&draft.path);
+        let external = fs::read_to_string(&path)
+            .unwrap()
+            .replace("splat_schema: 1", "tags: [DM]\nsplat_schema: 1");
+        fs::write(&path, &external).unwrap();
+        draft.body = "My words".into();
+        assert!(draft.save(&campaign, &[]).is_err());
+        assert_eq!(
+            draft.recovery.change.as_ref().unwrap().text.as_deref(),
+            Some(external.as_str())
+        );
+        let change = draft.recovery.accept().unwrap();
+        draft.source = change.text.clone().unwrap();
+        draft.baseline = change.text;
+        draft.save(&campaign, &[]).unwrap();
+        let saved = fs::read_to_string(path).unwrap();
+        assert!(saved.contains("tags: [DM]") && saved.contains("My words"));
+    }
+
+    #[test]
+    fn integrity_d8_creature_drafts_follow_moves_and_compare_edits() {
+        let dir = tempfile::tempdir().unwrap();
+        creature(dir.path(), "Monster", false);
+        let mut editor = CreatureEditor::open(dir.path(), "Monster.md").unwrap();
+        fs::rename(dir.path().join("Monster.md"), dir.path().join("Moved.md")).unwrap();
+        editor.fields.hp = "19".into();
+        editor.save(dir.path()).unwrap();
+        assert_eq!(editor.path, "Moved.md");
+        let outside = format!(
+            "{}\nDM's words",
+            fs::read_to_string(dir.path().join("Moved.md")).unwrap()
+        );
+        fs::write(dir.path().join("Moved.md"), &outside).unwrap();
+        editor.fields.hp = "20".into();
+        assert!(editor.save(dir.path()).is_err());
+        assert_eq!(
+            editor.recovery.change.as_ref().unwrap().text.as_deref(),
+            Some(outside.as_str())
+        );
+        assert_eq!(
+            fs::read_to_string(dir.path().join("Moved.md")).unwrap(),
+            outside
+        );
     }
     #[test]
     fn unselected_library_creatures_are_not_offered() {

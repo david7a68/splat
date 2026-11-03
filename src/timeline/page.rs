@@ -201,6 +201,9 @@ pub fn problems(ui: &mut egui::Ui, book: &mut Book) {
     {
         book.undo_reload();
     }
+    if let Some(warning) = &book.duplicate {
+        design::message(ui, Tone::Warning, warning);
+    }
     if let Some(error) = book.unreadable.clone() {
         design::message(ui, Tone::Error, &error);
         ui.horizontal(|ui| {

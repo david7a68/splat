@@ -375,6 +375,11 @@ struct Transcript {
 }
 
 impl Transcript {
+    #[cfg(test)]
+    fn write(&self, path: &Path, model: &str) -> Result<(), String> {
+        self.write_checked(path, model, fs::read(path).ok().as_deref())
+            .map(|_| ())
+    }
     fn read(path: &Path) -> Option<Self> {
         let text = fs::read_to_string(path).ok()?;
         let rest = text.strip_prefix("---\n")?;
@@ -391,17 +396,36 @@ impl Transcript {
         })
     }
 
-    fn write(&self, path: &Path, model: &str) -> Result<(), String> {
-        write_atomic(
-            path,
-            &format!(
-                "---\ntranscript_parts_done: {}\ntranscript_parts: {}\ntranscript_model: {}\n---\n\n{}",
-                self.parts_done,
-                self.parts,
-                serde_json::to_string(model).map_err(|e| e.to_string())?,
-                self.body
-            ),
-        )
+    fn write_checked(
+        &self,
+        path: &Path,
+        model: &str,
+        baseline: Option<&[u8]>,
+    ) -> Result<Vec<u8>, String> {
+        let text = format!(
+            "---\ntranscript_parts_done: {}\ntranscript_parts: {}\ntranscript_model: {}\n---\n\n{}",
+            self.parts_done,
+            self.parts,
+            serde_json::to_string(model).map_err(|e| e.to_string())?,
+            self.body
+        );
+        let parent = path.parent().ok_or("Invalid transcript location.")?;
+        let mut temp = tempfile::NamedTempFile::new_in(parent).map_err(|e| e.to_string())?;
+        temp.write_all(text.as_bytes())
+            .and_then(|()| temp.as_file().sync_all())
+            .map_err(|e| e.to_string())?;
+        if fs::read(path).ok().as_deref() != baseline {
+            return Err(format!(
+                "{} changed on disk. Processing stopped and kept your edit.",
+                path.display()
+            ));
+        }
+        if baseline.is_some() {
+            temp.persist(path).map_err(|e| e.to_string())?;
+        } else {
+            temp.persist_noclobber(path).map_err(|e| e.to_string())?;
+        }
+        Ok(text.into_bytes())
     }
 
     fn complete(&self) -> bool {
@@ -602,6 +626,11 @@ fn transcribe(
     let plan = layout.parts(&request.recording, PART_SECONDS, PART_MAX_BYTES)?;
     let parts = plan.len() as u64;
     let path = transcript_path(&request.recording);
+    let mut baseline = match fs::read(&path) {
+        Ok(bytes) => Some(bytes),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => None,
+        Err(error) => return Err(format!("{}: {error}", path.display())),
+    };
     let mut transcript = Transcript::read(&path)
         .filter(|old| old.parts == parts)
         .unwrap_or(Transcript {
@@ -644,7 +673,7 @@ fn transcribe(
             text.trim()
         ));
         transcript.parts_done += 1;
-        transcript.write(&path, model)?;
+        baseline = Some(transcript.write_checked(&path, model, baseline.as_deref())?);
     }
     Ok(transcript.body)
 }
@@ -1245,6 +1274,29 @@ pub fn start(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn integrity_d20_processing_keeps_a_transcript_edited_on_disk() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("evening.transcript.md");
+        let mut transcript = Transcript {
+            parts: 2,
+            parts_done: 1,
+            body: "First part".into(),
+        };
+        let baseline = transcript.write_checked(&path, "model", None).unwrap();
+        fs::write(&path, "DM's corrected transcript").unwrap();
+        transcript.parts_done = 2;
+        transcript.body.push_str("\nSecond part");
+        let error = transcript
+            .write_checked(&path, "model", Some(&baseline))
+            .unwrap_err();
+        assert!(error.contains("evening.transcript.md"));
+        assert_eq!(
+            fs::read_to_string(path).unwrap(),
+            "DM's corrected transcript"
+        );
+    }
     use crate::recording::wav_bytes;
     use std::{io::Read, net::TcpListener, sync::Mutex, thread};
 

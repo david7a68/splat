@@ -10,6 +10,33 @@ use std::{
 };
 use uuid::Uuid;
 
+/// Held for the whole app lifetime. The OS releases it after a crash too.
+pub struct InstanceLock(std::fs::File);
+
+impl InstanceLock {
+    pub fn acquire(path: &Path) -> Result<Self, String> {
+        let parent = path.parent().ok_or("Invalid lock location.")?;
+        fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+        let file = fs::OpenOptions::new()
+            .read(true)
+            .write(true)
+            .create(true)
+            .truncate(false)
+            .open(path)
+            .map_err(|e| e.to_string())?;
+        file.try_lock().map_err(|_| {
+            "Splat is already open. Use the open window before starting another.".to_owned()
+        })?;
+        Ok(Self(file))
+    }
+}
+
+impl Drop for InstanceLock {
+    fn drop(&mut self) {
+        let _ = self.0.unlock();
+    }
+}
+
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct OpenRun {
     pub campaign: Uuid,
@@ -97,6 +124,16 @@ fn write(path: &Path, state: &UiState) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn integrity_d24_a_second_instance_lock_is_refused() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("instance.lock");
+        let first = InstanceLock::acquire(&path).unwrap();
+        assert!(InstanceLock::acquire(&path).is_err());
+        drop(first);
+        assert!(InstanceLock::acquire(&path).is_ok());
+    }
 
     #[test]
     fn state_round_trips_and_a_bad_file_means_defaults() {
