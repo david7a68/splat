@@ -5701,9 +5701,6 @@ mod tests {
         )
         .unwrap();
         participant.conditions.push("Blessed".into());
-        participant.concentration = true;
-        // This is a live row; initiative was entered before combat began.
-        participant.initiative = Some(14);
         let ctx = egui::Context::default();
         crate::design::theme::install(&ctx);
         let _ = ctx.run(egui::RawInput::default(), |ctx| {
@@ -5729,12 +5726,31 @@ mod tests {
                                 scale.row
                             );
                             assert_eq!(layout.second_left, layout.name_left);
-                            if width >= 560.0 && scale.row <= design::RUN_REGULAR.row {
-                                assert_eq!(detail.rows.len(), 1, "{}", detail.text());
-                            }
                         }
                     }
                 }
+                // F1: a changed live creature with concentration and one condition,
+                // at the 1200x800 roster width beside its stat block.
+                let mut live = participant.clone();
+                live.side = "enemies".into();
+                live.concentration = true;
+                live.initiative = Some(14);
+                let layout = RowLayout::new(
+                    ui,
+                    596.0,
+                    &live,
+                    None,
+                    design::RUN_REGULAR,
+                    RowFit::Natural,
+                    0.0,
+                );
+                let detail = layout.second_line.as_ref().unwrap();
+                assert!(
+                    detail.text().contains("Conc")
+                        && detail.text().contains("Blessed")
+                        && detail.text().contains("Changed")
+                );
+                assert_eq!(detail.rows.len(), 1, "{}", detail.text());
             });
         });
     }
