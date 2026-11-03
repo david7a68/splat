@@ -741,6 +741,23 @@ impl Run {
                                 } else {
                                     notice.as_str()
                                 };
+                                let tone = if self.notice_summary.is_some() {
+                                    colors().result.warning
+                                } else {
+                                    colors().result.success
+                                };
+                                ui.label(
+                                    Type::Small
+                                        .rich(
+                                            ui,
+                                            if self.notice_summary.is_some() {
+                                                icons::WARN
+                                            } else {
+                                                icons::SUCCESS
+                                            },
+                                        )
+                                        .color(tone),
+                                );
                                 let text_room = ui.available_width() - design::L * 6.0 - design::S;
                                 let fitted = sheet_notice_words(
                                     ui,
@@ -760,13 +777,7 @@ impl Run {
                                         |ui| {
                                             ui.add(
                                                 egui::Label::new(
-                                                    Type::Small.rich(ui, shown).color(
-                                                        if self.notice_summary.is_some() {
-                                                            colors().result.warning
-                                                        } else {
-                                                            colors().result.success
-                                                        },
-                                                    ),
+                                                    Type::Small.rich(ui, shown).color(tone),
                                                 )
                                                 .wrap_mode(if self.notice_summary.is_some() {
                                                     egui::TextWrapMode::Extend
@@ -1576,20 +1587,7 @@ impl Run {
                 }
             }
             if self.state.phase == Phase::Setup {
-                let missing = count(&|i| {
-                    self.state.participants[i].present
-                        && self.state.participants[i].initiative.is_none()
-                });
-                let tied = count(&|i| self.setup_tie_directions(i).is_some());
-                if missing > 0 {
-                    text.push_str(&format!(
-                        ", {missing} {} initiative",
-                        if missing == 1 { "needs" } else { "need" }
-                    ));
-                }
-                if tied > 0 {
-                    text.push_str(&format!(", {}", design::count(tied, "tie", "ties")));
-                }
+                text.push_str(&self.setup_hidden_attention(rows));
             }
             Some(text)
         };
@@ -2973,7 +2971,7 @@ impl Run {
                 painter.galley(place, galley, c.accent);
             }
         }
-        let members = group.arrival_members();
+        let members = group.member_summary_wrapped();
         let added = self
             .state
             .participants
@@ -2982,23 +2980,29 @@ impl Run {
             .filter(|from| from.group_id == Some(group.id))
             .map(|from| from.round)
             .max();
-        let summary = if let Some(round) = added {
+        let mut status = if let Some(round) = added {
             if round == 0 {
-                format!("Added before combat · {members}")
+                "Added before combat".to_owned()
             } else {
-                format!("Added in round {round} · {members}")
+                format!("Added in round {round}")
             }
         } else if let Some(name) = group
             .encounter_name
             .as_ref()
             .filter(|_| group.encounter != self.source)
         {
-            format!("For {name} · {members}")
+            format!("For {name}")
         } else if group.encounter.is_some() && group.encounter != self.source {
-            format!("For a deleted encounter · {members}")
+            "For a deleted encounter".to_owned()
         } else {
-            members
+            String::new()
         };
+        if changed {
+            if !status.is_empty() {
+                status.push_str(" · ");
+            }
+            status.push_str("Changed");
+        }
         let mut add = false;
         ui.horizontal(|ui| {
             let controls = design::number_width(ui, "Total", &Type::Small.font(ui))
@@ -3011,6 +3015,7 @@ impl Run {
             ui.allocate_ui(vec2(width, Density::Read.control()), |ui| {
                 ui.set_min_width(width);
                 ui.set_max_width(width);
+                let summary = arrival_summary(ui, &status, &members, width);
                 ui.add(egui::Label::new(Type::Small.rich(ui, &summary).color(c.muted)).wrap());
             });
             let field = format!("Initiative total for {name}");
@@ -3369,6 +3374,7 @@ impl Run {
                     let values = view::RunValues {
                         armor_class: p.armor_class,
                         hp: p.max_hp,
+                        current_hp: p.hp,
                         initiative: p.initiative_bonus,
                         speed: p.changes.as_ref().and_then(|changes| {
                             changes
@@ -4295,27 +4301,47 @@ impl Run {
 
     /// How many the DM must order, when Notes hide the panel that says so.
     pub(super) fn tied_count(&self) -> usize {
-        if self.initiative.roster_ties {
-            return 0;
-        }
-        self.state
-            .participants
-            .iter()
-            .enumerate()
-            .filter(|(index, p)| {
-                p.initiative.is_some()
-                    && self
-                        .state
-                        .participants
-                        .iter()
-                        .enumerate()
-                        .any(|(other, q)| {
-                            *index != other
-                                && p.initiative == q.initiative
-                                && !self.shared_initiative(*index, other)
-                        })
-            })
+        (0..self.state.participants.len())
+            .filter(|&index| self.setup_tied(index))
             .count()
+    }
+
+    fn setup_tied(&self, index: usize) -> bool {
+        let p = &self.state.participants[index];
+        !self.initiative.roster_ties
+            && p.initiative.is_some()
+            && self
+                .state
+                .participants
+                .iter()
+                .enumerate()
+                .any(|(other, q)| {
+                    index != other
+                        && p.initiative == q.initiative
+                        && !self.shared_initiative(index, other)
+                })
+    }
+
+    fn setup_hidden_attention(&self, rows: &[usize]) -> String {
+        let missing = rows
+            .iter()
+            .filter(|&&i| {
+                self.state.participants[i].present
+                    && self.state.participants[i].initiative.is_none()
+            })
+            .count();
+        let tied = rows.iter().filter(|&&i| self.setup_tied(i)).count();
+        let mut words = String::new();
+        if missing > 0 {
+            words.push_str(&format!(
+                ", {missing} {} initiative",
+                if missing == 1 { "needs" } else { "need" }
+            ));
+        }
+        if tied > 0 {
+            words.push_str(&format!(", {}", design::count(tied, "tied", "tied")));
+        }
+        words
     }
 
     fn shared_initiative(&self, a: usize, b: usize) -> bool {
@@ -4619,7 +4645,40 @@ fn changes_block(ui: &mut egui::Ui, p: &Participant, above_stat_block: bool) {
         })
         .filter(|row| !p.npc_identity() || row.label != "Name")
         .collect();
-    change_rows(ui, &rows);
+    if above_stat_block {
+        let by_hand = rows
+            .iter()
+            .filter(|row| row.by_hand)
+            .map(|row| {
+                let value = row.changed.split(" on each").next().unwrap_or(&row.changed);
+                let value = value.split(" (").next().unwrap_or(value);
+                format!(
+                    "{} {value}",
+                    row.label.trim_end_matches(" bonus").to_lowercase()
+                )
+            })
+            .collect::<Vec<_>>();
+        if !by_hand.is_empty() {
+            ui.add(
+                egui::Label::new(
+                    Type::Body
+                        .rich(ui, format!("Add by hand: {}", by_hand.join(", ")))
+                        .color(c.participant.changed),
+                )
+                .wrap(),
+            );
+        }
+        change_rows(
+            ui,
+            &rows
+                .iter()
+                .filter(|row| !row.by_hand)
+                .cloned()
+                .collect::<Vec<_>>(),
+        );
+    } else {
+        change_rows(ui, &rows);
+    }
     let note = (!above_stat_block && rows.iter().any(|row| row.by_hand)).then_some(BY_HAND);
     if let Some(note) = note {
         ui.add(egui::Label::new(Type::Small.rich(ui, note).color(c.muted)).wrap());
@@ -4691,6 +4750,18 @@ pub(crate) fn change_preview(row: &Row) -> String {
         numbers(&row.changed),
         if row.by_hand { " · add by hand" } else { "" }
     )
+}
+
+fn arrival_summary(ui: &egui::Ui, status: &str, members: &str, width: f32) -> String {
+    if status.is_empty() {
+        return members.to_owned();
+    }
+    let summary = format!("{status}\u{a0}·\u{a0}{members}");
+    if design::number_width(ui, &summary, &Type::Small.font(ui)) <= width {
+        summary
+    } else {
+        format!("{}\n{members}", status.replace(" · ", "\u{a0}·\u{a0}"))
+    }
 }
 
 fn ordinal(place: usize) -> String {
@@ -5704,6 +5775,62 @@ mod tests {
     use super::*;
     use serde_yaml_ng::Mapping;
     use splat::content::{Entry, overrides::Overrides};
+
+    #[test]
+    fn arrival_status_wraps_without_a_trailing_separator() {
+        let ctx = egui::Context::default();
+        design::theme::install(&ctx);
+        let _ = ctx.run(egui::RawInput::default(), |ctx| {
+            egui::CentralPanel::default().show(ctx, |ui| {
+                for width in [100.0, 180.0, 400.0] {
+                    for status in [
+                        "Changed",
+                        "Added in round 2 · Changed",
+                        "Added before combat",
+                    ] {
+                        let summary = arrival_summary(ui, status, "2 × Wolf, Captain Varra", width);
+                        let galley = ui.painter().layout(
+                            summary,
+                            Type::Small.font(ui),
+                            colors().muted,
+                            width,
+                        );
+                        for row in &galley.rows {
+                            assert_ne!(row.glyphs.last().map(|glyph| glyph.chr), Some('·'));
+                            assert!(row.size.x <= width + 1.0);
+                        }
+                        if width == 400.0 {
+                            assert_eq!(galley.rows.len(), 1);
+                        }
+                    }
+                }
+            });
+        });
+    }
+
+    #[test]
+    fn hidden_shared_roll_of_three_has_no_tie_warning() {
+        let mut run = super::super::tests::run();
+        for p in &mut run.state.participants[..3] {
+            p.initiative = Some(17);
+            p.shared_roll = Some("goblins".into());
+        }
+        assert_eq!(run.tied_count(), 0);
+        assert_eq!(run.setup_hidden_attention(&[0, 1, 2]), "");
+        assert!(run.setup_tie_directions(1).is_some());
+    }
+
+    #[test]
+    fn hidden_independent_equal_rolls_say_two_tied() {
+        let mut run = super::super::tests::run();
+        run.state.participants[0].initiative = Some(17);
+        run.state.participants[1].initiative = Some(17);
+        run.state.participants[2].initiative = Some(12);
+        assert_eq!(run.tied_count(), 2);
+        assert_eq!(run.setup_hidden_attention(&[0, 1]), ", 2 tied");
+        run.initiative.roster_ties = true;
+        assert_eq!(run.setup_hidden_attention(&[0, 1]), "");
+    }
 
     #[test]
     fn saving_wait_and_save_failure_have_distinct_statuses() {

@@ -1173,6 +1173,11 @@ pub mod encounter_run {
             d.row_node(TARGET).is_some_and(|row| row.fully_in_view())
         });
         d.state("hp-changed", Sizes::All);
+        d.observe_both(
+            "iter-12-F2",
+            "The run card shows current and maximum HP after damage",
+            |d| d.visible_text("26 / 33"),
+        );
         d.goal_within("T1.2", "damage a named participant who is not current", 3);
 
         d.click_row(TARGET);
@@ -1369,7 +1374,21 @@ pub mod settings {
             match state {
                 Account::Busy => d.state("account-connecting", Sizes::Default),
                 Account::Connected => d.state("account-connected", Sizes::Default),
-                Account::KeyringWarning => d.state("account-keyring-warning", Sizes::Default),
+                Account::KeyringWarning => {
+                    d.state("account-keyring-warning", Sizes::Default);
+                    d.observe_both(
+                        "iter-12-U3",
+                        "The rail paints the full keyring warning",
+                        |d| {
+                            d.nodes().iter().any(|node| {
+                                node.name.contains("Connected · not remembered")
+                                    && node.rect.left() < 100.0
+                                    && node.fully_in_view()
+                                    && d.painted_in(node.rect).contains("not remembered")
+                            })
+                        },
+                    );
+                }
                 Account::NotConnected | Account::Failed | Account::RefreshFailing => {}
             }
         }
@@ -1408,6 +1427,25 @@ pub mod settings {
             d.row_of("Campaign name");
             d.wait_for_text("CAMPAIGN NAME");
             assert_eq!(d.field_text("Campaign name").as_deref(), Some("Salt Road"));
+            for _ in 0..4 {
+                if d.nodes()
+                    .iter()
+                    .any(|node| node.name == "Add campaign" && node.fully_in_view())
+                {
+                    break;
+                }
+                let folder = d.row_of("Folder");
+                d.scroll_at(folder.center(), 1);
+            }
+            let controls = d.nodes();
+            let cancel = controls.iter().find(|node| node.name == "Cancel").unwrap();
+            let add = controls
+                .iter()
+                .find(|node| node.name == "Add campaign")
+                .unwrap();
+            assert!(cancel.rect.right() < add.rect.left());
+            assert!((cancel.rect.center().y - add.rect.center().y).abs() <= 1.0);
+            assert!(cancel.fully_in_view() && add.fully_in_view());
         });
         d.click(CANCEL);
         d.app_mut().settings.simulate(Account::NotConnected);
@@ -3804,7 +3842,7 @@ pub mod signed_in {
     const SYNC_ON: &str = "Combat sync · On";
     const SYNC_OFF: &str = "Combat sync · Off";
     const RAIL_STOPPED: &str = "Sync stopped";
-    const SYNC_TOGGLE: &str = "Sync party with D&D Beyond";
+    const SYNC_TOGGLE: &str = "Sync this sheet with D&D Beyond";
     const STOPPED: &str = "Combat sync stopped";
     const FIRST_READ: &str = "First read";
     const SYNC_PARTY: &str = "Sync party";
@@ -3965,6 +4003,15 @@ pub mod signed_in {
             "Sign in again opens Settings with the cookie field focused",
         );
         d.state("sign-in-from-run", Sizes::Default);
+        d.observe_both(
+            "iter-12-R4",
+            "Sign-in recovery shows the cookie field without unexplained locked actions",
+            |d| {
+                d.in_view("Paste session cookie")
+                    && (!d.in_view("Edit details")
+                        || d.in_view("Close the run to change campaigns."))
+            },
+        );
         d.scroll_up_at(pos2(800.0, 250.0), 8);
         d.expect("Close the run to change campaigns.");
         d.expect_same("At 1200x800 the campaign lock reason already fits. Scrolling changes only the 960x640 view.");
@@ -4494,7 +4541,7 @@ pub mod session_notes {
             d.has_containing("Short rest added to Session 1."),
             "An event added here says so, in words",
         );
-        d.click("Undo");
+        d.click("Undo add");
         d.observe(
             "T11.2",
             !d.has("Short rest") && d.has_containing("Removed"),
@@ -4756,7 +4803,7 @@ pub mod session_notes {
         d.click("Undo delete");
         d.expect("Downtime");
 
-        d.click("← Sessions");
+        d.click("Sessions");
         d.click("Campaign");
         d.click("Link and folder");
         d.expect("SESSION FOLDER");
@@ -5364,7 +5411,16 @@ pub mod session_recording {
         d.click_containing("Recording silence ·");
         d.expect("Silent for over a minute");
         d.expect("Check the input in Settings");
-        d.state("recording-silent", Sizes::Default);
+        d.state("recording-silent", Sizes::All);
+        d.observe_both(
+            "iter-12-R2",
+            "The silent row owns its detail and stop action",
+            |d| {
+                d.visible_text("Silent for over a minute · 0:00 recorded")
+                    && d.in_view("Stop recording")
+                    && d.in_view("Check the input in Settings")
+            },
+        );
         d.app_mut()
             .sessions
             .simulate_recorder_health(Health::Stalled);
@@ -5431,7 +5487,7 @@ pub mod session_recording {
             "Process states what is missing before it can run",
         );
         d.click("Save an OpenAI key in Settings");
-        d.expect("Speech service");
+        d.expect("SPEECH SERVICE");
         d.state("processing-settings", Sizes::All);
         d.observe(
             "T11.6",
@@ -5524,6 +5580,11 @@ pub mod session_recording {
             "A new processing pass hides the old cancellation reason",
         );
         d.state("processing-second-pass", Sizes::Default);
+        d.observe(
+            "iter-12-R1",
+            !d.has_containing("Processing audio") && d.visible_text("Processing"),
+            "LLM work says Processing",
+        );
         d.app_mut().sessions.simulate_job_end(Err(
             "The LLM is busy, or your limit is reached. Wait, then select Continue processing."
                 .to_owned(),
@@ -6014,11 +6075,13 @@ pub mod encounter_groups {
         d.click(&add_group(GROUP_GOBLINS));
         d.expect(FIRST_GOBLIN);
         d.state("group-added-in-setup", Sizes::Default);
-        let overflow = d.at_size((960.0, 640.0), |d| d.visible_text("2 below, 2 ties"));
+        let overflow = d.at_size((960.0, 640.0), |d| {
+            d.visible_text("2 below") && !d.has_containing("2 ties") && !d.has_containing("2 tied")
+        });
         d.observe(
             "iter-11-F3",
             overflow,
-            "Setup names rows below the visible list at 960x640",
+            "Setup names hidden shared-roll rows without a false tie warning at 960x640",
         );
         d.goal("add a group during setup");
         d.click("Edit group");
@@ -6348,6 +6411,11 @@ pub mod run_overrides {
         d.expect(&format!("{RUN_HEADING}{RUN_ARENA}"));
         d.click_row(RIVAL);
         d.state("overridden-participant", Sizes::AllAndHiDpi);
+        d.observe_both(
+            "iter-12-F3",
+            "The run card keeps hand changes in one compact summary",
+            |d| d.visible_text("Add by hand: attack +1, damage +1, speed 40 ft"),
+        );
         // A number stays with its word on the row, by a space that does not wrap.
         let row = d.row_words(RIVAL).replace('\u{a0}', " ");
         d.observe(
@@ -6362,9 +6430,9 @@ pub mod run_overrides {
             "T13.3",
             !d.has_containing(BASE_AND_CHANGED)
                 && d.visible_text("printed 33")
-                && d.has_containing("Attack bonus: As printed → +1 on each attack")
+                && d.visible_text("Add by hand: attack +1, damage +1, speed 40 ft")
+                && d.visible_text("Attack +1, Damage +1 · add by hand")
                 && d.has_containing("add by hand")
-                && d.has_containing("Speed: 30 ft → 40 ft")
                 && d.visible_text("Speed 30 ft → 40 ft · add by hand")
                 && d.has_containing("Changed"),
             "The card shows the base and changed values, and says what to add by hand",
@@ -6966,10 +7034,10 @@ pub mod session_plan {
         d.click("Add Long rest");
         d.observe(
             "S4",
-            d.has("Undo") && !d.has("Undo everyone to full"),
+            d.has("Undo add") && !d.has("Undo everyone to full"),
             "The long rest has one Undo",
         );
-        d.click("Undo");
+        d.click("Undo add");
         d.observe(
             "S4",
             !d.has("Everyone at full"),

@@ -181,18 +181,6 @@ impl RunGroup {
             .join(", ")
     }
 
-    pub(crate) fn arrival_members(&self) -> String {
-        let members = self.member_summary_wrapped();
-        if self
-            .members
-            .iter()
-            .any(|member| !member.overrides.is_empty())
-        {
-            format!("Changed\u{a0}·\u{a0}{members}")
-        } else {
-            members
-        }
-    }
     /// Every creature the note names, whether or not it can be found now.
     pub(crate) fn creature_count(&self) -> u64 {
         self.members
@@ -5773,17 +5761,13 @@ mod tests {
         Entry::parse("beast.md", &format!("---\nsplat_schema: 1\nsplat_id: {}\nsplat_kind: creature\nsplat_name: Beast\nsplat_creature: {{type: beast}}\nsplat_stats:\n  max_hp: {{value: 40}}\n  armor_class: {{value: 12}}\n  initiative: {{value: -1}}\n  speed: {{value: 40}}\n---\n", Uuid::new_v4())).unwrap()
     }
     #[test]
-    fn group_summary_counts_members_and_changed_stays_with_first_member() {
+    fn group_summary_counts_members_and_changes() {
         let group = group_of(
             "Wave",
             "rivals",
             vec![(beast(), 3, changed("armor_class: {add: 1}"))],
         );
         assert_eq!(group.summary(), "3 members · Rivals · XP 0 · Changed");
-        assert_eq!(
-            group.arrival_members(),
-            "Changed\u{a0}·\u{a0}3\u{a0}×\u{a0}Beast"
-        );
     }
 
     #[test]
