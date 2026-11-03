@@ -43,64 +43,65 @@ pub(super) fn menu_action(ui: &mut egui::Ui, word: &str, blocked: Option<&str>) 
 /// The same named side picker serves roster slots and groups. Other opens a text field.
 pub(super) fn side_control(ui: &mut egui::Ui, name: &str, side: &mut String, choices: &[String]) {
     let id = ui.make_persistent_id((name, "other_side"));
+    let custom = !matches!(side.as_str(), "party" | "enemies")
+        && !choices.iter().any(|choice| choice == side);
     let mut other = ui.data(|data| data.get_temp::<bool>(id)).unwrap_or(false);
-    let custom = !matches!(side.as_str(), "party" | "enemies");
-    ui.allocate_ui_with_layout(
-        egui::vec2(design::S * 13.0, Density::Read.control()),
-        egui::Layout::top_down(egui::Align::LEFT),
-        |ui| {
-            let combo = egui::ComboBox::from_id_salt(name)
-                .icon(design::combo_icon)
-                .width(design::S * 13.0)
-                .selected_text(if other {
-                    "Other…".to_owned()
-                } else {
-                    design::reader::human_label(side)
-                })
-                .show_ui(ui, |ui| {
-                    for choice in ["party", "enemies"].into_iter().chain(
-                        choices
-                            .iter()
-                            .map(String::as_str)
-                            .filter(|c| !matches!(*c, "party" | "enemies")),
-                    ) {
-                        if ui
-                            .selectable_label(
-                                side == choice && !other,
-                                design::reader::human_label(choice),
-                            )
-                            .clicked()
-                        {
-                            *side = choice.to_owned();
-                            other = false;
-                        }
-                    }
-                    if ui.selectable_label(other, "Other…").clicked() {
-                        other = true;
-                    }
-                });
-            design::named(ui, &combo.response, name);
-            if other || custom {
-                let mut text = if custom {
-                    design::reader::human_label(side)
-                } else {
-                    String::new()
-                };
-                if design::text_input(
-                    ui,
-                    &format!("Other side for {name}"),
-                    &mut text,
-                    "Side name",
-                    design::S * 13.0,
-                )
-                .changed()
-                    && !text.trim().is_empty()
-                {
-                    *side = text.trim().to_lowercase();
-                }
+    ui.horizontal(|ui| {
+        if other {
+            let mut text = if custom {
+                design::reader::human_label(side)
+            } else {
+                String::new()
+            };
+            if design::text_input(
+                ui,
+                &format!("Other side for {name}"),
+                &mut text,
+                "Side name",
+                design::S * 10.0,
+            )
+            .changed()
+                && !text.trim().is_empty()
+            {
+                *side = text.trim().to_lowercase();
             }
-        },
-    );
+        }
+        let combo = egui::ComboBox::from_id_salt(name)
+            .icon(design::combo_icon)
+            .width(if other {
+                Density::Read.control()
+            } else {
+                design::S * 13.0
+            })
+            .selected_text(if other {
+                String::new()
+            } else {
+                design::reader::human_label(side)
+            })
+            .show_ui(ui, |ui| {
+                for choice in ["party", "enemies"].into_iter().chain(
+                    choices
+                        .iter()
+                        .map(String::as_str)
+                        .filter(|choice| !matches!(*choice, "party" | "enemies")),
+                ) {
+                    if ui
+                        .selectable_label(
+                            side == choice && !other,
+                            design::reader::human_label(choice),
+                        )
+                        .clicked()
+                    {
+                        *side = choice.to_owned();
+                        other = false;
+                    }
+                }
+                if ui.selectable_label(other, "Other…").clicked() {
+                    other = true;
+                }
+            });
+        design::named(ui, &combo.response, name);
+    });
     ui.data_mut(|data| data.insert_temp(id, other));
 }
 
@@ -116,14 +117,18 @@ fn section(
     open: Option<bool>,
     add: impl FnOnce(&mut egui::Ui),
 ) {
-    egui::CollapsingHeader::new(design::group_heading_text(ui, word, count))
-        .id_salt(id)
-        .icon(design::section_icon)
-        .open(open)
-        .show(ui, add);
+    if open.is_none() {
+        design::section_with_id(ui, id, design::group_heading_text(ui, word, count), add);
+    } else {
+        egui::CollapsingHeader::new(design::group_heading_text(ui, word, count))
+            .id_salt(id)
+            .icon(design::section_icon)
+            .open(open)
+            .show(ui, add);
+    }
 }
 
-fn list_row(
+pub(super) fn list_row(
     ui: &mut egui::Ui,
     id: impl std::hash::Hash,
     name: &str,
@@ -167,11 +172,19 @@ fn list_row(
     });
 }
 
-fn round(run: &SavedRunInfo) -> &str {
-    run.label
+/// Project saved rows through the same state words as the run.
+pub(crate) fn run_state_word(run: &SavedRunInfo, paused: bool) -> String {
+    let round = run
+        .label
         .split(" · ")
-        .find(|part| part.starts_with("Round "))
-        .unwrap_or("Setup")
+        .find_map(|part| part.strip_prefix("Round "))
+        .and_then(|part| part.parse::<u64>().ok())
+        .unwrap_or(0);
+    crate::encounter_run::state_words(
+        round,
+        paused,
+        run.standing == crate::encounter_run::Standing::Ended,
+    )
 }
 
 fn row_menu_for_run(
@@ -220,8 +233,16 @@ pub(super) fn in_progress_list(
     for (index, run) in page.in_progress.iter().enumerate() {
         let open = live.is_some_and(|live| live.id == run.id);
         let template = history::template_of(run, templates);
-        let detail = run.label.clone();
-        list_row(ui, &run.path, &run.encounter, &detail, true, |ui| {
+        let detail = if open {
+            run.label
+                .strip_prefix(&run_state_word(run, false))
+                .unwrap_or(&run.label)
+                .trim_start_matches(" · ")
+                .to_owned()
+        } else {
+            run.label.clone()
+        };
+        list_row(ui, &run.path, &run.encounter, &detail, !open, |ui| {
             row_menu_for_run(ui, run, template, open, blocked, loading, action);
             let edit_width = design::number_width(ui, "Edit", &Type::Strong.font(ui)) + design::L;
             ui.allocate_ui_with_layout(
@@ -240,7 +261,7 @@ pub(super) fn in_progress_list(
                 },
             );
             if open {
-                let word = format!("Running · {}", round(run));
+                let word = run_state_word(run, false);
                 if design::status_link(
                     ui,
                     Status {
@@ -269,9 +290,6 @@ pub(super) fn in_progress_list(
                 }
             }
         });
-        if !open {
-            blocked_reason(ui, blocked);
-        }
     }
     ui.add_space(design::L);
 }
@@ -284,12 +302,15 @@ pub(super) fn ready_list(
     action: &mut Option<ListAction>,
 ) {
     heading(ui, "READY TO RUN", page.ready.len());
+    blocked_reason(ui, blocked);
     if page.ready.is_empty() {
         blocked_reason(ui, Some("None ready. Select New encounter."));
     }
     for (index, row) in page.ready.iter().enumerate() {
         let template = row.template;
-        let start_blocked = if row.unfinished_run {
+        let start_blocked = if template.summary.as_deref().is_none_or(str::is_empty) {
+            Some("Add participants first")
+        } else if row.unfinished_run {
             Some("This encounter has an unfinished run. Resume it in In progress.")
         } else {
             blocked
@@ -327,9 +348,14 @@ pub(super) fn ready_list(
                 {
                     *action = Some(ListAction::Run(template.path.clone()));
                 }
+                if start_blocked == Some("Add participants first") {
+                    blocked_reason(ui, start_blocked);
+                }
             },
         );
-        blocked_reason(ui, start_blocked);
+        if start_blocked != blocked && start_blocked != Some("Add participants first") {
+            blocked_reason(ui, start_blocked);
+        }
     }
 }
 
@@ -350,9 +376,7 @@ pub(super) fn group_list(
             snapshot.groups.len(),
             None,
             |ui| {
-                if let Some(path) = groups::list(ui, snapshot, blocked) {
-                    *action = Some(ListAction::OpenGroup(path));
-                }
+                groups::list(ui, snapshot, blocked, action);
             },
         );
     }
@@ -389,7 +413,7 @@ pub(super) fn history_list(
                         .unwrap_or_else(|| "Date unknown".to_owned());
                     let detail = format!(
                         "{} · {date}{}",
-                        run.label,
+                        run_state_word(run, false),
                         if past.template.is_none() {
                             " · Encounter deleted"
                         } else {
@@ -406,28 +430,22 @@ pub(super) fn history_list(
                             ) {
                                 *action = Some(ListAction::Delete(run.path.clone()));
                             }
+                            if let Some(template) = past.template {
+                                let start_blocked = blocked.or(template
+                                    .summary
+                                    .as_deref()
+                                    .is_none_or(str::is_empty)
+                                    .then_some("Add participants first"));
+                                if menu_action(ui, START_FIGHT, start_blocked) {
+                                    *action = Some(ListAction::Run(template.path.clone()));
+                                }
+                                if menu_action(ui, "Edit", None) {
+                                    *action = Some(ListAction::Edit(template.path.clone()));
+                                }
+                            }
                         });
-                        if let Some(template) = past.template {
-                            if Action::quiet("Edit")
-                                .density(Density::Read)
-                                .name(&format!("Edit {}", run.encounter))
-                                .show(ui)
-                                .clicked()
-                            {
-                                *action = Some(ListAction::Edit(template.path.clone()));
-                            }
-                            if Action::secondary(START_FIGHT)
-                                .density(Density::Read)
-                                .name(&format!("Start fight: {}", run.encounter))
-                                .blocked(blocked)
-                                .show(ui)
-                                .clicked()
-                            {
-                                *action = Some(ListAction::Run(template.path.clone()));
-                            }
-                        }
                         let opened = read.is_some_and(|(path, _)| *path == run.path);
-                        if Action::quiet(if opened { "Close history" } else { "Open" })
+                        if Action::quiet(if opened { "Close" } else { "Open" })
                             .density(Density::Read)
                             .name(&format!(
                                 "{} the run of {}, {}",

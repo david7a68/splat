@@ -3164,13 +3164,14 @@ impl Run {
                     if blocked.is_none() || tied > 0 {
                         let text = if tied > 0 {
                             format!(
-                                "{} {}{tied} tied",
+                                "{} {}{}",
                                 icons::WARN,
                                 if blocked.is_none() {
                                     "Everyone is ready · "
                                 } else {
                                     ""
-                                }
+                                },
+                                design::count(tied, "tied", "tied")
                             )
                         } else {
                             "Everyone is ready.".to_owned()
@@ -4179,7 +4180,7 @@ impl RowLayout {
             condition_spans.push((
                 "Run conditions".into(),
                 add(
-                    &format!("{} more", p.conditions.len() - 2),
+                    &design::count(p.conditions.len() - 2, "more", "more"),
                     c.participant.condition,
                 ),
             ));

@@ -11,6 +11,11 @@ const DEFAULT_TOLERANCE: u8 = 2;
 
 /// How many pixels differ by more than the tolerance in any channel, and the largest gap.
 pub fn differing_pixels(a: &RgbaImage, b: &RgbaImage, tolerance: u8) -> (usize, u8) {
+    // Image equality uses a bulk byte comparison. Most captures are identical;
+    // retain the per-channel tolerance check for every image that is not.
+    if a == b {
+        return (0, 0);
+    }
     let mut count = 0;
     let mut largest = 0;
     for (left, right) in a.pixels().zip(b.pixels()) {

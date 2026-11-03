@@ -153,13 +153,19 @@ impl RunGroup {
                     .overrides
                     .resolve(&base)
                     .map_or(base.name, |resolved| resolved.name);
-                format!("{} × {name}", grouped_number(member.count))
+                format!(
+                    "{} × {name}",
+                    crate::design::count(member.count as usize, "", "").trim()
+                )
             })
             .collect();
         for (position, count, name) in &self.unavailable_members {
             members.insert(
                 (*position).min(members.len()),
-                format!("{} × {name}", grouped_number(count)),
+                format!(
+                    "{} × {name}",
+                    crate::design::count(*count as usize, "", "").trim()
+                ),
             );
         }
         members.join(", ")

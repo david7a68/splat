@@ -664,6 +664,11 @@ pub mod party {
 
         switch_campaign(d, QUIET_CAMPAIGN);
         d.expect(NO_CHARACTERS);
+        d.observe(
+            "P20",
+            !d.has("Connect to refresh") && d.has("Open Settings"),
+            "An empty Party has one Open Settings action",
+        );
         d.state("no-characters-signed-out", Sizes::All);
         d.goal("see a linked campaign with no characters");
 
@@ -687,6 +692,11 @@ pub mod party {
             "Force read needs a session",
             !d.has(FORCE_READ) && std::fs::read_to_string(&note).is_ok_and(|t| t == EDITED_NOTE),
             "Signed out, the warning says to connect, and the edited note stays",
+        );
+        d.observe(
+            "P18",
+            d.has_containing("Local edits"),
+            "The affected party row marks its local edits",
         );
         d.state("copy-has-local-edits-signed-out", Sizes::Default);
 
@@ -730,7 +740,7 @@ pub mod party {
     }
     const FORCE_READ: &str = "Replace with D&D Beyond sheet";
     const CONNECT_FIRST: &str = "Open Settings";
-    const REPLACED: &str = "D&D Beyond sheets replaced local edits";
+    const REPLACED: &str = "sheet now matches D&D Beyond. Your edited version is kept.";
     const DISMISS: &str = "Dismiss";
     const EDITED_NOTE: &str = "My own words";
 }
@@ -905,6 +915,11 @@ pub mod encounter_build {
         d.expect(SAVED_ENCOUNTER);
         open_saved_encounter(d, SAVED_ENCOUNTER);
         d.expect(SAVED_FIRST_SLOT);
+        d.observe(
+            "P1",
+            d.has(RESUME) && !d.has(RUN_ENCOUNTER) && d.has_containing("Round 2 · Paused"),
+            "The editor offers Resume for its paused run and shows its state",
+        );
         d.state("saved-roster", Sizes::All);
         d.goal("open a saved encounter");
         d.begin_task();
@@ -931,6 +946,14 @@ pub mod encounter_build {
         );
         d.click(SYNC_OPTION);
         d.expect(PARTY_NOW);
+        d.click(RESUME);
+        d.expect(&format!("{RUN_HEADING}Bridge Ambush"));
+        d.observe(
+            "P1",
+            d.has_containing("Bridge Ambush · Round 2") && !d.has("Begin combat"),
+            "Resume from the editor opens the paused second round",
+        );
+        d.state("resumed-from-editor", Sizes::All);
     }
 }
 
@@ -1362,7 +1385,7 @@ pub mod empty {
         d.state("party-without-link", Sizes::Default);
         d.observe(
             "Party next step",
-            d.has("Connect D&D Beyond") && !d.has("Link this campaign"),
+            d.has("Open Settings") && !d.has("Link this campaign"),
             "With no session, the next step is to connect, because linking needs one",
         );
         d.goal("see the other empty tabs");
@@ -2444,6 +2467,11 @@ pub mod library_to_encounter {
         d.begin_task();
 
         d.click(SAVE_ENCOUNTER);
+        d.observe(
+            "C17",
+            d.has_containing("CR 10 · HP 150 · AC 17 · Campaign"),
+            "The roster identifies the campaign-owned copy",
+        );
         d.state("copy-in-encounter", Sizes::All);
         d.goal("save the encounter with the copy");
     }
@@ -4997,8 +5025,9 @@ pub mod encounter_groups {
         d.state("group-editor", Sizes::All);
         d.observe(
             "T13.3",
-            d.has_containing("Maximum HP: 33 → 43 (+10)") && d.has_containing("Changed"),
-            "The group editor shows each change with its base value, marked as changed",
+            d.has_containing("Changed · 3 to add by hand")
+                && !d.has_containing("Maximum HP: 33 → 43 (+10)"),
+            "Member changes stay in one summary until their editor opens",
         );
         d.click(CHANGES);
         d.expect("Maximum HP: how it changes");
@@ -5046,6 +5075,21 @@ pub mod encounter_groups {
         d.goal("make an encounter group");
         d.click("Back to encounters");
         d.expect("GROUPS");
+
+        // Removal and recovery are their own task, outside the build and arrival costs.
+        d.begin_task();
+        d.click(&format!("More actions for {GROUP_GOBLINS}"));
+        d.click("Remove…");
+        d.expect("Undo remove group");
+        d.state("group-removed", Sizes::Default);
+        d.observe(
+            "F15",
+            !d.has(&format!("Edit group {GROUP_GOBLINS}")),
+            "Remove drops the saved group and offers Undo",
+        );
+        d.click("Undo remove group");
+        d.expect(&format!("Edit group {GROUP_GOBLINS}"));
+        d.begin_task();
 
         // At the table: the panel, with members and XP.
         resume_run(d, RUN);
@@ -5274,7 +5318,7 @@ pub mod encounter_history {
                 == 2
                 && nodes
                     .iter()
-                    .filter(|node| node.name == "Running · Round 2" && node.is_link())
+                    .filter(|node| node.name == "Round 2" && node.is_link())
                     .count()
                     == 1
                 && !d.has(RESUME)
@@ -5304,7 +5348,6 @@ pub mod encounter_owned_groups {
     const BELONGS_DROPDOWN: usize = 2;
     const NEW_FOR_ENCOUNTER: &str = "New group for this encounter";
     const NEW_NAME: &str = "Ash Hounds";
-    const FOR_ENCOUNTERS: &str = "Groups for encounters";
     const SAVE_ENCOUNTER: &str = "Save encounter";
 
     fn edit_group(name: &str) -> String {
@@ -5321,12 +5364,11 @@ pub mod encounter_owned_groups {
             "T13.5",
             d.has(&edit_group(GROUP_GOBLINS))
                 && d.has(&edit_group(GROUP_ORPHAN))
-                && !d.has(&edit_group(GROUP_SHRINE))
-                && !d.has(&edit_group(GROUP_ARENA))
-                && d.has_containing(&format!("{FOR_ENCOUNTERS} (2)")),
-            "An encounter's own groups stay closed. One whose encounter is gone stays in view",
+                && d.has(&edit_group(GROUP_SHRINE))
+                && d.has(&edit_group(GROUP_ARENA))
+                && d.has_containing("ENCOUNTER DELETED"),
+            "Groups opens one flat list, with headings for each encounter and deleted encounters last",
         );
-        d.click_starting(FOR_ENCOUNTERS);
         d.expect(&edit_group(GROUP_SHRINE));
         d.state("groups-for-encounters-open", Sizes::Default);
         d.observe(
@@ -5334,7 +5376,6 @@ pub mod encounter_owned_groups {
             d.has_containing("FOR SHRINE OF CINDERS") && d.has_containing("FOR ARENA FINAL"),
             "Opened, the section says who each group is for",
         );
-        d.click_starting(FOR_ENCOUNTERS);
 
         // A group whose encounter is gone says so in its editor.
         d.click(&edit_group(GROUP_ORPHAN));
@@ -5344,14 +5385,14 @@ pub mod encounter_owned_groups {
 
         // An encounter's editor has a section for each of its own, with what is in it.
         open_saved_encounter(d, SHRINE);
-        d.expect("Groups for this encounter (1)");
+        d.expect("GROUPS FOR THIS ENCOUNTER 1");
         d.state("encounter-with-its-groups", Sizes::All);
         d.check_tab_order("encounter editor, with its groups");
         d.observe(
             "T13.6",
             d.has(&format!("Group name: {GROUP_SHRINE}"))
                 && d.has_containing("Goblin Warrior")
-                && d.has_containing("2 creatures"),
+                && d.has_containing("2 creatures · XP"),
             "A section shows the group's name and its members",
         );
 
@@ -5363,17 +5404,17 @@ pub mod encounter_owned_groups {
             "T13.6",
             d.has(&format!("Add to: {NEW_NAME}"))
                 && d.has(&format!("Belongs to: {SHRINE}"))
-                && d.has_containing("No members yet. Add creatures from the list on the right."),
+                && d.has_containing("No members yet. Add creatures from the search."),
             "A new group belongs to this encounter, and takes what the search adds",
         );
         d.state("new-group-in-the-encounter", Sizes::All);
-        let roster_before = d.has_containing("Roster (7)");
+        let roster_before = d.has_containing("ROSTER 7");
         d.type_into(FIND_CREATURE, "wolf");
         d.click_beside_exact("Wolf", ADD);
         d.expect("1. Wolf");
         d.observe(
             "T13.6",
-            roster_before && d.has_containing("Roster (7)"),
+            roster_before && d.has_containing("ROSTER 7"),
             "What the search adds goes to the group, and the roster stays as it was",
         );
         d.observe(
@@ -5401,7 +5442,7 @@ pub mod encounter_owned_groups {
         d.begin_task();
         d.click("Back to encounters");
         d.expect("GROUPS");
-        d.expect(&format!("{FOR_ENCOUNTERS} (3)"));
+        d.expect("FOR SHRINE OF CINDERS 2");
 
         // A group can change hands, in its editor.
         d.click(&edit_group(GROUP_WATCH));
@@ -5525,6 +5566,8 @@ pub mod run_overrides {
         d.goal("read a changed creature's card in a run");
         close_run(d);
 
+        // Start the next intention on the ledger, after closing the fight just read.
+        d.begin_task();
         // The editor names the creature, and each change under it.
         open_saved_encounter(d, RUN_ARENA);
         d.expect(FIRST_SLOT);
@@ -5539,8 +5582,9 @@ pub mod run_overrides {
             "Opening a slot's overrides brings the form into view, however low the slot is",
         );
         d.state("slot-changes-open", Sizes::All);
-        // Start from the editor: the changed creature stays in view until setup opens.
-        d.click(RUN_ENCOUNTER);
+        // This encounter already has a paused run. Starting a second fight is explicit.
+        d.click(&format!("More actions for {RUN_ARENA}"));
+        d.click("Start another fight");
         d.expect(&format!("{RUN_HEADING}{RUN_ARENA}"));
         d.state("setup-with-a-changed-row", Sizes::Default);
         d.observe(
@@ -5658,7 +5702,7 @@ pub mod session_plan_groups {
         d.goal("assemble a group in the session's plan");
         d.observe(
             "T14.6",
-            d.has_containing("2 creatures") && !d.has("Back to the plan"),
+            d.has_containing("2\u{a0}creatures") && !d.has("Back to the plan"),
             "A group saved from the plan is linked in it, with what it holds",
         );
         go_library(d);
@@ -5676,6 +5720,19 @@ pub mod session_plan_groups {
         d.click(&format!("Plan {GROUP_RIVALS}"));
         d.expect(&format!("Edit group {GROUP_RIVALS}"));
         d.state("plan-with-groups", Sizes::Default);
+        d.begin_task();
+        d.click(&format!("More actions for {GROUP_RIVALS}"));
+        d.click(&format!("Remove group {GROUP_RIVALS} from the plan"));
+        d.expect("Undo remove from plan");
+        d.state("group-removed-from-plan", Sizes::Default);
+        d.observe(
+            "P17",
+            !d.has(&format!("Edit group {GROUP_RIVALS}")),
+            "The row menu removes a group from this plan",
+        );
+        d.click("Undo remove from plan");
+        d.expect(&format!("Edit group {GROUP_RIVALS}"));
+        d.begin_task();
 
         d.click(&format!("Edit group {GROUP_RIVALS}"));
         d.expect("Back to the plan");
@@ -6105,7 +6162,7 @@ pub mod session_plan {
             d.has(RESUME) && d.has_containing(HISTORY),
             "An interrupted run can be resumed, and ended runs are in the history",
         );
-        let delete = format!("{SECOND} · Setup");
+        let delete = format!("{SECOND} · Setup · Paused");
         let before = d.has_containing(&delete);
         delete_saved_run(d, SECOND);
         d.expect("Undo delete");
@@ -6138,7 +6195,7 @@ pub mod session_plan {
         );
         d.type_text("90");
         d.press_ctrl(Key::S);
-        d.expect("Add participants");
+        d.expect(FIND_CREATURE);
         d.goal_within("T12.0", "make a creature your own", 7);
         d.observe(
             "T12.0",

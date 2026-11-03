@@ -5,8 +5,8 @@
       "column-resize": 89,
       "dialogs": 45,
       "empty": 15,
-      "encounter-build": 49,
-      "encounter-groups": 72,
+      "encounter-build": 55,
+      "encounter-groups": 71,
       "encounter-history": 30,
       "encounter-owned-groups": 68,
       "encounter-run": 57,
@@ -37,7 +37,7 @@
       "run-sync-states": 19,
       "session-notes": 132,
       "session-plan": 122,
-      "session-plan-groups": 41,
+      "session-plan-groups": 43,
       "session-recording": 108,
       "settings": 27,
       "signed-in": 38,
@@ -65,8 +65,8 @@
       "column-resize": 89,
       "dialogs": 44,
       "empty": 15,
-      "encounter-build": 49,
-      "encounter-groups": 72,
+      "encounter-build": 55,
+      "encounter-groups": 71,
       "encounter-history": 30,
       "encounter-owned-groups": 67,
       "encounter-run": 56,
@@ -97,7 +97,7 @@
       "run-sync-states": 19,
       "session-notes": 132,
       "session-plan": 119,
-      "session-plan-groups": 41,
+      "session-plan-groups": 43,
       "session-recording": 104,
       "settings": 26,
       "signed-in": 38,
@@ -233,7 +233,7 @@
     },
     "run-overrides": {
       "read a changed creature's card in a run": 2,
-      "start a run with a changed creature": 5
+      "start a run with a changed creature": 4
     },
     "run-restart": {
       "be in a run": 3,
