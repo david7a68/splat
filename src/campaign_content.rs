@@ -7,7 +7,7 @@ use crate::{
     },
     design::{self, Action, Density, Tone, Type, colors, icons},
     library::{note_path, write_note},
-    persistence::Campaign,
+    persistence::{Campaign, Module},
 };
 use eframe::egui;
 use splat::character::campaign_package::{self, Move, Proposal};
@@ -63,6 +63,7 @@ pub struct CampaignContent {
     /// The DM's choice of list. Until they choose, a package opens on the list it needs.
     pub run_open: bool,
     pub open_lookup: Option<Uuid>,
+    pub found_package: Option<Module>,
     error: Option<String>,
     message: Option<String>,
     disabled_selections: std::collections::BTreeMap<Uuid, Selection>,
@@ -113,7 +114,7 @@ pub(crate) fn repair_problem(path: &str, text: &str) -> (Option<String>, Option<
             let thing = if *ch == '[' { "list" } else { "mapping" };
             return (
                 Some(format!(
-                    "line {line} opens a {thing} with `{ch}` that never closes"
+                    "line {line} opens a {thing} with {ch} that never closes"
                 )),
                 Some(*line),
             );
@@ -130,7 +131,33 @@ pub(crate) fn repair_problem(path: &str, text: &str) -> (Option<String>, Option<
     }
     (Some(problem), None)
 }
+/// A folder recovery must keep the selected package's identity.
+fn find_package_folder(reference: &EntryRef, folder: &std::path::Path) -> Result<Module, String> {
+    let module = crate::library::local_module(folder)?;
+    let matches = if let Some(id) = reference.id {
+        id == module.id
+    } else {
+        let catalogue = Catalogue::load(std::slice::from_ref(&module), None)?;
+        catalogue.resolve_ref(reference).ok() == Some(module.id)
+    };
+    if !matches {
+        return Err(
+            "Choose the folder for this package. That folder contains a different package.".into(),
+        );
+    }
+    Ok(module)
+}
+
 impl CampaignContent {
+    pub fn package_restored(&mut self, result: Result<(), String>) {
+        match result {
+            Ok(()) => {
+                self.refresh_pending = true;
+                self.error = None;
+            }
+            Err(error) => self.error = Some(error),
+        }
+    }
     #[cfg(test)]
     pub fn busy(&self) -> bool {
         self.pending.is_some()
@@ -262,8 +289,9 @@ impl CampaignContent {
             ctx.request_repaint();
         });
     }
-    pub fn refresh_destination(&mut self, root: &std::path::Path) {
-        if !self.dirty() && self.active.as_ref().is_some_and(|c| c.path == root) {
+    pub fn refresh_destination(&mut self, _root: &std::path::Path) {
+        // A package write can also save this campaign's selection (Use in this campaign).
+        if !self.dirty() && self.active.is_some() {
             self.refresh_pending = true;
         }
     }
@@ -501,32 +529,32 @@ impl CampaignContent {
         let mut repaired = false;
         for (path, baseline, draft) in &mut self.repairs {
             let (problem, error_line) = repair_problem(path, draft);
-            design::message(
+            let problem = problem
+                .as_deref()
+                .unwrap_or("The repair has not been saved");
+            let problem = problem.replace('[', "`[`").replace('{', "`{`");
+            design::message_with_code(
                 ui,
                 Tone::Error,
                 &format!(
                     "{path} cannot be read. Fix it here or in World. {}.",
-                    problem
-                        .as_deref()
-                        .unwrap_or("The repair has not been saved")
-                        .trim_end_matches('.')
+                    problem.trim_end_matches('.')
                 ),
             );
             let id = egui::Id::new(("repair_open", path.as_str()));
-            let mut open = ui.data(|data| data.get_temp::<bool>(id)).unwrap_or(true);
+            let mut open = ui.data(|data| data.get_temp::<bool>(id)).unwrap_or(false);
             if Action::quiet("Repair").show(ui).clicked() {
                 open = !open;
             }
             ui.data_mut(|data| data.insert_temp(id, open));
             if open {
+                design::group_heading(ui, &format!("Repair {path}"), 0);
                 ui.scope(|ui| {
                     ui.set_max_width(design::READER_MEASURE);
                     // What is wrong comes first, and stays true as the DM edits.
 
                     crate::world::repair::editor(ui, path, draft, error_line);
-                    if draft == baseline {
-                        ui.label(Type::Small.rich(ui, "No changes yet").color(colors().muted));
-                    }
+
                     ui.horizontal(|ui| {
                         if draft != baseline
                             && Action::quiet("Discard repair draft")
@@ -563,11 +591,16 @@ impl CampaignContent {
                             }
                         }
                         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                            if Action::secondary("Save repaired note")
+                            let pressed = Action::secondary("Save repaired note")
                                 .density(Density::Read)
-                                .blocked_if(draft == baseline, "No changes yet")
+                                .blocked_if(draft == baseline, "No changes yet.")
                                 .show(ui)
-                                .clicked()
+                                .clicked();
+                            design::blocked_reason(
+                                ui,
+                                (draft == baseline).then_some("No changes yet."),
+                            );
+                            if pressed
                                 || (draft != baseline
                                     && ui.input_mut(|i| {
                                         i.consume_key(egui::Modifiers::COMMAND, egui::Key::S)
@@ -658,11 +691,8 @@ impl CampaignContent {
                     document.selections = selections;
                 }
             }
-            if !dirty && repair.is_none() {
-                ui.label(Type::Small.rich(ui, "No changes").color(c.document.clean));
-            }
             if !dirty && !self.repairs.iter().any(|(_, b, d)| b != d) {
-                reload = Action::quiet("Reload content")
+                reload = Action::quiet("Reload from disk")
                     .icon(icons::REFRESH)
                     .density(Density::Read)
                     .show(ui)
@@ -686,6 +716,15 @@ impl CampaignContent {
                 })
                 .inner;
             if pressed || save_key {
+                for selection in &mut document.selections {
+                    if let Some(module) = catalogue
+                        .resolve_ref(&selection.package)
+                        .ok()
+                        .and_then(|id| catalogue.modules.iter().find(|module| module.id == id))
+                    {
+                        selection.name = Some(module.name.clone());
+                    }
+                }
                 match document.save() {
                     Ok(()) => {
                         self.saved_selections = document.selections.clone();
@@ -737,20 +776,55 @@ impl CampaignContent {
                     .ok()
                     .is_none_or(|id| !catalogue.modules.iter().any(|m| m.id == id))
             })
-            .map(|(i, s)| (i, s.package.label()))
+            .map(|(i, selection)| {
+                let mut selection = selection.clone();
+                if let Some(module) = campaigns
+                    .modules()
+                    .iter()
+                    .find(|module| selection.package.id == Some(module.id))
+                {
+                    selection.name = Some(module.name.clone());
+                }
+                (i, selection)
+            })
             .collect();
         let mut remove = None;
-        for (i, label) in unavailable {
+        for (i, selection) in unavailable {
             ui.push_id(i, |ui| {
-                ui.horizontal(|ui| {
-                    design::message(ui, Tone::Warning, &format!("Unavailable package: {label}"));
-                    if Action::quiet("Remove selection")
+                design::message(ui, Tone::Warning, &selection.unavailable_message(catalogue));
+                ui.horizontal_wrapped(|ui| {
+                    if Action::quiet("Remove from this campaign")
                         .density(Density::Read)
                         .show(ui)
                         .clicked()
                     {
                         remove = Some(i);
                     }
+                    if Action::secondary("Find the folder…")
+                        .blocked_if(
+                            document.selections != self.saved_selections
+                                || self
+                                    .repairs
+                                    .iter()
+                                    .any(|(_, baseline, draft)| baseline != draft),
+                            "Save or discard changes before finding the folder.",
+                        )
+                        .density(Density::Read)
+                        .show(ui)
+                        .clicked()
+                        && let Some(folder) = crate::hermetic::pick_folder()
+                    {
+                        match find_package_folder(&selection.package, &folder) {
+                            Ok(module) => self.found_package = Some(module),
+                            Err(error) => self.error = Some(error),
+                        }
+                    }
+                });
+                design::quiet_section(ui, "Technical details", |ui| {
+                    ui.label(Type::Mono.rich(
+                        ui,
+                        format!("Package reference: {}", selection.package.label()),
+                    ));
                 });
             });
         }
@@ -820,6 +894,7 @@ impl CampaignContent {
                                                 document.selections.remove(i);
                                             }
                                             document.selections.push(PackageSelection {
+                                                name: Some(module.name.clone()),
                                                 package: EntryRef::id(module.id),
                                                 selection: self
                                                     .disabled_selections
@@ -945,6 +1020,7 @@ impl CampaignContent {
                             document.selections[i].selection = Selection::All;
                         } else {
                             document.selections.push(PackageSelection {
+                                name: Some(module.name.clone()),
                                 package: EntryRef::id(module.id),
                                 selection: Selection::All,
                             });
@@ -1019,10 +1095,10 @@ impl CampaignContent {
                                     let why = closure.required.get(&id).map(|reasons| {
                                         reasons.iter().cloned().collect::<Vec<_>>().join(", ")
                                     });
-                                    if ui
+                                    let response = ui
                                         .add_enabled(
                                             !required,
-                                            egui::Checkbox::new(&mut selected, &entry.name),
+                                            egui::Checkbox::new(&mut selected, ""),
                                         )
                                         .on_hover_text(&entry.name)
                                         .on_disabled_hover_text(why.as_ref().map_or_else(
@@ -1034,8 +1110,10 @@ impl CampaignContent {
                                                 )
                                             },
                                         ))
-                                        .changed()
-                                    {
+                                        ;
+                                    design::named(ui, &response, &format!("Use {}", entry.name));
+                                    if design::link(ui, &entry.name).clicked() { self.open_lookup = Some(id); }
+                                    if response.changed() {
                                         toggled = Some((id, selected));
                                     }
                                     ui.label(
@@ -1082,6 +1160,7 @@ impl CampaignContent {
                         document.selections[i].selection = selection;
                     } else {
                         document.selections.push(PackageSelection {
+                            name: Some(module.name.clone()),
                             package: EntryRef::id(module.id),
                             selection,
                         });
@@ -1122,7 +1201,7 @@ mod tests {
         assert_eq!(line, Some(3));
         assert_eq!(
             problem.as_deref(),
-            Some("line 3 opens a list with `[` that never closes")
+            Some("line 3 opens a list with [ that never closes")
         );
     }
 
@@ -1260,5 +1339,27 @@ mod tests {
         content.reload(&ctx, &campaigns, second);
         assert!(content.discarded_selections.is_none());
         assert!(content.discarded_repair.is_none());
+    }
+    #[test]
+    fn finding_a_package_rejects_another_packages_folder() {
+        let dir = tempfile::tempdir().unwrap();
+        let expected = dir.path().join("expected");
+        let other = dir.path().join("other");
+        fs::create_dir(&expected).unwrap();
+        fs::create_dir(&other).unwrap();
+        let text = crate::library::note_text("Ashen Marches", "package", Some("ashen"));
+        let entry = write_note(&expected, "Package.md", None, &text).unwrap();
+        let text = crate::library::note_text("Other package", "package", Some("other"));
+        write_note(&other, "Package.md", None, &text).unwrap();
+        let reference = EntryRef::id(entry.id);
+        assert_eq!(
+            find_package_folder(&reference, &expected).unwrap().name,
+            "Ashen Marches"
+        );
+        assert!(
+            find_package_folder(&reference, &other)
+                .unwrap_err()
+                .contains("different package")
+        );
     }
 }

@@ -108,6 +108,7 @@ fn seed_campaigns(
 
     let mut document = CampaignDocument::load(&active)?;
     document.selections.push(PackageSelection {
+        name: None,
         package: EntryRef::id(module.id),
         selection: Selection::Selected {
             entries: [

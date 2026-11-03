@@ -545,7 +545,7 @@ impl Splat {
         } else {
             (
                 "Unsaved changes",
-                "Keep running",
+                "Keep editing",
                 "Discard and close",
                 "Return and save, or close and lose these changes.",
             )
@@ -1171,16 +1171,7 @@ impl Splat {
 
     fn no_campaign(&mut self, ui: &mut egui::Ui) {
         let no_campaigns = self.campaigns.all().is_empty();
-        design::page_header(
-            ui,
-            self.page.name(),
-            Some(if no_campaigns {
-                "No campaigns"
-            } else {
-                "No campaign open"
-            }),
-            |_| {},
-        );
+        design::page_header(ui, self.page.name(), None, |_| {});
         let mut add = false;
         design::empty_state(
             ui,
@@ -1196,7 +1187,7 @@ impl Splat {
                     self.campaigns.show_add_form(ui);
                 } else {
                     add = Action::primary(if no_campaigns {
-                        "Add a campaign"
+                        "Add campaign"
                     } else {
                         "Choose a campaign"
                     })
@@ -1548,6 +1539,49 @@ impl Splat {
 
     /// Requests that cross pages: read beside a draft, or open an entry where it lives.
     fn route(&mut self, ctx: &egui::Context) {
+        if let Some(target) = markdown_view::take_note_link(ctx) {
+            let from = ctx.data_mut(|data| {
+                data.remove_temp::<Option<uuid::Uuid>>(egui::Id::new("clicked_reader_document"))
+                    .flatten()
+            });
+            self.notes_give_way();
+            self.lookup.open_note_link(&target, from, ctx);
+        }
+        if let Some((package, entry)) = self.library.use_entry.take().or_else(|| {
+            ctx.data_mut(|data| {
+                data.remove_temp::<(uuid::Uuid, uuid::Uuid)>(egui::Id::new("use_package_entry"))
+            })
+        }) && let Some(campaign) = self.campaigns.active_campaign()
+            && let Some(module) = self
+                .campaigns
+                .modules()
+                .iter()
+                .find(|module| module.id == package)
+        {
+            match content_workspace::use_in_campaign(&campaign, package, &module.name, Some(entry))
+            {
+                Ok(()) => {
+                    self.library.refresh_destination(&campaign.path, ctx);
+                    self.campaign_content.refresh_destination(&campaign.path);
+                    self.encounters
+                        .refresh_content(ctx, &self.campaigns, &campaign.path);
+                    self.lookup.refresh();
+                }
+                Err(error) => {
+                    self.library.report_error(error);
+                }
+            }
+        }
+        if let Some(module) = self.campaign_content.found_package.take() {
+            let root = module.path.clone();
+            let result = self.campaigns.restore_module(module);
+            if result.is_ok() {
+                self.library.refresh_destination(&root, ctx);
+                self.encounters.refresh_content(ctx, &self.campaigns, &root);
+                self.lookup.refresh();
+            }
+            self.campaign_content.package_restored(result);
+        }
         if let Some(words) = markdown_view::take_lookup_link(ctx) {
             self.notes_give_way();
             self.lookup.open_words(&words);
@@ -1738,7 +1772,11 @@ impl Splat {
             self.timeline.open(None);
         }
         if let Some(source) = self.library.copy.take() {
-            self.copy_dialog = Some(copy_dialog::CopyDialog::new(source, &self.campaigns, ctx));
+            let mut dialog = copy_dialog::CopyDialog::new(source, &self.campaigns, ctx);
+            if let Some(package) = self.library.copy_to_package.take() {
+                dialog.prefer_package(package);
+            }
+            self.copy_dialog = Some(dialog);
         }
         match self.lookup.open_written.take() {
             Some(lookup::WrittenIn::Session(id)) => {
@@ -1797,6 +1835,14 @@ impl eframe::App for Splat {
         self.art.poll(ctx, self.campaigns.modules());
         art::show_viewer(ctx);
         self.lookup.poll(ctx, &self.campaigns);
+        ctx.data_mut(|data| {
+            let key = egui::Id::new("reader_link_index");
+            if let Some(index) = self.lookup.index() {
+                data.insert_temp(key, index);
+            } else {
+                data.remove::<std::sync::Arc<lookup::ContentIndex>>(key);
+            }
+        });
         self.encounters.poll(ctx, &self.campaigns);
         self.lookup.library_draft = self.library.dirty();
         self.sessions.run_open = self.encounters.has_run();

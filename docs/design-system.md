@@ -169,7 +169,7 @@ tooltips, and separators. Text cursors do not blink, because motion draws the ey
 | Count | `count` | `1 entry`, `2,108 entries`; zero returns no text. Empty unit words return only the formatted number |
 
 Header actions have at most one bordered secondary button, for `New …`. Other header actions are quiet and come before it.
-The Library scope control sits at the top of its category column. At a narrow width, it sits above the list.
+The Library scope control uses Can use in both layouts and sits at the top of its category column. At a narrow width, it sits above the list.
 
 **R-6: Empty states.** The full `empty_state` (icon, serif title and text) belongs to an empty pane or page only. An empty section inside a list page shows one muted line under its heading, with no `0` count.
 
@@ -194,7 +194,7 @@ control still has an accessible name and a tooltip.
 discard` stays until the next edit. It stands apart from `Save`, and it shows only when
 there is something to discard. A session note changed on disk shows the draft and disk text side by side in the Write view’s styled source face. Text wraps at word boundaries. A selected surface and a line mark identify differing lines. The choices stay above the comparison, which uses the whole session body while the plan is hidden. A file that changed on disk stops saving and asks: the run
 offers `Replace the file with this run` and `Save as a new run`, and a Library note offers `Overwrite with my
-draft`, `Show disk version` and `Reload and lose my draft`. These messages cannot be dismissed.
+draft` and the separate red `Reload and lose my draft`. Library uses the same side-by-side comparison, with `N lines differ` and `Next difference`. Neither choice has an accent fill. One message says: “This note changed on disk. Your draft is safe until you choose.” These messages cannot be dismissed.
 
 ## The Reader
 
@@ -345,7 +345,7 @@ rule as Lookup. The detail column exists only when an event is selected. Its hea
 
 Party uses one group-heading style throughout Overview. Saving throws and skills use two or three columns. Lists with eight or fewer entries have no filter or separate count line; the shared group heading holds the count. Local-edit warnings name the character, keep actions on the first line at the right edge and say that replacement keeps a copy.
 The affected list row says `Local edits`. A replacement names the character, with Show file for the kept version and Dismiss.
-An empty Party has one Open Settings action. Spell levels have their own counts, with no extra Spells heading; cantrips omit Prepared.
+An empty Party has one Connect D&D Beyond action. Spell levels have their own counts, with no extra Spells heading; cantrips omit Prepared.
 Technical details stays closed and uses plain words for rules not read yet or not supported.
 
 A live microphone has the only colour here. `Record` takes a second, inline step that says to tell the table.
@@ -408,7 +408,7 @@ An incoming sheet change removes only undo steps for that character. Remaining s
 
 Campaign repair opens at the reader measure, with the invalid-note reason above it. Needed by your entries is an item below the packages in the left column. Its right pane has one search and one list; rows open Lookup. Short package lists shrink to their rows. Invalid YAML marks the line to fix and uses plain words. A rolled World table selects the matching row, marks it with a dice icon, and states the result below in UI sans.
 
-Library keeps search and the selected result when its scope changes. Empty categories and their headings stay hidden. Scope buttons use short words. An empty reader says No entry open or No note open, then “Choose one from the list, or make a new one.” Empty campaign entries have one New entry action.
+Library keeps search and the selected result when its scope changes. Empty categories and their headings stay hidden. Scope buttons use short words. Library shows Back only when its reader replaces the list. Alt+Left returns through its reading history in either layout. An empty reader says No entry open or No note open, then “Choose one from the list, or make a new one.” Empty campaign entries have one New entry action.
 
 Inline creation forms use a Label title, fields, then a named Create action, its Small blocked reason, an L gap, and quiet Cancel. A Library draft states its cause once in the existing save row; controls that share the cause use its hover text. Typing never inserts a line above the editor. Campaign save state also belongs only in its save row. Lookup Back and Open in Library share the title line. Plain World notes use one-line rows. A typed table roll has the well fill, a centred placeholder, and the dice as its column heading. Fixed table headers cover passing rows with page fill and a hairline.
 
@@ -420,7 +420,7 @@ Recording retries say Continue processing. Process again is reserved for replaci
 
 Settings and the rail use one account status function. The rail shortens Signed out of D&D Beyond to Signed out with the full words on hover. Settings shows the recovery step once. Campaign import opens directly under the chosen row with a new sibling folder filled in. Editing details hides the row's Edit details action and uses a plain Details heading. The removal dialog is centred. Reload from disk names the local reload action.
 
-World readers show the relative file path with Edit in Obsidian and Show file on every note.
+On the World page, readers show the relative file path with Edit in Obsidian and Show file on every note.
 NPCs show Stat block and In below that line; locations show In. Each has a quiet Change picker.
 The search takes keyboard focus. A saved choice changes only its key and offers Undo. An undo
 checks the file before writing. Broken notes stay in a Cannot be read group and open the same
@@ -450,3 +450,11 @@ Changing the run folder with saved runs shows how many files stay behind. Move r
 and save stages all files without replacing an existing file, saves the settings,
 then removes unchanged originals. Save without moving keeps the files in the old
 folder. Saving run settings is blocked while a run is open.
+
+New entry, Create package and Copy to a package keep Use in this campaign on by default. The help says what selection will be saved. A package entry shows its package and Used here or Not used here; Use in this campaign saves the missing choice. Clean save rows show only the blocked save action with No changes to save. Unsaved, Saved and errors keep their left status.
+
+Every reader resolves `[[Name]]`, `[[Name#Heading]]` and `[[Name|text]]` against World notes and the entries the campaign can use. Duplicate names open a chooser. Missing names keep their words, with a dotted underline and Not found in this campaign on hover. Reference keys keep working. The shared resolver is `ContentIndex::resolve_link`; Markdown readers call `reader_markdown` through the current index.
+
+A package manifest opens from About followed by its name. It is not an entry row. Creation forms show their destination path. Creating a package opens its first entry form. Folder suggestions include existing folders, and saving can create a new subfolder. Reader pictures are 64 px thumbnails beside the title and meta line. Run-in titles use bold text. Sheet tabs use Small as a second level.
+
+An unavailable package keeps its last known display name in the campaign selection. Older selections without a name say A package that is no longer on this computer. The message counts affected campaign entries when the selected references are known, with Remove from this campaign and Find the folder… beside it. The folder picker checks the package identity before restoring its registration. Only Technical details shows its ID.

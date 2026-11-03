@@ -34,8 +34,7 @@ fn swatches(ui: &mut egui::Ui, title: &str, list: &[(&str, Color32)]) {
 
 fn design_group(ui: &mut egui::Ui, title: &str) {
     ui.add_space(XS);
-    ui.label(Type::Heading.rich(ui, title).color(colors().text));
-    rule(ui);
+    group_heading(ui, title, 0);
 }
 
 pub fn tokens(ui: &mut egui::Ui) {
@@ -250,15 +249,26 @@ pub fn components(ui: &mut egui::Ui) {
             });
         });
     });
+    group_heading(ui, "In progress", 1);
     ui.horizontal(|ui| {
-        let _ = status_link(
-            ui,
-            Status {
-                icon: icons::RUN,
-                word: "Round 2",
-                color: c.sync.matching,
-            },
-        );
+        ui.vertical(|ui| {
+            ui.label(Type::Name.rich(ui, "Bridge Ambush"));
+            let _ = status_link(
+                ui,
+                Status {
+                    icon: icons::RUN,
+                    word: "Round 2 · Paused",
+                    color: c.sync.matching,
+                },
+            );
+        });
+        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            row_menu(ui, "Paused Bridge Ambush", |ui| {
+                let _ = Action::quiet("Start another fight").show(ui);
+            });
+            let _ = Action::quiet("Edit").show(ui);
+            let _ = Action::secondary("Resume").show(ui);
+        });
     });
     design_group(ui, "One cause, one sentence");
     ui.horizontal(|ui| {

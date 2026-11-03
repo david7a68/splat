@@ -2862,17 +2862,6 @@ impl Run {
                 temporary_hp: p.temporary_hp,
                 conditions: p.conditions.clone(),
             };
-            if let Some(path) = self
-                .storage
-                .as_ref()
-                .and_then(|storage| crate::party_sync::portrait_path(storage.campaign, record))
-            {
-                let (rect, _) = ui.allocate_exact_size(
-                    egui::Vec2::splat(crate::party::SHEET_PORTRAIT),
-                    egui::Sense::empty(),
-                );
-                crate::art::portrait(ui, rect, Some(&path), &record.definition.splat_name, None);
-            }
             changes_block(ui, p, false);
             let freshness = crate::party::freshness(record, self.connected);
             // The sheet is older than what the DM just set here, so say which is which.
@@ -2888,14 +2877,31 @@ impl Run {
                 .get(&index)
                 .is_some_and(|sync| sync.state() == SyncState::Conflict)
             {
-                design::status(
-                    ui,
-                    Status {
-                        icon: freshness.icon,
-                        word: &word,
-                        color: freshness.color,
-                    },
-                );
+                ui.horizontal_wrapped(|ui| {
+                    if let Some(path) = self.storage.as_ref().and_then(|storage| {
+                        crate::party_sync::portrait_path(storage.campaign, record)
+                    }) {
+                        let (rect, _) = ui.allocate_exact_size(
+                            egui::Vec2::splat(design::XXL),
+                            egui::Sense::empty(),
+                        );
+                        crate::art::portrait(
+                            ui,
+                            rect,
+                            Some(&path),
+                            &record.definition.splat_name,
+                            None,
+                        );
+                    }
+                    design::status(
+                        ui,
+                        Status {
+                            icon: freshness.icon,
+                            word: &word,
+                            color: freshness.color,
+                        },
+                    );
+                });
             }
             let spells = crate::party::has_spells(record);
             if !spells && self.sheet_page == 2 {
@@ -2906,7 +2912,7 @@ impl Run {
                 .copied()
                 .filter(|(page, _)| *page != 2 || spells)
                 .collect();
-            design::overflow_tabs(ui, &mut self.sheet_page, &pages);
+            design::overflow_tabs_small(ui, &mut self.sheet_page, &pages);
             let page = self.sheet_page;
             egui::ScrollArea::vertical()
                 .id_salt(("run_sheet", definition.id, page))
@@ -3113,13 +3119,14 @@ impl Run {
                     design::group_label(ui, "D&D Beyond combat sync");
                     let sync = self.syncs.entry(index).or_default();
                     let was = sync.enabled;
-                    ui.push_id(index, |ui| sync.show(ui));
-                    if !self.connected && !self.simulate_connection {
-                        ui.horizontal(|ui| {
-                            design::blocked_reason(ui, Some("Not connected"));
-                            if design::link(ui, "Connect to sync").clicked() { self.wants_sign_in = true; }
-                        });
-                    }
+                    ui.push_id(index, |ui| {
+                        if self.connected || self.simulate_connection { sync.show(ui); } else {
+                            ui.horizontal_wrapped(|ui| {
+                                ui.add_enabled(false, egui::Checkbox::new(&mut sync.enabled, "Sync combat stats with D&D Beyond")).on_disabled_hover_text("Connect to sync");
+                                if design::link(ui, "Connect to sync").clicked() { self.wants_sign_in = true; }
+                            });
+                        }
+                    });
                     self.dirty |= was != sync.enabled;
                 }
             });

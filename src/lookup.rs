@@ -93,6 +93,8 @@ pub struct Item {
 #[derive(Default)]
 pub struct ContentIndex {
     pub items: Vec<Item>,
+    usable: Option<HashSet<Uuid>>,
+    package_owners: HashMap<Uuid, Uuid>,
     by_id: HashMap<Uuid, usize>,
     by_key: HashMap<String, usize>,
     spells: Vec<usize>,
@@ -220,6 +222,20 @@ fn note_items(
 impl ContentIndex {
     fn load(modules: &[Module], campaign: Option<&Campaign>) -> Result<Self, String> {
         let catalogue = Catalogue::load(modules, campaign)?;
+        let usable = campaign.map(|campaign| {
+            let mut usable: HashSet<_> = catalogue
+                .entries
+                .values()
+                .filter(|entry| entry.private)
+                .map(|entry| entry.entry.id)
+                .collect();
+            if let Ok(document) = crate::content_workspace::CampaignDocument::load(campaign) {
+                let closure = catalogue.closure(&document.selections, campaign.id);
+                usable.extend(closure.direct);
+                usable.extend(closure.required.keys().copied());
+            }
+            usable
+        });
         let owner_name = |owner: Uuid, private: bool| {
             if private {
                 "Campaign".to_owned()
@@ -284,6 +300,12 @@ impl ContentIndex {
         }
         items.sort_by(|a, b| a.lower.cmp(&b.lower).then(a.entry.id.cmp(&b.entry.id)));
         let mut index = Self {
+            usable,
+            package_owners: catalogue
+                .entries
+                .iter()
+                .map(|(id, entry)| (*id, entry.owner))
+                .collect(),
             errors: catalogue.errors.clone(),
             files_seen,
             ..Default::default()
@@ -433,30 +455,157 @@ impl ContentIndex {
 
     /// Where a link in a note leads.
     pub fn follow(&self, target: &str, from: &Item) -> Go {
-        let (name, heading) = match target.split_once('#') {
-            Some((name, heading)) => (name.trim(), Some(heading.trim())),
-            None => (target.trim(), None),
-        };
+        self.resolve_link(target, Some(from.entry.id))
+    }
+
+    /// Shared Obsidian link rule for every reader. Only World notes and entries
+    /// this campaign can use are name targets. Explicit reference keys still work.
+    pub fn resolve_link(&self, target: &str, from: Option<Uuid>) -> Go {
+        let target = target.split('|').next().unwrap_or(target);
+        let (name, heading) = target
+            .split_once('#')
+            .map_or((target.trim(), None), |(name, heading)| {
+                (name.trim(), Some(heading.trim()))
+            });
         if name.eq_ignore_ascii_case("timeline")
-            && let Some(id) = heading.and_then(|heading| heading.strip_prefix('^'))
+            && let Some(id) = heading.and_then(|h| h.strip_prefix('^'))
         {
-            return Go::Timeline(id.to_owned());
+            return Go::Timeline(id.into());
         }
         let heading = heading
-            .filter(|heading| !heading.starts_with('^'))
-            .map(|heading| heading.rsplit('#').next().unwrap_or(heading).to_owned());
+            .filter(|h| !h.starts_with('^'))
+            .map(|h| h.rsplit('#').next().unwrap_or(h).to_owned());
         if name.is_empty() {
-            return match self.position(from.entry.id) {
-                Some(position) => Go::Item(position, heading),
-                None => Go::Missing(target.to_owned()),
-            };
+            return from
+                .and_then(|id| self.position(id))
+                .map_or_else(|| Go::Missing(target.into()), |at| Go::Item(at, heading));
+        }
+        let reference =
+            Uuid::parse_str(name).map_or_else(|_| Reference::Key(name.into()), Reference::Id);
+        if let Some(at) = self.position_of(&reference) {
+            return Go::Item(at, heading);
         }
         let key = name.trim_end_matches(".md").to_lowercase();
-        match self.files.get(&key).map(Vec::as_slice) {
-            Some(&[position]) => Go::Item(position, heading),
-            Some(many) => Go::Many(many.to_vec()),
-            None => Go::Missing(name.to_owned()),
+        let found: Vec<_> = self
+            .items
+            .iter()
+            .enumerate()
+            .filter(|(_, item)| {
+                if matches!(item.source, Source::Heading(..)) {
+                    return false;
+                }
+                if !item.is_world_note()
+                    && self
+                        .usable
+                        .as_ref()
+                        .is_some_and(|usable| !usable.contains(&item.entry.id))
+                {
+                    return false;
+                }
+                item.lower == key
+                    || item.file_keys().contains(&key)
+                    || world::aliases(&item.entry)
+                        .iter()
+                        .any(|alias| alias.eq_ignore_ascii_case(&key))
+            })
+            .map(|(at, _)| at)
+            .collect();
+        match found.as_slice() {
+            &[at] => Go::Item(at, heading),
+            [] => Go::Missing(name.into()),
+            _ => Go::Many(found),
         }
+    }
+
+    /// Prepare wiki links in any reader, retaining exactly the note's display words.
+    pub fn reader_markdown(&self, body: &str, from: Option<Uuid>) -> String {
+        let source = world::with_links(body, &HashMap::new());
+        let prefix = "splat-note:";
+        let mut output = String::new();
+        let mut rest = source.as_str();
+        while let Some(start) = rest.find(prefix) {
+            let end = rest[start..]
+                .find('>')
+                .map(|end| start + end)
+                .unwrap_or(rest.len());
+            output.push_str(&rest[..start]);
+            let target = &rest[start + prefix.len()..end];
+            output.push_str(
+                if matches!(self.resolve_link(target, from), Go::Missing(_)) {
+                    "splat-missing:"
+                } else {
+                    prefix
+                },
+            );
+            output.push_str(target);
+            rest = &rest[end..];
+        }
+        output.push_str(rest);
+        output
+    }
+
+    pub fn unused_creatures(&self, query: &str) -> Vec<(Uuid, Uuid, String, String)> {
+        if query.trim().is_empty() {
+            return Vec::new();
+        }
+        self.items
+            .iter()
+            .filter(|item| {
+                item.entry.kind == "creature"
+                    && !item.private
+                    && item.lower.contains(query)
+                    && self
+                        .usable
+                        .as_ref()
+                        .is_some_and(|usable| !usable.contains(&item.entry.id))
+            })
+            .filter_map(|item| {
+                // Owner IDs come from the loaded package manifest, kept in the index.
+                self.package_owners.get(&item.entry.id).map(|&owner| {
+                    (
+                        owner,
+                        item.entry.id,
+                        item.entry.name.clone(),
+                        item.owner.clone(),
+                    )
+                })
+            })
+            .take(5)
+            .collect()
+    }
+
+    pub fn campaign_dependencies(&self, entry: &Entry) -> Vec<usize> {
+        let mut found = Vec::new();
+        if let Ok(references) = splat::content::required_references(entry) {
+            found.extend(
+                references
+                    .iter()
+                    .filter_map(|reference| self.position_of(reference)),
+            );
+        }
+        if let Ok(Some(reading)) = entry.reading() {
+            found.extend(reading.related.keys().filter_map(|target| {
+                self.position_of(
+                    &Uuid::parse_str(target)
+                        .map_or_else(|_| Reference::Key(target.clone()), Reference::Id),
+                )
+            }));
+        }
+        for target in world::links_in(&entry.body) {
+            match self.resolve_link(&target, Some(entry.id)) {
+                Go::Item(at, _) => found.push(at),
+                Go::Many(many) => found.extend(many),
+                _ => {}
+            }
+        }
+        found.retain(|&at| {
+            self.items[at].private
+                && !self.items[at].is_note()
+                && self.items[at].entry.id != entry.id
+        });
+        found.sort_unstable();
+        found.dedup();
+        found
     }
 
     /// The campaign's locations, each with its name first, then its other names.
@@ -847,6 +996,26 @@ impl Lookup {
     }
 
     /// Open one entry from a link somewhere else in the app.
+    pub fn open_note_link(&mut self, target: &str, from: Option<Uuid>, ctx: &egui::Context) {
+        let Some(index) = &self.index else {
+            return;
+        };
+        match index.resolve_link(target, from) {
+            Go::Item(at, heading) => {
+                self.reader.show_heading(heading);
+                self.open_position(at);
+            }
+            Go::Many(positions) => {
+                self.open = true;
+                self.query.clear();
+                self.reader.choose_link(positions, target);
+            }
+            Go::Timeline(id) => self.reader.open_timeline = Some(id),
+            _ => {}
+        }
+        ctx.request_repaint();
+    }
+
     pub fn open_position(&mut self, position: usize) {
         self.open = true;
         self.written_stale = true;
@@ -969,6 +1138,14 @@ impl Lookup {
         let mut close = false;
         ui.horizontal(|ui| {
             ui.label(Type::Heading.rich(ui, "Lookup"));
+            if self.current.is_some()
+                && self.query.trim().is_empty()
+                && Action::quiet("Close entry").show(ui).clicked()
+            {
+                self.current = None;
+                self.reader = Reader::default();
+            }
+
             if !self.history.is_empty()
                 && Action::quiet("Back").icon(icons::BACK).show(ui).clicked()
             {
@@ -1262,6 +1439,7 @@ impl Lookup {
                     }
                 }
                 generate = query.is_empty()
+                    && self.current.is_none()
                     && self.generated.is_none()
                     && Action::quiet("Generate NPC")
                         .icon(icons::DICE)
@@ -1317,6 +1495,12 @@ impl Lookup {
             self.written_reader(ui, at, &query);
             return;
         }
+        if self.generated.is_some() {
+            return;
+        }
+        if self.current.is_none() {
+            let _ = self.reader.choices(ui, &index).map(|nav| self.follow(nav));
+        }
         let Some(current) = self.current.and_then(|c| index.items.get(c)) else {
             if query.is_empty() {
                 ui.add_space(design::S);
@@ -1337,6 +1521,7 @@ impl Lookup {
         {
             self.results_open = false;
         }
+        self.reader.compact = true;
         let (reader, campaign) = (&mut self.reader, self.campaign.as_ref());
         egui::ScrollArea::vertical()
             .id_salt(("lookup_reader", current.entry.id))
@@ -1709,5 +1894,59 @@ mod tests {
         let wolves = index.search("wolf");
         assert_eq!(index.items[wolves[0]].entry.name, "Wolf");
         assert!(wolves.len() > 1);
+    }
+    #[test]
+    fn wiki_links_share_campaign_scope_aliases_headings_and_reference_keys() {
+        let (dir, campaign) = campaign_with(&[
+            ("Place.md", "# Place\n\n## Door\n"),
+            ("Other/Place.md", "# Place\n"),
+        ]);
+        let text = crate::library::note_text("Campaign rule", "rule", None);
+        let rule = Entry::parse("Rule.md", &text).unwrap();
+        std::fs::write(dir.path().join("Rule.md"), text).unwrap();
+        let aliased = entry_note(
+            Uuid::new_v4(),
+            "Harbour",
+            "  type: location\n  aliases: [Docks]",
+        );
+        std::fs::write(dir.path().join("Harbour.md"), aliased).unwrap();
+        let mut index = ContentIndex::load(&[], Some(&campaign)).unwrap();
+        assert!(
+            matches!(index.resolve_link("Docks", None), Go::Item(at, _) if index.items[at].entry.name == "Harbour")
+        );
+        assert!(
+            matches!(index.resolve_link("#Door", Some(rule.id)), Go::Item(at, Some(heading)) if index.items[at].entry.id == rule.id && heading == "Door")
+        );
+        assert!(
+            matches!(index.resolve_link("Place#Door", Some(rule.id)), Go::Many(found) if found.len() == 2)
+        );
+        assert!(matches!(
+            index.resolve_link("Campaign rule|these words", None),
+            Go::Item(..)
+        ));
+        assert!(matches!(
+            index.resolve_link("dnd2024:spells/fire_bolt", None),
+            Go::Item(..)
+        ));
+        let at = index
+            .items
+            .iter()
+            .position(|item| item.entry.name == "Campaign rule")
+            .unwrap();
+        index.usable.as_mut().unwrap().remove(&rule.id);
+        assert!(matches!(
+            index.resolve_link("Campaign rule", None),
+            Go::Missing(_)
+        ));
+        assert!(
+            matches!(index.resolve_link(&rule.id.to_string(), None), Go::Item(position, _) if position == at)
+        );
+        let rendered = index.reader_markdown(
+            "[[Gone|my words]] and [[Place#Door|the door]] and `[[Code]]`",
+            None,
+        );
+        assert!(rendered.contains("[my words](<splat-missing:Gone>)"));
+        assert!(rendered.contains("[the door](<splat-note:Place#Door>)"));
+        assert!(rendered.contains("`[[Code]]`"));
     }
 }

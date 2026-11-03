@@ -1089,6 +1089,16 @@ impl<'a> Driver<'a> {
         self.film_result(&caption);
     }
 
+    /// Alt+key, for reader history.
+    pub fn press_alt(&mut self, key: egui::Key) {
+        let caption = format!("Press: Alt+{}", key.name());
+        self.film_caption(&caption);
+        self.harness.key_press_modifiers(egui::Modifiers::ALT, key);
+        self.interactions += 1;
+        self.settle();
+        self.film_result(&caption);
+    }
+
     /// Ctrl+key, with the modifiers a Linux desktop reports.
     pub fn press_ctrl(&mut self, key: egui::Key) {
         let caption = format!("Press: Ctrl+{}", key.name());
@@ -1260,6 +1270,17 @@ impl<'a> Driver<'a> {
     /// A goal with a target from `docs/ux-intent.md` section 8.
     pub fn goal_within(&mut self, id: &str, goal: &str, target: u32) {
         let cost = self.goal(&format!("{id}: {goal}"));
+        self.observe(
+            id,
+            cost <= target,
+            format!("{goal}: {cost} interactions, target {target}"),
+        );
+    }
+
+    /// A new audit workflow has an explicit cost target, without adding a baseline allowance.
+    pub fn audit_goal_within(&mut self, id: &str, goal: &str, target: u32) {
+        let cost = self.interactions - self.last_goal;
+        self.last_goal = self.interactions;
         self.observe(
             id,
             cost <= target,

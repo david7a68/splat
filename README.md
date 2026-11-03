@@ -361,21 +361,24 @@ apply a change. The sidebar shows how many changes wait. See
 [Imported character content](docs/design/character-content.md).
 
 Under **Packages → Manage packages…**, register an existing folder containing exactly one package
-manifest, or enter a name, namespace (for example `my_homebrew`), and a new absolute
-folder path to create a package. The parent folder must already exist. Package
+manifest, or enter a name to create a package. The form shows the new folder path. **Browse…** changes its parent folder. After creation, the first entry form opens. Package
 registrations are stored in user settings; package notes remain in their own folders.
-Unregistering a package leaves its files in place. Package and campaign folders must
+Unregistering a package leaves its files in place. Campaign keeps its last known name and offers **Remove from this campaign** or **Find the folder…** if it becomes unavailable. Package IDs stay under **Technical details**. Package and campaign folders must
 be separate. Register My Homebrew in your preferred location for shared homebrew.
 
-Local packages support new draft entries and Markdown editing. **Save** checks note
+Local packages support new entries and Markdown editing. **About <package name>** opens the manifest. **New entry** shows the folder, kind and path before it writes a note, then opens its editor. Kind templates include a reader skeleton. A new subfolder is created when the note is saved.
+
+**Use in this campaign** starts on for new entries, new packages and copies to packages. It saves the package choice too, so the content can be found in the encounter editor. The reader shows whether an entry is used here and offers the same action when it is not. **Save** checks note
 structure, keeps existing UUIDs and kinds, rejects duplicate identities, and checks
 for external edits before replacing a file. Validation messages show unresolved
 references; a package-only check can report references to other packages as unresolved.
 Invalid entry notes remain available for repair. If the file changed on disk, the save stops
-and offers **Overwrite with my draft**, **Show disk version**, and **Reload and lose my draft**.
+and shows disk and draft side by side, with marked lines and **Next difference**. Choose **Overwrite with my draft** or **Reload and lose my draft**.
 **Discard changes** takes one press and offers **Undo discard** until the next edit. Changing
 pages keeps the draft in memory.
 Save before closing the app; drafts are not persisted.
+
+Every reader accepts Obsidian links: `[[Name]]`, `[[Name#Heading]]` and `[[Name|text]]`. Names resolve to World notes and content this campaign can use. **Alt+Left** returns through Library history. Duplicate names open a chooser. A missing name has a dotted underline and **Not found in this campaign** on hover. Existing reference keys still work. A package entry that refers to campaign-only content warns before sharing.
 
 In **Campaign → Packages**, enable a whole package or select individual
 entries. Required dependencies are included separately with their reasons, and rule
@@ -411,7 +414,7 @@ are in Settings and in **Campaign → Link and folder**.
 
 Open **Party** to read the linked D&D Beyond party. Select a character
 and browse Overview, Actions, Spells, Equipment, and Features. **Refresh party**
-gets the latest sheets. When signed out, **Connect to refresh** in the page header opens Settings with the cookie field focused. An empty Party uses one **Open Settings** action instead. Saves and skills use two or three columns. A sheet list gets a filter only when it has more than eight entries. **Technical details** keeps source and rule checks out of the main sheet. Computed totals come directly from D&D Beyond. Local
+gets the latest sheets. When signed out, **Connect to refresh** in the page header opens Settings with the cookie field focused. An empty Party uses one **Connect D&D Beyond** action instead. Saves and skills use two or three columns. A sheet list gets a filter only when it has more than eight entries. **Technical details** keeps source and rule checks out of the main sheet. Computed totals come directly from D&D Beyond. Local
 creature records remain available offline, and open sheets use the event stream
 with polling fallback. No character changes are sent to D&D Beyond. See [viewer details and streaming findings](docs/character-viewer.md).
 
