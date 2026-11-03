@@ -1054,7 +1054,7 @@ impl CombatSync {
     }
     pub fn show(&mut self, ui: &mut egui::Ui) {
         let was = self.enabled;
-        ui.checkbox(&mut self.enabled, "Sync combat stats with D&D Beyond");
+        ui.checkbox(&mut self.enabled, "Sync party with D&D Beyond");
         if was && !self.enabled {
             self.stop();
         }

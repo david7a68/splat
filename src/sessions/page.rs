@@ -3063,7 +3063,11 @@ impl Sessions {
                     any = true;
                     ui.push_id(group.id, |ui| {
                         let mut read_group = false;
-                        plan_row(ui, &widths, icons::GROUP, |ui| {
+                        let group_action = design::number_width(ui, if plan.arrivals_open { "Arrivals" } else { "Edit" }, &Type::Strong.font(ui))
+                            + Density::Read.control() + design::L * 2.0
+                            + if plan.arrivals_open { design::number_width(ui, icons::GROUP, &Type::Body.font(ui)) + design::S } else { 0.0 };
+                        let group_widths = [widths.iter().sum::<f32>() - group_action, group_action];
+                        plan_row(ui, &group_widths, icons::GROUP, |ui| {
                             if design::wrapped_link(ui, &group.name).clicked() { read_group = true; }
                             let summary = group.summary().split(" · ").map(|part| part.replace(' ', "\u{a0}")).collect::<Vec<_>>().join(" · ");
                             wrapped_words(ui, Type::Small, summary, c.muted);

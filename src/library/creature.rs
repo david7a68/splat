@@ -192,7 +192,19 @@ fn prose(
     spell_links: &mut impl FnMut(&mut egui::Ui, &str),
 ) {
     for paragraph in text.split("\n\n").map(str::trim).filter(|s| !s.is_empty()) {
-        reader_style::source_prose(ui, paragraph);
+        if let Some(speed) = values.and_then(|values| values.speed.as_ref())
+            && paragraph.lines().any(|line| line.starts_with("Speed "))
+        {
+            for line in paragraph.lines() {
+                if let Some(printed) = line.strip_prefix("Speed ") {
+                    changed_speed(ui, printed, speed);
+                } else {
+                    reader_style::source_prose(ui, line);
+                }
+            }
+        } else {
+            reader_style::source_prose(ui, paragraph);
+        }
         if (paragraph.contains("Attack Roll:") || paragraph.contains("to hit"))
             && let Some(values) = values
             && !values.by_hand.is_empty()
@@ -210,6 +222,18 @@ fn prose(
             spell_links(ui, paragraph);
         }
     }
+}
+
+fn changed_speed(ui: &mut egui::Ui, printed: &str, speed: &str) {
+    let printed = printed.trim();
+    ui.add(
+        egui::Label::new(
+            Type::Small
+                .rich(ui, format!("Speed {printed} → {speed} · add by hand"))
+                .color(colors().participant.changed),
+        )
+        .wrap(),
+    );
 }
 
 /// One ability row of the stat block's attribute table.
@@ -444,7 +468,13 @@ pub(super) fn stat_head(ui: &mut egui::Ui, entry: &Entry, values: Option<&super:
     ui.spacing_mut().item_spacing.y = 2.0;
     for (key, label) in DETAILS {
         if let Some(text) = detail(entry, key).filter(|text| !text.is_empty()) {
-            reader_style::detail(ui, label, &text);
+            if label == "Speed"
+                && let Some(speed) = values.and_then(|values| values.speed.as_ref())
+            {
+                changed_speed(ui, &text, speed);
+            } else {
+                reader_style::detail(ui, label, &text);
+            }
         }
     }
     ui.add_space(design::XS);

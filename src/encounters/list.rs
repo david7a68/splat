@@ -146,25 +146,50 @@ pub(super) fn list_row(
                     egui::Label::new(Type::Strong.rich(ui, name).color(colors().text)).truncate(),
                 )
                 .on_hover_text(name);
-                let label = if detail.contains("Changed elsewhere") {
-                    format!("{} {detail}", icons::WARN)
-                } else if status {
-                    format!("{} {detail}", icons::RUN)
-                } else {
-                    detail.to_owned()
-                };
-                let response = ui
-                    .add(
-                        egui::Label::new(Type::Small.rich(ui, label).color(
-                            if detail.contains("Changed elsewhere") {
+                let visible_detail = design::words_that_fit(
+                    ui,
+                    detail,
+                    &Type::Small.font(ui),
+                    ui.available_width() - design::L,
+                );
+                let warning = visible_detail
+                    .split(" · ")
+                    .position(|part| part == "Changed elsewhere");
+                let mut job = egui::text::LayoutJob::default();
+                for (index, part) in visible_detail.split(" · ").enumerate() {
+                    if index > 0 {
+                        job.append(
+                            " · ",
+                            0.0,
+                            egui::TextFormat {
+                                font_id: Type::Small.font(ui),
+                                color: colors().muted,
+                                ..Default::default()
+                            },
+                        );
+                    }
+                    let words = if warning == Some(index) {
+                        format!("{} {part}", icons::WARN)
+                    } else if index == 0 && status {
+                        format!("{} {part}", icons::RUN)
+                    } else {
+                        part.to_owned()
+                    };
+                    job.append(
+                        &words,
+                        0.0,
+                        egui::TextFormat {
+                            font_id: Type::Small.font(ui),
+                            color: if warning == Some(index) {
                                 colors().result.warning
                             } else {
                                 colors().muted
                             },
-                        ))
-                        .wrap(),
-                    )
-                    .on_hover_text(detail);
+                            ..Default::default()
+                        },
+                    );
+                }
+                let response = ui.add(egui::Label::new(job).extend()).on_hover_text(detail);
                 design::named(ui, &response, &format!("{name} · {detail}"));
             });
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), actions);
@@ -245,11 +270,15 @@ pub(super) fn in_progress_list(
         let open = live.is_some_and(|live| live.id == run.id);
         let template = history::template_of(run, templates);
         let detail = if open {
-            run.label
-                .strip_prefix(&run_state_word(run, false))
-                .unwrap_or(&run.label)
-                .trim_start_matches(" · ")
-                .to_owned()
+            run.saved_at.map_or_else(
+                || "Saved just now".to_owned(),
+                |at| {
+                    format!(
+                        "Saved {}",
+                        crate::party::fetch_age(crate::hermetic::now().saturating_sub(at))
+                    )
+                },
+            )
         } else {
             run.label.clone()
         };
@@ -319,10 +348,28 @@ pub(super) fn ready_list(
     }
     for (index, row) in page.ready.iter().enumerate() {
         let template = row.template;
-        let start_blocked = if template.summary.as_deref().is_none_or(str::is_empty) {
-            Some("Add participants first")
+        let unfinished = page.in_progress.iter().find(|run| {
+            run.source == Some(template.id)
+                || (run.source.is_none() && run.encounter == template.name)
+        });
+        let open = unfinished.is_some_and(|run| live.is_some_and(|live| live.id == run.id));
+        let short_reason = if open {
+            unfinished.map(|run| format!("Running · {}", run_state_word(run, false)))
         } else if row.unfinished_run {
-            Some("This encounter has an unfinished run. Resume it in In progress.")
+            Some("Paused · resume above".to_owned())
+        } else if template.summary.as_deref().is_none_or(str::is_empty) {
+            Some("Add participants first".to_owned())
+        } else {
+            None
+        };
+        let start_blocked = if row.unfinished_run {
+            Some(if open {
+                "This encounter has an open run. Go back to the run."
+            } else {
+                "This encounter has an unfinished run. Resume it in In progress."
+            })
+        } else if template.summary.as_deref().is_none_or(str::is_empty) {
+            Some("Add participants first")
         } else {
             blocked
         };
@@ -359,14 +406,15 @@ pub(super) fn ready_list(
                 {
                     *action = Some(ListAction::Run(template.path.clone()));
                 }
-                if start_blocked == Some("Add participants first") {
-                    blocked_reason(ui, start_blocked);
+                if let Some(reason) = &short_reason {
+                    ui.add(
+                        egui::Label::new(Type::Small.rich(ui, reason).color(colors().muted))
+                            .extend(),
+                    );
+                    ui.add_space(design::L);
                 }
             },
         );
-        if start_blocked != blocked && start_blocked != Some("Add participants first") {
-            blocked_reason(ui, start_blocked);
-        }
     }
 }
 
@@ -422,9 +470,16 @@ pub(super) fn history_list(
                         .saved_at
                         .map(crate::encounter_run::calendar_time)
                         .unwrap_or_else(|| "Date unknown".to_owned());
+                    let state = run_state_word(run, false);
+                    let outcome = run
+                        .label
+                        .split(" · Ended")
+                        .next()
+                        .filter(|_| !run.label.starts_with("Ended"));
                     let detail = format!(
-                        "{} · {date}{}",
-                        run_state_word(run, false),
+                        "{}{} · {date}{}",
+                        outcome.map_or_else(String::new, |outcome| format!("{outcome} · ")),
+                        state,
                         if past.template.is_none() {
                             " · Encounter deleted"
                         } else {
@@ -497,6 +552,20 @@ fn history_summary(ui: &mut egui::Ui, summary: &FightSummary) {
                 color: colors().document.read_only,
             },
         );
+        ui.horizontal_wrapped(|ui| {
+            for (label, value) in [
+                ("Outcome", summary.outcome.clone()),
+                ("End reason", summary.end_reason.clone()),
+                ("Final round", summary.round.to_string()),
+            ] {
+                ui.label(
+                    Type::Small
+                        .rich(ui, format!("{label}: {value}"))
+                        .color(colors().muted),
+                );
+                ui.add_space(design::L);
+            }
+        });
         design::group_label(ui, "Final state");
         for row in &summary.rows {
             ui.horizontal_wrapped(|ui| {

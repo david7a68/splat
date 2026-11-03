@@ -88,6 +88,7 @@ struct Draft {
     saved_body: String,
     /// The groups that belong to this encounter. They are built here and saved with it.
     groups: Vec<GroupDraft>,
+    deleted_groups: Vec<GroupDraft>,
     /// Whether those groups have been read. A new encounter has none to read.
     groups_read: bool,
     /// The group that takes what the search adds, by its path. With none, the roster does.
@@ -99,7 +100,7 @@ struct Draft {
     /// The last save wrote a group, even if it then stopped, so the campaign needs a new read.
     groups_written: bool,
     /// One group detached from this draft, until the next save.
-    removed_group: Option<(usize, GroupDraft)>,
+    removed_group: Option<(usize, GroupDraft, bool)>,
 }
 impl Draft {
     fn new() -> Self {
@@ -120,6 +121,7 @@ impl Draft {
             saved_setup: Setup::default(),
             saved_body: String::new(),
             groups: Vec::new(),
+            deleted_groups: Vec::new(),
             groups_read: true,
             add_to: None,
             focus_group: None,
@@ -150,6 +152,7 @@ impl Draft {
             body: entry.body.trim().to_owned(),
             saved_body: entry.body.trim().to_owned(),
             groups: Vec::new(),
+            deleted_groups: Vec::new(),
             groups_read: false,
             add_to: None,
             focus_group: None,
@@ -164,6 +167,7 @@ impl Draft {
             || self.setup != self.saved_setup
             || self.body != self.saved_body
             || self.groups.iter().any(GroupDraft::dirty)
+            || !self.deleted_groups.is_empty()
     }
     /// Read this encounter's own groups, once the campaign has been read.
     fn read_groups(&mut self, root: &std::path::Path, snapshot: &Snapshot) -> Result<(), String> {
@@ -190,6 +194,26 @@ impl Draft {
                 self.reveal_group = true;
             }
             None => self.add(id, party),
+        }
+    }
+    fn add_selected(&mut self, id: Uuid, party: bool, snapshot: &Snapshot) {
+        let npc = snapshot.npc_stat_block(id);
+        match npc {
+            Some((stat, name)) => {
+                if let Some(group) = self.target_group() {
+                    group.add_named(stat, name);
+                    self.reveal_group = true;
+                } else {
+                    self.add(stat, false);
+                    self.setup
+                        .roster
+                        .last_mut()
+                        .expect("added slot")
+                        .overrides
+                        .insert("name".into(), name.into());
+                }
+            }
+            None => self.add_chosen(id, party),
         }
     }
     fn text(&self) -> Result<String, String> {
@@ -252,6 +276,9 @@ impl Draft {
                 group_texts.push((index, text));
             }
         }
+        for group in &self.deleted_groups {
+            group.check_delete(campaign)?;
+        }
         // Each was checked against what is saved, and these are saved together.
         let mut names = BTreeSet::from([self.name.trim().to_ascii_lowercase()]);
         for name in self.groups.iter().filter_map(GroupDraft::linkable_name) {
@@ -288,6 +315,11 @@ impl Draft {
             })?;
             self.groups_written = true;
         }
+        for group in &self.deleted_groups {
+            group.delete_saved(campaign)?;
+            self.groups_written = true;
+        }
+        self.deleted_groups.clear();
         // A group the DM gave to another encounter is no longer this one's.
         let id = self.id;
         self.groups.retain(|group| group.belongs_to(id));
@@ -548,6 +580,12 @@ const RESULT_ROW: f32 = 40.0;
 /// first place holds a party copy's word, which has no challenge rating. The package follows
 /// if the row has room for it.
 fn detail_columns(ui: &mut egui::Ui, detail: &str, source: Option<&str>) {
+    if detail.starts_with("NPC · as ") {
+        let words = design::words_that_fit(ui, detail, &Type::Small.font(ui), ui.available_width());
+        ui.label(Type::Small.rich(ui, words).color(colors().muted))
+            .on_hover_text(detail);
+        return;
+    }
     const COLUMNS: [(&str, f32); 3] = [("CR ", 66.0), ("HP ", 46.0), ("AC ", 38.0)];
     let parts: Vec<&str> = detail.split(" · ").collect();
     let other = parts
@@ -722,7 +760,6 @@ fn stat_line(text: &str) -> String {
 
 struct SearchRoster<'a> {
     already: &'a dyn Fn(&Creature) -> bool,
-    members: Option<String>,
 }
 
 struct Snapshot {
@@ -745,6 +782,26 @@ impl Snapshot {
             self.options = old.options.clone();
             self.saved_options = old.saved_options.clone();
         }
+    }
+    fn npc_stat_block(&self, id: Uuid) -> Option<(Uuid, String)> {
+        let npc = &self.catalogue.entries.get(&id)?.entry;
+        if npc.kind != "world"
+            || npc
+                .fields
+                .get("splat_world")
+                .and_then(|world| world.get("type"))
+                .and_then(Value::as_str)
+                != Some("npc")
+        {
+            return None;
+        }
+        let value = npc.fields.get("splat_world")?.get("creature")?;
+        let reference: EntryRef = serde_yaml_ng::from_value(value.clone()).ok()?;
+        let stat = self.catalogue.resolve_ref(&reference).ok()?;
+        self.creatures
+            .iter()
+            .any(|c| c.id == stat)
+            .then(|| (stat, npc.name.clone()))
     }
     fn load(campaign: &Campaign, modules: &[Module]) -> Result<Self, String> {
         let document = CampaignDocument::load(campaign)?;
@@ -794,6 +851,41 @@ impl Snapshot {
                 }
             })
             .collect();
+        let npcs: Vec<_> = catalogue
+            .entries
+            .values()
+            .filter_map(|entry| {
+                let npc = &entry.entry;
+                if (npc.kind != "world"
+                    || npc
+                        .fields
+                        .get("splat_world")
+                        .and_then(|world| world.get("type"))
+                        .and_then(Value::as_str)
+                        != Some("npc"))
+                    || !(entry.private && entry.owner == campaign.id
+                        || closure.direct.contains(&npc.id)
+                        || closure.required.contains_key(&npc.id))
+                {
+                    return None;
+                }
+                let value = npc.fields.get("splat_world")?.get("creature")?;
+                let reference: EntryRef = serde_yaml_ng::from_value(value.clone()).ok()?;
+                let id = catalogue.resolve_ref(&reference).ok()?;
+                let stat = creatures.iter().find(|c| c.id == id && !c.linked)?;
+                Some(Creature {
+                    id: npc.id,
+                    name: npc.name.clone(),
+                    lower: npc.name.to_lowercase(),
+                    detail: format!("NPC · as {}", stat.name),
+                    source: None,
+                    party: false,
+                    linked: false,
+                    character: None,
+                })
+            })
+            .collect();
+        creatures.extend(npcs);
         creatures.sort_by_key(|c| (!c.party, c.name.to_lowercase(), c.id));
         let mut templates: Vec<_> = catalogue
             .entries
@@ -2046,7 +2138,7 @@ impl Encounters {
                     .clicked();
             }
             // A run stays open through this, so a note fixed outside Splat reaches its Groups tab.
-            reload = Action::quiet("Reload")
+            reload = Action::quiet("Reload from disk")
                 .icon(icons::REFRESH)
                 .blocked(
                     group_blocked
@@ -2348,14 +2440,6 @@ impl Encounters {
                 *focus_search_after_name = true;
             }
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                save = if dirty && !has_run && unfinished.is_none() {
-                    Action::primary("Save encounter")
-                } else {
-                    Action::secondary("Save encounter")
-                }
-                .blocked_if(!dirty, "No changes to save.")
-                .show(ui)
-                .clicked();
                 let start_blocked = has_run
                     .then_some(BLOCKED_BY_RUN)
                     .or(creature_dirty.then_some(BLOCKED_BY_CREATURE))
@@ -2395,9 +2479,18 @@ impl Encounters {
                 })
                 .show(ui)
                 .clicked();
+                save = if dirty && !has_run && unfinished.is_none() {
+                    Action::primary("Save encounter")
+                } else {
+                    Action::secondary("Save encounter")
+                }
+                .blocked_if(!dirty, "No changes to save.")
+                .show(ui)
+                .clicked();
             });
         });
-        ui.horizontal_wrapped(|ui| {
+        ui.horizontal(|ui| {
+            ui.set_min_height(Density::Read.control());
             if dirty {
                 discard = Action::quiet("Discard")
                     .blocked(creature_dirty.then_some(BLOCKED_BY_CREATURE))
@@ -2406,8 +2499,8 @@ impl Encounters {
             }
             let (icon, word, color) = if dirty {
                 (icons::DRAFT, "Unsaved", colors().document.unsaved)
-            } else if let Some(note) = saved_note.as_deref() {
-                (icons::OK, note, colors().document.saved)
+            } else if saved_note.is_some() {
+                (icons::OK, "Saved", colors().document.saved)
             } else {
                 (icons::OK, "No changes", colors().muted)
             };
@@ -2438,10 +2531,24 @@ impl Encounters {
                             .then_some("Add participants first"),
                     ),
             );
+        });
+        ui.allocate_ui(egui::vec2(ui.available_width(), Type::Small.line()), |ui| {
             if dirty {
-                blocked_reason(ui, Some("Save or discard the draft first."));
+                blocked_reason(
+                    ui,
+                    Some("Save or discard the draft to start a fight or switch campaign."),
+                );
             }
         });
+        if has_run {
+            blocked_reason(ui, Some("Close the open run to start this fight."));
+        }
+        if unfinished.is_some() {
+            blocked_reason(
+                ui,
+                Some("Changes apply to the next fight. Add to this fight from Arrivals."),
+            );
+        }
         design::rule(ui);
         if back {
             self.draft = None;
@@ -2649,13 +2756,10 @@ impl Encounters {
                 peek,
                 SearchRoster {
                     already: &|_| false,
-                    members: draft
-                        .target_group()
-                        .map(|group| groups::member_summary(group, snapshot)),
                 },
             );
             if let Some((id, party)) = chosen {
-                draft.add_chosen(id, party);
+                draft.add_selected(id, party, snapshot);
             }
             return;
         }
@@ -2716,11 +2820,10 @@ impl Encounters {
             peek,
             SearchRoster {
                 already: &|c: &Creature| c.party && on_roster(draft, c.id),
-                members: None,
             },
         );
         if let Some((id, party)) = chosen {
-            draft.add(id, party);
+            draft.add_selected(id, party, snapshot);
         }
     }
 
@@ -2743,14 +2846,6 @@ impl Encounters {
         );
         if std::mem::take(focus_search) {
             design::focus_and_select(ui, response.id, search);
-        }
-        if let Some(members) = &roster.members
-            && !members.is_empty()
-        {
-            ui.add(
-                egui::Label::new(Type::Small.rich(ui, members).color(colors().muted)).truncate(),
-            )
-            .on_hover_text(members);
         }
         let query = search.to_lowercase();
         let mut matches: Vec<&Creature> = creatures
@@ -2969,6 +3064,8 @@ impl Encounters {
                     Some(source) => format!("{detail} · {source}"),
                     None => detail,
                 };
+                let side_icon = if slot.side == "party" { icons::PARTY } else if slot.side == "enemies" { icons::ENCOUNTERS } else { icons::GROUP };
+                let detail = format!("{side_icon} {} · {detail}", design::reader::human_label(&slot.side));
                 let is_open = expanded.as_deref() == Some(slot.key.as_str());
                 ui.horizontal(|ui| {
                     ui.set_min_height(Density::Glance.row());
@@ -2999,7 +3096,6 @@ impl Encounters {
                             };
                         }
                         ui.add_space(design::XS);
-                        side_control(ui, "Side", &mut slot.side, &sides);
                         ui.with_layout(egui::Layout::top_down(egui::Align::LEFT), |ui| {
                             ui.spacing_mut().item_spacing.y = 0.0;
                             ui.add(
@@ -3021,17 +3117,17 @@ impl Encounters {
                         });
                     });
                 });
-                if let Some(entry) = definition {
-                    groups::show_changes(
-                        ui,
-                        &slot.overrides,
-                        entry,
-                        &slot.side,
-                        Some(&slot.initial),
-                        is_open,
-                    );
+                if let Some(entry) = definition
+                    && groups::changes_link(ui, &slot.overrides, entry, &slot.side, is_open)
+                {
+                    groups::show_form_when_it_opens(ui);
+                    *expanded = Some(slot.key.clone());
                 }
                 if is_open {
+                    ui.horizontal(|ui| {
+                        ui.label(Type::Small.rich(ui, "Side").color(colors().muted));
+                        side_control(ui, "Side", &mut slot.side, &sides);
+                    });
                     ui.horizontal_wrapped(|ui| {
                         let mut group = slot
                             .extra
@@ -3150,9 +3246,10 @@ impl Encounters {
             crate::design::spinner(ui);
             return;
         };
-        ui.set_width(ui.available_width().min(design::FORM_WIDTH));
         ui.add_space(design::S);
         let closed_while = draft_open.then_some("Save or discard the open encounter first.");
+        ui.scope_builder(egui::UiBuilder::new().max_rect(egui::Rect::from_min_size(
+            ui.cursor().min, egui::vec2(ui.available_width().min(design::FORM_WIDTH), ui.available_height()))), |ui| {
         design::locked(ui, closed_while, |ui| {
             design::text_field(
                 ui,
@@ -3187,8 +3284,18 @@ impl Encounters {
                     .color(colors().muted),
             );
             let changed = snapshot.options != snapshot.saved_options;
+            let left = snapshot.options.runs_left_in(&snapshot.saved_options, &active);
+            let run_files = left.as_ref().map_or(0, Vec::len);
+            let folder_changed = snapshot.options.directory(&active).ok() != snapshot.saved_options.directory(&active).ok();
+            let blocked = if run_open { Some("Close the open run to save run settings.") }
+                else if folder_changed && left.is_err() { Some("Could not read saved runs. Check the old run folder before saving.") }
+                else if !changed { Some("No changes to save.") } else { None };
+            if run_files > 0 {
+                design::message(ui, Tone::Warning, &format!("{} {} in {}. Splat will not show them from the new folder.",
+                    design::count(run_files, "saved run", "saved runs"), if run_files == 1 { "stays" } else { "stay" }, snapshot.saved_options.folder));
+            }
             ui.horizontal(|ui| {
-                let save_key = changed
+                let save_key = changed && blocked.is_none() && run_files == 0
                     && ui.input_mut(|i| i.consume_key(egui::Modifiers::COMMAND, egui::Key::S));
                 if changed {
                     self.discarded_options = None;
@@ -3206,8 +3313,6 @@ impl Encounters {
                             snapshot.saved_options.clone(),
                         ));
                     }
-                } else {
-                    design::blocked_reason(ui, Some("No changes"));
                 }
                 if !changed
                     && self.discarded_options.is_some()
@@ -3218,26 +3323,33 @@ impl Encounters {
                 }
                 let pressed = ui
                     .with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        let pressed = (if run_open {
-                            Action::secondary("Save run settings")
+                        if run_files > 0 && !run_open {
+                            let move_runs = Action::primary("Move runs and save").show(ui).clicked();
+                            let leave_runs = Action::quiet("Save without moving").show(ui).clicked();
+                            if move_runs {
+                                match snapshot.options.move_runs_and_save(&snapshot.saved_options, &active, &snapshot.campaign_text) {
+                                    Ok(warning) => { settings_saved = true; error = warning; },
+                                    Err(e) => error = Some(e),
+                                }
+                            }
+                            leave_runs
                         } else {
-                            Action::primary("Save run settings")
-                        })
-                        .key("Ctrl+S")
-                        .blocked_if(!changed, "No changes to save.")
-                        .show(ui)
-                        .clicked();
-                        design::blocked_reason(ui, (!changed).then_some("No changes to save."));
-                        pressed
+                            let pressed = Action::primary("Save run settings").key("Ctrl+S")
+                                .blocked(blocked).show(ui).clicked();
+                            design::blocked_reason(ui, blocked);
+                            pressed
+                        }
                     })
                     .inner;
-                if pressed || save_key {
+                if (pressed || save_key) && !run_open {
+                    if folder_changed && let Err(e) = &left { error = Some(e.clone()); return; }
                     match snapshot.options.save(&active, &snapshot.campaign_text) {
                         Ok(()) => settings_saved = true,
                         Err(e) => error = Some(e),
                     }
                 }
             });
+        });
         });
         if draft_open {
             design::message(
@@ -3246,15 +3358,15 @@ impl Encounters {
                 "Save or discard the open encounter to change run settings.",
             );
         }
+        if settings_saved {
+            self.saved = true;
+            self.reload(ui.ctx(), active, campaigns.modules().to_vec());
+        }
         if let Some(e) = error {
             self.error = Some(e);
         }
         if let Some(e) = &self.error {
             design::message(ui, Tone::Error, e);
-        }
-        if settings_saved {
-            self.saved = true;
-            self.reload(ui.ctx(), active, campaigns.modules().to_vec());
         }
     }
 }
@@ -3381,6 +3493,41 @@ mod tests {
             .unwrap()
             .id
     }
+    #[test]
+    fn a_named_npc_uses_its_stat_block_and_existing_name_override() {
+        let dir = tempfile::tempdir().unwrap();
+        let campaign = campaign(dir.path());
+        let stat = creature(dir.path(), "Guard", false);
+        let text = format!(
+            "---\nsplat_schema: 1\nsplat_id: {}\nsplat_kind: world\nsplat_name: Rook Ambry\nsplat_world:\n  type: npc\n  creature: {{id: {stat}}}\n---\n",
+            Uuid::new_v4()
+        );
+        let npc = write_note(dir.path(), "Rook.md", None, &text).unwrap().id;
+        let snapshot = Snapshot::load(&campaign, &[]).unwrap();
+        assert!(
+            snapshot
+                .creatures
+                .iter()
+                .any(|c| c.id == npc && c.detail == "NPC · as Guard")
+        );
+        let mut draft = Draft::new();
+        draft.add_selected(npc, false, &snapshot);
+        assert_eq!(
+            draft.setup.roster[0].creature.as_ref().unwrap().id,
+            Some(stat)
+        );
+        assert_eq!(
+            draft.setup.roster[0].overrides["name"].as_str(),
+            Some("Rook Ambry")
+        );
+        draft.save(&campaign, &[]).unwrap();
+        let reopened = Draft::open(dir.path(), &draft.path).unwrap();
+        assert_eq!(
+            reopened.setup.roster[0].overrides,
+            draft.setup.roster[0].overrides
+        );
+    }
+
     #[test]
     fn save_reopen_party_and_duplicate_monsters_preserves_order_identity_and_state() {
         let dir = tempfile::tempdir().unwrap();

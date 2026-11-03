@@ -153,6 +153,66 @@ pub fn group_heading_text(ui: &Ui, title: &str, count: usize) -> LayoutJob {
     job
 }
 
+/// Run state uses the full second line, so ended and round words fit in the rail.
+pub fn run_nav_item(ui: &mut Ui, detail: &str, selected: bool) -> Response {
+    let c = colors();
+    let height = Density::Glance.control() + XS;
+    let (rect, response) =
+        ui.allocate_exact_size(vec2(ui.available_width(), height), Sense::click());
+    response.widget_info(|| {
+        WidgetInfo::selected(
+            WidgetType::Button,
+            ui.is_enabled(),
+            selected,
+            format!("Run · {detail}"),
+        )
+    });
+    if ui.is_rect_visible(rect) {
+        let fill = if selected {
+            c.selected
+        } else if response.hovered() {
+            c.hover
+        } else {
+            Color32::TRANSPARENT
+        };
+        ui.painter().rect_filled(rect, corner(RADIUS_CONTROL), fill);
+        if selected {
+            ui.painter().rect_filled(
+                Rect::from_min_size(rect.min, vec2(3.0, rect.height())),
+                corner(1.0),
+                c.accent,
+            );
+        }
+        let color = if selected { c.text } else { c.muted };
+        let center = rect.top() + height * 0.35;
+        ui.painter().text(
+            pos2(rect.left() + S + 2.0, center),
+            Align2::LEFT_CENTER,
+            icons::RUN,
+            Type::Body.font(ui),
+            color,
+        );
+        ui.painter().text(
+            pos2(rect.left() + 28.0, center),
+            Align2::LEFT_CENTER,
+            "Run",
+            if selected { Type::Strong } else { Type::Body }.font(ui),
+            color,
+        );
+        ui.painter().text(
+            pos2(rect.left() + S, rect.top() + height * 0.56),
+            Align2::LEFT_TOP,
+            detail,
+            Type::Small.font(ui),
+            c.muted,
+        );
+        if response.has_focus() {
+            focus_ring(ui, rect);
+        }
+    }
+    response
+}
+
 /// The quiet menu at the right edge of a list row.
 pub fn row_menu(ui: &mut Ui, name: &str, add: impl FnOnce(&mut Ui)) {
     let response = icon_button(ui, icons::EXPAND, &format!("More actions for {name}"));
@@ -1471,6 +1531,48 @@ pub fn add_strip(ui: &mut Ui, actions: impl FnOnce(&mut Ui)) {
         ui.spacing_mut().item_spacing.x = XS;
         ui.label(Type::Label.rich(ui, "Add").color(colors().muted));
         actions(ui);
+    });
+}
+
+/// Sheet tabs keep one line. Less frequent pages move to a named menu when needed.
+pub fn overflow_tabs(ui: &mut Ui, selected: &mut usize, choices: &[(usize, &str)]) {
+    let width = |label: &str| number_width(ui, label, &Type::Strong.font(ui)) + L;
+    let all: f32 = choices.iter().map(|(_, label)| width(label)).sum();
+    if all <= ui.available_width() {
+        segmented(ui, selected, choices);
+        return;
+    }
+    let mut used = width("More") + L;
+    let mut count = 0;
+    for (_, label) in choices {
+        if used + width(label) > ui.available_width() {
+            break;
+        }
+        used += width(label);
+        count += 1;
+    }
+    ui.horizontal(|ui| {
+        ui.spacing_mut().item_spacing.x = 0.0;
+        segmented(ui, selected, &choices[..count]);
+        let menu = ui.menu_button(format!("More {}", icons::DOWN), |ui| {
+            for (value, label) in &choices[count..] {
+                if ui.selectable_label(*selected == *value, *label).clicked() {
+                    *selected = *value;
+                    ui.close();
+                }
+            }
+        });
+        named(ui, &menu.response, "More sheet pages");
+        if choices[count..]
+            .iter()
+            .any(|(value, _)| *value == *selected)
+        {
+            ui.painter().hline(
+                menu.response.rect.x_range(),
+                menu.response.rect.bottom(),
+                Stroke::new(HAIRLINE_WIDTH, colors().accent),
+            );
+        }
     });
 }
 

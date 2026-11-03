@@ -758,7 +758,7 @@ pub mod encounter_build {
     const NEW_NAME: &str = "Ashfall Crossing";
     const MONSTER: &str = "wolf";
     const BOSS: &str = "cultist";
-    const SAVED_NOTE: &str = "Encounter saved.";
+    const SAVED_NOTE: &str = "Saved";
     const SAVED_ENCOUNTER: &str = "Bridge Ambush";
     const SAVED_FIRST_SLOT: &str = "1. Brannoch Vale";
     const SYNC_OPTION: &str = "Sync party with D&D Beyond";
@@ -901,7 +901,7 @@ pub mod encounter_build {
         d.expect(READY_TO_RUN);
         let nodes = d.nodes();
         let dated = nodes.iter().any(|node| {
-            node.name.contains(RUN) && node.name.contains("Paused") && node.name.contains("Saved ")
+            node.name.contains(RUN) && node.name.contains("Paused") && node.name.contains("Round 2")
         });
         let first = nodes
             .iter()
@@ -915,7 +915,7 @@ pub mod encounter_build {
         d.observe(
             "T4.4",
             dated && first,
-            format!("Unfinished runs show their encounter, when they were saved, and their status: {dated}. They come first: {first}"),
+            format!("Unfinished runs show their encounter, round, and paused status: {dated}. They come first: {first}"),
         );
         d.state("saved-runs", Sizes::Default);
 
@@ -1759,7 +1759,7 @@ pub mod prep_to_table {
             d.has("Current HP") && !d.has("Resolve ties"),
             "The row menu opens that participant's correction fields; ties stay on the roster",
         );
-        d.click("Prep");
+        fight_tab(d, "Prep");
 
         // A player who did not arrive can be marked, in Setup, and marked back.
         d.begin_task();
@@ -1888,7 +1888,16 @@ pub mod prep_to_table {
             );
         }
         d.goal("enter the other players' initiative");
-        d.state("resolve-ties", Sizes::Default);
+        let tie = d
+            .nodes()
+            .iter()
+            .find(|node| node.name.starts_with("Move ") && node.name.contains(" before "))
+            .map(|node| node.name.clone());
+        if let Some(tie) = tie {
+            d.click(&tie);
+        }
+        d.expect("Undo: tie order");
+        d.state("shared-roll-order", Sizes::Default);
         // Tied rows keep their arrows in two fixed places, so that a second click on one lands
         // on the same arrow.
         let arrows = |d: &Driver<'_>, word: &str| -> Vec<f32> {
@@ -2553,7 +2562,6 @@ pub mod library_to_encounter {
 pub mod run_folder_defect {
     use super::*;
     const RUN_FOLDER: &str = "Run folder";
-    const SAVE_SETTINGS: &str = "Save run settings";
     const DISCARD: &str = "Discard";
     const BACK_TO_LIST: &str = "Back to encounters";
 
@@ -2570,7 +2578,9 @@ pub mod run_folder_defect {
             go_encounters(d);
             let names = d.enabled_page_buttons();
             for name in &names {
-                if name == NEW_ENCOUNTER || name == SAVE_ENCOUNTER || d.has(name) {
+                if (name == NEW_ENCOUNTER || name == SAVE_ENCOUNTER || d.has(name))
+                    && !d.is_disabled(name)
+                {
                     d.click_first(name);
                 }
                 if d.has(CLOSE_RUN) && !d.is_disabled(CLOSE_RUN) {
@@ -2586,7 +2596,13 @@ pub mod run_folder_defect {
                 }
             }
             go_campaign(d);
-            d.click(SAVE_SETTINGS);
+            d.click("Move runs and save");
+            go_encounters(d);
+            d.observe(
+                "Run folder recovery",
+                d.has(RESUME),
+                "Moving the run folder keeps the paused run available",
+            );
             assert!(!names.is_empty(), "the page has buttons to press");
         });
         let panicked = std::panic::catch_unwind(click).is_err();
@@ -3435,7 +3451,7 @@ pub mod signed_in {
     const SYNC_ON: &str = "Combat sync · On";
     const SYNC_OFF: &str = "Combat sync · Off";
     const RAIL_STOPPED: &str = "Sync stopped";
-    const SYNC_TOGGLE: &str = "Sync combat stats with D&D Beyond";
+    const SYNC_TOGGLE: &str = "Sync party with D&D Beyond";
     const STOPPED: &str = "Combat sync stopped";
     const FIRST_READ: &str = "First read";
     const SYNC_PARTY: &str = "Sync party";
@@ -4750,7 +4766,7 @@ pub mod session_notes {
         }
         d.observe(
             "T11.8",
-            d.has_containing("Everyone is ready · 2 tied"),
+            d.visible_text("Everyone is ready") && d.has_containing("2 tied"),
             "Notes hide the order of ties, so setup says that there are ties",
         );
         d.click("Close notes");
@@ -5251,7 +5267,7 @@ pub mod encounter_groups {
         let (found, invalid) = d.at_size(SMALL, |d| {
             (
                 d.in_view_containing("cannot find this creature"),
-                d.in_view_containing("would become -28"),
+                d.in_view_containing("would become −28"),
             )
         });
         d.observe(
@@ -5261,7 +5277,7 @@ pub mod encounter_groups {
         );
         d.state("group-unavailable-creature", Sizes::Default);
         d.click("Changes for Cinder Wolf");
-        let in_view = d.at_size(SMALL, |d| d.in_view_containing("would become -28"));
+        let in_view = d.at_size(SMALL, |d| d.in_view_containing("would become −28"));
         d.observe(
             "T13.3",
             in_view,
@@ -5365,9 +5381,12 @@ pub mod encounter_groups {
         d.state("group-added-with-a-total", Sizes::Default);
         d.observe(
             "T13.2",
-            d.has_containing("Encounter group Rival Team added")
-                && d.has_containing("Initiative 14, entered by the DM"),
-            "The panel says who arrived, and at what total",
+            d.has_containing("Undo: add Rival Team")
+                && d.has_containing("Added in round 2")
+                && d.nodes().iter().any(|node| {
+                    node.name.contains(RIVAL_NAME) && node.name.contains("Initiative 14")
+                }),
+            "The group marks its arrival, Undo names it, and its members show the total",
         );
 
         // The card of a creature that arrived: where it came from, and its changes.
@@ -5533,9 +5552,7 @@ pub mod encounter_history {
                     == 1
                 && !d.has(RESUME)
                 && d.is_disabled(RUN_ENCOUNTER)
-                && d.visible_text(
-                    "This encounter has an unfinished run. Resume it in In progress.",
-                ),
+                && d.visible_text("Running · Round 2"),
             "Keep in Ready adds only a blocked Start fight with a reason, never a second run link",
         );
         d.state("keep-in-ready-blocked", Sizes::All);
@@ -5634,7 +5651,7 @@ pub mod encounter_owned_groups {
         );
         d.state("creature-added-to-a-group", Sizes::Default);
         d.click(SAVE_ENCOUNTER);
-        d.expect("Encounter saved.");
+        d.expect("Saved");
         d.observe(
             "T13.6",
             d.in_view("1. Wolf"),
@@ -5644,7 +5661,7 @@ pub mod encounter_owned_groups {
         d.goal("build a group in an encounter's editor");
         d.begin_task();
         d.click_first(&format!("More actions for {NEW_NAME}"));
-        d.click("Remove");
+        d.click("Make available to any encounter");
         d.expect("Undo remove group");
         d.state("saved-group-removed", Sizes::All);
         d.click("Undo remove group");
@@ -5765,6 +5782,7 @@ pub mod run_overrides {
                 && d.has_containing("Attack bonus: As printed → +1 on each attack")
                 && d.has_containing("add\u{a0}by\u{a0}hand")
                 && d.has_containing("Speed: 30 ft → 40 ft")
+                && d.visible_text("Speed 30 ft. → 40 ft · add by hand")
                 && d.has_containing("Changed"),
             "The card shows the base and changed values, and says what to add by hand",
         );
@@ -6412,7 +6430,7 @@ pub mod session_plan {
         d.type_into("Read-aloud and notes", "Ash falls on the ford.");
         d.state("read-aloud-field", Sizes::All);
         d.click(SAVE_ENCOUNTER);
-        d.expect("Encounter saved.");
+        d.expect("Saved");
         d.click("Back to encounters");
 
         // A save on Encounters reaches the Library, so its next save is not a false conflict.
@@ -6429,5 +6447,51 @@ pub mod session_plan {
             "The Library holds the encounter's latest file",
         );
         d.begin_task();
+    }
+}
+
+/// A named NPC joins a prepared encounter through its stat block, in one Add.
+pub mod npc_in_encounter {
+    use super::*;
+    pub fn run(d: &mut Driver<'_>) {
+        let campaign = d.app_mut().campaigns.active_campaign().unwrap();
+        let catalogue = crate::content_workspace::Catalogue::load(&[], Some(&campaign)).unwrap();
+        let guard = catalogue
+            .entries
+            .values()
+            .find(|entry| entry.entry.kind == "creature" && entry.entry.name == "Guard")
+            .unwrap()
+            .entry
+            .id;
+        let text = format!(
+            "---\nsplat_schema: 1\nsplat_id: {}\nsplat_kind: world\nsplat_name: Rook Ambry\nsplat_world:\n  type: npc\n  creature: {{id: {guard}}}\n---\n",
+            uuid::Uuid::new_v4()
+        );
+        std::fs::create_dir_all(campaign.path.join("NPCs")).unwrap();
+        crate::library::write_note(&campaign.path, "NPCs/Rook Ambry.md", None, &text).unwrap();
+        go_encounters(d);
+        d.click("Reload from disk");
+        d.wait_for_text(NEW_ENCOUNTER);
+        d.begin_task();
+        let started = d.interaction_count();
+        d.click(NEW_ENCOUNTER);
+        d.type_text("Rook's ambush");
+        d.type_into(FIND_CREATURE, "Rook Ambry");
+        d.wait_for_text("Rook Ambry");
+        d.state("npc-result", Sizes::All);
+        d.click_beside_exact("Rook Ambry", "Add");
+        d.observe(
+            "NPC encounter",
+            d.has_containing("6. Rook Ambry"),
+            "One Add uses Guard with the NPC's name",
+        );
+        d.state("npc-in-roster", Sizes::All);
+        d.click(SAVE_ENCOUNTER);
+        d.wait_for_text("Saved");
+        d.click(RUN_ENCOUNTER);
+        d.expect("Initiative for Rook Ambry");
+        d.state("npc-in-setup", Sizes::All);
+        let cost = d.interaction_count() - started;
+        d.observe("W6", cost <= 8, format!("Prepare an encounter with a named NPC and start setup: {cost} interactions, target 8"));
     }
 }

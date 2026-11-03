@@ -111,6 +111,12 @@ Build artifacts stay in the code repository's ignored `target/` directory.
 Keep D&D Beyond session cookies and tokens outside Git. Authentication is available
 in Settings; character sheets with combat sync are available in **Party**. Characters now have persistent local copies in the shared creature schema.
 The encounter builder uses these local character copies. Manual DM runs are available.
+Encounter and group searches also find NPCs with a stat block. Add keeps the NPC's
+name through the existing encounter override. Shared NPC initiative rolls stay quiet;
+only equal totals from different rolls need a tie ruling. Changing the run folder
+warns about saved runs and offers **Move runs and save** or **Save without moving**.
+Close the open run before saving run settings.
+
 The run panel groups participant tabs and fight tabs. `Correct` changes a participant's
 values. `Arrivals` adds a creature or a prepared group; a blank initiative total rolls it.
 `Ctrl+G` opens Arrivals in one step when it is in the `Fight` menu.

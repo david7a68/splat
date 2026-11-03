@@ -413,3 +413,28 @@ Inline creation forms use a Label title, fields, then a named Create action, its
 Settings uses `CAMPAIGNS` and `D&D BEYOND ACCOUNT` group headings in both layouts. In the compact layout, the open account form replaces the status line and its `Connect…` link. The account verb is `Connect`; states include `Not connected` and `Signed out of D&D Beyond`. A keyring warning owns its `Connect again` action. `Disconnect` is quiet and follows the trust text. The add-campaign form closes after a successful add.
 
 Recording settings clip at the tab rule, with `L` above each section. Visible field labels are `Service`, `Address`, `Model` and `API key`; accessible names keep the service context. The page header names the processing state, such as `Speech key missing` or `Ready to process`. A remove-key button names the saved key's service.
+
+
+## Run and encounter audit, iteration 3
+
+A shared NPC initiative roll is one roll group. It has a quiet bracket and ordering
+arrows. Only equal totals from different rolls show a tie warning. Setup names its
+Undo action. The live header keeps the next participant visible when Undo is empty.
+Sheet pages use one tab line, with later pages in More when space is short. At the
+table, the rail uses its natural width; a wider desk width stays saved.
+
+Recovery copies have unique names, including seconds and a suffix when needed.
+The run closed last and a file changed elsewhere lead their row's second line.
+History puts the outcome before the ended state and shows the outcome, end reason
+and final round above the final roster.
+
+The encounter and group searches include NPCs with a usable stat block. Add uses
+the stat block and the existing display-name override. The saved encounter format
+stays the same. Roster sides sit on the second line and change in Edit. A collapsed
+change list uses one Changed link in both editors. Group menus distinguish Make
+available to any encounter from Delete group, with Undo before saving.
+
+Changing the run folder with saved runs shows how many files stay behind. Move runs
+and save stages all files without replacing an existing file, saves the settings,
+then removes unchanged originals. Save without moving keeps the files in the old
+folder. Saving run settings is blocked while a run is open.
