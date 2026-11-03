@@ -95,10 +95,10 @@ impl WorldPage {
         ui.ctx().data_mut(|data| {
             data.insert_temp(egui::Id::new("reader_surface"), egui::Id::new("world"))
         });
-        let count = index.map_or(0, |index| {
-            index.world_groups("").values().map(Vec::len).sum()
-        });
         let broken = index.map_or(0, |index| index.broken_world.len());
+        let count = index.map_or(0, |index| {
+            index.world_groups("").values().map(Vec::len).sum::<usize>() + broken
+        });
         let mut create = None;
         design::page_header(
             ui,
@@ -114,20 +114,23 @@ impl WorldPage {
                         .then_some("Wait for the notes to load before creating a note."),
                     new_menu,
                 );
+                if broken > 0 {
+                    design::status(
+                        ui,
+                        design::Status {
+                            icon: icons::WARN,
+                            word: &format!(
+                                "{} cannot be read",
+                                design::count(broken, "note", "notes")
+                            ),
+                            color: colors().result.warning,
+                        },
+                    );
+                }
             },
         );
         if let Some(kind) = create.take() {
             self.begin_new(kind, index.map(AsRef::as_ref));
-        }
-        if broken > 0 {
-            design::status(
-                ui,
-                design::Status {
-                    icon: icons::WARN,
-                    word: &format!("{} cannot be read", design::count(broken, "note", "notes")),
-                    color: colors().result.warning,
-                },
-            );
         }
         let Some(index) = index else {
             ui.horizontal(|ui| {
@@ -208,6 +211,25 @@ impl WorldPage {
                                 .on_hover_text(problem);
                                 if response.clicked() {
                                     self.open_repair(campaign, path);
+                                }
+                            }
+                        }
+                        let drafts: Vec<_> = self
+                            .kept_repairs
+                            .iter()
+                            .filter(|r| {
+                                r.dirty()
+                                    && !index.broken_world.iter().any(|(path, _)| path == &r.path)
+                            })
+                            .map(|r| r.path.clone())
+                            .collect();
+                        if !drafts.is_empty() {
+                            design::group_heading(ui, "Repair drafts", drafts.len());
+                            for path in drafts {
+                                if design::two_line_row(ui, ROW, false, &path, "Unsaved repair")
+                                    .clicked()
+                                {
+                                    self.open_repair(campaign, &path);
                                 }
                             }
                         }

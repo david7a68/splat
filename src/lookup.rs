@@ -306,6 +306,12 @@ impl ContentIndex {
                 if item.entry.path.contains('/') {
                     index.files.entry(path).or_default().push(position);
                 }
+                for alias in world::aliases(&item.entry) {
+                    let positions = index.files.entry(alias.to_lowercase()).or_default();
+                    if !positions.contains(&position) {
+                        positions.push(position);
+                    }
+                }
             }
             if item.is_world_note() || item.entry.kind == "world" {
                 index.world.push(position);
@@ -384,23 +390,16 @@ impl ContentIndex {
             return self.position_of(&reference);
         }
         let link = entry.fields.get("splat_world")?.get("in")?.as_str()?;
-        let name = link
+        let target = link
             .strip_prefix("[[")?
             .strip_suffix("]]")?
-            .split(['|', '#'])
+            .split('|')
             .next()?
-            .trim()
-            .to_lowercase();
-        let mut matches = self.world.iter().copied().filter(|&at| {
-            let item = &self.items[at];
-            item.lower == name
-                || item.file_keys().contains(&name)
-                || world::aliases(&item.entry)
-                    .iter()
-                    .any(|a| a.to_lowercase() == name)
-        });
-        let found = matches.next()?;
-        matches.next().is_none().then_some(found)
+            .trim();
+        match self.follow(target, &self.items[position]) {
+            Go::Item(at, _) => Some(at),
+            _ => None,
+        }
     }
 
     pub fn place_of(&self, id: Uuid) -> Option<usize> {

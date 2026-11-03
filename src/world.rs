@@ -1038,7 +1038,7 @@ impl Reader {
         if let Some(value) = chosen {
             return self.change(campaign, item, key, value);
         }
-        if cancel {
+        if cancel || ui.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Escape)) {
             self.picker = None;
         }
         go

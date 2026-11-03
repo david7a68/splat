@@ -26,6 +26,11 @@ pub fn broken(d: &mut Driver<'_>) {
     reload(d);
     d.click(NAV_WORLD);
     d.expect("1 note cannot be read");
+    d.observe(
+        "W5",
+        d.visible_text("4 notes"),
+        "The World total includes the note that cannot be read",
+    );
     d.state("broken-note-listed", Sizes::All);
     d.click_containing("Notes/Broken.md");
     d.expect("Save repaired note");
@@ -40,6 +45,13 @@ pub fn broken(d: &mut Driver<'_>) {
         splat::character::stable_id("repaired-watchkeeper")
     );
     d.replace_text_in("Note text", &fixed);
+    d.click("Setting · ");
+    d.click_containing("Notes/Broken.md");
+    d.observe(
+        "W5",
+        d.editor_text().as_deref() == Some(&fixed),
+        "Reading another note keeps the repair draft",
+    );
     d.click("Save repaired note");
     d.settle();
     d.observe(
@@ -180,6 +192,17 @@ pub fn round_trip(d: &mut Driver<'_>) {
         "New Note accepts an optional World type and offers the file editor",
     );
     d.state("new-faction-note", Sizes::All);
+    go_campaign(d);
+    d.click(TAB_ENTRIES);
+    d.click_containing("Captain Varra · Creature");
+    d.click("Make NPC note");
+    d.expect("Change Stat block");
+    d.observe(
+        "W13",
+        d.current_page() == "World" && d.has("Captain Varra"),
+        "Make NPC note opens the linked person in World",
+    );
+    d.state("campaign-creature-as-npc", Sizes::All);
 }
 
 pub fn tables(d: &mut Driver<'_>) {

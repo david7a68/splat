@@ -8,7 +8,7 @@ use eframe::egui;
 
 pub(crate) fn editor(ui: &mut egui::Ui, path: &str, draft: &mut String, error_line: Option<usize>) {
     egui::ScrollArea::vertical()
-        .max_height(design::XXL * 4.0 + design::L + design::S)
+        .max_height(design::XXL * 6.0 + design::L + design::S + design::XS)
         .id_salt(("repair", path))
         .show(ui, |ui| {
             let output = egui::TextEdit::multiline(draft)
@@ -73,56 +73,78 @@ impl Repair {
         }
         editor(ui, &self.path, &mut self.draft, line);
         let mut saved = false;
-        ui.horizontal_wrapped(|ui| {
-            if self.draft != self.baseline
-                && design::Action::quiet("Discard repair draft")
+        ui.horizontal(|ui| {
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                let reason = if self.draft == self.baseline {
+                    Some("No changes yet")
+                } else {
+                    problem.as_deref()
+                };
+                if design::Action::secondary("Save repaired note")
+                    .blocked(reason)
                     .show(ui)
                     .clicked()
-            {
-                self.discarded = Some(self.draft.clone());
-                self.draft = self.baseline.clone();
-            }
-            if let Some(discarded) = &self.discarded
-                && design::Action::quiet("Undo discard").show(ui).clicked()
-            {
-                self.draft = discarded.clone();
-                self.discarded = None;
-            }
-            let reason = if self.draft == self.baseline {
-                Some("No changes yet")
-            } else {
-                problem.as_deref()
-            };
-            if design::Action::secondary("Save repaired note")
-                .blocked(reason)
-                .show(ui)
-                .clicked()
-                || (reason.is_none()
-                    && ui.input_mut(|i| i.consume_key(egui::Modifiers::COMMAND, egui::Key::S)))
-            {
-                let result =
-                    splat::content::Entry::parse(&self.path, &self.draft).and_then(|entry| {
-                        if entry.kind == "package"
-                            || (entry.kind == "campaign" && entry.id != campaign.id)
-                        {
-                            return Err("Keep campaign ownership consistent with settings.".into());
+                    || (reason.is_none()
+                        && ui.input_mut(|i| i.consume_key(egui::Modifiers::COMMAND, egui::Key::S)))
+                {
+                    let result =
+                        splat::content::Entry::parse(&self.path, &self.draft).and_then(|entry| {
+                            if entry.kind == "package"
+                                || (entry.kind == "campaign" && entry.id != campaign.id)
+                            {
+                                return Err(
+                                    "Keep campaign ownership consistent with settings.".into()
+                                );
+                            }
+                            write_note(
+                                &campaign.path,
+                                &self.path,
+                                Some(&self.baseline),
+                                &self.draft,
+                            )
+                        });
+                    match result {
+                        Ok(_) => {
+                            self.baseline = self.draft.clone();
+                            saved = true;
                         }
-                        write_note(
-                            &campaign.path,
-                            &self.path,
-                            Some(&self.baseline),
-                            &self.draft,
-                        )
-                    });
-                match result {
-                    Ok(_) => {
-                        self.baseline = self.draft.clone();
-                        saved = true;
+                        Err(error) => self.error = Some(error),
                     }
-                    Err(error) => self.error = Some(error),
                 }
-            }
-            design::blocked_reason(ui, reason);
+                ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
+                    if self.draft != self.baseline
+                        && design::Action::quiet("Discard repair draft")
+                            .show(ui)
+                            .clicked()
+                    {
+                        self.discarded = Some(self.draft.clone());
+                        self.draft = self.baseline.clone();
+                    }
+                    if let Some(discarded) = &self.discarded
+                        && design::Action::quiet("Undo discard").show(ui).clicked()
+                    {
+                        self.draft = discarded.clone();
+                        self.discarded = None;
+                    }
+
+                    if self.dirty() {
+                        design::status(
+                            ui,
+                            design::Status {
+                                icon: design::icons::DRAFT,
+                                word: "Unsaved",
+                                color: colors().document.unsaved,
+                            },
+                        );
+                    } else {
+                        ui.label(
+                            design::Type::Small
+                                .rich(ui, "No changes yet")
+                                .color(colors().muted),
+                        );
+                    }
+                });
+            });
         });
         saved
     }
