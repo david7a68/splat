@@ -153,3 +153,212 @@ jobs per implementer may help contention, but no global job cap was imposed.
   [scripts](../../devenv.nix), [visual suite](../../src/visual_tests/mod.rs),
   [driver](../../src/visual_tests/driver.rs),
   [comparison](../../src/visual_tests/compare.rs), [profiles](../../Cargo.toml).
+
+
+## Second scan: iteration 2 feedback and partial runs
+
+2026-11-03. Base: `c5b8998dd744c8ebdd5b49ca71f91324044b1a26` (main,
+after PRs 44–47). Same 16-core, 31 GiB machine and pinned toolchain. This scan
+keeps the previous scheduling experiment reverted. The main opportunity is to
+remove redundant feedback runs; all merge gates remain required.
+
+### Changes
+
+- **Show all measured baseline changes before failing.** Regressions and
+  improvements now print before scenario, stale-allowance or regression assertions.
+  Previously a failed scenario or stale allowance could hide a second class of
+  failure in terminal output. Both report files already contained both lists.
+- **Collect text mismatches explicitly.** `SPLAT_VISUAL_DIAGNOSE=1` makes
+  `Driver::expect` record missing text and continue. The suite still fails, even
+  with report enforcement or the full baseline updater enabled. Normal mode still
+  stops at the first missing phrase. Missing controls, raw assertions and async
+  timeouts still stop a scenario; continuing after those could drive the wrong UI.
+  This finds all reached text checks in one run, not checks after an unreachable
+  action. The diagnostic mode cannot produce an eligible baseline observation
+  when any expected text was missing.
+- **Apply saved chrome counts without another visual run.** An eligible run writes
+  `chrome-observation.json` beside its reports. After reviewing the changes, run
+  `devenv shell -- visual-baseline-chrome <label>`. The helper updates only the
+  selected scenarios' three `/egui-chrome` checks. Zero counts remove their old
+  allowances. App checks, workflow allowances, task costs and unselected scenarios
+  retain their counts. It requires the baseline on disk to equal the one used by
+  the run. A started run removes its previous observation before selection or
+  capture cleanup. Failed scenarios, missing full-suite goals, workflow failures
+  and non-chrome regressions prevent observation creation. Unchanged baseline
+  bytes are not rewritten, so a no-op refresh does not invalidate `include_str!`.
+  This command applies measurements; it does not certify later source edits.
+  Run every full gate on the final source after an actual baseline change.
+- **Cache generated fixture PNG bytes.** Module art and character portraits are
+  pure functions of width, height and colour. A process-local cache uses all three
+  inputs as its key. Each scenario still writes independent files into its own
+  world/cache folders; only immutable encoded bytes are shared. Tests compare
+  these bytes against fresh generation and check that editing one world's file
+  does not alter another world. Screenshot rendering, encoding and sizes are
+  unchanged.
+- **Expose stage costs.** `SPLAT_VISUAL_TIMINGS=1` prints lock wait, fixture setup,
+  app/fonts/renderer setup, settling, PNG rendering and PNG encoding/writing.
+  These are per-scenario wall times, with overlapping work; they must not be added
+  as if they were serial stages. SRD work can be inside fixture/setup/settling.
+
+Suggested feedback sequence:
+
+```sh
+# One full feedback run exposes every reached text mismatch and baseline delta.
+SPLAT_VISUAL_DIAGNOSE=1 devenv shell -- cargo test --locked
+# Or capture affected scenarios while working.
+SPLAT_VISUAL_DIAGNOSE=1 devenv shell -- visual-test work --only party,settings
+# Review the reports and captures, fix text expectations, then apply chrome counts
+# from an eligible run. App/workflow/task failures need fixes, not new allowances.
+devenv shell -- visual-baseline-chrome work
+# The final full merge gates are still required.
+devenv shell -- cargo check --locked --tests
+devenv shell -- cargo test --locked
+devenv shell -- check
+devenv shell -- visual-test final
+```
+
+### Measurements and limits
+
+| Stage or workflow | Before median | After median | Interpretation |
+| --- | ---: | ---: | --- |
+| Refresh chrome counts from an already completed run | 38.20 s | 0.10 s | Removes a redundant full visual run; linked test execution plus devenv, build excluded. Final merge gates still run. |
+| Complete 965-PNG run, no video | 42.95 s | 43.08 s | Effectively unchanged (+0.3%); no claim of a full-suite wall-time gain. |
+| Two-scenario feedback, existing video-on / PNG-only option | 16.01 s | 14.64 s | Existing switch, not a new default; same 60 PNGs and checks. |
+| Reached missing text checks exposed per controlled failing run | 1 | 2 | Opt-in diagnosis; all four runs still failed with status 101. |
+| Generate fixture PNG bytes, 39 worlds × 6 inputs, writes excluded | 4.04 s | 0.20 s | Fresh process per run, same 1,499,472 returned bytes; this removes duplicate work, not screenshot captures. |
+
+These rows are separate stages and workflows, not additive iteration savings.
+A real baseline edit still requires a rebuild and every full final gate. The
+refresh comparison reused the same valid measurements and unchanged counts to
+isolate redundant remeasurement versus applying saved data. The observed chrome
+baseline was unchanged in this PR. The final CLI no-op check also verifies that
+applying unchanged counts preserves the baseline's modification time.
+
+All paired measurements alternate before, after, before, after. Each median uses
+two runs per state. Only one of our builds/benchmarks ran at once. A 250 ms
+process monitor recorded Cargo, rustc, devenv, Splat and ffmpeg processes. The
+run table below marks other builds. Reviewers continued reading PNGs. These are
+measurements with no detected competing build, not a reproduction of five
+implementers rebuilding at once. They cannot promise the same gains under that
+load. Linked before/after test executables were saved under this worktree's
+`target/audit-speed/`, then run through the same devenv shell. Compilation is
+excluded from those paired rows. Raw commands, timestamps, process samples,
+stdout and stderr are under ignored `artifacts/screenshots/audit-speed-2/`.
+Build output stayed in `target/`; no build output or large files went into `/tmp`.
+
+For `party,settings` before fixture caching, the first PNG-only run took
+14.72 s wall / 14.54 s inside the suite. Outside-test overhead was about 0.18 s,
+including devenv entry, process start and process exit. Each scenario's fixture
+took about 1.2 s; combined app/font/renderer setup took 41–64 ms. Party spent
+6.05 s settling, 0.49 s rendering PNGs and 0.55 s encoding/writing PNGs; Settings
+spent 12.23 s settling, 0.43 s rendering and 0.46 s encoding/writing. Those
+per-scenario stages overlap with the other scenario. Font bytes are embedded;
+there is no font-file download. SRD and definition entries are parsed once per
+process, then reused. The remaining time includes interaction, checks and frame
+work. These timers do not isolate SRD parsing or each individual window size.
+All existing size plans, including HiDpi captures, remain in the measured totals.
+
+Optional video added only about 1.36 s here. It does not explain a 60–137 s
+partial run by itself. `world_root` instead holds `/tmp/splat-visual-world.lock`
+for the entire suite. The pinned shell leaves `TMPDIR` unset, so the worktrees
+share that path. No lock wait was significant in these idle-build measurements;
+under five implementers, waiting behind one 38–43 s full suite is a plausible
+large fixed cost. This scan measures the wait but does not remove the lock,
+change fixture paths or claim a measured five-way speedup. Reducing settle
+frames, repaint checks, states or sizes was not attempted.
+
+| Run, in pair order | Seconds | Start (Toronto) | Other build | Exit |
+| --- | ---: | --- | --- | ---: |
+| retained-before-1 | 43.408 | 05:36:31 | No | 0 |
+| retained-after-1 | 43.221 | 05:37:14 | No | 0 |
+| retained-before-2 | 42.497 | 05:37:58 | No | 0 |
+| retained-after-2 | 42.946 | 05:38:40 | No | 0 |
+| refresh-before-1 | 38.332 | 05:28:47 | No | 0 |
+| refresh-after-1 | 0.109 | 05:29:26 | No | 0 |
+| refresh-before-2 | 38.072 | 05:29:26 | No | 0 |
+| refresh-after-2 | 0.096 | 05:30:04 | No | 0 |
+| fixture-before-1 | 4.052 | 05:42:22 | No | 0 |
+| fixture-after-1 | 0.197 | 05:42:26 | No | 0 |
+| fixture-before-2 | 4.036 | 05:42:26 | No | 0 |
+| fixture-after-2 | 0.198 | 05:42:30 | No | 0 |
+| small-video-1 | 15.983 | 05:30:13 | No | 0 |
+| small-png-1 | 14.720 | 05:30:29 | No | 0 |
+| small-video-2 | 16.036 | 05:30:44 | No | 0 |
+| small-png-2 | 14.569 | 05:31:00 | No | 0 |
+| fault-normal-1 | 8.268 | 05:35:54 | No | 101 |
+| fault-diagnose-1 | 8.419 | 05:36:02 | No | 101 |
+| fault-normal-2 | 8.327 | 05:36:10 | No | 101 |
+| fault-diagnose-2 | 8.273 | 05:36:19 | No | 101 |
+
+Exploratory diagnostics-only and module-art-only pairs were superseded by the
+retained implementation's pairs above. Their logs remain in the same folder.
+An initial isolated fixture probe had the wrong image-count assertion (five
+instead of six); those failed probes are excluded, and its corrected paired
+runs use two module images plus four portraits.
+
+### Fidelity and verification
+
+Final retained-source validation passed:
+
+- `cargo check --locked --tests` and `check` (fmt plus warnings-denied Clippy).
+- `cargo test --locked`: 187 library and 486 binary tests passed. The 11 existing
+  ignored tests remain unchanged. The new ignored baseline command was exercised
+  explicitly through `visual-baseline-chrome`.
+- `SPLAT_VISUAL_VIDEO=0 visual-test audit-speed-final`: all 42 scenarios and 965
+  PNGs, with the original 960x640 / 1200x800 / 1920x1080 and HiDpi capture plans.
+- A 60-PNG `party,settings` partial run and the actual CLI chrome updater passed.
+  An unchanged update preserved both baseline bytes and modification time.
+- Stale-baseline, incomplete-run and invalid-selection probes were rejected.
+  Diagnostic mode also remained a failure in report mode. None of these negative
+  probes wrote baseline counts or left an eligible observation.
+- Tests verify exact generated PNG bytes, independent world files, selected-only
+  chrome changes, zero-count removal, unchanged app/workflow/task allowances,
+  accumulated text failures and normal mode's existing immediate panic.
+- Baseline counts, scenario scripts, capture scheduling, render/PNG encoders,
+  window sizes, gate commands, Cargo profiles and lockfiles have no final diff.
+  `git diff --check` passed.
+
+All four retained paired full runs have identical capture names and dimensions
+and byte-identical ergonomics JSON/Markdown reports. The final real `visual-test`
+reports also match the before run byte for byte. Existing image nondeterminism
+remains: before/before has 35 changed PNG hashes (8 above the existing tolerance),
+after/after 30 (9 above), and before/after 16 (8 above). The larger differences
+are in copied-content states and a conflict note; the other differences have a
+maximum channel gap of one. The previous scan already recorded this problem;
+`content_workspace::CopyPlan::prepare` still uses `Uuid::new_v4()`. No masking, tolerance
+increase, scheduling change or reduced capture coverage was introduced. This
+scan therefore proves exact fixture PNG inputs and matching reports/inventories,
+not byte-identical screenshots from an app that already varies between runs.
+Raw file-by-file comparisons are in `audit-speed-2/fidelity.json`.
+
+The fixture microbenchmark calls the actual old generator or the new cache,
+234 times in a fresh process. It includes a cold cache in each after run. Its
+in-test medians are 3.93 s and 0.10 s; the table includes shell/process overhead.
+It excludes file writes and overlapping scenario work, which is why its gain
+must not be presented as a four-second full-suite wall-time gain. The temporary
+ignored benchmark and injected failing phrases were restored before commit;
+their source and logs are kept only under ignored screenshot artifacts.
+
+### Larger ideas not implemented
+
+These are estimates, not measured gains from this scan.
+
+| Idea | Likely opportunity | Estimated effort |
+| --- | --- | --- |
+| Isolate visual worlds while retaining their visible absolute paths | `world_root` holds one exclusive lock for the complete suite. Five worktrees queue on it even with private `target/` directories. Removing a queued full run can save roughly one suite duration per waiter; changing paths directly changes captures. Linux mount namespaces could isolate the same paths, but need portability, cleanup and capture proof. | 0.5–1 day |
+| Cache a verified immutable catalogue or parts of seeded worlds | SRD and definition entries already use `OnceLock`; blindly adding another parsed-SRD cache will not help. Rebuilding catalogues, fixtures and app state remains a candidate. Possible 1–10 s per full run; not isolated here. | 0.5–1 day |
+| Fix remaining UUID/display nondeterminism, then revisit bounded scheduling | The prior limit-16 trial saved about 6 s, but was reverted because identical pixels could not be proved. Keep it reverted until all visible generated values repeat. | 2–4 h for reproducibility investigation, then repeat the paired scheduling study |
+| Reuse software render resources between scenarios | Setup is small in a two-scenario run but grows under 42-scenario load. Shared textures/devices need isolation proof. Possible 0–3 s per run, unmeasured. | 0.5 day |
+| Tune PNG filters or compression | The image crate already defaults to Fast compression with Adaptive filtering. Lossless alternatives might save a fraction of PNG encoding time, but would change file hashes and sizes. No encoder or tolerance change was made. | 1–2 h plus full decoded-image comparisons |
+| Limit Cargo jobs across five implementers | May reduce compile contention; this scan ran while reviewers, rather than implementers, were active. No evidence here for a specific cap. | 30–60 min of controlled five-worktree trials |
+
+Source evidence: [suite and shared lock](../../src/visual_tests/mod.rs),
+[driver and timings](../../src/visual_tests/driver.rs),
+[baseline selection and comparison](../../src/visual_tests/ergonomics.rs),
+[fixtures](../../src/visual_tests/fixture.rs),
+[embedded SRD cache](../../src/content/builtin.rs),
+[definition cache](../../src/content/definitions.rs),
+[fonts](../../src/design/theme.rs),
+[video pipeline](../../src/visual_tests/video.rs), and
+[shell commands](../../devenv.nix). The linked primary Cargo/Mesa documentation
+above still applies; no compiler, renderer, job limit or dependency version changed.

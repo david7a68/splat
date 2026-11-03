@@ -53,6 +53,18 @@
     echo "Output: $out"
     exit "$status"
   '';
+  # Apply only chrome counts from a completed full or --only run, without recapturing.
+  scripts.visual-baseline-chrome.exec = ''
+    if [ "$#" -ne 1 ]; then
+      echo "Use: visual-baseline-chrome <label>" >&2
+      exit 2
+    fi
+    case "$1" in
+      "" | */* | .*) echo "Use a plain capture label." >&2; exit 2 ;;
+    esac
+    SPLAT_VISUAL_BASELINE_RUN="$PWD/artifacts/screenshots/$1" \
+      cargo test --locked --bin splat visual_update_chrome -- --ignored --nocapture
+  '';
   # A sheet is optional and can be made from existing captures without rerunning tests.
   scripts.visual-contact-sheet.exec = ''
     if [ "$#" -ne 1 ]; then

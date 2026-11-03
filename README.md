@@ -69,6 +69,20 @@ or set `SPLAT_VISUAL_CONTACT_SHEET=1` to make it with a full `visual-test` run.
 
 - `SPLAT_VISUAL_ENFORCE=strict` fails on any violation. `report` never fails on a check.
 - `SPLAT_VISUAL_UPDATE_BASELINE=1` rewrites the baseline after a full run.
+- After reviewing chrome changes, `devenv shell -- visual-baseline-chrome work`
+  applies the saved chrome counts from label `work` without running scenarios again.
+  This also works after `--only`: it changes only those scenarios' egui chrome counts,
+  including counts that fell to zero. App allowances, task costs and other scenarios
+  stay as they were. The run must finish without scenario, workflow or app regressions;
+  the helper refuses a baseline that changed since the run. A started run clears any
+  earlier observation; incomplete scenarios do not generate one. The full merge gates still run.
+- `SPLAT_VISUAL_DIAGNOSE=1` collects missing `d.expect(...)` text in one run and
+  still fails at the end, even in report mode. Missing controls, failed raw assertions
+  and async timeouts still stop that scenario. The terminal and `ergonomics.md` show
+  all measured baseline changes, even when another failure ends the test.
+- `SPLAT_VISUAL_TIMINGS=1` prints world-lock wait, fixture setup, app/font/renderer
+  setup, settling, PNG rendering and PNG encoding/writing times. Per-scenario times
+  overlap because the scenarios run in parallel; do not add them as wall time.
 - `SPLAT_VISUAL_SCENARIOS=party,settings` runs only those scenarios. `visual-test <label> --only
   party,settings` is the same, and keeps the captures of the label's other scenarios.
 - `SPLAT_VISUAL_VIDEO=0` turns video off for `visual-test`.

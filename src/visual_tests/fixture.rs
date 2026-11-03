@@ -17,6 +17,7 @@ use splat::{
 use std::{
     fs,
     path::{Path, PathBuf},
+    sync::{Arc, Mutex, OnceLock},
 };
 
 pub const REMOTE_CAMPAIGN: &str = "7700001";
@@ -315,13 +316,31 @@ fn picture_bytes(width: u32, height: u32, color: [u8; 3]) -> Result<Vec<u8>, Str
     Ok(bytes)
 }
 
+/// Cache only immutable encoded bytes, keyed by every input to the generator.
+/// Each scenario still writes and owns its own module art and portrait files.
+fn cached_picture_bytes(width: u32, height: u32, color: [u8; 3]) -> Result<Arc<[u8]>, String> {
+    type Pictures = std::collections::BTreeMap<(u32, u32, [u8; 3]), Arc<[u8]>>;
+    static PICTURES: OnceLock<Mutex<Pictures>> = OnceLock::new();
+    let mut pictures = PICTURES
+        .get_or_init(Mutex::default)
+        .lock()
+        .map_err(|e| e.to_string())?;
+    let key = (width, height, color);
+    if let Some(bytes) = pictures.get(&key) {
+        return Ok(Arc::clone(bytes));
+    }
+    let bytes: Arc<[u8]> = picture_bytes(width, height, color)?.into();
+    pictures.insert(key, Arc::clone(&bytes));
+    Ok(bytes)
+}
+
 /// Art for the module: one creature of its own, and a default picture for one creature type.
 fn write_art(root: &Path) -> Result<(), String> {
     let art = root.join("Art");
     fs::create_dir_all(&art).map_err(|e| e.to_string())?;
-    let wolf = picture_bytes(480, 640, [190, 96, 52])?;
+    let wolf = cached_picture_bytes(480, 640, [190, 96, 52])?;
+    let humanoid = cached_picture_bytes(320, 320, [84, 118, 170])?;
     fs::write(art.join("cinder-wolf.png"), wolf).map_err(|e| e.to_string())?;
-    let humanoid = picture_bytes(320, 320, [84, 118, 170])?;
     fs::write(art.join("type-humanoid.png"), humanoid).map_err(|e| e.to_string())?;
     let index = json!({
         "splat_art": 1,
@@ -713,7 +732,7 @@ fn party(
         cache.save(campaign, &record)?;
         if let Some(url) = record.portrait_url() {
             let color = hero.portrait_color();
-            let bytes = picture_bytes(320, 320, color)?;
+            let bytes = cached_picture_bytes(320, 320, color)?;
             cache.save_portrait(campaign, REMOTE_CAMPAIGN, hero.id, url, &bytes)?;
         }
         record.save_campaign_copy(campaign_path)?;
@@ -1186,4 +1205,46 @@ impl Hero {
         let fetched = hermetic::closed::FIXED_NOW - 3 * 3600;
         EntitySnapshot::from_beyond(raw, computed, REMOTE_CAMPAIGN, self.id, fetched, fetched)
     }
+}
+
+#[test]
+fn cached_art_is_byte_identical_and_world_files_remain_independent() {
+    let first = tempfile::tempdir().unwrap();
+    let second = tempfile::tempdir().unwrap();
+    write_art(first.path()).unwrap();
+    let wolf = picture_bytes(480, 640, [190, 96, 52]).unwrap();
+    let humanoid = picture_bytes(320, 320, [84, 118, 170]).unwrap();
+    assert_eq!(
+        fs::read(first.path().join("Art/cinder-wolf.png")).unwrap(),
+        wolf
+    );
+    assert_eq!(
+        fs::read(first.path().join("Art/type-humanoid.png")).unwrap(),
+        humanoid
+    );
+    for hero in HEROES {
+        let color = hero.portrait_color();
+        assert_eq!(
+            cached_picture_bytes(320, 320, color).unwrap().as_ref(),
+            picture_bytes(320, 320, color).unwrap()
+        );
+    }
+    fs::write(
+        first.path().join("Art/cinder-wolf.png"),
+        b"edited by one scenario",
+    )
+    .unwrap();
+    write_art(second.path()).unwrap();
+    assert_eq!(
+        fs::read(second.path().join("Art/cinder-wolf.png")).unwrap(),
+        wolf
+    );
+    assert_eq!(
+        fs::read(second.path().join("Art/type-humanoid.png")).unwrap(),
+        humanoid
+    );
+    assert_eq!(
+        fs::read(first.path().join("Art/cinder-wolf.png")).unwrap(),
+        b"edited by one scenario"
+    );
 }
