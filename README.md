@@ -217,7 +217,7 @@ wins over both. With sync on, a first read still takes the sheet's value for HP 
 not carry over.
 
 **Session** holds session notes and session templates, as Markdown in the campaign's session folder (`Sessions`
-by default; change it under **Campaign → Link and folder**). **Timeline** holds every encounter, rest, travel interval, day and other
+by default; change it under **Campaign → Link and folder**). A folder change counts what stays behind and offers **Move files and save** or **Save without moving**. Moving keeps note text, templates, events, audio and processing files, and refuses to replace an existing file. **Timeline** holds every encounter, rest, travel interval, day and other
 major event in story order, in `Timeline.md` in the same folder. It is also the campaign's one clock, in hours, counted
 from the first **Day**. A **Day** moves to the start of the next day. A rest adds 8 hours or 1 hour unless you say otherwise,
 and any event adds its length when it reads as a number and a unit, such as `3 days` or `an hour`. A length it cannot read
@@ -225,14 +225,14 @@ moves nothing, and the row says so. A fight does not move the clock. The list in
 writes the body from it. An encounter run adds its own event when combat begins. New events and runs go to the newest
 session unless you choose another on the Timeline page. **Notes** (Ctrl+J) opens that session's note beside any page.
 
-A planned fight with a saved run offers **Resume**, as the primary action for the first waiting fight when no run is open. A run before combat says **Setup**; a closed unfinished run adds **Paused**. Its menu holds **Start a new run** and **Delete the saved run**, with undo for deletion. The open fight has a status link in the plan; the run strip keeps **Back to run**. A played fight shows its result and last round once. It opens a grid of final party HP with first names, then **Log**, **Whole run** and **Timeline** links.
+A planned fight with a saved run offers **Resume**, as the primary action for the first waiting fight when no run is open. A run before combat says **Setup**; a closed unfinished run adds **Paused**. Its menu holds **Start a new run** and **Delete the saved run**, with undo for deletion. Every planned fight also has **Remove from tonight**: it removes one link from the plan and offers **Undo remove** below the row. The open fight has a status link in the plan; the run strip keeps **Back to run**. A played fight shows its result and last round once. It opens a grid of final party HP with first names, then **Log**, **Whole run** and **Timeline** links.
 
 Session and Timeline use the same quiet **Add** strip: **Fight**, **Group** (plan only), **Day**, **Long rest**, **Short rest**, **Travel**, **Major event**. A new plan event stays closed and uses its kind as its title. Open its row for **Title** and **Notes**, or follow **Timeline** for **How long** and **Where**. A new event on Timeline opens with **Title** focused. On Timeline, **Adds to** chooses the session. The detail column opens only when an event is selected. Its title, save state, **Copy link** and row menu stay above the fields as they scroll. **Place after** sets the event order.
 
 The note conflict view opens at the first line that differs, with a line count and **Next difference**. **Reload and lose my draft** is red and separate from **Overwrite with my draft**. Starting a session during a fight offers **Move it here** to move its timeline event in one step.
 
 Each event has a reference such as `[[Timeline#^t-1a2b3c4d5e|Rest at the mill]]`. Paste it in any note: it is a block
-link in Obsidian, and Splat lists the notes that link to an event.
+link in Obsidian, and Splat lists the notes that link to an event. Renaming an event offers **Update links in notes** below its Title field. The update has one Undo in the Timeline list. That Undo clears at the next note or event edit or when you leave Timeline.
 
 In the Reader, bold words such as `**Docket**` are links to Lookup. A unique matching name opens
 directly. Otherwise, Lookup shows a search for those words. Bold text inside an explicit link
@@ -251,7 +251,7 @@ Nothing leaves the computer until you select **Process** on a recording. Choose 
 1. A **speech service** writes `<recording>.transcript.md`. The default is OpenAI's `gpt-transcribe`, and any service
    with the OpenAI `audio/transcriptions` API works. It needs a key, kept in the desktop keyring. Audio goes up in parts
    of at most 10 minutes (the limit is 25 MB), each cut at the quietest moment nearby, and each with the end of the last
-   part as its `prompt`. Processing resumes at the next part after a failure.
+   part as its `prompt`. **Continue processing** resumes at the next part after a failure.
 2. An **LLM** goes over the transcript twice. The default is `gpt-6.1-sol` through the `codex` command, with your Codex
    sign-in, in a read-only sandbox. Anthropic and any OpenAI-compatible API are options. The Codex CLI takes no audio, so
    step 1 cannot use it.

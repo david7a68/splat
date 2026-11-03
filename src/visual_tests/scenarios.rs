@@ -1188,6 +1188,7 @@ pub mod settings {
 
         d.click("Connect…");
         d.type_into(COOKIE_FIELD, SYNTHETIC_COOKIE);
+        d.wait_for_text("Remember my D&D Beyond sign-in on this computer");
         d.state("cookie-entered", Sizes::Default);
         d.click(CONNECT);
         d.expect(OFFLINE_ERROR);
@@ -1247,7 +1248,7 @@ pub mod settings {
                 d.click("Add from D&D Beyond");
             }
             d.row_of("Campaign name");
-            d.wait_for_text("D&D Beyond ID");
+            d.wait_for_text("CAMPAIGN NAME");
             assert_eq!(d.field_text("Campaign name").as_deref(), Some("Salt Road"));
         });
         d.click(CANCEL);
@@ -4116,9 +4117,17 @@ pub mod session_notes {
 
         // A rest, on the session's own page, with no step away from it.
         show_plan(d);
-        d.state("session-events-empty", Sizes::Default);
+        d.wait_for_text("Nothing planned yet.");
+        d.state_prepared("session-plan-fight-picker", Sizes::Default, |d| {
+            if !d.has("Plan Bridge Ambush") {
+                d.click("Add a fight");
+            }
+            d.wait_for_text("Bridge Ambush");
+        });
+        d.press(Key::Escape);
         d.begin_task();
         d.click(ADD_LONG_REST);
+        d.wait_for_text("Long rest added. Everyone starts the next fight at full.");
         d.goal_within("T11.2", "put a long rest on the timeline", 2);
         d.expect("Long rest added. Everyone starts the next fight at full.");
         d.state("session-event-added", Sizes::Default);
@@ -4235,6 +4244,12 @@ pub mod session_notes {
         d.click("Update 1 link in notes");
         d.click_starting("Rest at the mill ·");
         d.click("Open this session");
+        d.settle();
+        d.observe(
+            "iter-4-S2",
+            !d.has("Undo update links"),
+            "Leaving Timeline clears the link-update Undo",
+        );
         read_note(d);
         d.observe(
             "T11.4",
@@ -4244,6 +4259,7 @@ pub mod session_notes {
         write_note(d);
         d.click(NAV_TIMELINE);
         d.click("Rests");
+        d.expect("of 4 events");
         d.state("timeline-filtered", Sizes::Default);
         d.observe(
             "S16",
@@ -4254,6 +4270,7 @@ pub mod session_notes {
         d.click("More actions for Rest at the mill");
         d.click("Remove this event");
         d.expect("Undo remove");
+        d.expect("1 note still links to it.");
         d.state("timeline-removed", Sizes::Default);
         d.click_containing("Travel ·");
         d.observe(
@@ -4352,7 +4369,16 @@ pub mod session_notes {
         d.click("Link and folder");
         d.expect("SESSION FOLDER");
         d.state("session-folder-in-campaign", Sizes::All);
+        d.app_mut().timeline.save();
+        d.replace_text_in("Session folder", "30 Sessions");
+        d.expect("Move files and save");
+        d.expect("Save without moving");
+        d.state("session-folder-move-offered", Sizes::All);
+        d.click("Move files and save");
+        d.expect("Saved");
+        d.state("session-folder-moved", Sizes::Default);
         d.click(NAV_SESSIONS);
+        d.expect(&format!("Session 1: {TITLE}"));
 
         // Reading last week's note does not send tonight's run there.
         d.click(NAV_TIMELINE);
@@ -4986,7 +5012,7 @@ pub mod session_recording {
         d.click(NAV_SESSIONS);
         d.expect("names to api.openai.com");
         d.state("recording-ready", Sizes::Default);
-        // The words were held to 680 before they could follow the column.
+        // Service help stays at the reader measure; recording rows keep the column.
         let notice = d.at_size(LARGE, |d| {
             d.nodes()
                 .into_iter()
@@ -4995,8 +5021,8 @@ pub mod session_recording {
         });
         d.observe(
             "Column resize",
-            notice > 680.0,
-            format!("The Recordings tab's words use the column, {notice} wide"),
+            notice > 0.0 && notice <= crate::design::READER_MEASURE,
+            format!("The processing help stays at the reader measure, {notice} wide"),
         );
         d.observe(
             "T11.6",
@@ -5012,7 +5038,7 @@ pub mod session_recording {
         d.expect("Transcribing part 3 of 24");
         d.state("processing-speech", Sizes::Default);
         d.request_close();
-        d.expect("processing it again goes on from there");
+        d.expect("Continue processing goes on from there");
         d.state("processing-close-prompt", Sizes::Default);
         d.click("Keep running");
         d.app_mut()
@@ -5035,7 +5061,8 @@ pub mod session_recording {
         );
         d.state("processing-second-pass", Sizes::Default);
         d.app_mut().sessions.simulate_job_end(Err(
-            "The LLM is busy, or your limit is reached. Wait, then process it again.".to_owned(),
+            "The LLM is busy, or your limit is reached. Wait, then select Continue processing."
+                .to_owned(),
         ));
         d.settle();
         // A failure reaches the DM on any other page, and a routine message cannot hide it.
@@ -5140,7 +5167,7 @@ pub mod session_recording {
         d.settle();
         d.observe(
             "T11.6",
-            d.has_containing("Processed: check it"),
+            d.has_containing("Processed, with a warning"),
             "A result with a warning does not read as done on other pages",
         );
         d.state("processing-warned-elsewhere", Sizes::Default);
@@ -6097,12 +6124,24 @@ pub mod session_plan {
 
         // T12.1: from the plan to the fight, and back to the plan.
         show_plan(d);
-        d.state("plan-empty", Sizes::Default);
-        for name in [FIRST, SECOND] {
-            d.click("Add a fight");
-            d.click(&format!("Plan {name}"));
-        }
+        d.wait_for_text("Nothing planned yet.");
+        d.state_prepared("plan-fight-picker", Sizes::Default, |d| {
+            if !d.has(&format!("Plan {FIRST}")) {
+                d.click("Add a fight");
+            }
+            d.wait_for_text(FIRST);
+        });
+        d.click(&format!("Plan {FIRST}"));
+        d.click("Add a fight");
+        d.click(&format!("Plan {SECOND}"));
         d.expect(&format!("Start fight: {FIRST}"));
+        d.click(&format!("More actions for {SECOND}"));
+        d.click("Remove from tonight");
+        d.expect(&format!("Removed “{SECOND}” from tonight."));
+        d.state("planned-fight-removed", Sizes::All);
+        d.click("Undo remove");
+        d.expect(&format!("Start fight: {SECOND}"));
+
         d.state("plan-with-fights", Sizes::AllAndHiDpi);
         d.check_tab_order("session plan");
         write_note(d);

@@ -284,16 +284,112 @@ fn session_heading(number: u32, title: &str) -> String {
     }
 }
 
-pub fn create_note(folder: &Path, new: &NewNote<'_>) -> Result<Note, String> {
-    fs::create_dir_all(folder).map_err(|e| format!("Could not create the folder: {e}"))?;
-    let id = crate::hermetic::new_uuid();
-    let mut stem = format!("Session {}", new.number);
-    let title = file_safe(new.title);
+pub(crate) fn note_path(folder: &Path, number: u32, title: &str) -> PathBuf {
+    let mut stem = format!("Session {number}");
+    let title = file_safe(title);
     if !title.is_empty() {
         stem.push_str(" - ");
         stem.push_str(&title);
     }
-    let path = free_path(folder, &stem, "md");
+    free_path(folder, &stem, "md")
+}
+
+/// Files owned by session storage. Other campaign notes stay where they are.
+pub(crate) fn storage_files(folder: &Path) -> Result<Vec<PathBuf>, String> {
+    fn files(root: &Path, out: &mut Vec<PathBuf>) -> Result<(), String> {
+        if !root.exists() {
+            return Ok(());
+        }
+        for item in fs::read_dir(root).map_err(|error| error.to_string())? {
+            let item = item.map_err(|error| error.to_string())?;
+            let path = item.path();
+            if item
+                .file_type()
+                .map_err(|error| error.to_string())?
+                .is_symlink()
+            {
+                return Err(format!(
+                    "{} is a link to another file or folder. Move it by hand first.",
+                    path.display()
+                ));
+            }
+            if path.is_dir() {
+                files(&path, out)?;
+            } else {
+                out.push(path);
+            }
+        }
+        Ok(())
+    }
+    let mut out: Vec<_> = list_notes(folder)
+        .into_iter()
+        .flat_map(|note| std::iter::once(note.path).chain(note.also))
+        .collect();
+    if folder.join("Timeline.md").exists() {
+        out.push(folder.join("Timeline.md"));
+    }
+    files(&folder.join(TEMPLATES), &mut out)?;
+    files(&folder.join(RECORDINGS), &mut out)?;
+    Ok(out)
+}
+
+/// Copy before changing the manifest; retain the old files if any step fails.
+pub(crate) fn move_storage(campaign: &Campaign, name: &str) -> Result<PathBuf, String> {
+    let old = folder(campaign)?;
+    let new = resolve(campaign, name)?;
+    if old == new {
+        return save_folder(campaign, name);
+    }
+    let files = storage_files(&old)?;
+    let pairs: Vec<_> = files
+        .iter()
+        .map(|path| {
+            (
+                path,
+                new.join(path.strip_prefix(&old).expect("storage path")),
+            )
+        })
+        .collect();
+    if let Some((_, target)) = pairs.iter().find(|(_, target)| target.exists()) {
+        return Err(format!(
+            "Not moved. {} already exists. Choose another folder.",
+            target.display()
+        ));
+    }
+    let mut copied = Vec::new();
+    let result = (|| {
+        for (source, target) in &pairs {
+            if let Some(parent) = target.parent() {
+                fs::create_dir_all(parent).map_err(|error| error.to_string())?;
+            }
+            let mut output = fs::OpenOptions::new()
+                .write(true)
+                .create_new(true)
+                .open(target)
+                .map_err(|error| error.to_string())?;
+            copied.push(target.clone());
+            let mut input = fs::File::open(source).map_err(|error| error.to_string())?;
+            std::io::copy(&mut input, &mut output).map_err(|error| error.to_string())?;
+            output.sync_all().map_err(|error| error.to_string())?;
+        }
+        save_folder(campaign, name)
+    })();
+    if result.is_err() {
+        for path in copied {
+            let _ = fs::remove_file(path);
+        }
+    } else {
+        for path in files {
+            let _ = fs::remove_file(path);
+        }
+    }
+    result
+}
+
+pub fn create_note(folder: &Path, new: &NewNote<'_>) -> Result<Note, String> {
+    fs::create_dir_all(folder).map_err(|e| format!("Could not create the folder: {e}"))?;
+    let id = crate::hermetic::new_uuid();
+    let path = note_path(folder, new.number, new.title);
     let mut front = serde_yaml_ng::Mapping::new();
     front.insert("session_id".into(), id.to_string().into());
     front.insert("session_number".into(), u64::from(new.number).into());
@@ -1543,6 +1639,58 @@ mod tests {
         let error = create_template(dir.path(), "Downtime", "Again").unwrap_err();
         assert!(error.contains("already exists"));
         assert!(create_template(dir.path(), "///", "x").is_err());
+    }
+
+    #[test]
+    fn moving_storage_keeps_every_file_and_refuses_collisions() {
+        let dir = tempfile::tempdir().unwrap();
+        let campaign = Campaign {
+            id: Uuid::from_u128(9),
+            name: "Marches".into(),
+            path: dir.path().to_owned(),
+            dndbeyond_campaign_id: None,
+            dndbeyond_campaign_name: None,
+        };
+        let old = folder(&campaign).unwrap();
+        let note = create_note(&old, &new_note(1, "The Bridge", "My words.")).unwrap();
+        let relative = [
+            note.path.strip_prefix(&old).unwrap().to_path_buf(),
+            PathBuf::from("Timeline.md"),
+            PathBuf::from("Templates/Own.md"),
+            PathBuf::from("Recordings/session/audio.wav"),
+            PathBuf::from("Recordings/session/audio.transcript.md"),
+        ];
+        for path in &relative[1..] {
+            fs::create_dir_all(old.join(path).parent().unwrap()).unwrap();
+            fs::write(old.join(path), format!("kept {}", path.display())).unwrap();
+        }
+        fs::write(old.join("Other.md"), "Not a session note.").unwrap();
+        let originals: Vec<_> = relative
+            .iter()
+            .map(|path| fs::read(old.join(path)).unwrap())
+            .collect();
+        let new = dir.path().join("Evenings");
+        fs::create_dir_all(new.join("Templates")).unwrap();
+        fs::write(new.join("Templates/Own.md"), "Existing template").unwrap();
+        assert!(
+            move_storage(&campaign, "Evenings")
+                .unwrap_err()
+                .contains("already exists")
+        );
+        assert_eq!(folder(&campaign).unwrap(), old);
+        assert!(note.path.exists());
+        assert_eq!(
+            fs::read_to_string(new.join("Templates/Own.md")).unwrap(),
+            "Existing template"
+        );
+        fs::remove_file(new.join("Templates/Own.md")).unwrap();
+        assert_eq!(move_storage(&campaign, "Evenings").unwrap(), new);
+        assert_eq!(folder(&campaign).unwrap(), new);
+        for (path, bytes) in relative.iter().zip(originals) {
+            assert_eq!(fs::read(new.join(path)).unwrap(), bytes);
+            assert!(!old.join(path).exists());
+        }
+        assert!(old.join("Other.md").exists());
     }
 
     #[test]
