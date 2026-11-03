@@ -923,7 +923,7 @@ pub fn redirect_reference(text: &str, old: &Entry, new_id: Uuid) -> Result<Strin
     }
     let entry = Entry::parse("reference.md", text)?;
     let mut changes = Vec::new();
-    for (key, value) in &entry.fields {
+    for (key, value) in entry.fields.iter() {
         if ["splat_id", "splat_origin"].contains(&key.as_str().unwrap_or_default()) {
             continue;
         }
