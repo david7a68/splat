@@ -2,7 +2,7 @@
   "violations": {
     "accessible-name/egui-chrome": {
       "campaign-content": 60,
-      "column-resize": 89,
+      "column-resize": 92,
       "dialogs": 45,
       "empty": 15,
       "encounter-build": 55,
@@ -35,10 +35,10 @@
       "run-roster-conflict": 18,
       "run-sync-conflict": 28,
       "run-sync-states": 20,
-      "session-notes": 133,
-      "session-plan": 123,
+      "session-notes": 138,
+      "session-plan": 122,
       "session-plan-groups": 43,
-      "session-recording": 110,
+      "session-recording": 116,
       "settings": 27,
       "signed-in": 39,
       "world": 42
@@ -61,7 +61,7 @@
     },
     "target-size/egui-chrome": {
       "campaign-content": 60,
-      "column-resize": 89,
+      "column-resize": 92,
       "dialogs": 44,
       "empty": 15,
       "encounter-build": 55,
@@ -94,10 +94,10 @@
       "run-roster-conflict": 18,
       "run-sync-conflict": 28,
       "run-sync-states": 20,
-      "session-notes": 133,
-      "session-plan": 120,
+      "session-notes": 138,
+      "session-plan": 119,
       "session-plan-groups": 43,
-      "session-recording": 106,
+      "session-recording": 112,
       "settings": 26,
       "signed-in": 39,
       "world": 41

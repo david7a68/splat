@@ -251,6 +251,25 @@ impl<'a> Driver<'a> {
             .contains(text)
     }
 
+    /// A passage inside a scrolling source editor can be visible while its whole galley is not.
+    pub fn visible_passage(&self, words: &str) -> bool {
+        let mut visible = false;
+        self.each_painted_text(|text, clip| {
+            if let Some(at) = text.galley.job.text.find(words) {
+                let start = text.galley.job.text[..at].chars().count();
+                let end = start + words.chars().count();
+                let bounds = text
+                    .galley
+                    .pos_from_cursor(egui::text::CCursor::new(start))
+                    .union(text.galley.pos_from_cursor(egui::text::CCursor::new(end)))
+                    .translate(text.pos.to_vec2());
+                visible |= clip.expand(1.0).contains_rect(bounds)
+                    && self.harness.ctx.content_rect().contains_rect(bounds);
+            }
+        });
+        visible
+    }
+
     /// What is painted from this label down, in its column and to its right.
     pub fn painted_from_label(&self, name: &str) -> String {
         self.nodes()

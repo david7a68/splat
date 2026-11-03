@@ -197,9 +197,11 @@ moves nothing, and the row says so. A fight does not move the clock. The list in
 writes the body from it. An encounter run adds its own event when combat begins. New events and runs go to the newest
 session unless you choose another on the Timeline page. **Notes** (Ctrl+J) opens that session's note beside any page.
 
-A planned fight with a saved run offers **Resume**. Its menu holds **Start a new run** and **Delete the saved run**, with undo for deletion. The open fight has a status link in the plan; the run strip keeps **Back to run**. A played fight shows its result and last round once. It opens a grid of final party HP with first names, then **Log**, **Whole run** and **Timeline** links.
+A planned fight with a saved run offers **Resume**, as the primary action for the first waiting fight when no run is open. A run before combat says **Setup**; a closed unfinished run adds **Paused**. Its menu holds **Start a new run** and **Delete the saved run**, with undo for deletion. The open fight has a status link in the plan; the run strip keeps **Back to run**. A played fight shows its result and last round once. It opens a grid of final party HP with first names, then **Log**, **Whole run** and **Timeline** links.
 
-Session and Timeline use the same quiet **Add** strip: **Fight**, **Group** (plan only), **Day**, **Long rest**, **Short rest**, **Travel**, **Major event**. A new event opens with **Title** focused. On Timeline, **Adds to** chooses the session. The detail column opens only when an event is selected. Its title, save state, **Copy link** and row menu stay above the fields as they scroll. **Place after** sets the event order.
+Session and Timeline use the same quiet **Add** strip: **Fight**, **Group** (plan only), **Day**, **Long rest**, **Short rest**, **Travel**, **Major event**. A new plan event stays closed and uses its kind as its title. Open its row for **Title** and **Notes**, or follow **Timeline** for **How long** and **Where**. A new event on Timeline opens with **Title** focused. On Timeline, **Adds to** chooses the session. The detail column opens only when an event is selected. Its title, save state, **Copy link** and row menu stay above the fields as they scroll. **Place after** sets the event order.
+
+The note conflict view opens at the first line that differs, with a line count and **Next difference**. **Reload and lose my draft** is red and separate from **Overwrite with my draft**. Starting a session during a fight offers **Move it here** to move its timeline event in one step.
 
 Each event has a reference such as `[[Timeline#^t-1a2b3c4d5e|Rest at the mill]]`. Paste it in any note: it is a block
 link in Obsidian, and Splat lists the notes that link to an event.
@@ -604,7 +606,7 @@ Transport and conflict handling are tested with simulated responses. Live writes
 have not been verified with an authenticated D&D Beyond character. Endpoint
 sources and limits are recorded in [the research notes](docs/research/dndbeyond-combat-writes.md).
 
-Recording failures and stops remain on each recording’s row after you dismiss a banner. Process again retries a failed job from its banner. The result viewer switches directly between its available texts. The rail’s recording status opens the recording in one click.
+Recording failures and stops remain on each recording’s row after you dismiss a banner. A stopped recording links to the microphone input in Settings. **Continue processing** resumes kept work. An active job hides the old cancellation or failure reason. The result viewer keeps its back link, date and Add to notes on one line. View choices sit below them, as a segmented control or a dropdown when space is short. The rail’s recording status opens the recording in one click.
 
 Lookup keeps up to five results above the reader and marks the open one. New NPC and New location include the proposed name, and appear only when no exact match exists. A copy keeps the original name by default and offers Edit the copy after saving. Wide reader tables keep their first column and header in view. World rolls mark their matched row.
 

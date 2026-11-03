@@ -4042,12 +4042,23 @@ pub mod session_notes {
         d.click("Remove this event");
         d.click(NAV_SESSIONS);
         d.click(ADD_TRAVEL);
-        d.type_text("Travel");
-        d.press(Key::Enter);
+        d.observe(
+            "iter-2-S2",
+            !d.has("Title"),
+            "A new plan event stays closed",
+        );
+        d.click("Travel");
+        d.observe(
+            "iter-2-S2",
+            d.field_text("Title").as_deref() == Some("Travel")
+                && !d.has("How long")
+                && !d.has("Where"),
+            "An opened plan event has its kind as Title and keeps duration and place on Timeline",
+        );
         d.observe(
             "S13",
             d.has("Travel"),
-            "A new event accepts its title directly",
+            "A new event starts with its kind as its title",
         );
         d.state("plan-event-title", Sizes::Default);
         d.click(ADD_EVENT);
@@ -4158,7 +4169,13 @@ pub mod session_notes {
         d.press_ctrl(Key::S);
         d.expect("Changed on disk");
         d.expect("Overwrite with my draft");
-        d.click("Show disk version");
+        d.expect("line differs");
+        d.observe(
+            "iter-2-S6",
+            !d.has("Show disk version") && d.in_view_containing("Written in Obsidian."),
+            "The comparison opens at its first difference without another action",
+        );
+        d.click("Next difference");
         d.observe(
             "T11.4",
             d.has_containing("Written in Obsidian."),
@@ -4208,7 +4225,7 @@ pub mod session_notes {
         d.expect("Standard session");
         d.state("templates-built-in", Sizes::All);
         d.click("Customize this template");
-        d.expect("This campaign");
+        d.expect("Campaign");
         d.state("templates-own", Sizes::Default);
         d.type_into_editor("Edited in the template.\n");
         d.click("New template");
@@ -4279,6 +4296,11 @@ pub mod session_notes {
                 && d.editor_text()
                     .is_some_and(|text| text.contains("The ogre fled")),
             "The note goes in the session being played, and the run stays in view",
+        );
+        d.observe(
+            "iter-2-S10",
+            !d.visible_passage("Recap of last time") && d.visible_passage("What happened"),
+            "The Notes panel opens at What happened with repeated note headings scrolled out",
         );
         d.state("run-with-notes", Sizes::All);
         let wide_screen = d.at_size((1536.0, 864.0), |d| d.in_view(NEXT_TURN) && !d.has("Prep"));
@@ -4534,7 +4556,7 @@ pub mod session_notes {
             d.has_containing("Old session"),
             "During a run, the rail says that events are going to an old session",
         );
-        d.click("Play this one");
+        d.click("Play it tonight");
         d.observe(
             "T11.8",
             !d.has_containing("This session is dated"),
@@ -4576,6 +4598,20 @@ pub mod session_notes {
             "A new session during a run says that the run's event stays where it was",
         );
         d.state("new-session-during-run", Sizes::Default);
+        d.click("Move it here");
+        let current = d.app_mut().sessions.current();
+        let moved = d
+            .app_mut()
+            .timeline
+            .events
+            .iter()
+            .any(|event| event.run.is_some() && event.session == current);
+        d.observe(
+            "iter-2-S17",
+            moved,
+            "The running fight moves to this session without leaving the page",
+        );
+        d.state("run-moved-to-session", Sizes::Default);
 
         // Setup beside the notes. Each digit must stay in its field.
         d.click(BACK_TO_RUN);
@@ -4658,6 +4694,13 @@ pub mod session_recording {
     const RECORDING: &str = "19:00";
     const WARNING: &str = "The second pass returned no transcript, so the first pass's transcript stands without a check.";
 
+    fn choose_view(d: &mut Driver<'_>, name: &str) {
+        if d.has("Recording view") {
+            d.click("Recording view");
+        }
+        d.click(name);
+    }
+
     pub fn run(d: &mut Driver<'_>) {
         d.click(NAV_SESSIONS);
         new_session(d, TITLE);
@@ -4697,7 +4740,7 @@ pub mod session_recording {
         d.settle();
         d.expect("Hearing sound");
         d.state("recording-hearing", Sizes::AllAndHiDpi);
-        d.click("Recordings (1)");
+        d.click("Recordings");
         d.expect("· Recording");
         d.state("recording-listed", Sizes::Default);
         write_note(d);
@@ -4776,7 +4819,7 @@ pub mod session_recording {
         d.click("Stop recording");
         d.expect("saved: 2026-01-01 19:00");
 
-        d.click("Recordings (1)");
+        d.click("Recordings");
         d.expect(RECORDING);
         d.observe(
             "T11.5",
@@ -4788,10 +4831,10 @@ pub mod session_recording {
         // T11.6: the default services are named, and what is missing is said.
         d.observe(
             "T11.6",
-            d.has_containing("Save an API key for this speech service"),
+            d.has_containing("Save an OpenAI key in Settings"),
             "Process states what is missing before it can run",
         );
-        d.click("Open Settings");
+        d.click("Save an OpenAI key in Settings");
         d.expect("Speech service");
         d.state("processing-settings", Sizes::All);
         d.observe(
@@ -4877,6 +4920,12 @@ pub mod session_recording {
         });
         d.settle();
         d.expect("Pass 2 of 2: checking the first pass, 42 s");
+        d.observe(
+            "iter-2-R1",
+            !d.has_containing("Cancelled at part")
+                && !d.has_containing("Processing it again goes on"),
+            "A new processing pass hides the old cancellation reason",
+        );
         d.state("processing-second-pass", Sizes::Default);
         d.app_mut().sessions.simulate_job_end(Err(
             "The LLM is busy, or your limit is reached. Wait, then process it again.".to_owned(),
@@ -4929,11 +4978,35 @@ pub mod session_recording {
         d.state("marked-transcript", Sizes::All);
         d.click("Earlier part");
         d.expect("Part 1 of 2");
-        d.click("What the check changed");
+        choose_view(d, "What the check changed");
         d.expect("Restored");
         d.state("second-pass-review", Sizes::Default);
-        d.click("Summary");
-        d.state("recording-summary", Sizes::Default);
+        choose_view(d, "Summary");
+        let viewer_layout = d.at_size(SMALL, |d| {
+            let back = d.place_of("Back to recordings").unwrap();
+            let add = d.place_of("Add to notes").unwrap();
+            let views: Vec<_> = [
+                "Summary",
+                "Clean transcript",
+                "What the check changed",
+                "Raw transcript",
+            ]
+            .iter()
+            .filter_map(|name| d.place_of(name))
+            .collect();
+            (back.center().y - add.center().y).abs() < 1.0
+                && views.len() == 4
+                && views.iter().all(|view| {
+                    view.top() >= back.bottom() && (view.top() - views[0].top()).abs() < 1.0
+                })
+                && (views[0].left() - back.left()).abs() < 1.0
+        });
+        d.observe(
+            "iter-2-R11",
+            viewer_layout,
+            "Navigation and Add to notes share a line; all four view choices stay on the next line",
+        );
+        d.state("recording-summary", Sizes::All);
         d.click("Back to recordings");
         d.click(NAV_TIMELINE);
         d.observe(
@@ -4972,6 +5045,7 @@ pub mod session_recording {
         d.click("Not now");
 
         d.click_containing("More actions for 2026-01-01");
+        d.expect("Delete recording:");
         d.state("recording-row-menu", Sizes::All);
         d.click_containing("Delete recording:");
         d.expect("Keep the recording");
@@ -5032,6 +5106,26 @@ pub mod session_recording {
             "A note whose file went keeps its words, saved under a new identity",
         );
         d.goal("record a session and process it");
+
+        // A separate responsive check follows the measured workflow.
+        d.click("Record this session");
+        d.click("Start recording");
+        d.click("Stop recording");
+        d.click("Recordings");
+        d.click_containing("Process:");
+        d.expect("Summary");
+        d.click("Summary");
+        d.press_ctrl(Key::K);
+        d.expect("Recording view");
+        choose_view(d, "Raw transcript");
+        d.observe(
+            "iter-2-R11",
+            d.visible_text("Raw transcript") && !d.has("Add to notes"),
+            "The narrow viewer's dropdown switches to the raw transcript",
+        );
+        choose_view(d, "Summary");
+        d.state("recording-summary-narrow", Sizes::Default);
+        d.press_ctrl(Key::K);
     }
 }
 
@@ -5898,11 +5992,8 @@ pub mod session_plan {
         read_note(d);
         d.observe(
             "T12.1",
-            !d.visible_text("[[")
-                && d.nodes().iter().any(|node| {
-                    node.role == egui::accesskit::Role::Link && node.name.contains(FIRST)
-                }),
-            "The Reader shows a fight's words as an inline link",
+            !d.visible_text("[[") && d.visible_text("2 fights, in the plan"),
+            "Read summarizes fights already shown in the plan and keeps the links in the file",
         );
         d.state("note-read-with-links", Sizes::Default);
         show_plan(d);
