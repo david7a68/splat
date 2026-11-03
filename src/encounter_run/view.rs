@@ -2593,11 +2593,7 @@ impl Run {
                         .iter()
                         .find(|(panel, _)| *panel == self.panel)
                         .map(|(_, label)| *label);
-                    let word = "Fight";
-                    let button = Action::quiet(word)
-                        .icon(icons::DOWN)
-                        .name("Fight menu")
-                        .show(ui);
+                    let button = design::menu_button(ui, "Fight", false);
                     egui::Popup::menu(&button).show(|ui| {
                         for (panel, label) in fight {
                             let action = egui::Button::new(label).selected(self.panel == panel);
@@ -2649,7 +2645,22 @@ impl Run {
                         icons::SESSIONS,
                         "No prep notes yet",
                         "Add read-aloud text or notes when you edit the encounter.",
-                        |_| {},
+                        |ui| {
+                            if let Some(item) = self.content.as_ref().and_then(|index| {
+                                index.items.iter().find(|item| {
+                                    Some(item.entry.id) == self.source
+                                        && item.entry.kind == "encounter"
+                                })
+                            }) && Action::quiet("Edit encounter").show(ui).clicked()
+                            {
+                                ui.ctx().data_mut(|data| {
+                                    data.insert_temp(
+                                        egui::Id::new("edit_run_encounter"),
+                                        item.entry.path.clone(),
+                                    )
+                                });
+                            }
+                        },
                     );
                 } else {
                     design::group_label(ui, READ_ALOUD);
@@ -3472,14 +3483,20 @@ impl Run {
                 }
                 ui.add_space(design::L);
                 design::group_heading(ui, "DM notes", 0);
+                let mut note_reason_below = false;
                 ui.horizontal(|ui| {
                     correction_label(ui, "Note");
+                    let reason_width = design::number_width(ui, "Type a note first.", &Type::Small.font(ui)) + design::S;
+                    let button_width = Action::secondary("Add note").density(Density::Read).natural_width(ui);
+                    let empty = self.note.trim().is_empty();
+                    note_reason_below = empty && ui.available_width() < button_width + reason_width + design::XXL * 3.0;
+                    let reserved = if empty && !note_reason_below { reason_width } else { 0.0 };
                     design::text_input(
                         ui,
                         "DM note",
                         &mut self.note,
-                        "Type a note first.",
-                        (ui.available_width() - Action::secondary("Add note").density(Density::Read).natural_width(ui) - ui.spacing().item_spacing.x).max(design::XXL),
+                        "What happened",
+                        (ui.available_width() - button_width - reserved - ui.spacing().item_spacing.x).max(design::XXL),
                     );
                     if Action::secondary("Add note")
                         .name("Add note")
@@ -3490,7 +3507,14 @@ impl Run {
                     {
                         command = Some(Command::Note(index, self.note.clone()));
                     }
+                    if empty && !note_reason_below { design::blocked_reason(ui, Some("Type a note first.")); }
                 });
+                if note_reason_below {
+                    ui.horizontal(|ui| {
+                        correction_label(ui, "");
+                        design::blocked_reason(ui, Some("Type a note first."));
+                    });
+                }
                 if !p.notes.is_empty() {
                     ui.add(
                         egui::Label::new(Type::Body.rich(ui, &p.notes).color(colors().text)).wrap(),

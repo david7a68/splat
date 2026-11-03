@@ -361,7 +361,11 @@ impl Draft {
             }
             match (&slot.creature, &slot.party_slot) {
                 (Some(reference), None) => {
-                    let id = snapshot.catalogue.resolve_ref(reference)?;
+                    let id = snapshot.catalogue.resolve_ref(reference).map_err(|_| {
+                        reference.id.and_then(|id| snapshot.catalogue.unreadable.get(&id))
+                            .map_or_else(|| format!("{} is not found. Choose a replacement in the roster.", roster_name(slot, None, &snapshot.known_creature_names)),
+                                |note| format!("{}. Open in Library to fix it.", note.word))
+                    })?;
                     if !snapshot.creatures.iter().any(|c| c.id == id) { return Err(format!("{}: creature is unavailable in campaign content.", slot.key)); }
                     self.validate_overrides(slot, &snapshot.catalogue.entries[&id].entry)?;
                 }
@@ -1555,6 +1559,20 @@ impl Encounters {
         self.creature = None;
     }
     /// Start a fight from a saved encounter, with no editor left open.
+    pub fn edit_path(&mut self, path: &str, active: &Campaign) {
+        match Draft::open(&active.path, path) {
+            Ok(draft) => {
+                self.search.clear();
+                self.draft = Some(draft);
+                self.from_session = false;
+                self.plan_on_save = false;
+                self.error = None;
+                self.message = None;
+            }
+            Err(error) => self.error = Some(error),
+        }
+    }
+
     pub fn run_path(&mut self, path: &str, active: &Campaign, modules: &[Module]) {
         if let Some(reason) = self.start_blocked() {
             self.error = Some(reason.to_owned());
@@ -3318,6 +3336,8 @@ impl Encounters {
                     .map(|e| &e.entry);
                 let name = roster_name(slot, definition, &snapshot.known_creature_names);
                 let missing = definition.is_none();
+                let unreadable = slot.creature.as_ref().and_then(|reference| reference.id)
+                    .and_then(|id| snapshot.catalogue.unreadable.get(&id));
                 let creature =
                     resolved.and_then(|id| snapshot.creatures.iter().find(|c| c.id == id));
                 let synced = live.is_some() && creature.is_some_and(|c| c.party);
@@ -3353,7 +3373,7 @@ impl Encounters {
                 let identity = definition.filter(|_| slot.overrides.contains_key("name")).map(|entry| format!(" · as {}", entry.name)).unwrap_or_default();
                 let side = design::reader::human_label(&slot.side);
                 let detail = if missing {
-                    format!("{side} · {} {MISSING_CREATURE}", icons::WARN)
+                    format!("{side} · {} {}", icons::WARN, unreadable.map_or(MISSING_CREATURE, |note| note.word.as_str()))
                 } else if detail.is_empty() {
                     format!("{side_icon} {side}{identity}")
                 } else {
@@ -3374,7 +3394,11 @@ impl Encounters {
                             }
                             if menu_action(ui, "Remove", None) { remove = Some(i); }
                         });
-                        if Action::quiet("Edit")
+                        if let Some(note) = unreadable {
+                            if Action::quiet("Open in Library").density(Density::Read).show(ui).clicked() {
+                                ui.ctx().data_mut(|data| data.insert_temp(egui::Id::new("open_library_repair"), note.path.clone()));
+                            }
+                        } else if Action::quiet("Edit")
                             .density(Density::Read)
                             .name(groups::SLOT_OPTIONS)
                             .selected(is_open)
@@ -3427,9 +3451,9 @@ impl Encounters {
                     groups::show_form_when_it_opens(ui);
                     *expanded = Some(slot.key.clone());
                 }
-                if is_open && missing {
+                if is_open && missing && unreadable.is_none() {
                     if let Some((creature, all)) = replace_missing_creature(ui, snapshot, missing_counts[i], &name) { replacement = Some((i, creature, all)); *expanded = None; }
-                } else if is_open {
+                } else if is_open && !missing {
                     ui.horizontal(|ui| {
                         ui.label(Type::Small.rich(ui, "Side").color(colors().muted));
                         side_control(ui, "Side", &mut slot.side, &sides);

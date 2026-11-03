@@ -1758,7 +1758,7 @@ fn sheet_entries(record: &EntitySnapshot, page: usize) -> Vec<SheetEntry> {
 fn detail_intro(ui: &mut egui::Ui, record: &EntitySnapshot, page: usize, search: &str) {
     match page {
         1 => {
-            design::group_heading(ui, "Attacks", record.character.attacks.len());
+            sheet_heading(ui, "Attacks", record.character.attacks.len());
             for attack in &record.character.attacks {
                 let value = &attack["damage"]["value"];
                 let damage = if let Some(n) = value.as_i64() {
@@ -1844,6 +1844,11 @@ fn detail_intro(ui: &mut egui::Ui, record: &EntitySnapshot, page: usize, search:
     }
 }
 
+fn sheet_heading(ui: &mut egui::Ui, title: &str, count: usize) {
+    ui.add_space(design::L);
+    design::group_heading(ui, title, count);
+}
+
 pub(crate) fn details(ui: &mut egui::Ui, record: &EntitySnapshot, page: usize, search: &str) {
     detail_intro(ui, record, page, search);
     let entries = sheet_entries(record, page);
@@ -1853,7 +1858,7 @@ pub(crate) fn details(ui: &mut egui::Ui, record: &EntitySnapshot, page: usize, s
         .filter(|(name, source, _, _)| format!("{name} {source}").to_lowercase().contains(&search))
         .collect();
     if page != 2 {
-        design::group_heading(
+        sheet_heading(
             ui,
             match page {
                 1 => "Action descriptions",
@@ -1889,8 +1894,7 @@ pub(crate) fn details(ui: &mut egui::Ui, record: &EntitySnapshot, page: usize, s
     let mut last_level = None;
     for (i, (name, meta, description, level)) in filtered.into_iter().enumerate() {
         if page == 2 && (i == 0 || last_level != *level) {
-            ui.add_space(design::L);
-            design::group_heading(
+            sheet_heading(
                 ui,
                 &match level {
                     Some(0) => "Cantrips".to_owned(),

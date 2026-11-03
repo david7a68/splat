@@ -135,7 +135,7 @@ impl Note {
     fn section(&self) -> Section {
         self.entry
             .as_ref()
-            .map_or(Section::Other, Section::for_entry)
+            .map_or(Section::Unreadable, Section::for_entry)
     }
     fn matches(&self, section: Section, query: &str) -> bool {
         if !query.is_empty() {
@@ -287,7 +287,7 @@ impl Loaded {
                 let line = note
                     .entry
                     .as_ref()
-                    .map_or_else(|| "Invalid note".to_owned(), presentation::subtitle);
+                    .map_or_else(|| "Cannot be read".to_owned(), presentation::subtitle);
                 presentation::list_subtitle(&line, source)
             })
             .collect();
@@ -938,6 +938,7 @@ pub struct Library {
     /// The draft `Discard changes` last dropped, with its note's path, for one step of undo.
     /// The note's owner and path, and the discarded words.
     discarded: Option<(Option<Uuid>, String, String)>,
+    discarded_note: Option<Note>,
     /// A save was refused because the file changed. The draft waits for the DM's choice.
     disk_change: Option<DiskChange>,
     /// The note on screen was saved, and has not changed since.
@@ -970,6 +971,7 @@ pub struct Library {
     pub run_open: bool,
     pub open_world_npc: Option<Uuid>,
     pending_edit: Option<Entry>,
+    pending_repair: Option<PathBuf>,
     scope_notice: Option<String>,
     new_form: bool,
     focus_new_name: bool,
@@ -1026,6 +1028,32 @@ const NOTE_CHANGED: &str = "This entry changed on disk.";
 struct DiskChange {
     /// None when the file has gone.
     text: Option<String>,
+    moved_to: Option<String>,
+}
+
+/// Check readable and broken notes, so a move cannot create a second identity.
+fn moved_note(root: &Path, id: Uuid, old: &str) -> Result<Option<(String, String)>, String> {
+    let (entries, errors) = content::read_directory(root)?;
+    let mut found = None;
+    for path in entries
+        .into_iter()
+        .map(|e| e.path)
+        .chain(errors.into_iter().map(|e| e.path))
+    {
+        if path == old {
+            continue;
+        }
+        let text = fs::read_to_string(note_path(root, &path)?).map_err(|e| e.to_string())?;
+        if crate::content_workspace::note_id(&text) == Some(id) {
+            if found.is_some() {
+                return Err(
+                    "Several files have this entry's ID. Keep one file, then try again.".into(),
+                );
+            }
+            found = Some((path, text));
+        }
+    }
+    Ok(found)
 }
 /// Where Back returns to after following a link.
 struct BackStep {
@@ -1059,6 +1087,9 @@ impl Library {
         let Some(note) = self.loaded.as_mut().and_then(|l| l.notes.get_mut(index)) else {
             return;
         };
+        if let Some(path) = change.moved_to {
+            note.path = path;
+        }
         let draft = std::mem::take(&mut self.draft);
         self.discarded = Some((note.owner.id(), note.path.clone(), draft));
         match change.text {
@@ -1077,7 +1108,18 @@ impl Library {
                 note.text = text.clone();
                 self.draft = text;
             }
-            None => self.draft = note.text.clone(),
+            None => {
+                self.discarded_note = Some(Note {
+                    path: note.path.clone(),
+                    text: note.text.clone(),
+                    entry: note.entry.clone(),
+                    error: note.error.clone(),
+                    owner: note.owner.clone(),
+                });
+                self.draft = note.text.clone();
+                self.stale = true;
+                self.selected = None;
+            }
         }
         if let Some(loaded) = &mut self.loaded {
             loaded.invalidate();
@@ -1090,6 +1132,7 @@ impl Library {
         if self.dirty() {
             return;
         }
+        self.discarded_note = None;
         let Some(note) = self.loaded.as_ref().and_then(|l| l.notes.get(index)) else {
             return;
         };
@@ -1184,6 +1227,10 @@ impl Library {
     pub fn edit_copy(&mut self, entry: Entry) {
         self.pending_edit = Some(entry);
     }
+    pub fn repair_file(&mut self, path: PathBuf) {
+        self.pending_repair = Some(path);
+        self.stale = true;
+    }
     pub fn can_save_and_close(&self) -> bool {
         self.dirty()
             && self.disk_change.is_none()
@@ -1211,10 +1258,21 @@ impl Library {
                 .ok()
                 .and_then(|path| fs::read_to_string(path).ok());
             if text.as_deref() != Some(&note.text) {
-                self.disk_change = Some(DiskChange { text });
+                let moved = text
+                    .is_none()
+                    .then(|| {
+                        crate::content_workspace::note_id(&note.text)
+                            .and_then(|id| moved_note(root, id, &note.path).ok().flatten())
+                    })
+                    .flatten();
+                self.disk_change = Some(DiskChange {
+                    text: moved.as_ref().map(|(_, text)| text.clone()).or(text),
+                    moved_to: moved.map(|(path, _)| path),
+                });
             }
         }
         self.discarded = None;
+        self.discarded_note = None;
         self.stale = true;
     }
     fn invalidate(&mut self) {
@@ -1325,6 +1383,25 @@ impl Library {
                 self.pending_edit = Some(entry);
             }
         }
+        if self.pending.is_none()
+            && !self.stale
+            && !self.dirty()
+            && let Some(path) = self.pending_repair.take()
+            && let Some(index) = self.loaded.as_ref().and_then(|loaded| {
+                loaded.notes.iter().position(|note| {
+                    note.owner
+                        .root()
+                        .is_some_and(|root| root.join(&note.path) == path)
+                })
+            })
+        {
+            self.scope = Scope::All;
+            self.search.clear();
+            self.section = Section::Unreadable;
+            self.open_entry(index);
+            self.source = true;
+            self.focus_repair = true;
+        }
         let dirty = self.dirty();
         let locked = self.draft_reason().or(self
             .pending
@@ -1349,31 +1426,6 @@ impl Library {
                 .then(|| design::count(total, "entry", "entries"))
                 .as_deref(),
             |ui| {
-                if let Some(loaded) = &self.loaded
-                    && !loaded.diagnostics.is_empty()
-                {
-                    let word = design::count(
-                        loaded.diagnostics.len(),
-                        "validation message",
-                        "validation messages",
-                    );
-                    let response = Action::quiet(&word).icon(icons::WARN).show(ui);
-                    egui::Popup::menu(&response).show(|ui| {
-                        ui.set_max_width(design::READER_MEASURE);
-                        egui::ScrollArea::vertical()
-                            .max_height(design::XXL * 6.0)
-                            .show(ui, |ui| {
-                                for message in &loaded.diagnostics {
-                                    ui.add(
-                                        egui::Label::new(
-                                            Type::Small.rich(ui, message).color(colors().muted),
-                                        )
-                                        .wrap(),
-                                    );
-                                }
-                            });
-                    });
-                }
                 let no_place =
                     campaigns.active_campaign().is_none() && campaigns.modules().is_empty();
                 if !(self.scope == Scope::Campaign && total == 0) {
@@ -1386,15 +1438,7 @@ impl Library {
                         .clicked();
                 }
                 design::locked(ui, locked, |ui| {
-                    let response = Action::quiet("Packages    ").name("Packages").show(ui);
-                    let caret = egui::Rect::from_min_max(
-                        egui::pos2(
-                            response.rect.right() - design::L - design::XS,
-                            response.rect.top(),
-                        ),
-                        response.rect.right_bottom(),
-                    );
-                    design::combo_icon(ui, caret, ui.style().interact(&response), false);
+                    let response = design::menu_button(ui, "Packages", false);
                     egui::Popup::menu(&response).show(|ui| {
                         if Action::quiet("Reload from disk")
                             .icon(icons::REFRESH)
@@ -1414,6 +1458,43 @@ impl Library {
                         }
                     });
                 });
+                if let Some(loaded) = &self.loaded
+                    && !loaded.diagnostics.is_empty()
+                {
+                    let word = design::count(
+                        loaded
+                            .diagnostics
+                            .iter()
+                            .map(|message| message.split(": ").next().unwrap_or(message))
+                            .collect::<std::collections::HashSet<_>>()
+                            .len(),
+                        "entry needs fixing",
+                        "entries need fixing",
+                    );
+                    let response = design::status_link(
+                        ui,
+                        Status {
+                            icon: icons::WARN,
+                            word: &word,
+                            color: colors().result.warning,
+                        },
+                    );
+                    egui::Popup::menu(&response).show(|ui| {
+                        ui.set_max_width(design::READER_MEASURE);
+                        egui::ScrollArea::vertical()
+                            .max_height(design::XXL * 6.0)
+                            .show(ui, |ui| {
+                                for message in &loaded.diagnostics {
+                                    ui.add(
+                                        egui::Label::new(
+                                            Type::Small.rich(ui, message).color(colors().muted),
+                                        )
+                                        .wrap(),
+                                    );
+                                }
+                            });
+                    });
+                }
             },
         );
         if new_entry {
@@ -2674,6 +2755,29 @@ impl Library {
             return;
         };
         let note = &self.loaded.as_ref().unwrap().notes[i];
+        let mut file_gone = file_gone;
+        if file_gone
+            || note_path(note.owner.root().unwrap(), &note.path).is_ok_and(|path| !path.exists())
+        {
+            let moved = crate::content_workspace::note_id(&note.text)
+                .map(|id| moved_note(note.owner.root().unwrap(), id, &note.path))
+                .transpose();
+            match moved {
+                Ok(Some(Some((path, text)))) => {
+                    let note = &mut self.loaded.as_mut().unwrap().notes[i];
+                    note.path = path;
+                    note.text = text;
+                    file_gone = false;
+                    self.stale = true;
+                }
+                Err(error) => {
+                    self.error = Some(error);
+                    return;
+                }
+                _ => {}
+            }
+        }
+        let note = &self.loaded.as_ref().unwrap().notes[i];
         let root = note.owner.root().expect("an editable note").to_path_buf();
         let owner_is_campaign = matches!(note.owner, Owner::Campaign(_));
         let result = Entry::parse(&note.path, &self.draft).and_then(|entry| {
@@ -2742,6 +2846,7 @@ impl Library {
             }
             Err(e) if e == NOTE_CHANGED => {
                 self.disk_change = Some(DiskChange {
+                    moved_to: None,
                     text: note_path(&root, &note.path)
                         .ok()
                         .and_then(|path| fs::read_to_string(path).ok()),
@@ -2752,6 +2857,24 @@ impl Library {
     }
 
     fn editor_pane(&mut self, ui: &mut egui::Ui, subtitle: &str, campaigns: &Campaigns) {
+        if self.discarded_note.is_some()
+            && !self.dirty()
+            && design::draft_discarded(ui)
+            && let Some((_, _, draft)) = self.discarded.take()
+            && let Some(note) = self.discarded_note.take()
+            && let Some(loaded) = self.loaded.as_mut()
+        {
+            self.selected = Some(loaded.notes.len());
+            loaded.notes.push(note);
+            loaded.invalidate();
+            self.draft = draft;
+            self.source = true;
+            self.disk_change = Some(DiskChange {
+                text: None,
+                moved_to: None,
+            });
+            self.invalidate();
+        }
         let Some(i) = self.selected else {
             design::empty_state(
                 ui,
@@ -2770,6 +2893,10 @@ impl Library {
         let overwrite = std::mem::take(&mut self.overwrite_disk);
         let mut file_gone = false;
         if overwrite && let Some(change) = self.disk_change.take() {
+            if let Some(path) = change.moved_to {
+                self.loaded.as_mut().unwrap().notes[i].path = path;
+                self.stale = true;
+            }
             match change.text {
                 Some(text) => self.loaded.as_mut().unwrap().notes[i].text = text,
                 None => file_gone = true,
@@ -3178,14 +3305,26 @@ impl Library {
             design::message(
                 ui,
                 Tone::Warning,
-                if change.text.is_some() {
+                if change.moved_to.is_some() {
+                    "This entry moved on disk. Save your draft to its new path, or keep the disk version."
+                } else if change.text.is_some() {
                     "This entry changed on disk. Your draft is safe until you choose."
                 } else {
                     "This entry's file has gone from disk. Your draft is safe here until you choose."
                 },
             );
             ui.horizontal(|ui| {
-                if Action::secondary("Overwrite with my draft")
+                let save_word = change.moved_to.as_ref().map_or_else(
+                    || {
+                        if change.text.is_none() {
+                            "Save my draft again".to_owned()
+                        } else {
+                            "Overwrite with my draft".to_owned()
+                        }
+                    },
+                    |path| format!("Save my draft to {path}"),
+                );
+                if Action::secondary(&save_word)
                     .density(Density::Read)
                     .show(ui)
                     .clicked()
@@ -3193,10 +3332,14 @@ impl Library {
                     self.overwrite_disk = true;
                 }
                 ui.add_space(design::L);
-                reload_from_disk = Action::destructive("Reload and lose my draft")
-                    .density(Density::Read)
-                    .show(ui)
-                    .clicked();
+                reload_from_disk = Action::destructive(if change.text.is_none() {
+                    "Let it go"
+                } else {
+                    "Reload and lose my draft"
+                })
+                .density(Density::Read)
+                .show(ui)
+                .clicked();
             });
         }
         let (repair_problem, repair_line) =
@@ -3280,6 +3423,11 @@ impl Library {
                 if let Some(change) = &mut self.disk_change {
                     if let Some(text) = &change.text {
                         design::draft_comparison(ui, &self.draft, text, (&note.path, text));
+                    } else {
+                        design::group_heading(ui, "Your draft", 0);
+                        let mut draft = self.draft.as_str();
+                        let response = ui.add(egui::TextEdit::multiline(&mut draft).font(egui::TextStyle::Monospace).desired_width(editor_width).interactive(false));
+                        design::named(ui, &response, "Your draft");
                     }
                     return;
                 }
@@ -3593,6 +3741,43 @@ mod tests {
             }),
             ..Default::default()
         }
+    }
+
+    #[test]
+    fn moved_draft_save_does_not_duplicate_its_id() {
+        let temp = tempfile::tempdir().unwrap();
+        let module = create_module(&temp.path().join("package"), "Test", "test").unwrap();
+        let text = note_text("Moved rule", "rule", None);
+        fs::write(module.path.join("Rule.md"), &text).unwrap();
+        let loaded = load(Some(&module)).unwrap();
+        let selected = loaded
+            .notes
+            .iter()
+            .position(|n| n.path == "Rule.md")
+            .unwrap();
+        let mut library = Library {
+            loaded: Some(loaded),
+            selected: Some(selected),
+            draft: format!("{text}\nMy draft.\n"),
+            ..Default::default()
+        };
+        fs::create_dir(module.path.join("Moved")).unwrap();
+        fs::rename(
+            module.path.join("Rule.md"),
+            module.path.join("Moved/Rule.md"),
+        )
+        .unwrap();
+        library.refresh_destination(&module.path, &egui::Context::default());
+        library.save_selected(true);
+        assert!(
+            !module.path.join("Rule.md").exists(),
+            "must not recreate the old path"
+        );
+        assert!(
+            fs::read_to_string(module.path.join("Moved/Rule.md"))
+                .unwrap()
+                .contains("My draft.")
+        );
     }
 
     #[test]

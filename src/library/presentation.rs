@@ -16,6 +16,7 @@ pub(crate) enum Section {
     Encounters,
     World,
     Other,
+    Unreadable,
 }
 
 impl Section {
@@ -30,6 +31,7 @@ impl Section {
         ("Preparation", &[Self::Encounters]),
         ("Campaign", &[Self::World]),
         ("Package", &[Self::Other]),
+        ("Cannot be read", &[Self::Unreadable]),
     ];
 
     pub fn label(self) -> &'static str {
@@ -44,6 +46,7 @@ impl Section {
             Self::Encounters => "Encounters",
             Self::World => "World",
             Self::Other => "Other entries",
+            Self::Unreadable => "Cannot be read",
         }
     }
 
@@ -659,6 +662,39 @@ pub(crate) fn reading_sections<'a>(body: &'a str, name: &str) -> Vec<ReadingSect
 mod reading_tests {
     use super::*;
     use crate::design;
+
+    #[test]
+    fn builtin_item_body_has_no_collapsing_header_before_prose() {
+        let loaded = crate::library::load(None).unwrap();
+        let mut checked = 0;
+        for entry in loaded
+            .notes
+            .iter()
+            .filter_map(|note| note.entry.as_ref())
+            .filter(|entry| entry.fields.contains_key("splat_item"))
+        {
+            let ctx = eframe::egui::Context::default();
+            design::theme::install(&ctx);
+            ctx.enable_accesskit();
+            let sections = reading_sections(&entry.body, &entry.name);
+            let output = ctx.run(Default::default(), |ctx| {
+                eframe::egui::CentralPanel::default().show(ctx, |ui| {
+                    crate::library::reader::show(ui, Some(entry), &sections, true, false);
+                });
+            });
+            let update = output.platform_output.accesskit_update.unwrap();
+            assert!(
+                !update
+                    .nodes
+                    .iter()
+                    .any(|(_, node)| node.is_expanded().is_some()),
+                "{} puts a disclosure in its body",
+                entry.name
+            );
+            checked += 1;
+        }
+        assert!(checked > 100);
+    }
 
     /// The `## Source text` of every built-in note that the reader shows.
     fn corpus() -> Vec<(String, String)> {

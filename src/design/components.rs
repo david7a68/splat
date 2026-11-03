@@ -10,6 +10,20 @@ fn corner(value: f32) -> CornerRadius {
     CornerRadius::same(value as u8)
 }
 
+/// A quiet menu button with its caret after the word.
+pub fn menu_button(ui: &mut Ui, word: &str, selected: bool) -> Response {
+    let response = Action::quiet(&format!("{word}    "))
+        .name(word)
+        .selected(selected)
+        .show(ui);
+    let caret = Rect::from_min_max(
+        pos2(response.rect.right() - L - XS, response.rect.top()),
+        response.rect.right_bottom(),
+    );
+    super::combo_icon(ui, caret, ui.style().interact(&response), false);
+    response
+}
+
 /// One line of text cut to fit, with an ellipsis. The tree still has the full text.
 pub fn one_line(
     ui: &Ui,

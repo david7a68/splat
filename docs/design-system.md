@@ -683,7 +683,23 @@ New entry reveals its selected list row after the catalogue reloads. Hidden sour
 headings and comments add no reader space. Manage packages offers Clear only for
 filled fields. Folder suggestions use the combo arrow and normal text colour.
 
-Plan group summaries put XP first, then members, Changed and side. They measure
+Plan group summaries put XP first, then Changed, members and side. They measure
 against their own action. Tabbed member and roster views omit the repeated count.
 Sheet group headings use an L gap. Death-save counts use words; Correct HP has an
 L gap after death saves. Missing encounter entries have a warning icon.
+
+## Library and preparation audit, iteration 10
+
+Unreadable Library notes use the CANNOT BE READ group. The amber header count
+says how many entries need fixing and comes before Packages and New entry.
+An unreadable package creature keeps its file name and error line in the roster.
+Open in Library opens its repair editor. Only a deleted file offers replacement.
+
+A deleted draft shows YOUR DRAFT, Save my draft again and red Let it go, with
+Undo discard. A moved file offers Save my draft to its new path. Saving checks
+the ID on disk so it cannot create a second file after a move.
+Creature copies write splat_creature and splat_stats in front matter and keep prose.
+Source text and structured item fields stay in the end group after related notes.
+Fight and Packages use the same menu button, with the caret after the word.
+World relationship values use a 240 px column; Not found stays on one line.
+Empty fight prep offers Edit encounter while its encounter exists.

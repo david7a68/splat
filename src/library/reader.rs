@@ -1,6 +1,6 @@
 //! A common reading layout for all non-creature entries.
 use super::presentation::{self, ReadingSection};
-use crate::design::{Type, colors, reader as style};
+use crate::design::reader as style;
 use eframe::egui;
 use splat::content::Entry;
 
@@ -143,16 +143,7 @@ fn item_summary(ui: &mut egui::Ui, entry: &Entry, printed: Option<&str>) {
     style::facts(ui, &facts);
     for (key, value) in item {
         let Some(key) = key.as_str() else { continue };
-        if key == "armor"
-            && let Some(armor) = value.as_mapping()
-        {
-            style::section_heading(ui, "Armor");
-            for (label, value) in armor {
-                if label.as_str() != Some("base_ac") {
-                    style::detail(ui, &display_value(label), &display_value(value));
-                }
-            }
-        } else if ![
+        if ![
             "damage",
             "armor_class",
             "price",
@@ -164,14 +155,6 @@ fn item_summary(ui: &mut egui::Ui, entry: &Entry, printed: Option<&str>) {
         .contains(&key)
         {
             if value.is_mapping() || value.is_sequence() {
-                egui::CollapsingHeader::new(
-                    Type::StatLabel
-                        .rich(ui, style::human_label(key))
-                        .color(colors().text),
-                )
-                .id_salt(("item_summary", key))
-                .icon(crate::design::section_icon)
-                .show(ui, |ui| structured_value(ui, value));
                 continue;
             }
             style::detail(
@@ -181,6 +164,29 @@ fn item_summary(ui: &mut egui::Ui, entry: &Entry, printed: Option<&str>) {
             );
         }
     }
+}
+
+pub(super) fn item_details(ui: &mut egui::Ui, entry: &Entry) {
+    if let Some(item) = entry.fields.get("splat_item").and_then(|v| v.as_mapping()) {
+        for (key, value) in item {
+            if value.is_mapping() || value.is_sequence() {
+                crate::design::quiet_section(ui, &style::human_label(&display_value(key)), |ui| {
+                    structured_value(ui, value);
+                });
+            }
+        }
+    }
+}
+
+pub(super) fn has_item_details(entry: &Entry) -> bool {
+    entry
+        .fields
+        .get("splat_item")
+        .and_then(|v| v.as_mapping())
+        .is_some_and(|item| {
+            item.values()
+                .any(|value| value.is_mapping() || value.is_sequence())
+        })
 }
 
 /// A value with nothing to read. Sheet copies often have these, and they must not show
@@ -304,7 +310,6 @@ pub(super) fn show(
     }
     for section in sections {
         if section.title == "Source text" && has_summary {
-            crate::design::quiet_section(ui, "Source text", |ui| style::markdown(ui, section.body));
             continue;
         }
         if section.body.contains("<!-- splat:") {

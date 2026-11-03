@@ -1645,6 +1645,19 @@ impl Splat {
             self.notes_give_way();
             self.lookup.open_creature_result(id);
         }
+        if let Some(path) = ctx.data_mut(|data| {
+            data.remove_temp::<std::path::PathBuf>(egui::Id::new("open_library_repair"))
+        }) {
+            self.library.repair_file(path);
+            self.page = Page::Library;
+        }
+        if let Some(path) =
+            ctx.data_mut(|data| data.remove_temp::<String>(egui::Id::new("edit_run_encounter")))
+            && let Some(campaign) = self.campaigns.active_campaign()
+        {
+            self.encounters.edit_path(&path, &campaign);
+            self.page = Page::Encounters;
+        }
         if ctx
             .data_mut(|data| data.remove_temp::<bool>(egui::Id::new("open_campaign_packages")))
             .is_some()

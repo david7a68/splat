@@ -3782,7 +3782,7 @@ impl Sessions {
                         plan_row(ui, &group_widths, icons::GROUP, |ui| {
                             if design::wrapped_link(ui, &group.name).clicked() { read_group = true; }
                         }, |ui| {
-                            let summary = format!("{} · {}{} · {}", group.xp_label(), group.member_summary(), if group.members.iter().any(|m| !m.overrides.is_empty()) { " · Changed" } else { "" }, design::reader::human_label(&group.side));
+                            let summary = format!("{}{} · {} · {}", group.xp_label(), if group.members.iter().any(|m| !m.overrides.is_empty()) { " · Changed" } else { "" }, group.member_summary(), design::reader::human_label(&group.side));
                             let shown = design::words_that_fit(ui, &summary, &Type::Small.font(ui), ui.available_width());
                             ui.label(Type::Small.rich(ui, shown).color(c.muted)).on_hover_text(&summary);
                             if let Some(problem) = &group.problem { wrapped_words(ui, Type::Small, problem, c.result.warning); }

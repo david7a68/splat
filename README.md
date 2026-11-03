@@ -111,6 +111,12 @@ page shows the recorded time in the detail; the rail keeps it on hover.
 
 Library has **New entry** in its header. Its form opens in the reader column and closes after creation. World has **New ▾** for a plain note, a note with a type, an NPC, a location, or a generated NPC. List headings use capitals and a count. Page headers show state or nonzero counts beside the title, with a rule and an `L` gap below. Counts use thousands separators.
 
+An unreadable package creature offers **Open in Library** from the encounter roster.
+Library keeps a deleted file's draft until you choose **Save my draft again** or
+**Let it go**, with Undo. A moved file's draft saves to its new path. Creature
+copies use the same front-matter stats as a new creature and keep the book's prose.
+An empty fight **Prep** tab offers **Edit encounter** while the encounter exists.
+
 With no campaigns, the switcher says **No campaign** and offers **Add campaign…**.
 New entry and Copy entry use **Destination** and show a short path, with the full path
 on hover. Sharing required campaign entries lists the copies before **Share both**.

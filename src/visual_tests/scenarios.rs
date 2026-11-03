@@ -6084,7 +6084,7 @@ pub mod encounter_owned_groups {
 
         // A group whose encounter is gone says so in its editor.
         d.click(&edit_group(GROUP_ORPHAN));
-        d.expect("An encounter this campaign no longer has");
+        d.expect("Deleted encounter");
         d.state("group-whose-encounter-is-gone", Sizes::Default);
         d.click("Back to encounters");
 
@@ -7062,6 +7062,13 @@ pub mod npc_in_encounter {
         });
         let cost = d.interaction_count() - started;
         d.observe("W6", cost <= 8, format!("Prepare an encounter with a named NPC and start setup: {cost} interactions, target 8"));
+        fight_tab(d, "Prep");
+        d.expect("No prep notes yet");
+        d.expect("Edit encounter");
+        d.click("Edit encounter");
+        d.expect("Back to run");
+        d.expect("Rook's ambush");
+        d.state("edit-encounter-from-prep", Sizes::All);
     }
 }
 
