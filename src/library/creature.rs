@@ -340,11 +340,16 @@ fn prose(
 }
 
 fn changed_speed(ui: &mut egui::Ui, printed: &str, speed: &str) {
-    let printed = printed.trim();
+    let preview = crate::encounter_run::change_preview(&splat::content::overrides::Row {
+        label: "Speed",
+        base: printed.into(),
+        changed: speed.into(),
+        by_hand: true,
+    });
     ui.add(
         egui::Label::new(
             Type::Small
-                .rich(ui, format!("Speed {printed} → {speed} · add by hand"))
+                .rich(ui, format!("Speed {preview}"))
                 .color(colors().participant.changed),
         )
         .wrap(),

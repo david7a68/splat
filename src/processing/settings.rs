@@ -416,7 +416,7 @@ impl ProcessingSettings {
                         .desired_width(width)
                         .margin(egui::vec2(design::S, 5.0))
                         .hint_text(if saved && fits {
-                            "Saved"
+                            "Paste a new key to replace it"
                         } else {
                             "Paste the key"
                         }),

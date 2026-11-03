@@ -205,7 +205,13 @@ fn show_inner(
     } else {
         body
     };
-    let sections = presentation::reading_sections(body, name);
+    let sections: Vec<_> = presentation::reading_sections(body, name)
+        .into_iter()
+        .filter(|section| {
+            section.title != "Personal notes"
+                || section.body.trim() != "This section is kept when the sheet refreshes."
+        })
+        .collect();
     let styled = entry.filter(|entry| reading.is_none() && creature::supports(entry, &sections));
     let reading = reading.as_ref();
     let builtin = origin.builtin;

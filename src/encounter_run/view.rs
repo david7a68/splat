@@ -493,12 +493,38 @@ impl Run {
             self.history.is_empty(),
             if self.undo_stopped {
                 "Undo stopped at sheet update. See Log."
-            } else if self.reopened {
-                "Nothing to undo since this run reopened"
             } else {
-                "Nothing to undo yet."
+                self.empty_undo_reason()
             },
         )
+    }
+
+    fn empty_undo_reason(&self) -> &'static str {
+        if self.reopened {
+            "Nothing to undo since reopening"
+        } else {
+            "Nothing to undo"
+        }
+    }
+
+    fn empty_undo(&self, ui: &mut egui::Ui) -> bool {
+        let full = self.empty_undo_reason();
+        let action = self.undo_action("Undo");
+        let room = ui.available_width() - action.natural_width(ui) - design::S;
+        let shown = if design::number_width(ui, full, &Type::Small.font(ui)) <= room {
+            full
+        } else {
+            "Nothing to undo"
+        };
+        let clicked = action
+            .name(&format!("Undo · {full}"))
+            .hint(full)
+            .show(ui)
+            .clicked();
+        let reason = ui.label(Type::Small.rich(ui, shown).color(colors().muted));
+        design::named(ui, &reason, full);
+        reason.on_hover_text(full);
+        clicked
     }
 
     fn run_title(&self, ui: &mut egui::Ui, what: &str) {
@@ -963,7 +989,13 @@ impl Run {
                         1,
                     );
                 }
-                let minimum = self.undo_action(&minimum).natural_width(ui) + design::XS;
+                let minimum = self.undo_action(&minimum).natural_width(ui)
+                    + design::XS
+                    + if self.history.is_empty() && !self.undo_stopped {
+                        design::number_width(ui, "Nothing to undo", &font) + design::S
+                    } else {
+                        0.0
+                    };
                 let notice_width = (design::number_width(ui, &notice, &font) + design::S)
                     .min((ui.available_width() - minimum - design::L).max(0.0));
                 let slot = ui.available_width() - notice_width - design::L;
@@ -979,39 +1011,15 @@ impl Run {
                     vec2(slot, Density::Read.control()),
                     Layout::right_to_left(Align::Center),
                     |ui| {
-                        let reason = if self.history.is_empty() && !self.undo_stopped {
-                            Some(if self.reopened {
-                                "since reopening"
-                            } else {
-                                "Nothing to undo"
-                            })
+                        undo = if self.history.is_empty() && !self.undo_stopped {
+                            self.empty_undo(ui)
                         } else {
-                            None
+                            self.undo_action(&shown)
+                                .name(&undo_label)
+                                .hint(&undo_label)
+                                .show(ui)
+                                .clicked()
                         };
-                        let reason_width = reason.map_or(0.0, |reason| {
-                            design::number_width(ui, reason, &font) + design::S
-                        });
-                        if reason_width + self.undo_action(&shown).natural_width(ui) <= slot {
-                            design::blocked_reason(ui, reason);
-                        }
-                        let full = if self.history.is_empty() && !self.undo_stopped {
-                            format!(
-                                "{undo_label} · {}",
-                                if self.reopened {
-                                    "Nothing to undo since this run reopened"
-                                } else {
-                                    "Nothing to undo yet."
-                                }
-                            )
-                        } else {
-                            undo_label.clone()
-                        };
-                        undo = self
-                            .undo_action(&shown)
-                            .name(&undo_label)
-                            .hint(&full)
-                            .show(ui)
-                            .clicked();
                     },
                 );
                 ui.with_layout(Layout::left_to_right(Align::Center), |ui| {
@@ -2381,6 +2389,7 @@ impl Run {
             .wrap(),
         );
         for (index, name) in names {
+            ui.add_space(design::L);
             let Some(sync) = self.syncs.get_mut(&index) else {
                 continue;
             };
@@ -2421,16 +2430,7 @@ impl Run {
         } else {
             &p.name
         };
-        if matches!(self.panel, Panel::Log | Panel::Encounter | Panel::Groups) {
-            ui.horizontal_wrapped(|ui| {
-                ui.label(Type::Title.rich(ui, title).color(colors().text));
-                ui.add(
-                    egui::Label::new(Type::Small.rich(ui, &p.name).color(colors().muted)).wrap(),
-                );
-            });
-        } else {
-            ui.add(egui::Label::new(Type::Title.rich(ui, title).color(colors().text)).wrap());
-        }
+        ui.add(egui::Label::new(Type::Title.rich(ui, title).color(colors().text)).wrap());
 
         let participant_tab = !matches!(self.panel, Panel::Log | Panel::Encounter | Panel::Groups);
         let reference = if is_sheet { "Sheet" } else { "Stat block" };
@@ -3593,18 +3593,18 @@ impl Run {
             Layout::right_to_left(Align::Center),
             |ui| {
                 let label = self.undo_label();
-                if self
-                    .undo_action(&label)
-                    .name(&label)
-                    .hint(&label)
-                    .show(ui)
-                    .clicked()
-                {
+                let undo = if self.history.is_empty() && !self.undo_stopped {
+                    self.empty_undo(ui)
+                } else {
+                    self.undo_action(&label)
+                        .name(&label)
+                        .hint(&label)
+                        .show(ui)
+                        .clicked()
+                };
+                if undo {
                     self.undo();
                     self.return_focus = self.lookup_open;
-                }
-                if self.history.is_empty() {
-                    design::blocked_reason(ui, Some("Nothing to undo"));
                 }
             },
         );
@@ -4466,7 +4466,11 @@ pub(crate) fn change_preview(row: &Row) -> String {
     }
     format!(
         "{} → {}{}",
-        numbers(&row.base),
+        numbers(if row.label == "Speed" {
+            row.base.trim().trim_end_matches('.')
+        } else {
+            &row.base
+        }),
         numbers(&row.changed),
         if row.by_hand { " · add by hand" } else { "" }
     )
@@ -4725,7 +4729,22 @@ impl RowLayout {
         fit: RowFit,
         longest_name: f32,
     ) -> Self {
-        Self::measured(ui, width, p, sync, scale, (fit, 2), longest_name)
+        Self::measured(
+            ui,
+            width,
+            p,
+            sync,
+            scale,
+            (
+                fit,
+                if fit == RowFit::Summary && p.conditions.len() > 3 {
+                    2
+                } else {
+                    p.conditions.len()
+                },
+            ),
+            longest_name,
+        )
     }
 
     fn measured(
@@ -4824,11 +4843,7 @@ impl RowLayout {
         let mut condition_spans: Vec<_> = p
             .conditions
             .iter()
-            .take(if fit == RowFit::Summary && p.conditions.len() > 3 {
-                condition_count
-            } else {
-                p.conditions.len()
-            })
+            .take(condition_count)
             .map(|condition| {
                 let shown = if condition.split_whitespace().count() > 4 {
                     format!(
@@ -4846,7 +4861,7 @@ impl RowLayout {
             })
             .collect();
         // A side of its own needs its word: a name and a number can look like another side's.
-        if fit == RowFit::Summary && p.conditions.len() > 3 {
+        if p.conditions.len() > condition_count {
             condition_spans.push((
                 "Run conditions".into(),
                 add(
@@ -4894,11 +4909,7 @@ impl RowLayout {
             );
         }
         let second_line = (!job.is_empty()).then(|| ui.fonts_mut(|fonts| fonts.layout_job(job)));
-        if fit == RowFit::Summary
-            && p.conditions.len() > 3
-            && condition_count > 0
-            && second_line.as_ref().is_some_and(|line| line.rows.len() > 1)
-        {
+        if condition_count > 0 && second_line.as_ref().is_some_and(|line| line.rows.len() > 1) {
             return Self::measured(
                 ui,
                 width,
@@ -5421,7 +5432,7 @@ mod tests {
         assert_eq!(
             change_preview(&Row {
                 label: "Speed",
-                base: "30 ft".into(),
+                base: "30 ft.".into(),
                 changed: "40 ft".into(),
                 by_hand: true
             }),

@@ -792,7 +792,7 @@ impl Splat {
                         color,
                     },
                 );
-                let full = if state == "Check result" {
+                let full = if state == "Processed" {
                     sessions::page::processed_warning().word
                 } else {
                     state
