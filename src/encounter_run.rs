@@ -2265,6 +2265,7 @@ impl Run {
         let mut changes = Vec::new();
         let mut from_sheet = Vec::new();
         let mut from_panel = Vec::new();
+        let mut choice_indices = Vec::new();
         for (index, sync) in &mut self.syncs {
             if sync.updated {
                 self.notice = None;
@@ -2348,6 +2349,7 @@ impl Run {
                         from_sheet.push(line);
                     } else {
                         from_panel.push(line);
+                        choice_indices.push(*index);
                     }
                 }
                 // Only what D&D Beyond has confirmed. Saving unsent values here would make
@@ -2370,7 +2372,7 @@ impl Run {
                 for (index, participant) in changed_participants {
                     before_sync.participants[index] = participant;
                 }
-                self.reconcile_sync_history(&before_sync, &sheet_indices, &from_panel);
+                self.reconcile_sync_history(&before_sync, &sheet_indices, &choice_indices);
                 self.note_sync_changes(&from_sheet, &from_panel);
             }
             self.dirty = true;
@@ -2395,7 +2397,7 @@ impl Run {
 
     /// Snapshots include the whole run. Drop a step only if it changed this character,
     /// then carry the new sheet values through the snapshots that remain.
-    fn reconcile_sync_history(&mut self, before: &State, indices: &[usize], choices: &[String]) {
+    fn reconcile_sync_history(&mut self, before: &State, indices: &[usize], choices: &[usize]) {
         let mut kept = Vec::new();
         let mut labels = Vec::new();
         let mut dropped = Vec::new();
@@ -2465,7 +2467,25 @@ impl Run {
                 previous.participants[*index] = self.state.participants[*index].clone();
             }
             self.history.push(previous);
-            self.history_labels.push("use D&D Beyond values".to_owned());
+            let label = if let [index] = choices {
+                let old = &before.participants[*index];
+                let now = &self.state.participants[*index];
+                let what = if old.conditions == now.conditions
+                    && old.successes == now.successes
+                    && old.failures == now.failures
+                {
+                    "HP"
+                } else {
+                    "values"
+                };
+                format!("D&D Beyond {what} for {}", now.name)
+            } else {
+                format!(
+                    "D&D Beyond values for {}",
+                    crate::design::count(choices.len(), "character", "characters")
+                )
+            };
+            self.history_labels.push(label);
             self.dm_steps += 1;
         }
     }
@@ -3322,6 +3342,15 @@ impl Run {
     pub fn simulate_connection(&mut self) {
         self.simulate_connection = true;
     }
+
+    /// The live empty-history state before any reopen or sheet-update boundary.
+    pub fn simulate_fresh_live_history(&mut self) {
+        assert_eq!(self.state.phase, Phase::Running);
+        self.history.clear();
+        self.history_labels.clear();
+        self.reopened = false;
+        self.undo_stopped = false;
+    }
     pub fn simulate_rename(&mut self, name: &str, to: &str) {
         let participant = self
             .state
@@ -3499,6 +3528,19 @@ mod tests {
             run.apply(Command::Initiative(index, Some(total))).unwrap();
         }
         run.apply(Command::Begin).unwrap();
+    }
+
+    #[test]
+    fn remote_choice_undo_names_one_or_many_characters() {
+        let mut run = run();
+        let before = run.state.clone();
+        run.state.participants[0].hp = Some(8);
+        run.reconcile_sync_history(&before, &[], &[0]);
+        assert_eq!(run.undo_label(), "Undo: D&D Beyond HP for Guard 1");
+        run.undo();
+        assert_eq!(run.state.participants[0].hp, before.participants[0].hp);
+        run.reconcile_sync_history(&before, &[], &[0, 1]);
+        assert_eq!(run.undo_label(), "Undo: D&D Beyond values for 2 characters");
     }
     #[test]
     fn resolved_starting_state_is_independent_for_each_placement() {
