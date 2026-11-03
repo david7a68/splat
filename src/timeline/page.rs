@@ -656,22 +656,38 @@ impl TimelinePage {
             }
             design::status(ui, design::Status { icon, word, color });
         };
-        if needed <= ui.available_width() {
-            ui.horizontal(|ui| {
-                title_line(ui);
-                ui.with_layout(
-                    egui::Layout::right_to_left(egui::Align::Center),
-                    &mut actions,
-                );
+        let width_id = ui
+            .id()
+            .with(("timeline_form_width", ui.available_width().to_bits()));
+        let header_width = ui
+            .ctx()
+            .data(|data| data.get_temp::<f32>(width_id))
+            .unwrap_or_else(|| {
+                (ui.available_width() - ui.spacing().scroll.allocated_width())
+                    .min(design::FORM_WIDTH)
             });
-        } else {
-            ui.horizontal(title_line);
-            ui.allocate_ui_with_layout(
-                egui::vec2(ui.available_width(), Density::Read.control()),
-                egui::Layout::right_to_left(egui::Align::Center),
-                actions,
-            );
-        }
+        ui.allocate_ui_with_layout(
+            egui::vec2(header_width, 0.0),
+            egui::Layout::top_down(egui::Align::Min),
+            |ui| {
+                if needed <= ui.available_width() {
+                    ui.horizontal(|ui| {
+                        title_line(ui);
+                        ui.with_layout(
+                            egui::Layout::right_to_left(egui::Align::Center),
+                            &mut actions,
+                        );
+                    });
+                } else {
+                    ui.horizontal(title_line);
+                    ui.allocate_ui_with_layout(
+                        egui::vec2(ui.available_width(), Density::Read.control()),
+                        egui::Layout::right_to_left(egui::Align::Center),
+                        actions,
+                    );
+                }
+            },
+        );
         if let Some(reason) = blocked {
             ui.label(Type::Small.rich(ui, reason).color(c.muted));
         }
@@ -685,7 +701,13 @@ impl TimelinePage {
         let clip = ui.available_rect_before_wrap().intersect(ui.clip_rect());
         area.show(ui, |ui| {
             ui.set_clip_rect(ui.clip_rect().intersect(clip));
-            ui.set_max_width(ui.available_width().min(design::FORM_WIDTH));
+            let form_width = ui.available_width().min(design::FORM_WIDTH);
+            ui.ctx()
+                .data_mut(|data| data.insert_temp(width_id, form_width));
+            if (form_width - header_width).abs() > design::HAIRLINE_WIDTH {
+                ui.ctx().request_repaint();
+            }
+            ui.set_max_width(form_width);
             let event = &mut book.events[index];
             ui.add_space(design::XS);
             let hint = (event.kind == Kind::Day)

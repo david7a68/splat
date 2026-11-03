@@ -34,7 +34,7 @@ pub fn words_that_fit(ui: &Ui, text: &str, font: &FontId, width: f32) -> String 
         return full;
     }
     while let Some(word) = words.last() {
-        let joining = ["to", "of", "on", "from", "and", "the", "de", "von"]
+        let joining = ["to", "of", "on", "from", "and", "the", "de", "von", "·"]
             .iter()
             .any(|joining| word.eq_ignore_ascii_case(joining));
         if !joining {
@@ -204,7 +204,7 @@ pub fn run_nav_item(ui: &mut Ui, detail: &str, selected: bool) -> Response {
             if selected { Type::Strong } else { Type::Body }.font(ui),
             color,
         );
-        let shown = words_that_fit(ui, detail, &Type::Small.font(ui), rect.width() - 28.0 - S);
+        let shown = run_nav_detail(ui, detail, rect.width() - 28.0 - S);
         ui.painter().text(
             pos2(rect.left() + 28.0, rect.top() + height * 0.56),
             Align2::LEFT_TOP,
@@ -217,6 +217,19 @@ pub fn run_nav_item(ui: &mut Ui, detail: &str, selected: bool) -> Response {
         }
     }
     response.on_hover_text(format!("Run · {detail}"))
+}
+
+fn run_nav_detail(ui: &Ui, detail: &str, width: f32) -> String {
+    let font = Type::Small.font(ui);
+    if number_width(ui, detail, &font) <= width {
+        detail.to_owned()
+    } else if detail.starts_with("Ended ·") {
+        "Ended".to_owned()
+    } else if detail.ends_with("· Paused") {
+        "Paused".to_owned()
+    } else {
+        words_that_fit(ui, detail, &font, width)
+    }
 }
 
 /// The quiet menu at the right edge of a list row.
@@ -1852,7 +1865,7 @@ mod tests {
                     assert_eq!(fitted, expected);
                     assert!(number_width(ui, &fitted, &font) <= width);
                 }
-                for joining in ["to", "of", "on", "from", "and", "the", "de", "von"] {
+                for joining in ["to", "of", "on", "from", "and", "the", "de", "von", "·"] {
                     let text = format!("Undo: 5 damage {joining} Ghost of the Mill");
                     // The joining word and ellipsis fit, so the word rule must remove it.
                     let width = number_width(ui, &format!("Undo: 5 damage {joining}…"), &font);
@@ -1862,6 +1875,24 @@ mod tests {
                     words_that_fit(ui, text, &font, number_width(ui, text, &font)),
                     text
                 );
+                for width in [40.0, 84.0, 120.0, 200.0] {
+                    for detail in ["Ended · Round 2", "Round 2 · Paused"] {
+                        let shown = run_nav_detail(ui, detail, width);
+                        assert!(!shown.trim_end_matches('…').trim_end().ends_with('·'));
+                        if number_width(ui, detail, &Type::Small.font(ui)) <= width {
+                            assert_eq!(shown, detail);
+                        } else {
+                            assert_eq!(
+                                shown,
+                                if detail.starts_with("Ended") {
+                                    "Ended"
+                                } else {
+                                    "Paused"
+                                }
+                            );
+                        }
+                    }
+                }
             });
         });
     }

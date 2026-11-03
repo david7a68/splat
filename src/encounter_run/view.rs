@@ -1231,6 +1231,11 @@ impl Run {
         }
         #[cfg(test)]
         for (&index, layout) in self.state.order.iter().zip(&layouts) {
+            let first = &layouts[0];
+            assert_eq!(layout.initiative_right, first.initiative_right);
+            assert_eq!(layout.name_left, first.name_left);
+            assert_eq!(layout.picture, first.picture);
+            assert!(layout.fit != RowFit::Natural || layout.height(scale) >= scale.row);
             assert!(
                 layout
                     .second_line
@@ -2160,19 +2165,8 @@ impl Run {
 
     /// `Saved` or `Not saved`, in every phase.
     fn save_status(&self, ui: &mut egui::Ui) {
-        let status = if !self.dirty {
-            Status {
-                icon: icons::OK,
-                word: "Saved",
-                color: colors().document.saved,
-            }
-        } else {
-            Status {
-                icon: icons::DRAFT,
-                word: "Not saved",
-                color: colors().document.unsaved,
-            }
-        };
+        let status = self.save_status_value();
+        let base_word = status.word;
         let path = self.path().map(|path| path.display().to_string());
         let word = self.copy_label.as_ref().map(|copy| {
             format!(
@@ -2186,17 +2180,37 @@ impl Run {
             ..status
         };
         let response = design::status(ui, status);
-        let full = self.copy_label.as_ref().map(|copy| {
-            format!(
-                "{} · {copy}",
-                if self.dirty { "Not saved" } else { "Saved" }
-            )
-        });
+        let full = self
+            .copy_label
+            .as_ref()
+            .map(|copy| format!("{base_word} · {copy}"));
         if let Some(full) = &full {
             design::named(ui, &response, full);
         }
         if let Some(path) = path {
             response.on_hover_text(full.map_or(path.clone(), |full| format!("{full}\n{path}")));
+        }
+    }
+
+    fn save_status_value(&self) -> Status<'static> {
+        if self.strip().not_saved {
+            Status {
+                icon: icons::ERROR,
+                word: "Not saved",
+                color: colors().document.invalid,
+            }
+        } else if !self.dirty {
+            Status {
+                icon: icons::OK,
+                word: "Saved",
+                color: colors().document.saved,
+            }
+        } else {
+            Status {
+                icon: icons::DRAFT,
+                word: "Not saved",
+                color: colors().document.unsaved,
+            }
         }
     }
 
@@ -2237,15 +2251,26 @@ impl Run {
             if cannot_save {
                 ui.add(
                     egui::Label::new(format!(
-                        "{}Closing loses unsaved changes: {changes}",
+                        "{}Closing loses {}:",
                         if self.has_disk_conflict() {
                             "The file changed on disk, so saving stopped. "
                         } else {
                             ""
+                        },
+                        if changes.len() == 1 {
+                            "this change"
+                        } else {
+                            "these changes"
                         }
                     ))
                     .wrap(),
                 );
+                for change in changes.iter().take(3) {
+                    ui.add(egui::Label::new(change).wrap());
+                }
+                if changes.len() > 3 {
+                    ui.label(format!("and {} more", changes.len() - 3));
+                }
             } else if conflict.is_some() {
                 ui.label("Choose which HP to keep, or close and choose next time.");
             } else if stranded.is_empty() {
@@ -2324,18 +2349,31 @@ impl Run {
         close && (cannot_save || self.close_run())
     }
 
-    fn unsaved_summary(&self) -> String {
+    fn unsaved_summary(&self) -> Vec<String> {
         let saved_lines = self
             .storage
             .as_ref()
             .and_then(|s| s.baseline.as_ref())
             .and_then(|bytes| serde_json::from_slice::<super::SavedRun>(bytes).ok())
             .map_or(0, |saved| saved.state.log.len());
-        let changes = self.state.log.get(saved_lines..).unwrap_or(&[]);
-        match changes {
-            [] => "everything since the last save.".to_owned(),
-            [one] => one.clone(),
-            [first, rest @ ..] => format!("{first} And {} more.", rest.len()),
+        let changes: Vec<_> = self
+            .history
+            .iter()
+            .zip(&self.history_labels)
+            .filter(|(state, _)| state.log.len() >= saved_lines)
+            .map(|(_, label)| {
+                self.state
+                    .participants
+                    .iter()
+                    .find(|p| label.ends_with(&format!("damage to {}", p.name)))
+                    .and_then(|p| p.hp)
+                    .map_or_else(|| label.clone(), |hp| format!("{label} ({hp} HP left)"))
+            })
+            .collect();
+        if changes.is_empty() {
+            vec!["Everything since the last save.".to_owned()]
+        } else {
+            changes
         }
     }
 
@@ -2476,7 +2514,12 @@ impl Run {
         } else {
             &p.name
         };
-        ui.add(egui::Label::new(Type::Title.rich(ui, title).color(colors().text)).wrap());
+        let shown = dock_name(ui, title, &Type::Title.font(ui), ui.available_width());
+        let response = ui.add(egui::Label::new(
+            Type::Title.rich(ui, shown).color(colors().text),
+        ));
+        design::named(ui, &response, title);
+        response.on_hover_text(title);
 
         let participant_tab = !matches!(self.panel, Panel::Log | Panel::Encounter | Panel::Groups);
         let reference = if is_sheet { "Sheet" } else { "Stat block" };
@@ -2691,12 +2734,25 @@ impl Run {
                                 ""
                             }
                         );
-                        if design::message_with_action(
+                        let arrival =
+                            Self::roll_block_name(&self.state, &self.state.participants[first]);
+                        let full = format!("Move {arrival} before {name}");
+                        let font = Type::Strong.font(ui);
+                        let shown = undo_words(
                             ui,
-                            Tone::Info,
-                            &line,
-                            &format!("Move before {name}"),
-                        ) {
+                            &full,
+                            &self.state.participants,
+                            &font,
+                            ui.available_width() - design::S * 2.0,
+                        );
+                        design::message(ui, Tone::Info, &line);
+                        if Action::quiet(&shown)
+                            .name(&full)
+                            .hint(&full)
+                            .density(Density::Read)
+                            .show(ui)
+                            .clicked()
+                        {
                             self.run_command(Command::MoveArrivalBefore(first, before));
                         }
                     } else {
@@ -4652,6 +4708,7 @@ fn undo_words(
     }
     if let Some((moved, target)) = action
         .strip_prefix("move ")
+        .or_else(|| action.strip_prefix("Move "))
         .and_then(|words| words.split_once(" before "))
     {
         let room = width - design::number_width(ui, "move  before ", font);
@@ -4663,7 +4720,12 @@ fn undo_words(
             font,
             room - design::number_width(ui, &moved, font),
         );
-        return format!("move {moved} before {target}");
+        let verb = if action.starts_with("Move ") {
+            "Move"
+        } else {
+            "move"
+        };
+        return format!("{verb} {moved} before {target}");
     }
     let target = participants
         .iter()
@@ -4823,6 +4885,13 @@ enum RowFit {
     Summary,
 }
 
+#[derive(Clone, Copy, PartialEq)]
+enum BonusFit {
+    All,
+    One,
+    None,
+}
+
 /// The height that makes these rows, none shorter than it is now, fill `room`, up to `cap`.
 /// Rows taller than that keep their own height. Zero if the rows already fill `room`.
 fn even_height(heights: &[f32], room: f32, cap: f32) -> f32 {
@@ -4900,7 +4969,7 @@ impl RowLayout {
             p,
             sync,
             scale,
-            (fit, p.conditions.len(), true),
+            (fit, p.conditions.len(), BonusFit::All),
             longest_name,
         )
     }
@@ -4911,10 +4980,10 @@ impl RowLayout {
         p: &Participant,
         sync: Option<SyncState>,
         scale: RunScale,
-        fit_and_count: (RowFit, usize, bool),
+        fit_and_count: (RowFit, usize, BonusFit),
         longest_name: f32,
     ) -> Self {
-        let (fit, condition_count, show_bonus) = fit_and_count;
+        let (fit, condition_count, bonus_fit) = fit_and_count;
         let c = colors();
         // Fixed columns from the left of the numbers. A name stays near its HP.
         // The smallest scale has one set of columns, compressed or not, so that a list that
@@ -5044,17 +5113,17 @@ impl RowLayout {
                 c.participant.changed,
             );
             let bonuses = changes.overrides.table_bonuses(&changes.base);
-            for bonus in bonuses.iter().take(if !show_bonus {
-                0
-            } else if fit == RowFit::Summary {
-                1
-            } else {
-                bonuses.len()
+            for bonus in bonuses.iter().take(match bonus_fit {
+                BonusFit::None => 0,
+                BonusFit::One => 1,
+                BonusFit::All => bonuses.len(),
             }) {
                 let span = add(&bonus.replace(' ', "\u{a0}"), c.participant.changed);
                 bonus_start.get_or_insert(span.start);
             }
-            if !bonuses.is_empty() && (!show_bonus || (fit == RowFit::Summary && bonuses.len() > 1))
+            if !bonuses.is_empty()
+                && (bonus_fit == BonusFit::None
+                    || (bonus_fit == BonusFit::One && bonuses.len() > 1))
             {
                 condition_spans.push(("Run changes".into(), add("more", c.participant.changed)));
             }
@@ -5106,7 +5175,7 @@ impl RowLayout {
             > 1;
         let mut second_line =
             (!job.is_empty()).then(|| ui.fonts_mut(|fonts| fonts.layout_job(job.clone())));
-        if show_bonus
+        if bonus_fit != BonusFit::None
             && p.stat_changes()
             && second_line.as_ref().is_some_and(|line| line.rows.len() > 1)
         {
@@ -5116,7 +5185,15 @@ impl RowLayout {
                 p,
                 sync,
                 scale,
-                (RowFit::Summary, condition_count, fit != RowFit::Summary),
+                (
+                    fit,
+                    condition_count,
+                    if bonus_fit == BonusFit::All {
+                        BonusFit::One
+                    } else {
+                        BonusFit::None
+                    },
+                ),
                 longest_name,
             );
         }
@@ -5129,7 +5206,7 @@ impl RowLayout {
                 p,
                 sync,
                 scale,
-                (fit, condition_count - 1, show_bonus),
+                (fit, condition_count - 1, bonus_fit),
                 longest_name,
             );
         }
@@ -5583,6 +5660,38 @@ mod tests {
     use super::*;
     use serde_yaml_ng::Mapping;
     use splat::content::{Entry, overrides::Overrides};
+
+    #[test]
+    fn saving_wait_and_save_failure_have_distinct_statuses() {
+        let mut run = super::super::tests::run();
+        run.dirty = true;
+        let status = run.save_status_value();
+        assert_eq!(status.icon, icons::DRAFT);
+        assert_eq!(status.color, colors().document.unsaved);
+        run.disk_conflict = true;
+        let status = run.save_status_value();
+        assert_eq!(status.word, "Not saved");
+        assert_eq!(status.icon, icons::ERROR);
+        assert_eq!(status.color, colors().document.invalid);
+    }
+
+    #[test]
+    fn closing_lists_changes_with_their_targets() {
+        let mut run = super::super::tests::run();
+        run.state.participants[0].hp = Some(11);
+        run.state.participants[0].temporary_hp = 0;
+        let name = run.state.participants[0].name.clone();
+        run.apply(Command::Damage(0, 3)).unwrap();
+        assert_eq!(
+            run.unsaved_summary(),
+            vec![format!("3 damage to {name} (8 HP left)")]
+        );
+        run.apply(Command::Condition(0, "Prone".into())).unwrap();
+        assert_eq!(run.unsaved_summary().len(), 2);
+        assert_eq!(run.unsaved_summary()[1], format!("Prone on {name}"));
+        run.undo();
+        assert_eq!(run.unsaved_summary().len(), 1);
+    }
 
     #[test]
     fn undo_keeps_actions_directions_amounts_and_copy_numbers() {

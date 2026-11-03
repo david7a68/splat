@@ -1280,7 +1280,7 @@ pub mod settings {
     const OFFLINE_ERROR: &str = "Could not reach D&D Beyond";
     const CAMPAIGNS_SECTION: &str = "CAMPAIGNS";
     const EDIT_DETAILS: &str = "Edit details";
-    const EDIT_FORM: &str = "DETAILS";
+    const EDIT_FORM: &str = "CAMPAIGN NAME";
     const CANCEL: &str = "Cancel";
 
     pub fn run(d: &mut Driver<'_>) {
@@ -1375,6 +1375,11 @@ pub mod settings {
             d.row_of(COOKIE_HELP_TEXT);
             d.wait_for_text(COOKIE_HELP_TEXT);
         });
+        d.click(
+            "Party sync stopped when D&D Beyond disconnected. Connect, then turn sync on in Party.",
+        );
+        d.expect("Party");
+        d.state("sync-stopped-recovery", Sizes::Default);
     }
 }
 
@@ -3289,7 +3294,7 @@ pub mod run_edge_states {
             "Changed on disk",
             !d.has_containing("stays saved")
                 && d.has("Close and lose changes")
-                && d.visible_text("loses unsaved changes"),
+                && d.visible_text("Closing loses this change:"),
             "Close says what it will lose, in place of \"The run stays saved\"",
         );
         d.state("close-while-not-saved", Sizes::Default);
@@ -3727,7 +3732,7 @@ pub mod signed_in {
     const SYNC_PARTY: &str = "Sync party";
     const STOP_SYNC: &str = "Stop party sync";
     const LINK_TAB: &str = "Link and folder";
-    const BLOCKED_REASON: &str = "Close the run to change the link.";
+    const BLOCKED_REASON: &str = "Close the run to change the folder or the link.";
     const EDIT_DETAILS: &str = "Edit details";
     const CONFLICT: &str = "Conflict";
     const RAIL_FAILING: &str = "Sign-in failing";
@@ -5030,6 +5035,20 @@ pub mod session_notes {
         // Beside a panel at the minimum window, the list keeps its room.
         d.press_ctrl(Key::K);
         d.state("timeline-beside-lookup", Sizes::All);
+        d.observe_both(
+            "iter-10-S3",
+            "Timeline header actions end at the form edge",
+            |d| {
+                let field = d.place_of("Title");
+                let menu = d
+                    .nodes()
+                    .into_iter()
+                    .find(|node| node.name.starts_with("More actions for "));
+                field
+                    .zip(menu)
+                    .is_some_and(|(field, menu)| (field.right() - menu.rect.right()).abs() < 1.0)
+            },
+        );
         d.click(NAV_SESSIONS);
         d.expect("All sessions");
         d.state("session-beside-lookup", Sizes::Default);
@@ -5395,6 +5414,7 @@ pub mod session_recording {
             .simulate_job_end(Err(CANCELLED.to_owned()));
         d.settle();
         d.expect("Cancelled");
+        d.expect("Continue processing sends the rest of the audio (parts 3 to 24)");
         d.state("processing-cancelled", Sizes::Default);
         d.app_mut().sessions.simulate_job(Progress::Asking {
             pass: crate::processing::Pass::Review,
@@ -5467,6 +5487,30 @@ pub mod session_recording {
             "The marker heading and its timeline state are visible together in the transcript",
         );
         d.state("marked-transcript", Sizes::All);
+        d.click("On the timeline");
+        d.expect("Copy link");
+        d.observe(
+            "T11.7",
+            d.has_containing("Rest at the mill"),
+            "The transcript's added marker opens its event on the timeline",
+        );
+        d.state("transcript-marker-on-timeline", Sizes::Default);
+        d.observe_both(
+            "iter-10-S3-wide",
+            "Wide Timeline keeps its header and form edges aligned",
+            |d| {
+                let field = d.place_of("Title");
+                let menu = d
+                    .nodes()
+                    .into_iter()
+                    .find(|node| node.name.starts_with("More actions for "));
+                field
+                    .zip(menu)
+                    .is_some_and(|(field, menu)| (field.right() - menu.rect.right()).abs() < 1.0)
+            },
+        );
+        d.click(NAV_SESSIONS);
+        d.expect("Earlier part");
         d.click("Earlier part");
         d.expect("Part 1 of 2");
         choose_view(d, "What the check changed");
@@ -5499,13 +5543,6 @@ pub mod session_recording {
         );
         d.state("recording-summary", Sizes::All);
         d.click("Back to recordings");
-        d.click(NAV_TIMELINE);
-        d.observe(
-            "T11.7",
-            d.has_containing("Rest at the mill"),
-            "A marker the DM adds is on the timeline, with its place and length",
-        );
-        d.click(NAV_SESSIONS);
 
         // A warning lasts as long as the result, past the message and the rail.
         d.app_mut().sessions.simulate_job(Progress::Asking {
@@ -5859,7 +5896,7 @@ pub mod encounter_groups {
         d.click(&add_group(GROUP_RIVALS));
         d.expect("placed after");
         let before = current_participant(d);
-        d.click_containing("Move before Rival Team");
+        d.click("Move Rival Team before Rival Team");
         d.at_size(DEFAULT, |d| {
             d.expect("Rival Captain 2 moved before Rival Team at 14")
         });
@@ -6308,7 +6345,7 @@ pub mod run_add_creature {
         d.state("arrivals-made-up-ready", Sizes::Default);
         d.click("Add Ghost of the Mill to the initiative list");
         d.expect("Added by hand: Ghost of the Mill");
-        d.expect("Move before Ember Cultist");
+        d.expect("Move Ghost of the Mill before Ember Cultist");
         d.state("arrivals-made-up-added", Sizes::All);
         d.goal("add a creature made up at the table to a running fight");
         d.click_row("Ghost of the Mill");
