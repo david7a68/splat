@@ -314,67 +314,77 @@ fn vital_rows(entry: &Entry) -> Vec<(&'static str, String)> {
 
 pub(super) fn vitals(ui: &mut egui::Ui, entry: &Entry, values: Option<&super::view::RunValues>) {
     let c = colors();
-    ui.horizontal_wrapped(|ui| {
-        ui.spacing_mut().item_spacing = egui::vec2(design::L, 2.0);
-        let printed = vital_rows(entry);
-        let rows = if values.is_some() {
-            ["ARMOR CLASS", "HIT POINTS", "INITIATIVE"]
-                .into_iter()
-                .map(|label| {
-                    (
-                        label,
-                        printed
-                            .iter()
-                            .find(|(key, _)| *key == label)
-                            .map_or_else(|| "Unknown".to_owned(), |(_, text)| text.clone()),
-                    )
-                })
-                .collect()
-        } else {
-            printed
-        };
-        for (label, text) in rows {
-            ui.vertical(|ui| {
-                ui.spacing_mut().item_spacing.y = 0.0;
-                ui.label(Type::Label.rich(ui, label).color(c.muted));
-                let live = values.map(|values| match label {
-                    "ARMOR CLASS" => values.armor_class,
-                    "HIT POINTS" => values.hp,
-                    _ => values.initiative,
-                });
-                let printed = match label {
-                    "ARMOR CLASS" => stat(entry, "armor_class"),
-                    "HIT POINTS" => stat(entry, "max_hp"),
-                    _ => stat(entry, "initiative"),
-                };
-                let shown = live.map_or_else(
-                    || text.clone(),
-                    |n| {
-                        n.map_or_else(
-                            || "Unknown".to_owned(),
-                            |n| {
-                                if label == "INITIATIVE" {
-                                    design::signed(n)
-                                } else {
-                                    n.to_string()
-                                }
-                            },
+    ui.with_layout(
+        egui::Layout::left_to_right(egui::Align::Min).with_main_wrap(true),
+        |ui| {
+            ui.spacing_mut().item_spacing = egui::vec2(design::L, 2.0);
+            let printed = vital_rows(entry);
+            let rows = if values.is_some() {
+                ["ARMOR CLASS", "HIT POINTS", "INITIATIVE"]
+                    .into_iter()
+                    .map(|label| {
+                        (
+                            label,
+                            printed
+                                .iter()
+                                .find(|(key, _)| *key == label)
+                                .map_or_else(|| "Unknown".to_owned(), |(_, text)| text.clone()),
                         )
+                    })
+                    .collect()
+            } else {
+                printed
+            };
+            for (label, text) in rows {
+                let width = design::number_width(ui, label, &Type::Label.font(ui))
+                    .max(design::number_width(ui, &text, &Type::Prose.font(ui)))
+                    + design::S;
+                ui.allocate_ui_with_layout(
+                    egui::vec2(width, 0.0),
+                    egui::Layout::top_down(egui::Align::Min),
+                    |ui| {
+                        ui.spacing_mut().item_spacing.y = 0.0;
+                        ui.label(Type::Label.rich(ui, label).color(c.muted));
+                        let live = values.map(|values| match label {
+                            "ARMOR CLASS" => values.armor_class,
+                            "HIT POINTS" => values.hp,
+                            _ => values.initiative,
+                        });
+                        let printed = match label {
+                            "ARMOR CLASS" => stat(entry, "armor_class"),
+                            "HIT POINTS" => stat(entry, "max_hp"),
+                            _ => stat(entry, "initiative"),
+                        };
+                        let shown = live.map_or_else(
+                            || text.clone(),
+                            |n| {
+                                n.map_or_else(
+                                    || "Unknown".to_owned(),
+                                    |n| {
+                                        if label == "INITIATIVE" {
+                                            design::signed(n)
+                                        } else {
+                                            n.to_string()
+                                        }
+                                    },
+                                )
+                            },
+                        );
+                        ui.label(Type::Prose.rich(ui, shown).color(c.text));
+                        if let Some(live) = live
+                            && live != printed
+                        {
+                            ui.label(
+                                Type::Small
+                                    .rich(ui, format!("printed {text}"))
+                                    .color(c.muted),
+                            );
+                        }
                     },
                 );
-                ui.label(Type::Prose.rich(ui, shown).color(c.text));
-                if let Some(live) = live
-                    && live != printed
-                {
-                    ui.label(
-                        Type::Small
-                            .rich(ui, format!("printed {text}"))
-                            .color(c.muted),
-                    );
-                }
-            });
-        }
-    });
+            }
+        },
+    );
 }
 
 /// The body line that gives this creature's hit points, such as `HP 22 (4d8 + 4)`. The

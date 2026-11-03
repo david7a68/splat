@@ -14,7 +14,12 @@ use splat::content::{
     Entry,
     overrides::{Overrides, Resolved},
 };
-use std::{collections::BTreeSet, fs, sync::Arc, sync::mpsc};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    fs,
+    sync::Arc,
+    sync::mpsc,
+};
 use uuid::Uuid;
 
 mod groups;
@@ -781,12 +786,68 @@ fn stat_line(text: &str) -> String {
         .join(" · ")
 }
 
+const MISSING_CREATURE: &str = "Not found. Its package entry was deleted.";
+
+fn roster_name(
+    slot: &Slot,
+    definition: Option<&Entry>,
+    known: &BTreeMap<String, String>,
+) -> String {
+    let name = definition
+        .map(|entry| entry.name.clone())
+        .or_else(|| {
+            slot.creature
+                .as_ref()
+                .and_then(|reference| known.get(&reference.label()))
+                .cloned()
+        })
+        .unwrap_or_else(|| "Missing creature".into());
+    groups::shown_name(&slot.overrides, name)
+}
+
+fn replace_missing_creature(ui: &mut egui::Ui, slot: &mut Slot, snapshot: &Snapshot) -> bool {
+    let key = ui.id().with("replacement_creature");
+    let mut search = ui
+        .ctx()
+        .data_mut(|data| data.get_temp::<String>(key))
+        .unwrap_or_default();
+    let width = ui.available_width();
+    design::search_field(
+        ui,
+        "Replacement creature",
+        &mut search,
+        "Choose another creature…",
+        width,
+    );
+    let query = search.to_lowercase();
+    let mut replaced = false;
+    for creature in snapshot
+        .creatures
+        .iter()
+        .filter(|c| !c.linked && c.lower.contains(&query))
+        .take(5)
+    {
+        if Action::secondary(&format!("Use {}", creature.name))
+            .show(ui)
+            .clicked()
+        {
+            slot.creature = Some(EntryRef::id(creature.id));
+            slot.party_slot = None;
+            slot.overrides.clear();
+            replaced = true;
+        }
+    }
+    ui.ctx().data_mut(|data| data.insert_temp(key, search));
+    replaced
+}
+
 struct SearchRoster<'a> {
     already: &'a dyn Fn(&Creature) -> bool,
 }
 
 struct Snapshot {
     catalogue: Catalogue,
+    known_creature_names: BTreeMap<String, String>,
     creatures: Vec<Creature>,
     templates: Vec<Template>,
     issues: Vec<String>,
@@ -801,6 +862,11 @@ impl Snapshot {
     /// A refresh keeps settings the DM is editing. Otherwise the file decides, or the next
     /// save would write an old value over a change made outside Splat.
     fn keep_edited_settings(&mut self, old: &Self) {
+        for (reference, name) in &old.known_creature_names {
+            self.known_creature_names
+                .entry(reference.clone())
+                .or_insert_with(|| name.clone());
+        }
         if old.options != old.saved_options {
             self.options = old.options.clone();
             self.saved_options = old.saved_options.clone();
@@ -964,8 +1030,20 @@ impl Snapshot {
                 })
                 .collect(),
         );
+        let mut known_creature_names = BTreeMap::new();
+        for creature in &creatures {
+            known_creature_names.insert(creature.id.to_string(), creature.name.clone());
+            if let Some(key) = catalogue
+                .entries
+                .get(&creature.id)
+                .and_then(|e| e.entry.key.as_ref())
+            {
+                known_creature_names.insert(key.clone(), creature.name.clone());
+            }
+        }
         Ok(Self {
             groups,
+            known_creature_names,
             run_creatures,
             options: options.clone(),
             saved_options: options,
@@ -3136,28 +3214,16 @@ impl Encounters {
         let (mut remove, mut duplicate, mut raise, mut lower) = (None, None, None, None);
         let count = draft.setup.roster.len();
         for (i, slot) in draft.setup.roster.iter_mut().enumerate() {
-            ui.push_id(&slot.key, |ui| {
+            ui.push_id(slot.key.clone(), |ui| {
                 let resolved = slot
                     .creature
                     .as_ref()
                     .and_then(|r| snapshot.catalogue.resolve_ref(r).ok());
-                let name = resolved
-                    .and_then(|id| snapshot.catalogue.entries.get(&id))
-                    .map(|e| e.entry.name.clone())
-                    .unwrap_or_else(|| {
-                        format!(
-                            "Unavailable creature / party slot: {}",
-                            slot.party_slot.as_deref().unwrap_or(&slot.key)
-                        )
-                    });
-                let name = if resolved.is_some() {
-                    groups::shown_name(&slot.overrides, name)
-                } else {
-                    name
-                };
                 let definition = resolved
                     .and_then(|id| snapshot.catalogue.entries.get(&id))
                     .map(|e| &e.entry);
+                let name = roster_name(slot, definition, &snapshot.known_creature_names);
+                let missing = definition.is_none();
                 let creature =
                     resolved.and_then(|id| snapshot.creatures.iter().find(|c| c.id == id));
                 let synced = live.is_some() && creature.is_some_and(|c| c.party);
@@ -3191,7 +3257,14 @@ impl Encounters {
                 };
                 let side_icon = if slot.side == "party" { icons::PARTY } else if slot.side == "enemies" { icons::ENCOUNTERS } else { icons::GROUP };
                 let identity = definition.filter(|entry| snapshot.npc_name_for(entry, &slot.overrides).is_some()).map(|entry| format!("as {} · ", entry.name)).unwrap_or_default();
-                let detail = format!("{identity}{side_icon} {} · {detail}", design::reader::human_label(&slot.side));
+                let side = design::reader::human_label(&slot.side);
+                let detail = if missing {
+                    format!("{side} · {MISSING_CREATURE}")
+                } else if detail.is_empty() {
+                    format!("{identity}{side_icon} {side}")
+                } else {
+                    format!("{identity}{side_icon} {side} · {detail}")
+                };
                 let is_open = expanded.as_deref() == Some(slot.key.as_str());
                 let member_row = ui.horizontal(|ui| {
                     ui.set_min_height(Density::Glance.row());
@@ -3232,7 +3305,9 @@ impl Encounters {
                                 )
                                 .truncate(),
                             );
-                            if !detail.is_empty() {
+                            if missing {
+                                ui.add(egui::Label::new(Type::Small.rich(ui, &detail).color(colors().result.warning)).wrap());
+                            } else if !detail.is_empty() {
                                 // What a player has left is the reason to look, so all of it shows.
                                 ui.spacing_mut().interact_size.y = 0.0;
                                 ui.horizontal_wrapped(|ui| {
@@ -3258,7 +3333,9 @@ impl Encounters {
                     groups::show_form_when_it_opens(ui);
                     *expanded = Some(slot.key.clone());
                 }
-                if is_open {
+                if is_open && missing {
+                    if replace_missing_creature(ui, slot, snapshot) { *expanded = None; }
+                } else if is_open {
                     ui.horizontal(|ui| {
                         ui.label(Type::Small.rich(ui, "Side").color(colors().muted));
                         side_control(ui, "Side", &mut slot.side, &sides);
@@ -3545,6 +3622,67 @@ fn roster_detail(detail: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn missing_roster_names_never_fall_back_to_reference_keys() {
+        let mut draft = Draft::new();
+        let id = Uuid::new_v4();
+        draft.add(id, false);
+        let slot = &mut draft.setup.roster[0];
+        slot.key = "actor_wolf_1".into();
+        slot.party_slot = Some("party_slot_internal".into());
+        for reference in [
+            EntryRef::id(id),
+            EntryRef {
+                id: None,
+                key: Some("package:wolf".into()),
+                link: None,
+            },
+        ] {
+            slot.creature = Some(reference);
+            let mut known = BTreeMap::new();
+            let label = roster_name(slot, None, &known);
+            assert_eq!(label, "Missing creature");
+            for raw in [
+                &slot.key,
+                slot.party_slot.as_ref().unwrap(),
+                &slot.creature.as_ref().unwrap().label(),
+            ] {
+                assert!(!label.contains(raw));
+            }
+            known.insert(
+                slot.creature.as_ref().unwrap().label(),
+                "Cinder Wolf 1".into(),
+            );
+            assert_eq!(roster_name(slot, None, &known), "Cinder Wolf 1");
+        }
+        slot.overrides = yaml("{name: Last known wolf}")
+            .as_mapping()
+            .unwrap()
+            .clone();
+        assert_eq!(roster_name(slot, None, &BTreeMap::new()), "Last known wolf");
+    }
+
+    #[test]
+    fn a_refresh_keeps_the_name_of_a_deleted_creature() {
+        let dir = tempfile::tempdir().unwrap();
+        let active = campaign(dir.path());
+        let id = creature(dir.path(), "Cinder Wolf", false);
+        let old = Snapshot::load(&active, &[]).unwrap();
+        fs::remove_file(dir.path().join("Cinder Wolf.md")).unwrap();
+        let mut refreshed = Snapshot::load(&active, &[]).unwrap();
+        refreshed.keep_edited_settings(&old);
+        let mut draft = Draft::new();
+        draft.add(id, false);
+        assert_eq!(
+            roster_name(
+                &draft.setup.roster[0],
+                None,
+                &refreshed.known_creature_names
+            ),
+            "Cinder Wolf"
+        );
+    }
+
     #[test]
     fn undo_discard_stays_in_its_campaign() {
         let (a, b) = (tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap());
@@ -4241,8 +4379,8 @@ mod tests {
         assert!(run.keeps_party_synced());
         assert_eq!(
             run.hp_of(0),
-            None,
-            "the sheet decides, so the override waits"
+            Some(1),
+            "the template HP stays while the setup override waits for the sheet"
         );
         assert_eq!(run.hp_of(1), Some(7));
 

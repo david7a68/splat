@@ -1238,6 +1238,11 @@ impl<'a> Driver<'a> {
         self.scroll_by(pos, notches, egui::vec2(0.0, -100.0));
     }
 
+    /// Return to the start of a reader after editing its source.
+    pub fn scroll_up_at(&mut self, pos: egui::Pos2, notches: u32) {
+        self.scroll_by(pos, notches, egui::vec2(0.0, 100.0));
+    }
+
     /// Scroll across a table to read columns outside the pane.
     pub fn scroll_sideways_at(&mut self, pos: egui::Pos2, notches: u32) {
         self.scroll_by(pos, notches, egui::vec2(-100.0, 0.0));

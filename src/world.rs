@@ -610,20 +610,22 @@ pub(crate) fn file_actions(ui: &mut egui::Ui, campaign: &Campaign, relative: &st
 }
 
 pub(crate) fn entry_file_actions(ui: &mut egui::Ui, root: &Path, relative: &str, obsidian: bool) {
+    ui.horizontal_wrapped(|ui| entry_file_parts(ui, root, relative, obsidian));
+}
+
+pub(crate) fn entry_file_parts(ui: &mut egui::Ui, root: &Path, relative: &str, obsidian: bool) {
     let path = root.join(relative);
-    ui.horizontal_wrapped(|ui| {
-        ui.label(Type::Small.rich(ui, relative).color(colors().muted));
-        if obsidian && design::link(ui, "Edit in Obsidian").clicked() {
-            ui.ctx()
-                .open_url(egui::OpenUrl::new_tab(obsidian_url(&path)));
-        }
-        if design::link(ui, "Show file").clicked() {
-            ui.ctx().open_url(egui::OpenUrl::new_tab(format!(
-                "file://{}",
-                encode_path(&path)
-            )));
-        }
-    });
+    ui.label(Type::Small.rich(ui, relative).color(colors().muted));
+    if obsidian && design::link(ui, "Edit in Obsidian").clicked() {
+        ui.ctx()
+            .open_url(egui::OpenUrl::new_tab(obsidian_url(&path)));
+    }
+    if design::link(ui, "Show file").clicked() {
+        ui.ctx().open_url(egui::OpenUrl::new_tab(format!(
+            "file://{}",
+            encode_path(&path)
+        )));
+    }
 }
 
 fn encode_path(path: &Path) -> String {
@@ -941,10 +943,13 @@ impl Reader {
         let campaign = campaign?;
         let mut chosen = None;
         ui.add_space(design::M);
-        design::quiet_section(ui, "Make world entry", |ui| {
+        design::quiet_section(ui, "Give this note a type", |ui| {
             ui.label(
                 Type::Small
-                    .rich(ui, "Gives this note an identity. Its text does not change.")
+                    .rich(
+                        ui,
+                        "Adds a type to the file's front matter. The text does not change.",
+                    )
                     .color(colors().muted),
             );
             ui.horizontal_wrapped(|ui| {
@@ -1403,14 +1408,20 @@ fn add_form(
         ui.checkbox(&mut adding.save, "Save this as their stat block");
     }
     if sides.len() > 1 {
-        egui::ComboBox::from_id_salt("world_add_side")
-            .selected_text(adding.side.clone())
+        ui.label(Type::Label.rich(ui, "SIDE").color(colors().muted));
+        let combo = egui::ComboBox::from_id_salt("world_add_side")
+            .selected_text(design::reader::human_label(&adding.side))
             .icon(design::combo_icon)
             .show_ui(ui, |ui| {
                 for side in sides {
-                    ui.selectable_value(&mut adding.side, side.clone(), side);
+                    ui.selectable_value(
+                        &mut adding.side,
+                        side.clone(),
+                        design::reader::human_label(side),
+                    );
                 }
             });
+        design::named(ui, &combo.response, "Side");
     }
     design::text_field(
         ui,

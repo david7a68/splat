@@ -1177,6 +1177,19 @@ impl CopyPlan {
                 ),
             ],
         )?;
+        // Rename only the first matching H1. Keep all other prose and citations.
+        let body_start = text.find("\n---").map(|at| at + "\n---".len()).unwrap_or(0);
+        let mut offset = body_start;
+        for line in text[body_start..].split_inclusive('\n') {
+            if let Some(heading) = line.trim_end().strip_prefix("# ") {
+                if heading.trim() == source.entry.name {
+                    let end = offset + line.trim_end().len();
+                    text.replace_range(offset..end, &format!("# {}", name.trim()));
+                }
+                break;
+            }
+            offset += line.len();
+        }
         // Preserve the full original body and source citations; append attribution for bundled material.
         if source
             .entry
@@ -1676,6 +1689,31 @@ mod tests {
         assert!(plan.save().is_err());
     }
     #[test]
+    fn a_copy_keeps_an_independent_heading_and_the_rest_of_the_prose() {
+        let text = note_text("Wolf", "rule", None).replace("# Wolf", "# Road notes")
+            + "\nWolf tracks.\n\n# Wolf\n";
+        let source = CopySource {
+            entry: Entry::parse("Wolf.md", &text).unwrap(),
+            text,
+            root: None,
+            campaign: None,
+        };
+        let folder = tempfile::tempdir().unwrap();
+        let plan = CopyPlan::prepare(
+            &source,
+            folder.path(),
+            None,
+            "Watch Wolf",
+            "",
+            &Catalogue::default(),
+        )
+        .unwrap();
+        assert!(plan.text.contains("# Road notes"));
+        assert!(plan.text.contains("Wolf tracks.\n\n# Wolf\n"));
+        assert!(!plan.text.contains("# Watch Wolf"));
+    }
+
+    #[test]
     fn builtin_catalogue_and_guard_copy_use_one_owner_and_preserve_attribution() {
         let cat = Catalogue::load(&[], None).unwrap();
         assert_eq!(cat.modules.len(), 1);
@@ -1704,6 +1742,9 @@ mod tests {
         .unwrap();
         let copy = plan.save().unwrap();
         assert_ne!(copy.id, guard.entry.id);
+        assert!(plan.text.contains("\n# Gate Guard\n"));
+        assert!(!plan.text.contains("\n# Guard\n"));
+        assert!(plan.text.contains("HP 11 (2d8 + 2)"));
         assert!(plan.text.contains(content::builtin::ATTRIBUTION));
         let all = cat.closure(
             &[PackageSelection {

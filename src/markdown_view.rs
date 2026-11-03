@@ -101,10 +101,12 @@ fn show_with_density(ui: &mut egui::Ui, markdown: &str, dense: bool) {
         |index| index.reader_markdown(markdown, from),
     );
     let source = local_figure_links(&linked, |url| crate::art::link_art(&ctx, url).is_some());
-    for event in Parser::new_ext(
+    for (event, range) in Parser::new_ext(
         &source,
         Options::ENABLE_TABLES | Options::ENABLE_STRIKETHROUGH,
-    ) {
+    )
+    .into_offset_iter()
+    {
         // A roll marker belongs to the table right after it, not to a later one.
         if matches!(
             event,
@@ -308,10 +310,14 @@ fn show_with_density(ui: &mut egui::Ui, markdown: &str, dense: bool) {
                     && let Some(start) = strong_link.take()
                 {
                     let words = job.text[start..].trim();
-                    if !words.is_empty() && !words.ends_with(['.', ':']) {
+                    let table_caption = job.text[..start].trim().is_empty()
+                        && source[range.end..].trim_start().starts_with('|');
+                    if !(words.is_empty() || words.ends_with(['.', ':']) || table_caption) {
                         for section in &mut job.sections {
                             if section.byte_range.start >= start {
                                 section.format.color = colors().accent;
+                                section.format.underline =
+                                    egui::Stroke::new(design::HAIRLINE_WIDTH, colors().accent);
                                 if section.format.strikethrough != egui::Stroke::NONE {
                                     section.format.strikethrough.color = colors().accent;
                                 }

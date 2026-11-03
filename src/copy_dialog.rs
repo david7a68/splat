@@ -181,7 +181,7 @@ impl CopyDialog {
             design::field(ui, "Destination", None, None, |ui| {
                 let combo = egui::ComboBox::from_id_salt("copy_destination")
                     .icon(design::combo_icon)
-                    .width(ui.available_width().min(360.0))
+                    .width(ui.available_width())
                     .selected_text(
                         destinations
                             .iter()
@@ -381,10 +381,28 @@ impl CopyDialog {
                                     d.2.split_once(" · ").map_or(d.2.as_str(), |(_, name)| name)
                                 })
                                 .unwrap_or("the destination");
-                            self.completed = Some(format!(
-                                "Copied to {destination_name} as {}.",
-                                self.name.trim()
-                            ));
+                            self.completed = Some(if plan.shared.is_empty() {
+                                format!("Copied to {destination_name} as {}.", self.name.trim())
+                            } else {
+                                let names = plan
+                                    .shared
+                                    .iter()
+                                    .filter_map(|p| {
+                                        splat::content::Entry::parse(&p.relative, &p.text)
+                                            .ok()
+                                            .map(|e| e.name)
+                                    })
+                                    .collect::<Vec<_>>()
+                                    .join(" and ");
+                                let folder = std::path::Path::new(&plan.relative)
+                                    .parent()
+                                    .filter(|p| !p.as_os_str().is_empty())
+                                    .map_or("the main folder".into(), |p| p.display().to_string());
+                                format!(
+                                    "Copied {} and {names} to {destination_name}, in {folder}.",
+                                    self.name.trim()
+                                )
+                            });
                             self.completed_path = Some(plan.root.join(&plan.relative));
                             self.refresh = Some(plan.root.clone());
                             self.error = None;
