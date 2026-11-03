@@ -39,11 +39,19 @@
     # Feedback-only settings must not turn a merge gate into a partial/report run.
     unset SPLAT_VISUAL_SCENARIOS SPLAT_VISUAL_UPDATE_BASELINE SPLAT_VISUAL_DIAGNOSE
     export SPLAT_VISUAL_ENFORCE=baseline
-    check || exit "$?"
+    # Cargo serializes compilation in this target directory, but releases its
+    # build lock before running tests. Let fmt/Clippy overlap test execution.
+    check &
+    check_pid=$!
     out="$PWD/artifacts/screenshots/$label"
     SPLAT_VISUAL_DIR="$out" SPLAT_VISUAL_VIDEO="''${SPLAT_VISUAL_VIDEO:-1}" \
       cargo test --locked -- --nocapture
     status=$?
+    wait "$check_pid"
+    check_status=$?
+    if [ "$check_status" -ne 0 ]; then
+      status=$check_status
+    fi
     if [ "''${SPLAT_VISUAL_CONTACT_SHEET:-0}" = 1 ]; then
       visual-contact-sheet "$label"
     else
