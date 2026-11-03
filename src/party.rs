@@ -1,7 +1,7 @@
 //! Character viewer, with combat sync on from the time Splat connects to D&D Beyond.
 use crate::{
     auth::Session,
-    design::{self, Action, Density, Status, Tone, Type, colors, icons},
+    design::{self, Action, Density, Tone, Type, colors, icons},
     party_sync::{Reader, Stored},
 };
 use eframe::egui;
@@ -173,22 +173,47 @@ impl Party {
         } else {
             None
         };
+        let checked = self.reader.selected.as_ref().is_some_and(|id| {
+            self.reader.online_ids.contains(id) && !self.reader.errors.contains_key(id)
+        }) && self.reader.error.is_none();
+        let (status_icon, status_word, _status_color) = if session.is_none() {
+            (icons::OFFLINE, "Not connected", c.connection.offline)
+        } else if self.reader.loading() {
+            (icons::BUSY, "Refreshing", c.connection.busy)
+        } else if self.combat.ready() {
+            (
+                icons::ONLINE,
+                "Connected · Sync reads this sheet",
+                c.connection.connected,
+            )
+        } else if !checked {
+            (icons::ONLINE, "Connected · Cached sheet", c.connection.busy)
+        } else if self.reader.stream_open {
+            (icons::ONLINE, "Live updates", c.connection.connected)
+        } else {
+            (
+                icons::ONLINE,
+                "Connected · Checking for updates",
+                c.connection.connected,
+            )
+        };
+        let context = format!("{status_icon} {status_word}{fetched}");
         let mut refresh = false;
         let mut open_link = false;
-        design::page_header(ui, "Party", None, |ui| {
+        design::page_header(ui, "Party", Some(&context), |ui| {
             if linked {
-                refresh = Action::secondary("Refresh party")
+                refresh = Action::quiet("Refresh party")
                     .icon(icons::REFRESH)
                     .blocked(can_refresh)
                     .show(ui)
                     .clicked();
+                if session.is_none() && design::link(ui, "Connect to refresh").clicked() {
+                    self.wants_settings = true;
+                }
             }
         });
-        if linked
-            && session.is_some()
-            && let Some(reason) = can_refresh
-        {
-            ui.label(Type::Small.rich(ui, reason).color(c.muted));
+        if linked && session.is_some() {
+            design::blocked_reason(ui, can_refresh);
         }
         if refresh && let Some(session) = session.clone() {
             self.reader.refresh(session, ui.ctx(), true);
@@ -197,8 +222,16 @@ impl Party {
             design::empty_state(
                 ui,
                 icons::PARTY,
-                "Link this campaign to D&D Beyond to see its party",
-                "Choose its D&D Beyond campaign under Campaign, Link and folder. The rest of Splat works without a link.",
+                if session.is_none() {
+                    "Connect D&D Beyond to see the party"
+                } else {
+                    "Link this campaign to D&D Beyond to see its party"
+                },
+                if session.is_none() {
+                    "First connect your D&D Beyond account. Then choose its campaign under Campaign, Link and folder."
+                } else {
+                    "Choose its D&D Beyond campaign under Campaign, Link and folder."
+                },
                 |ui| {
                     // Linking needs a session, so that comes first.
                     if session.is_none() {
@@ -224,54 +257,6 @@ impl Party {
             self.wants_link_page = open_link;
             return;
         }
-        let checked = self.reader.selected.as_ref().is_some_and(|id| {
-            self.reader.online_ids.contains(id) && !self.reader.errors.contains_key(id)
-        }) && self.reader.error.is_none();
-        let (status_icon, status_word, status_color) = if session.is_none() {
-            (icons::OFFLINE, "Not connected", c.connection.offline)
-        } else if self.reader.loading() {
-            (icons::BUSY, "Refreshing", c.connection.busy)
-        } else if self.combat.ready() {
-            (
-                icons::ONLINE,
-                "Connected · Sync reads this sheet",
-                c.connection.connected,
-            )
-        } else if !checked {
-            (icons::ONLINE, "Connected · Cached sheet", c.connection.busy)
-        } else if self.reader.stream_open {
-            (icons::ONLINE, "Live updates", c.connection.connected)
-        } else {
-            (
-                icons::ONLINE,
-                "Connected · Checking for updates",
-                c.connection.connected,
-            )
-        };
-        ui.horizontal_wrapped(|ui| {
-            if self.reader.loading() {
-                crate::design::spinner(ui);
-            }
-            design::status(
-                ui,
-                Status {
-                    icon: status_icon,
-                    word: &format!("{status_word}{fetched}"),
-                    color: status_color,
-                },
-            )
-            .on_hover_text(if session.is_none() {
-                "Showing saved sheets. Connect in Settings to get updates."
-            } else {
-                "Sheets refresh automatically. Use Refresh party to request the latest data."
-            });
-            if session.is_none() {
-                ui.label(Type::Small.rich(ui, "·").color(c.muted));
-                if design::link(ui, "Connect to refresh").clicked() {
-                    self.wants_settings = true;
-                }
-            }
-        });
         if let Some(e) = &self.reader.error {
             design::message(ui, Tone::Error, e);
         }
@@ -1298,11 +1283,11 @@ fn array(v: &Value) -> &[Value] {
 }
 fn section_heading(ui: &mut egui::Ui, title: &str) {
     ui.add_space(design::S);
-    design::group_label(ui, title);
+    design::group_heading(ui, title, 0);
 }
 fn subsection_heading(ui: &mut egui::Ui, title: &str) {
     ui.add_space(design::XS);
-    design::group_label(ui, title);
+    design::group_heading(ui, title, 0);
 }
 const TILE_WIDTH: f32 = 112.0;
 
@@ -1460,7 +1445,7 @@ pub(crate) fn overview(ui: &mut egui::Ui, record: &EntitySnapshot, live: Option<
     );
     section_heading(ui, "Resources");
     if record.definition.splat_resources.is_empty() {
-        ui.label("No limited-use pools returned.");
+        ui.weak("No limited-use pools returned.");
     }
     for (key, pool) in &record.definition.splat_resources {
         ui.label(format!(
@@ -1713,7 +1698,7 @@ fn detail_intro(ui: &mut egui::Ui, record: &EntitySnapshot, page: usize, search:
     let d = &record.source.raw;
     match page {
         1 => {
-            section_heading(ui, "Attacks");
+            design::group_heading(ui, "Attacks", record.character.attacks.len());
             for attack in &record.character.attacks {
                 let value = &attack["damage"]["value"];
                 let damage = if let Some(n) = value.as_i64() {
@@ -1751,7 +1736,6 @@ fn detail_intro(ui: &mut egui::Ui, record: &EntitySnapshot, page: usize, search:
                 }
             }
             ui.add_space(design::S);
-            section_heading(ui, "Action descriptions");
         }
         2 => {
             section_heading(ui, "Spellcasting");
@@ -1797,7 +1781,6 @@ fn detail_intro(ui: &mut egui::Ui, record: &EntitySnapshot, page: usize, search:
             }
         }
         3 => {
-            section_heading(ui, "Equipment & coins");
             ui.label(format!(
                 "Coins · {} cp · {} sp · {} ep · {} gp · {} pp",
                 d["currencies"]["cp"],
@@ -1807,7 +1790,7 @@ fn detail_intro(ui: &mut egui::Ui, record: &EntitySnapshot, page: usize, search:
                 d["currencies"]["pp"]
             ));
         }
-        _ => section_heading(ui, "Features & traits"),
+        _ => {}
     }
 }
 
@@ -1819,11 +1802,22 @@ pub(crate) fn details(ui: &mut egui::Ui, record: &EntitySnapshot, page: usize, s
         .iter()
         .filter(|(name, source, _, _)| format!("{name} {source}").to_lowercase().contains(&search))
         .collect();
-    if entries.len() > 8 {
-        ui.weak(design::count(filtered.len(), "entry", "entries"));
+    design::group_heading(
+        ui,
+        match page {
+            1 => "Action descriptions",
+            2 => "Spells",
+            3 => "Equipment & coins",
+            _ => "Features & traits",
+        },
+        filtered.len(),
+    );
+    let mut level_counts = std::collections::BTreeMap::new();
+    for row in &filtered {
+        *level_counts.entry(row.3).or_insert(0) += 1;
     }
     if filtered.is_empty() {
-        ui.label(if search.is_empty() {
+        ui.weak(if search.is_empty() {
             "No entries returned for this character."
         } else {
             "No entries match this filter."
@@ -1832,13 +1826,14 @@ pub(crate) fn details(ui: &mut egui::Ui, record: &EntitySnapshot, page: usize, s
     let mut last_level = None;
     for (i, (name, meta, description, level)) in filtered.into_iter().enumerate() {
         if page == 2 && (i == 0 || last_level != *level) {
-            section_heading(
+            design::group_heading(
                 ui,
                 &match level {
                     Some(0) => "Cantrips".to_owned(),
                     Some(n) => format!("Level {n} spells"),
                     None => "Other spells".to_owned(),
                 },
+                level_counts.get(level).copied().unwrap_or(0),
             );
             last_level = *level;
         }

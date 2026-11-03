@@ -1934,17 +1934,39 @@ impl Encounters {
             .is_some_and(|s| s.templates.is_empty() && s.runs.is_empty() && s.groups.is_empty());
         // A group can be prepared while a run is open. It only joins the run when it is added.
         let group_blocked = self.draft_dirty().then_some(BLOCKED_BY_DRAFT);
-        design::page_header(ui, "Encounters", Some(&active.name), |ui| {
+        let open_run = self
+            .run
+            .as_ref()
+            .and_then(crate::encounter_run::Run::live_info);
+        let context = self
+            .snapshot
+            .as_ref()
+            .map(|snapshot| {
+                let page = history::arrange(
+                    &snapshot.templates,
+                    &snapshot.runs,
+                    open_run.as_ref(),
+                    story.events,
+                    story.sessions,
+                );
+                format!(
+                    "{} ready · {} in progress",
+                    page.ready.len(),
+                    page.in_progress.len()
+                )
+            })
+            .unwrap_or_else(|| "Reading encounters…".into());
+        design::page_header(ui, "Encounters", Some(&context), |ui| {
             if !empty {
+                new = Action::secondary("New encounter")
+                    .icon(icons::ADD)
+                    .blocked(blocked.or(loading.then_some("Still reading this campaign.")))
+                    .show(ui)
+                    .clicked();
                 new_group = Action::quiet("New group")
                     .icon(icons::ADD)
                     .blocked(group_blocked.or(loading.then_some("Still reading this campaign.")))
                     .hint("A reusable set of creatures to add to a running encounter")
-                    .show(ui)
-                    .clicked();
-                new = Action::secondary("New encounter")
-                    .icon(icons::ADD)
-                    .blocked(blocked.or(loading.then_some("Still reading this campaign.")))
                     .show(ui)
                     .clicked();
             }
@@ -2961,7 +2983,7 @@ impl Encounters {
             crate::design::spinner(ui);
             return;
         };
-        ui.set_max_width(ui.available_width().min(design::FORM_WIDTH));
+        ui.set_max_width(ui.available_width().min(design::READER_MEASURE));
         ui.add_space(design::S);
         let closed_while = draft_open.then_some("Save or discard the open encounter first.");
         design::locked(ui, closed_while, |ui| {
@@ -2994,25 +3016,15 @@ impl Encounters {
             );
             ui.label(
                 Type::Small
-                    .rich(ui, "This is the default for the roll in run setup, which can change it for one roll. Side and initiative groups use the first NPC's bonus and roll mode. Players keep their entered initiative. An encounter group follows this rule when it arrives, and the run's Groups tab says how.")
+                    .rich(ui, "This is the default for the roll in run setup, which can change it for one roll. Side and initiative groups use the first NPC's bonus and roll mode. Players keep their entered initiative. An encounter group follows this rule when it arrives, and the run's Arrivals tab says how.")
                     .color(colors().muted),
             );
             let changed = snapshot.options != snapshot.saved_options;
             ui.horizontal(|ui| {
                 let save_key = changed
                     && ui.input_mut(|i| i.consume_key(egui::Modifiers::COMMAND, egui::Key::S));
-                let pressed = Action::primary("Save run settings")
-                    .key("Ctrl+S")
-                    .blocked_if(!changed, "No changes to save.")
-                    .show(ui)
-                    .clicked();
-                if pressed || save_key {
-                    match snapshot.options.save(&active, &snapshot.campaign_text) {
-                        Ok(()) => settings_saved = true,
-                        Err(e) => error = Some(e),
-                    }
-                }
                 if changed {
+                    self.discarded_options = None;
                     design::status(
                         ui,
                         Status {
@@ -3021,22 +3033,36 @@ impl Encounters {
                             color: colors().document.unsaved,
                         },
                     );
-                    self.discarded_options = None;
-                    ui.add_space(design::XL);
-                    if Action::destructive("Discard settings changes")
-                        .show(ui)
-                        .clicked()
-                    {
+                    if Action::quiet("Discard").show(ui).clicked() {
                         self.discarded_options = Some(std::mem::replace(
                             &mut snapshot.options,
                             snapshot.saved_options.clone(),
                         ));
                     }
-                } else if self.discarded_options.is_some()
+                } else {
+                    design::blocked_reason(ui, Some("No changes"));
+                }
+                if !changed
+                    && self.discarded_options.is_some()
                     && Action::secondary("Undo discard").show(ui).clicked()
                     && let Some(options) = self.discarded_options.take()
                 {
                     snapshot.options = options;
+                }
+                let pressed = ui
+                    .with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        Action::primary("Save run settings")
+                            .key("Ctrl+S")
+                            .blocked_if(!changed, "No changes to save.")
+                            .show(ui)
+                            .clicked()
+                    })
+                    .inner;
+                if pressed || save_key {
+                    match snapshot.options.save(&active, &snapshot.campaign_text) {
+                        Ok(()) => settings_saved = true,
+                        Err(e) => error = Some(e),
+                    }
                 }
             });
         });
@@ -3061,8 +3087,7 @@ impl Encounters {
 }
 
 /// The widest a list row grows, so that its actions stay near the name they belong to.
-// Package A owns the shared token. Keep this local measure until it lands.
-const LIST_MEASURE: f32 = design::S * 110.0;
+use crate::design::LIST_MEASURE;
 mod list;
 use list::{
     blocked_reason, group_list, history_list, in_progress_list, menu_action, ready_list, row_menu,

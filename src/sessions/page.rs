@@ -1621,7 +1621,7 @@ impl Sessions {
                     }
                 });
                 if let Some(words) = &draft.on_disk {
-                    design::group_label(ui, "In the file now");
+                    design::group_heading(ui, "In the file now", 0);
                     egui::ScrollArea::vertical()
                         .id_salt("note_on_disk")
                         .max_height(160.0)
@@ -1908,7 +1908,7 @@ impl Sessions {
             Self::draft_problem(ui, draft);
         }
         if draft.on_disk.is_some() {
-            design::group_label(ui, "Your draft");
+            design::group_heading(ui, "Your draft", 0);
         }
         let focus = std::mem::take(&mut self.focus_notes);
         // A stray click leaves the keyboard on nothing, and the DM's eyes can be on the table.
@@ -2413,13 +2413,14 @@ impl Sessions {
         if let Some(problem) = &self.rename_problem {
             design::message(ui, Tone::Warning, problem);
         }
-        design::group_label(
+        design::group_heading(
             ui,
             if session == self.current() {
                 "Tonight"
             } else {
                 "This session"
             },
+            0,
         );
         let mut added = None;
         egui::TopBottomPanel::bottom(egui::Id::new(("session_plan_add", session)))
@@ -3165,12 +3166,10 @@ impl Sessions {
         }
         let c = colors();
         let session = self.selected;
-        design::group_label(
+        design::group_heading(
             ui,
-            &format!(
-                "Events marked in this recording: {}",
-                recording.markers.len()
-            ),
+            "Events marked in this recording",
+            recording.markers.len(),
         );
         ui.label(
             Type::Small
@@ -4272,16 +4271,16 @@ impl Sessions {
         let mut stop = false;
         design::page_header(ui, "Session", Some(&context), |ui| {
             let list_alone = self.list_only && ui.ctx().content_rect().width() < 1500.0;
-            if self.live.is_some() && (self.view != View::Notes || in_form || list_alone || empty) {
-                stop = Action::destructive("Stop recording")
-                    .icon(icons::STOP_RECORDING)
-                    .show(ui)
-                    .clicked();
-            }
             if self.view == View::Notes && !in_form && !empty {
                 new_session = Action::secondary("New session")
                     .icon(icons::ADD)
                     .blocked_if(locked, "Choose what to do with this note first.")
+                    .show(ui)
+                    .clicked();
+            }
+            if self.live.is_some() && (self.view != View::Notes || in_form || list_alone || empty) {
+                stop = Action::quiet("Stop recording")
+                    .icon(icons::STOP_RECORDING)
                     .show(ui)
                     .clicked();
             }

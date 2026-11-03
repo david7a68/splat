@@ -224,6 +224,8 @@ pub const PANEL_LEAVES_PAGE: f32 = RUN_LIST_KEEPS + 2.0 * M;
 pub const RAIL_LEAVES_WINDOW: f32 = PANEL_LEAVES_PAGE + PANEL_MIN_WIDTH;
 pub const READER_MEASURE: f32 = 488.0;
 pub const FORM_WIDTH: f32 = 560.0;
+/// A list keeps its actions near the names on wide windows.
+pub const LIST_MEASURE: f32 = 880.0;
 
 /// Control and row sizes. A level belongs to a screen, not to the app.
 #[derive(Clone, Copy, PartialEq)]

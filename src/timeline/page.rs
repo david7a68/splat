@@ -311,14 +311,7 @@ impl TimelinePage {
             let spine = rect.left() + SPINE;
             let width = rect.width() - TEXT_AT - design::S;
             let icon_y = rect.center().y;
-            if event.kind == Kind::Day {
-                // A day opens a stretch of the list. It starts with a rule, as a heading does.
-                painter.hline(
-                    rect.x_range(),
-                    rect.top() + 0.5,
-                    egui::Stroke::new(design::HAIRLINE_WIDTH, c.rule),
-                );
-            } else {
+            if event.kind != Kind::Day {
                 for (from, to) in [(rect.top(), icon_y - 11.0), (icon_y + 11.0, rect.bottom())] {
                     painter.vline(
                         spine,
@@ -338,14 +331,15 @@ impl TimelinePage {
                     c.muted
                 },
             );
-            let font = if event.kind == Kind::Day {
-                Type::Heading
-            } else if selected {
-                Type::Strong
+            let galley = if event.kind == Kind::Day {
+                let mut job = design::group_heading_text(ui, &title, 0);
+                job.wrap.max_width = width;
+                job.wrap.max_rows = 1;
+                painter.layout_job(job)
             } else {
-                Type::Body
+                let font = if selected { Type::Strong } else { Type::Body };
+                design::one_line(ui, &title, font.font(ui), c.text, width)
             };
-            let galley = design::one_line(ui, &title, font.font(ui), c.text, width);
             let lines = if detail.is_empty() {
                 galley.size().y
             } else {

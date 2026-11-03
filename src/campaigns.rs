@@ -13,6 +13,9 @@ pub struct Campaigns {
     error: Option<String>,
     writable: bool,
     editing: Option<Uuid>,
+    focus_name: bool,
+    add_name: String,
+    add_path: String,
     name: String,
     path: String,
     remote: Option<(String, String)>,
@@ -34,6 +37,9 @@ impl Default for Campaigns {
             error: None,
             writable: false,
             editing: None,
+            focus_name: false,
+            add_name: String::new(),
+            add_path: String::new(),
             name: String::new(),
             path: String::new(),
             remote: None,
@@ -177,6 +183,9 @@ impl Campaigns {
             error: None,
             writable: true,
             editing: None,
+            focus_name: false,
+            add_name: String::new(),
+            add_path: String::new(),
             name: String::new(),
             path: String::new(),
             remote: None,
@@ -304,9 +313,17 @@ impl Campaigns {
     }
 
     fn clear_form(&mut self) {
-        self.editing = None;
-        self.name.clear();
-        self.path.clear();
+        let editing = self.editing.take().is_some();
+        self.name = if editing {
+            std::mem::take(&mut self.add_name)
+        } else {
+            String::new()
+        };
+        self.path = if editing {
+            std::mem::take(&mut self.add_path)
+        } else {
+            String::new()
+        };
         self.remote = None;
     }
 
@@ -363,6 +380,7 @@ impl Campaigns {
             let used = ui.cursor().top() - top;
             ui.add_space((SELECTOR_HEIGHT - used).max(0.0));
         });
+        design::blocked_reason(ui, reason);
         if selected != current {
             self.select(selected);
         }
@@ -402,7 +420,11 @@ impl Campaigns {
                     .show(ui)
                     .clicked()
                 {
-                    self.clear_form();
+                    if self.editing.is_none() {
+                        self.add_name = self.name.clone();
+                        self.add_path = self.path.clone();
+                    }
+                    self.remote = None;
                     self.editing = Some(campaign.id);
                     self.name = campaign.name.clone();
                     self.path = campaign.path.to_string_lossy().into_owned();
@@ -508,6 +530,7 @@ impl Campaigns {
         dndbeyond: &mut crate::dndbeyond::DndBeyond,
     ) {
         let c = colors();
+        ui.set_max_width(ui.available_width().min(design::LIST_MEASURE));
         self.remove_dialog(ui.ctx());
         if let Some(added) = self.added.clone() {
             ui.horizontal(|ui| {
@@ -523,18 +546,14 @@ impl Campaigns {
             });
         }
         ui.horizontal(|ui| {
-            ui.label(Type::Heading.rich(ui, "Campaigns").color(c.text));
-            ui.label(
-                Type::Small
-                    .rich(ui, format!("{} configured", self.data.campaigns.len()))
-                    .color(c.muted),
-            );
+            design::group_heading(ui, "Campaigns", self.data.campaigns.len());
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                if Action::quiet("Reload")
-                    .density(Density::Read)
-                    .hint("Reload campaign settings from disk")
-                    .show(ui)
-                    .clicked()
+                if !self.data.campaigns.is_empty()
+                    && Action::quiet("Reload")
+                        .density(Density::Read)
+                        .hint("Reload campaign settings from disk")
+                        .show(ui)
+                        .clicked()
                 {
                     self.reload();
                 }
@@ -545,20 +564,15 @@ impl Campaigns {
         }
         let unwritable = (!self.writable).then_some("Reload valid campaign settings first.");
         design::locked(ui, unwritable, |ui| {
-            design::rule(ui);
             if self.data.campaigns.is_empty() {
                 ui.add_space(design::XS);
                 ui.label(
                     Type::Body
-                        .rich(
-                            ui,
-                            "No campaigns yet. Add one below, from a folder or from D&D Beyond.",
-                        )
+                        .rich(ui, "No campaign yet. Add one below.")
                         .color(c.muted),
                 );
             }
             let mut open = None;
-            let mut edit = None;
             for campaign in self.data.campaigns.clone() {
                 let active = self.data.active_campaign_id == Some(campaign.id);
                 ui.push_id(campaign.id, |ui| {
@@ -567,7 +581,7 @@ impl Campaigns {
                         ui.vertical(|ui| {
                             ui.spacing_mut().item_spacing.y = 0.0;
                             // The active row has one more action to keep room for.
-                            let actions = if active { 240.0 } else { 180.0 };
+                            let actions = if active { 150.0 } else { 220.0 };
                             ui.set_max_width((ui.available_width() - actions).max(120.0));
                             ui.horizontal(|ui| {
                                 ui.add(
@@ -577,7 +591,14 @@ impl Campaigns {
                                     .wrap(),
                                 );
                                 if active {
-                                    ui.label(Type::Small.rich(ui, "Active").color(c.accent));
+                                    design::status(
+                                        ui,
+                                        Status {
+                                            icon: icons::OK,
+                                            word: "Active",
+                                            color: c.text,
+                                        },
+                                    );
                                 }
                             });
                             // The folder is worth a word only when it is missing. The link has its own line.
@@ -589,77 +610,108 @@ impl Campaigns {
                                 let link = campaign
                                     .dndbeyond_campaign_name
                                     .as_deref()
-                                    .map(|name| format!("Linked: {name}"))
+                                    .map(|name| format!("Linked to {name}"))
                                     .or(campaign
                                         .dndbeyond_campaign_id
                                         .as_deref()
-                                        .map(|id| format!("Linked: campaign {id}")))
+                                        .map(|id| format!("Linked to campaign {id}")))
                                     .unwrap_or_else(|| "Not linked".to_owned());
-                                ui.add(
-                                    egui::Label::new(Type::Small.rich(ui, link).color(c.muted))
-                                        .wrap(),
+                                design::status(
+                                    ui,
+                                    Status {
+                                        icon: if campaign.dndbeyond_campaign_id.is_some() {
+                                            icons::LINK
+                                        } else {
+                                            icons::SYNC_OFF
+                                        },
+                                        word: &link,
+                                        color: c.muted,
+                                    },
                                 );
                             }
                         });
                         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                             // Buttons keep every letter. The name and status give way first.
                             ui.spacing_mut().item_spacing.x = design::XS;
-                            // Rarely wanted, and it asks first. It should not be the loudest
-                            // thing on the row.
-                            if Action::quiet("Remove…")
+                            design::row_menu(ui, &campaign.name, |ui| {
+                                if ui.button("Remove…").clicked() {
+                                    self.confirm_remove = Some(campaign.id);
+                                    ui.close();
+                                }
+                            });
+                            if Action::quiet("Edit details")
                                 .density(Density::Read)
-                                .name(&format!("Remove {} from Splat", campaign.name))
                                 .show(ui)
                                 .clicked()
                             {
-                                self.confirm_remove = Some(campaign.id);
+                                if self.editing.is_none() {
+                                    self.add_name = self.name.clone();
+                                    self.add_path = self.path.clone();
+                                }
+                                self.remote = None;
+                                self.editing = Some(campaign.id);
+                                self.name = campaign.name.clone();
+                                self.path = campaign.path.to_string_lossy().into_owned();
                             }
-                            ui.add_space(design::M);
-                            if active {
-                                if Action::quiet("Edit details")
+                            if !active
+                                && Action::secondary("Open")
                                     .density(Density::Read)
+                                    .name(&format!("Make {} the active campaign", campaign.name))
                                     .show(ui)
                                     .clicked()
-                                {
-                                    edit = Some(campaign.clone());
-                                }
-                            } else if Action::secondary("Open")
-                                .density(Density::Read)
-                                .name(&format!("Make {} the active campaign", campaign.name))
-                                .show(ui)
-                                .clicked()
                             {
                                 open = Some(campaign.id);
                             }
                         });
                     });
+                    if self.editing == Some(campaign.id) {
+                        self.form(ui, false, true);
+                    }
                 });
                 design::rule(ui);
             }
             if let Some(id) = open {
                 self.select(Some(id));
             }
-            if let Some(campaign) = edit {
-                self.clear_form();
-                self.editing = Some(campaign.id);
-                self.name = campaign.name.clone();
-                self.path = campaign.path.to_string_lossy().into_owned();
-            }
             ui.add_space(design::S);
             dndbeyond.show_import(ui, session.clone(), self);
-            self.form(ui);
+            if self.editing.is_some() {
+                let editing = self.editing.take();
+                let name = std::mem::replace(&mut self.name, std::mem::take(&mut self.add_name));
+                let path = std::mem::replace(&mut self.path, std::mem::take(&mut self.add_path));
+                self.form(ui, false, false);
+                self.add_name = std::mem::replace(&mut self.name, name);
+                self.add_path = std::mem::replace(&mut self.path, path);
+                self.editing = editing;
+            } else if self.remote.is_none() {
+                self.form(ui, false, true);
+            }
         });
+    }
+
+    pub fn show_import_form(&mut self, ui: &mut egui::Ui, remote_id: &str) {
+        if self.remote.as_ref().is_some_and(|(id, _)| id == remote_id) {
+            self.form(ui, false, true);
+        }
+    }
+
+    pub fn focus_add(&mut self) {
+        self.focus_name = true;
+    }
+
+    pub fn show_add_form(&mut self, ui: &mut egui::Ui) {
+        self.form(ui, true, true);
     }
 
     /// Edit the active campaign's details from the page that links to them.
     pub fn show_form_if_editing(&mut self, ui: &mut egui::Ui) {
         if self.editing.is_some() {
             ui.add_space(design::S);
-            self.form(ui);
+            self.form(ui, false, true);
         }
     }
 
-    fn form(&mut self, ui: &mut egui::Ui) {
+    fn form(&mut self, ui: &mut egui::Ui, inline: bool, primary: bool) {
         let editing = self.editing.is_some();
         egui::CollapsingHeader::new(if editing {
             "Edit campaign details"
@@ -669,14 +721,17 @@ impl Campaigns {
         .icon(design::section_icon)
         .icon(design::section_icon)
         .id_salt(("campaign_form", self.editing))
-        .open(self.remote.as_ref().map(|_| true))
+        .open((self.remote.is_some() || self.focus_name).then_some(true))
         .default_open(editing || self.data.campaigns.is_empty())
         .show(ui, |ui| {
             ui.add_space(design::XS);
             if let Some((id, name)) = &self.remote {
                 ui.label(format!("{name} · D&D Beyond ID {id}"));
             }
-            design::text_field(ui, "Campaign name", &mut self.name, None, None);
+            let name = design::text_field(ui, "Campaign name", &mut self.name, None, None);
+            if std::mem::take(&mut self.focus_name) {
+                name.request_focus();
+            }
             // The button sits on the field's line, and ends where the fields above end.
             let room = ui.available_width();
             let field = ui
@@ -702,11 +757,18 @@ impl Campaigns {
             ui.horizontal(|ui| {
                 let submit = if editing {
                     "Save details"
+                } else if inline {
+                    "Add campaign"
                 } else {
                     "Open campaign"
                 };
                 let missing = self.name.trim().is_empty() || self.path.trim().is_empty();
-                if Action::primary(submit)
+                let action = if primary {
+                    Action::primary(submit)
+                } else {
+                    Action::secondary(submit)
+                };
+                if action
                     .blocked_if(missing, "Enter a campaign name and a folder first.")
                     .show(ui)
                     .clicked()
@@ -807,6 +869,9 @@ mod tests {
             error: None,
             writable: true,
             editing: None,
+            focus_name: false,
+            add_name: String::new(),
+            add_path: String::new(),
             name: String::new(),
             path: String::new(),
             remote: None,

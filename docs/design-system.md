@@ -66,7 +66,7 @@ HP and initiative hold their place because the font's digits have one width.
 | `StatLabel` / `Stat` | SmText 13 / 18 | Stat block rows |
 | `Mono` | Monospace 13 | Markdown source |
 
-**Measure.** `READER_MEASURE` is 488 px at `Prose`, about 62 characters on average and
+**Measure.** Lists of rows with actions use `LIST_MEASURE` (880 px), so actions stay near the names. `READER_MEASURE` is 488 px at `Prose`, about 62 characters on average and
 at most 75 (T6.1). Prose never fills a wide window.
 
 **The run has its own scale.** `RunScale` holds a row height and type sizes, and
@@ -142,9 +142,9 @@ tooltips, and separators. Text cursors do not blink, because motion draws the ey
 
 | Part | Function | Notes |
 |---|---|---|
-| Page header | `page_header` | Title, one line of context, actions on the right |
+| Page header | `page_header` | Title and one `Small` muted state or count on the same baseline; actions on the right; a hairline below. Never repeat the campaign name |
 | Nav item | `nav_item` | Icon and word. Accent bar when selected |
-| Buttons | `Action::primary / secondary / quiet / destructive` | `.blocked(reason)` disables and shows why (G1). `.key("N")` shows the key beside the word |
+| Buttons | `Action::primary / secondary / quiet / destructive` | `.blocked(reason)` disables; put `blocked_reason` beside it in visible `Small` text (G1). `.key("N")` shows the key beside the word |
 | Split button | `split_action` | An `Action` that does the default, and a caret that opens a menu of the other ways |
 | Field | `field` | Label, control, help, error; names the control for accessibility |
 | Text fields | `text_field`, `text_input`, `number_field`, `search_field`, `named` | Always have an accessible name and a 26 px target. Numbers align left, so the caret never lies on a digit |
@@ -157,7 +157,9 @@ tooltips, and separators. Text cursors do not blink, because motion draws the ey
 | Status | `status`, `status_link`, `Status` | Icon, word, colour. `status_link` also leads to where the DM can act |
 | Stat tile | `stat_tile` | A label over a large value, with no box |
 | HP | `hp_bar`, `hp_readout`, `hp_state` | Fixed slots. Temp HP is separate |
-| Empty state | `empty_state` | What this is, and the one next step |
+| Empty state | `empty_state` | What this is, and the one next step. At the top of an empty pane or page, with its normal padding |
+| Group heading | `group_heading` | `Type::Label` in capitals and a muted, nonzero count after it. No rule. Serif headings belong to readers and stat blocks |
+| Row menu | `row_menu` | Quiet `⋯` at the right edge, named `More actions for <name>`. Put Remove and Delete here |
 | Add strip | `add_strip` | `Add` in `Label`, then quiet icon-and-word buttons that wrap. Fight, Group (plan only), Day, Long rest, Short rest, Travel, Major event |
 | Message | `message`, `Tone` | Inline. Never modal |
 | Side panel | `side_panel_width`, `panel_header` | One width rule for Lookup, Notes and the run. The run separates participant tabs from fight tabs |
@@ -165,6 +167,17 @@ tooltips, and separators. Text cursors do not blink, because motion draws the ey
 | Link | `link` | A real `Link` role, at least 24 px high |
 | Number | `number`, `number_width` | Right-aligned digits |
 | Count | `count` | `1 entry`, `2 entries` |
+
+Header actions have at most one bordered secondary button, for `New …`. Other header actions are quiet and come before it.
+The Library scope control sits at the top of its category column. At a narrow width, it sits above the list.
+
+**R-6: Empty states.** The full `empty_state` (icon, serif title and text) belongs to an empty pane or page only. An empty section inside a list page shows one muted line under its heading, with no `0` count.
+
+One accent-filled primary action can be in view. On other pages while a run is open, the run strip's `Next turn` owns the primary fill. `Back to run` is secondary.
+A page uses `status_link`, for example `Running · Round 2`, to show a run's state and open it.
+An on toggle uses `selected`, its icon or a check, and its word. It does not use the accent fill.
+Delete and Remove belong in a row menu, away from the primary action. A save row has the save-state word and quiet `Discard` at the left, and `Save` at the right.
+Use red only for an action that loses something.
 
 Icons support words. They replace a word only where the meaning is universal, and then the
 control still has an accessible name and a tooltip.
@@ -294,11 +307,11 @@ so a note keeps its line breaks between the two views. A session's notes, events
 table nobody stops to press Save. A file changed elsewhere stops saving and asks, as in "Keeping a draft".
 
 The timeline is a ledger, not a chart. It is one column in story order, with a hairline spine and an icon and
-a word for each kind. A day opens with a rule, as a heading does, and numbers itself. It has no card and no
+a word for each kind. A day uses the shared group-heading style, without a rule, and numbers itself. It has no card and no
 colour for kinds, because a kind is not a state. An event's detail sits beside the list, with the same width
 rule as Lookup. The detail column exists only when an event is selected. Its header stays above the scrolling form: kind, title, save state, Copy link and a row menu with Remove. Selecting a different event resets the fields to the top. A copy uses a check and Copied on the button for two seconds. Link text stays in a quiet section; Place after is the one ordering control. Adds to shares the filter line. Notices have their own line and never cover the header.
 
-Party uses one group-heading style throughout Overview. Saving throws and skills use two or three columns. Lists with eight or fewer entries have no filter or count line. Local-edit warnings name the character, keep actions at the right edge and say that replacement keeps a copy. Technical details stays closed.
+Party uses one group-heading style throughout Overview. Saving throws and skills use two or three columns. Lists with eight or fewer entries have no filter or separate count line; the shared group heading holds the count. Local-edit warnings name the character, keep actions at the right edge and say that replacement keeps a copy. Technical details stays closed.
 
 A live microphone has the only colour here. `Record` takes a second, inline step that says to tell the table.
 While it records, the rail keeps the word and the time in view on every page. The time counts audio in the file, so it

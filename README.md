@@ -54,7 +54,9 @@ the host's `ffmpeg` and `montage`.
   party,settings` is the same, and keeps the captures of the label's other scenarios.
 - `SPLAT_VISUAL_VIDEO=0` turns video off for `visual-test`.
 
-The `gallery` scenario captures every design token and component. `src/design/lint.rs` fails on raw
+Library has **New entry** in its header. Its form opens in the reader column and closes after creation. World has **New ▾** for an NPC, a location, or a generated NPC. List headings use capitals and a count. Page headers show state or counts beside the title, with a rule below.
+
+The `gallery` scenario captures every design token and component, including page headers, blocked reasons, row menus and status links. `src/design/lint.rs` fails on raw
 colours and text sizes outside `src/design/`, and `src/design/tokens.rs` tests WCAG contrast.
 
 Scenario labels are at the top of each scenario in `src/visual_tests/scenarios.rs`, and the
@@ -121,9 +123,9 @@ local campaigns. Select **Not linked** to remove a link, or choose another
 campaign to replace it.
 
 After connecting, expand **Add from D&D Beyond** and select a campaign. Its
-name and ID fill the campaign form. Then choose its data folder with **Browse…**
+name and ID fill the form under that row. Then choose its data folder with **Browse…**
 or enter a path, and select **Open campaign**. No local campaign is required first.
-You can also choose an existing folder and select **Open campaign** without connecting.
+You can also choose an existing folder and select **Open campaign** without connecting. Campaigns stay on the left of Settings, with the account on the right. On a narrow window, campaigns come first and **Connect…** opens the account form. The Campaign page also has the add form when no campaign exists. Removal is in each row’s **More actions** menu.
 
 Splat creates or discovers the campaign manifest in that folder. It stores the
 name and D&D Beyond link there, alongside existing custom paths and content
@@ -356,7 +358,7 @@ are in Settings and in **Campaign → Link and folder**.
 
 Open **Party** to read the linked D&D Beyond party. Select a character
 and browse Overview, Actions, Spells, Equipment, and Features. **Refresh party**
-gets the latest sheets. When signed out, **Connect to refresh** in the status line opens Settings with the cookie field focused. Saves and skills use two or three columns. A sheet list gets a filter only when it has more than eight entries. **Technical details** keeps source and rule checks out of the main sheet. Computed totals come directly from D&D Beyond. Local
+gets the latest sheets. When signed out, **Connect to refresh** in the page header opens Settings with the cookie field focused. Saves and skills use two or three columns. A sheet list gets a filter only when it has more than eight entries. **Technical details** keeps source and rule checks out of the main sheet. Computed totals come directly from D&D Beyond. Local
 creature records remain available offline, and open sheets use the event stream
 with polling fallback. No character changes are sent to D&D Beyond. See [viewer details and streaming findings](docs/character-viewer.md).
 
