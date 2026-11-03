@@ -201,6 +201,31 @@ fight**, on this page and on Encounters. Add buttons stay at the foot of the pla
 that they do not move under the pointer. A fight's row lists the party first, with HP right-aligned in the run's tints, and
 everyone else behind one word. In a page narrower than 720 px, the plan and the note have a tab each.
 
+## The encounter ledger and editor
+
+Encounters uses one column, at most 880 px wide. The sections are `IN PROGRESS`,
+`READY TO RUN`, `GROUPS`, and `HISTORY`, in that order. Group headings use `Label`
+and a muted count, without a rule. Groups and History start closed. Each row keeps
+its main action, quiet `Edit`, and `⋯` menu at the column’s right edge. The menu is
+named `More actions for <name>`. It holds deletion and starting another run.
+An unfinished run shows `In progress · Round 2` and `Resume`. An open run shows the
+status link `Running · Round 2`; the strip owns `Back to run` and the primary.
+History opens a read-only final state and log in place. It never takes the live-run slot.
+A paused run stays in the rail and resumes in one click.
+
+Roster rows have the name and second line, side menu, quiet `Edit`, then `⋯`.
+The menu holds ordering, duplication, `Make it yours`, and removal. A creature
+result’s name opens its stat block; its one button is `Add`. A party member already
+present shows `In roster`. The sync and repeat options follow the roster. The
+header keeps Save and Start on its first line, and the name field gives up width.
+`Discard` is quiet beside the save-state word. A blocked Start shows its reason.
+The side picker offers `Party`, `Enemies`, and `Other…` in every editor.
+
+A plan group editor takes the full notes column; the note stays behind its tab.
+Member names and stats have their own lines above Count, Edit, and the row menu.
+A summary of members stays below the search. Removing an encounter’s group makes
+it available for any encounter on Save, with Undo until that save.
+
 ## The live run
 
 The roster is the screen. Every row has fixed columns: initiative, side mark, name, AC,

@@ -38,7 +38,7 @@ pub(super) struct PastSession<'a> {
 
 #[derive(Default)]
 pub(super) struct Arranged<'a> {
-    /// The open run first, whatever its phase, so the way back to it is always here.
+    /// Unfinished runs, with the open one first. Ended runs always stay in History.
     pub in_progress: Vec<&'a SavedRunInfo>,
     pub ready: Vec<ReadyRow<'a>>,
     pub history: Vec<PastSession<'a>>,
@@ -55,7 +55,10 @@ const NO_SESSION: &str = "No session";
 
 /// The template a run came from. A save with no record of it matches by name, but only when
 /// one template has that name: entries can share a name, and a wrong match would hide one.
-fn template_of<'a>(run: &SavedRunInfo, templates: &'a [Template]) -> Option<&'a Template> {
+pub(super) fn template_of<'a>(
+    run: &SavedRunInfo,
+    templates: &'a [Template],
+) -> Option<&'a Template> {
     if let Some(source) = run.source {
         return templates.iter().find(|template| template.id == source);
     }
@@ -79,7 +82,8 @@ pub(super) fn arrange<'a>(
         .iter()
         .filter(|run| open.is_none_or(|open| run.id != open.id));
     let mut page = Arranged::default();
-    page.in_progress.extend(open);
+    page.in_progress
+        .extend(open.filter(|run| run.standing == Standing::Unfinished));
     let (mut ended, mut unfinished) = (BTreeSet::new(), BTreeSet::new());
     if let Some(open) = open
         && let Some(template) = template_of(open, templates)
@@ -90,6 +94,13 @@ pub(super) fn arrange<'a>(
         };
     }
     let mut past = Vec::new();
+    past.extend(
+        open.filter(|run| run.standing == Standing::Ended)
+            .map(|run| PastRun {
+                run,
+                template: template_of(run, templates),
+            }),
+    );
     for run in on_disk {
         let template = template_of(run, templates);
         match run.standing {
@@ -269,18 +280,10 @@ mod tests {
         let other = [run(&templates[0], Standing::Unfinished)];
         let page = arrange(&templates, &other, Some(&brand_new), &[], &[]);
         assert!(ready_names(&page).is_empty(), "it ended while open");
-        assert_eq!(page.in_progress.len(), 2);
-        assert_eq!(
-            page.in_progress[0].id, brand_new.id,
-            "the way back stays first"
-        );
-        assert!(
-            page.in_progress[1..]
-                .iter()
-                .all(|run| run.id == other[0].id),
-            "then the rest"
-        );
-        assert_eq!(page.ended_count(), 0);
+        assert_eq!(page.in_progress.len(), 1);
+        assert_eq!(page.in_progress[0].id, other[0].id);
+        assert_eq!(page.ended_count(), 1);
+        assert_eq!(page.history[0].runs[0].run.id, brand_new.id);
     }
 
     #[test]

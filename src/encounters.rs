@@ -98,6 +98,8 @@ struct Draft {
     reveal_group: bool,
     /// The last save wrote a group, even if it then stopped, so the campaign needs a new read.
     groups_written: bool,
+    /// One group detached from this draft, until the next save.
+    removed_group: Option<(usize, GroupDraft)>,
 }
 impl Draft {
     fn new() -> Self {
@@ -123,6 +125,7 @@ impl Draft {
             focus_group: None,
             reveal_group: false,
             groups_written: false,
+            removed_group: None,
         }
     }
     fn open(root: &std::path::Path, path: &str) -> Result<Self, String> {
@@ -152,6 +155,7 @@ impl Draft {
             focus_group: None,
             reveal_group: false,
             groups_written: false,
+            removed_group: None,
         })
     }
     fn dirty(&self) -> bool {
@@ -287,6 +291,7 @@ impl Draft {
         // A group the DM gave to another encounter is no longer this one's.
         let id = self.id;
         self.groups.retain(|group| group.belongs_to(id));
+        self.removed_group = None;
         Ok(())
     }
     fn validate(&self, snapshot: &Snapshot) -> Result<(), String> {
@@ -650,6 +655,19 @@ fn roster_summary(setup: &Setup) -> String {
         design::count(others, "other", "others")
     )
 }
+/// Keep a stat label with its value. A second line can break between facts.
+fn stat_line(text: &str) -> String {
+    text.split(" · ")
+        .map(|part| part.replace(' ', "\u{a0}"))
+        .collect::<Vec<_>>()
+        .join(" · ")
+}
+
+struct SearchRoster<'a> {
+    already: &'a dyn Fn(&Creature) -> bool,
+    members: Option<String>,
+}
+
 struct Snapshot {
     catalogue: Catalogue,
     creatures: Vec<Creature>,
@@ -796,6 +814,8 @@ pub struct Encounters {
     discarded_options: Option<crate::encounter_settings::Options>,
     pub saved: bool,
     run: Option<crate::encounter_run::Run>,
+    /// History is a read-only snapshot and never owns the open-run slot.
+    history_read: Option<(std::path::PathBuf, crate::encounter_run::FightSummary)>,
     /// A run just opened, or the DM asked to go back to it from its row in the list, so the
     /// shell goes to the Run page.
     pub go_to_run: bool,
@@ -843,6 +863,7 @@ pub struct Story<'a> {
 /// What the DM asked for from a row of the list. One press in a frame, so one of these.
 enum ListAction {
     Resume(std::path::PathBuf),
+    ReadHistory(std::path::PathBuf),
     BackToRun,
     Delete(std::path::PathBuf),
     Edit(String),
@@ -859,7 +880,7 @@ const START_FIGHT: &str = "Start fight";
 const NAME_FIELD: &str = "Encounter name";
 const SEARCH_FIELD: &str = "Find a creature or party member";
 const SYNC_OPTION: &str = "Sync party with D&D Beyond";
-const REPEATABLE_OPTION: &str = "Keep in Ready to run after a run ends";
+const REPEATABLE_OPTION: &str = "Keep in Ready after a run ends";
 const BLOCKED_BY_RUN: &str = "Close the open run first.";
 const BLOCKED_BY_DRAFT: &str = "Save or discard the open encounter first.";
 const BLOCKED_BY_CREATURE: &str = "Save or discard the changes to this creature first.";
@@ -1004,19 +1025,33 @@ impl Encounters {
     }
     /// Reopen a saved run, to read it or go on with it.
     pub fn open_saved_run(&mut self, path: &std::path::Path, active: &Campaign) {
-        // Opening another would drop the open one, with its undo and any unsent sync.
-        if self.has_run() {
-            self.error = Some(BLOCKED_BY_RUN.to_owned());
-            return;
-        }
-        match crate::encounter_run::Run::open(path, active.id) {
-            Ok(run) => {
-                self.run = Some(run);
-                self.go_to_run = true;
+        match crate::encounter_run::fight_summary(path, active.id) {
+            Ok(summary) if summary.ended => {
+                self.history_read = Some((path.to_path_buf(), summary));
                 self.error = None;
             }
-            Err(e) => self.error = Some(e),
+            Ok(_) if self.has_run() => self.error = Some(BLOCKED_BY_RUN.to_owned()),
+            Ok(_) => match crate::encounter_run::Run::open(path, active.id) {
+                Ok(run) => {
+                    self.run = Some(run);
+                    self.go_to_run = true;
+                    self.error = None;
+                }
+                Err(error) => self.error = Some(error),
+            },
+            Err(error) => self.error = Some(error),
         }
+    }
+    /// The newest unfinished save is one click away from any page.
+    pub fn paused_run(&self) -> Option<&crate::encounter_run::SavedRunInfo> {
+        if self.has_run() {
+            return None;
+        }
+        self.snapshot
+            .as_ref()?
+            .runs
+            .iter()
+            .find(|run| run.standing == crate::encounter_run::Standing::Unfinished)
     }
     /// A new encounter from a session's plan. It joins the plan, and back leads there.
     /// Whether a fight is open that has not ended.
@@ -1128,6 +1163,10 @@ impl Encounters {
     }
     /// Start a fight from a saved encounter, with no editor left open.
     pub fn run_path(&mut self, path: &str, active: &Campaign, modules: &[Module]) {
+        if let Some(reason) = self.start_blocked() {
+            self.error = Some(reason.to_owned());
+            return;
+        }
         self.creature = None;
         match Draft::open(&active.path, path) {
             Ok(d) => {
@@ -1185,6 +1224,7 @@ impl Encounters {
     }
     fn reload(&mut self, ctx: &egui::Context, campaign: Campaign, modules: Vec<Module>) {
         self.creature = None;
+        self.history_read = None;
         // A discarded draft belongs to its campaign. Undo must not save it into another.
         if self.active.as_ref().is_none_or(|old| old.id != campaign.id) {
             self.discarded = None;
@@ -1440,37 +1480,55 @@ impl Encounters {
                 .color(colors().text),
         );
         ui.horizontal(|ui| {
+            if dirty {
+                close = Action::quiet("Discard")
+                    .name("Discard creature changes")
+                    .density(Density::Read)
+                    .show(ui)
+                    .clicked();
+                design::status(
+                    ui,
+                    Status {
+                        icon: icons::DRAFT,
+                        word: "Unsaved",
+                        color: colors().document.unsaved,
+                    },
+                );
+            } else {
+                ui.label(
+                    Type::Small
+                        .rich(ui, "No changes to save.")
+                        .color(colors().muted),
+                );
+            }
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                close = if dirty {
-                    Action::destructive("Discard changes").name("Discard creature changes")
-                } else {
-                    Action::quiet("Done").name("Done with this creature")
-                }
-                .density(Density::Read)
-                .show(ui)
-                .clicked();
-                save = Action::primary("Save creature")
+                save = Action::secondary("Save creature")
                     .density(Density::Read)
                     .key("Ctrl+S")
                     .blocked_if(!dirty, "No changes to save.")
                     .show(ui)
                     .clicked();
+                if !dirty {
+                    close = Action::quiet("Done")
+                        .name("Done with this creature")
+                        .density(Density::Read)
+                        .show(ui)
+                        .clicked();
+                }
             });
         });
         if let Some(error) = &editor.error {
             design::message(ui, Tone::Error, error);
         }
         // As wide as the pane: a form's fixed width would push the scroll bar past its edge.
-        let name = design::field(ui, "Name", None, None, |ui| {
+        design::field(ui, "Name", None, None, |ui| {
             let width = ui.available_width() - 2.0 * design::S;
             design::text_input(ui, "Name", &mut editor.fields.name, "Name", width)
         });
-        if std::mem::take(&mut editor.focus) {
-            design::focus_and_select(ui, name.id, &editor.fields.name);
-        }
+        let focus_hp = std::mem::take(&mut editor.focus);
         ui.horizontal(|ui| {
             design::field(ui, "Hit points", None, None, |ui| {
-                design::number_field(
+                let response = design::number_field(
                     ui,
                     "Hit points",
                     &mut editor.fields.hp,
@@ -1478,6 +1536,9 @@ impl Encounters {
                     56.0,
                     Density::Read.control(),
                 );
+                if focus_hp {
+                    design::focus_and_select(ui, response.id, &editor.fields.hp);
+                }
             });
             design::field(ui, "Armor class", None, None, |ui| {
                 design::number_field(
@@ -1539,6 +1600,9 @@ impl Encounters {
         campaign: &Campaign,
         modules: &[Module],
     ) -> Result<crate::encounter_run::Run, String> {
+        if self.has_run() {
+            return Err(BLOCKED_BY_RUN.to_owned());
+        }
         let draft = self
             .draft
             .as_ref()
@@ -1831,9 +1895,26 @@ impl Encounters {
         campaigns: &Campaigns,
         story: &Story<'_>,
     ) {
+        let size = egui::vec2(
+            ui.available_width().min(LIST_MEASURE),
+            ui.available_height(),
+        );
+        ui.allocate_ui_with_layout(size, egui::Layout::top_down(egui::Align::LEFT), |ui| {
+            self.ledger_view(ui, active, campaigns, story);
+        });
+    }
+
+    fn ledger_view(
+        &mut self,
+        ui: &mut egui::Ui,
+        active: &Campaign,
+        campaigns: &Campaigns,
+        story: &Story<'_>,
+    ) {
+        ui.set_max_width(ui.available_width().min(LIST_MEASURE));
         let loading = self.pending.is_some();
-        let blocked = self.start_blocked();
-        let settings_changed = self.unsaved();
+        let blocked = self.draft_dirty().then_some(BLOCKED_BY_DRAFT);
+        let settings_changed = self.settings_unsaved();
         let mut new = false;
         let mut new_group = false;
         let mut reload = false;
@@ -1913,7 +1994,12 @@ impl Encounters {
         if !snapshot.issues.is_empty() {
             design::section(
                 ui,
-                format!("Content issues ({})", snapshot.issues.len()),
+                Type::Small
+                    .rich(
+                        ui,
+                        format!("{} {} content issues", icons::WARN, snapshot.issues.len()),
+                    )
+                    .color(colors().result.warning),
                 |ui| {
                     for issue in &snapshot.issues {
                         ui.add(
@@ -1924,7 +2010,6 @@ impl Encounters {
                 },
             );
         }
-        let two_columns = ui.available_width() >= 640.0;
         if empty {
             let mut create = false;
             let mut create_group = false;
@@ -1979,30 +2064,30 @@ impl Encounters {
                 in_progress_list(
                     ui,
                     &page,
+                    &snapshot.templates,
                     live.as_ref(),
                     start_blocked,
                     loading,
                     &mut action,
                 );
-                if two_columns {
-                    ui.columns(2, |columns| {
-                        within_row_width(&mut columns[0], |ui| {
-                            ready_list(ui, &page, &snapshot.templates, start_blocked, &mut action);
-                        });
-                        within_row_width(&mut columns[1], |ui| {
-                            group_list(ui, snapshot, group_blocked, &mut action);
-                        });
-                    });
-                } else {
-                    within_row_width(ui, |ui| {
-                        ready_list(ui, &page, &snapshot.templates, start_blocked, &mut action);
-                    });
-                    ui.add_space(design::L);
-                    within_row_width(ui, |ui| {
-                        group_list(ui, snapshot, group_blocked, &mut action);
-                    });
-                }
-                history_list(ui, &page, start_blocked, &mut action);
+                ready_list(
+                    ui,
+                    &page,
+                    &snapshot.templates,
+                    live.as_ref(),
+                    start_blocked,
+                    &mut action,
+                );
+                ui.add_space(design::L);
+                group_list(ui, snapshot, group_blocked, &mut action);
+                history_list(
+                    ui,
+                    &page,
+                    start_blocked,
+                    live.as_ref(),
+                    self.history_read.as_ref(),
+                    &mut action,
+                );
             });
         let Some(action) = action else {
             return;
@@ -2020,7 +2105,27 @@ impl Encounters {
                 Err(e) => self.error = Some(e),
             },
             ListAction::Resume(path) => self.open_saved_run(&path, active),
+            ListAction::ReadHistory(path) => {
+                if self
+                    .history_read
+                    .as_ref()
+                    .is_some_and(|(open, _)| *open == path)
+                {
+                    self.history_read = None;
+                } else {
+                    self.open_saved_run(&path, active);
+                }
+            }
             ListAction::Delete(path) => {
+                if self
+                    .run
+                    .as_ref()
+                    .and_then(|run| run.path())
+                    .is_some_and(|open| open == path)
+                {
+                    self.error = Some("Close this run before deleting its save.".to_owned());
+                    return;
+                }
                 let deleted = self
                     .snapshot
                     .as_ref()
@@ -2077,7 +2182,6 @@ impl Encounters {
         // Beside Lookup at the minimum window, the roster and the search take turns.
         let compact = ui.available_width() < 760.0;
         // The title and its actions need more room than the panes do.
-        let two_rows = ui.available_width() < 1040.0;
         let has_run = self.has_run();
         let loading = self.pending.is_some();
         let saved_note = self.message.clone();
@@ -2085,128 +2189,86 @@ impl Encounters {
         let focus_name = &mut self.focus_name;
         let focus_search_after_name = &mut self.focus_search;
         let from_session = self.from_session;
-        let mut title = |ui: &mut egui::Ui, width: f32| {
-            let response = ui.add(
-                egui::TextEdit::singleline(&mut draft_ref.name)
-                    .id(design::focus_id(NAME_FIELD))
-                    .desired_width(width)
-                    .min_size(egui::vec2(0.0, Density::Scan.control()))
-                    .margin(egui::vec2(design::S, 5.0))
-                    .font(Type::Heading.font(ui)),
-            );
-            design::named(ui, &response, &format!("{NAME_FIELD}: {}", draft_ref.name));
-            if std::mem::take(focus_name) {
-                design::focus_and_select(ui, response.id, &draft_ref.name);
-            }
-            // The next thing to do after a name is to find what the party fights.
-            if response.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)) {
-                *focus_search_after_name = true;
-            }
-            if dirty {
-                design::status(
-                    ui,
-                    Status {
-                        icon: icons::DRAFT,
-                        word: "Unsaved",
-                        color: colors().document.unsaved,
-                    },
-                );
-            } else if let Some(note) = &saved_note {
-                // Beside the name, so that saving does not move the roster.
-                design::status(
-                    ui,
-                    Status {
-                        icon: icons::OK,
-                        word: note,
-                        color: colors().document.saved,
-                    },
-                );
+        ui.horizontal(|ui| {
+            let back_name = if from_session {
+                "Back to session"
             } else {
-                design::status(
-                    ui,
-                    Status {
-                        icon: icons::OK,
-                        word: "No changes",
-                        color: colors().muted,
-                    },
-                );
-            }
-        };
-        let mut actions = |ui: &mut egui::Ui| {
-            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                // The next thing to do carries the weight: Save while there are changes.
-                run_it = if dirty {
-                    Action::secondary(START_FIGHT)
-                } else {
-                    Action::primary(START_FIGHT)
-                }
-                .icon(icons::RUN)
-                .blocked(
-                    has_run
-                        .then_some(BLOCKED_BY_RUN)
-                        .or(creature_dirty.then_some(BLOCKED_BY_CREATURE))
-                        .or(loading.then_some("Still reading this campaign.")),
-                )
-                .hint(if dirty {
-                    "Save this encounter and start a run."
-                } else {
-                    "Start a run of this encounter."
-                })
-                .show(ui)
-                .clicked();
-                // The next thing to do carries the weight: Save while there are changes.
-                save = if dirty {
-                    Action::primary("Save encounter")
-                } else {
-                    Action::secondary("Save encounter")
-                }
-                .blocked_if(!dirty, "No changes to save.")
-                .key("Ctrl+S")
-                .show(ui)
-                .clicked();
-                // Away from Save, because they are never meant to be pressed by the same hand.
-                ui.add_space(design::XL);
-                if dirty {
-                    discard = Action::destructive("Discard changes")
-                        .blocked(creature_dirty.then_some(BLOCKED_BY_CREATURE))
-                        .show(ui)
-                        .clicked();
-                }
-            });
-        };
-        let (back_word, back_name) = if from_session {
-            ("Session", "Back to session")
-        } else {
-            ("Encounters", "Back to encounters")
-        };
-        let back_action = |ui: &mut egui::Ui| {
-            Action::quiet(back_word)
-                .icon(icons::BACK)
+                "Back to encounters"
+            };
+            back = Action::quiet(icons::BACK)
                 .name(back_name)
+                .hint(back_name)
                 .blocked(
                     dirty
                         .then_some("Save or discard this encounter first.")
                         .or(creature_dirty.then_some(BLOCKED_BY_CREATURE)),
                 )
                 .show(ui)
-                .clicked()
-        };
-        if two_rows {
-            ui.horizontal(|ui| {
-                back = back_action(ui);
-                // Room is kept for the word beside the name: Unsaved, or a saved note.
-                let width = (ui.available_width() - 150.0).clamp(120.0, 360.0);
-                title(ui, width);
+                .clicked();
+            let width = (ui.available_width() - design::S * 33.0).max(Density::Scan.control());
+            let response = ui.add(
+                egui::TextEdit::singleline(&mut draft_ref.name)
+                    .id(design::focus_id(NAME_FIELD))
+                    .desired_width(width)
+                    .min_size(egui::vec2(0.0, Density::Scan.control()))
+                    .margin(egui::vec2(design::S, design::XS))
+                    .font(Type::Heading.font(ui)),
+            );
+            design::named(ui, &response, &format!("{NAME_FIELD}: {}", draft_ref.name));
+            if std::mem::take(focus_name) {
+                design::focus_and_select(ui, response.id, &draft_ref.name);
+            }
+            if response.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)) {
+                *focus_search_after_name = true;
+            }
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                save = if dirty && !has_run {
+                    Action::primary("Save encounter")
+                } else {
+                    Action::secondary("Save encounter")
+                }
+                .blocked_if(!dirty, "No changes to save.")
+                .show(ui)
+                .clicked();
+                run_it = if dirty || has_run {
+                    Action::secondary(START_FIGHT)
+                } else {
+                    Action::primary(START_FIGHT)
+                }
+                .blocked(
+                    has_run
+                        .then_some(BLOCKED_BY_RUN)
+                        .or(creature_dirty.then_some(BLOCKED_BY_CREATURE))
+                        .or(loading.then_some("Still reading this campaign.")),
+                )
+                .hint("Save this encounter and start a run.")
+                .show(ui)
+                .clicked();
             });
-            ui.horizontal(|ui| actions(ui));
-        } else {
-            ui.horizontal(|ui| {
-                back = back_action(ui);
-                let width = (ui.available_width() - 610.0).clamp(120.0, 360.0);
-                title(ui, width);
-                actions(ui);
-            });
-        }
+        });
+        ui.horizontal_wrapped(|ui| {
+            if dirty {
+                discard = Action::quiet("Discard")
+                    .blocked(creature_dirty.then_some(BLOCKED_BY_CREATURE))
+                    .show(ui)
+                    .clicked();
+            }
+            let (icon, word, color) = if dirty {
+                (icons::DRAFT, "Unsaved", colors().document.unsaved)
+            } else if let Some(note) = saved_note.as_deref() {
+                (icons::OK, note, colors().document.saved)
+            } else {
+                (icons::OK, "No changes", colors().muted)
+            };
+            design::status(ui, Status { icon, word, color });
+            blocked_reason(
+                ui,
+                has_run
+                    .then_some(BLOCKED_BY_RUN)
+                    .or(creature_dirty.then_some(BLOCKED_BY_CREATURE))
+                    .or(loading.then_some("Still reading this campaign.")),
+            );
+        });
         design::rule(ui);
         if back {
             self.draft = None;
@@ -2401,7 +2463,12 @@ impl Encounters {
                 search,
                 focus_search,
                 peek,
-                &|_| false,
+                SearchRoster {
+                    already: &|_| false,
+                    members: draft
+                        .target_group()
+                        .map(|group| groups::member_summary(group, snapshot)),
+                },
             );
             if let Some((id, party)) = chosen {
                 draft.add_chosen(id, party);
@@ -2423,22 +2490,39 @@ impl Encounters {
             .filter(|c| c.party && !on_roster(draft, c.id))
             .map(|c| c.id)
             .collect();
-        if Action::secondary("Add party")
-            .icon(icons::PARTY)
-            .blocked(if !any_party {
-                Some("No saved party copies yet. Connect to D&D Beyond in Settings.")
-            } else if missing.is_empty() {
-                Some("The whole party is on the roster.")
-            } else {
-                None
-            })
-            .show(ui)
-            .clicked()
-        {
-            for id in missing {
-                draft.add(id, true);
+        if !missing.is_empty() || !any_party {
+            if Action::secondary("Add party")
+                .icon(icons::PARTY)
+                .blocked(if !any_party {
+                    Some("No saved party copies yet. Connect to D&D Beyond in Settings.")
+                } else if missing.is_empty() {
+                    Some("The whole party is on the roster.")
+                } else {
+                    None
+                })
+                .show(ui)
+                .clicked()
+            {
+                for id in missing {
+                    draft.add(id, true);
+                }
+                *focus_search = true;
             }
-            *focus_search = true;
+        } else {
+            design::status(
+                ui,
+                Status {
+                    icon: icons::OK,
+                    word: "Party in roster",
+                    color: colors().muted,
+                },
+            );
+        }
+        if !any_party {
+            blocked_reason(
+                ui,
+                Some("No saved party copies yet. Connect to D&D Beyond in Settings."),
+            );
         }
         let chosen = Self::creature_search(
             ui,
@@ -2446,7 +2530,10 @@ impl Encounters {
             search,
             focus_search,
             peek,
-            &|c: &Creature| c.party && on_roster(draft, c.id),
+            SearchRoster {
+                already: &|c: &Creature| c.party && on_roster(draft, c.id),
+                members: None,
+            },
         );
         if let Some((id, party)) = chosen {
             draft.add(id, party);
@@ -2460,7 +2547,7 @@ impl Encounters {
         search: &mut String,
         focus_search: &mut bool,
         peek: &mut Option<Uuid>,
-        added_already: &dyn Fn(&Creature) -> bool,
+        roster: SearchRoster<'_>,
     ) -> Option<(Uuid, bool)> {
         let mut chosen = None;
         let response = design::search_field(
@@ -2472,6 +2559,12 @@ impl Encounters {
         );
         if std::mem::take(focus_search) {
             design::focus_and_select(ui, response.id, search);
+        }
+        if let Some(members) = &roster.members {
+            ui.add(
+                egui::Label::new(Type::Small.rich(ui, members).color(colors().muted)).truncate(),
+            )
+            .on_hover_text(members);
         }
         let query = search.to_lowercase();
         let mut matches: Vec<&Creature> = creatures.filter(|c| c.lower.contains(&query)).collect();
@@ -2488,22 +2581,18 @@ impl Encounters {
             && ui.input(|i| i.key_pressed(egui::Key::Enter))
             && !query.is_empty()
             && let Some(first) = matches.first()
-            && !added_already(first)
+            && !(roster.already)(first)
         {
             chosen = Some((first.id, first.party));
             *focus_search = true;
         }
         if matches.is_empty() {
-            ui.add(
-                egui::Label::new(
-                    Type::Body
-                        .rich(
-                            ui,
-                            "No creatures match. Check the spelling, or the packages this campaign uses.",
-                        )
-                        .color(colors().muted),
-                )
-                .wrap(),
+            design::empty_state(
+                ui,
+                icons::SEARCH,
+                "No creatures match",
+                "Check the spelling, or the packages this campaign uses.",
+                |_| {},
             );
         }
         ui.spacing_mut().item_spacing.y = 0.0;
@@ -2518,30 +2607,26 @@ impl Encounters {
                             // The name is what the eye looks for, so it comes first.
                             ui.vertical(|ui| {
                                 ui.spacing_mut().item_spacing.y = 0.0;
-                                ui.set_max_width((ui.available_width() - 150.0).max(80.0));
-                                ui.add(
-                                    egui::Label::new(
-                                        Type::Body.rich(ui, &c.name).color(colors().text),
-                                    )
-                                    .truncate(),
+                                ui.set_max_width(
+                                    (ui.available_width() - design::S * 12.0).max(design::S * 10.0),
                                 );
+                                if design::link(ui, &c.name)
+                                    .on_hover_text("Read this entry in Lookup")
+                                    .clicked()
+                                {
+                                    *peek = Some(c.id);
+                                }
                                 detail_columns(ui, &c.detail, c.source.as_deref());
                             });
                             ui.with_layout(
                                 egui::Layout::right_to_left(egui::Align::Center),
                                 |ui| {
-                                    if Action::quiet("Read")
+                                    if (roster.already)(c) {
+                                        ui.label(
+                                            Type::Small.rich(ui, "In roster").color(colors().muted),
+                                        );
+                                    } else if Action::secondary("Add")
                                         .density(Density::Read)
-                                        .hint("Read this entry in Lookup. The draft stays open.")
-                                        .show(ui)
-                                        .clicked()
-                                    {
-                                        *peek = Some(c.id);
-                                    }
-                                    let added = added_already(c);
-                                    if Action::secondary(if added { "In roster" } else { "Add" })
-                                        .density(Density::Read)
-                                        .blocked_if(added, "Already on the roster.")
                                         .show(ui)
                                         .clicked()
                                     {
@@ -2576,21 +2661,18 @@ impl Encounters {
                         .rich(ui, format!("Roster ({})", draft.setup.roster.len()))
                         .color(colors().text),
                 );
-                if let Some(party) = linked_party {
-                    Self::sync_option(ui, draft, snapshot, party);
-                }
-                ui.checkbox(&mut draft.setup.repeatable, REPEATABLE_OPTION);
                 // Without a link there is no sheet to sync with, whatever the note says.
                 let live = linked_party.filter(|_| draft.setup.combat_sync);
                 if draft.setup.roster.is_empty() {
                     ui.add_space(design::S);
-                    ui.label(
-                        Type::Body
-                            .rich(ui, "Add the party and some creatures from the list.")
-                            .color(colors().muted),
-                    );
+                    design::empty_state(ui, icons::PARTY, "No participants yet", "Add the party and creatures from Add participants.", |_| {});
                 }
                 Self::roster(ui, draft, snapshot, focus_search, expanded, live, make_yours);
+                ui.add_space(design::M);
+                if let Some(party) = linked_party {
+                    Self::sync_option(ui, draft, snapshot, party);
+                }
+                ui.checkbox(&mut draft.setup.repeatable, REPEATABLE_OPTION);
                 ui.add_space(design::M);
                 design::group_label(ui, "Read-aloud and notes");
                 let response = ui.add(
@@ -2702,36 +2784,16 @@ impl Encounters {
                     ui.set_min_height(Density::Glance.row());
                     // Every slot is reserved, so columns line up between rows.
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        ui.spacing_mut().item_spacing.x = 2.0;
-                        if design::icon_button(ui, icons::REMOVE, "Remove").clicked() {
-                            remove = Some(i);
-                        }
-                        if design::icon_button(ui, icons::COPY, "Duplicate").clicked() {
-                            duplicate = Some(i);
-                        }
-                        // A sheet belongs to its player. Every other creature can be changed.
-                        let sheet = resolved
-                            .and_then(|id| snapshot.creatures.iter().find(|c| c.id == id))
-                            .is_none_or(|c| c.party);
-                        if sheet {
-                            ui.add_space(Density::Read.control());
-                        } else if design::icon_button(ui, icons::EDIT, "Make it yours").clicked() {
-                            *make_yours = Some(i);
-                        }
-                        if i + 1 < count {
-                            if design::icon_button(ui, icons::MOVE_DOWN, "Move down").clicked() {
-                                lower = Some(i);
+                        row_menu(ui, &name, |ui| {
+                            if menu_action(ui, "Move up", (i == 0).then_some("Already first.")) { raise = Some(i); }
+                            if menu_action(ui, "Move down", (i + 1 == count).then_some("Already last.")) { lower = Some(i); }
+                            if menu_action(ui, "Duplicate", None) { duplicate = Some(i); }
+                            if creature.is_some_and(|c| !c.party) {
+                                if menu_action(ui, "Make it yours", None) { *make_yours = Some(i); }
+                                ui.add(egui::Label::new(Type::Small.rich(ui, "Edit a copy in this campaign.").color(colors().muted)).wrap());
                             }
-                        } else {
-                            ui.add_space(Density::Read.control());
-                        }
-                        if i > 0 {
-                            if design::icon_button(ui, icons::MOVE_UP, "Move up").clicked() {
-                                raise = Some(i);
-                            }
-                        } else {
-                            ui.add_space(Density::Read.control());
-                        }
+                            if menu_action(ui, "Remove", None) { remove = Some(i); }
+                        });
                         if Action::quiet("Edit")
                             .density(Density::Read)
                             .name(groups::SLOT_OPTIONS)
@@ -2747,20 +2809,7 @@ impl Encounters {
                             };
                         }
                         ui.add_space(design::XS);
-                        let combo = egui::ComboBox::from_id_salt("side")
-                            .icon(design::combo_icon)
-                            .width(104.0)
-                            .selected_text(crate::design::reader::human_label(&slot.side))
-                            .show_ui(ui, |ui| {
-                                for side in &sides {
-                                    ui.selectable_value(
-                                        &mut slot.side,
-                                        side.clone(),
-                                        crate::design::reader::human_label(side),
-                                    );
-                                }
-                            });
-                        design::named(ui, &combo.response, "Side");
+                        side_control(ui, "Side", &mut slot.side, &sides);
                         ui.with_layout(egui::Layout::top_down(egui::Align::LEFT), |ui| {
                             ui.spacing_mut().item_spacing.y = 0.0;
                             ui.add(
@@ -2774,9 +2823,10 @@ impl Encounters {
                             if !detail.is_empty() {
                                 // What a player has left is the reason to look, so all of it shows.
                                 let line = egui::Label::new(
-                                    Type::Small.rich(ui, &detail).color(colors().muted),
+                                    Type::Small.rich(ui, stat_line(&detail)).color(colors().muted),
                                 );
-                                ui.add(if synced { line.wrap() } else { line.truncate() });
+                                let response = ui.add(line.wrap());
+                                design::named(ui, &response, &detail);
                             }
                         });
                     });
@@ -2866,6 +2916,21 @@ impl Encounters {
                 }
                 design::rule(ui);
             });
+        }
+        for side in draft.setup.roster.iter().flat_map(|slot| {
+            [
+                Some(slot.side.as_str()),
+                slot.overrides.get("side").and_then(Value::as_str),
+            ]
+            .into_iter()
+            .flatten()
+        }) {
+            if !side.trim().is_empty() && !draft.setup.sides.contains_key(side) {
+                draft
+                    .setup
+                    .sides
+                    .insert(side.into(), yaml("{hostile_to: []}"));
+            }
         }
         if let Some(i) = remove {
             draft.setup.roster.remove(i);
@@ -2994,254 +3059,13 @@ impl Encounters {
 }
 
 /// The widest a list row grows, so that its actions stay near the name they belong to.
-const ROW_WIDTH: f32 = 640.0;
-
-/// A column's width is fixed, so only a scope inside it can be narrower.
-fn within_row_width(ui: &mut egui::Ui, add: impl FnOnce(&mut egui::Ui)) {
-    ui.scope(|ui| {
-        ui.set_max_width(ui.available_width().min(ROW_WIDTH));
-        add(ui);
-    });
-}
-
-/// A row of the list: a name, what is known about it, and its actions at the right. `actions`
-/// adds them from the right, and needs `room`.
-fn list_row(
-    ui: &mut egui::Ui,
-    id: impl std::hash::Hash,
-    name: &str,
-    detail: Option<&str>,
-    room: f32,
-    actions: impl FnOnce(&mut egui::Ui),
-) {
-    ui.push_id(id, |ui| {
-        ui.horizontal(|ui| {
-            ui.set_min_height(Density::Scan.row() + design::S);
-            ui.vertical(|ui| {
-                ui.spacing_mut().item_spacing.y = 0.0;
-                ui.set_max_width((ui.available_width() - room).max(100.0));
-                ui.add(
-                    egui::Label::new(Type::Strong.rich(ui, name).color(colors().text)).truncate(),
-                );
-                if let Some(detail) = detail {
-                    let response = ui.add(
-                        egui::Label::new(Type::Small.rich(ui, detail).color(colors().muted))
-                            .truncate(),
-                    );
-                    design::named(ui, &response, &format!("{name} · {detail}"));
-                }
-            });
-            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), actions);
-        });
-    });
-}
-
-/// What is in play. With nothing in play, this takes no room at all.
-fn in_progress_list(
-    ui: &mut egui::Ui,
-    page: &history::Arranged<'_>,
-    live: Option<&crate::encounter_run::SavedRunInfo>,
-    start_blocked: Option<&'static str>,
-    loading: bool,
-    action: &mut Option<ListAction>,
-) {
-    if page.in_progress.is_empty() {
-        return;
-    }
-    ui.label(Type::Heading.rich(ui, "In progress").color(colors().text));
-    design::rule(ui);
-    if live.is_some() {
-        design::message(
-            ui,
-            Tone::Info,
-            "A run is open. Close it to start or edit another.",
-        );
-    }
-    within_row_width(ui, |ui| {
-        for run in &page.in_progress {
-            // At the table, picking up the interrupted run comes first. The open run has no
-            // Delete: its next save would find its file gone.
-            let open = live.is_some_and(|live| live.id == run.id);
-            list_row(
-                ui,
-                &run.path,
-                &run.encounter,
-                Some(&run.label),
-                200.0,
-                |ui| {
-                    if open {
-                        if Action::primary("Back to this run").show(ui).clicked() {
-                            *action = Some(ListAction::BackToRun);
-                        }
-                        return;
-                    }
-                    if Action::primary("Resume")
-                        .blocked(start_blocked)
-                        .show(ui)
-                        .clicked()
-                    {
-                        *action = Some(ListAction::Resume(run.path.clone()));
-                    }
-                    if Action::quiet("Delete")
-                        .density(Density::Read)
-                        .name(&format!(
-                            "Delete the saved run of {}, {}",
-                            run.encounter, run.label
-                        ))
-                        // A load under way has read the list, and would bring the row back.
-                        .blocked(loading.then_some("Still reading this campaign."))
-                        .show(ui)
-                        .clicked()
-                    {
-                        *action = Some(ListAction::Delete(run.path.clone()));
-                    }
-                },
-            );
-        }
-    });
-    ui.add_space(design::L);
-}
-
-/// The encounters that have not happened yet, and those that can happen again.
-fn ready_list(
-    ui: &mut egui::Ui,
-    page: &history::Arranged<'_>,
-    templates: &[Template],
-    start_blocked: Option<&'static str>,
-    action: &mut Option<ListAction>,
-) {
-    let heading = format!("Ready to run ({})", page.ready.len());
-    ui.label(Type::Heading.rich(ui, heading).color(colors().text));
-    design::rule(ui);
-    if page.ready.is_empty() {
-        let words = if templates.is_empty() {
-            "No encounters yet. Create one with New encounter."
-        } else {
-            "Each encounter has been run. Run one again from History, or create one with New encounter."
-        };
-        ui.add(egui::Label::new(Type::Body.rich(ui, words).color(colors().muted)).wrap());
-    }
-    for row in &page.ready {
-        let template = row.template;
-        list_row(
-            ui,
-            &template.path,
-            &template.name,
-            template.summary.as_deref(),
-            200.0,
-            |ui| {
-                let mut start = Action::secondary(START_FIGHT)
-                    .icon(icons::RUN)
-                    .density(Density::Read)
-                    .blocked(start_blocked);
-                if row.unfinished_run {
-                    start =
-                        start.hint("A run of this encounter is in progress. This starts another.");
-                }
-                if start.show(ui).clicked() {
-                    *action = Some(ListAction::Run(template.path.clone()));
-                }
-                if Action::quiet("Edit")
-                    .density(Density::Read)
-                    .blocked(start_blocked)
-                    .show(ui)
-                    .clicked()
-                {
-                    *action = Some(ListAction::Edit(template.path.clone()));
-                }
-            },
-        );
-    }
-}
-
-fn group_list(
-    ui: &mut egui::Ui,
-    snapshot: &Snapshot,
-    group_blocked: Option<&'static str>,
-    action: &mut Option<ListAction>,
-) {
-    if let Some(path) = groups::list(ui, snapshot, group_blocked) {
-        *action = Some(ListAction::OpenGroup(path));
-    }
-}
-
-/// What has happened, out of the way until the DM asks. The count in its title changes, so its
-/// open state has an ID of its own.
-fn history_list(
-    ui: &mut egui::Ui,
-    page: &history::Arranged<'_>,
-    start_blocked: Option<&'static str>,
-    action: &mut Option<ListAction>,
-) {
-    if page.ended_count() == 0 && page.unreadable.is_empty() {
-        return;
-    }
-    ui.add_space(design::L);
-    let title = format!("History ({})", page.ended_count());
-    design::section_with_id(ui, "encounter_history", title, |ui| {
-        ui.set_max_width(ui.available_width().min(ROW_WIDTH));
-        for session in &page.history {
-            ui.add_space(design::XS);
-            design::group_label(ui, session.label);
-            for past in &session.runs {
-                let run = past.run;
-                let template = past.template;
-                list_row(
-                    ui,
-                    &run.path,
-                    &run.encounter,
-                    Some(&run.label),
-                    260.0,
-                    |ui| {
-                        // The ending's undo lasted until the run closed, so this only reads it.
-                        if Action::secondary("Open")
-                            .density(Density::Read)
-                            .name(&format!("Open the run of {}, {}", run.encounter, run.label))
-                            .blocked(start_blocked)
-                            .show(ui)
-                            .clicked()
-                        {
-                            *action = Some(ListAction::Resume(run.path.clone()));
-                        }
-                        let Some(template) = template else {
-                            return;
-                        };
-                        if Action::quiet("Run again")
-                            .density(Density::Read)
-                            .name(&format!("Run {} again", run.encounter))
-                            .blocked(start_blocked)
-                            .show(ui)
-                            .clicked()
-                        {
-                            *action = Some(ListAction::Run(template.path.clone()));
-                        }
-                        if Action::quiet("Edit")
-                            .density(Density::Read)
-                            .name(&format!("Edit {}", run.encounter))
-                            .blocked(start_blocked)
-                            .show(ui)
-                            .clicked()
-                        {
-                            *action = Some(ListAction::Edit(template.path.clone()));
-                        }
-                    },
-                );
-            }
-        }
-        // It can be another campaign's file in a shared folder, so nothing here can change it.
-        if !page.unreadable.is_empty() {
-            ui.add_space(design::XS);
-            design::group_label(ui, &format!("Unreadable ({})", page.unreadable.len()));
-            for run in &page.unreadable {
-                ui.add(
-                    egui::Label::new(Type::Small.rich(ui, &run.label).color(colors().muted))
-                        .truncate(),
-                )
-                .on_hover_text(run.path.display().to_string());
-            }
-        }
-    });
-}
+// Package A owns the shared token. Keep this local measure until it lands.
+const LIST_MEASURE: f32 = design::S * 110.0;
+mod list;
+use list::{
+    blocked_reason, group_list, history_list, in_progress_list, menu_action, ready_list, row_menu,
+    side_control,
+};
 
 #[cfg(test)]
 mod tests {
@@ -3573,6 +3397,73 @@ mod tests {
         fs::write(&path, format!("{original}External edit\n")).unwrap();
         assert!(editor.start_run(&campaign, &[]).is_err());
     }
+    #[test]
+    fn history_never_takes_the_live_slot_or_writes_the_saved_run() {
+        let dir = tempfile::tempdir().unwrap();
+        let campaign = campaign(dir.path());
+        let wolf = stat_creature(dir.path(), "Wolf", 20);
+        let mut draft = Draft::new();
+        draft.add(wolf, false);
+        draft.save(&campaign, &[]).unwrap();
+        let template = draft.path.clone();
+        let mut editor = Encounters {
+            active: Some(campaign.clone()),
+            draft: Some(draft),
+            ..Default::default()
+        };
+        let ended = editor.start_run(&campaign, &[]).unwrap();
+        let path = ended.path().unwrap().to_path_buf();
+        let mut saved: serde_json::Value =
+            serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
+        saved["state"]["phase"] = serde_json::json!({"Ended": {"outcome": "Won"}});
+        saved["state"]["round"] = 3.into();
+        let bytes = serde_json::to_vec_pretty(&saved).unwrap();
+        fs::write(&path, &bytes).unwrap();
+        editor.open_saved_run(&path, &campaign);
+        assert!(!editor.has_run());
+        assert!(!editor.go_to_run);
+        assert!(editor.history_read.as_ref().unwrap().1.ended);
+        assert_eq!(fs::read(&path).unwrap(), bytes);
+
+        editor.run = Some(editor.start_run(&campaign, &[]).unwrap());
+        let current = editor.run().unwrap().live_info().unwrap().id;
+        editor.open_saved_run(&path, &campaign);
+        assert_eq!(editor.run().unwrap().live_info().unwrap().id, current);
+        assert_eq!(fs::read(&path).unwrap(), bytes);
+        editor.run_path(&template, &campaign, &[]);
+        assert_eq!(editor.error.as_deref(), Some(BLOCKED_BY_RUN));
+        assert_eq!(editor.run().unwrap().live_info().unwrap().id, current);
+        assert!(
+            editor.draft.is_some(),
+            "a refused start must keep the editor"
+        );
+    }
+
+    #[test]
+    fn the_rail_resumes_the_newest_unfinished_run_and_keeps_a_draft() {
+        let dir = tempfile::tempdir().unwrap();
+        let campaign = campaign(dir.path());
+        let wolf = stat_creature(dir.path(), "Wolf", 20);
+        let mut draft = Draft::new();
+        draft.add(wolf, false);
+        draft.save(&campaign, &[]).unwrap();
+        let mut editor = Encounters {
+            active: Some(campaign.clone()),
+            draft: Some(draft),
+            ..Default::default()
+        };
+        let run = editor.start_run(&campaign, &[]).unwrap();
+        let path = run.path().unwrap().to_path_buf();
+        editor.snapshot = Some(Snapshot::load(&campaign, &[]).unwrap());
+        assert_eq!(editor.paused_run().unwrap().path, path);
+        editor.draft.as_mut().unwrap().body = "Keep this draft".to_owned();
+        editor.open_saved_run(&path, &campaign);
+        assert!(editor.has_run());
+        assert!(editor.go_to_run);
+        assert!(editor.paused_run().is_none());
+        assert_eq!(editor.draft.as_ref().unwrap().body, "Keep this draft");
+    }
+
     fn slot_override(draft: &mut Draft, index: usize, text: &str) {
         draft.setup.roster[index].overrides = serde_yaml_ng::from_str(text).unwrap();
     }

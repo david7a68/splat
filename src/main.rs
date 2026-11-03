@@ -53,6 +53,44 @@ fn main() -> eframe::Result {
     )
 }
 
+/// The paused detail uses the full rail width, below the icon and name.
+fn paused_run_item(ui: &mut egui::Ui, detail: &str) -> egui::Response {
+    let c = colors();
+    let height = Density::Glance.control() + design::XS;
+    let (rect, response) = ui.allocate_exact_size(
+        egui::vec2(ui.available_width(), height),
+        egui::Sense::click(),
+    );
+    let name = format!("Run · {detail}");
+    response.widget_info(|| {
+        egui::WidgetInfo::labeled(egui::WidgetType::Button, ui.is_enabled(), &name)
+    });
+    if ui.is_rect_visible(rect) {
+        if response.hovered() {
+            ui.painter()
+                .rect_filled(rect, design::RADIUS_CONTROL, c.hover);
+        }
+        ui.painter().text(
+            rect.min + egui::vec2(design::S, design::XS),
+            egui::Align2::LEFT_TOP,
+            format!("{} Run", icons::RUN),
+            Type::Body.font(ui),
+            c.muted,
+        );
+        ui.painter().text(
+            rect.min + egui::vec2(design::S, Type::Body.line() + design::XS),
+            egui::Align2::LEFT_TOP,
+            detail,
+            Type::Small.font(ui),
+            c.muted,
+        );
+        if response.has_focus() {
+            design::focus_ring(ui, rect);
+        }
+    }
+    response
+}
+
 struct Splat {
     page: Page,
     campaign_tab: CampaignTab,
@@ -572,8 +610,33 @@ impl Splat {
                 ui.spacing_mut().interact_size.y = Density::Read.control();
                 self.campaigns.selector(ui, blocked);
             });
+            if self.encounters.draft_dirty() {
+                ui.add(
+                    egui::Label::new(
+                        Type::Small
+                            .rich(ui, "Save or discard the draft first")
+                            .color(c.muted),
+                    )
+                    .wrap(),
+                );
+            }
             ui.add_space(design::S);
-            if self.encounters.has_run() {
+            if !self.encounters.has_run() {
+                let paused = self.encounters.paused_run().map(|run| {
+                    let round = run
+                        .label
+                        .split(" · ")
+                        .find(|part| part.starts_with("Round "))
+                        .unwrap_or("Round 0");
+                    (run.path.clone(), format!("{round} · Paused"))
+                });
+                if let Some((path, detail)) = paused
+                    && paused_run_item(ui, &detail).clicked()
+                    && let Some(active) = self.campaigns.active_campaign()
+                {
+                    self.encounters.open_saved_run(&path, &active);
+                }
+            } else {
                 let strip = self.encounters.run().map(|run| run.strip());
                 let detail = strip.as_ref().map(|strip| {
                     if strip.running {
@@ -915,7 +978,7 @@ impl Splat {
                     }
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         if strip.running
-                            && Action::primary("Next turn")
+                            && Action::secondary("Next turn")
                                 .icon(icons::NEXT)
                                 .show(ui)
                                 .clicked()
@@ -924,7 +987,7 @@ impl Splat {
                             run.next_turn();
                             self.sessions.after_a_step_back_to_note(self.notes_gave_way);
                         }
-                        if Action::secondary("Back to run").show(ui).clicked() {
+                        if Action::primary("Back to run").show(ui).clicked() {
                             self.page = Page::Run;
                         }
                         if strip.not_saved {
