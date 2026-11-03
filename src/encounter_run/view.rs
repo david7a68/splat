@@ -4360,6 +4360,7 @@ fn dock_name(ui: &egui::Ui, name: &str, font: &egui::FontId, width: f32) -> Stri
     if fitted == name {
         return fitted;
     }
+    let fitted = fitted.trim_end_matches('…');
     let last = name.split_whitespace().last().unwrap_or(name);
     if !last.chars().all(|c| c.is_ascii_digit()) && last.chars().count() != 1 {
         let mut words: Vec<_> = fitted.split_whitespace().collect();
@@ -4378,6 +4379,7 @@ fn dock_name(ui: &egui::Ui, name: &str, font: &egui::FontId, width: f32) -> Stri
     }
     let prefix_room = width - design::number_width(ui, &format!("… {last}"), font);
     let prefix = design::words_that_fit(ui, name, font, prefix_room);
+    let prefix = prefix.trim_end_matches('…');
     let candidate = format!("{prefix}… {last}");
     if design::number_width(ui, &candidate, font) <= width {
         candidate

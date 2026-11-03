@@ -281,8 +281,9 @@ the panel, those words open the second line instead, so that a name is never cut
   scrolls.
 - **Header:** the round and the current turn in bold sans, larger than any row's name, and
   `Next turn`. The header always has two lines. Line two keeps the notice at the left
-  and a fixed Undo slot at the right. Undo fits whole words; hover and its accessible name
-  keep the full action. A sync conflict comes first, then recording silence, then other
+  and a fixed Undo slot at the right. A cut Undo label ends with an ellipsis and drops a
+  trailing joining word, such as to, of, on, from or and. Undo fits whole words; hover and
+  its accessible name keep the full action. A sync conflict comes first, then recording silence, then other
   sync notices, then the next name. Silence and the short sync state stay together when
   space is short. Connect to sync gives up its link before either state gives up its word.
 - **Dock:** a fixed place above the footer. `Amount`, `Damage`, `Heal`, `Temp HP`, then the
