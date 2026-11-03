@@ -108,6 +108,14 @@ pub(crate) struct Origin<'a> {
     pub builtin: bool,
 }
 
+/// Values from an open run. The saved entry stays unchanged.
+pub(crate) struct RunValues {
+    pub armor_class: Option<i64>,
+    pub hp: Option<i64>,
+    pub initiative: Option<i64>,
+    pub by_hand: Vec<String>,
+}
+
 /// Draw an entry's content. Returns the index of a link the DM followed.
 pub(crate) fn show(
     ui: &mut egui::Ui,
@@ -116,6 +124,37 @@ pub(crate) fn show(
     body: &str,
     origin: &Origin<'_>,
     links: &dyn Links,
+) -> Option<usize> {
+    show_inner(ui, name, entry, body, origin, links, None)
+}
+
+pub(crate) fn show_run(
+    ui: &mut egui::Ui,
+    entry: &Entry,
+    origin: &Origin<'_>,
+    links: &dyn Links,
+    values: &RunValues,
+) -> Option<usize> {
+    show_inner(
+        ui,
+        &entry.name,
+        Some(entry),
+        &entry.body,
+        origin,
+        links,
+        Some(values),
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn show_inner(
+    ui: &mut egui::Ui,
+    name: &str,
+    entry: Option<&Entry>,
+    body: &str,
+    origin: &Origin<'_>,
+    links: &dyn Links,
+    values: Option<&RunValues>,
 ) -> Option<usize> {
     let reading = entry.and_then(|entry| entry.reading().ok().flatten());
     let sections = presentation::reading_sections(body, name);
@@ -133,7 +172,9 @@ pub(crate) fn show(
             let measure = design::READER_MEASURE;
             ui.allocate_ui_with_layout(vec2(measure, 0.0), layout, |ui| {
                 ui.set_max_width(measure);
-                open_link = content(ui, entry, reading, &sections, styled, builtin, links);
+                open_link = content(
+                    ui, entry, reading, &sections, styled, builtin, links, values,
+                );
             });
             ui.add_space(design::XL);
             let width = ui.available_width().min(REFERENCE_MAX);
@@ -152,7 +193,9 @@ pub(crate) fn show(
         if let Some(path) = &art {
             crate::art::small_hero(ui, path, name);
         }
-        let open_link = content(ui, entry, reading, &sections, styled, builtin, links);
+        let open_link = content(
+            ui, entry, reading, &sections, styled, builtin, links, values,
+        );
         ui.add_space(design::L);
         design::rule(ui);
         reference(ui, entry, &sections, styled.is_some(), origin);
@@ -166,6 +209,7 @@ const REFERENCE_MAX: f32 = 360.0;
 pub(crate) const WIDE_READER: f32 = design::READER_MEASURE + design::XL + REFERENCE_MAX;
 
 /// What the entry says. `styled` is the entry when it reads as a styled stat block.
+#[allow(clippy::too_many_arguments)]
 fn content(
     ui: &mut egui::Ui,
     entry: Option<&Entry>,
@@ -174,6 +218,7 @@ fn content(
     styled: Option<&Entry>,
     builtin: bool,
     links: &dyn Links,
+    values: Option<&RunValues>,
 ) -> Option<usize> {
     let mut open_link = None;
     if let Some(reading) = reading {
@@ -181,13 +226,13 @@ fn content(
     }
     if let Some(entry) = styled {
         let references = creature::spell_references(entry);
-        creature::show(ui, entry, sections, |ui, paragraph| {
+        creature::show(ui, entry, sections, values, |ui, paragraph| {
             open_link = open_link.or(spell_links(ui, &references, paragraph, links));
         });
     } else {
         // A creature the DM wrote has no source text to style. Its numbers still lead.
         if let Some(entry) = entry.filter(|entry| reading.is_none() && creature::has_stats(entry)) {
-            creature::stat_head(ui, entry);
+            creature::stat_head(ui, entry, values);
         }
         reader::show(ui, entry, sections, builtin, reading.is_some());
     }
