@@ -1866,15 +1866,7 @@ impl Encounters {
         let Some(deleted) = &self.deleted_run else {
             return;
         };
-        let name = &deleted.encounter;
-        let words = if deleted.unsent.is_empty() {
-            format!("Deleted the saved run of {name}.")
-        } else {
-            format!(
-                "Deleted the saved run of {name}. It held changes for {} that D&D Beyond does not have. Undo to keep them.",
-                deleted.unsent.join(", "),
-            )
-        };
+        let words = deleted.message();
         if design::message_with_action(ui, Tone::Info, &words, "Undo delete") {
             match deleted.restore() {
                 Ok(()) => {

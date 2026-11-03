@@ -2781,6 +2781,28 @@ impl Run {
     }
 }
 
+/// Shared words for a run's state on Session, Encounters and the rail.
+pub fn run_state_words(round: u64, paused: bool, ended: bool) -> String {
+    if ended {
+        if round == 0 {
+            "Ended · Setup".to_owned()
+        } else {
+            format!("Ended · Round {round}")
+        }
+    } else {
+        let state = if round == 0 {
+            "Setup".to_owned()
+        } else {
+            format!("Round {round}")
+        };
+        if paused {
+            format!("{state} · Paused")
+        } else {
+            state
+        }
+    }
+}
+
 /// Where a saved run stands, as the Encounters page sorts it.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Standing {
@@ -2806,6 +2828,19 @@ pub struct SavedRunInfo {
     pub unsent: Vec<String>,
 }
 
+impl SavedRunInfo {
+    pub fn state_words(&self, paused: bool) -> String {
+        let round = self
+            .label
+            .split("Round ")
+            .nth(1)
+            .and_then(|tail| tail.split_whitespace().next())
+            .and_then(|round| round.parse().ok())
+            .unwrap_or(0);
+        run_state_words(round, paused, self.standing == Standing::Ended)
+    }
+}
+
 /// A run file the DM deleted, kept in memory for one step of undo.
 pub struct DeletedRun {
     path: PathBuf,
@@ -2816,6 +2851,19 @@ pub struct DeletedRun {
 }
 
 impl DeletedRun {
+    /// One deletion warning on every page, including the way to keep unsent changes.
+    pub fn message(&self) -> String {
+        let name = &self.encounter;
+        if self.unsent.is_empty() {
+            format!("Deleted the saved run of {name}.")
+        } else {
+            format!(
+                "Deleted the saved run of {name}. It held changes for {} that D&D Beyond does not have. Undo to keep them.",
+                self.unsent.join(", ")
+            )
+        }
+    }
+
     /// Remove the run's file.
     pub fn delete(info: &SavedRunInfo) -> Result<Self, String> {
         let bytes = fs::read(&info.path).map_err(|e| e.to_string())?;

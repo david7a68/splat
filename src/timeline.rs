@@ -153,7 +153,10 @@ impl Event {
     pub fn summary(&self, session: Option<&str>) -> String {
         let mut parts = Vec::new();
         // An untitled event already shows its kind as its name.
-        if self.kind != Kind::Day && !self.title.trim().is_empty() {
+        if self.kind != Kind::Day
+            && !self.title.trim().is_empty()
+            && self.title.trim() != self.kind.word()
+        {
             parts.push(self.kind.word());
         }
         for part in [&self.duration, &self.place, &self.result] {
@@ -544,6 +547,8 @@ pub struct Book {
     path: Option<PathBuf>,
     pub events: Vec<Event>,
     baseline: Option<Vec<u8>>,
+    saved_events: Vec<Event>,
+    reordered: Vec<String>,
     dirty: bool,
     last_edit: Option<Instant>,
     last_check: Option<Instant>,
@@ -581,6 +586,7 @@ impl Book {
     /// Read the file, and drop any edit not yet saved.
     pub fn reload(&mut self) {
         self.dirty = false;
+        self.reordered.clear();
         self.conflict = false;
         self.error = None;
         self.unreadable = None;
@@ -595,7 +601,10 @@ impl Book {
                     .map_err(|e| e.to_string())
                     .and_then(parse)
                 {
-                    Ok(events) => self.events = events,
+                    Ok(events) => {
+                        self.saved_events.clone_from(&events);
+                        self.events = events;
+                    }
                     Err(error) => {
                         self.events.clear();
                         self.unreadable = Some(format!(
@@ -641,7 +650,9 @@ impl Book {
             .map_err(|e| e.to_string())?;
         temp.persist(path).map_err(|e| e.to_string())?;
         self.baseline = Some(text.into_bytes());
+        self.saved_events.clone_from(&self.events);
         self.dirty = false;
+        self.reordered.clear();
         self.conflict = false;
         self.error = None;
         Ok(())
@@ -684,6 +695,14 @@ impl Book {
     /// An edit is waiting for its pause before it saves.
     pub fn unsaved(&self) -> bool {
         self.dirty
+    }
+
+    /// Only edits to this event affect its own save word.
+    pub fn event_unsaved(&self, id: &str) -> bool {
+        self.unsaved()
+            && (self.reordered.iter().any(|event| event == id)
+                || self.events.iter().find(|event| event.id == id)
+                    != self.saved_events.iter().find(|event| event.id == id))
     }
 
     /// Back to the file, keeping what was here for one step of undo.
@@ -781,6 +800,9 @@ impl Book {
             .and_then(|after| self.events.iter().position(|event| event.id == after))
             .map_or(0, |index| index + 1);
         self.events.insert(at, event);
+        if at != index && !self.reordered.iter().any(|event| event == id) {
+            self.reordered.push(id.to_owned());
+        }
         self.touch();
     }
 
@@ -959,6 +981,43 @@ mod tests {
             state,
             steps: 1,
         }
+    }
+
+    #[test]
+    fn a_run_update_does_not_mark_an_unchanged_event_unsaved() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut timeline = book(dir.path());
+        let rest = timeline.add(Kind::LongRest, None);
+        let event = timeline.add(Kind::Event, None);
+        timeline.save();
+        assert!(!timeline.event_unsaved(&rest));
+        timeline.record_change(None, &fact(RunState::Running), None);
+        assert!(timeline.unsaved());
+        assert!(!timeline.event_unsaved(&rest));
+        timeline.event_mut(&event).unwrap().notes = "Changed here".into();
+        timeline.touch();
+        assert!(timeline.event_unsaved(&event));
+        timeline.save();
+        assert!(!timeline.event_unsaved(&event));
+        timeline.place_after(&rest, Some(&event));
+        assert!(timeline.event_unsaved(&rest));
+        assert!(!timeline.event_unsaved(&event));
+        timeline.save();
+        assert!(!timeline.event_unsaved(&rest));
+        timeline.event_mut(&event).unwrap().notes = "A second edit".into();
+        timeline.touch();
+        assert!(timeline.event_unsaved(&event));
+        timeline.reload();
+        assert!(!timeline.event_unsaved(&event));
+        assert_eq!(
+            timeline
+                .events
+                .iter()
+                .find(|item| item.id == event)
+                .unwrap()
+                .notes,
+            "Changed here"
+        );
     }
 
     #[test]

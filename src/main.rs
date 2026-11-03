@@ -1690,6 +1690,11 @@ impl Splat {
         if std::mem::take(&mut self.sessions.wants_sessions_page) {
             self.page = Page::Sessions;
         }
+        if std::mem::take(&mut self.sessions.wants_recording_input) {
+            self.page = Page::Settings;
+            self.settings_tab = SettingsTab::Recording;
+            self.processing.focus_input = true;
+        }
         if std::mem::take(&mut self.sessions.wants_processing_settings) {
             self.page = Page::Settings;
             self.settings_tab = SettingsTab::Recording;

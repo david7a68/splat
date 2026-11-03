@@ -197,8 +197,6 @@ pub struct Sessions {
     reading_note: bool,
     /// The event open in place in the plan.
     open_event: Option<String>,
-    focus_event_title: bool,
-    new_event_title: Option<String>,
     reveal_event: bool,
     open_planned: Option<String>,
     show_fight_log: bool,
@@ -258,6 +256,8 @@ pub struct Sessions {
     /// A step of the run came between. The next word typed starts a line of its own.
     break_before_words: bool,
     note_editor_id: Option<egui::Id>,
+    conflict_at: Option<(PathBuf, usize)>,
+    move_run_here: Option<(Uuid, String)>,
     /// When a recording last stopped, so the rail can say it was kept.
     saved_at: Option<Instant>,
     note_had_focus: bool,
@@ -270,6 +270,7 @@ pub struct Sessions {
     /// The Sessions page is showing, so a button there need not lead here.
     pub on_page: bool,
     pub wants_processing_settings: bool,
+    pub wants_recording_input: bool,
     /// The DM asked to see the session this is about.
     pub wants_sessions_page: bool,
     pub wants_event: Option<String>,
@@ -313,17 +314,27 @@ fn plan_row(
     mut words: impl FnMut(&mut egui::Ui),
     mut action: impl FnMut(&mut egui::Ui),
 ) {
-    design::table_row(ui, widths, design::S, |ui, cell| {
-        if cell == 0 {
-            ui.horizontal_top(|ui| {
-                ui.label(Type::Body.rich(ui, icon).color(colors().muted));
-                ui.vertical(&mut words);
-            });
-        } else {
+    ui.horizontal_top(|ui| {
+        ui.spacing_mut().item_spacing.x = design::S;
+        for (cell, width) in widths.iter().enumerate() {
             ui.allocate_ui_with_layout(
-                egui::vec2(ui.available_width(), Density::Read.control()),
-                egui::Layout::right_to_left(egui::Align::Center),
-                &mut action,
+                egui::vec2(*width, 0.0),
+                egui::Layout::top_down(egui::Align::Min),
+                |ui| {
+                    ui.set_width(*width);
+                    if cell == 0 {
+                        ui.horizontal_top(|ui| {
+                            ui.label(Type::Body.rich(ui, icon).color(colors().muted));
+                            ui.vertical(&mut words);
+                        });
+                    } else {
+                        ui.allocate_ui_with_layout(
+                            egui::vec2(ui.available_width(), Density::Read.control()),
+                            egui::Layout::right_to_left(egui::Align::Center),
+                            &mut action,
+                        );
+                    }
+                },
             );
         }
     });
@@ -331,14 +342,52 @@ fn plan_row(
 
 /// A paused run needs its state here; the whole saved-run record stays in Encounters.
 fn plan_saved_status(saved: &crate::encounter_run::SavedRunInfo) -> String {
-    if saved.label.contains("Preparing") {
-        "Preparing".to_owned()
-    } else {
-        format!(
-            "{} · Paused",
-            saved.label.split(" · ").next().unwrap_or(&saved.label)
-        )
-    }
+    saved.state_words(true)
+}
+
+fn plan_link(ui: &mut egui::Ui, label: &str, open: bool) -> egui::Response {
+    let response = design::wrapped_link(ui, label);
+    design::named(ui, &response, label);
+    ui.ctx()
+        .accesskit_node_builder(response.id, |node| node.set_expanded(open));
+    response
+}
+
+fn plan_details(ui: &mut egui::Ui, add: impl FnOnce(&mut egui::Ui)) {
+    ui.horizontal_top(|ui| {
+        ui.add_space(Type::Body.size() + design::S);
+        ui.vertical(add);
+    });
+}
+
+fn plan_rule(ui: &mut egui::Ui) {
+    ui.add_space(design::S);
+    design::rule(ui);
+}
+
+/// A title and its date wrap together, and expose the full title to assistive tools.
+fn note_title(ui: &mut egui::Ui, title: &str, date: &str) {
+    let mut job = egui::text::LayoutJob::default();
+    job.append(
+        title,
+        0.0,
+        egui::TextFormat {
+            font_id: Type::Title.font(ui),
+            color: colors().text,
+            ..Default::default()
+        },
+    );
+    job.append(
+        &format!("  {date}"),
+        0.0,
+        egui::TextFormat {
+            font_id: Type::Small.font(ui),
+            color: colors().muted,
+            ..Default::default()
+        },
+    );
+    let response = ui.add(egui::Label::new(job).wrap());
+    design::named(ui, &response, &format!("{title} · {date}"));
 }
 
 /// A played fight names its result and last round once, on the row's second line.
@@ -464,34 +513,60 @@ fn words_to_read(body: &str, book: &Book) -> String {
     without_empty_sections(&crate::world::with_links(&linked, &Default::default()))
 }
 
+/// Keep a note's plan links in its file, but avoid listing the same fights twice in Read.
+fn compact_plan_for_reading(body: &str, fights: &[PlanFight], beside: bool) -> String {
+    let Some(plan) = section_text(body, "Plan for tonight") else {
+        return body.to_owned();
+    };
+    let lines: Vec<_> = plan
+        .lines()
+        .filter(|line| !line.trim().is_empty())
+        .collect();
+    let only_fights = !lines.is_empty()
+        && lines.iter().all(|line| {
+            let link = line
+                .trim()
+                .strip_prefix("- ")
+                .or_else(|| line.trim().strip_prefix("* "));
+            link.and_then(|link| {
+                link.strip_prefix("[[")
+                    .and_then(|link| link.strip_suffix("]]"))
+            })
+            .is_some_and(|name| {
+                fights.iter().any(|fight| {
+                    fight
+                        .name
+                        .eq_ignore_ascii_case(name.split('|').next().unwrap_or(name))
+                })
+            })
+        });
+    if !only_fights {
+        return body.to_owned();
+    }
+    let words = format!(
+        "{}, in the plan{}",
+        design::count(lines.len(), "fight", "fights"),
+        if beside { " at left" } else { "" }
+    );
+    let heading = body
+        .split_inclusive('\n')
+        .scan(0, |offset, line| {
+            let at = *offset;
+            *offset += line.len();
+            Some((at, line))
+        })
+        .find(|(_, line)| line.trim_end() == "## Plan for tonight")
+        .map_or(0, |(at, _)| at);
+    let start = heading + body[heading..].find(&plan).expect("the plan section");
+    let mut reading = body.to_owned();
+    reading.replace_range(start..start + plan.len(), &words);
+    reading
+}
+
 /// The fields of one event, in place in a session's plan. Returns whether any changed.
-fn event_fields(
-    ui: &mut egui::Ui,
-    event: &mut timeline::Event,
-    focus: &mut bool,
-    new_title: &mut Option<String>,
-) -> bool {
+fn event_fields(ui: &mut egui::Ui, event: &mut timeline::Event) -> bool {
     let title = design::text_field(ui, "Title", &mut event.title, None, None);
-    if std::mem::take(focus) {
-        title.request_focus();
-    }
-    let enter = ui.input(|input| input.key_pressed(egui::Key::Enter));
-    let escape = ui.input(|input| input.key_pressed(egui::Key::Escape));
     let mut changed = title.changed();
-    if (title.has_focus() || title.lost_focus()) && (enter || escape) {
-        if escape && new_title.as_ref() == Some(&event.id) {
-            event.title.clear();
-            changed = true;
-        }
-        *new_title = None;
-        title.surrender_focus();
-    } else if title.lost_focus() {
-        *new_title = None;
-    }
-    if event.kind != Kind::Day {
-        changed |= design::text_field(ui, "How long", &mut event.duration, None, None).changed();
-    }
-    changed |= design::text_field(ui, "Where", &mut event.place, None, None).changed();
     design::field(ui, "Notes", None, None, |ui| {
         let response = ui.add(
             egui::TextEdit::multiline(&mut event.notes)
@@ -520,7 +595,7 @@ fn note_width<R>(ui: &mut egui::Ui, add: impl FnOnce(&mut egui::Ui) -> R) -> R {
 fn dated_before_today(note: &Note, today: &str) -> Option<String> {
     (note.date.as_str() < today).then(|| {
         format!(
-            "This session is dated {}. If you play a new one tonight, start it first. Play this one changes its date to today.",
+            "This session is dated {}. Play it tonight, or start a new one.",
             note.date
         )
     })
@@ -579,9 +654,15 @@ fn session_row(ui: &mut egui::Ui, selected: bool, title: &str, detail: &str) -> 
     let galley = ui
         .painter()
         .layout(title.to_owned(), font.font(ui), c.text, width);
-    let second = ui
-        .painter()
-        .layout(detail.to_owned(), Type::Small.font(ui), c.muted, width);
+    let second = ui.painter().layout(
+        detail.replace(
+            &format!("{} Playing", icons::RUN),
+            &format!("{}\u{a0}Playing", icons::RUN),
+        ),
+        Type::Small.font(ui),
+        c.muted,
+        width,
+    );
     let lines = galley.size().y + second.size().y;
     let height = (lines + design::M).max(Density::Glance.control() + design::S);
     design::row(
@@ -601,11 +682,18 @@ fn session_row(ui: &mut egui::Ui, selected: bool, title: &str, detail: &str) -> 
 }
 
 fn recording_detail(words: &str) -> String {
-    let detail = words
-        .strip_prefix("Failed: ")
-        .or_else(|| words.strip_prefix("Processing cancelled: "))
-        .or_else(|| words.strip_prefix("Stopped by itself: "))
-        .unwrap_or(words);
+    if let Some(cancelled) = words.strip_prefix("Processing cancelled: ") {
+        if let Some(tail) = cancelled.strip_prefix("Transcribing part ") {
+            let part = tail.split('.').next().unwrap_or(tail);
+            return format!("Cancelled at part {part}. Continue processing goes on from there.");
+        }
+        let step = cancelled.split(". Cancelled.").next().unwrap_or(cancelled);
+        return format!("Cancelled during {step}. Continue processing goes on from there.");
+    }
+    if words.starts_with("Stopped by itself:") {
+        return format!("{}. Check the microphone in", words.trim_end_matches('.'));
+    }
+    let detail = words.strip_prefix("Failed: ").unwrap_or(words);
     if let Some((step, rest)) = detail.split_once(", ")
         && let Some((elapsed, error)) = rest.split_once(". ")
         && elapsed.ends_with(" s")
@@ -951,7 +1039,7 @@ impl Sessions {
                 self.notice = None;
             }
             Err(error) if error == processing::CANCELLED => {
-                self.notice = Some((Tone::Info, error));
+                self.notice = None;
             }
             Err(error) => {
                 self.notice = None;
@@ -1482,12 +1570,11 @@ impl Sessions {
     fn record_blocked(&self, settings: &ProcessingSettings) -> Option<String> {
         if let Some(live) = &self.live {
             Some(format!("Stop the recording of {} first.", live.label))
-        } else if self
-            .draft
-            .as_ref()
-            .is_some_and(|draft| draft.state == DraftState::Missing)
-        {
-            Some("Save your words first.".to_owned())
+        } else if self.draft.as_ref().is_some_and(Draft::needs_attention) {
+            Some(
+                "Choose what to do with this note before recording or starting a session."
+                    .to_owned(),
+            )
         } else if settings.probing() {
             Some("Looking for a recorder.".to_owned())
         } else if settings.tool().is_none() {
@@ -1533,8 +1620,11 @@ impl Sessions {
         {
             self.confirm_record = true;
         }
-        if let Some(reason) = reason {
+        if let Some(reason) =
+            reason.filter(|_| !self.draft.as_ref().is_some_and(Draft::needs_attention))
+        {
             ui.label(Type::Small.rich(ui, reason).color(colors().muted));
+            ui.add_space(design::L);
         }
     }
 
@@ -1590,7 +1680,11 @@ impl Sessions {
                                         }
                                     ),
                                 )
-                                .color(c.recording),
+                                .color(if *health == Health::Silent {
+                                    c.result.warning
+                                } else {
+                                    c.recording
+                                }),
                         );
                         ui.label(Type::Small.rich(ui, word).color(color));
                         if *health == Health::Silent
@@ -1742,10 +1836,10 @@ impl Sessions {
                     {
                         draft.overwrite();
                     }
-                    if Action::quiet("Show disk version").show(ui).clicked() {
-                        draft.show_disk();
-                    }
-                    if Action::quiet("Reload and lose my draft").show(ui).clicked()
+                    ui.add_space(design::L);
+                    if Action::destructive("Reload and lose my draft")
+                        .show(ui)
+                        .clicked()
                         && draft.reload_keeping_undo().is_err()
                     {
                         draft.state = DraftState::Missing;
@@ -1903,6 +1997,7 @@ impl Sessions {
             ),
         ));
         self.notice_session = Some(new);
+        self.move_run_here = self.notice.as_ref().map(|(_, words)| (new, words.clone()));
     }
 
     fn submit_form(&mut self, form: &Form) -> Result<Uuid, String> {
@@ -1978,7 +2073,7 @@ impl Sessions {
                             let state = self
                                 .recording_status()
                                 .map_or("Recording", |(_, word, _)| word);
-                            format!("{} · {state}", note.date)
+                            state.to_owned()
                         } else if job == Some(note.id) {
                             format!("{} · Processing", note.date)
                         } else if result == Some(note.id) {
@@ -2033,31 +2128,65 @@ impl Sessions {
             if let Some(disk) = &draft.on_disk {
                 let left: Vec<_> = draft.body.lines().collect();
                 let right: Vec<_> = disk.lines().collect();
+                let differences: Vec<_> = (0..left.len().max(right.len()))
+                    .filter(|&line| left.get(line) != right.get(line))
+                    .collect();
+                let first = differences.first().copied().unwrap_or(0);
+                let initial = self
+                    .conflict_at
+                    .as_ref()
+                    .is_none_or(|(path, _)| *path != draft.path);
+                let mut target = initial.then_some(first);
+                if initial {
+                    self.conflict_at = Some((draft.path.clone(), first));
+                }
+                ui.horizontal(|ui| {
+                    let words = if differences.is_empty() {
+                        "No lines differ".to_owned()
+                    } else {
+                        design::count(differences.len(), "line differs", "lines differ")
+                    };
+                    ui.label(Type::Small.rich(ui, words).color(colors().muted));
+                    if !differences.is_empty()
+                        && Action::quiet("Next difference").show(ui).clicked()
+                    {
+                        let current = self.conflict_at.as_ref().map_or(first, |(_, line)| *line);
+                        let next = differences
+                            .iter()
+                            .copied()
+                            .find(|&line| line > current)
+                            .unwrap_or(first);
+                        self.conflict_at = Some((draft.path.clone(), next));
+                        target = Some(next);
+                    }
+                });
+                ui.columns(2, |columns| {
+                    design::group_label(&mut columns[0], "Your draft");
+                    design::group_label(&mut columns[1], "In the file now");
+                });
+                let comparison_height = ui.available_height();
                 egui::ScrollArea::vertical()
-                    .id_salt("conflict_versions")
+                    .id_salt(("conflict_versions", &draft.path))
                     .auto_shrink([false, false])
                     .show(ui, |ui| {
-                        ui.columns(2, |columns| {
-                            for (at, (label, lines)) in
-                                [("Your draft", &left), ("In the file now", &right)]
-                                    .into_iter()
-                                    .enumerate()
-                            {
-                                design::group_label(&mut columns[at], label);
-                                for (line, text) in lines.iter().enumerate() {
-                                    let differs = left.get(line) != right.get(line);
+                        for line in 0..left.len().max(right.len()) {
+                            let differs = left.get(line) != right.get(line);
+                            let top = ui.cursor().top();
+                            ui.columns(2, |columns| {
+                                for (at, lines) in [&left, &right].into_iter().enumerate() {
                                     let fill = if differs {
                                         colors().selected
                                     } else {
                                         colors().page
                                     };
                                     egui::Frame::new().fill(fill).show(&mut columns[at], |ui| {
+                                        ui.set_min_width(ui.available_width());
                                         ui.horizontal_top(|ui| {
+                                            let (mark, _) = ui.allocate_exact_size(
+                                                egui::vec2(design::XS, Type::Body.line()),
+                                                egui::Sense::hover(),
+                                            );
                                             if differs {
-                                                let (mark, _) = ui.allocate_exact_size(
-                                                    egui::vec2(design::XS, Type::Small.line()),
-                                                    egui::Sense::hover(),
-                                                );
                                                 ui.painter().vline(
                                                     mark.center().x,
                                                     mark.y_range(),
@@ -2067,22 +2196,31 @@ impl Sessions {
                                                     ),
                                                 );
                                             }
-                                            let width = ui.available_width();
-                                            let galley = crate::markdown_source::layouter(
-                                                ui,
-                                                &text.to_string(),
-                                                width,
+                                            ui.add(
+                                                egui::Label::new(Type::Body.rich(
+                                                    ui,
+                                                    lines.get(line).copied().unwrap_or(" "),
+                                                ))
+                                                .wrap(),
                                             );
-                                            ui.add(egui::Label::new(galley).wrap());
                                         });
                                     });
                                 }
+                            });
+                            if target == Some(line) {
+                                let rect = egui::Rect::from_min_size(
+                                    egui::pos2(ui.min_rect().left(), top),
+                                    egui::vec2(ui.available_width(), Type::Body.line()),
+                                );
+                                ui.scroll_to_rect(rect, Some(egui::Align::TOP));
                             }
-                        });
+                        }
+                        ui.add_space((comparison_height - Type::Body.line()).max(0.0));
                     });
                 return;
             }
         }
+        self.conflict_at = None;
         let focus = std::mem::take(&mut self.focus_notes);
         // A stray click leaves the keyboard on nothing, and the DM's eyes can be on the table.
         // With no field to go to, what they type still belongs in the note.
@@ -2154,6 +2292,15 @@ impl Sessions {
                     .min_size(egui::vec2(0.0, ui.available_height()))
                     .show(ui);
                 crate::markdown_source::paint_section_rules(ui, &output);
+                if in_panel && let Some(at) = draft.body.find("## What happened") {
+                    // Even a short note must scroll its repeated heading out of the panel.
+                    let heading = draft.body[..at].chars().count();
+                    let offset = output
+                        .galley
+                        .pos_from_cursor(egui::text::CCursor::new(heading))
+                        .top();
+                    ui.add_space(offset.max(0.0));
+                }
                 let response = output.response;
                 design::named(ui, &response, "Note text");
                 self.note_had_focus = response.has_focus();
@@ -2175,9 +2322,23 @@ impl Sessions {
                 if let Some(caret) = self.caret_to_show.take() {
                     let rect = output
                         .galley
-                        .pos_from_cursor(egui::text::CCursor::new(caret))
+                        .pos_from_cursor(egui::text::CCursor::new(if in_panel {
+                            draft
+                                .body
+                                .find("## What happened")
+                                .map_or(caret, |at| draft.body[..at].chars().count())
+                        } else {
+                            caret
+                        }))
                         .translate(output.galley_pos.to_vec2());
-                    ui.scroll_to_rect(rect, Some(egui::Align::Center));
+                    ui.scroll_to_rect(
+                        rect,
+                        Some(if in_panel {
+                            egui::Align::TOP
+                        } else {
+                            egui::Align::Center
+                        }),
+                    );
                 }
                 if focus {
                     response.request_focus();
@@ -2286,10 +2447,17 @@ impl Sessions {
                     .selected
                     .and_then(|id| self.notes.iter().find(|note| note.id == id))
                     .map_or_else(|| "Notes".to_owned(), Note::label);
-                if design::panel_header(ui, &title, "Close notes") {
-                    self.notes_open = false;
-                    return;
-                }
+                let date = self.selected.and_then(|id| self.notes.iter().find(|note| note.id == id)).map_or("", |note| note.date.as_str());
+                let mut close = false;
+                ui.horizontal_top(|ui| {
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Min), |ui| {
+                        close = design::icon_button(ui, icons::CLOSE, "Close notes").clicked();
+                        ui.with_layout(egui::Layout::left_to_right(egui::Align::Min), |ui| note_title(ui, &title, date));
+                    });
+                });
+                if let Some(draft) = &self.draft { Self::note_status(ui, draft); }
+                design::rule(ui);
+                if close { self.notes_open = false; return; }
                 if self.selected.is_none() {
                     design::message(ui, Tone::Info, "No session yet.");
                     if Action::primary("New session").show(ui).clicked() {
@@ -2311,21 +2479,20 @@ impl Sessions {
                     .and_then(|id| self.notes.iter().find(|note| note.id == id));
                 let mut play = false;
                 let mut start = false;
-                if let Some(note) = note {
-                    ui.label(Type::Small.rich(ui, &note.date).color(colors().muted));
-                    if let Some(words) = dated_before_today(note, &today) {
+                if let Some(note) = note
+                    && let Some(words) = dated_before_today(note, &today)
+                {
                         design::message(ui, Tone::Warning, &words);
                         ui.horizontal(|ui| {
-                            play = Action::secondary("Play this one")
+                            play = Action::secondary("Play it tonight")
                                 .density(Density::Read)
                                 .show(ui)
                                 .clicked();
-                            start = Action::secondary("New session")
+                            start = Action::quiet("New session")
                                 .density(Density::Read)
                                 .show(ui)
                                 .clicked();
                         });
-                    }
                 }
                 if play {
                     self.play_this_one();
@@ -2333,14 +2500,11 @@ impl Sessions {
                 if start {
                     self.start_new_session();
                 }
-                if let Some(draft) = &self.draft {
-                    Self::note_status(ui, draft);
-                }
                 self.note_editor(ui, true);
             });
     }
 
-    fn read_tab(&mut self, ui: &mut egui::Ui, book: &Book) {
+    fn read_tab(&mut self, ui: &mut egui::Ui, book: &Book, plan: &Plan<'_>, beside: bool) {
         let Some(draft) = &self.draft else {
             return;
         };
@@ -2351,12 +2515,26 @@ impl Sessions {
             || draft.body.clone(),
             |note| without_own_heading(&draft.body, note),
         );
-        let text = words_to_read(&body, book);
+        let compact = compact_plan_for_reading(&body, plan.fights, beside);
+        let summary = (compact != body)
+            .then(|| section_text(&compact, "Plan for tonight"))
+            .flatten();
+        let text = words_to_read(&compact, book);
         egui::ScrollArea::vertical()
             .id_salt(("session_reader", self.selected))
             .auto_shrink([false, false])
             .show(ui, |ui| {
-                note_width(ui, |ui| markdown_view::show_reader(ui, &text));
+                note_width(ui, |ui| {
+                    if let Some(summary) = &summary
+                        && let Some((before, after)) = text.split_once(summary)
+                    {
+                        markdown_view::show_reader(ui, before);
+                        ui.label(Type::Small.rich(ui, summary).color(colors().muted));
+                        markdown_view::show_reader(ui, after);
+                    } else {
+                        markdown_view::show_reader(ui, &text);
+                    }
+                });
             });
         if let Some(target) = markdown_view::take_note_link(ui.ctx()) {
             if let Some(id) = target.strip_prefix("Timeline#^") {
@@ -2374,9 +2552,9 @@ impl Sessions {
     }
 
     /// The note, as one view: words to write, or the same words to read.
-    fn note_pane(&mut self, ui: &mut egui::Ui, book: &Book) {
+    fn note_pane(&mut self, ui: &mut egui::Ui, book: &Book, plan: &Plan<'_>, beside: bool) {
         if self.reading_note {
-            self.read_tab(ui, book);
+            self.read_tab(ui, book, plan, beside);
         } else {
             self.note_editor(ui, false);
         }
@@ -2611,6 +2789,9 @@ impl Sessions {
                 });
                 if let Some(id) = &added {
                     // A long rest and its HP ruling are one operation and one Undo.
+                    if let Some(event) = book.events.iter_mut().find(|event| event.id == *id) {
+                        event.title = event.kind.word().to_owned();
+                    }
                     let next_order = book.next_order();
                     if let Some(event) = book.events.iter_mut().find(|event| event.id == *id)
                         && event.kind == Kind::LongRest
@@ -2626,10 +2807,7 @@ impl Sessions {
                         at: Instant::now(),
                         count: book.events.len(),
                     });
-                    self.open_event = Some(id.clone());
-                    self.focus_event_title = true;
-                    self.new_event_title = Some(id.clone());
-                    self.reveal_event = true;
+                    self.open_event = None;
                 }
             });
         let days = timeline::day_numbers(&book.events);
@@ -2684,6 +2862,7 @@ impl Sessions {
                 let width = ui.available_width() - design::M;
                 let widths = [width - PLAN_ACTION - design::S, PLAN_ACTION];
                 let mut any = false;
+                let mut primary_available = plan.open_run.is_none() && !self.confirm_record;
                 for (at, event) in book.events.iter_mut().enumerate() {
                     if !event.is_in(session) { continue; }
                     any = true;
@@ -2703,11 +2882,11 @@ impl Sessions {
                         event.summary(None)
                     };
                     let row = ui.push_id(event.id.clone(), |ui| {
-                        plan_row(ui, &row_widths, event.kind.icon(), |ui| {
-                            if design::wrapped_link(ui, &label).clicked() { toggle = Some(event.id.clone()); }
+                        plan_row(ui, &row_widths, if is_open { icons::DOWN } else { icons::NEXT }, |ui| {
+                            if plan_link(ui, &label, is_open).clicked() { toggle = Some(event.id.clone()); }
                             if running {
                                 if design::status_link(ui, Status { icon: icons::RUN,
-                                    word: &format!("Running · Round {}", plan.open_round), color: c.text }).clicked() {
+                                    word: &crate::encounter_run::run_state_words(plan.open_round, false, false), color: c.text }).clicked() {
                                     self.wants_back_to_run = true;
                                 }
                             } else if let Some(saved) = saved {
@@ -2722,9 +2901,7 @@ impl Sessions {
                             }
                         }, |ui| {
                             if let Some(saved) = saved {
-                                if design::split_action(ui, Action::secondary("Resume")
-                                    .name(&format!("Resume: {label}")).blocked(plan.blocked).density(Density::Read),
-                                    &format!("More actions for {label}"), |ui| {
+                                design::row_menu(ui, &label, |ui| {
                                     if let Some(fight) = saved_fight
                                         && Action::quiet("Start a new run").blocked(plan.blocked).show(ui).clicked() {
                                         self.wants_fight = Some(fight.path.clone()); ui.close();
@@ -2735,7 +2912,11 @@ impl Sessions {
                                     if Action::quiet("Remove").name("Remove this event").show(ui).clicked() {
                                         remove = Some(event.id.clone()); ui.close();
                                     }
-                                }).clicked() { self.wants_saved_run = Some(saved.path.clone()); }
+                                });
+                                let action = if std::mem::take(&mut primary_available) { Action::primary("Resume") } else { Action::secondary("Resume") };
+                                if action.name(&format!("Resume: {label}")).blocked(plan.blocked).density(Density::Read).show(ui).clicked() {
+                                    self.wants_saved_run = Some(saved.path.clone());
+                                }
                             } else {
                                 // Overflow is always at the row's right edge.
                                 let more = design::icon_button(ui, icons::EXPAND, &format!("More actions for {label}"));
@@ -2754,17 +2935,15 @@ impl Sessions {
                                 }
                             }
                         });
-                        if let Some(reason) = plan.blocked.filter(|_| saved.is_some() && !running) {
-                            wrapped_words(ui, Type::Small, reason, c.muted);
-                        }
                         if is_open {
+                            plan_details(ui, |ui| {
                             if running {
                                 self.fight = None;
                                 wrapped_words(ui, Type::Small, "This fight is running. Its final HP shows here when it ends.", c.muted);
                             } else if let Some(run) = event.run {
                                 self.fight_block(ui, run, &event.id, plan);
                             } else {
-                                changed |= event_fields(ui, event, &mut self.focus_event_title, &mut self.new_event_title);
+                                changed |= event_fields(ui, event);
                                 if event.kind == Kind::LongRest && event.restores
                                     && design::link(ui, "Not at full").clicked() {
                                     event.restores = false;
@@ -2772,7 +2951,9 @@ impl Sessions {
                                 }
                                 if design::link(ui, "Timeline").clicked() { self.wants_event = Some(event.id.clone()); }
                             }
+                            });
                         }
+                        plan_rule(ui);
                     });
                     // The opened row and the next row stay in reach.
                     if is_open && std::mem::take(&mut self.reveal_event) { row.response.scroll_to_me(Some(egui::Align::TOP)); }
@@ -2781,13 +2962,13 @@ impl Sessions {
                     any = true;
                     let running = plan.open_run.is_some() && plan.open_encounter == Some(fight.name.as_str());
                     ui.push_id((&fight.path, position), |ui| {
-                        plan_row(ui, &widths, icons::ENCOUNTERS, |ui| {
-                            if design::wrapped_link(ui, &fight.name).clicked() {
+                        plan_row(ui, &widths, if self.open_planned.as_ref() == Some(&fight.path) { icons::DOWN } else { icons::NEXT }, |ui| {
+                            if plan_link(ui, &fight.name, self.open_planned.as_ref() == Some(&fight.path)).clicked() {
                                 self.open_planned = (self.open_planned.as_ref() != Some(&fight.path)).then(|| fight.path.clone());
                             }
                             if running {
                                 if design::status_link(ui, Status { icon: icons::RUN,
-                                    word: &format!("Running · Round {}", plan.open_round), color: c.text }).clicked() {
+                                    word: &crate::encounter_run::run_state_words(plan.open_round, false, false), color: c.text }).clicked() {
                                     self.wants_back_to_run = true;
                                 }
                             } else if let Some(saved) = &fight.saved {
@@ -2797,18 +2978,20 @@ impl Sessions {
                             if running {
                                 // The run strip owns Back to run.
                             } else if let Some(saved) = &fight.saved {
-                                if design::split_action(ui, Action::secondary("Resume")
-                                    .name(&format!("Resume: {}", fight.name)).density(Density::Read).blocked(plan.blocked),
-                                    &format!("More actions for {}", fight.name), |ui| {
+                                design::row_menu(ui, &fight.name, |ui| {
                                     if Action::quiet("Start a new run").blocked(plan.blocked).show(ui).clicked() {
                                         self.wants_fight = Some(fight.path.clone()); ui.close();
                                     }
                                     if Action::quiet("Delete the saved run").blocked(plan.blocked).show(ui).clicked() {
                                         delete_run = Some(saved.clone()); ui.close();
                                     }
-                                }).clicked() { self.wants_saved_run = Some(saved.path.clone()); }
+                                });
+                                let action = if std::mem::take(&mut primary_available) { Action::primary("Resume") } else { Action::secondary("Resume") };
+                                if action.name(&format!("Resume: {}", fight.name)).density(Density::Read).blocked(plan.blocked).show(ui).clicked() {
+                                    self.wants_saved_run = Some(saved.path.clone());
+                                }
                             } else {
-                                let action = if position == 0 && plan.open_run.is_none() && !self.confirm_record {
+                                let action = if std::mem::take(&mut primary_available) {
                                     Action::primary("Start fight")
                                 } else { Action::secondary("Start fight") };
                                 if action.icon(icons::RUN).name(&format!("Start fight: {}", fight.name))
@@ -2817,9 +3000,12 @@ impl Sessions {
                                 }
                             }
                         });
-                        if let Some(reason) = plan.blocked.filter(|_| !running) { wrapped_words(ui, Type::Small, reason, c.muted); }
-                        if self.open_planned.as_ref() == Some(&fight.path)
-                            && design::link(ui, "Read encounter").clicked() { self.wants_lookup = Some(fight.name.clone()); }
+                        if self.open_planned.as_ref() == Some(&fight.path) {
+                            plan_details(ui, |ui| {
+                                if design::link(ui, "Read encounter").clicked() { self.wants_lookup = Some(fight.name.clone()); }
+                            });
+                        }
+                        plan_rule(ui);
                     });
                 }
                 for group in &planned_groups {
@@ -2842,7 +3028,7 @@ impl Sessions {
                             }
                         });
                         if read_group { self.wants_group = Some(group.path.clone()); self.group_session = self.selected; }
-                        if let Some(reason) = plan.group_blocked.filter(|_| !plan.arrivals_open) { wrapped_words(ui, Type::Small, reason, c.muted); }
+                        plan_rule(ui);
                     });
                 }
                 if !any {
@@ -2885,18 +3071,7 @@ impl Sessions {
     /// What can be undone in the plan: the event just added or just removed.
     fn plan_messages(&mut self, ui: &mut egui::Ui, book: &mut Book, session: Option<Uuid>) {
         if let Some(deleted) = &self.deleted_run {
-            let words = format!(
-                "Deleted the saved run of {}. {}",
-                deleted.encounter,
-                if deleted.unsent.is_empty() {
-                    String::new()
-                } else {
-                    format!(
-                        "HP changes were not sent for {}.",
-                        deleted.unsent.join(", ")
-                    )
-                }
-            );
+            let words = deleted.message();
             if design::message_with_action(ui, Tone::Info, &words, "Undo delete run") {
                 match deleted.restore() {
                     Ok(()) => {
@@ -3143,7 +3318,42 @@ impl Sessions {
         let length = recording
             .seconds
             .map_or_else(|| "Unknown length".to_owned(), spoken_length);
-        ui.label(Type::Strong.rich(ui, &recording.title).color(c.text));
+        let mut delete = false;
+        ui.horizontal(|ui| {
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                design::row_menu(ui, &recording.title, |ui| {
+                    let busy = live
+                        || self
+                            .job
+                            .as_ref()
+                            .is_some_and(|(job, _)| job.recording == recording.path);
+                    ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
+                        delete = Action::quiet("Delete…")
+                            .name(&format!("Delete recording: {}", recording.name))
+                            .density(Density::Read)
+                            .blocked_if(busy, "This recording is in use.")
+                            .show(ui)
+                            .clicked();
+                        if busy {
+                            ui.label(
+                                Type::Small
+                                    .rich(ui, "This recording is in use.")
+                                    .color(c.muted),
+                            );
+                        }
+                    });
+                    if delete {
+                        ui.close();
+                    }
+                });
+                ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
+                    ui.add(
+                        egui::Label::new(Type::Strong.rich(ui, &recording.title).color(c.text))
+                            .wrap(),
+                    );
+                });
+            });
+        });
         let processing = self
             .job
             .as_ref()
@@ -3167,7 +3377,11 @@ impl Sessions {
             } else {
                 "Stopped"
             };
-            (icons::WARN, state, c.result.warning)
+            if state == "Cancelled" {
+                (icons::WARN, state, c.result.warning)
+            } else {
+                (icons::ERROR, state, c.result.error)
+            }
         } else if recording.warning.is_some() {
             (icons::WARN, "Processed, with a warning", c.result.warning)
         } else if recording.summary {
@@ -3178,13 +3392,29 @@ impl Sessions {
             (icons::RECORD, "Not processed", c.muted)
         };
         design::status(ui, Status { icon, word, color }).on_hover_text(word);
-        if let Some(words) = stored {
-            ui.add(
-                egui::Label::new(Type::Small.rich(ui, recording_detail(words)).color(c.muted))
-                    .wrap(),
+        if let Some(words) = stored.as_ref().filter(|_| !live && !processing) {
+            ui.horizontal_wrapped(|ui| {
+                ui.add(
+                    egui::Label::new(Type::Small.rich(ui, recording_detail(words)).color(c.muted))
+                        .wrap(),
+                );
+                if words.starts_with("Stopped by itself:") && design::link(ui, "Settings").clicked()
+                {
+                    self.wants_recording_input = true;
+                }
+            });
+        }
+        if live {
+            ui.label(
+                Type::Small
+                    .rich(
+                        ui,
+                        "Stop recording before processing or changing campaigns.",
+                    )
+                    .color(c.muted),
             );
         }
-        if let Some(warning) = &recording.warning {
+        if let Some(warning) = recording.warning.as_ref().filter(|_| !live && !processing) {
             design::message(ui, Tone::Warning, warning);
         }
         let job_here = self
@@ -3210,16 +3440,15 @@ impl Sessions {
                     {
                         open = Some(made);
                     }
+                    if made == Made::Transcript && recording.check_missing() {
+                        ui.label(Type::Small.rich(ui, "No check ran").color(c.muted));
+                    }
                 }
             });
         }
-        if recording.check_missing() {
-            ui.label(Type::Small.rich(ui, "No check ran").color(c.muted));
-        }
         let mut process = false;
         let mut again = false;
-        let mut delete = false;
-        ui.horizontal(|ui| {
+        ui.horizontal_wrapped(|ui| {
             if job_here {
                 let words = self
                     .job
@@ -3257,7 +3486,11 @@ impl Sessions {
             if !job_here {
                 let label = if recording.summary {
                     "Process again"
-                } else if recording.transcript {
+                } else if recording.transcript
+                    || recording.status.as_ref().is_some_and(|words| {
+                        words.starts_with("Failed") || words.starts_with("Processing cancelled")
+                    })
+                {
                     "Continue processing"
                 } else {
                     "Process"
@@ -3268,34 +3501,29 @@ impl Sessions {
                     .blocked(reason.as_deref())
                     .show(ui)
                     .clicked();
-                if let Some(reason) = &reason {
-                    ui.label(Type::Small.rich(ui, reason).color(c.muted));
+                if let Some(reason) = reason.as_ref().filter(|_| !live && self.job.is_none()) {
+                    let speech = processing::host(&settings.config.speech_url);
+                    let named = if reason.starts_with("Save an API key for this speech service") {
+                        format!(
+                            "Save an {} key in Settings",
+                            if speech == "api.openai.com" {
+                                "OpenAI"
+                            } else {
+                                &speech
+                            }
+                        )
+                    } else {
+                        reason.clone()
+                    };
+                    if design::link(ui, &named).clicked() {
+                        self.wants_processing_settings = true;
+                    }
                 }
                 process = pressed && !recording.summary;
                 again = pressed && recording.summary;
                 ui.add_space(design::L);
             }
-            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                design::row_menu(ui, &recording.title, |ui| {
-                    delete = Action::quiet("Delete…")
-                        .name(&format!("Delete recording: {}", recording.name))
-                        .density(Density::Read)
-                        .blocked_if(live || job_here, "This recording is in use.")
-                        .show(ui)
-                        .clicked();
-                    if delete {
-                        ui.close();
-                    }
-                });
-            });
         });
-        if live || job_here {
-            ui.label(
-                Type::Small
-                    .rich(ui, "This recording is in use.")
-                    .color(c.muted),
-            );
-        }
         if self.confirm_again.as_deref() == Some(recording.path.as_path()) {
             design::message(
                 ui,
@@ -3379,6 +3607,7 @@ impl Sessions {
         }
         let c = colors();
         let session = self.selected;
+        ui.add_space(design::L);
         design::group_heading(
             ui,
             "Events marked in this recording",
@@ -3481,67 +3710,82 @@ impl Sessions {
     fn reading_view(&mut self, ui: &mut egui::Ui, book: &mut Book) {
         let c = colors();
         let session = self.selected;
-        if let Some(reading) = &self.reading {
-            let path = reading.recording.clone();
-            let mut made = reading.made;
-            let options: Vec<_> = [Made::Summary, Made::Marked, Made::Review, Made::Transcript]
-                .into_iter()
-                .filter(|made| {
-                    made.path(&path).exists()
-                        && (*made != Made::Review
-                            || self
-                                .recordings
-                                .iter()
-                                .find(|recording| recording.path == path)
-                                .is_none_or(|recording| !recording.check_missing()))
-                })
-                .map(|made| (made, made.word()))
-                .collect();
-            if design::segmented(ui, &mut made, &options)
-                && let Some(recording) = self
-                    .recordings
-                    .iter()
-                    .find(|recording| recording.path == path)
-                    .cloned()
-            {
-                self.open_reading(&recording, made, None, None);
-            }
-        }
-        let Some(reading) = &mut self.reading else {
+        let Some(reading) = &self.reading else {
             return;
         };
+        let path = reading.recording.clone();
+        let mut made = reading.made;
+        let options: Vec<_> = [Made::Summary, Made::Marked, Made::Review, Made::Transcript]
+            .into_iter()
+            .filter(|made| {
+                made.path(&path).exists()
+                    && (*made != Made::Review
+                        || self
+                            .recordings
+                            .iter()
+                            .find(|recording| recording.path == path)
+                            .is_none_or(|recording| !recording.check_missing()))
+            })
+            .map(|made| (made, made.word()))
+            .collect();
         let mut back = false;
         let mut add_to_notes = None;
+        let mut switched = false;
         let in_notes = self.draft.as_ref().map_or("", |draft| draft.body.as_str());
-        ui.horizontal(|ui| {
+        ui.horizontal_wrapped(|ui| {
             back = Action::quiet("Recordings")
                 .icon(icons::BACK)
                 .name("Back to recordings")
                 .density(Density::Read)
                 .show(ui)
                 .clicked();
-            ui.label(Type::Heading.rich(ui, reading.made.word()).color(c.text));
             ui.label(Type::Small.rich(ui, &reading.name).color(c.muted));
+            switched = design::segmented(ui, &mut made, &options);
             if reading.made == Made::Summary {
-                let summary = nested_in_note(reading.parts[0].1.trim());
-                if in_notes.contains(summary.trim()) {
-                    design::status(
-                        ui,
-                        Status {
-                            icon: icons::OK,
-                            word: "In notes",
-                            color: c.document.saved,
-                        },
-                    );
-                } else if Action::secondary("Add to notes")
-                    .density(Density::Read)
-                    .show(ui)
-                    .clicked()
-                {
-                    add_to_notes = Some(summary);
-                }
+                let action_width = design::number_width(ui, "Add to notes", &Type::Strong.font(ui))
+                    + 2.0 * design::M;
+                let width = if ui.available_width() >= action_width {
+                    ui.available_width()
+                } else {
+                    ui.max_rect().width()
+                };
+                ui.allocate_ui_with_layout(
+                    egui::vec2(width, Density::Read.control()),
+                    egui::Layout::right_to_left(egui::Align::Center),
+                    |ui| {
+                        let summary = nested_in_note(reading.parts[0].1.trim());
+                        if in_notes.contains(summary.trim()) {
+                            design::status(
+                                ui,
+                                Status {
+                                    icon: icons::OK,
+                                    word: "In notes",
+                                    color: c.document.saved,
+                                },
+                            );
+                        } else if Action::secondary("Add to notes")
+                            .density(Density::Read)
+                            .show(ui)
+                            .clicked()
+                        {
+                            add_to_notes = Some(summary);
+                        }
+                    },
+                );
             }
         });
+        if switched
+            && let Some(recording) = self
+                .recordings
+                .iter()
+                .find(|recording| recording.path == path)
+                .cloned()
+        {
+            self.open_reading(&recording, made, None, None);
+        }
+        let Some(reading) = &mut self.reading else {
+            return;
+        };
         if let Some((done, parts)) = reading.short_of {
             design::message(
                 ui,
@@ -3694,13 +3938,7 @@ impl Sessions {
             self.reading_view(ui, book);
             return;
         }
-        if self.live.is_some() {
-            // Processing setup is shown after recording stops.
-        } else if let Some(problem) = settings.problem() {
-            if design::message_with_action(ui, Tone::Info, &problem, "Open Settings") {
-                self.wants_processing_settings = true;
-            }
-        } else {
+        if self.live.is_none() && settings.problem().is_none() {
             let config = &settings.config;
             let llm = if config.provider == processing::Provider::CodexCli {
                 format!("Codex ({})", config.llm_model.trim())
@@ -3756,7 +3994,12 @@ impl Sessions {
             .show(ui, |ui| {
                 for recording in &recordings {
                     ui.add_space(design::S);
-                    self.recording_row(ui, recording, settings, book);
+                    ui.scope_builder(
+                        egui::UiBuilder::new().id(("recording_row", &recording.path)),
+                        |ui| {
+                            self.recording_row(ui, recording, settings, book);
+                        },
+                    );
                     self.markers(ui, recording, book);
                     // Each marker row ends in a rule already.
                     if recording.markers.is_empty() {
@@ -3838,7 +4081,11 @@ impl Sessions {
             }
             return;
         };
-        // The controls first, and the title in what is left. A long title wraps.
+        // At a narrow width the title gets its own line, so controls cannot squeeze it out.
+        let title_on_own_line = ui.available_width() < TWO_COLUMNS_FROM;
+        if title_on_own_line {
+            note_title(ui, &note.label(), &note.date);
+        }
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Min), |ui| {
             self.record_control(ui, settings);
             if Action::quiet("Details")
@@ -3864,27 +4111,9 @@ impl Sessions {
                 );
             }
             ui.with_layout(egui::Layout::left_to_right(egui::Align::Min), |ui| {
-                let room = ui.available_width()
-                    - design::number_width(ui, &note.date, &Type::Small.font(ui))
-                    - design::S;
-                let title = design::words_that_fit(ui, &note.label(), &Type::Title.font(ui), room);
-                let baseline = |words: &str, kind: Type| {
-                    let galley =
-                        ui.painter()
-                            .layout_no_wrap(words.to_owned(), kind.font(ui), c.text);
-                    galley
-                        .rows
-                        .first()
-                        .and_then(|row| row.glyphs.first())
-                        .map_or(0.0, |glyph| glyph.pos.y)
-                };
-                let date_offset = baseline(&title, Type::Title) - baseline(&note.date, Type::Small);
-                ui.label(Type::Title.rich(ui, title).color(c.text))
-                    .on_hover_text(note.label());
-                ui.vertical(|ui| {
-                    ui.add_space(date_offset.max(0.0));
-                    ui.label(Type::Small.rich(ui, &note.date).color(c.muted));
-                });
+                if !title_on_own_line {
+                    note_title(ui, &note.label(), &note.date);
+                }
             });
         });
         self.record_line(ui, settings);
@@ -3897,19 +4126,44 @@ impl Sessions {
             self.job_warned = false;
         }
         if let Some((tone, words)) = self.notice.clone().filter(|_| shown) {
-            ui.horizontal_top(|ui| {
-                let button = Density::Read.control() + design::S;
-                let width = ui.available_width() - button;
-                ui.allocate_ui_with_layout(
-                    egui::vec2(width, 0.0),
-                    egui::Layout::top_down(egui::Align::Min),
-                    |ui| design::message(ui, tone, &words),
-                );
-                if design::icon_button(ui, icons::CLOSE, "Dismiss").clicked() {
+            if let Some(session) = self
+                .move_run_here
+                .as_ref()
+                .filter(|(session, notice)| {
+                    Some(*session) == self.selected && *notice == words && plan.open_run.is_some()
+                })
+                .map(|(session, _)| *session)
+            {
+                if design::message_with_action(ui, tone, &words, "Move it here") {
+                    if let Some(event) = book
+                        .events
+                        .iter_mut()
+                        .find(|event| event.run.is_some() && event.run == plan.open_run)
+                    {
+                        event.session = Some(session);
+                        event.continued_in = None;
+                        book.touch();
+                    }
+                    self.open_run = self.open_run.take().map(|(name, _)| (name, session));
+                    self.move_run_here = None;
                     self.notice = None;
                     self.notice_session = None;
                 }
-            });
+            } else {
+                ui.horizontal_top(|ui| {
+                    let button = Density::Read.control() + design::S;
+                    let width = ui.available_width() - button;
+                    ui.allocate_ui_with_layout(
+                        egui::vec2(width, 0.0),
+                        egui::Layout::top_down(egui::Align::Min),
+                        |ui| design::message(ui, tone, &words),
+                    );
+                    if design::icon_button(ui, icons::CLOSE, "Dismiss").clicked() {
+                        self.notice = None;
+                        self.notice_session = None;
+                    }
+                });
+            }
         }
         if let Some(copy) = note.also.first() {
             design::message(
@@ -3961,7 +4215,6 @@ impl Sessions {
             self.note_editor(ui, false);
             return;
         }
-        let recordings = format!("Recordings ({})", self.recordings.len());
         let editing_group_here = plan.group_open && self.group_session == self.selected;
         let beside = ui.available_width() >= PLAN_BESIDE_NOTE_FROM && !editing_group_here;
         // In a wide page, the note is on the plan's tab, so there is no second one to choose.
@@ -3973,19 +4226,26 @@ impl Sessions {
         let tabs: &[(Tab, &str)] = if beside {
             &[
                 (Tab::Plan, "Plan and notes"),
-                (Tab::Recordings, recordings.as_str()),
+                (Tab::Recordings, "Recordings"),
             ]
         } else {
             &[
                 (Tab::Plan, "Plan"),
                 (Tab::Note, "Note"),
-                (Tab::Recordings, recordings.as_str()),
+                (Tab::Recordings, "Recordings"),
             ]
         };
         ui.horizontal(|ui| {
             if design::segmented(ui, &mut shown, tabs) {
                 self.tab = shown;
                 self.clear_success();
+            }
+            if !self.recordings.is_empty() {
+                ui.label(
+                    Type::Small
+                        .rich(ui, design::count(self.recordings.len(), "", "").trim())
+                        .color(c.muted),
+                );
             }
             if shown != Tab::Recordings {
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
@@ -4015,11 +4275,13 @@ impl Sessions {
                     page_column(ui, PLAN_WIDTH, height, |ui| {
                         self.plan_pane(ui, book, plan);
                     });
-                    page_column(ui, note_width, height, |ui| self.note_pane(ui, book));
+                    page_column(ui, note_width, height, |ui| {
+                        self.note_pane(ui, book, plan, beside)
+                    });
                 });
             }
             Tab::Plan => self.plan_pane(ui, book, plan),
-            Tab::Note => self.note_pane(ui, book),
+            Tab::Note => self.note_pane(ui, book, plan, beside),
             Tab::Recordings => {
                 ui.set_max_width(ui.available_width().min(EDITOR_WIDTH + design::XL));
                 self.recordings_tab(ui, settings, book);
@@ -4250,7 +4512,7 @@ impl Sessions {
             .show(ui, |ui| {
                 for template in &self.templates {
                     let kind = if template.path.is_some() {
-                        "This campaign"
+                        "Campaign"
                     } else {
                         "Built-in"
                     };
@@ -4517,13 +4779,22 @@ impl Sessions {
         book: &mut Book,
         plan: &Plan<'_>,
     ) {
-        let context = design::count(self.notes.len(), "session", "sessions");
+        let (page_title, count, singular, plural) = if self.view == View::Templates {
+            ("Templates", self.templates.len(), "template", "templates")
+        } else {
+            ("Session", self.notes.len(), "session", "sessions")
+        };
+        let context = if count == 0 {
+            String::new()
+        } else {
+            design::count(count, singular, plural)
+        };
         let mut new_session = false;
         let in_form = self.form.is_some();
         let empty = self.notes.is_empty();
         let locked = self.draft.as_ref().is_some_and(Draft::needs_attention);
         let mut stop = false;
-        design::page_header(ui, "Session", Some(&context), |ui| {
+        design::page_header(ui, page_title, Some(&context), |ui| {
             let list_alone = self.list_only && ui.ctx().content_rect().width() < 1500.0;
             if self.view == View::Notes && !in_form && !empty {
                 new_session = Action::secondary("New session")
@@ -4531,13 +4802,6 @@ impl Sessions {
                     .blocked_if(locked, "Choose what to do with this note first.")
                     .show(ui)
                     .clicked();
-                if locked {
-                    ui.label(
-                        Type::Small
-                            .rich(ui, "Choose what to do with this note first.")
-                            .color(colors().muted),
-                    );
-                }
             }
             if self.live.is_some() && (self.view != View::Notes || in_form || list_alone || empty) {
                 stop = Action::quiet("Stop recording")
@@ -4631,6 +4895,30 @@ impl Sessions {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn read_plan_summary_keeps_mixed_notes_and_repeated_fights_in_the_file() {
+        let fights = [PlanFight {
+            saved: None,
+            name: "Bridge Ambush".into(),
+            path: String::new(),
+            summary: String::new(),
+        }];
+        let source = "## Plan for tonight\n\n- [[Bridge Ambush]]\n- [[Bridge Ambush]]\n\n## What happened\n\nWe crossed the bridge.\n";
+        let compact = compact_plan_for_reading(source, &fights, true);
+        assert!(compact.contains("2 fights, in the plan at left"));
+        assert!(!compact.contains("[[Bridge Ambush]]"));
+        assert!(compact.contains("We crossed the bridge."));
+        assert_eq!(source.matches("[[Bridge Ambush]]").count(), 2);
+        let repeated = format!(
+            "## Recap of last time\n\n- [[Bridge Ambush]]\n- [[Bridge Ambush]]\n\n{source}"
+        );
+        let compact = compact_plan_for_reading(&repeated, &fights, true);
+        assert_eq!(compact.matches("[[Bridge Ambush]]").count(), 2);
+        assert!(compact.starts_with("## Recap of last time\n\n- [[Bridge Ambush]]"));
+        let mixed = source.replace("- [[Bridge Ambush]]\n\n##", "- Ask the ferryman.\n\n##");
+        assert_eq!(compact_plan_for_reading(&mixed, &fights, true), mixed);
+    }
 
     #[test]
     fn read_view_keeps_inline_note_and_event_links_without_rewriting_the_note() {

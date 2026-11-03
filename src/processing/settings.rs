@@ -141,6 +141,7 @@ pub struct ProcessingSettings {
     pub config: Config,
     /// A recording is live, so a new input cannot apply to it.
     pub recording_now: bool,
+    pub focus_input: bool,
     started: bool,
     load_error: Option<String>,
     save_error: Option<String>,
@@ -162,6 +163,7 @@ impl Default for ProcessingSettings {
             store: Store::user(),
             config: Config::default(),
             recording_now: false,
+            focus_input: false,
             started: false,
             load_error: None,
             save_error: None,
@@ -528,6 +530,10 @@ impl ProcessingSettings {
                                 }
                             });
                         design::named(ui, &inner.response, "Recording input");
+                        if std::mem::take(&mut self.focus_input) {
+                            inner.response.request_focus();
+                            inner.response.scroll_to_me(Some(egui::Align::TOP));
+                        }
                     });
                     if changed {
                         self.persist();
