@@ -365,25 +365,35 @@ impl ProcessingSettings {
             KeySlot::Speech => &self.config.speech_key_for,
             KeySlot::Llm => &self.config.llm_key_for,
         };
-        let owner = if saved_for.contains("api.openai.com") {
-            "OpenAI"
-        } else if saved_for.contains("anthropic.com") {
-            "Anthropic"
-        } else if saved_for.contains("groq.com") {
-            "Groq"
-        } else if saved_for.contains("googleapis.com") {
-            "Gemini"
-        } else if saved_for.contains("openrouter.ai") {
-            "OpenRouter"
-        } else {
-            saved_for
-                .trim_start_matches("https://")
-                .trim_start_matches("http://")
-                .split('/')
-                .next()
-                .filter(|s| !s.is_empty())
-                .unwrap_or("service")
-        };
+        fn service_name(saved_for: &str) -> &str {
+            if saved_for.contains("api.openai.com") {
+                "OpenAI"
+            } else if saved_for.contains("anthropic.com") {
+                "Anthropic"
+            } else if saved_for.contains("groq.com") {
+                "Groq"
+            } else if saved_for.contains("googleapis.com") {
+                "Gemini"
+            } else if saved_for.contains("openrouter.ai") {
+                "OpenRouter"
+            } else {
+                saved_for
+                    .trim_start_matches("https://")
+                    .trim_start_matches("http://")
+                    .split('/')
+                    .next()
+                    .filter(|s| !s.is_empty())
+                    .unwrap_or("service")
+            }
+        }
+        let owner = service_name(saved_for);
+        let target = service_name(match slot {
+            KeySlot::Speech => &self.config.speech_url,
+            KeySlot::Llm => &self.config.llm_url,
+        });
+        let warning = format!(
+            "The saved key is for {owner}, so Splat will not send it to {target}. Save a key for this service."
+        );
         let slot_word = if slot == KeySlot::Speech {
             "speech"
         } else {
@@ -433,11 +443,7 @@ impl ProcessingSettings {
             });
         });
         if (saved || held) && !fits {
-            design::message(
-                ui,
-                Tone::Warning,
-                "The saved key is for another service, so Splat will not send it here. Save a key for this service.",
-            );
+            design::message(ui, Tone::Warning, &warning);
         }
         if save {
             match slot {
