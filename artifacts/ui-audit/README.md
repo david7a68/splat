@@ -97,8 +97,26 @@ The visual pass found no remaining moderate or higher issue.
 The existing nine clipped-label reports occur only after resizing Library
 columns at 960×640. They are list titles or metadata shortened with an ellipsis;
 opening an entry shows its full title and content. They are minor, and the
-baseline was not expanded for them. Independent code review and the final
-baseline-enforced UI run must also pass before this iteration is ready to merge.
+baseline was not expanded for them. The final run enforced the saved baseline:
+42 scenarios, 870 captures, zero regressions and zero workflow failures.
+
+### Standards
+
+The independent review found no documented-standard violations or concrete
+regressions. It noted possible duplication of the wide-table test fixture
+between the rendered unit check and the UI journey. This is a low-priority
+judgement call; the fixtures remain independent at the two test levels.
+
+### Spec
+
+The independent review found no actionable findings. Table words and the final
+column are readable in both readers. Ordinary wheel input reaches the outer
+note. The clipping exception requires a real horizontal scrollbar, and tests
+retain checks for unscrollable clipping and unnamed app controls.
+
+Review totals: Standards 0 hard violations, 1 low-priority suggestion; Spec 0
+findings. Neither axis found a moderate or higher issue. The code and visual
+audit has converged, so no further fix iteration is needed.
 
 ## Limits
 
