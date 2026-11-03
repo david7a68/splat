@@ -177,6 +177,7 @@ impl Event {
 /// What the party's state comes from in one session, as far as the timeline can say.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct PartyState {
+    pub rest_order: u64,
     /// A long rest the DM marked brought everyone back.
     pub rested: bool,
     /// The fights since then, oldest first: each run, and its name. A player not in the last
@@ -204,6 +205,7 @@ pub fn party_state(events: &[Event], session: Option<Uuid>) -> PartyState {
             state.fights.push((run, event.label(day)));
         } else if event.kind == Kind::LongRest && event.restores {
             state = PartyState {
+                rest_order: event.played_order,
                 rested: true,
                 fights: Vec::new(),
             };

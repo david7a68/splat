@@ -291,6 +291,7 @@ impl Splat {
             .filter(|_| state.rested || !state.fights.is_empty())
             .map(|campaign| {
                 let mut carry = encounter_run::Carry {
+                    rest_order: state.rest_order,
                     from: "the long rest".to_owned(),
                     full: state.rested,
                     values: Default::default(),
@@ -314,6 +315,11 @@ impl Splat {
                 carry
             });
         self.party.tonight.clone_from(&carry);
+        if let Some(run) = self.encounters.run_mut()
+            && let Some(carry) = &carry
+        {
+            run.remember_rest(carry.rest_order);
+        }
         self.encounters.carry = carry;
     }
 

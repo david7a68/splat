@@ -1414,7 +1414,10 @@ impl Encounters {
             }
             Ok(_) if self.has_run() => self.error = Some(BLOCKED_BY_RUN.to_owned()),
             Ok(_) => match crate::encounter_run::Run::open(path, active.id) {
-                Ok(run) => {
+                Ok(mut run) => {
+                    if let Some(carry) = &self.carry {
+                        run.rest_saved_setup(carry.rest_order);
+                    }
                     self.run = Some(run);
                     self.go_to_run = true;
                     self.error = None;
@@ -2083,11 +2086,7 @@ impl Encounters {
         if fresh.setup.combat_sync && campaign.dndbeyond_campaign_id.is_some() {
             run.keep_party_synced();
         }
-        if let Some(carry) = self
-            .carry
-            .as_ref()
-            .filter(|carry| !sheets.is_empty() || !carry.missing.is_empty())
-        {
+        if let Some(carry) = self.carry.as_ref() {
             run.note_carry(carry, sheets);
         }
         Ok(run)
@@ -2660,7 +2659,7 @@ impl Encounters {
                     } else {
                         0.0
                     }
-                    - if dirty {
+                    - if dirty || saved_note.is_some() {
                         0.0
                     } else {
                         design::number_width(ui, "No changes to save.", &Type::Small.font(ui))
@@ -2743,58 +2742,69 @@ impl Encounters {
                     .blocked_if(!dirty, "No changes to save.")
                     .show(ui)
                     .clicked();
-                    blocked_reason(ui, (!dirty).then_some("No changes to save."));
+                    blocked_reason(
+                        ui,
+                        (!dirty && saved_note.is_none()).then_some("No changes to save."),
+                    );
                 },
             );
         });
-        ui.horizontal(|ui| {
-            ui.set_min_height(Density::Read.control());
-            if dirty {
-                discard = Action::quiet("Discard")
-                    .blocked(creature_dirty.then_some(BLOCKED_BY_CREATURE))
-                    .show(ui)
-                    .clicked();
-            }
-            let (icon, word, color) = if dirty {
-                (icons::DRAFT, "Unsaved", colors().document.unsaved)
-            } else if saved_note.is_some() {
-                (icons::OK, "Saved", colors().document.saved)
-            } else {
-                (icons::OK, "No changes", colors().muted)
-            };
-            if dirty || saved_note.is_some() {
-                design::status(ui, Status { icon, word, color });
-            }
-            if dirty {
-                blocked_reason(ui, Some(draft_switch_reason()));
-            }
-            if let Some(run) = &unfinished {
-                design::status(
+        if dirty
+            || saved_note.is_some()
+            || unfinished.is_some()
+            || creature_dirty
+            || loading
+            || (!has_run && draft_ref.setup.roster.is_empty())
+        {
+            ui.horizontal(|ui| {
+                ui.set_min_height(Density::Read.control());
+                if dirty {
+                    discard = Action::quiet("Discard")
+                        .blocked(creature_dirty.then_some(BLOCKED_BY_CREATURE))
+                        .show(ui)
+                        .clicked();
+                }
+                let (icon, word, color) = if dirty {
+                    (icons::DRAFT, "Unsaved", colors().document.unsaved)
+                } else if saved_note.is_some() {
+                    (icons::OK, "Saved", colors().document.saved)
+                } else {
+                    (icons::OK, "No changes", colors().muted)
+                };
+                if dirty || saved_note.is_some() {
+                    design::status(ui, Status { icon, word, color });
+                }
+                if dirty {
+                    blocked_reason(ui, Some(draft_switch_reason()));
+                }
+                if let Some(run) = &unfinished {
+                    design::status(
+                        ui,
+                        Status {
+                            icon: icons::RUN,
+                            word: &run_state_word(
+                                run,
+                                self.run
+                                    .as_ref()
+                                    .and_then(|open| open.path())
+                                    .is_none_or(|path| path != run.path),
+                            ),
+                            color: colors().muted,
+                        },
+                    );
+                }
+                blocked_reason(
                     ui,
-                    Status {
-                        icon: icons::RUN,
-                        word: &run_state_word(
-                            run,
-                            self.run
-                                .as_ref()
-                                .and_then(|open| open.path())
-                                .is_none_or(|path| path != run.path),
-                        ),
-                        color: colors().muted,
-                    },
+                    creature_dirty
+                        .then_some(BLOCKED_BY_CREATURE)
+                        .or(loading.then_some("Still reading this campaign."))
+                        .or((!has_run
+                            && unfinished.is_none()
+                            && draft_ref.setup.roster.is_empty())
+                        .then_some("Add participants first")),
                 );
-            }
-            blocked_reason(
-                ui,
-                creature_dirty
-                    .then_some(BLOCKED_BY_CREATURE)
-                    .or(loading.then_some("Still reading this campaign."))
-                    .or(
-                        (!has_run && unfinished.is_none() && draft_ref.setup.roster.is_empty())
-                            .then_some("Add participants first"),
-                    ),
-            );
-        });
+            });
+        }
         if unfinished.is_some() {
             blocked_reason(
                 ui,

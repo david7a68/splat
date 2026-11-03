@@ -1095,7 +1095,7 @@ impl Lookup {
         }
     }
 
-    /// A creature opened from the encounter search keeps its result selected.
+    /// Read an editor result directly, without repeating the editor's result list.
     pub fn open_creature_result(&mut self, id: Uuid) {
         self.open_id(id);
         if let Some(item) = self
@@ -1104,7 +1104,7 @@ impl Lookup {
             .and_then(|index| index.position(id).map(|at| &index.items[at]))
         {
             self.query = item.entry.name.clone();
-            self.results_open = true;
+            self.results_open = false;
         }
     }
 

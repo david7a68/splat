@@ -173,7 +173,7 @@ tooltips, and separators. Text cursors do not blink, because motion draws the ey
 | Empty state | `empty_state` | What this is, and the one next step. At the top of an empty pane or page, with its normal padding |
 | Group heading | `group_heading` | `Type::Label` in capitals and a muted, nonzero count after it. No rule. Serif headings belong to readers and stat blocks |
 | Row menu | `row_menu` | Quiet `⋯` at the right edge, named `More actions for <name>`. Put Remove and Delete here |
-| Add strip | `add_strip` | `Add` in `Label`, then quiet icon-and-word buttons that wrap. Fight, Group (plan only), Day, Long rest, Short rest, Travel, Major event |
+| Add strip | `hanging_add_strip` | `Add` in its own Label column; quiet icon-and-word buttons wrap at the first button's left edge. Fight, Group (plan only), Day, Long rest, Short rest, Travel, Major event |
 | Message | `message`, `message_with_action`, `Tone` | Inline. Measure the full action, including padding. Move it below the text, aligned with the text, when both cannot fit on one line |
 | Side panel | `side_panel_width`, `panel_header` | One width rule for Lookup, Notes and the run. The run separates participant tabs from fight tabs |
 | Column | `Column::left / right / panel` | Every side column: the rail, a page's list, a panel. A drag handle on its inner edge. Natural width until dragged, then the DM's width, here and after a restart. A drag always leaves the page its room, and the run's roster keeps `RUN_LIST_KEEPS`. What sits beside a column reaches its edge, so no blank band opens between them. Text keeps its measure inside that room |
@@ -267,6 +267,10 @@ The side picker offers `Party`, `Enemies`, and `Other…` in every editor. Only 
 All editor section headings use `group_heading`. In the tabbed layout, Add participants has no repeated heading.
 
 A plan group editor takes the full notes column; the note stays behind its tab.
+Plan summaries sit directly below names, with actions centred beside both lines.
+Member counts and XP use one dot-separated line. Count stays at the left; Edit and
+the row menu sit together at the right. Encounter editors show one clean-state word.
+
 Member names and stats have their own lines above Count, Edit, and the row menu.
 Member changes stay on one line, such as `Changed · 2 to add by hand`, until opened.
 An empty group frame has one muted line and no zero count or duplicate search summary.
@@ -274,6 +278,11 @@ The Groups list has one level of headings: For any encounter, each encounter, th
 Its rows keep Edit and a menu with Remove, which has Undo. A planned group also has Remove with Undo; it removes the link and keeps the note’s words.
 A summary of members stays below the search when it has members. Removing an encounter’s group makes
 it available for any encounter on Save, with Undo until that save.
+
+A saved Setup resumed after a restoring long rest starts party HP at full. Its
+notice says `Party HP is full after the long rest.` and offers `Use the saved HP`
+as one Undo step. Combat keeps its saved HP, and the rest message names those fights.
+New templates say `Starts with the title line only.` below the name field.
 
 ## The live run
 

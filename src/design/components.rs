@@ -1627,6 +1627,16 @@ pub fn add_strip(ui: &mut Ui, actions: impl FnOnce(&mut Ui)) {
     });
 }
 
+/// The Add label has its own column, so wrapped actions share one left edge.
+pub fn hanging_add_strip(ui: &mut Ui, actions: impl FnOnce(&mut Ui)) {
+    add_strip(ui, |ui| {
+        ui.horizontal_wrapped(|ui| {
+            ui.spacing_mut().item_spacing.x = XS;
+            actions(ui);
+        });
+    });
+}
+
 /// Sheet tabs keep one line. Less frequent pages move to a named menu when needed.
 pub fn overflow_tabs(ui: &mut Ui, selected: &mut usize, choices: &[(usize, &str)]) {
     let width = |label: &str| number_width(ui, label, &Type::Strong.font(ui)) + L;

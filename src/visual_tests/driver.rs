@@ -1531,6 +1531,7 @@ impl<'a> Driver<'a> {
     /// Repeating setup for another capture size is not another action in the DM's task.
     pub fn state_prepared(&mut self, name: &str, sizes: Sizes, mut prepare: impl FnMut(&mut Self)) {
         let task_interactions = self.interactions;
+        self.finish_capture_saves();
         let expect_same = self.expect_same.take();
         self.states += 1;
         let label = format!("{:02}-{name}", self.states);
@@ -1543,7 +1544,7 @@ impl<'a> Driver<'a> {
         for &(size, density) in plan {
             self.resize(size, density);
             prepare(self);
-            self.settle();
+            self.finish_capture_saves();
             // Logical layout at twice the density matches the 1x capture. The minimum
             // window is the harder test, so a state checked once is checked there.
             let one_size = matches!(sizes, Sizes::Default | Sizes::DefaultAndHiDpi);
@@ -1671,6 +1672,7 @@ impl<'a> Driver<'a> {
 
     /// Capture the current state with the pointer resting on a control.
     pub fn state_hovering(&mut self, name: &str, target: &str) {
+        self.finish_capture_saves();
         self.states += 1;
         let label = format!("{:02}-{name}", self.states);
         let rect = self.aim(&format!("hover target {target:?}"), |node| {
@@ -1681,6 +1683,12 @@ impl<'a> Driver<'a> {
         let expect_same = self.expect_same.take();
         self.capture(&label, self.base, 1.0, expect_same);
         self.harness.remove_cursor();
+        self.settle();
+    }
+
+    fn finish_capture_saves(&mut self) {
+        self.app_mut().sessions.flush();
+        self.app_mut().timeline.save();
         self.settle();
     }
 

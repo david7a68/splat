@@ -351,7 +351,9 @@ pub(super) fn in_progress_list(
                         })
                         .unwrap_or_else(|| "Date unknown".into())
                 });
-            detail.push_str(&format!(" · {context}"));
+            if !detail.contains(&context) {
+                detail.push_str(&format!(" · {context}"));
+            }
         }
         list_row(ui, &run.path, &run.encounter, &detail, !open, |ui| {
             row_menu_for_run(ui, run, template, open, blocked, loading, action);
