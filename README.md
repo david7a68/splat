@@ -753,4 +753,7 @@ Package repair keeps entries available when `Package.md` breaks or is deleted.
 **Write Package.md again** restores the registered identity and package details.
 Replacing a broken file offers **Undo write Package.md**. Copied World notes stay
 visible in World and Lookup with a duplicate warning and file-specific identity
-repair. Each repair has Undo. A run's Sheet uses its live death-save counts once.
+repair. Each repair has Undo. It also uses the file name for the copy's name and matching
+first heading. A copied package folder offers **Register as a new package** under
+its warning. This writes new package and entry identities, keeps links within the
+copy, and has one Undo that restores the files. A run's Sheet uses its live death-save counts once.

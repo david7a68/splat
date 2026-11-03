@@ -728,7 +728,7 @@ pub(crate) fn folder_field(
     design::field(
         ui,
         label,
-        Some("Type a new folder, or choose one. New folders are made when you save."),
+        Some("Type a new folder, or choose one. A new folder is made with the file."),
         None,
         |ui| {
             form_control(ui, |ui| {
@@ -1108,6 +1108,10 @@ pub struct Library {
     discarded_note: Option<Note>,
     identity_undo: Option<IdentityUndo>,
     manifest_write: Option<crate::content_workspace::ManifestWrite>,
+    package_copy: Option<crate::content_workspace::PackageCopy>,
+    copied_package: Option<Module>,
+    copy_name: String,
+    copy_name_open: bool,
     /// A save was refused because the file changed. The draft waits for the DM's choice.
     disk_change: Option<DiskChange>,
     /// The note on screen was saved, and has not changed since.
@@ -1250,10 +1254,37 @@ struct BackStep {
     search: String,
 }
 impl Library {
+    fn register_copy(&mut self, campaigns: &mut Campaigns) -> Result<(), String> {
+        let source = self
+            .copied_package
+            .clone()
+            .ok_or("Choose the copied folder first.")?;
+        if campaigns
+            .modules()
+            .iter()
+            .any(|m| m.path.starts_with(&source.path) || source.path.starts_with(&m.path))
+        {
+            return Err("Choose a separate copied folder first.".into());
+        }
+        let copy = crate::content_workspace::PackageCopy::write(&source.path, &self.copy_name)?;
+        if let Err(error) = campaigns.register_module(copy.module.clone()) {
+            copy.undo()?;
+            return Err(error);
+        }
+        self.package_copy = Some(copy);
+        self.copied_package = None;
+        self.copy_name_open = false;
+        self.form = false;
+        self.stale = true;
+        self.scope = Scope::All;
+        self.content_changed = Some(source.path.clone());
+        Ok(())
+    }
+
     fn give_new_identity(&mut self) -> Result<(), String> {
         let index = self.selected.ok_or("Open the copy first.")?;
         let note = &self.loaded.as_ref().unwrap().notes[index];
-        let entry = note.entry.as_ref().ok_or("Repair this entry first.")?;
+        note.entry.as_ref().ok_or("Repair this entry first.")?;
         let root = note
             .owner
             .root()
@@ -1261,14 +1292,7 @@ impl Library {
             .to_path_buf();
         let before = note.text.clone();
         let id = Uuid::new_v4();
-        let redirected = crate::content_workspace::redirect_reference(&before, entry, id)?;
-        let after = crate::content_workspace::patch_fields(
-            &redirected,
-            &[
-                ("splat_id", Some(id.to_string().into())),
-                ("splat_key", None),
-            ],
-        )?;
+        let after = crate::content_workspace::new_note_identity(&before, &note.path, id)?;
         let updated = write_note(&root, &note.path, Some(&before), &after)?;
         self.identity_undo = Some(IdentityUndo {
             root: root.clone(),
@@ -1797,6 +1821,27 @@ impl Library {
         }
         if let Some(message) = &self.message {
             design::message(ui, Tone::Success, message);
+        }
+        if self.package_copy.is_some()
+            && design::message_with_action(
+                ui,
+                Tone::Success,
+                "The copy is registered as a new package.",
+                "Undo package registration",
+            )
+        {
+            let copy = self.package_copy.as_ref().unwrap();
+            match copy
+                .undo()
+                .and_then(|()| campaigns.unregister_module(copy.module.id))
+            {
+                Ok(()) => {
+                    self.content_changed = Some(copy.module.path.clone());
+                    self.package_copy = None;
+                    self.stale = true;
+                }
+                Err(error) => self.error = Some(error),
+            }
         }
         if self.selection_undo.as_ref().is_some_and(|undo| {
             campaigns
@@ -2553,14 +2598,26 @@ impl Library {
                         .clicked()
                     {
                         match local_module(Path::new(self.path.trim())).and_then(|module| {
+                            if let Some(original) = campaigns
+                                .modules()
+                                .iter()
+                                .find(|m| m.id == module.id && m.path != module.path)
+                            {
+                                self.copied_package = Some(module);
+                                self.copy_name = format!("{} copy", original.name);
+                                self.copy_name_open = false;
+                                self.error = None;
+                                return Ok(None);
+                            }
                             campaigns.register_module(module.clone())?;
-                            Ok(module)
+                            Ok(Some(module))
                         }) {
-                            Ok(module) => {
+                            Ok(Some(module)) => {
                                 self.scope = Scope::Package(module.id);
                                 self.form = false;
                                 self.stale = true;
                             }
+                            Ok(None) => {}
                             Err(error) => self.error = Some(error),
                         }
                     }
@@ -2573,6 +2630,49 @@ impl Library {
                     );
                     ui.add_space(design::L);
                 });
+
+                if let Some(copy) = self.copied_package.clone() {
+                    if Path::new(self.path.trim()).canonicalize().ok().as_ref() != Some(&copy.path)
+                    {
+                        self.copied_package = None;
+                    } else {
+                        let name = campaigns
+                            .modules()
+                            .iter()
+                            .find(|m| m.id == copy.id)
+                            .map_or(copy.name.as_str(), |m| m.name.as_str());
+                        design::message(
+                            ui,
+                            Tone::Warning,
+                            &format!("This folder is a copy of {name}."),
+                        );
+                        design::quiet_section(ui, "Technical details", |ui| {
+                            ui.label(copy.id.to_string());
+                        });
+                        if self.copy_name_open {
+                            design::text_field(
+                                ui,
+                                "New package name",
+                                &mut self.copy_name,
+                                None,
+                                None,
+                            );
+                        }
+                        if Action::quiet("Register as a new package")
+                            .blocked(locked)
+                            .show(ui)
+                            .clicked()
+                        {
+                            if self.copy_name_open {
+                                if let Err(error) = self.register_copy(campaigns) {
+                                    self.error = Some(error);
+                                }
+                            } else {
+                                self.copy_name_open = true;
+                            }
+                        }
+                    }
+                }
 
                 form_heading(ui, "New package");
                 let response = design::text_field(ui, "Name", &mut self.name, None, None);
@@ -4362,6 +4462,9 @@ mod tests {
         let saved_copy = library.draft.clone();
         library.give_new_identity().unwrap();
         assert_ne!(crate::content_workspace::note_id(&library.draft), Some(id));
+        let repaired = Entry::parse("Wolf copy.md", &library.draft).unwrap();
+        assert_eq!(repaired.name, "Wolf copy");
+        assert!(repaired.body.contains("# Wolf copy\n"));
         assert_eq!(
             fs::read_to_string(module.path.join("Wolf.md")).unwrap(),
             original
@@ -4397,6 +4500,46 @@ mod tests {
             fs::read_to_string(module.path.join("Wolf.md")).unwrap(),
             original
         );
+    }
+
+    #[test]
+    fn manifest_only_hand_repair_keeps_original_and_both_library_files() {
+        let temp = tempfile::tempdir().unwrap();
+        let original =
+            create_module(&temp.path().join("original"), "Original", "original").unwrap();
+        let copy = create_module(&temp.path().join("copy"), "Copy", "copy").unwrap();
+        let manifest = fs::read_to_string(original.path.join("Module.md")).unwrap();
+        let hand_edit = crate::content_workspace::patch_fields(
+            &manifest,
+            &[("splat_id", Some(copy.id.to_string().into()))],
+        )
+        .unwrap();
+        fs::write(copy.path.join("Module.md"), hand_edit).unwrap();
+        let text = note_text("Wolf", "creature", None);
+        fs::write(original.path.join("Wolf.md"), &text).unwrap();
+        fs::write(copy.path.join("Wolf.md"), &text).unwrap();
+        let id = crate::content_workspace::note_id(&text).unwrap();
+        let modules = [original.clone(), copy];
+        let catalogue = Catalogue::load(&modules, None).unwrap();
+        assert_eq!(catalogue.entries[&id].owner, original.id);
+        assert!(
+            catalogue
+                .errors
+                .iter()
+                .any(|e| e.contains("share an identity"))
+        );
+        let loaded = load_all(&modules, None).unwrap();
+        let wolves: Vec<_> = loaded
+            .notes
+            .iter()
+            .enumerate()
+            .filter(|(_, n)| n.name() == "Wolf" && n.owner.root().is_some())
+            .collect();
+        assert_eq!(wolves.len(), 2);
+        for (at, _) in wolves {
+            assert_eq!(loaded.duplicates(at).len(), 1);
+            assert!(loaded.build_subtitles()[at].contains("Duplicate identity"));
+        }
     }
 
     #[test]

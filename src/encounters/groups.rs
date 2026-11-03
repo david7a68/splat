@@ -674,9 +674,10 @@ pub(super) fn add_target(ui: &mut egui::Ui, draft: &mut Draft, _snapshot: &Snaps
         return;
     }
     // Beside the search, because the group itself can be out of view or on another tab.
-    let shown = draft
-        .target_group()
-        .map_or_else(|| ROSTER.to_owned(), |group| group.name.clone());
+    let shown = draft.target_group().map_or_else(
+        || format!("the {}", ROSTER.to_lowercase()),
+        |group| group.name.clone(),
+    );
     ui.label(
         Type::Small
             .rich(ui, format!("Adding to {shown}"))

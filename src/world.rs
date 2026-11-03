@@ -738,16 +738,8 @@ impl Change {
 fn new_identity(campaign: &Campaign, relative: &str) -> Result<(Change, Uuid), String> {
     let path = note_path(&campaign.path, relative)?;
     let before = fs::read_to_string(path).map_err(|e| e.to_string())?;
-    let entry = Entry::parse(relative, &before)?;
     let id = crate::hermetic::new_uuid();
-    let redirected = crate::content_workspace::redirect_reference(&before, &entry, id)?;
-    let after = patch_fields(
-        &redirected,
-        &[
-            ("splat_id", Some(id.to_string().into())),
-            ("splat_key", None),
-        ],
-    )?;
+    let after = crate::content_workspace::new_note_identity(&before, relative, id)?;
     write_note(&campaign.path, relative, Some(&before), &after)?;
     Ok((
         Change {
@@ -1860,6 +1852,9 @@ mod tests {
             before
         );
         assert_eq!(Entry::parse("copy.md", &undo.after).unwrap().id, id);
+        let repaired = Entry::parse("copy.md", &undo.after).unwrap();
+        assert_eq!(repaired.name, "Rook copy");
+        assert!(repaired.body.contains("# Rook copy\n"));
         undo.undo(&campaign).unwrap();
         assert_eq!(
             fs::read_to_string(dir.path().join("Rook copy.md")).unwrap(),

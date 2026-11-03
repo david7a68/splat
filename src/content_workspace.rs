@@ -32,6 +32,139 @@ pub(crate) fn note_id(text: &str) -> Option<Uuid> {
 
 pub(crate) const DELETED_MANIFEST: &str = "Package.md was deleted. Entries are still available. Write it again, or restore it from a backup.";
 
+/// A copied note gets its file's name in the same write as its new identity.
+pub(crate) fn new_note_identity(text: &str, path: &str, id: Uuid) -> Result<String, String> {
+    let entry = Entry::parse(path, text)?;
+    let name = Path::new(path)
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .ok_or("Invalid file name.")?;
+    let redirected = redirect_reference(text, &entry, id)?;
+    let after = patch_fields(
+        &redirected,
+        &[
+            ("splat_id", Some(id.to_string().into())),
+            ("splat_key", None),
+            ("splat_name", Some(name.into())),
+        ],
+    )?;
+    Ok(rename_first_heading(after, &entry.name, name))
+}
+
+fn rename_first_heading(mut after: String, old: &str, name: &str) -> String {
+    let start = after.find("\n---").map_or(0, |at| at + 4);
+    let mut offset = start;
+    for line in after[start..].split_inclusive('\n') {
+        if let Some(heading) = line.trim_end().strip_prefix("# ") {
+            if heading.trim() == old {
+                after.replace_range(offset..offset + line.trim_end().len(), &format!("# {name}"));
+            }
+            break;
+        }
+        offset += line.len();
+    }
+    after
+}
+
+/// All writes for a copied package, with one guarded Undo.
+pub(crate) struct PackageCopy {
+    pub module: Module,
+    files: Vec<(String, String, String)>,
+}
+impl PackageCopy {
+    pub fn write(root: &Path, name: &str) -> Result<Self, String> {
+        if name.trim().is_empty() || name.contains(['\n', '\r']) {
+            return Err("Type a package name first.".into());
+        }
+        let root = root.canonicalize().map_err(|e| e.to_string())?;
+        let (entries, errors) = content::read_directory(&root)?;
+        if !errors.is_empty() || entries.iter().filter(|e| e.kind == "package").count() != 1 {
+            return Err("Repair the copied files before registering this package.".into());
+        }
+        let ids: BTreeMap<_, _> = entries
+            .iter()
+            .map(|e| (e.id, crate::hermetic::new_uuid()))
+            .collect();
+        if ids.len() != entries.len() {
+            return Err("Repair duplicate identities inside this folder first.".into());
+        }
+        let manifest = entries.iter().find(|e| e.kind == "package").unwrap();
+        let id = ids[&manifest.id];
+        let namespace = format!("package_{}", id.simple());
+        let mut files = Vec::new();
+        for entry in &entries {
+            let before =
+                fs::read_to_string(note_path(&root, &entry.path)?).map_err(|e| e.to_string())?;
+            let mut after = before.clone();
+            for old in &entries {
+                after = redirect_reference(&after, old, ids[&old.id])?;
+            }
+            let mut fields = vec![
+                ("splat_id", Some(ids[&entry.id].to_string().into())),
+                (
+                    "splat_key",
+                    Some(format!("{namespace}:{}", ids[&entry.id].simple()).into()),
+                ),
+            ];
+            if entry.kind == "package" {
+                fields.push(("splat_name", Some(name.trim().into())));
+                fields.push(("splat_namespace", Some(namespace.clone().into())));
+            }
+            after = patch_fields(&after, &fields)?;
+            if entry.kind == "package" {
+                after = rename_first_heading(after, &entry.name, name.trim());
+            }
+            files.push((entry.path.clone(), before, after));
+        }
+        let copy = Self {
+            module: Module {
+                id,
+                name: name.trim().into(),
+                path: root,
+            },
+            files,
+        };
+        copy.apply(false)?;
+        Ok(copy)
+    }
+
+    fn apply(&self, undo: bool) -> Result<(), String> {
+        for (path, before, after) in &self.files {
+            let expected = if undo { after } else { before };
+            if fs::read_to_string(note_path(&self.module.path, path)?).map_err(|e| e.to_string())?
+                != *expected
+            {
+                return Err(format!(
+                    "{path} changed on disk. Reload before trying again."
+                ));
+            }
+        }
+        for (written, (path, before, after)) in self.files.iter().enumerate() {
+            let (from, to) = if undo {
+                (after, before)
+            } else {
+                (before, after)
+            };
+            if let Err(error) = write_note(&self.module.path, path, Some(from), to) {
+                for (path, before, after) in self.files[..written].iter().rev() {
+                    let (from, to) = if undo {
+                        (before, after)
+                    } else {
+                        (after, before)
+                    };
+                    let _ = write_note(&self.module.path, path, Some(from), to);
+                }
+                return Err(error);
+            }
+        }
+        Ok(())
+    }
+
+    pub fn undo(&self) -> Result<(), String> {
+        self.apply(true)
+    }
+}
+
 /// A repair keeps the registered identity and never overwrites a later disk edit.
 pub(crate) struct ManifestWrite {
     root: PathBuf,
@@ -388,6 +521,19 @@ impl Catalogue {
     ) -> Result<(), String> {
         let path = note_path(root, &entry.path)?;
         if self.entries.contains_key(&entry.id) || self.duplicate_ids.contains(&entry.id) {
+            // A manifest-only hand repair must not remove the registered original.
+            // Library loads both files and offers a named repair for each one.
+            if let Some(original) = self.entries.get(&entry.id)
+                && original.owner != owner
+                && let Some((first, _)) = self.files.get(&entry.id)
+            {
+                self.errors.push(format!(
+                    "{} and {} share an identity. Choose one in Library.",
+                    first.display(),
+                    path.display()
+                ));
+                return Ok(());
+            }
             let first = self
                 .files
                 .get(&entry.id)
@@ -620,7 +766,9 @@ impl Catalogue {
                 .and_then(Value::as_str)
                 .ok_or("Missing package namespace")?;
             if !result.namespaces.insert(ns.to_owned()) {
-                return Err(format!("Duplicate package namespace: {ns}"));
+                result.errors.push(format!(
+                    "Duplicate package namespace: {ns}. Choose a new identity in Library."
+                ));
             }
             let ids = entries.iter().map(|e| e.id).collect();
             let name = manifests[0].name.clone();
@@ -1640,6 +1788,114 @@ impl CopyPlan {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn identity_repair_keeps_a_different_heading_and_other_fields() {
+        let before =
+            note_text("Rook", "creature", None).replace("# Rook", "# Watch captain") + "\n# Rook\n";
+        let id = Uuid::new_v4();
+        let after = new_note_identity(&before, "Rook copy.md", id).unwrap();
+        let parsed = Entry::parse("Rook copy.md", &after).unwrap();
+        assert_eq!(parsed.id, id);
+        assert_eq!(parsed.name, "Rook copy");
+        assert_eq!(
+            parsed.fields["splat_creature"],
+            Entry::parse("Rook.md", &before).unwrap().fields["splat_creature"]
+        );
+        assert!(parsed.body.contains("# Watch captain\n"));
+        assert!(parsed.body.contains("# Rook\n"));
+    }
+
+    #[test]
+    fn package_copy_refuses_broken_files_without_changing_the_manifest() {
+        let temp = tempfile::tempdir().unwrap();
+        let manifest = note_text("Original", "package", Some("original"));
+        fs::write(temp.path().join("Package.md"), &manifest).unwrap();
+        fs::write(temp.path().join("Broken.md"), "---\nsplat_id: [\n---\n").unwrap();
+        assert!(PackageCopy::write(temp.path(), "Copy").is_err());
+        assert_eq!(
+            fs::read_to_string(temp.path().join("Package.md")).unwrap(),
+            manifest
+        );
+    }
+
+    #[test]
+    fn package_copy_keeps_original_entries_encounters_and_byte_exact_undo() {
+        use crate::visual_tests::fixture::{Seed, World};
+        let temp = tempfile::tempdir().unwrap();
+        let world = World::build(
+            temp.path(),
+            &temp.path().join("cache"),
+            "copy-test",
+            Seed::Campaign,
+        )
+        .unwrap();
+        let app = world.app();
+        let original = &app.campaigns.modules()[0];
+        let campaign = app.campaigns.active_campaign().unwrap();
+        let copied = temp.path().join("copy");
+        fs::create_dir(&copied).unwrap();
+        let (entries, errors) = content::read_directory(&original.path).unwrap();
+        assert!(errors.is_empty());
+        let before: Vec<_> = entries
+            .iter()
+            .map(|e| {
+                let text = fs::read_to_string(original.path.join(&e.path)).unwrap();
+                let to = copied.join(&e.path);
+                fs::create_dir_all(to.parent().unwrap()).unwrap();
+                fs::write(to, &text).unwrap();
+                (e.path.clone(), text)
+            })
+            .collect();
+        let copy = PackageCopy::write(&copied, "New Marches").unwrap();
+        let modules = [original.clone(), copy.module.clone()];
+        let catalogue = Catalogue::load(&modules, Some(&campaign)).unwrap();
+        assert!(catalogue.errors.is_empty(), "{:?}", catalogue.errors);
+        for entry in &entries {
+            assert_eq!(catalogue.entries[&entry.id].owner, original.id);
+            assert_eq!(
+                fs::read_to_string(original.path.join(&entry.path)).unwrap(),
+                before.iter().find(|(p, _)| p == &entry.path).unwrap().1
+            );
+        }
+        let (copies, _) = content::read_directory(&copied).unwrap();
+        assert_eq!(copies.len(), entries.len());
+        for entry in &copies {
+            assert!(
+                !entries
+                    .iter()
+                    .any(|old| old.id == entry.id || old.key == entry.key)
+            );
+            assert_eq!(catalogue.entries[&entry.id].owner, copy.module.id);
+            for reference in content::required_references(entry).unwrap() {
+                assert!(catalogue.resolve(&reference).is_ok());
+            }
+        }
+        for name in ["Bridge Ambush", "Shrine of Cinders"] {
+            let encounter = catalogue
+                .entries
+                .values()
+                .find(|e| e.entry.name == name)
+                .unwrap();
+            let refs = content::required_references(&encounter.entry).unwrap();
+            assert!(!refs.is_empty());
+            for reference in refs {
+                assert!(catalogue.resolve(&reference).is_ok());
+            }
+        }
+        copy.undo().unwrap();
+        for (path, text) in &before {
+            assert_eq!(fs::read(copied.join(path)).unwrap(), text.as_bytes());
+        }
+        let copy = PackageCopy::write(&copied, "New Marches").unwrap();
+        fs::write(copied.join("Module.md"), "A later edit").unwrap();
+        assert!(copy.undo().is_err());
+        for (path, _, after) in &copy.files {
+            if path != "Module.md" {
+                assert_eq!(fs::read_to_string(copied.join(path)).unwrap(), *after);
+            }
+        }
+    }
 
     #[test]
     fn manifest_write_preserves_identity_entries_and_supports_safe_undo() {

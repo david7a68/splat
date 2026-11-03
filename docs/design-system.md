@@ -798,4 +798,8 @@ Campaign Packages and the Library Package.md row offer Write Package.md again.
 The action keeps the registered identity and reloads; replacing a file has Undo.
 Copied typed World notes stay visible with a duplicate warning. Each identity
 action names its file and has Undo. Encounter repair opens World for World notes.
-A copied package folder names the duplicate identity when registration is refused.
+A copied package folder names the original under Add folder, with the id in
+Technical details. Register as a new package asks for a name, writes independent
+package and entry identities, and has one Undo for all files. New identity also
+sets a note's name and matching first heading to its file stem. World rows with
+the same typed name show each file name on the second line.

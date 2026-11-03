@@ -25,7 +25,7 @@
       "package-delete-entry": 109,
       "package-duplicate-id": 86,
       "package-file-changed": 121,
-      "package-folder-copied": 11,
+      "package-folder-copied": 61,
       "package-manifest-broken": 98,
       "package-rename": 55,
       "package-to-table": 38,
@@ -60,8 +60,9 @@
       "world-broken-note": 23,
       "world-edit-round-trip": 24,
       "world-note-deleted": 43,
-      "world-note-duplicated": 34,
+      "world-note-duplicated": 40,
       "world-note-moved": 36,
+      "world-note-renamed": 15,
       "world-places": 37
     },
     "no-overlap/egui-chrome": {
@@ -105,7 +106,7 @@
       "package-delete-entry": 109,
       "package-duplicate-id": 86,
       "package-file-changed": 121,
-      "package-folder-copied": 11,
+      "package-folder-copied": 61,
       "package-manifest-broken": 98,
       "package-rename": 55,
       "package-to-table": 38,
@@ -140,8 +141,9 @@
       "world-broken-note": 23,
       "world-edit-round-trip": 24,
       "world-note-deleted": 43,
-      "world-note-duplicated": 34,
+      "world-note-duplicated": 40,
       "world-note-moved": 36,
+      "world-note-renamed": 15,
       "world-places": 37
     }
   },

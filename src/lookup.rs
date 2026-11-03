@@ -1890,6 +1890,38 @@ mod tests {
     use super::*;
 
     #[test]
+    fn repaired_note_has_a_distinct_name_link_and_no_false_mention() {
+        let temp = tempfile::tempdir().unwrap();
+        let campaign = Campaign {
+            id: Uuid::new_v4(),
+            name: "Test".into(),
+            path: temp.path().into(),
+            dndbeyond_campaign_id: None,
+            dndbeyond_campaign_name: None,
+        };
+        let before = crate::content_workspace::patch_fields(
+            &crate::library::note_text("Rook", "world", None),
+            &[(
+                "splat_world",
+                Some(serde_yaml_ng::from_str("{type: npc}").unwrap()),
+            )],
+        )
+        .unwrap();
+        let original = Entry::parse("Rook.md", &before).unwrap();
+        let id = Uuid::new_v4();
+        let after =
+            crate::content_workspace::new_note_identity(&before, "Rook copy.md", id).unwrap();
+        std::fs::write(temp.path().join("Rook.md"), before).unwrap();
+        std::fs::write(temp.path().join("Rook copy.md"), after).unwrap();
+        let index = ContentIndex::load(&[], Some(&campaign)).unwrap();
+        assert_eq!(index.items[index.by_id[&id]].entry.name, "Rook copy");
+        assert!(index.mentions_of(id).is_empty());
+        assert!(
+            matches!(index.resolve_link("Rook", None), Go::Item(at, _) if index.items[at].entry.id == original.id)
+        );
+    }
+
+    #[test]
     fn package_files_are_checked_without_an_active_campaign() {
         use std::fs;
         let folder = tempfile::tempdir().unwrap();

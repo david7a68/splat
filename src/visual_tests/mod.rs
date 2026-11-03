@@ -27,7 +27,7 @@ mod compare;
 mod dm_audit;
 mod driver;
 pub(crate) mod ergonomics;
-mod fixture;
+pub(crate) mod fixture;
 #[cfg(target_os = "linux")]
 mod isolation;
 mod repeated_captures;
@@ -52,7 +52,7 @@ const BASELINE_PATH: &str = "src/visual_tests/baseline.json";
 
 type Script = fn(&mut Driver<'_>);
 
-const SCENARIOS: [(&str, Seed, Script); 63] = [
+const SCENARIOS: [(&str, Seed, Script); 64] = [
     (
         "package-to-table",
         Seed::Campaign,
@@ -239,6 +239,11 @@ const SCENARIOS: [(&str, Seed, Script); 63] = [
         "world-note-duplicated",
         Seed::Campaign,
         scenarios::world_build::world_note_duplicated,
+    ),
+    (
+        "world-note-renamed",
+        Seed::Campaign,
+        scenarios::world_build::world_note_renamed,
     ),
     (
         "package-folder-copied",

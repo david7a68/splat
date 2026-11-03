@@ -233,9 +233,9 @@ impl Party {
                     "Link this campaign to D&D Beyond to see its party"
                 },
                 if session.is_none() {
-                    "First connect your D&D Beyond account. Then choose its campaign under Campaign, Link and folder."
+                    "First connect your D&D Beyond account. Then choose its campaign under Campaign → Link and folder."
                 } else {
-                    "Choose its D&D Beyond campaign under Campaign, Link and folder."
+                    "Choose its D&D Beyond campaign under Campaign → Link and folder."
                 },
                 |ui| {
                     // Linking needs a session, so that comes first.

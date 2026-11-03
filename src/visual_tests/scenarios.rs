@@ -362,6 +362,7 @@ pub mod library_author {
         d.observe_both("W7", "A new creature starts in Creatures", |d| {
             d.field_text("Folder").as_deref() == Some("Creatures")
         });
+        d.expect("Type a new folder, or choose one. A new folder is made with the file.");
         d.state("new-entry-form", Sizes::All);
         d.type_into(NEW_NAME_FIELD, NEW_NAME);
         d.click(CREATE_ENTRY);
@@ -811,6 +812,7 @@ pub mod party {
 
         switch_campaign(d, UNLINKED_CAMPAIGN);
         d.expect(NOT_LINKED);
+        d.expect("First connect your D&D Beyond account. Then choose its campaign under Campaign → Link and folder.");
         d.state("campaign-not-linked", Sizes::All);
         d.goal("see a campaign with no link");
 
@@ -1502,6 +1504,7 @@ pub mod dialogs {
         d.expect(CREATURE);
         d.click(COPY_TO);
         d.expect(COPY_TITLE);
+        d.expect("Type a new folder, or choose one. A new folder is made with the file.");
         d.state("copy-dialog", Sizes::All);
         d.goal("open the copy dialog");
 
@@ -6342,6 +6345,7 @@ pub mod encounter_owned_groups {
         // An encounter's editor has a section for each of its own, with what is in it.
         open_saved_encounter(d, SHRINE);
         d.expect("GROUPS FOR THIS ENCOUNTER 1");
+        d.expect("Adding to the roster");
         d.state("encounter-with-its-groups", Sizes::All);
         d.check_tab_order("encounter editor, with its groups");
         d.observe(
