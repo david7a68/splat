@@ -1436,7 +1436,11 @@ pub(crate) fn overview(ui: &mut egui::Ui, record: &EntitySnapshot, live: Option<
         }
         for (key, stat) in &record.definition.splat_stats {
             if let Some(mode) = key.strip_prefix("speed_") {
-                metric(ui, mode, format!("{} ft", stat.value));
+                metric(
+                    ui,
+                    &design::reader::human_label(mode),
+                    format!("{} ft", stat.value),
+                );
             }
         }
     });

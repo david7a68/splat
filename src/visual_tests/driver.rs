@@ -20,6 +20,9 @@ pub const SMALL: (f32, f32) = (960.0, 640.0);
 pub const DEFAULT: (f32, f32) = (1200.0, 800.0);
 pub const LARGE: (f32, f32) = (1920.0, 1080.0);
 const ASYNC_TIMEOUT: Duration = Duration::from_secs(180);
+// Diagnostic feedback may stop early, but must still fail on missing text.
+// The full gate retains the original allowance for slow background work.
+const DIAGNOSTIC_TEXT_TIMEOUT: Duration = Duration::from_secs(5);
 const TAB_LIMIT: usize = 80;
 
 /// The window sizes a state is captured and checked at.
@@ -480,11 +483,17 @@ impl<'a> Driver<'a> {
 
     pub fn wait_for_text(&mut self, text: &str) {
         let started = Instant::now();
+        let timeout = if self.diagnose {
+            DIAGNOSTIC_TEXT_TIMEOUT
+        } else {
+            ASYNC_TIMEOUT
+        };
         while !self.visible_text(text) {
             assert!(
-                started.elapsed() < ASYNC_TIMEOUT,
-                "{}: waiting for painted {text:?}",
-                self.scenario
+                started.elapsed() < timeout,
+                "{}: waiting for painted {text:?} after {timeout:?}.\n{}",
+                self.scenario,
+                self.describe()
             );
             self.harness.step();
         }
@@ -1833,4 +1842,26 @@ fn diagnostic_text_failures_remain_failures_and_normal_mode_still_panics() {
     assert_eq!(outcome.failed_expectations.len(), 2);
     assert!(outcome.failed_expectations[0].contains("phrase one"));
     assert!(outcome.failed_expectations[1].contains("phrase two"));
+}
+
+#[test]
+fn diagnostic_painted_text_wait_still_fails_for_absent_text() {
+    let root = tempfile::tempdir().unwrap();
+    let world = World::build(
+        root.path(),
+        root.path(),
+        "painted-text-check",
+        super::fixture::Seed::Empty,
+    )
+    .unwrap();
+    let mut driver = Driver::new(&world, "painted-text-check", root.path(), None, false);
+    driver.diagnose = true;
+    let started = Instant::now();
+    let failure = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        driver.wait_for_text("this phrase is deliberately absent");
+    }))
+    .expect_err("a missing painted phrase must still fail");
+    let message = failure.downcast_ref::<String>().unwrap();
+    assert!(message.contains("this phrase is deliberately absent"));
+    assert!(started.elapsed() < Duration::from_secs(15));
 }
