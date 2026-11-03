@@ -13,6 +13,9 @@
 //!   or `report` (never fails on a check).
 //! - `SPLAT_VISUAL_UPDATE_BASELINE=1` rewrites `baseline.json` from this run.
 //! - `SPLAT_VISUAL_SCENARIOS=party,settings` runs only those scenarios.
+//! - `SPLAT_VISUAL_DIAGNOSE=1` collects text expectations, then still fails the run.
+//! - `SPLAT_VISUAL_TIMINGS=1` prints stage timings without changing captures.
+//! - `visual-baseline-chrome <label>` applies eligible saved chrome measurements.
 //! - `SPLAT_VISUAL_VIDEO=1`, with captures on, also encodes one video per scenario
 //!   with ffmpeg, into the output folder's `video/`.
 mod compare;
@@ -233,7 +236,11 @@ fn enforcement() -> Enforce {
 fn world_root() -> (fs::File, PathBuf) {
     let temp = std::env::temp_dir();
     let lock = fs::File::create(temp.join("splat-visual-world.lock")).expect("create world lock");
+    let started = Instant::now();
     lock.lock().expect("lock world folder");
+    if std::env::var_os("SPLAT_VISUAL_TIMINGS").is_some() {
+        println!("Timing world lock wait = {:?}", started.elapsed());
+    }
     let root = temp.join("splat-visual-world");
     if root.exists() {
         fs::remove_dir_all(&root).expect("clear the previous world");
@@ -255,11 +262,20 @@ fn run_scenario(
         .position(|(other, ..)| *other == name)
         .expect("listed scenario") as u128;
     crate::hermetic::closed::repeatable_uuids((index + 1) << 64);
+    let started = Instant::now();
     let world = World::build(&root.join(name), &cache, name, seed)
         .unwrap_or_else(|error| panic!("{name}: could not build its world: {error}"));
+    if std::env::var_os("SPLAT_VISUAL_TIMINGS").is_some() {
+        println!("Timing {name}: fixture = {:?}", started.elapsed());
+    }
+    let started = Instant::now();
     let mut driver = Driver::new(&world, name, &root.join(name), output, record);
     script(&mut driver);
-    driver.finish()
+    let outcome = driver.finish();
+    if std::env::var_os("SPLAT_VISUAL_TIMINGS").is_some() {
+        println!("Timing {name}: driver + script = {:?}", started.elapsed());
+    }
+    outcome
 }
 
 fn selected() -> Vec<(&'static str, Seed, Script)> {
@@ -333,15 +349,70 @@ fn clear_old_captures(directory: &Path) {
     }
 }
 
+#[derive(serde::Serialize)]
+struct ChromeObservation<'a> {
+    scenarios: Vec<String>,
+    known: &'a Baseline,
+    current: &'a Baseline,
+}
+
+/// Apply measurements without running scenarios or accepting app/task allowances.
+#[test]
+#[ignore = "Use visual-baseline-chrome <label> after reviewing a completed run"]
+fn visual_update_chrome() {
+    #[derive(serde::Deserialize)]
+    struct Observation {
+        scenarios: Vec<String>,
+        known: Baseline,
+        current: Baseline,
+    }
+    let directory =
+        std::env::var_os("SPLAT_VISUAL_BASELINE_RUN").expect("Use visual-baseline-chrome <label>");
+    let observation: Observation = serde_json::from_slice(
+        &fs::read(Path::new(&directory).join("chrome-observation.json"))
+            .expect("No eligible completed run: fix scenario/workflow/app failures and rerun"),
+    )
+    .expect("valid chrome measurements");
+    let names: Vec<&str> = observation.scenarios.iter().map(String::as_str).collect();
+    assert!(
+        !names.is_empty()
+            && names
+                .iter()
+                .all(|name| SCENARIOS.iter().any(|s| s.0 == *name)),
+        "unknown or empty scenarios"
+    );
+    let previous = fs::read(BASELINE_PATH).expect("read baseline");
+    let disk: Baseline = serde_json::from_slice(&previous).expect("valid baseline");
+    assert_eq!(
+        disk, observation.known,
+        "Baseline changed since this run; rerun before updating"
+    );
+    let updated = disk.with_chrome_from(&observation.current, &names);
+    let mut text = serde_json::to_string_pretty(&updated).expect("encode baseline");
+    text.push('\n');
+    // An unchanged include_str! input must not trigger a needless test rebuild.
+    if previous != text.as_bytes() {
+        fs::write(BASELINE_PATH, text).expect("write baseline");
+    }
+    println!(
+        "Applied chrome counts for {}. Run the full merge gates before merging.",
+        names.join(", ")
+    );
+}
+
 /// Every scenario runs in one test, so the report and baseline see one whole run.
 #[test]
 fn visual_suite() {
     let started = Instant::now();
     let (directory, capture) = output_directory();
+    fs::create_dir_all(&directory).expect("create output folder");
+    let chrome_observation = directory.join("chrome-observation.json");
+    if chrome_observation.exists() {
+        fs::remove_file(&chrome_observation).expect("clear previous chrome measurements");
+    }
     if capture {
         clear_old_captures(&directory);
     }
-    fs::create_dir_all(&directory).expect("create output folder");
     let record = capture && std::env::var("SPLAT_VISUAL_VIDEO").is_ok_and(|value| value == "1");
     if record {
         fs::create_dir_all(directory.join("video")).expect("create video folder");
@@ -380,6 +451,7 @@ fn visual_suite() {
     for (name, outcome) in outcomes {
         match outcome {
             Ok(outcome) => {
+                failed.extend(outcome.failed_expectations);
                 violations.extend(outcome.violations);
                 passes.extend(outcome.passes);
                 costs.extend(outcome.task_costs);
@@ -458,8 +530,44 @@ fn visual_suite() {
         videos.len(),
         started.elapsed(),
     );
+    // Print every class before any assertion can hide another class of failure.
+    for line in &regressions {
+        println!("Regression: {line}");
+    }
+    for line in &failed {
+        println!("Scenario failed: {line}");
+    }
     for line in &improvements {
         println!("Improved: {line}");
+    }
+    let silent = if names.len() == SCENARIOS.len() {
+        silent_section8_tests(&passes, &violations, &not_measured, &look_review)
+    } else {
+        Vec::new()
+    };
+    if failed.is_empty()
+        && silent.is_empty()
+        && !violations.iter().any(|v| v.check == "workflow")
+        && regressions.iter().all(|line| {
+            line.split(" / ")
+                .next()
+                .is_some_and(|check| check.ends_with(ergonomics::CHROME_SUFFIX))
+        })
+    {
+        let observation = ChromeObservation {
+            scenarios: names.iter().map(|name| (*name).to_owned()).collect(),
+            known: &known,
+            current: &current,
+        };
+        fs::write(
+            &chrome_observation,
+            serde_json::to_vec_pretty(&observation).expect("encode chrome measurements"),
+        )
+        .expect("write chrome measurements");
+        println!(
+            "Chrome measurements: {}. Apply with visual-baseline-chrome <label> after review.",
+            chrome_observation.display()
+        );
     }
     if std::env::var_os("SPLAT_VISUAL_UPDATE_BASELINE").is_some() {
         assert!(
@@ -490,7 +598,6 @@ fn visual_suite() {
     // A run of every scenario must speak for every test in section 8. A deleted `observe`
     // would otherwise look like nothing at all.
     if names.len() == SCENARIOS.len() {
-        let silent = silent_section8_tests(&passes, &violations, &not_measured, &look_review);
         assert!(
             silent.is_empty(),
             "Section 8 tests with no result in this run: {silent:?}"

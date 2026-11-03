@@ -690,6 +690,28 @@ impl Baseline {
         baseline
     }
 
+    /// Replace only selected scenarios' chrome counts, including counts now zero.
+    /// App violations, task costs and unselected scenarios retain their allowances.
+    pub fn with_chrome_from(mut self, current: &Self, scenarios: &[&str]) -> Self {
+        for check in CHECKS.iter().filter(|check| check.ends_with(CHROME_SUFFIX)) {
+            let counts = self.violations.entry((*check).to_owned()).or_default();
+            for &scenario in scenarios {
+                counts.remove(scenario);
+                if let Some(&count) = current
+                    .violations
+                    .get(*check)
+                    .and_then(|counts| counts.get(scenario))
+                    && count != 0
+                {
+                    counts.insert(scenario.to_owned(), count);
+                }
+            }
+        }
+        self.violations
+            .retain(|check, counts| !check.ends_with(CHROME_SUFFIX) || !counts.is_empty());
+        self
+    }
+
     /// Lines where `current` is worse than this baseline, then lines where it is better.
     /// A scenario that did not run is neither.
     pub fn compare(&self, current: &Self, scenarios: &[&str]) -> (Vec<String>, Vec<String>) {
@@ -846,6 +868,42 @@ pub fn write_markdown(report: &Report<'_>) -> String {
 mod tests {
     use super::*;
     use egui_kittest::Harness;
+
+    #[test]
+    fn chrome_refresh_preserves_unselected_and_app_allowances_and_clears_zeroes() {
+        let known: Baseline = serde_json::from_value(serde_json::json!({
+            "violations": {
+                "target-size/egui-chrome": {"party": 9, "settings": 4},
+                "accessible-name/egui-chrome": {"party": 3},
+                "target-size": {"party": 2},
+                "workflow": {"party": 1}
+            },
+            "task_cost": {"party": {"goal": 7}, "settings": {"goal": 3}}
+        }))
+        .unwrap();
+        let current: Baseline = serde_json::from_value(serde_json::json!({
+            "violations": {
+                "target-size/egui-chrome": {"party": 12, "settings": 100},
+                "target-size": {"party": 200},
+                "no-overlap/egui-chrome": {"party": 1}
+            },
+            "task_cost": {"party": {"goal": 100}}
+        }))
+        .unwrap();
+        let updated = known.with_chrome_from(&current, &["party"]);
+        assert_eq!(updated.violations["target-size/egui-chrome"]["party"], 12);
+        assert_eq!(updated.violations["target-size/egui-chrome"]["settings"], 4);
+        assert!(
+            !updated
+                .violations
+                .contains_key("accessible-name/egui-chrome")
+        );
+        assert_eq!(updated.violations["no-overlap/egui-chrome"]["party"], 1);
+        assert_eq!(updated.violations["target-size"]["party"], 2);
+        assert_eq!(updated.violations["workflow"]["party"], 1);
+        assert_eq!(updated.task_cost["party"]["goal"], 7);
+        assert_eq!(updated.task_cost["settings"]["goal"], 3);
+    }
 
     #[test]
     fn a_column_handle_is_chrome() {
