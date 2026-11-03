@@ -4179,7 +4179,7 @@ pub mod signed_in {
             "Locked link",
             d.visible_text(BLOCKED_REASON)
                 && d.is_disabled(EDIT_DETAILS)
-                && d.is_disabled("Session folder"),
+                && d.is_disabled("Folder"),
             "With a run open, the link tab states why it is locked, and its controls are",
         );
         d.state("link-tab-during-run", Sizes::Default);
