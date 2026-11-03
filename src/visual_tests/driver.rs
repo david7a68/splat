@@ -11,6 +11,7 @@ use eframe::egui::{
 };
 use egui_kittest::{Harness, Node, kittest::NodeT};
 use std::{
+    cell::RefCell,
     path::{Path, PathBuf},
     time::{Duration, Instant},
 };
@@ -43,6 +44,7 @@ pub struct Outcome {
     pub not_measured: Vec<String>,
     pub look_review: Vec<String>,
     pub video: Option<String>,
+    pub failed_expectations: Vec<String>,
 }
 
 pub struct Driver<'a> {
@@ -68,6 +70,16 @@ pub struct Driver<'a> {
     /// Each top-level page the app showed, with the interaction count when it appeared.
     pub page_trail: Vec<(u32, String)>,
     pub outcome: Outcome,
+    failed_expectations: RefCell<Vec<String>>,
+    diagnose: bool,
+    timing: CaptureTiming,
+}
+
+#[derive(Default)]
+struct CaptureTiming {
+    render: Duration,
+    png: Duration,
+    settle: Duration,
 }
 
 impl Outcome {
@@ -174,7 +186,14 @@ impl<'a> Driver<'a> {
             Recorder::start(&directory.join("video").join(format!("{scenario}.mp4")))
                 .unwrap_or_else(|error| panic!("{scenario}: {error}"))
         });
+        let started = Instant::now();
         let harness = Self::build_harness(world, output.is_some());
+        if std::env::var_os("SPLAT_VISUAL_TIMINGS").is_some() {
+            println!(
+                "Timing {scenario}: app + fonts + renderer = {:?}",
+                started.elapsed()
+            );
+        }
         let mut driver = Self {
             harness,
             world: world.clone(),
@@ -193,6 +212,9 @@ impl<'a> Driver<'a> {
             pointer: None,
             held: false,
             page_trail: Vec::new(),
+            failed_expectations: RefCell::default(),
+            diagnose: std::env::var_os("SPLAT_VISUAL_DIAGNOSE").is_some(),
+            timing: CaptureTiming::default(),
             outcome: Outcome {
                 violations: Vec::new(),
                 passes: Vec::new(),
@@ -202,6 +224,7 @@ impl<'a> Driver<'a> {
                 not_measured: Vec::new(),
                 look_review: Vec::new(),
                 video: None,
+                failed_expectations: Vec::new(),
             },
         };
         driver.settle();
@@ -397,6 +420,7 @@ impl<'a> Driver<'a> {
                 if self.page_trail.last().is_none_or(|(_, last)| *last != page) {
                     self.page_trail.push((self.interactions, page));
                 }
+                self.timing.settle += started.elapsed();
                 return;
             }
             assert!(
@@ -536,12 +560,20 @@ impl<'a> Driver<'a> {
     /// Fail the scenario unless this text is on screen. Scripts call this so a
     /// screenshot can never silently show the wrong state.
     pub fn expect(&self, name: &str) {
-        assert!(
-            self.has_containing(name),
+        if self.has_containing(name) {
+            return;
+        }
+        let message = format!(
             "{}: expected {name:?} on screen.\n{}",
             self.scenario,
             self.describe()
         );
+        if self.diagnose {
+            eprintln!("{message}");
+            self.failed_expectations.borrow_mut().push(message);
+        } else {
+            panic!("{message}");
+        }
     }
 
     fn click_rect(&mut self, rect: egui::Rect, caption: &str) {
@@ -1509,13 +1541,17 @@ impl<'a> Driver<'a> {
             if density == 1.0 { "" } else { "@2x" }
         );
         let path = directory.join(&file);
+        let started = Instant::now();
         let image = self
             .harness
             .render()
             .unwrap_or_else(|error| panic!("{}: render failed: {error}", self.scenario));
+        self.timing.render += started.elapsed();
+        let started = Instant::now();
         image
             .save(&path)
             .unwrap_or_else(|error| panic!("Could not write {}: {error}", path.display()));
+        self.timing.png += started.elapsed();
         self.outcome.screenshots.push(file);
     }
 
@@ -1651,6 +1687,13 @@ impl<'a> Driver<'a> {
 
     pub fn finish(mut self) -> Outcome {
         self.stop_filming();
+        self.outcome.failed_expectations = self.failed_expectations.into_inner();
+        if std::env::var_os("SPLAT_VISUAL_TIMINGS").is_some() {
+            println!(
+                "Timing {}: settle = {:?}, PNG render = {:?}, PNG encode/write = {:?}",
+                self.scenario, self.timing.settle, self.timing.render, self.timing.png
+            );
+        }
         self.outcome
     }
 }
@@ -1667,4 +1710,32 @@ fn software_renderer() -> egui_kittest::wgpu::WgpuTestRenderer {
         adapter.backend,
     );
     WgpuTestRenderer::from_render_state(state)
+}
+
+#[test]
+fn diagnostic_text_failures_remain_failures_and_normal_mode_still_panics() {
+    let root = tempfile::tempdir().unwrap();
+    let world = super::fixture::World::build(
+        root.path(),
+        root.path(),
+        "text-check",
+        super::fixture::Seed::Empty,
+    )
+    .unwrap();
+    let mut driver = Driver::new(&world, "text-check", root.path(), None, false);
+    driver.diagnose = true;
+    driver.expect("missing diagnostic phrase one");
+    driver.expect("missing diagnostic phrase two");
+    assert_eq!(driver.failed_expectations.borrow().len(), 2);
+    driver.diagnose = false;
+    assert!(
+        std::panic::catch_unwind(std::panic::AssertUnwindSafe(
+            || driver.expect("missing normal phrase")
+        ))
+        .is_err()
+    );
+    let outcome = driver.finish();
+    assert_eq!(outcome.failed_expectations.len(), 2);
+    assert!(outcome.failed_expectations[0].contains("phrase one"));
+    assert!(outcome.failed_expectations[1].contains("phrase two"));
 }
