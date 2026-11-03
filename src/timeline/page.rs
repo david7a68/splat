@@ -381,13 +381,21 @@ impl TimelinePage {
             }
             return false;
         }
+        let close: Vec<_> = self
+            .places
+            .iter()
+            .filter_map(|(_, names)| {
+                names
+                    .iter()
+                    .find(|name| name.to_lowercase().contains(&typed))
+            })
+            .take(5)
+            .collect();
+        if close.is_empty() {
+            return false;
+        }
         let mut changed = false;
         ui.horizontal_wrapped(|ui| {
-            let close = self
-                .places
-                .iter()
-                .filter_map(|(_, names)| names.iter().find(|n| n.to_lowercase().contains(&typed)))
-                .take(5);
             for name in close {
                 if design::link(ui, name).clicked() {
                     event.place = name.clone();
@@ -398,7 +406,36 @@ impl TimelinePage {
         changed
     }
 
-    fn list(&mut self, ui: &mut egui::Ui, book: &Book, sessions: &[SessionLink]) {
+    fn list_messages(&mut self, ui: &mut egui::Ui, book: &mut Book) {
+        undo_removed(ui, book);
+        // It goes when the DM moves on, or soon, so that it cannot undo the wrong event.
+        self.just_added = self
+            .just_added
+            .take()
+            .filter(|(id, at)| at.elapsed() < UNDO_ADD_FOR && self.selected.as_ref() == Some(id));
+        if let Some((id, _)) = self.just_added.clone() {
+            ui.ctx().request_repaint_after(UNDO_ADD_FOR);
+            let days = day_numbers(&book.events);
+            let label = book
+                .events
+                .iter()
+                .position(|event| event.id == id)
+                .map_or_else(String::new, |at| book.events[at].label(days[at]));
+            if design::message_with_action(
+                ui,
+                Tone::Success,
+                &format!("{label} added."),
+                "Undo add",
+            ) {
+                book.remove(&id);
+                self.just_added = None;
+                self.selected = None;
+            }
+        }
+    }
+
+    fn list(&mut self, ui: &mut egui::Ui, book: &mut Book, sessions: &[SessionLink]) {
+        self.list_messages(ui, book);
         let days = day_numbers(&book.events);
         let rows: Vec<usize> = (0..book.events.len())
             .filter(|&index| self.matches(&book.events[index], days[index]))
@@ -445,32 +482,6 @@ impl TimelinePage {
 
     fn detail(&mut self, ui: &mut egui::Ui, book: &mut Book, sessions: &[SessionLink]) {
         let c = colors();
-        undo_removed(ui, book);
-        // It goes when the DM moves on, or soon, so that it cannot undo the wrong event.
-        self.just_added = self
-            .just_added
-            .take()
-            .filter(|(id, at)| at.elapsed() < UNDO_ADD_FOR && self.selected.as_ref() == Some(id));
-        if let Some((id, _)) = self.just_added.clone() {
-            ui.ctx().request_repaint_after(UNDO_ADD_FOR);
-            let days = day_numbers(&book.events);
-            let label = book
-                .events
-                .iter()
-                .position(|event| event.id == id)
-                .map_or_else(String::new, |at| book.events[at].label(days[at]));
-            if design::message_with_action(
-                ui,
-                Tone::Success,
-                &format!("{label} added."),
-                "Undo add",
-            ) {
-                book.remove(&id);
-                self.just_added = None;
-                self.selected = None;
-                return;
-            }
-        }
         let Some(id) = self
             .selected
             .clone()
@@ -497,7 +508,16 @@ impl TimelinePage {
             .position(|event| event.id == id)
             .expect("the selected event");
         let link = reference(&book.events[index], days[index]);
-        let unsaved = book.unsaved();
+        let unsaved = book.event_unsaved(&id);
+        let blocked = book
+            .unreadable
+            .as_deref()
+            .or(book.error.as_deref())
+            .or(if book.conflict {
+                Some("Changed on disk. Choose what to keep above.")
+            } else {
+                None
+            });
         let mut changed = false;
         let mut removed = false;
         let mut placed: Option<Option<String>> = None;
@@ -542,12 +562,21 @@ impl TimelinePage {
                 .on_hover_text(title);
         });
         ui.horizontal(|ui| {
-            let (icon, word, color) = if unsaved {
-                (icons::DRAFT, "Unsaved", c.document.unsaved)
+            let (icon, word, color) = if blocked.is_some() {
+                (
+                    icons::WARN,
+                    if unsaved { "Unsaved" } else { "Saving blocked" },
+                    c.document.external,
+                )
+            } else if unsaved {
+                (icons::BUSY, "Saving…", c.document.unsaved)
             } else {
                 (icons::OK, "Saved", c.document.clean)
             };
             design::status(ui, design::Status { icon, word, color });
+            if let Some(reason) = blocked {
+                ui.label(Type::Small.rich(ui, reason).color(c.muted));
+            }
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 let more = design::icon_button(
                     ui,
@@ -605,6 +634,7 @@ impl TimelinePage {
             if std::mem::take(&mut self.focus_title) {
                 title.request_focus();
             }
+            ui.add_space(design::M);
             design::field(ui, "Kind", None, None, |ui| {
                 let inner = egui::ComboBox::from_id_salt("timeline_event_kind")
                     .selected_text(event.kind.word())
@@ -619,25 +649,54 @@ impl TimelinePage {
                     });
                 design::named(ui, &inner.response, "Kind of event");
             });
+            ui.add_space(design::M);
             if event.kind != Kind::Day {
-                changed |= design::text_field(
+                design::field(
                     ui,
                     "How long",
-                    &mut event.duration,
                     Some("A number and a unit move the clock: 3 days, 8 hours, an hour."),
                     None,
-                )
-                .changed();
-            }
-            if let Some(start) = starts {
-                ui.label(
-                    Type::Small
-                        .rich(ui, format!("Starts: {}", clock_words(start)))
-                        .color(c.muted),
+                    |ui| {
+                        let hint = match event.kind {
+                            Kind::LongRest => "8 hours",
+                            Kind::ShortRest => "1 hour",
+                            _ => "",
+                        };
+                        changed |= design::text_input(
+                            ui,
+                            "How long",
+                            &mut event.duration,
+                            hint,
+                            ui.available_width(),
+                        )
+                        .changed();
+                    },
                 );
             }
+            if let Some(start) = starts {
+                ui.horizontal_wrapped(|ui| {
+                    ui.label(
+                        Type::Small
+                            .rich(ui, format!("Starts: {}", clock_words(start)))
+                            .color(c.muted),
+                    );
+                    ui.label(
+                        Type::Small
+                            .rich(
+                                ui,
+                                format!(
+                                    "Ends: {}",
+                                    clock_words(start.saturating_add(event.minutes()))
+                                ),
+                            )
+                            .color(c.muted),
+                    );
+                });
+            }
+            ui.add_space(design::M);
             changed |= design::text_field(ui, "Where", &mut event.place, None, None).changed();
             changed |= self.place_help(ui, event);
+            ui.add_space(design::M);
             design::field(ui, "Session", None, None, |ui| {
                 let label = event
                     .session
@@ -672,10 +731,12 @@ impl TimelinePage {
                 self.open_session = Some(session);
             }
             if !event.result.is_empty() {
+                ui.add_space(design::M);
                 design::field(ui, "From the run", None, None, |ui| {
                     ui.label(Type::Body.rich(ui, &event.result).color(c.text));
                 });
             }
+            ui.add_space(design::M);
             design::field(ui, "Notes", None, None, |ui| {
                 let response = ui.add(
                     egui::TextEdit::multiline(&mut event.notes)
@@ -703,6 +764,7 @@ impl TimelinePage {
                 });
             }
             ui.add_space(design::XS);
+            ui.add_space(design::M);
             design::field(ui, "Place after", None, None, |ui| {
                 let before = index
                     .checked_sub(1)
@@ -774,11 +836,15 @@ impl TimelinePage {
         design::page_header(
             ui,
             "Timeline",
-            Some(&format!(
-                "{} · Now: {}",
-                design::count(book.events.len(), "event", "events"),
-                clock_now(&book.events).map_or_else(|| "not set".to_owned(), clock_words)
-            )),
+            Some(&if book.events.is_empty() {
+                String::new()
+            } else {
+                format!(
+                    "{} · Now: {}",
+                    design::count(book.events.len(), "event", "events"),
+                    clock_now(&book.events).map_or_else(|| "not set".to_owned(), clock_words)
+                )
+            }),
             |_| {},
         );
         problems(ui, book);
@@ -810,6 +876,7 @@ impl TimelinePage {
         }
         ui.add_space(design::XS);
         if book.events.is_empty() && book.unreadable.is_none() {
+            self.list_messages(ui, book);
             let mut first = false;
             design::empty_state(
                 ui,
@@ -860,13 +927,11 @@ impl TimelinePage {
                 }
                 self.detail(ui, book, sessions);
             } else {
-                undo_removed(ui, book);
                 self.list(ui, book, sessions);
             }
             return;
         }
         if !event_open {
-            undo_removed(ui, book);
             self.list(ui, book, sessions);
             return;
         }

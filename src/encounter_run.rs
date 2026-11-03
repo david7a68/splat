@@ -2897,6 +2897,19 @@ pub struct DeletedRun {
 }
 
 impl DeletedRun {
+    /// One deletion warning on every page, including the way to keep unsent changes.
+    pub fn message(&self) -> String {
+        let name = &self.encounter;
+        if self.unsent.is_empty() {
+            format!("Deleted the saved run of {name}.")
+        } else {
+            format!(
+                "Deleted the saved run of {name}. It held changes for {} that D&D Beyond does not have. Undo to keep them.",
+                self.unsent.join(", ")
+            )
+        }
+    }
+
     /// Remove the run's file.
     pub fn delete(info: &SavedRunInfo) -> Result<Self, String> {
         let bytes = fs::read(&info.path).map_err(|e| e.to_string())?;

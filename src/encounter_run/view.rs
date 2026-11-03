@@ -863,7 +863,11 @@ impl Run {
                         let fits = design::number_width(ui, notice, &Type::Small.font(ui))
                             < ui.available_width();
                         let words = if fits { notice } else { "Recording silence" };
-                        ui.label(Type::Small.rich(ui, words).color(c.result.warning));
+                        ui.label(
+                            Type::Small
+                                .rich(ui, format!("{} {words}", icons::WARN))
+                                .color(c.result.warning),
+                        );
                     } else if nobody_present {
                         // Its first sentence, beside a long Undo. Next turn's hover has the rest.
                         let first = NOBODY_PRESENT
