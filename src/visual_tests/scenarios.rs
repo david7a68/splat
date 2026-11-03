@@ -1063,12 +1063,12 @@ pub mod encounter_run {
             format!("The row gains the condition and keeps its HP. Nothing was typed: {row}"),
         );
 
-        // The words on screen, in full, not only the accessible name.
+        // F3 keeps whole words in a fixed slot and the full action in its accessible name.
         let undo_text = format!("{UNDO}{CONDITION} on {TARGET}");
         d.observe(
             "T1.6",
-            d.visible_text(&undo_text),
-            format!("At 960x640, the button shows in full: {undo_text}"),
+            d.in_view(&undo_text) && d.visible_passage(&format!("{UNDO}{CONDITION}")),
+            format!("At 960x640, Undo shows its action and keeps the full name: {undo_text}"),
         );
         d.click_containing(UNDO);
         d.state("undo", Sizes::Default);
@@ -5300,7 +5300,8 @@ pub mod session_recording {
         d.settle();
         d.observe(
             "T11.6",
-            d.has_containing("Processed, with a warning"),
+            d.has_containing("Processed, with a warning")
+                && d.rail_words().contains("Check result"),
             "A result with a warning does not read as done on other pages",
         );
         d.state("processing-warned-elsewhere", Sizes::Default);

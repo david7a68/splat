@@ -792,10 +792,15 @@ impl Splat {
                         color,
                     },
                 );
-                if state == "Recording silence" {
-                    design::named(ui, &response, "Recording silence");
+                let full = if state == "Check result" {
+                    sessions::page::processed_warning().word
+                } else {
+                    state
+                };
+                if state == "Recording silence" || full != state {
+                    design::named(ui, &response, full);
                 }
-                if response.on_hover_text(state).clicked() {
+                if response.on_hover_text(full).clicked() {
                     self.sessions.open_live_recording();
                     self.page = Page::Sessions;
                 }
@@ -804,7 +809,6 @@ impl Splat {
                 let full = match state.word {
                     "Signed out" => "Signed out of D&D Beyond",
                     "Not remembered" => "Connected · not remembered",
-                    "Check result" => sessions::page::processed_warning().word,
                     _ => state.word,
                 };
                 let response = design::wrapped_status(ui, state).on_hover_text(full);
