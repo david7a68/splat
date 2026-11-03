@@ -524,7 +524,14 @@ impl Campaigns {
         ui.add_space(design::S);
         design::rule(ui);
         ui.add_space(design::S);
-        dndbeyond.show(ui, session, self, blocked);
+        let link_blocked = blocked.map(|reason| {
+            if reason == "Close the run to change campaigns." {
+                "Close the run to change the link."
+            } else {
+                reason
+            }
+        });
+        dndbeyond.show(ui, session, self, link_blocked);
         ui.add_space(design::S);
         design::quiet_section(ui, "Technical details", |ui| {
             ui.label(format!("ID: {}", campaign.id));

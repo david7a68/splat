@@ -317,13 +317,18 @@ struct MovedRun {
     words: String,
 }
 
-fn processing_destination(settings: &ProcessingSettings) -> String {
+fn processing_llm(settings: &ProcessingSettings) -> String {
     let config = &settings.config;
-    let llm = if config.provider == processing::Provider::CodexCli {
+    if config.provider == processing::Provider::CodexCli {
         format!("Codex ({})", config.llm_model.trim())
     } else {
         processing::host(&config.llm_url)
-    };
+    }
+}
+
+fn processing_destination(settings: &ProcessingSettings) -> String {
+    let config = &settings.config;
+    let llm = processing_llm(settings);
     format!(
         "Process sends the audio and the session and campaign names to {} for a transcript. Then the transcript, this session's name, notes and events go to {llm} twice: once to clean them, and once to check that work against the raw words.",
         processing::host(&config.speech_url)
@@ -889,7 +894,10 @@ fn recording_detail(words: &str) -> String {
         && let Some((elapsed, error)) = rest.split_once(". ")
         && elapsed.ends_with(" s")
     {
-        return format!("{step}, after {elapsed}: {error}");
+        return format!(
+            "Stopped at {}, after {elapsed}. {error}",
+            step.replacen(": ", ", ", 1).to_lowercase()
+        );
     }
     detail.to_owned()
 }
@@ -1098,6 +1106,20 @@ impl Sessions {
                 {
                     design::message(ui, Tone::Error, &alert.words);
                     ui.horizontal_wrapped(|ui| {
+                        let missing_input = alert.can_record
+                            && (settings.input_missing()
+                                || alert.words.to_lowercase().contains("no such device"));
+                        if missing_input
+                            && (if run_open {
+                                Action::secondary("Choose an input")
+                            } else {
+                                Action::primary("Choose an input")
+                            })
+                            .show(ui)
+                            .clicked()
+                        {
+                            self.wants_recording_input = true;
+                        }
                         if let Some(path) = &alert.retry
                             && (if run_open {
                                 Action::secondary("Continue processing")
@@ -1115,7 +1137,9 @@ impl Sessions {
                         }
                         if alert.can_record
                             && self.live.is_none()
-                            && (if run_open {
+                            && (if missing_input {
+                                Action::quiet("Record again")
+                            } else if run_open {
                                 Action::secondary("Record again")
                             } else {
                                 Action::primary("Record again")
@@ -1249,6 +1273,14 @@ impl Sessions {
             }
             Err(error) if error == processing::CANCELLED => {
                 self.notice = None;
+                self.raise(Alert {
+                    session,
+                    can_record: false,
+                    retry: failed_recording,
+                    word: "Cancelled",
+                    words: "Processing cancelled. Continue processing goes on from there."
+                        .to_owned(),
+                });
             }
             Err(error) => {
                 self.notice = None;
@@ -1708,9 +1740,17 @@ impl Sessions {
         }
         if let Some(word) = self.alert_words().last() {
             return Some(Status {
-                icon: icons::ERROR,
+                icon: if word == "Cancelled" {
+                    icons::WARN
+                } else {
+                    icons::ERROR
+                },
                 word,
-                color: c.result.error,
+                color: if word == "Cancelled" {
+                    c.result.warning
+                } else {
+                    c.result.error
+                },
             });
         }
         if self.job_warned() {
@@ -2630,7 +2670,28 @@ impl Sessions {
                         let state = if live == Some(note.id) || job == Some(note.id) {
                             self.rail_recording_status()
                         } else {
-                            None
+                            self.alerts
+                                .iter()
+                                .rev()
+                                .find(|alert| alert.session == note.id)
+                                .map(|alert| {
+                                    let cancelled = alert.word == "Cancelled";
+                                    Status {
+                                        icon: if cancelled { icons::WARN } else { icons::ERROR },
+                                        word: if cancelled {
+                                            "Cancelled"
+                                        } else if alert.can_record {
+                                            "Stopped"
+                                        } else {
+                                            "Failed"
+                                        },
+                                        color: if cancelled {
+                                            colors().result.warning
+                                        } else {
+                                            colors().result.error
+                                        },
+                                    }
+                                })
                         };
                         let detail = if let Some(state) = state {
                             format!("{} {}", state.icon, state.word)
@@ -4302,21 +4363,13 @@ impl Sessions {
             }
         });
         if self.confirm_again.as_deref() == Some(recording.path.as_path()) {
-            ui.scope(|ui| {
-                ui.set_max_width(ui.available_width().min(design::READER_MEASURE));
-                ui.add(
-                    egui::Label::new(
-                        Type::Small
-                            .rich(ui, processing_destination(settings))
-                            .color(c.muted),
-                    )
-                    .wrap(),
-                );
-            });
             design::message(
                 ui,
                 Tone::Info,
-                "This asks the LLM again, and replaces the summary, the clean transcript and what the check changed. The raw transcript stays. Events you added stay on the timeline, and a reworded suggestion can offer Add again.",
+                &format!(
+                    "This sends the raw transcript, this session's name, notes and events to {} twice. The audio is not sent again. It replaces the summary, the clean transcript and what the check changed. Events you added stay on the timeline.",
+                    processing_llm(settings)
+                ),
             );
             ui.horizontal(|ui| {
                 if Action::secondary("Not now").show(ui).clicked() {
@@ -4863,11 +4916,15 @@ impl Sessions {
                 .wrap(),
             );
             ui.add_space(design::S);
-            ui.horizontal(|ui| {
-                keep |= Action::secondary("Keep the recording").show(ui).clicked();
-                ui.add_space(design::L);
-                delete = Action::destructive("Delete recording").show(ui).clicked();
-            });
+            ui.allocate_ui_with_layout(
+                egui::vec2(ui.available_width(), Density::Read.control()),
+                egui::Layout::right_to_left(egui::Align::Center),
+                |ui| {
+                    delete = Action::destructive("Delete recording").show(ui).clicked();
+                    ui.add_space(design::L);
+                    keep |= Action::secondary("Keep the recording").show(ui).clicked();
+                },
+            );
         });
         if keep {
             self.confirm_delete = None;

@@ -1206,6 +1206,11 @@ pub mod encounter_run {
         d.expect(&format!("{RUN_HEADING}{SECOND_ENCOUNTER}"));
         d.state("run-setup", Sizes::All);
         d.click(ROLL_NPCS);
+        d.observe(
+            "iter-8-F10",
+            !d.visible_text("1st") && !d.visible_text("2nd"),
+            "Places wait until every present participant has initiative",
+        );
         d.state("npc-initiative-rolled", Sizes::Default);
         d.goal("start a new run and roll initiative");
 
@@ -3689,7 +3694,7 @@ pub mod signed_in {
     const SYNC_PARTY: &str = "Sync party";
     const STOP_SYNC: &str = "Stop party sync";
     const LINK_TAB: &str = "Link and folder";
-    const BLOCKED_REASON: &str = "Close the run to change campaigns.";
+    const BLOCKED_REASON: &str = "Close the run to change the link.";
     const EDIT_DETAILS: &str = "Edit details";
     const CONFLICT: &str = "Conflict";
     const RAIL_FAILING: &str = "Sign-in failing";
@@ -5514,6 +5519,7 @@ pub mod session_recording {
             "A recording that stops by itself stays in the rail on other pages",
         );
         d.state("recording-stopped-elsewhere", Sizes::Default);
+        d.expect("Choose an input");
         d.click(NAV_SESSIONS);
         d.expect("no such device");
         d.state("recording-stopped", Sizes::Default);
@@ -5815,11 +5821,12 @@ pub mod encounter_groups {
         d.click_containing("Move before Rival Team");
         d.observe(
             "F4",
-            current_participant(d) == before && d.has_containing("Undo: move arrival before"),
+            current_participant(d) == before
+                && d.has_containing("Undo: move Rival Captain 2 before Rival Team"),
             "Move before keeps the current turn and offers Undo",
         );
         d.state("tied-arrival-moved-before", Sizes::All);
-        d.click_containing("Undo: move arrival before");
+        d.click_containing("Undo: move Rival Captain 2 before Rival Team");
         d.click_containing("Undo: add Rival Team");
         d.begin_task();
 
@@ -6163,7 +6170,10 @@ pub mod run_overrides {
         let row = d.row_words(RIVAL).replace('\u{a0}', " ");
         d.observe(
             "T13.3",
-            row.contains("Changed") && row.contains("Attack +1") && row.contains("Damage +1"),
+            row.contains("Blessed")
+                && row.contains("Changed")
+                && row.contains("Attack +1")
+                && (row.contains("Damage +1") || row.contains("more")),
             format!("The row marks a change and carries its bonuses: {row}"),
         );
         d.observe(

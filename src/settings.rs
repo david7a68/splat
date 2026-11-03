@@ -336,9 +336,18 @@ impl Settings {
         } else {
             ui.horizontal(|ui| {
                 design::status(ui, state);
+                if self.account() == Account::RefreshFailing {
+                    ui.label(
+                        Type::Small
+                            .rich(ui, "Sync works for about one more minute.")
+                            .color(colors().muted),
+                    );
+                }
                 if design::Action::quiet(
                     if matches!(self.account(), Account::NotConnected | Account::Failed) {
                         "Connect…"
+                    } else if self.account() == Account::RefreshFailing {
+                        "Connect again…"
                     } else {
                         "Account…"
                     },
@@ -426,10 +435,12 @@ impl Settings {
             self.focus_sign_in();
         }
         if self.sign_in_again || matches!(account, Account::NotConnected | Account::Failed) {
-            small(
-                ui,
-                "Connect your account to import campaigns and read characters.",
-            );
+            if self.error.as_deref() != Some(SESSION_ENDED) {
+                small(
+                    ui,
+                    "Connect your account to import campaigns and read characters.",
+                );
+            }
             if design::link(ui, "Open D&D Beyond sign-in").clicked() {
                 ui.ctx()
                     .open_url(egui::OpenUrl::new_tab("https://www.dndbeyond.com/sign-in"));
