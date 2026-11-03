@@ -532,3 +532,129 @@ in the first scan; [`devenv.nix`](../../devenv.nix),
 [`hermetic.rs`](../../src/hermetic.rs). The driver checks all size plans regardless
 of capture mode, then renders when output is enabled; the combined command uses
 that unchanged capture path.
+
+## Fourth scan: compare captures in parallel
+
+2026-11-03. Base: `5c176b4551e9a73a7a23277578b69703fd1f4232` (main,
+after PRs 54–56). Same 16-core, 31 GiB machine, Rust 1.95.0 and devenv
+2.2.2. The suite now has 54 scenarios and 1,110 captures. Pinned inputs,
+lockfiles, profiles and gate commands are unchanged.
+
+### What iteration 4 spent time on
+
+The bodies of [PR 54](https://github.com/david7a68/splat/pull/54),
+[PR 55](https://github.com/david7a68/splat/pull/55) and
+[PR 56](https://github.com/david7a68/splat/pull/56) were read with
+`gh pr view <n> --json body,url,headRefOid`. These are historical observations,
+not controlled measurements:
+
+| PR | Reported time | Cause or implication |
+| --- | --- | --- |
+| 54 | Final gates 86 and 314 s; partial run 263 s; three later diagnostic runs 60–61 s | The final gate queued on the shared fixture lock. The early partial run also had a wrong-case painted-text wait that reached its 180 s timeout. |
+| 55 | Targeted runs 203, 46, 68 and 267 s; later gates 74–82 s | The long targeted runs queued on the fixture lock. Combining tests and captures already removed the duplicate scenario pass. |
+| 56 | Gate 263 s, then 149 s; passing gates 113, 77 and 84 s | The 263 s failure waited for an accessible name as painted text; the 149 s gate included a fixture-lock wait. Fixes and main merges still required complete final gates. |
+
+Most remaining large costs need the larger work listed below. This scan found one
+small saving in capture comparison, outside rendering and the merge gate.
+
+### Change retained
+
+[`compare`](../../src/visual_tests/compare.rs) now uses the existing Rayon
+dependency to decode and compare independent image pairs in parallel. It collects
+small results in indexed filename order, then emits the same ordered report. It
+still decodes both images even when their PNG bytes match, checks dimensions,
+and uses the original per-channel tolerance of 2. Decode errors are retained as
+results until collection completes, so the first error still names the first
+invalid file in sorted order. Workers release each decoded pair before taking
+another; decoded images for the whole suite are not collected in memory.
+
+No app, renderer, PNG encoder, scenario, fixture, capture scheduling, size plan,
+ergonomics baseline or merge-gate code changes. The full tests and every capture
+remain required before merge. This is a faster optional `visual-compare` step,
+not a faster `visual-test` or `audit-gate`, and not a replacement for human review.
+
+### Alternating measurements
+
+| Stage | Before median | After median | Saving |
+| --- | ---: | ---: | ---: |
+| Compare all 1,110 fixed capture pairs | 7.48 s | 2.61 s | 4.87 s (65.1%) |
+| Pairs decoded per run | 1,110 | 1,110 | None skipped |
+| Reported changed captures / exit status | 3 / 101 | 3 / 101 | Identical |
+
+The fixed inputs are copies of PR 56's final `iter-4-B` capture set. The second
+copy has one red-channel change of 64 in each of three files; all other bytes
+are held fixed. Thus the benchmark checks preserved failure reporting as well as
+the common equal-image path. Each version reports exactly the same three names,
+one differing pixel per name, maximum gap 64, and failure status 101.
+
+Every run decodes all 447 captures at 960×640, 445 at 1200×800, 201 at
+1920×1080, and 17 at 2400×1600 (the existing HiDPI plan). The before executable
+was saved before editing; the after executable was built with the unchanged
+pinned toolchain and profiles. Both live under this worktree's `target/audit-speed-4/`.
+The timer covers the linked comparison test and a 250 ms completion poll;
+compilation and devenv entry are excluded. Each process still starts through a
+fresh `devenv shell --`. These warm-filesystem measurements do not estimate
+concurrent-implementer throughput or end-to-end audit savings.
+
+| Run, in pair order | Seconds | Start (Toronto) | Start load 1/5/15 | End load 1/5/15 | Other build/test | Exit |
+| --- | ---: | --- | --- | --- | --- | ---: |
+| before-1 | 7.610 | 07:28:15 | 2.26, 12.74, 17.60 | 2.07, 12.35, 17.42 | No | 101 |
+| after-1 | 2.636 | 07:29:16 | 2.25, 10.67, 16.55 | 2.25, 10.67, 16.55 | No | 101 |
+| before-2 | 7.356 | 07:29:31 | 1.90, 10.32, 16.38 | 2.08, 10.08, 16.23 | No | 101 |
+| after-2 | 2.582 | 07:29:42 | 2.07, 9.94, 16.15 | 2.07, 9.94, 16.15 | No | 101 |
+
+Only one of our benchmarks/builds ran at a time. A host process monitor sampled
+Cargo, rustc, Clippy, linkers, Splat and ffmpeg every 250 ms, excluding this run's
+descendants. No competing build/test was detected in the four measurements;
+seven reviewers continued reading PNGs. Load values are literal 1/5/15-minute
+averages and include earlier machine activity.
+
+Raw commands, stdout/stderr, process samples, run metadata, exact normalized
+comparison reports and input dimensions are under ignored
+`artifacts/screenshots/audit-speed-4/`. Fixed input copies also live there;
+all build output stays in `target/`. No build output or large files were put in
+`/tmp`. The small comparison unit-test fixtures use the existing `tempfile`
+convention.
+
+### Verification
+
+The comparison tests cover equal pixels, within-tolerance noise, changed pixels,
+missing files on either side, mismatched dimensions, sorted report order and
+identical corrupt PNGs. The corrupt-file test confirms that matching file bytes
+do not bypass PNG validation and that the first invalid filename remains stable.
+
+Final validation passed: `SPLAT_VISUAL_VIDEO=0 SPLAT_VISUAL_TIMINGS=1 devenv
+shell -- audit-gate audit-speed-4-final` ran formatting, warnings-denied Clippy,
+all 706 tests (187 library + 519 binary; 12 existing ignored), documentation and
+other binary targets, all 54 scenarios, and all 1,110 captures. The visual suite
+reported 56.61 s; this is validation, not a paired capture-speed measurement.
+Capture names and dimensions match the final PR-56 set. Both ergonomics reports
+and `chrome-observation.json` are byte-identical to that set, and every manifest
+SHA-256 was checked against its PNG. A separate complete equal-set comparison
+passes with 1,110 pairs and no differences. `git diff --check` passed.
+
+The comparison benchmark uses fixed existing images, so its equality claim is
+exact and does not depend on the app's pre-existing screenshot nondeterminism
+recorded in earlier scans. It does not claim that independent new app runs
+produce identical PNG bytes.
+
+### Larger ideas still requiring separate work
+
+These are estimates, not measured gains from this scan.
+
+| Idea | Opportunity | Effort estimate |
+| --- | --- | --- |
+| Isolate fixtures at identical visible paths with mount namespaces | Remove suite-sized lock queues seen in all three iteration-4 PRs; retain cache isolation, cleanup and non-Linux behavior. | 0.5–1 day plus full paired capture validation |
+| Diagnose remaining visible nondeterminism, then bound scenario concurrency | The first scan's limit-16 trial saved about 6 s; it remains reverted because pixel fidelity was not proved. | 2–4 h for determinism, then 1–2 h for paired full trials |
+| Cache more immutable catalogue/fixture work | Existing SRD parsing and generated fixture PNG caches already remove duplicate work. Remaining possible gain 1–10 s per suite, unmeasured. | 0.5–1 day |
+| Tune rasterizer threads or Cargo jobs under concurrent implementers | Possible contention savings; idle CPU during review cannot establish useful limits. | 1–2 h plus complete image comparisons |
+| Agree landing order before final gates | Reduce repeated merge-and-retest rounds while still gating every final source. | 30–60 min per audit; savings depend on merge order |
+
+Sources: PR bodies linked above; the repository's
+[comparer](../../src/visual_tests/compare.rs),
+[full suite](../../src/visual_tests/mod.rs),
+[gate commands](../../devenv.nix), and
+[existing dependencies/profiles](../../Cargo.toml); Rayon's
+[`IndexedParallelIterator`](https://docs.rs/rayon/1.12.0/rayon/iter/trait.IndexedParallelIterator.html)
+and [indexed collection implementation](https://docs.rs/rayon/1.12.0/src/rayon/iter/collect/mod.rs.html).
+The installed Rayon 1.12.0 source was also inspected; no dependency update is made.
