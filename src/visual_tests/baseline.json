@@ -1,7 +1,7 @@
 {
   "violations": {
     "accessible-name/egui-chrome": {
-      "campaign-content": 72,
+      "campaign-content": 60,
       "column-resize": 91,
       "dialogs": 45,
       "empty": 15,
@@ -9,12 +9,12 @@
       "encounter-groups": 72,
       "encounter-history": 30,
       "encounter-owned-groups": 67,
-      "encounter-run": 53,
+      "encounter-run": 52,
       "gallery": 30,
       "library-author": 50,
       "library-browse": 79,
       "library-navigation": 31,
-      "library-scope": 8,
+      "library-scope": 7,
       "library-to-encounter": 20,
       "nav-state": 24,
       "party": 43,
@@ -41,7 +41,7 @@
       "session-recording": 116,
       "settings": 27,
       "signed-in": 38,
-      "world": 43
+      "world": 42
     },
     "in-viewport/egui-chrome": {
       "campaign-content": 6
@@ -60,7 +60,7 @@
       "world": 3
     },
     "target-size/egui-chrome": {
-      "campaign-content": 72,
+      "campaign-content": 60,
       "column-resize": 91,
       "dialogs": 44,
       "empty": 15,
@@ -68,12 +68,12 @@
       "encounter-groups": 72,
       "encounter-history": 30,
       "encounter-owned-groups": 66,
-      "encounter-run": 52,
+      "encounter-run": 51,
       "gallery": 29,
       "library-author": 49,
       "library-browse": 79,
       "library-navigation": 31,
-      "library-scope": 7,
+      "library-scope": 6,
       "library-to-encounter": 20,
       "nav-state": 24,
       "party": 43,
@@ -100,7 +100,7 @@
       "session-recording": 112,
       "settings": 26,
       "signed-in": 38,
-      "world": 42
+      "world": 41
     }
   },
   "task_cost": {
