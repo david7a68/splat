@@ -1091,6 +1091,7 @@ pub mod encounter_run {
             format!("At 960x640, Undo shows its action and keeps the full name: {undo_text}"),
         );
         d.click_containing(UNDO);
+        d.expect_same("Undo returns to the Conditions panel before the condition was added.");
         d.state("undo", Sizes::Default);
         d.observe(
             "T1.6",
@@ -1187,6 +1188,9 @@ pub mod encounter_run {
         d.state("npc-roll-menu", Sizes::Default);
         d.check_tab_order("NPC roll menu");
         d.click("Individually");
+        d.expect_same(
+            "Rolling another way changes only the initiative numbers in the same Setup rows.",
+        );
         d.state("npc-initiative-rolled-individually", Sizes::Default);
         d.goal_within(
             "Roll once another way",
@@ -1567,6 +1571,7 @@ pub mod run_lookup {
         d.begin_task();
         d.press(Key::Escape);
         d.expect(RUN_HEADING);
+        d.expect_same("Closing Lookup returns to the preserved run and selected participant.");
         d.state("back-in-the-run", Sizes::All);
         d.goal_within("T2.2", "return to the run", 1);
         d.observe(
@@ -1786,6 +1791,7 @@ pub mod run_absent_player {
             ),
         );
         d.click(&format!("No initiative for {PLAYER}"));
+        d.expect_same("Opening the inline initiative field changes only this small row control.");
         d.state("initiative-field-in-row", Sizes::All);
         let top = d.row_node(TURN_ORDER_FIRST).map(|row| row.rect.top());
         d.type_text("20");
@@ -2438,6 +2444,7 @@ pub mod nav_state {
 
         go_library(d);
         let library = d.has_containing(SEARCH_RESULTS) && d.in_view(CREATURE);
+        d.expect_same("Library keeps its search and reader when returning from another page.");
         d.state("library-returned", Sizes::Default);
 
         go_campaign(d);
@@ -2446,10 +2453,12 @@ pub mod nav_state {
 
         go_party(d);
         let party = d.in_view_containing(MEMBER) && d.in_view_containing(SHEET_PAGE_TEXT);
+        d.expect_same("Party keeps the selected member and sheet page on return.");
         d.state("party-returned", Sizes::Default);
 
         go_encounters(d);
         let encounters = d.in_view_containing(ROSTER_TEXT);
+        d.expect_same("Encounters keeps its open editor on return.");
         d.state("encounters-returned", Sizes::Default);
         d.goal("return to every page");
         d.observe(
@@ -2552,6 +2561,7 @@ pub mod party_from_run {
 
         // The hardest rows: 0 HP, absent, and many conditions. Words, not only colour.
         d.click_row(MEMBER);
+        d.expect_same("Returning to Kestrel restores the same sheet beside the unchanged run.");
         d.state("sheet-returned-to-kestrel", Sizes::Default);
         let correct_y = d.place_of("Correct").map(|rect| rect.min.y);
         d.type_text(ZERO_DAMAGE);
@@ -3100,6 +3110,7 @@ pub mod run_restart {
         let before_resume = d.interaction_count();
         d.click_starting("Paused run ·");
         d.expect(NEXT_TURN);
+        d.expect_same("Resuming the paused run restores the saved turn and participant state.");
         d.state("paused-run-resumed-from-rail", Sizes::All);
         d.observe(
             "P3",
@@ -3152,6 +3163,9 @@ pub mod run_edge_states {
             "Long effects",
             d.visible_text(LONG_EFFECT),
             "More opens Conditions with the full effect",
+        );
+        d.expect_same(
+            "More returns to Conditions with the full effect already shown after adding it.",
         );
         d.state("full-effect-in-conditions", Sizes::Default);
         d.begin_task();
@@ -3248,6 +3262,9 @@ pub mod run_edge_states {
             d.click("Close menu");
         }
         d.click(CLOSE_RUN);
+        d.expect_same(
+            "A second disk conflict opens the same close recovery choices for the new file.",
+        );
         d.state("save-new-run-before-close", Sizes::All);
         d.click("Save as a new run and close");
         let closed = !d.app_mut().encounters.has_run();
@@ -5118,6 +5135,7 @@ pub mod session_recording {
             .simulate_recorder_health(Health::Hearing);
         d.settle();
         d.expect("Hearing sound");
+        d.expect_same("Only the small sound-health label changes from Waiting to Hearing sound.");
         d.state("recording-hearing", Sizes::AllAndHiDpi);
         d.click("Recordings");
         d.expect(&format!("{} Recording", crate::design::icons::RECORD));
@@ -5415,7 +5433,7 @@ pub mod session_recording {
             seconds: 9,
         });
         d.settle();
-        go_library(d);
+        go_party(d);
         d.app_mut().sessions.simulate_job_end_warned(WARNING);
         d.settle();
         d.observe(
@@ -5566,6 +5584,7 @@ pub mod encounter_groups {
                 && d.in_view_containing("Changes for Ember Cultist"),
             "Done closes the form and returns to its member",
         );
+        d.expect_same("Done closes the changes form and restores the unchanged group editor.");
         d.state("group-changes-done", Sizes::Default);
         d.click("Back to encounters");
 
