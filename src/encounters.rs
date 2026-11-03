@@ -608,13 +608,6 @@ fn detail_columns(ui: &mut egui::Ui, detail: &str, source: Option<&str>) {
     ui.spacing_mut().interact_size.y = 0.0;
     ui.horizontal(|ui| {
         ui.spacing_mut().item_spacing.x = 0.0;
-        if detail.starts_with("NPC · as ") {
-            ui.label(
-                Type::Small
-                    .rich(ui, parts[..2].join(" · "))
-                    .color(colors().muted),
-            );
-        }
         for (prefix, width) in COLUMNS {
             let part = parts
                 .iter()
@@ -629,6 +622,14 @@ fn detail_columns(ui: &mut egui::Ui, detail: &str, source: Option<&str>) {
                         ui.label(Type::Small.rich(ui, *part).color(colors().muted));
                     }
                 },
+            );
+        }
+        if detail.starts_with("NPC · as ") {
+            ui.add_space(design::S);
+            ui.label(
+                Type::Small
+                    .rich(ui, parts[..2].join(" · "))
+                    .color(colors().muted),
             );
         }
         // Only whole: a cut name says nothing, and Read always shows it.
@@ -2468,6 +2469,12 @@ impl Encounters {
             } else {
                 (ui.available_rect_before_wrap().width()
                     - design::S * if unfinished.is_some() { 38.0 } else { 33.0 }
+                    - if has_run {
+                        design::number_width(ui, "Close the open run first", &Type::Small.font(ui))
+                            + design::L
+                    } else {
+                        0.0
+                    }
                     - if dirty {
                         0.0
                     } else {
@@ -2539,6 +2546,10 @@ impl Encounters {
                     })
                     .show(ui)
                     .clicked();
+                    if has_run {
+                        blocked_reason(ui, Some("Close the open run first"));
+                        ui.add_space(design::L);
+                    }
                     save = if dirty && !has_run && unfinished.is_none() {
                         Action::primary("Save encounter")
                     } else {
@@ -2569,6 +2580,9 @@ impl Encounters {
             if dirty || saved_note.is_some() {
                 design::status(ui, Status { icon, word, color });
             }
+            if dirty {
+                blocked_reason(ui, Some(draft_switch_reason()));
+            }
             if let Some(run) = &unfinished {
                 design::status(
                     ui,
@@ -2596,14 +2610,6 @@ impl Encounters {
                     ),
             );
         });
-        ui.allocate_ui(egui::vec2(ui.available_width(), Type::Small.line()), |ui| {
-            if dirty {
-                blocked_reason(ui, Some(draft_switch_reason()));
-            }
-        });
-        if has_run {
-            blocked_reason(ui, Some("Close the open run to start this fight."));
-        }
         if unfinished.is_some() {
             blocked_reason(
                 ui,
@@ -3064,7 +3070,7 @@ impl Encounters {
     fn sync_option(ui: &mut egui::Ui, draft: &mut Draft, snapshot: &Snapshot, party: &Party) {
         ui.checkbox(&mut draft.setup.combat_sync, SYNC_OPTION);
         let words = if draft.setup.combat_sync {
-            "The party starts with the HP and conditions on their sheets. The run and D&D Beyond stay matched."
+            "The party starts with the HP and conditions on their sheets. When connected, the run and D&D Beyond stay matched."
         } else {
             "The party starts from their saved copies and the starting values here. Nothing in this encounter reaches D&D Beyond, unless you select Sync party in the run."
         };
@@ -3079,7 +3085,14 @@ impl Encounters {
             .filter_map(|slot| slot_sheet(slot, snapshot, party))
             .collect();
         if let Some(line) = crate::party::party_line(&sheets, party.connected()) {
-            ui.add(egui::Label::new(Type::Small.rich(ui, line).color(colors().text)).wrap());
+            ui.horizontal_wrapped(|ui| {
+                ui.add(egui::Label::new(Type::Small.rich(ui, line).color(colors().text)).wrap());
+                if !party.connected() && design::link(ui, "Connect to sync").clicked() {
+                    ui.ctx().data_mut(|data| {
+                        data.insert_temp(egui::Id::new("open_account_settings"), true)
+                    });
+                }
+            });
         }
     }
 
@@ -3200,11 +3213,18 @@ impl Encounters {
                             );
                             if !detail.is_empty() {
                                 // What a player has left is the reason to look, so all of it shows.
-                                let line = egui::Label::new(
-                                    Type::Small.rich(ui, stat_line(&detail)).color(colors().muted),
-                                );
-                                let response = ui.add(line.wrap());
-                                design::named(ui, &response, &detail);
+                                ui.spacing_mut().interact_size.y = 0.0;
+                                ui.horizontal_wrapped(|ui| {
+                                    ui.spacing_mut().item_spacing.x = 0.0;
+                                    for (at, part) in detail.split(" · ").enumerate() {
+                                        if at > 0 { ui.label(Type::Small.rich(ui, " · ").color(colors().muted)); }
+                                        if part == "Bloodied" {
+                                            design::status(ui, Status { icon: icons::BLOODIED, word: part, color: colors().hp.bloodied });
+                                        } else {
+                                            ui.label(Type::Small.rich(ui, stat_line(part)).color(colors().muted));
+                                        }
+                                    }
+                                });
                             }
                         });
                     });

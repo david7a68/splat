@@ -194,7 +194,7 @@ control still has an accessible name and a tooltip.
 discard` stays until the next edit. It stands apart from `Save`, and it shows only when
 there is something to discard. A session note changed on disk shows the draft and disk text side by side in the Write view’s styled source face. Text wraps at word boundaries. A selected surface and a line mark identify differing lines. The choices stay above the comparison, which uses the whole session body while the plan is hidden. A file that changed on disk stops saving and asks: the run
 offers `Replace the file with this run` and `Save as a new run`, and a Library note offers `Overwrite with my
-draft` and the separate red `Reload and lose my draft`. Library uses the same side-by-side comparison, with `N lines differ` and `Next difference`. Both comparisons open with the first difference and two lines of context in view. A missing line says `No line`. Neither choice has an accent fill. One message says: “This note changed on disk. Your draft is safe until you choose.” These messages cannot be dismissed.
+draft` and the separate red `Reload and lose my draft`. Library uses the same side-by-side comparison, with `N lines differ` and `Next difference` only for two or more differing lines. Both comparisons open with the first difference and two lines of context in view. A missing line says `No line`. Neither choice has an accent fill. One message says: “This note changed on disk. Your draft is safe until you choose.” These messages cannot be dismissed.
 
 ## The Reader
 
@@ -336,16 +336,16 @@ file is exactly what was typed and Obsidian reads the same text. The box fills i
 so a note keeps its line breaks between the two views. A session's notes, events and recordings follow the column, because these are the DM's own working pages. The books' rules prose keeps `READER_MEASURE`. `Read` is the one Reader. The gallery's `Markdown` sheet shows both from one note. A draft saves two seconds after the last edit, because at the
 table nobody stops to press Save. During the autosave delay, notes show Saving… in muted with the busy icon. A file changed elsewhere stops saving and asks, as in "Keeping a draft".
 
-Plan row actions show their message and Undo below the affected row with an S gap. Add-strip messages stay beside Add. A removed plan group stays in page state until the next note or plan edit. Duplicate saved-run names include their session or a save date; copies saved on the same date also show the save time. Resume has the run icon. Session and Library conflicts use the shared comparison. It opens at the first difference with two whole lines of context above it. Session also names the nearest heading.
+Plan row actions show their message and Undo below the affected row with an S gap. Removing a planned group puts the message and Undo in its old row’s place and keeps the other rows still. The second line of a plan row can use the width below its action. Summary items wrap together with their separator, so a line never ends with a dot. Add-strip messages stay beside Add. A removed plan group stays in page state until the next note or plan edit. Duplicate saved-run names include their session or a save date; copies saved on the same date also show the save time. Resume has the run icon. Session and Library conflicts use the shared comparison. It opens at the first difference with two whole lines of context above it. Session also names the nearest heading.
 
 The timeline is a ledger, not a chart. It is one column in story order, with a hairline spine and an icon and
 a word for each kind. A day uses the shared group-heading style, without a rule, and numbers itself. It has no card and no
 colour for kinds, because a kind is not a state. An event's detail sits beside the list, with the same width
-rule as Lookup. The detail column exists only when an event is selected. Its header stays above the scrolling form: kind, title, save state, Copy link and a row menu with Remove. Selecting a different event resets the fields to the top. A copy uses a check and Copied on the button for two seconds. Link text stays in a quiet section; Place after is the one ordering control. Adds to shares the filter line. Added and removed notices sit in the list column. Selecting or adding an event resets its form to the top. Its context line shows the visible count out of the total while a search or filter is active. The filter says Major events. Removing an event says how many notes still link to it. Its save word tracks its own edits: Saving… in muted during the delay, Saved when unchanged, and Unsaved with a reason when saving is blocked. A rest shows its default duration as a faint placeholder, and Starts and Ends beside the duration help. Field labels have an M gap before them.
+rule as Lookup. The detail column exists only when an event is selected. Its header stays above the scrolling form: kind, title, save state, Copy link and a row menu with Remove. Selecting a different event, opening Timeline or changing its filters resets the fields to the top. The scrolling fields clip below the fixed header. A Day shows Starts without an Ends time. A copy uses a check and Copied on the button for two seconds. Link text stays in a quiet section; Place after is the one ordering control. Adds to shares the filter line. Added and removed notices sit in the list column. Selecting or adding an event resets its form to the top. Its context line shows the visible count out of the total while a search or filter is active. The filter says Major events. Removing an event says how many notes still link to it. Its save word tracks its own edits: Saving… in muted during the delay, Saved when unchanged, and Unsaved with a reason when saving is blocked. A rest shows its default duration as a faint placeholder, and Starts and Ends beside the duration help. Field labels have an M gap before them.
 
 Party uses one group-heading style throughout Overview. Saving throws and skills use two or three columns. Lists with eight or fewer entries have no filter or separate count line; the shared group heading holds the count. Local-edit warnings name the character, keep actions on the first line at the right edge and say that replacement keeps a copy.
 The affected list row says `Local edits`. A replacement names the character, with Show file for the kept version and Dismiss.
-An empty Party has one Connect D&D Beyond action. Spell levels have their own counts, with no extra Spells heading; cantrips omit Prepared.
+An empty Party has one Connect D&D Beyond action. Spell levels have their own counts, with no extra Spells heading; cantrips omit Prepared and use one-line rows. Coins sit below the Equipment & coins heading. Bloodied uses the run’s heart icon, word and colour on Party and encounter roster rows.
 Technical details stays closed and uses plain words for rules not read yet or not supported.
 
 A live microphone has the only colour here. `Record` takes a second, inline step that says to tell the table.
@@ -384,7 +384,7 @@ icons are glyphs or painter shapes. `design::icons` names only the glyphs in use
   It is a reference, not a full inventory: some tokens and whole-screen parts, such as the
   run row and the dialogs, are seen in their own scenarios.
 - `visual_tests::ergonomics`: target size, accessible name, in view, overlap (including
-  over labels), clipped text (any ellipsis, or text past its pane's edge, read from the
+  over labels, except a label fully inside its own interactive ancestor), clipped text (any ellipsis, or text past its pane's edge, read from the
   painted shapes), keyboard reach, and the workflow goals. Each check except the workflow
   goals has a seeded failure in its unit tests. Workflow goals were shown to fail by breaking
   the app for one run.
@@ -412,11 +412,11 @@ Library keeps search and the selected result when its scope changes. Empty categ
 
 Inline creation forms use a Label title, fields, then a named Create action, its Small blocked reason, an L gap, and quiet Cancel. A Library draft states its cause once in the existing save row; controls that share the cause use its hover text. Typing never inserts a line above the editor. Campaign save state also belongs only in its save row. Lookup Back and Open in Library share the title line. Plain World notes use one-line rows. A typed table roll has the well fill, a centred placeholder, and the dice as its column heading. Fixed table headers cover passing rows with page fill and a hairline.
 
-Settings uses `CAMPAIGNS` and `D&D BEYOND ACCOUNT` group headings in both layouts. In the compact layout, the open account form replaces the status line and its `Connect…` link. The account verb is `Connect`; states include `Not connected` and `Signed out of D&D Beyond`. A keyring warning owns its `Connect again` action. `Disconnect` is quiet and follows the trust text. The add-campaign form closes after a successful add.
+Settings uses `CAMPAIGNS` and `D&D BEYOND ACCOUNT` group headings in both layouts. In the compact layout, the open account form replaces the status line and its `Connect…` link. The account verb is `Connect`; states include `Not connected` and `Signed out of D&D Beyond`. A keyring warning owns its `Connect again` action. `Disconnect` is quiet and follows the trust text. A quiet action on its own line aligns its word with the text above it; its target can extend into the gutter. The add-campaign form closes after a successful add.
 
-Settings shows one Connecting status, and Cancel aligns with the column. Connect is primary when a cookie is entered and no run owns the primary action. The rail shortens Connected · not remembered to Not remembered; its hover text and accessible name keep the full state. The import form keeps the campaign name in its field and omits the remote identifier, repeated heading and open row's Add action. An API key saved for another service keeps Save key visible with Paste a key first; removing that other key is a separate quiet action.
+Settings shows one Connecting status, and Cancel aligns with the column. Connect is primary when a cookie is entered, no campaign form is open and no run owns the primary action. An unchanged campaign form blocks Save details with No changes to save. Settings leaves its header context empty; campaign counts stay on their list heading. The rail shortens Connected · not remembered to Not remembered; its hover text and accessible name keep the full state. The import form keeps the campaign name in its field and omits the remote identifier, repeated heading and open row's Add action. An API key saved for another service keeps Save key visible with Paste a key first; removing that other key is a separate quiet action.
 
-Recording settings clip at the tab rule, with `L` above each section. Visible field labels are `Service`, `Address`, `Model` and `API key`; accessible names keep the service context. The page header names the processing state, such as `Speech key missing` or `Ready to process`. A remove-key button names its slot and service, for example Remove speech key (OpenAI). A saved key for the chosen service with no replacement typed hides Save key and its empty-field reason.
+Recording settings clip at the tab rule, with `L` above each section. Visible field labels are `Service`, `Address`, `Model` and `API key`; accessible names keep the service context. A remove-key button names its slot and service, for example Remove speech key (OpenAI). It sits below the key state at the column’s left edge. A saved key for the chosen service with no replacement typed hides Save key and its empty-field reason.
 
 Recording retries say Continue processing. Process again is reserved for replacing existing results; its confirmation has secondary Not now and red Replace the results. A live row puts Stop recording first. beside Process. A job shows one spinner and one Processing progress line. The session list omits the date while a recording or job runs. Not processed uses the neutral file icon. Transcript marker actions sit beside the marker in the text.
 
@@ -488,3 +488,18 @@ hand. Editors, run cards and fault details share the same preview. Done closes a
 change form and returns to its member row. An empty group blocks Save group with
 Add a creature first. A tied arrival states who it tied with and offers Move before
 as one step with Undo. Member summaries wrap between members, never inside a name.
+
+## Session and preparation audit, iteration 5
+
+Record remains available during a note conflict because it writes its own file.
+A missing note says Notes not saved with the same error status in its header and the rail.
+The rail shortens Notes changed on disk to Changed on disk and keeps the full name on hover and for accessibility.
+Built-in templates use the styled source face without an input well, at full column height.
+The session Number field is five L units wide.
+
+Encounter drafts keep Save or discard to switch campaign on their save row.
+A blocked Start fight shows Close the open run first beside it. Clean group saves use
+No changes to save beside Save group, with no second clean status.
+NPC search results keep CR, HP and AC in fixed columns and put NPC · as Guard after AC.
+An offline Party now line offers Connect to sync. The first-sheet-read help keeps its Settings link inside the Small sentence. Initiative tie arrows have one fixed slot
+before the ordinal and use the standard setup row height.
