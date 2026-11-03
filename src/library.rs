@@ -226,33 +226,18 @@ impl Loaded {
             .notes
             .iter()
             .map(|note| {
-                let line = note
-                    .entry
-                    .as_ref()
-                    .map_or_else(|| "Invalid note".to_owned(), presentation::subtitle);
-                match &note.owner {
-                    Owner::Builtin => line,
-                    Owner::Package(module) => format!("{line} · {}", module.name),
-                    Owner::Campaign(_) => format!("{line} · Campaign"),
-                }
+                let source = match &note.owner {
+                    Owner::Builtin => None,
+                    Owner::Package(module) => Some(module.name.as_str()),
+                    Owner::Campaign(_) => Some("Campaign"),
+                };
+                note.entry.as_ref().map_or_else(
+                    || "Invalid note".to_owned(),
+                    |entry| presentation::list_subtitle(entry, source),
+                )
             })
             .collect();
-        let mut labels = std::collections::HashMap::new();
-        for (i, note) in self.notes.iter().enumerate() {
-            labels
-                .entry((note.name(), subtitles[i].clone()))
-                .or_insert_with(Vec::new)
-                .push(i);
-        }
-        for indices in labels.values().filter(|indices| indices.len() > 1) {
-            for &i in indices {
-                // The printed page tells them apart, in the DM's own terms.
-                if let Some(page) = self.notes[i].entry.as_ref().and_then(source_page) {
-                    subtitles[i].push_str(&format!(" · {page}"));
-                }
-            }
-        }
-        // Two on one page: a plain count is all that is left to tell them apart.
+        // Identical names and parents retain a stable count as a last resort.
         let mut seen = std::collections::HashMap::new();
         for (i, note) in self.notes.iter().enumerate() {
             let count = seen
@@ -293,26 +278,8 @@ const ENTRY_ROW_HEIGHT: f32 = 44.0;
 const SEARCH_NAME: &str = "Search the Library";
 
 // Fixed height keeps the virtual scroll position independent of label length.
-fn entry_row(
-    ui: &mut egui::Ui,
-    name: &str,
-    subtitle: &str,
-    owner: &Owner,
-    selected: bool,
-) -> egui::Response {
-    // Only when the whole line fits: a cut name says nothing, and the reader always shows it.
-    // The line of an entry from any other package names it already.
-    let room = ui.available_width() - 2.0 * design::S;
-    let with_package = (*owner == Owner::Builtin)
-        .then(|| format!("{subtitle} · {BUILTIN_NAME}"))
-        .filter(|line| design::number_width(ui, line, &Type::Small.font(ui)) <= room);
-    design::two_line_row(
-        ui,
-        ENTRY_ROW_HEIGHT,
-        selected,
-        name,
-        with_package.as_deref().unwrap_or(subtitle),
-    )
+fn entry_row(ui: &mut egui::Ui, name: &str, subtitle: &str, selected: bool) -> egui::Response {
+    design::two_line_row(ui, ENTRY_ROW_HEIGHT, selected, name, subtitle)
 }
 
 fn local_module(path: &Path) -> Result<Module, String> {
@@ -594,7 +561,6 @@ fn load_key(campaigns: &Campaigns) -> LoadKey {
 
 #[derive(Default)]
 pub struct Library {
-    list_is_empty: bool,
     /// The list should scroll to the selected entry, which arrived by a link.
     reveal_row: bool,
     /// The draft `Discard changes` last dropped, with its note's path, for one step of undo.
@@ -632,6 +598,7 @@ pub struct Library {
     pub run_open: bool,
     pending_edit: Option<Entry>,
     scope_notice: Option<String>,
+    new_form: bool,
     new_name: String,
     new_kind: String,
     source: bool,
@@ -642,12 +609,6 @@ pub struct Library {
     pub peek: Option<Uuid>,
     history: Vec<BackStep>,
 }
-/// `pp. 35`, where a built-in entry is printed.
-fn source_page(entry: &Entry) -> Option<String> {
-    let sources = entry.fields.get("splat_sources")?.as_sequence()?;
-    Some(sources.first()?.get("locator")?.as_str()?.to_owned())
-}
-
 /// Sort so that "Level 2" comes before "Level 18".
 fn natural_key(name: &str) -> Vec<(String, u64)> {
     let lower = name.to_lowercase();
@@ -784,7 +745,7 @@ impl Library {
             .is_some_and(|n| n.text != self.draft)
     }
     pub fn form_open(&self) -> bool {
-        self.form || self.confirm_unregister.is_some()
+        self.form || self.new_form || self.confirm_unregister.is_some()
     }
     /// A draft in the campaign's own folder must block a campaign switch.
     pub fn campaign_draft(&self) -> bool {
@@ -925,15 +886,29 @@ impl Library {
         let compact = ui.available_width() < 900.0 || self.disk_change.is_some();
         let mut open_form = false;
         let mut reload = false;
-        ui.horizontal(|ui| {
-            ui.set_min_height(Density::Scan.control());
-            ui.label(Type::Title.rich(ui, "Library").color(colors().text));
-            ui.add_space(design::M);
-            // Beside what it changes, not across the page from it.
-            self.scope_menu(ui, compact, campaigns);
-            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+        let total = self.loaded.as_ref().map_or(0, |loaded| {
+            loaded
+                .notes
+                .iter()
+                .filter(|n| loaded.in_scope(n, self.scope))
+                .count()
+        });
+        let mut new_entry = false;
+        design::page_header(
+            ui,
+            "Library",
+            Some(&design::count(total, "entry", "entries")),
+            |ui| {
+                let no_place =
+                    campaigns.active_campaign().is_none() && campaigns.modules().is_empty();
+                new_entry = Action::secondary("New entry")
+                    .icon(icons::ADD)
+                    .blocked(locked.or(no_place.then_some("Add a campaign or a package first.")))
+                    .show(ui)
+                    .clicked();
                 design::locked(ui, locked, |ui| {
-                    ui.menu_button("Packages", |ui| {
+                    let response = Action::quiet("Packages").show(ui);
+                    egui::Popup::menu(&response).show(|ui| {
                         if ui.button("Reload the Library").clicked() {
                             reload = true;
                             ui.close();
@@ -942,13 +917,15 @@ impl Library {
                             open_form = true;
                             ui.close();
                         }
-                    })
-                    .response
-                    .on_disabled_hover_text(locked.unwrap_or_default());
+                    });
                 });
-            });
-        });
-        design::rule(ui);
+            },
+        );
+        design::blocked_reason(ui, locked);
+        if new_entry {
+            self.new_form = true;
+            self.form = false;
+        }
         if let Some(words) = &self.scope_notice {
             design::message(ui, Tone::Info, words);
         }
@@ -956,23 +933,31 @@ impl Library {
             self.start_load(ui.ctx(), campaigns);
         }
         if open_form {
+            self.new_form = false;
             self.form = !self.form;
         }
         if campaigns.active_campaign().is_none() {
-            ui.horizontal(|ui| {
-                // Level with the action beside it. A message aligns to the top of its row.
-                ui.vertical(|ui| {
-                    ui.add_space((Density::Read.control() - Type::Body.line()) / 2.0);
-                    design::message(
-                        ui,
-                        Tone::Info,
-                        "No campaign yet. Next step: add one in Settings.",
-                    );
-                });
-                if Action::primary("Open Settings")
-                    .density(Density::Read)
-                    .show(ui)
-                    .clicked()
+            ui.horizontal_wrapped(|ui| {
+                ui.label(
+                    Type::Small
+                        .rich(
+                            ui,
+                            if campaigns.all().is_empty() {
+                                "No campaign yet. Add a campaign or a package to create entries."
+                            } else {
+                                "No campaign open. The Library works without one."
+                            },
+                        )
+                        .color(colors().muted),
+                );
+                if Action::secondary(if campaigns.all().is_empty() {
+                    "Add a campaign"
+                } else {
+                    "Choose a campaign"
+                })
+                .density(Density::Read)
+                .show(ui)
+                .clicked()
                 {
                     self.wants_settings = true;
                 }
@@ -994,7 +979,6 @@ impl Library {
             return;
         }
 
-        self.new_entry(ui, dirty, campaigns);
         let Some(loaded) = &self.loaded else {
             return;
         };
@@ -1061,6 +1045,37 @@ impl Library {
             .map(|(_, counts)| counts.clone())
             .unwrap_or_default();
         let searching = !self.search.trim().is_empty();
+        let empty_scope = scope == Scope::Campaign && count_of(Section::All, &counts) == 0;
+        if empty_scope {
+            Self::scope_menu(
+                ui,
+                compact,
+                campaigns,
+                &mut self.scope,
+                &mut self.section,
+                &mut self.search,
+            );
+            if self.new_form {
+                self.new_entry(ui, dirty, campaigns);
+            } else {
+                design::empty_state(
+                    ui,
+                    icons::LIBRARY,
+                    "No entries of your own yet",
+                    "This campaign has no entries of its own yet. Use Copy to… from any entry, or create one here.",
+                    |ui| {
+                        if Action::primary("New entry")
+                            .icon(icons::ADD)
+                            .show(ui)
+                            .clicked()
+                        {
+                            self.new_form = true;
+                        }
+                    },
+                );
+            }
+            return;
+        }
         if !compact {
             design::Column::left("library_sections", 166.0, 150.0..=280.0)
                 // The drag handle is on this edge, so the rows stop short of it.
@@ -1069,6 +1084,14 @@ impl Library {
                     ..Default::default()
                 }))
                 .show_inside(ui, |ui| {
+                    Self::scope_menu(
+                        ui,
+                        compact,
+                        campaigns,
+                        &mut self.scope,
+                        &mut self.section,
+                        &mut self.search,
+                    );
                     egui::ScrollArea::vertical()
                         .id_salt("section_list")
                         .show(ui, |ui| {
@@ -1082,7 +1105,14 @@ impl Library {
                                 }
                                 if !group.is_empty() {
                                     ui.add_space(design::M);
-                                    design::group_label(ui, group);
+                                    design::group_heading(
+                                        ui,
+                                        group,
+                                        sections
+                                            .iter()
+                                            .map(|section| count_of(*section, &counts))
+                                            .sum(),
+                                    );
                                     ui.add_space(design::XS);
                                 }
                                 for &section in sections {
@@ -1169,7 +1199,6 @@ impl Library {
             self.matches = Some((self.section, query.clone(), found));
         }
         let matches = &self.matches.as_ref().unwrap().2;
-        self.list_is_empty = matches.is_empty();
         // Keep the reader in sync with the visible list without dropping an unsaved draft.
         let mut select = None;
         // The whole catalogue has no first entry worth opening for the DM.
@@ -1198,6 +1227,9 @@ impl Library {
                 bottom: 0,
             }))
             .show_inside(ui, |ui| {
+                if compact {
+                    Self::scope_menu(ui, compact, campaigns, &mut self.scope, &mut self.section, &mut self.search);
+                }
                 ui.horizontal(|ui| {
                     let width =
                         ui.available_width() - if self.search.is_empty() { 0.0 } else { 72.0 };
@@ -1238,29 +1270,7 @@ impl Library {
                     design::named(ui, &combo.response, "Section");
                 }
                 ui.add_space(design::XS);
-                ui.horizontal(|ui| {
-                    ui.label(
-                        Type::Heading
-                            .rich(
-                                ui,
-                                if searching {
-                                    "Search results"
-                                } else {
-                                    self.section.label()
-                                },
-                            )
-                            .color(colors().text),
-                    );
-                    ui.label(
-                        Type::Small
-                            .rich(
-                                ui,
-                                design::count(matches.len(), "entry", "entries"),
-                            )
-                            .color(colors().muted),
-                    );
-                });
-                design::rule(ui);
+                design::group_heading(ui, if searching { "Search results" } else { self.section.label() }, matches.len());
                 if matches.is_empty() {
                     ui.add_space(design::S);
                     let text = if scope == Scope::Campaign && !searching {
@@ -1290,14 +1300,18 @@ impl Library {
                         for row in range {
                             let i = matches[row];
                             let note = &loaded.notes[i];
-                            let subtitle = &subtitles[i];
+                            let line = &subtitles[i];
+                            let subtitle = match (&note.owner, scope) {
+                                (Owner::Campaign(_), Scope::Campaign) => line.strip_suffix(" · Campaign").unwrap_or(line),
+                                (Owner::Package(module), Scope::Package(id)) if module.id == id => line.strip_suffix(&format!(" · {}", module.name)).unwrap_or(line),
+                                _ => line,
+                            };
                             let response = ui
                                 .push_id(i, |ui| {
                                     entry_row(
                                         ui,
                                         note.name(),
                                         subtitle,
-                                        &note.owner,
                                         selected == Some(i),
                                     )
                                 })
@@ -1344,6 +1358,8 @@ impl Library {
             .show_inside(ui, |ui| {
                 if self.form {
                     self.package_form(ui, campaigns);
+                } else if self.new_form {
+                    self.new_entry(ui, dirty, campaigns);
                 } else {
                     self.editor(ui, &subtitle);
                 }
@@ -1351,7 +1367,14 @@ impl Library {
     }
 
     /// What the catalogue shows. Choosing here never changes the active campaign.
-    fn scope_menu(&mut self, ui: &mut egui::Ui, compact: bool, campaigns: &Campaigns) {
+    fn scope_menu(
+        ui: &mut egui::Ui,
+        compact: bool,
+        campaigns: &Campaigns,
+        current: &mut Scope,
+        section: &mut Section,
+        search: &mut String,
+    ) {
         let active = campaigns.active_campaign();
         let label = |scope: Scope| -> String {
             match scope {
@@ -1369,16 +1392,19 @@ impl Library {
                 ),
             }
         };
-        let mut scope = if active.is_none() && matches!(self.scope, Scope::Uses | Scope::Campaign) {
+        let mut scope = if active.is_none() && matches!(*current, Scope::Uses | Scope::Campaign) {
             Scope::All
         } else {
-            self.scope
+            *current
         };
         let before = scope;
         let combo = egui::ComboBox::from_id_salt("library_scope")
             .icon(design::combo_icon)
-            .width(if compact { 150.0 } else { 240.0 })
-            .truncate()
+            .width(
+                ui.available_width()
+                    .min(if compact { 150.0 } else { 166.0 }),
+            )
+            .wrap()
             .selected_text(label(scope))
             .show_ui(ui, |ui| {
                 ui.set_min_width(260.0);
@@ -1400,11 +1426,11 @@ impl Library {
                 }
             });
         design::named(ui, &combo.response, "What the Library shows");
-        self.scope = scope;
+        *current = scope;
         if scope != before {
             // The selected entry can stay if it is in this scope. A draft always stays.
-            self.search.clear();
-            self.section = Section::All;
+            search.clear();
+            *section = Section::All;
         }
     }
 
@@ -1632,6 +1658,10 @@ impl Library {
         if self.loaded.is_none() {
             return;
         }
+        if ui.input_mut(|input| input.consume_key(egui::Modifiers::NONE, egui::Key::Escape)) {
+            self.new_form = false;
+            return;
+        }
         // Where a new entry can go: the campaign, or a package. Never the built-in rules.
         let mut places: Vec<Owner> = campaigns
             .modules()
@@ -1655,7 +1685,14 @@ impl Library {
             .new_place
             .filter(|place| *place < places.len())
             .unwrap_or(default_place);
-        design::section(ui, "New entry", |ui| {
+        ui.vertical(|ui| {
+            ui.set_max_width(ui.available_width().min(design::READER_MEASURE));
+            ui.horizontal(|ui| {
+                design::group_label(ui, "New entry");
+                if Action::quiet("Cancel").show(ui).clicked() {
+                    self.new_form = false;
+                }
+            });
             ui.label(
                 Type::Small
                     .rich(
@@ -1664,20 +1701,31 @@ impl Library {
                     )
                     .color(colors().muted),
             );
-            ui.horizontal_wrapped(|ui| {
-                design::text_input(ui, "Entry name", &mut self.new_name, "Entry name", 180.0);
+            ui.vertical(|ui| {
+                design::text_field(ui, "Entry name", &mut self.new_name, None, None);
                 if self.new_kind.is_empty() {
                     self.new_kind = "creature".into();
                 }
+                design::group_label(ui, "Kind");
                 let combo = egui::ComboBox::from_id_salt("new_kind")
                     .icon(design::combo_icon)
-                    .selected_text(&self.new_kind)
+                    .selected_text(
+                        self.new_kind
+                            .replace('_', " ")
+                            .chars()
+                            .enumerate()
+                            .map(|(i, c)| if i == 0 { c.to_ascii_uppercase() } else { c })
+                            .collect::<String>(),
+                    )
                     .show_ui(ui, |ui| {
                         for kind in ["creature", "spell", "item", "effect", "rule", "rule_group"] {
-                            ui.selectable_value(&mut self.new_kind, kind.into(), kind);
+                            let word = kind.replace('_', " ");
+                            let word = format!("{}{}", word[..1].to_uppercase(), &word[1..]);
+                            ui.selectable_value(&mut self.new_kind, kind.into(), word);
                         }
                     });
                 design::named(ui, &combo.response, "Kind of entry");
+                design::group_label(ui, "Where");
                 let combo = egui::ComboBox::from_id_salt("new_place")
                     .icon(design::combo_icon)
                     .width(150.0)
@@ -1692,11 +1740,12 @@ impl Library {
                 let blocked = if dirty {
                     Some("Save or discard this entry first.")
                 } else if self.new_name.trim().is_empty() {
-                    Some("Enter a name first.")
+                    Some("Type a name first.")
                 } else {
                     None
                 };
-                if Action::secondary("Create entry")
+                design::blocked_reason(ui, blocked);
+                if Action::primary("Create entry")
                     .blocked(blocked)
                     .show(ui)
                     .clicked()
@@ -1735,6 +1784,7 @@ impl Library {
                             self.source = true;
                             self.draft = text;
                             self.new_name.clear();
+                            self.new_form = false;
                             self.error = None;
                             // Show the new entry, wherever the DM chose to put it.
                             if self
@@ -1873,17 +1923,12 @@ impl Library {
 
     fn editor_pane(&mut self, ui: &mut egui::Ui, subtitle: &str) {
         let Some(i) = self.selected else {
-            ui.label(
-                Type::Body
-                    .rich(
-                        ui,
-                        if self.list_is_empty {
-                            "Nothing to read here yet."
-                        } else {
-                            "Choose an entry from the list to read it."
-                        },
-                    )
-                    .color(colors().muted),
+            design::empty_state(
+                ui,
+                icons::LIBRARY,
+                "Read the Library",
+                "Choose an entry from the list to read it, or create an entry of your own.",
+                |_| {},
             );
             return;
         };
@@ -1970,7 +2015,7 @@ impl Library {
                 },
                 Owner::Campaign(_) => Status {
                     icon: icons::EDIT,
-                    word: "Campaign-owned",
+                    word: "Campaign",
                     color: d.clean,
                 },
             }
@@ -2364,7 +2409,6 @@ mod tests {
                         ui,
                         &"Long entry name ".repeat(30),
                         &"Long subtitle ".repeat(30),
-                        &Owner::Builtin,
                         false,
                     );
                     assert_eq!(response.rect.height(), 44.0);
@@ -2410,39 +2454,6 @@ mod tests {
         loaded.invalidate();
         assert_eq!(loaded.count(Section::All), 2);
         assert_eq!(loaded.subtitles().len(), 2);
-    }
-
-    #[test]
-    fn built_in_row_names_its_package_only_when_the_whole_line_fits() {
-        let line_at = |width: f32| {
-            let ctx = egui::Context::default();
-            let output = ctx.run(
-                egui::RawInput {
-                    screen_rect: Some(egui::Rect::from_min_size(
-                        egui::Pos2::ZERO,
-                        egui::vec2(width, 200.0),
-                    )),
-                    ..Default::default()
-                },
-                |ctx| {
-                    egui::CentralPanel::default().show(ctx, |ui| {
-                        entry_row(ui, "Fireball", "Spell · Level 3", &Owner::Builtin, false);
-                    });
-                },
-            );
-            output
-                .shapes
-                .iter()
-                .find_map(|shape| match &shape.shape {
-                    egui::Shape::Text(text) if text.galley.job.text.starts_with("Spell") => {
-                        Some(text.galley.job.text.clone())
-                    }
-                    _ => None,
-                })
-                .unwrap()
-        };
-        assert_eq!(line_at(600.0), format!("Spell · Level 3 · {BUILTIN_NAME}"));
-        assert_eq!(line_at(150.0), "Spell · Level 3");
     }
 
     #[test]

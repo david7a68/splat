@@ -66,7 +66,7 @@ HP and initiative hold their place because the font's digits have one width.
 | `StatLabel` / `Stat` | SmText 13 / 18 | Stat block rows |
 | `Mono` | Monospace 13 | Markdown source |
 
-**Measure.** `READER_MEASURE` is 488 px at `Prose`, about 62 characters on average and
+**Measure.** Lists of rows with actions use `LIST_MEASURE` (880 px), so actions stay near the names. `READER_MEASURE` is 488 px at `Prose`, about 62 characters on average and
 at most 75 (T6.1). Prose never fills a wide window.
 
 **The run has its own scale.** `RunScale` holds a row height and type sizes, and
@@ -142,9 +142,9 @@ tooltips, and separators. Text cursors do not blink, because motion draws the ey
 
 | Part | Function | Notes |
 |---|---|---|
-| Page header | `page_header` | Title, one line of context, actions on the right |
+| Page header | `page_header` | Title and one `Small` muted state or count on the same baseline; actions on the right; a hairline below. Never repeat the campaign name |
 | Nav item | `nav_item` | Icon and word. Accent bar when selected |
-| Buttons | `Action::primary / secondary / quiet / destructive` | `.blocked(reason)` disables and shows why (G1). `.key("N")` shows the key beside the word |
+| Buttons | `Action::primary / secondary / quiet / destructive` | `.blocked(reason)` disables; put `blocked_reason` beside it in visible `Small` text (G1). `.key("N")` shows the key beside the word |
 | Split button | `split_action` | An `Action` that does the default, and a caret that opens a menu of the other ways |
 | Field | `field` | Label, control, help, error; names the control for accessibility |
 | Text fields | `text_field`, `text_input`, `number_field`, `search_field`, `named` | Always have an accessible name and a 26 px target. Numbers align left, so the caret never lies on a digit |
@@ -157,13 +157,26 @@ tooltips, and separators. Text cursors do not blink, because motion draws the ey
 | Status | `status`, `status_link`, `Status` | Icon, word, colour. `status_link` also leads to where the DM can act |
 | Stat tile | `stat_tile` | A label over a large value, with no box |
 | HP | `hp_bar`, `hp_readout`, `hp_state` | Fixed slots. Temp HP is separate |
-| Empty state | `empty_state` | What this is, and the one next step |
+| Empty state | `empty_state` | What this is, and the one next step. At the top of an empty pane or page, with its normal padding |
+| Group heading | `group_heading` | `Type::Label` in capitals and a muted, nonzero count after it. No rule. Serif headings belong to readers and stat blocks |
+| Row menu | `row_menu` | Quiet `⋯` at the right edge, named `More actions for <name>`. Put Remove and Delete here |
 | Message | `message`, `Tone` | Inline. Never modal |
 | Side panel | `side_panel_width`, `panel_header` | One width rule for Lookup, Notes and the run. The run separates participant tabs from fight tabs |
 | Column | `Column::left / right / panel` | Every side column: the rail, a page's list, a panel. A drag handle on its inner edge. Natural width until dragged, then the DM's width, here and after a restart. A drag always leaves the page its room, and the run's roster keeps `RUN_LIST_KEEPS`. What sits beside a column reaches its edge, so no blank band opens between them. Text keeps its measure inside that room |
 | Link | `link` | A real `Link` role, at least 24 px high |
 | Number | `number`, `number_width` | Right-aligned digits |
 | Count | `count` | `1 entry`, `2 entries` |
+
+Header actions have at most one bordered secondary button, for `New …`. Other header actions are quiet and come before it.
+The Library scope control sits at the top of its category column. At a narrow width, it sits above the list.
+
+**R-6: Empty states.** The full `empty_state` (icon, serif title and text) belongs to an empty pane or page only. An empty section inside a list page shows one muted line under its heading, with no `0` count.
+
+One accent-filled primary action can be in view. On other pages while a run is open, the run strip's `Next turn` owns the primary fill. `Back to run` is secondary.
+A page uses `status_link`, for example `Running · Round 2`, to show a run's state and open it.
+An on toggle uses `selected`, its icon or a check, and its word. It does not use the accent fill.
+Delete and Remove belong in a row menu, away from the primary action. A save row has the save-state word and quiet `Discard` at the left, and `Save` at the right.
+Use red only for an action that loses something.
 
 Icons support words. They replace a word only where the meaning is universal, and then the
 control still has an accessible name and a tooltip.
@@ -201,6 +214,35 @@ fight**, on this page and on Encounters. Add buttons stay at the foot of the pla
 that they do not move under the pointer. A fight's row lists the party first, with HP right-aligned in the run's tints, and
 everyone else behind one word. In a page narrower than 720 px, the plan and the note have a tab each.
 
+## The encounter ledger and editor
+
+Encounters uses one column, at most 880 px wide. The sections are `IN PROGRESS`,
+`READY TO RUN`, `GROUPS`, and `HISTORY`, in that order. Group headings use `Label`
+and a muted count, without a rule. Empty sections hide the count and show one muted
+line with the next step. Groups and History start closed when they have rows. Each row keeps
+its main action, quiet `Edit`, and `⋯` menu at the column’s right edge. The menu is
+named `More actions for <name>`. It holds deletion and starting another run.
+An unfinished run shows `In progress · Round 2` and `Resume`. An open run shows the
+status link `Running · Round 2`. The strip owns the primary `Next turn` and secondary
+`Back to run`. An encounter with an unfinished run appears only in In progress. When
+the run ends, its encounter returns to Ready to run. With `Keep in Ready during a run`
+on, its Ready row keeps `Start fight` blocked and says to resume from In progress.
+History opens a read-only final state and log in place. It never takes the live-run slot.
+A paused run stays in the rail and resumes in one click.
+
+Roster rows have the name and second line, side menu, quiet `Edit`, then `⋯`.
+The menu holds ordering, duplication, `Make it yours`, and removal. A creature
+result’s name opens its stat block; its one button is `Add`. A party member already
+present shows `In roster`. The sync and repeat options follow the roster. The
+header keeps Save and Start on its first line, and the name field gives up width.
+`Discard` is quiet beside the save-state word. A blocked Start shows its reason.
+The side picker offers `Party`, `Enemies`, and `Other…` in every editor.
+
+A plan group editor takes the full notes column; the note stays behind its tab.
+Member names and stats have their own lines above Count, Edit, and the row menu.
+A summary of members stays below the search. Removing an encounter’s group makes
+it available for any encounter on Save, with Undo until that save.
+
 ## The live run
 
 The roster is the screen. Every row has fixed columns: initiative, side mark, name, AC,
@@ -227,7 +269,7 @@ the panel, those words open the second line instead, so that a name is never cut
 - **Overflow:** when rows still cannot fit, a line under the list says how many are above
   and below, with any `Conflict`, `0 HP` and `Bloodied` among them. A row cut by the edge
   counts as out of view. Each turn scrolls to show the current row and the next.
-- **Strip:** on other pages, a line with the turn, any conflict, `Back to run` and `Next turn`.
+- **Strip:** on other pages, a line with the turn, any conflict, secondary `Back to run` and primary `Next turn`.
 - **Changed:** a creature with overrides has `Changed` on its second line, then anything the
   run cannot apply, such as `Attack +1` or `Speed 40 ft`, because the DM needs it at the table. A setup
   row has the word `Changed` only. Its card lists each

@@ -53,6 +53,57 @@ fn main() -> eframe::Result {
     )
 }
 
+/// The paused detail wraps below the Run label, at the same inset as an open run.
+fn paused_run_item(ui: &mut egui::Ui, detail: &str) -> egui::Response {
+    let c = colors();
+    let name = format!("Run · {detail}");
+    let label_inset = design::S * 3.0 + design::XS;
+    let detail = ui.painter().layout(
+        detail.to_owned(),
+        Type::Small.font(ui),
+        c.muted,
+        (ui.available_width() - label_inset - design::XS).max(design::S),
+    );
+    let height = (Type::Body.line() + detail.size().y + design::S)
+        .max(Density::Glance.control() + design::XS);
+    let (rect, response) = ui.allocate_exact_size(
+        egui::vec2(ui.available_width(), height),
+        egui::Sense::click(),
+    );
+    response.widget_info(|| {
+        egui::WidgetInfo::labeled(egui::WidgetType::Button, ui.is_enabled(), &name)
+    });
+    if ui.is_rect_visible(rect) {
+        if response.hovered() {
+            ui.painter()
+                .rect_filled(rect, design::RADIUS_CONTROL, c.hover);
+        }
+        ui.painter().text(
+            rect.min + egui::vec2(design::S + design::XS / 2.0, design::XS),
+            egui::Align2::LEFT_TOP,
+            icons::RUN,
+            Type::Body.font(ui),
+            c.muted,
+        );
+        ui.painter().text(
+            rect.min + egui::vec2(label_inset, design::XS),
+            egui::Align2::LEFT_TOP,
+            "Run",
+            Type::Body.font(ui),
+            c.muted,
+        );
+        ui.painter().galley(
+            rect.min + egui::vec2(label_inset, Type::Body.line() + design::XS),
+            detail,
+            c.muted,
+        );
+        if response.has_focus() {
+            design::focus_ring(ui, rect);
+        }
+    }
+    response
+}
+
 struct Splat {
     page: Page,
     campaign_tab: CampaignTab,
@@ -629,8 +680,33 @@ impl Splat {
             {
                 ui.label(Type::Small.rich(ui, reason).color(c.muted));
             }
+            if self.encounters.draft_dirty() {
+                ui.add(
+                    egui::Label::new(
+                        Type::Small
+                            .rich(ui, "Save or discard the draft first")
+                            .color(c.muted),
+                    )
+                    .wrap(),
+                );
+            }
             ui.add_space(design::S);
-            if self.encounters.has_run() {
+            if !self.encounters.has_run() {
+                let paused = self.encounters.paused_run().map(|run| {
+                    let round = run
+                        .label
+                        .split(" · ")
+                        .find(|part| part.starts_with("Round "))
+                        .unwrap_or("Round 0");
+                    (run.path.clone(), format!("{round} · Paused"))
+                });
+                if let Some((path, detail)) = paused
+                    && paused_run_item(ui, &detail).clicked()
+                    && let Some(active) = self.campaigns.active_campaign()
+                {
+                    self.encounters.open_saved_run(&path, &active);
+                }
+            } else {
                 let strip = self.encounters.run().map(|run| run.strip());
                 let detail = strip.as_ref().map(|strip| {
                     if strip.running {
@@ -773,6 +849,7 @@ impl Splat {
             .map(|run| run.arrivals_in_run())
             .unwrap_or_default();
         self.lookup.run_open = self.encounters.has_run();
+        self.world_page.run_open = self.encounters.has_run();
         if let Some(words) = self.world_page.ask_lookup.take() {
             self.notes_give_way();
             self.lookup.search_for(&words);
@@ -845,13 +922,25 @@ impl Splat {
             },
             Connection::Failing => Status {
                 icon: icons::WARN,
-                word: "Session failing",
+                word: "Sign-in failing",
                 color: c.result.warning,
             },
             Connection::Offline => Status {
-                icon: icons::OFFLINE,
-                word: "Not connected",
-                color: c.connection.offline,
+                icon: if self.settings.connection_failed() {
+                    icons::ERROR
+                } else {
+                    icons::OFFLINE
+                },
+                word: if self.settings.connection_failed() {
+                    "Connection failed"
+                } else {
+                    "Not connected"
+                },
+                color: if self.settings.connection_failed() {
+                    c.result.error
+                } else {
+                    c.connection.offline
+                },
             },
         }];
         for (dirty, word) in [
@@ -862,6 +951,7 @@ impl Splat {
             ),
             (self.encounters.creature_dirty(), "Creature draft"),
             (self.campaign_content.dirty(), "Campaign draft"),
+            (self.encounters.settings_unsaved(), "Run settings draft"),
         ] {
             if dirty {
                 statuses.push(Status {
@@ -1071,24 +1161,47 @@ impl Splat {
             });
     }
 
-    fn no_campaign(&mut self, ui: &mut egui::Ui, title: &str) {
-        let mut settings = false;
-        design::page_header(ui, self.page.name(), None, |_| {});
-        let icon = match self.page {
-            Page::Encounters => icons::ENCOUNTERS,
-            Page::Party => icons::PARTY,
-            _ => icons::CAMPAIGN,
-        };
+    fn no_campaign(&mut self, ui: &mut egui::Ui) {
+        let no_campaigns = self.campaigns.all().is_empty();
+        design::page_header(
+            ui,
+            self.page.name(),
+            Some(if no_campaigns {
+                "No campaigns"
+            } else {
+                "No campaign open"
+            }),
+            |_| {},
+        );
+        let mut add = false;
         design::empty_state(
             ui,
-            icon,
-            title,
-            "Add a campaign in Settings. The Library works without one.",
+            icons::CAMPAIGN,
+            if no_campaigns {
+                "No campaign yet"
+            } else {
+                "No campaign open"
+            },
+            "A campaign keeps your notes, party and encounters together. The Library works without one.",
             |ui| {
-                settings = Action::primary("Open Settings").show(ui).clicked();
+                if self.page == Page::Campaign && no_campaigns {
+                    self.campaigns.show_add_form(ui);
+                } else {
+                    add = Action::primary(if no_campaigns {
+                        "Add a campaign"
+                    } else {
+                        "Choose a campaign"
+                    })
+                    .show(ui)
+                    .clicked();
+                }
             },
         );
-        if settings {
+        if add {
+            if no_campaigns {
+                self.campaigns.focus_add();
+            }
+            self.settings_tab = SettingsTab::Account;
             self.page = Page::Settings;
         }
     }
@@ -1101,7 +1214,11 @@ impl Splat {
                 design::page_header(
                     ui,
                     "Settings",
-                    Some("Your D&D Beyond account, your campaign list, and session recording"),
+                    Some(&design::count(
+                        self.campaigns.all().len(),
+                        "campaign",
+                        "campaigns",
+                    )),
                     |_| {},
                 );
                 let tab_changed = design::segmented(
@@ -1115,12 +1232,13 @@ impl Splat {
                 if tab_changed {
                     self.processing.look_again();
                 }
+                design::rule(ui);
                 if self.settings_tab == SettingsTab::Recording {
                     egui::ScrollArea::vertical()
                         .id_salt("recording_settings")
                         .auto_shrink([false, false])
                         .show(ui, |ui| {
-                            ui.add_space(design::S);
+                            ui.add_space(design::L);
                             ui.set_max_width(design::FORM_WIDTH + design::XXL);
                             self.processing.show(ui);
                         });
@@ -1146,7 +1264,7 @@ impl Splat {
                                     campaigns.show(ui, session.clone(), dndbeyond);
                                 });
                             };
-                        if ui.available_width() >= 720.0 {
+                        if ui.ctx().content_rect().width() >= 1000.0 {
                             // A clear gutter, so that the left column's text does not run on.
                             // Not `ui.columns`, whose justified layout stretches the words in a paragraph.
                             let width = (ui.available_width() - design::XL) / 2.0;
@@ -1154,14 +1272,12 @@ impl Splat {
                                 ui.spacing_mut().item_spacing.x = design::XL;
                                 let column = egui::vec2(width, 0.0);
                                 let layout = egui::Layout::top_down(egui::Align::Min);
-                                // A first campaign needs no account, so that path comes first.
-                                let list_first = self.campaigns.all().is_empty();
                                 for place in 0..2 {
                                     ui.allocate_ui_with_layout(column, layout, |ui| {
                                         // Both ways, so the second column starts in one place.
                                         ui.set_width(width);
                                         ui.spacing_mut().item_spacing.x = 8.0;
-                                        if (place == 0) == list_first {
+                                        if place == 0 {
                                             list(ui, &mut self.campaigns, &mut self.dndbeyond);
                                         } else {
                                             account(ui, &mut self.settings);
@@ -1169,14 +1285,10 @@ impl Splat {
                                     });
                                 }
                             });
-                        } else if self.campaigns.all().is_empty() {
-                            list(ui, &mut self.campaigns, &mut self.dndbeyond);
-                            ui.add_space(design::L);
-                            account(ui, &mut self.settings);
                         } else {
-                            account(ui, &mut self.settings);
-                            ui.add_space(design::L);
                             list(ui, &mut self.campaigns, &mut self.dndbeyond);
+                            ui.add_space(design::L);
+                            self.settings.show_compact(ui);
                         }
                     });
             }
@@ -1209,7 +1321,7 @@ impl Splat {
                     self.sessions
                         .show(ui, &self.processing, &mut self.timeline, &plan);
                 } else {
-                    self.no_campaign(ui, "No campaign to keep notes for yet");
+                    self.no_campaign(ui);
                 }
             }
             Page::Timeline => {
@@ -1232,7 +1344,7 @@ impl Splat {
                         current,
                     );
                 } else {
-                    self.no_campaign(ui, "No campaign, so no timeline yet");
+                    self.no_campaign(ui);
                 }
             }
             Page::Library => {
@@ -1243,6 +1355,10 @@ impl Splat {
                     design::message(ui, Tone::Error, &error);
                 }
                 if std::mem::take(&mut self.library.wants_settings) {
+                    if self.campaigns.all().is_empty() {
+                        self.campaigns.focus_add();
+                    }
+                    self.settings_tab = SettingsTab::Account;
                     self.page = Page::Settings;
                 }
                 if let Some(root) = self.library.content_changed.take() {
@@ -1266,7 +1382,7 @@ impl Splat {
                         },
                     );
                 } else {
-                    self.no_campaign(ui, "No campaign to prepare yet");
+                    self.no_campaign(ui);
                 }
             }
             Page::World => {
@@ -1274,7 +1390,7 @@ impl Splat {
                     let index = self.lookup.index();
                     self.world_page.show(ui, index.as_ref(), campaign);
                 } else {
-                    self.no_campaign(ui, "No campaign, so no world yet");
+                    self.no_campaign(ui);
                 }
             }
             Page::Party => {
@@ -1285,22 +1401,33 @@ impl Splat {
                         active.is_some_and(|c| c.dndbeyond_campaign_id.is_some()),
                     );
                 } else {
-                    self.no_campaign(ui, "No campaign, so no party yet");
+                    self.no_campaign(ui);
                 }
             }
             Page::Campaign => {
-                let Some(campaign) = active else {
-                    self.no_campaign(ui, "No campaign selected");
+                let Some(_campaign) = active else {
+                    self.no_campaign(ui);
                     return;
                 };
                 let mut open_entries = false;
-                design::page_header(ui, "Campaign", Some(&campaign.name), |ui| {
-                    open_entries = Action::quiet("Campaign entries")
-                        .icon(icons::DOCUMENT)
-                        .hint("This campaign's own entries, in the Library")
-                        .show(ui)
-                        .clicked();
-                });
+                design::page_header(
+                    ui,
+                    "Campaign",
+                    Some(
+                        if self.campaign_content.dirty() || self.encounters.settings_unsaved() {
+                            "Unsaved changes"
+                        } else {
+                            "Saved"
+                        },
+                    ),
+                    |ui| {
+                        open_entries = Action::quiet("Campaign entries")
+                            .icon(icons::DOCUMENT)
+                            .hint("This campaign's own entries, in the Library")
+                            .show(ui)
+                            .clicked();
+                    },
+                );
                 if open_entries {
                     self.library.show_campaign_entries();
                     self.page = Page::Library;
@@ -1522,6 +1649,8 @@ impl Splat {
             }
         }
         if std::mem::take(&mut self.party.wants_settings) {
+            self.settings_tab = SettingsTab::Account;
+            self.settings.focus_sign_in();
             self.page = Page::Settings;
         }
         if std::mem::take(&mut self.party.wants_link_page) {
@@ -1711,7 +1840,9 @@ impl eframe::App for Splat {
             &self.timeline,
             self.encounters.has_run(),
         );
+        design::reserve_primary(ctx, false);
         self.run_strip(ctx);
+        design::reserve_primary(ctx, self.encounters.has_run() && self.page != Page::Run);
         // With no panel left, going on typing must reach the note and never change the run.
         if self.notes_gave_way && !self.lookup.open {
             self.notes_gave_way = false;
@@ -1745,6 +1876,7 @@ impl eframe::App for Splat {
                 }
                 self.page(ui);
             });
+        design::reserve_primary(ctx, false);
         self.route(ctx);
         if let Some(dialog) = &mut self.copy_dialog {
             dialog.draft = self.encounters.draft_name();

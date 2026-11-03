@@ -765,9 +765,13 @@ enum LinkTarget {
 /// A paragraph stays one paragraph, and only its links can be pressed.
 fn draw_with_links(
     ui: &mut egui::Ui,
-    job: LayoutJob,
+    mut job: LayoutJob,
     links: Vec<(std::ops::Range<usize>, LinkTarget)>,
 ) {
+    // A one-line linked paragraph still needs a full control target.
+    job.first_row_min_height = job
+        .first_row_min_height
+        .max(design::Density::Read.control());
     let text = job.text.clone();
     let (position, galley, response) = egui::Label::new(job)
         .wrap()

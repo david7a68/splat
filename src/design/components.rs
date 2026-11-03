@@ -94,20 +94,80 @@ pub fn named(ui: &Ui, response: &Response, name: &str) {
     });
 }
 
-/// A heading at the top of a page: title, a line of context, and actions.
+/// A page title and one context line on the same baseline. Actions keep their room.
+/// Actions are drawn right to left: put the bordered New action first in the closure.
 pub fn page_header(ui: &mut Ui, title: &str, context: Option<&str>, actions: impl FnOnce(&mut Ui)) {
-    ui.horizontal(|ui| {
-        ui.set_min_height(Density::Scan.control());
-        ui.label(Type::Title.rich(ui, title).color(colors().text));
-        if let Some(context) = context {
-            ui.add_space(XS);
-            ui.add(
-                egui::Label::new(Type::Small.rich(ui, context).color(colors().muted)).truncate(),
-            );
-        }
-        ui.with_layout(Layout::right_to_left(Align::Center), actions);
-    });
+    ui.allocate_ui_with_layout(
+        vec2(ui.available_width(), Density::Scan.control()),
+        Layout::right_to_left(Align::Center),
+        |ui| {
+            ui.set_min_height(Density::Scan.control());
+            actions(ui);
+            ui.with_layout(Layout::left_to_right(Align::Max), |ui| {
+                ui.label(Type::Title.rich(ui, title).color(colors().text));
+                if let Some(context) = context {
+                    ui.add_space(XS);
+                    ui.add(
+                        egui::Label::new(Type::Small.rich(ui, context).color(colors().muted))
+                            .truncate(),
+                    )
+                    .on_hover_text(context);
+                }
+            });
+        },
+    );
     rule(ui);
+}
+
+/// A list group, with its nonzero count in muted type and no rule.
+pub fn group_heading(ui: &mut Ui, title: &str, count: usize) {
+    ui.label(group_heading_text(ui, title, count));
+}
+
+pub fn group_heading_text(ui: &Ui, title: &str, count: usize) -> LayoutJob {
+    let mut job = LayoutJob::default();
+    for (text, color) in [
+        (title.to_uppercase(), colors().text),
+        (
+            if count == 0 {
+                String::new()
+            } else {
+                format!(" {count}")
+            },
+            colors().muted,
+        ),
+    ] {
+        job.append(
+            &text,
+            0.0,
+            egui::TextFormat {
+                font_id: Type::Label.font(ui),
+                extra_letter_spacing: Type::Label.tracking(),
+                line_height: Some(Type::Label.line()),
+                color,
+                ..Default::default()
+            },
+        );
+    }
+    job
+}
+
+/// The quiet menu at the right edge of a list row.
+pub fn row_menu(ui: &mut Ui, name: &str, add: impl FnOnce(&mut Ui)) {
+    let response = icon_button(ui, icons::EXPAND, &format!("More actions for {name}"));
+    egui::Popup::menu(&response).show(add);
+}
+
+/// The visible reason beside a blocked control. A tooltip is only a second route.
+pub fn blocked_reason(ui: &mut Ui, reason: Option<&str>) {
+    if let Some(reason) = reason {
+        ui.add(egui::Label::new(Type::Small.rich(ui, reason).color(colors().muted)).wrap());
+    }
+}
+
+/// Reserve the primary action for the run strip while another page is open.
+pub fn reserve_primary(ctx: &egui::Context, reserved: bool) {
+    ctx.data_mut(|data| data.insert_temp(Id::new("primary_reserved"), reserved));
 }
 
 /// A hairline across the available width, with no extra space around it.
@@ -203,7 +263,7 @@ pub fn nav_item(
 }
 
 /// A rail control that opens a panel beside the page. It is not a place, so it never
-/// looks like the selected page: an open panel shows an accent icon and the word Open.
+/// uses a navigation bar: an open panel shows the selected surface and the word Open.
 pub fn nav_toggle(ui: &mut Ui, icon: &str, label: &str, key: &str, open: bool) -> Response {
     let c = colors();
     let (rect, response) = ui.allocate_exact_size(
@@ -212,11 +272,14 @@ pub fn nav_toggle(ui: &mut Ui, icon: &str, label: &str, key: &str, open: bool) -
     );
     response.widget_info(|| WidgetInfo::labeled(WidgetType::Button, ui.is_enabled(), label));
     if ui.is_rect_visible(rect) {
-        if response.hovered() {
-            ui.painter()
-                .rect_filled(rect, corner(RADIUS_CONTROL), c.hover);
+        if open || response.hovered() {
+            ui.painter().rect_filled(
+                rect,
+                corner(RADIUS_CONTROL),
+                if open { c.selected } else { c.hover },
+            );
         }
-        let color = if open { c.accent } else { c.muted };
+        let color = if open { c.text } else { c.muted };
         ui.painter().text(
             pos2(rect.left() + S + 2.0, rect.center().y),
             Align2::LEFT_CENTER,
@@ -236,7 +299,7 @@ pub fn nav_toggle(ui: &mut Ui, icon: &str, label: &str, key: &str, open: bool) -
             Align2::RIGHT_CENTER,
             if open { "Open" } else { key },
             Type::Small.font(ui),
-            if open { c.accent } else { c.faint },
+            if open { c.text } else { c.faint },
         );
         if response.has_focus() {
             focus_ring(ui, rect);
@@ -349,7 +412,16 @@ impl<'a> Action<'a> {
         self
     }
 
-    pub fn show(self, ui: &mut Ui) -> Response {
+    pub fn show(mut self, ui: &mut Ui) -> Response {
+        if self.kind == Kind::Primary
+            && (self.selected
+                || ui.ctx().data(|data| {
+                    data.get_temp::<bool>(Id::new("primary_reserved"))
+                        .unwrap_or(false)
+                }))
+        {
+            self.kind = Kind::Secondary;
+        }
         let enabled = self.blocked.is_none();
         // `add_enabled` keeps the parent's layout, so wrapped rows still wrap.
         let mut response = ui.add_enabled(enabled, |ui: &mut Ui| self.paint(ui));
@@ -410,6 +482,7 @@ impl<'a> Action<'a> {
             Color32::TRANSPARENT
         };
         let (fill, stroke) = match self.kind {
+            _ if self.selected => (c.selected, Stroke::new(HAIRLINE_WIDTH, c.field_border)),
             // Disabled, it loses its fill, so it cannot outweigh what can be pressed.
             Kind::Primary if !ui.is_enabled() => (
                 Color32::TRANSPARENT,
@@ -424,9 +497,6 @@ impl<'a> Action<'a> {
                 Stroke::NONE,
             ),
             Kind::Secondary => (plain_fill, Stroke::new(HAIRLINE_WIDTH, c.field_border)),
-            // On, the control has its own fill and edge: it can stand on any surface,
-            // the dock's included.
-            Kind::Quiet if self.selected => (c.current_row, Stroke::new(HAIRLINE_WIDTH, c.accent)),
             Kind::Quiet => (plain_fill, Stroke::NONE),
             Kind::Destructive => (plain_fill, Stroke::new(HAIRLINE_WIDTH, c.destructive)),
         };
@@ -1024,15 +1094,22 @@ pub fn signed(value: i64) -> String {
 
 /// A count and the right word for it: `1 entry`, `2 entries`.
 pub fn count(n: usize, one: &str, many: &str) -> String {
-    format!("{n} {}", if n == 1 { one } else { many })
+    let digits = n.to_string();
+    let mut grouped = String::new();
+    for (i, digit) in digits.chars().enumerate() {
+        if i > 0 && (digits.len() - i).is_multiple_of(3) {
+            grouped.push(',');
+        }
+        grouped.push(digit);
+    }
+    format!("{grouped} {}", if n == 1 { one } else { many })
 }
 
 /// What this place is, and the one next step.
 pub fn empty_state(ui: &mut Ui, icon: &str, title: &str, body: &str, action: impl FnOnce(&mut Ui)) {
     let c = colors();
-    ui.add_space(XXL);
     ui.vertical(|ui| {
-        ui.set_max_width(ui.available_width().min(FORM_WIDTH));
+        ui.set_max_width(ui.available_width().min(READER_MEASURE));
         ui.spacing_mut().item_spacing.y = S;
         ui.label(Type::Title.rich(ui, icon).color(c.muted));
         ui.label(Type::Title.rich(ui, title).color(c.text));
@@ -1161,13 +1238,30 @@ pub fn image_viewer(ctx: &egui::Context, name: &str, uri: &str) -> bool {
         .backdrop_color(Color32::from_black_alpha(200))
         .frame(egui::Frame::new())
         .show(ctx, |ui| {
+            let mut close = false;
+            ui.horizontal(|ui| {
+                ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                    close = Action::quiet("Close")
+                        .icon(icons::CLOSE)
+                        .key("Esc")
+                        .show(ui)
+                        .clicked();
+                });
+            });
             let image = egui::Image::from_uri(uri)
                 .fit_to_original_size(1.0)
-                .max_size(viewport.size() - vec2(XXL * 2.0, XXL * 2.0))
+                .max_size(
+                    viewport.size()
+                        - vec2(
+                            XXL * 2.0,
+                            XXL * 2.0 + Density::Scan.control() + Type::Small.line() + S,
+                        ),
+                )
                 .sense(Sense::click());
             let response = ui.add(image).on_hover_text(name);
             response.widget_info(|| WidgetInfo::labeled(WidgetType::Button, true, name));
-            response.clicked()
+            ui.label(Type::Small.rich(ui, name).color(colors().text));
+            close || response.clicked()
         });
     response.should_close() || response.inner
 }

@@ -105,7 +105,6 @@ pub struct ContentIndex {
     /// What the campaign's files looked like just before this was read.
     files_seen: Option<u64>,
     pub errors: Vec<String>,
-    main_source: String,
 }
 
 /// Among equal matches: the DM's own entry, then the book, then a sheet's copy.
@@ -143,32 +142,15 @@ impl Item {
         self.builtin
     }
 
-    fn result_detail(&self, main_source: &str) -> String {
-        let mut detail = self.subtitle.clone();
-        if self.private {
-            detail.push_str(" · Campaign");
-        }
-        let source = self
-            .entry
-            .fields
-            .get("splat_sources")
-            .and_then(|sources| sources.as_sequence())
-            .and_then(|sources| sources.first())
-            .and_then(|source| source.get("title"))
-            .and_then(|title| title.as_str())
-            .or_else(|| {
-                self.entry
-                    .fields
-                    .get("splat_reference")
-                    .and_then(|reference| reference.get("source"))
-                    .and_then(|source| source.as_str())
-            })
-            .or_else(|| (!self.private && !self.builtin).then_some(self.owner.as_str()));
-        if let Some(source) = source.filter(|source| !source.is_empty() && *source != main_source) {
-            detail.push_str(" · ");
-            detail.push_str(source);
-        }
-        detail
+    fn result_detail(&self) -> String {
+        let source = if self.private {
+            Some("Campaign")
+        } else if self.builtin {
+            None
+        } else {
+            Some(self.owner.as_str())
+        };
+        presentation::list_subtitle(&self.entry, source)
     }
 
     fn file_keys(&self) -> [String; 2] {
@@ -304,13 +286,6 @@ impl ContentIndex {
         }
         items.sort_by(|a, b| a.lower.cmp(&b.lower).then(a.entry.id.cmp(&b.entry.id)));
         let mut index = Self {
-            main_source: crate::content_workspace::builtin_manifest()
-                .fields
-                .get("splat_reference")
-                .and_then(|reference| reference.get("source"))
-                .and_then(|source| source.as_str())
-                .unwrap_or_default()
-                .to_owned(),
             errors: catalogue.errors.clone(),
             files_seen,
             ..Default::default()
@@ -1074,7 +1049,7 @@ impl Lookup {
                         let item = &index.items[position];
                         (
                             item.entry.name.clone(),
-                            item.result_detail(&index.main_source),
+                            item.result_detail(),
                             self.reading_written.is_none() && row == self.highlight,
                         )
                     }
@@ -1378,7 +1353,7 @@ impl Lookup {
 }
 
 /// What the generator rolled, with its choices. Returns save, reroll and discard.
-fn generated_card(
+pub(crate) fn generated_card(
     ui: &mut egui::Ui,
     npc: &crate::npc_generator::Generated,
     problems: &[String],
