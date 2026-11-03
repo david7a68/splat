@@ -362,3 +362,173 @@ Source evidence: [suite and shared lock](../../src/visual_tests/mod.rs),
 [video pipeline](../../src/visual_tests/video.rs), and
 [shell commands](../../devenv.nix). The linked primary Cargo/Mesa documentation
 above still applies; no compiler, renderer, job limit or dependency version changed.
+
+## Third scan: one full gate per final source
+
+2026-11-03. Base: `c7af1f328cb48f286ba8b83b894a099bb1aaec7f` (main,
+after PRs 49–52). Same 16-core, 31 GiB machine, Rust 1.95.0 and devenv
+2.2.2; pinned inputs and lockfiles remain unchanged. The suite has 51 scenarios
+and 1,063 captures.
+
+### What the iteration-3 timings show
+
+The [PR 49](https://github.com/david7a68/splat/pull/49),
+[PR 50](https://github.com/david7a68/splat/pull/50),
+[PR 51](https://github.com/david7a68/splat/pull/51), and
+[PR 52](https://github.com/david7a68/splat/pull/52) bodies were read with
+`gh pr view <n> --json number,url,body`. Their complete JSON is saved in the ignored scan
+logs. These are reported historical wall times, not controlled benchmarks:
+
+| PR | Evidence | Implication |
+| --- | --- | --- |
+| 49 | Full capture 238 s; one-scenario refresh 120 s; full tests after the PR-50 merge 101 s. The body identifies shared-fixture lock waits. | A small selection does not avoid the suite-wide lock. |
+| 50 | Full refresh 268 s; later full tests 142 s, then 57 s after the assertion fix. The body identifies a shared-lock queue. | Waiting and failed expectations dominate some loops, not shell entry. |
+| 51 | After main merges: full captures 107 s and 62 s; full tests 73 s. Final tests 67 s plus final captures 91 s. One targeted 191 s run had an accessibility expectation error as well. | Do not label every long run a lock wait. Full tests and captures also repeat the same scenario scripts. |
+| 52 | First full capture 243 s, with the global lock owner checked. Later full captures 59–106 s; tests after successive merges 70, 145 and 62 s. Some lint runs waited on the local Cargo lock. | Private targets help Cargo isolation but do not isolate visual fixtures. |
+
+Each incoming main merge changes the source under test. A previous gate cannot
+certify that new source. No gate is skipped after a merge, and this change adds
+no result cache. The cheap opportunity is to perform the required checks once
+in each gate, rather than run the visual scenario scripts twice.
+
+### Change retained
+
+`devenv shell -- audit-gate <label>` runs the exact `check` command, then
+`cargo test --locked -- --nocapture` with the same capture directory and video
+settings as `visual-test`. The full Cargo test invocation includes library,
+binary and documentation tests. Its existing `visual_suite` test renders every
+capture while running every scenario and ergonomics check. There is no test-name
+filter. The separate full-test, check and visual-test commands remain available.
+Human review of all captures remains required before merging.
+
+The command clears inherited `SPLAT_VISUAL_SCENARIOS` and
+`SPLAT_VISUAL_UPDATE_BASELINE`, and forces baseline enforcement. It validates
+labels before running checks. A lint failure stops before tests; a test or capture
+failure retains its nonzero exit status. Video still defaults to on. The existing
+PNG-only option and optional contact-sheet behavior remain available. No Rust
+source, baseline, scenario, frame count, size plan, encoder, renderer, tolerance,
+profile or dependency changes.
+
+### Measurements and fidelity
+
+| Workflow | Before median | After median | Difference |
+| --- | ---: | ---: | ---: |
+| Full merge gate, warm artifacts, PNG-only | 118.54 s | 69.23 s | −49.30 s (41.6%) |
+| Complete visual scenario executions per gate | 2 | 1 | All 51 scenarios still run with captures. |
+| Shared fixture lock acquisitions per gate | 2 | 1 | Lock and fixture paths are unchanged. |
+
+Before: `check && cargo test --locked -- --nocapture && visual-test <label>`.
+After: `audit-gate <label>`. Both ran through a fresh `devenv shell --`, with
+`SPLAT_VISUAL_VIDEO=0` and `SPLAT_VISUAL_TIMINGS=1`. Video remains on by default;
+this fidelity contract covers PNGs and ergonomics. Contact sheets remain optional.
+The table measures a complete warm merge gate, not a faster standalone capture
+command. The removed work is the redundant no-capture scenario pass.
+
+Order was before, after, before, after; medians use two runs per state. A host
+process monitor sampled Cargo, compilers, linkers and Splat every 250 ms, excluding
+our descendants. No competing build/test process was detected during these four
+retained measurements. Seven reviewers were reading PNGs. Loads below are literal
+1/5/15-minute values; high end loads include our own 51 scenario threads. Times
+include shell entry and completion polling, but exclude seed preparation and
+compilation warmup. The original pinned toolchain and private target were warm.
+These are local results, not a promise under several competing implementers.
+
+| Run, in pair order | Seconds | Start (Toronto) | Start load 1/5/15 | End load 1/5/15 | Other build/test | Exit |
+| --- | ---: | --- | --- | --- | --- | ---: |
+| before-1 | 119.341 | 06:43:21 | 2.25, 4.73, 9.54 | 31.56, 13.83, 12.22 | No | 0 |
+| after-1 | 69.750 | 06:45:20 | 31.56, 13.83, 12.22 | 36.39, 18.52, 13.93 | No | 0 |
+| before-2 | 117.729 | 06:46:30 | 36.39, 18.52, 13.93 | 34.91, 22.73, 15.94 | No | 0 |
+| after-2 | 68.718 | 06:48:28 | 34.91, 22.73, 15.94 | 34.29, 24.89, 17.16 | No | 0 |
+
+All four runs passed the same 695 tests (187 library + 508 binary), with the same
+12 opt-in tests ignored; binary/doc targets with no tests also completed. The
+before gate additionally ran the same `visual_suite` test again through
+`visual-test`. A comparison of every named test/status confirms that only this
+duplicate execution is removed. Every run captured all 51 scenarios and the
+same 1,063 names and dimensions: 431 at 960×640, 429 at 1200×800, 186 at
+1920×1080, and 17 at 2400×1600 (the unchanged 1200×800 HiDPI plan). Both ergonomics
+reports and `chrome-observation.json` are byte-identical across all four runs.
+The last after run inherited an invalid scenario selection, report enforcement
+and baseline-update mode; the gate cleared them and still passed the full suite
+without changing baseline bytes.
+
+The app still does not produce byte-identical screenshots from unchanged code.
+The comparison uses the existing channel tolerance of 2, without masks or new
+allowances:
+
+| Capture pair | Changed PNG hashes | Above existing tolerance |
+| --- | ---: | ---: |
+| before-1 / after-1 | 122 | 13 |
+| before-2 / after-2 | 29 | 12 |
+| before-1 / before-2 | 54 | 7 |
+| after-1 / after-2 | 95 | 18 |
+
+Every above-tolerance before/after file also differs in at least one of the two
+same-version repeat comparisons. Variations include copied-content IDs and
+session-note/recording states; the remaining causes were not diagnosed in this
+quick scan. Thus tests, check results, reports and capture coverage match exactly;
+byte-identical pixels cannot be promised even for the unmodified baseline. No
+Rust source, renderer, scenario, tolerance or capture scheduling change is made.
+
+Guard probes confirmed invalid labels/extra arguments exit 2, a lint error stops
+before tests, test errors propagate, and inherited feedback settings are cleared.
+The generated command still defaults video to 1. Nix formatting and
+`git diff --check` passed. Raw commands, all output, process samples, run metadata,
+file-by-file image comparisons and probes are under ignored
+`artifacts/screenshots/audit-speed-3/`; captures are in the four sibling
+`audit-speed-3-{before,after}-{1,2}` label folders. All build output stayed under this
+worktree's `target/`. No build output or new large artifacts went into `/tmp`.
+
+A later alternative wrapper, which deferred only the no-capture suite and then
+called standalone `visual-test`, was not retained. Its completed trials overlapped
+other builds (122.748 s before / 78.781 s after; **other build: Yes for both**).
+The next trial queued behind an iteration-4 diagnostic run for over three
+minutes. `/proc/locks` confirmed another worktree as owner and this worktree plus
+a third as waiters. Only our extra benchmark processes were stopped; no other
+worktree was interrupted. These incomplete/contended alternative trials are
+excluded from the retained medians; their logs and metadata remain under
+`standalone-trial/`, with live lock evidence alongside them.
+
+### Shared fixture lock: keep it shared for now
+
+[`world_root`](../../src/visual_tests/mod.rs) locks
+`/tmp/splat-visual-world.lock` before deleting/recreating the shared
+`/tmp/splat-visual-world`, and holds it until the suite returns. The shell leaves
+`TMPDIR` unset. All worktrees therefore contend on the same lock, including the
+visual run inside ordinary `cargo test`. PR 52 checked the blocking owner;
+PRs 49 and 50 also report queue waits. This is an observed cross-worktree problem.
+
+Making only the lock per-worktree would allow a second process to delete files
+that the first process is using. Moving the root per-worktree, or setting a
+worktree-specific `TMPDIR`, would also change the campaign/module paths shown
+in the UI. The ergonomics elision allowance names the existing absolute root
+in [`ergonomics.rs`](../../src/visual_tests/ergonomics.rs). Such a change is not
+safe under the requirement to retain the same captures and checks.
+
+A two-process diagnostic used the same linked test executable with separate
+output folders and the `party` scenario: both passed with 32 PNGs and the same
+checks. The first held the fixture for 8.86 s; the second reported an 8.85 s lock
+wait. The diagnostic overlapped the image-comparison task, not a build, and is
+not included in the before/after benchmark. It confirms serialization rather
+than estimating concurrent throughput. The retained command instead acquires the shared fixture lock once per full gate, rather than
+twice. It does not make capture runs concurrent.
+
+### Larger ideas not implemented
+
+These are estimates, not additional measured savings.
+
+| Idea | Expected opportunity | Effort estimate |
+| --- | --- | --- |
+| Isolate fixtures at the same visible absolute paths with Linux mount namespaces | Remove suite-sized waits when worktrees capture at once. Must prove namespace permissions, path identity, cleanup, character-cache isolation and non-Linux behavior; concurrent rasterizers can still compete for CPU/RAM. | 0.5–1 day, then full paired capture validation. |
+| Fix remaining visible random IDs, then repeat the bounded-scheduling trial | Earlier limit-16 experiment saved about 6 s; current copy paths still use `Uuid::new_v4()`. No scheduling change belongs in this small gate wrapper. | 2–4 h for determinism, then 1–2 h for alternating full trials. |
+| Integrate packages in an agreed order before each final gate | Reduce successive merge-and-retest rounds, while still running the full gate on each PR's final merged source. Cannot reuse old-source results after another main merge. | 30–60 min of workflow planning per audit; savings depend on landing order. |
+| Cache more immutable fixture/catalogue work | Fixture timers include substantial work across 51 overlapping scenarios. SRD parsing and generated fixture PNG bytes are already cached; measure the remaining work before adding caches. | 0.5–1 day; possible 1–10 s per suite, unmeasured. |
+| Tune rasterizer threads or Cargo jobs under several implementers | Could reduce oversubscription, but idle-build runs cannot select a useful cap. Preserve every capture and check. | 1–2 h of controlled concurrent trials and full image comparisons. |
+
+Sources: the four PR bodies above; the existing primary Cargo documentation linked
+in the first scan; [`devenv.nix`](../../devenv.nix),
+[`visual_suite`](../../src/visual_tests/mod.rs),
+[`Driver::state_prepared` and `capture`](../../src/visual_tests/driver.rs), and
+[`hermetic.rs`](../../src/hermetic.rs). The driver checks all size plans regardless
+of capture mode, then renders when output is enabled; the combined command uses
+that unchanged capture path.
