@@ -44,6 +44,9 @@
     check &
     check_pid=$!
     out="$PWD/artifacts/screenshots/$label"
+    export SPLAT_VISUAL_CHROME_HINT="$(printf \
+      'After reviewing chrome changes, run: devenv shell -- visual-baseline-chrome %q\nThen rerun the full gate: devenv shell -- audit-gate %q' \
+      "$label" "$label")"
     SPLAT_VISUAL_DIR="$out" SPLAT_VISUAL_VIDEO="''${SPLAT_VISUAL_VIDEO:-1}" \
       cargo test --locked -- --nocapture
     status=$?
