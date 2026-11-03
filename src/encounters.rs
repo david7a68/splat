@@ -2527,18 +2527,21 @@ impl Encounters {
                 "No encounters yet",
                 "Build a roster from your party and the creatures this campaign can use. Then run it at the table.",
                 |ui| {
-                    create = Action::primary("New encounter")
-                        .icon(icons::ADD)
-                        .blocked(blocked)
-                        .name("Create a first encounter")
-                        .show(ui)
-                        .clicked();
-                    create_group = Action::quiet("New group")
-                        .line_start()
-                        .blocked(group_blocked)
-                        .hint("A reusable set of creatures to add to a running encounter")
-                        .show(ui)
-                        .clicked();
+                    ui.horizontal(|ui| {
+                        create = Action::primary("New encounter")
+                            .icon(icons::ADD)
+                            .blocked(blocked)
+                            .name("Create a first encounter")
+                            .show(ui)
+                            .clicked();
+                        ui.add_space(design::L);
+                        create_group = Action::quiet("New group")
+                            .icon(icons::ADD)
+                            .blocked(group_blocked)
+                            .hint("A reusable set of creatures to add to a running encounter")
+                            .show(ui)
+                            .clicked();
+                    });
                 },
             );
             if create {

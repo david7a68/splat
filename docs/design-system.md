@@ -489,7 +489,7 @@ A copy starts with the original name selected. Its destination and dependency pr
 
 An incoming sheet change removes only undo steps for that character. Remaining snapshots keep the current sheet values. An atomic step that also affects another participant ends older affected steps if retaining them would restore stale values; the Log names each removed step. A DM choice in a conflict is a named undo step.
 
-Campaign repair opens at the reader measure, with the invalid-note reason above it. Needed by your entries is an item below the packages in the left column. Its right pane has one search and one list; rows open Lookup. Short package lists shrink to their rows. Invalid YAML marks the line to fix and uses plain words. A rolled World table selects the matching row, marks it with a dice icon, and states the result below in UI sans.
+Campaign repair fills the column, with the invalid-note reason above it. An L gap and a hairline separate its save row from the package save row. Needed by your entries is an item below the packages in the left column. Its right pane has one search and one list; rows open Lookup. Short package lists shrink to their rows. Invalid YAML marks the line to fix and uses plain words. A rolled World table selects the matching row, marks it with a dice icon, and states the result below in UI sans.
 
 Library keeps search and the selected result when its scope changes. Empty categories and their headings stay hidden. Scope buttons use short words. Library shows quiet Back whenever it has reading history, with its Alt+Left hint when room permits. Reader links use accent text and an underline. Links in Library open in place; links in other readers open in Lookup. An empty reader says No entry open or No note open, then “Choose one from the list, or make a new one.” Empty campaign entries have one New entry action.
 
@@ -696,7 +696,7 @@ An unreadable package creature keeps its file name and error line in the roster.
 Open in Library opens its repair editor. Only a deleted file offers replacement.
 
 A deleted draft shows YOUR DRAFT, Save my draft again and red Let it go, with
-Undo discard. A moved file offers Save my draft to its new path. Saving checks
+Undo let go. A moved file offers Save my draft to its new path. Saving checks
 the ID on disk so it cannot create a second file after a move.
 Creature copies write splat_creature and splat_stats in front matter and keep prose.
 Source text and structured item fields stay in the end group after related notes.
@@ -731,11 +731,22 @@ Copy to… requires a campaign or package destination and states that reason on 
 Unreadable rows name their kind and file line. Their owner line says Cannot be read.
 A moved draft shows its new path and its old folder; file actions use the new path.
 Let it go names entries that need the deleted note and keeps Undo.
+Undo let go and Undo discard use quiet buttons with the undo icon on the message line.
+Moved-from text sits at the end of the file line. Unreadable entries opened from a
+roster select their kind under Cannot be read. Broken package and campaign links
+have a list-row warning and a warning icon before the dotted reader text.
+
+Party sheets use a true minus for negative modifiers. Saves and skills start on
+tile edges. Skills sort A to Z and fill each column from top to bottom. Library
+form headings use text colour and an L gap; field labels stay muted.
 
 Duplicate identities keep both files visible with a warning. Saves write only the
-open file. Give the copy a new identity changes the open file and has Undo; the
-warning tells the DM to open the copy first. Encounters block ambiguous creatures
-and offer Open in Library. Validation messages update after encounter or group edits.
+open file. Each New identity action names its file and has Undo. A renamed copy
+comes first, or else the newest file does. Other actions name the encounters that
+will change source. Encounters
+block ambiguous creatures; Open in Library opens the first repair action's file.
+Validation messages update after encounter or group edits.
 Changed stays at the end of a roster row's second line; shorten muted detail first.
-Arrivals puts Changed before member names. Roster, Members and Recordings share
+Arrivals joins Changed to the first member with no-break spaces. Groups count members.
+Roster, Members and Recordings share
 an underlined tab with a muted, nonzero count.

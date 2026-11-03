@@ -2973,11 +2973,7 @@ impl Run {
                 painter.galley(place, galley, c.accent);
             }
         }
-        let members = if changed {
-            format!("Changed · {}", group.member_summary_wrapped())
-        } else {
-            group.member_summary_wrapped()
-        };
+        let members = group.arrival_members();
         let added = self
             .state
             .participants
@@ -3986,20 +3982,7 @@ impl Run {
                 + presence_slot;
             let name_width = (ui.available_width() - actions).max(design::XL);
             let side = "";
-            let plain = format!("{absent}{side}{numbers}");
-            // Changed values keep their mark beside the setup numbers.
-            let detail = if !p.stat_changes() {
-                plain
-            } else {
-                let changed = format!("{} Changed", icons::CHANGED);
-                let both = format!("{absent}{side}{changed} · {numbers}");
-                let font = Type::Small.font(ui);
-                if design::number_width(ui, &both, &font) + 2.0 * design::S <= name_width {
-                    both
-                } else {
-                    format!("{absent}{changed} · {numbers}")
-                }
-            };
+            let detail = format!("{absent}{side}{numbers}");
             let width = name_width - 2.0 * design::S;
             let title =
                 ui.painter()
@@ -4024,8 +4007,11 @@ impl Run {
                 }
                 detail = next;
             }
-            if p.npc_identity() {
+            if p.source_identity() {
                 detail.push_str(&format!(" · as {}", p.definition.name));
+            }
+            if p.stat_changes() {
+                detail.push_str(&format!(" · {} Changed", icons::CHANGED));
             }
             let row_name = format!("{name} · {detail}");
             let detail = detail
@@ -4599,7 +4585,7 @@ fn changes_block(ui: &mut egui::Ui, p: &Participant, above_stat_block: bool) {
             .wrap(),
         );
     }
-    if p.npc_identity() {
+    if p.source_identity() {
         ui.label(
             Type::Small
                 .rich(ui, format!("as {}", p.definition.name))
@@ -4915,7 +4901,7 @@ fn row_name(p: &Participant, turn: TurnMark, sync: Option<SyncState>) -> String 
         parts.push("Concentrating".into());
     }
     parts.extend(p.conditions.iter().cloned());
-    if p.npc_identity() {
+    if p.source_identity() {
         parts.push(format!("as {}", p.definition.name));
     }
     if let Some(changes) = p.changes.as_ref().filter(|_| p.stat_changes()) {
@@ -5161,7 +5147,7 @@ impl RowLayout {
         }
         // A change is never hidden. What the run cannot apply is on the row, for the roll.
         // A number stays with its word when the line wraps.
-        if p.npc_identity() {
+        if p.source_identity() {
             add(&format!("as {}", p.definition.name), c.muted);
         }
         let mut bonus_start = None;

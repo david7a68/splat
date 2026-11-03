@@ -124,7 +124,7 @@ impl RunGroup {
     pub(crate) fn summary(&self) -> String {
         let mut summary = format!(
             "{} · {} · {}",
-            crate::design::count(self.creature_count() as usize, "creature", "creatures"),
+            crate::design::count(self.creature_count() as usize, "member", "members"),
             crate::design::reader::human_label(&self.side),
             self.xp_label()
         );
@@ -180,6 +180,19 @@ impl RunGroup {
             .collect::<Vec<_>>()
             .join(", ")
     }
+
+    pub(crate) fn arrival_members(&self) -> String {
+        let members = self.member_summary_wrapped();
+        if self
+            .members
+            .iter()
+            .any(|member| !member.overrides.is_empty())
+        {
+            format!("Changed\u{a0}·\u{a0}{members}")
+        } else {
+            members
+        }
+    }
     /// Every creature the note names, whether or not it can be found now.
     pub(crate) fn creature_count(&self) -> u64 {
         self.members
@@ -234,6 +247,12 @@ fn stat(entry: &Entry, name: &str) -> Option<i64> {
 impl Participant {
     pub(super) fn npc_identity(&self) -> bool {
         self.definition.fields.contains_key("splat_run_npc_name")
+    }
+    pub(super) fn source_identity(&self) -> bool {
+        self.npc_identity()
+            || self.changes.as_ref().is_some_and(|change| {
+                change.overrides.name.is_some() && self.name != self.definition.name
+            })
     }
     pub(super) fn stat_changes(&self) -> bool {
         self.changes.as_ref().is_some_and(|changes| {
@@ -3185,7 +3204,7 @@ impl Run {
         {
             let round_prefix = format!("Round {}: ", self.state.round);
             let last = last.strip_prefix(&round_prefix).unwrap_or(last);
-            label.push_str(&format!(" · {last}"));
+            label.push_str(&format!(" · Last: {last}"));
         }
         label.push_str(&saved);
         SavedRunInfo {
@@ -3925,7 +3944,7 @@ mod tests {
         assert_eq!(copies[0].id, Some(latest));
         assert!(copies[0].encounter.contains(" · saved "));
         assert!(copies[0].label.starts_with("Closed last · "));
-        assert!(!copies[0].label.contains("Last:"));
+        assert!(copies[0].label.contains(" · Last: "));
         let old = copies
             .iter()
             .find(|copy| copy.id == Some(original_id))
@@ -5256,7 +5275,11 @@ mod tests {
         let reopened = close_and_reopen(&mut run, campaign);
         assert!(reopened.history_labels.is_empty());
         let info = reopened.info(PathBuf::new(), None, true);
-        assert!(info.label.contains(&expected), "{}", info.label);
+        assert!(
+            info.label.contains(&format!(" · Last: {expected}")),
+            "{}",
+            info.label
+        );
         assert!(expected.contains("HP left"));
     }
 
@@ -5748,6 +5771,37 @@ mod tests {
     }
     fn beast() -> Entry {
         Entry::parse("beast.md", &format!("---\nsplat_schema: 1\nsplat_id: {}\nsplat_kind: creature\nsplat_name: Beast\nsplat_creature: {{type: beast}}\nsplat_stats:\n  max_hp: {{value: 40}}\n  armor_class: {{value: 12}}\n  initiative: {{value: -1}}\n  speed: {{value: 40}}\n---\n", Uuid::new_v4())).unwrap()
+    }
+    #[test]
+    fn group_summary_counts_members_and_changed_stays_with_first_member() {
+        let group = group_of(
+            "Wave",
+            "rivals",
+            vec![(beast(), 3, changed("armor_class: {add: 1}"))],
+        );
+        assert_eq!(group.summary(), "3 members · Rivals · XP 0 · Changed");
+        assert_eq!(
+            group.arrival_members(),
+            "Changed\u{a0}·\u{a0}3\u{a0}×\u{a0}Beast"
+        );
+    }
+
+    #[test]
+    fn replaced_creature_row_names_its_source_and_keeps_changed() {
+        let mut run = run();
+        run.apply(Command::AddCreature(
+            group_of(
+                "Replacement",
+                "enemies",
+                vec![(beast(), 1, changed("name: Cinder Wolf"))],
+            ),
+            None,
+        ))
+        .unwrap();
+        let participant = run.state.participants.last().unwrap();
+        let words = view::row_words_for_test(participant);
+        assert!(words.contains("as Beast"), "{words}");
+        assert!(words.contains("Changed"), "{words}");
     }
     fn names(run: &Run, range: std::ops::Range<usize>) -> Vec<String> {
         run.state.participants[range]

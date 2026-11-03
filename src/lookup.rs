@@ -455,6 +455,31 @@ impl ContentIndex {
         self.parent(self.position(id)?)
     }
 
+    pub(crate) fn place_choices(&self, id: Uuid) -> Vec<usize> {
+        let Some(at) = self.position(id) else {
+            return Vec::new();
+        };
+        let Some(link) = self.items[at]
+            .entry
+            .fields
+            .get("splat_world")
+            .and_then(|fields| fields.get("in"))
+            .and_then(serde_yaml_ng::Value::as_str)
+        else {
+            return Vec::new();
+        };
+        let Some(target) = link
+            .strip_prefix("[[")
+            .and_then(|link| link.strip_suffix("]]"))
+        else {
+            return Vec::new();
+        };
+        match self.resolve_link(target, Some(id)) {
+            Go::Many(choices) => choices,
+            _ => Vec::new(),
+        }
+    }
+
     fn place_loops(&self) -> Vec<String> {
         self.world
             .iter()
@@ -557,6 +582,13 @@ impl ContentIndex {
     }
 
     /// Prepare wiki links in any reader, retaining exactly the note's display words.
+    pub(crate) fn broken_link_count(&self, body: &str, from: Uuid) -> usize {
+        world::links_in(body)
+            .into_iter()
+            .filter(|target| matches!(self.resolve_link(target, Some(from)), Go::Missing(_)))
+            .count()
+    }
+
     pub fn reader_markdown(&self, body: &str, from: Option<Uuid>) -> String {
         let source = world::with_links(body, &HashMap::new());
         let prefix = "splat-note:";
@@ -1874,6 +1906,100 @@ mod tests {
         format!(
             "---\nsplat_schema: 1\nsplat_id: {id}\nsplat_kind: world\nsplat_name: {name}\nsplat_world:\n{world}\n---\n"
         )
+    }
+
+    #[test]
+    fn moved_world_entries_keep_stat_block_place_and_npc_ids() {
+        let npc = Uuid::new_v4();
+        let place = Uuid::new_v4();
+        let block = crate::library::note_text("Guard", "creature", None);
+        let block_id = crate::content_workspace::note_id(&block).unwrap();
+        let npc_text = entry_note(
+            npc,
+            "Rook",
+            &format!("  type: npc\n  in: {{id: {place}}}\n  creature: {{id: {block_id}}}"),
+        );
+        let place_text = entry_note(place, "Watch House", "  type: location");
+        let (_dir, campaign) = campaign_with(&[
+            ("Rook.md", &npc_text),
+            ("Watch House.md", &place_text),
+            ("Guard.md", &block),
+        ]);
+        std::fs::create_dir(campaign.path.join("Moved")).unwrap();
+        for file in ["Rook.md", "Watch House.md", "Guard.md"] {
+            std::fs::rename(
+                campaign.path.join(file),
+                campaign.path.join("Moved").join(file),
+            )
+            .unwrap();
+        }
+        let index = ContentIndex::load(&[], Some(&campaign)).unwrap();
+        let item = &index.items[index.position(npc).unwrap()];
+        assert_eq!(item.entry.path, "Moved/Rook.md");
+        assert_eq!(index.items[index.place_of(npc).unwrap()].entry.id, place);
+        let block_at = index
+            .position(block_id)
+            .expect("the moved stat block still exists");
+        assert_eq!(
+            index.position_of(&splat::content::Reference::Id(block_id)),
+            Some(block_at)
+        );
+        let catalogue = crate::content_workspace::Catalogue::load(&[], Some(&campaign)).unwrap();
+        assert_eq!(
+            catalogue
+                .resolve_ref(&crate::content_workspace::EntryRef::id(block_id))
+                .unwrap(),
+            block_id
+        );
+        assert_eq!(
+            item.entry.fields["splat_world"]["creature"]["id"].as_str(),
+            Some(block_id.to_string().as_str())
+        );
+        assert_eq!(
+            std::fs::read_to_string(campaign.path.join("Moved/Rook.md")).unwrap(),
+            npc_text
+        );
+    }
+
+    #[test]
+    fn moved_plain_note_changes_ephemeral_id_but_name_links_still_resolve() {
+        let npc = Uuid::new_v4();
+        let text = entry_note(npc, "Rook", "  type: npc\n  in: '[[Watch House]]'");
+        let (_dir, campaign) =
+            campaign_with(&[("Rook.md", &text), ("Watch House.md", "# Watch House\n")]);
+        let before = ContentIndex::load(&[], Some(&campaign)).unwrap();
+        let old_id = before.items[before.place_of(npc).unwrap()].entry.id;
+        std::fs::create_dir(campaign.path.join("Moved")).unwrap();
+        std::fs::rename(
+            campaign.path.join("Watch House.md"),
+            campaign.path.join("Moved/Watch House.md"),
+        )
+        .unwrap();
+        let index = ContentIndex::load(&[], Some(&campaign)).unwrap();
+        let place = &index.items[index.place_of(npc).unwrap()].entry;
+        assert_ne!(place.id, old_id);
+        assert_eq!(place.path, "Moved/Watch House.md");
+        assert!(matches!(
+            index.resolve_link("Watch House", Some(npc)),
+            Go::Item(..)
+        ));
+        std::fs::write(campaign.path.join("Watch House.md"), "Second place\n").unwrap();
+        let index = ContentIndex::load(&[], Some(&campaign)).unwrap();
+        assert_eq!(index.place_choices(npc).len(), 2);
+        assert!(
+            !world::broken_links(&index.items[index.position(npc).unwrap()], &index)
+                .contains(&"Place not found")
+        );
+    }
+
+    #[test]
+    fn broken_link_count_ignores_resolved_and_ambiguous_links() {
+        let (_dir, campaign) = campaign_with(&[("A/Twin.md", "One\n"), ("B/Twin.md", "Two\n")]);
+        let index = ContentIndex::load(&[], Some(&campaign)).unwrap();
+        assert_eq!(
+            index.broken_link_count("[[Gone]] and [[Twin]] and [[A/Twin]]", Uuid::nil()),
+            1
+        );
     }
 
     #[test]

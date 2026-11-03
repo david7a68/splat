@@ -23,7 +23,7 @@
       "npc-in-lookup": 22,
       "package-about": 41,
       "package-delete-entry": 108,
-      "package-duplicate-id": 58,
+      "package-duplicate-id": 86,
       "package-file-changed": 121,
       "package-rename": 55,
       "package-to-table": 38,
@@ -58,6 +58,7 @@
       "world-broken-note": 23,
       "world-edit-round-trip": 24,
       "world-note-deleted": 43,
+      "world-note-moved": 36,
       "world-places": 37
     },
     "no-overlap/egui-chrome": {
@@ -99,7 +100,7 @@
       "npc-in-lookup": 22,
       "package-about": 41,
       "package-delete-entry": 108,
-      "package-duplicate-id": 58,
+      "package-duplicate-id": 86,
       "package-file-changed": 121,
       "package-rename": 55,
       "package-to-table": 38,
@@ -134,6 +135,7 @@
       "world-broken-note": 23,
       "world-edit-round-trip": 24,
       "world-note-deleted": 43,
+      "world-note-moved": 36,
       "world-places": 37
     }
   },

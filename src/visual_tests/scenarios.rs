@@ -192,6 +192,22 @@ pub mod library_author {
         );
         d.click(EDIT_MARKDOWN);
         d.state("edit-markdown", Sizes::All);
+        let edges_match = |d: &Driver<'_>| {
+            let editor = d.place_of("Markdown editor").unwrap();
+            let save = d.place_of("Save").unwrap();
+            (editor.right() - save.right()).abs() <= 1.0
+        };
+        d.observe_both(
+            "C3",
+            "The editor and save row share a right edge",
+            edges_match,
+        );
+        let wide = d.at_size((1920.0, 1080.0), edges_match);
+        d.observe(
+            "C3",
+            wide,
+            "The editor keeps the save row edge at 1920x1080",
+        );
         d.observe(
             "Clean word",
             d.visible_text("No changes"),
@@ -579,6 +595,17 @@ pub mod campaign_content {
         d.begin_task();
         d.click_starting(MODULE_ROW);
         d.expect(PARTIAL);
+        d.observe_both(
+            "U1",
+            "Package mode comes before the selection actions",
+            |d| {
+                d.place_of("Chosen entries only")
+                    .zip(d.place_of("Use all"))
+                    .is_some_and(|(mode, action)| {
+                        mode.left() < action.left() && mode.center().y < action.bottom()
+                    })
+            },
+        );
         d.state("packages-partial-selection", Sizes::All);
         d.goal("see a partial package selection");
 
@@ -678,6 +705,14 @@ pub mod campaign_content {
         // The repair opens here, with the note's text in it.
         d.click(REPAIR);
         d.expect("Note text");
+        d.observe_both("U5", "Both save rows share the column's right edge", |d| {
+            d.place_of("Save repaired note")
+                .zip(d.place_of(SAVE_SELECTIONS))
+                .is_some_and(|(repair, selections)| {
+                    (repair.right() - selections.right()).abs() < 1.0
+                        && selections.top() - repair.bottom() >= crate::design::L
+                })
+        });
         d.state("repair-open", Sizes::Default);
         d.observe(
             "Repair says why",
@@ -1558,6 +1593,12 @@ pub mod empty {
         d.expect(CONTENT_TITLE);
         d.click(TAB_ENTRIES);
         d.expect(NO_ENTRIES);
+        d.observe_both("U4", "The empty scope menu keeps the category width", |d| {
+            d.nodes()
+                .into_iter()
+                .find(|node| node.name.starts_with("What the Library shows:"))
+                .is_some_and(|node| node.rect.width() <= 166.0)
+        });
         d.state("no-campaign-entries", Sizes::Default);
         d.begin_task();
         d.click("entry you can use");
@@ -1569,6 +1610,14 @@ pub mod empty {
             1,
         );
         go_encounters(d);
+        d.observe_both("U6", "The empty encounter actions share a line", |d| {
+            d.place_of("Create a first encounter")
+                .zip(d.place_of("New group"))
+                .is_some_and(|(encounter, group)| {
+                    (encounter.center().y - group.center().y).abs() < 1.0
+                        && group.left() - encounter.right() >= crate::design::L
+                })
+        });
         d.state("no-encounters", Sizes::Default);
         go_party(d);
         d.expect(NOT_LINKED);
@@ -7291,7 +7340,9 @@ pub mod remove_package_in_use {
         d.state("missing-package-technical-details", Sizes::Default);
         d.click("Technical details");
         d.click("Remove from this campaign");
-        d.wait_for_text("Ashen Marches removed from this campaign.");
+        d.wait_for_text(
+            "Bridge Ambush and Shrine of Cinders now have creatures Splat cannot find.",
+        );
         d.expect("Bridge Ambush");
         d.expect("Shrine of Cinders");
         d.state("missing-package-removed-with-undo", Sizes::All);

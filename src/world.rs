@@ -494,6 +494,7 @@ pub(crate) fn broken_links(item: &Item, index: &ContentIndex) -> Vec<&'static st
     let mut problems = Vec::new();
     if world_field(&item.entry, "in").is_some_and(|value| !value.is_null())
         && index.place_of(item.entry.id).is_none()
+        && index.place_choices(item.entry.id).is_empty()
     {
         problems.push("Place not found");
     }
@@ -1242,6 +1243,14 @@ impl Reader {
                             if design::wrapped_link(ui, &index.items[at].entry.name).clicked() {
                                 go = Some(Go::Item(at, None));
                             }
+                        } else if key == "in" && !index.place_choices(item.entry.id).is_empty() {
+                            let choices = index.place_choices(item.entry.id);
+                            let name = world_field(&item.entry, key)
+                                .map(|value| link_name(value, label))
+                                .unwrap_or_default();
+                            if design::wrapped_link(ui, &name).clicked() {
+                                go = Some(Go::Many(choices));
+                            }
                         } else if let Some(value) = world_field(&item.entry, key) {
                             let words = format!(
                                 "{} {} · Not found",
@@ -1415,7 +1424,20 @@ impl Reader {
                     },
                 );
             }
+            let choices = index.place_choices(item.entry.id);
+            if !choices.is_empty() {
+                ui.horizontal(|ui| {
+                    ui.label(Type::Small.rich(ui, "In").color(colors().muted));
+                    let name = world_field(&item.entry, "in")
+                        .map(|value| link_name(value, "Place"))
+                        .unwrap_or_default();
+                    if design::link(ui, &name).clicked() {
+                        go = Some(Go::Many(choices));
+                    }
+                });
+            }
             if index.place_of(item.entry.id).is_none()
+                && index.place_choices(item.entry.id).is_empty()
                 && let Some(place) = world_field(&item.entry, "in").and_then(Value::as_str)
             {
                 ui.label(
