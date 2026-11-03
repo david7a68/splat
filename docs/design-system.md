@@ -279,9 +279,9 @@ it available for any encounter on Save, with Undo until that save.
 
 The roster is the screen. Every row has fixed columns: initiative, side mark, name, AC,
 temporary HP, HP with its bar, then a state column for `Bloodied`, `0 HP` and the sync
-word. Conditions take a second line that wraps before the HP column and grows the row, so
-long local effects show four words and `more`, which opens their full text in `Conditions`.
-Official conditions stay worded. When a window has no room for the state column, as at 960x640 beside
+word. Conditions take one second line before the HP column. When they would wrap, a count
+replaces the remaining conditions. Long local effects show four words and `more`.
+The count opens their full text in `Conditions`. When a window has no room for the state column, as at 960x640 beside
 the panel, those words open the second line instead, so that a name is never cut.
 
 - **Current row:** the `current_row` fill, a 2 px stroke, a 6 px bar, and the word `TURN`
@@ -297,7 +297,9 @@ the panel, those words open the second line instead, so that a name is never cut
   and Undo at the right. Measure the notice first; Undo takes the remaining width, less an L gap.
   If needed, drop `Undo:`, then shorten only the target name, keeping a copy's number.
   Keep action words, amounts and condition directions. Hover and the accessible name keep
-  the full action. An empty history shows `Nothing to undo`, or `since reopening` after a restart.
+  the full action. An empty history shows `Nothing to undo`, or `Nothing to undo since reopening`.
+  Both screens put this reason to the left of blocked Undo. A narrow slot uses
+  `Nothing to undo`; hover and accessibility keep the full reason.
   A sync conflict comes first, then recording silence, then other
   sync notices, then the next name. Silence and the short sync state stay together when
   space is short. Connect to sync gives up its link before either state gives up its word.
@@ -309,7 +311,7 @@ the panel, those words open the second line instead, so that a name is never cut
 - **Strip:** on other pages, a line with the turn, any conflict, secondary `Back to run` and primary `Next turn`.
 - **Changed:** a creature with overrides has `Changed` on its second line, then anything the
   run cannot apply, such as `Attack +1` or `Speed 40 ft`, because the DM needs it at the table. A setup
-  row has the word `Changed` only. The second line starts under the name at every scale. If the list still does not fit after name-only rows shrink, keep the first table bonus and a `more` link to the full changes. A long condition list keeps its first two conditions and a count link to Conditions. Its card lists changes at the top of the stat block's tab, except AC, maximum HP and initiative bonus, which the value trio already shows. What
+  row has the word `Changed` only. The second line starts under the name at every scale. If the list still does not fit after name-only rows shrink, keep the first table bonus and a `more` link to the full changes. A long condition list keeps the conditions that fit and a count link to Conditions. Its card lists changes at the top of the stat block's tab, except AC, maximum HP and initiative bonus, which the value trio already shows. What
   the run cannot apply comes first, in larger type, and says `add by hand`. The stat block uses the
   run's AC, maximum HP and initiative bonus, with the printed value below each changed value.
   The list scrolls with the stat block, and each participant keeps its own place in it.
@@ -320,7 +322,7 @@ the panel, those words open the second line instead, so that a name is never cut
   `Add to` above the search names it. The Encounters page keeps these groups in one closed section.
 - **Panel:** one tab row has participant tabs (`Stat block` or `Sheet`, `Conditions`, `Correct`)
   at the left, then an `L` gap and fight tabs (`Log`, `Prep`, `Arrivals`) at the right.
-  Fight tabs use `This fight` as the title. When space is short, they share a `Fight ▾` menu.
+  Fight tabs name only the fight tab in the title in setup and live play. When space is short, they share a `Fight ▾` menu.
   The row never wraps.
 - **Arrivals:** a tab beside the stat block adds one creature, found or made up. Only search
   shows until a name is typed. The form then has two fixed rows of fields. Below it, the tab
@@ -368,7 +370,7 @@ Technical details stays closed and uses plain words for rules not read yet or no
 
 A live microphone has the only colour here. `Record` takes a second, inline step that says to tell the table.
 While it records, the rail keeps the word and the time in view on every page. The time counts audio in the file, so it
-stops when saving stops. Processing help keeps READER_MEASURE, while recording rows fill their column. A processed warning uses the same full state, Processed, with a warning, on the row and in the rail's hover text and accessible name; the rail's short word is Check result. Continue processing resumes work kept after a stop or a failure. A recording that stops by itself has Open the session in its banner. On the timeline is a success status link wherever it opens the added event. The rail and the session's page show the same state: `Recording`, `Recording silence`, or `Not saving
+stops when saving stops. Processing help keeps READER_MEASURE, while recording rows fill their column. A processed warning uses the same full state, Processed, with a warning, on the row and in the rail's hover text and accessible name; the rail's short word is Processed. Continue processing resumes work kept after a stop or a failure. A recording that stops by itself has Open the session in its banner. On the timeline is a success status link wherever it opens the added event. The rail and the session's page show the same state: `Recording`, `Recording silence`, or `Not saving
 audio`. In the rail, silence is shortened to `Silence 0:00`, with the full state in its hover text and accessible name. A stall takes a banner at the bottom of every page, with `Record again`, because at the table the DM looks at the roster and
 not at the rail. It is at the bottom so that it never moves `Next turn`. A recording or a job that fails takes the same banner, and
 the rail, until the DM dismisses it or tries again. Silence takes no banner, because a table goes quiet often. After a minute it shows in the rail,
@@ -534,6 +536,7 @@ and an L gap below. Encounter and group change forms use the run's condition gri
 Recording and processing keep one linked rail slot above account status. A recording row
 owns its failure, stopped or stalled message while it is open; other pages keep the banner.
 A live row owns Stop recording on the Recordings tab; other tabs keep the header button.
+A row that offers Record again also owns the recording action on that tab.
 The recordings list and its events keep LIST_MEASURE; result readers use the full pane.
 A stopped row keeps
 Record again beside Process, so recovery stays one press. A processed row puts
@@ -576,3 +579,17 @@ Adding to as read-only text. Members and XP share one heading line.
 
 The capture suite rejects consecutive steps with identical pixels at the same size.
 An intended repeat needs expect_same with a reason on its second step.
+
+## Run and recording audit, iteration 7
+
+Paused rows give text the space left by their measured actions. Their saved time follows
+the turn without a full stop. Recovery copies keep Edit when their encounter exists.
+Readers hide the untouched Personal notes help; the editor keeps it.
+
+Sync-choice Undo names the character, or the count of characters. Ended-run sync blocks
+have an L gap between characters. An ended sign-in uses muted recovery text; a failed
+Connect keeps its error state. A warned result says Processed in the rail, with its full
+warning on hover and in its accessible name. A stalled row omits its session name.
+
+Processing destinations show beside Process and Continue processing, and in the
+Process again confirmation. A saved key field invites a replacement key.

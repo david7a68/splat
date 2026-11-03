@@ -62,9 +62,11 @@ pub(super) fn template_of<'a>(
     if let Some(source) = run.source {
         return templates.iter().find(|template| template.id == source);
     }
-    let mut named = templates
-        .iter()
-        .filter(|template| template.name == run.encounter);
+    let name = run
+        .encounter
+        .split_once(" · saved ")
+        .map_or(run.encounter.as_str(), |(name, _)| name);
+    let mut named = templates.iter().filter(|template| template.name == name);
     let first = named.next()?;
     named.next().is_none().then_some(first)
 }
@@ -227,6 +229,18 @@ mod tests {
             .iter()
             .map(|row| row.template.name.as_str())
             .collect()
+    }
+
+    #[test]
+    fn recovery_copies_keep_their_encounter_without_guessing_between_duplicates() {
+        let mut templates = vec![template("Bridge")];
+        let saved = old_run("Bridge · saved 03:00:00 (2)", Standing::Unfinished);
+        assert_eq!(template_of(&saved, &templates).unwrap().id, templates[0].id);
+        templates.push(template("Bridge"));
+        assert!(template_of(&saved, &templates).is_none());
+        let mut saved = saved;
+        saved.source = Some(templates[1].id);
+        assert_eq!(template_of(&saved, &templates).unwrap().id, templates[1].id);
     }
 
     #[test]
