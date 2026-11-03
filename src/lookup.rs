@@ -1267,7 +1267,7 @@ impl Lookup {
 }
 
 /// What the generator rolled, with its choices. Returns save, reroll and discard.
-fn generated_card(
+pub(crate) fn generated_card(
     ui: &mut egui::Ui,
     npc: &crate::npc_generator::Generated,
     problems: &[String],

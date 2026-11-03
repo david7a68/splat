@@ -4,7 +4,7 @@ A desktop foundation for D&D 2024 encounter planning and simulation.
 Built with Rust and egui (eframe). The design system is in [docs/design-system.md](docs/design-system.md).
 The sidebar has one flat level: **Run** (while a run is open), **Encounters**, **Session**, **Timeline**, **World**, **Party**,
 **Library**, **Campaign**, and **Settings**. The campaign switcher is always above them. **Lookup** (Ctrl+K) searches every entry, every session note and the timeline, and
-opens beside any page. While a run is open, other pages show a strip with the turn and **Next turn**. Each page keeps its
+opens beside any page. While a run is open, other pages show a strip with the turn, **Next turn**, and the primary **Back to run** action. Each page keeps its
 state, and the app reopens on the last page or the open run. Drag the edge of the sidebar, a page's list, or a panel to
 change its width. The app keeps that width after a restart. Simulation is later work.
 
@@ -54,7 +54,9 @@ the host's `ffmpeg` and `montage`.
   party,settings` is the same, and keeps the captures of the label's other scenarios.
 - `SPLAT_VISUAL_VIDEO=0` turns video off for `visual-test`.
 
-The `gallery` scenario captures every design token and component. `src/design/lint.rs` fails on raw
+Library has **New entry** in its header. Its form opens in the reader column and closes after creation. World has **New ▾** for an NPC, a location, or a generated NPC. List headings use capitals and a count. Page headers show state or counts beside the title, with a rule below.
+
+The `gallery` scenario captures every design token and component, including page headers, blocked reasons, row menus and status links. `src/design/lint.rs` fails on raw
 colours and text sizes outside `src/design/`, and `src/design/tokens.rs` tests WCAG contrast.
 
 Scenario labels are at the top of each scenario in `src/visual_tests/scenarios.rs`, and the
@@ -116,9 +118,9 @@ local campaigns. Select **Not linked** to remove a link, or choose another
 campaign to replace it.
 
 After connecting, expand **Add from D&D Beyond** and select a campaign. Its
-name and ID fill the campaign form. Then choose its data folder with **Browse…**
+name and ID fill the form under that row. Then choose its data folder with **Browse…**
 or enter a path, and select **Open campaign**. No local campaign is required first.
-You can also choose an existing folder and select **Open campaign** without connecting.
+You can also choose an existing folder and select **Open campaign** without connecting. Campaigns stay on the left of Settings, with the account on the right. On a narrow window, campaigns come first and **Connect…** opens the account form. The Campaign page also has the add form when no campaign exists. Removal is in each row’s **More actions** menu.
 
 Splat creates or discovers the campaign manifest in that folder. It stores the
 name and D&D Beyond link there, alongside existing custom paths and content

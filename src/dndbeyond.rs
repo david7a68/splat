@@ -216,6 +216,17 @@ impl DndBeyond {
         session: Option<Session>,
         local: &mut Campaigns,
     ) {
+        if session.is_none() {
+            ui.horizontal_wrapped(|ui| {
+                ui.label("To import from D&D Beyond,");
+                if crate::design::link(ui, "connect your account").clicked() {
+                    ui.ctx()
+                        .data_mut(|data| data.insert_temp(egui::Id::new("focus_cookie"), true));
+                }
+                ui.label("first.");
+            });
+            return;
+        }
         egui::CollapsingHeader::new("Add from D&D Beyond")
             .icon(crate::design::section_icon)
             .icon(crate::design::section_icon)
@@ -226,7 +237,7 @@ impl DndBeyond {
                     return;
                 };
                 if (!self.loaded && self.error.is_none() && self.pending.is_none())
-                    || crate::design::Action::secondary("Refresh campaigns")
+                    || crate::design::Action::secondary("Refresh from D&D Beyond")
                         .density(crate::design::Density::Read)
                         .blocked_if(self.pending.is_some(), "Already refreshing.")
                         .show(ui)
@@ -245,18 +256,28 @@ impl DndBeyond {
                 }
                 for remote in &self.campaigns {
                     let added = local.is_added(&remote.id);
-                    let label = if added {
-                        format!("{} · Added", remote.name)
-                    } else {
-                        remote.name.clone()
-                    };
-                    if ui
-                        .add_enabled(!added, egui::Button::new(label))
-                        .on_disabled_hover_text("This campaign is already in your list.")
-                        .clicked()
-                    {
-                        local.start_import(&remote.id, &remote.name);
-                    }
+                    ui.horizontal(|ui| {
+                        ui.label(crate::design::Type::Strong.rich(ui, &remote.name));
+                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                            if added {
+                                crate::design::status(
+                                    ui,
+                                    crate::design::Status {
+                                        icon: crate::design::icons::OK,
+                                        word: "Added",
+                                        color: crate::design::colors().muted,
+                                    },
+                                );
+                            } else if crate::design::Action::secondary("Add…")
+                                .name(&format!("Add {} from D&D Beyond", remote.name))
+                                .show(ui)
+                                .clicked()
+                            {
+                                local.start_import(&remote.id, &remote.name);
+                            }
+                        });
+                    });
+                    local.show_import_form(ui, &remote.id);
                 }
             });
     }
@@ -274,7 +295,14 @@ impl DndBeyond {
             } else if session.is_none() {
                 ui.weak("Not connected · saved name");
             } else {
-                ui.weak("Connected");
+                crate::design::status(
+                    ui,
+                    crate::design::Status {
+                        icon: crate::design::icons::ONLINE,
+                        word: "Connected",
+                        color: crate::design::colors().connection.connected,
+                    },
+                );
             }
         });
         let Some(campaign) = local.active_campaign() else {

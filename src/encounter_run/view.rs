@@ -2417,6 +2417,29 @@ impl Run {
     fn reference_tab(&mut self, ui: &mut egui::Ui, index: usize) {
         let p = &self.state.participants[index];
         let definition = &p.definition;
+        if definition.path == "Made up in this fight" {
+            design::empty_state(
+                ui,
+                icons::ENCOUNTERS,
+                "Made-up creature",
+                "Made up in this fight. It has no stat block.",
+                |_| {},
+            );
+            ui.horizontal(|ui| {
+                design::stat_tile(
+                    ui,
+                    "Armor class",
+                    &p.armor_class
+                        .map_or_else(|| "?".into(), |ac| ac.to_string()),
+                );
+                design::stat_tile(
+                    ui,
+                    "Hit points",
+                    &p.hp.map_or_else(|| "?".into(), |hp| hp.to_string()),
+                );
+            });
+            return;
+        }
         // A linked character shows the same sheet as the Party page, with its age.
         if let Some(record) = self
             .sheet

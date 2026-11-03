@@ -128,6 +128,10 @@ pub fn tokens(ui: &mut egui::Ui) {
 
 pub fn components(ui: &mut egui::Ui) {
     let c = colors();
+    page_header(ui, "Encounters", Some("2 ready · 1 in progress"), |ui| {
+        let _ = Action::secondary("New encounter").icon(icons::ADD).show(ui);
+        let _ = Action::quiet("Reload").show(ui);
+    });
     design_group(ui, "Buttons: enabled, blocked");
     for (kind, label) in [
         (0, "Primary"),
@@ -141,13 +145,35 @@ pub fn components(ui: &mut egui::Ui) {
             2 => Action::quiet(label),
             _ => Action::destructive(label),
         };
-        ui.horizontal(|ui| {
-            let _ = action(label).icon(icons::ADD).show(ui);
-            let _ = action(label).show(ui);
-            let _ = action(label).density(Density::Read).show(ui);
-            let _ = action(label)
-                .blocked(Some("Blocked for a stated reason."))
-                .show(ui);
+        ui.horizontal_top(|ui| {
+            for (state, sample) in [
+                ("With icon", 0),
+                ("Enabled", 1),
+                ("Read density", 2),
+                ("Blocked", 3),
+            ] {
+                ui.vertical(|ui| {
+                    ui.set_max_width(140.0);
+                    ui.label(Type::Small.rich(ui, state).color(c.muted));
+                    match sample {
+                        0 => {
+                            let _ = action(label).icon(icons::ADD).show(ui);
+                        }
+                        1 => {
+                            let _ = action(label).show(ui);
+                        }
+                        2 => {
+                            let _ = action(label).density(Density::Read).show(ui);
+                        }
+                        _ => {
+                            let _ = action(label)
+                                .blocked(Some("Blocked for a stated reason."))
+                                .show(ui);
+                            blocked_reason(ui, Some("Blocked for a stated reason."));
+                        }
+                    }
+                });
+            }
         });
     }
     ui.horizontal(|ui| {
@@ -159,6 +185,12 @@ pub fn components(ui: &mut egui::Ui) {
             let _ = ui.selectable_label(true, "The default");
             let _ = ui.selectable_label(false, "Another way");
         });
+    });
+    ui.horizontal(|ui| {
+        let _ = Action::quiet("Absent")
+            .icon(icons::ABSENT)
+            .selected(true)
+            .show(ui);
     });
     design_group(ui, "Fields");
     let mut text = "Bridge Ambush".to_owned();
@@ -186,7 +218,7 @@ pub fn components(ui: &mut egui::Ui) {
     let _ = two_line_row(ui, 40.0, true, "A selected row", "Second line");
     ui.horizontal_wrapped(|ui| {
         for (icon, word, color) in [
-            (icons::OK, "Synced", c.sync.matching),
+            (icons::OK, "Matching", c.sync.matching),
             (icons::REFRESH, "Pending", c.sync.pending),
             (icons::WARN, "Conflict", c.sync.conflict),
             (icons::ERROR, "Error", c.sync.error),
@@ -196,6 +228,22 @@ pub fn components(ui: &mut egui::Ui) {
         ] {
             status(ui, Status { icon, word, color });
         }
+    });
+    group_heading(ui, "Ready to run", 2);
+    ui.horizontal(|ui| {
+        let _ = status_link(
+            ui,
+            Status {
+                icon: icons::RUN,
+                word: "Running · Round 2",
+                color: c.sync.matching,
+            },
+        );
+        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            row_menu(ui, "Bridge Ambush", |ui| {
+                let _ = ui.button("Remove…");
+            });
+        });
     });
     design_group(ui, "HP");
     for (hp, max, temp) in [

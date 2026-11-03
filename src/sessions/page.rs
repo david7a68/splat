@@ -4148,27 +4148,24 @@ impl Sessions {
         book: &mut Book,
         plan: &Plan<'_>,
     ) {
-        let campaign = self
-            .campaign
-            .as_ref()
-            .map_or_else(String::new, |campaign| campaign.name.clone());
         let mut new_session = false;
         let in_form = self.form.is_some();
         let empty = self.notes.is_empty();
         let locked = self.draft.as_ref().is_some_and(Draft::needs_attention);
         let mut stop = false;
-        design::page_header(ui, "Session", Some(&campaign), |ui| {
+        let context = design::count(self.notes.len(), "session", "sessions");
+        design::page_header(ui, "Session", Some(&context), |ui| {
             let list_alone = self.list_only && ui.ctx().content_rect().width() < 1500.0;
-            if self.live.is_some() && (self.view != View::Notes || in_form || list_alone || empty) {
-                stop = Action::destructive("Stop recording")
-                    .icon(icons::STOP_RECORDING)
-                    .show(ui)
-                    .clicked();
-            }
             if self.view == View::Notes && !in_form && !empty {
                 new_session = Action::secondary("New session")
                     .icon(icons::ADD)
                     .blocked_if(locked, "Choose what to do with this note first.")
+                    .show(ui)
+                    .clicked();
+            }
+            if self.live.is_some() && (self.view != View::Notes || in_form || list_alone || empty) {
+                stop = Action::quiet("Stop recording")
+                    .icon(icons::STOP_RECORDING)
                     .show(ui)
                     .clicked();
             }

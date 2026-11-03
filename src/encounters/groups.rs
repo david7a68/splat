@@ -507,26 +507,14 @@ pub(super) fn list(
         .filter(|group| group.encounter.is_some() && group.encounter_name.is_none())
         .collect();
     let owned = snapshot.groups.len() - any.len() - orphans.len();
-    ui.label(
-        Type::Heading
-            .rich(
-                ui,
-                format!("Encounter groups ({})", any.len() + orphans.len()),
-            )
-            .color(colors().text),
-    );
-    design::rule(ui);
+    design::group_heading(ui, "Groups", any.len() + orphans.len());
     if snapshot.groups.is_empty() {
-        ui.add(
-            egui::Label::new(
-                Type::Body
-                    .rich(
-                        ui,
-                        "No groups yet. Prepare a set of creatures with New group, then add it to a running encounter when it arrives.",
-                    )
-                    .color(colors().muted),
-            )
-            .wrap(),
+        design::empty_state(
+            ui,
+            icons::GROUP,
+            "No groups yet",
+            "A group is a set of creatures that arrive together. Select New group to prepare one.",
+            |_| {},
         );
     }
     for group in any {

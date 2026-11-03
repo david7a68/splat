@@ -12,6 +12,7 @@ use zeroize::{Zeroize, Zeroizing};
 
 pub struct Settings {
     cookie_input: String,
+    sign_in_again: bool,
     session: Option<Session>,
     worker: Option<Worker>,
     generation: u64,
@@ -49,7 +50,7 @@ pub enum Account {
     RefreshFailing,
 }
 
-const SESSION_ENDED: &str = "The D&D Beyond session ended because it could not be renewed. Check your connection, then select Connect.";
+const SESSION_ENDED: &str = "Signed out of D&D Beyond. Check your connection, then select Connect.";
 
 /// 5, 10, 20, 40, then 60 seconds. Renewal starts a minute before the token ends at most,
 /// so a short drop gets several tries.
@@ -61,6 +62,7 @@ impl Default for Settings {
     fn default() -> Self {
         Self {
             cookie_input: String::new(),
+            sign_in_again: false,
             session: None,
             worker: None,
             generation: 0,
@@ -157,6 +159,10 @@ impl Settings {
         } else {
             Account::NotConnected
         }
+    }
+
+    pub fn connection_failed(&self) -> bool {
+        self.account() == Account::Failed && self.error.as_deref() != Some(SESSION_ENDED)
     }
 
     pub fn refresh_failing(&self) -> bool {
@@ -279,12 +285,68 @@ impl Settings {
         self.send(Action::Forget, ctx);
     }
 
-    pub fn show(&mut self, ui: &mut egui::Ui) {
+    pub fn show_compact(&mut self, ui: &mut egui::Ui) {
         let c = colors();
-        ui.label(Type::Heading.rich(ui, "D&D Beyond account").color(c.text));
+        let (icon, word, color) = match self.account() {
+            Account::NotConnected => (icons::OFFLINE, "Not connected", c.connection.offline),
+            Account::Failed if self.error.as_deref() == Some(SESSION_ENDED) => (
+                icons::OFFLINE,
+                "Signed out of D&D Beyond",
+                c.connection.offline,
+            ),
+            Account::Failed => (icons::ERROR, "Connection failed", c.result.error),
+            Account::Busy => (icons::BUSY, "Connecting", c.connection.busy),
+            Account::RefreshFailing => (icons::WARN, "Sign-in failing", c.result.warning),
+            Account::KeyringWarning => {
+                (icons::WARN, "Connected · not remembered", c.result.warning)
+            }
+            Account::Connected => (icons::ONLINE, "Connected", c.connection.connected),
+        };
+        let id = egui::Id::new("compact_account_open");
+        let mut open = ui
+            .ctx()
+            .data(|data| data.get_temp::<bool>(id).unwrap_or(false));
+        ui.horizontal(|ui| {
+            design::status(ui, Status { icon, word, color });
+            if design::Action::quiet(
+                if matches!(self.account(), Account::NotConnected | Account::Failed) {
+                    "Connect…"
+                } else {
+                    "Account…"
+                },
+            )
+            .show(ui)
+            .clicked()
+            {
+                open = !open;
+            }
+        });
+        open |= ui.ctx().data(|data| {
+            data.get_temp::<bool>(egui::Id::new("focus_cookie"))
+                .unwrap_or(false)
+        });
+        ui.ctx().data_mut(|data| data.insert_temp(id, open));
+        if open {
+            self.show_account(ui, false);
+        }
+    }
+
+    pub fn show(&mut self, ui: &mut egui::Ui) {
+        self.show_account(ui, true);
+    }
+
+    fn show_account(&mut self, ui: &mut egui::Ui, heading: bool) {
+        let c = colors();
+        if heading {
+            ui.label(Type::Heading.rich(ui, "D&D Beyond account").color(c.text));
+        }
         let small = |ui: &mut egui::Ui, text: &str| {
             ui.add(egui::Label::new(Type::Small.rich(ui, text).color(c.muted)).wrap());
         };
+        self.sign_in_again |= ui.ctx().data(|data| {
+            data.get_temp::<bool>(egui::Id::new("focus_cookie"))
+                .unwrap_or(false)
+        });
         let account = self.account();
         let state = match account {
             Account::Busy => Status {
@@ -304,35 +366,34 @@ impl Settings {
             },
             Account::Failed => Status {
                 icon: icons::ERROR,
-                word: "Not connected: the last attempt failed",
+                word: "Not connected",
                 color: c.result.error,
             },
             Account::KeyringWarning => Status {
                 icon: icons::WARN,
-                word: "Connected, but the session was not saved",
+                word: "Connected · not remembered",
                 color: c.result.warning,
             },
             Account::RefreshFailing => Status {
                 icon: icons::WARN,
-                word: "Connected, but renewing the session failed. Retrying.",
+                word: "Connected, but renewing the sign-in failed",
                 color: c.result.warning,
             },
         };
-        ui.horizontal(|ui| {
-            if account == Account::Busy {
-                crate::design::spinner(ui);
-            }
-            design::status(ui, state);
-        });
+        if heading {
+            ui.horizontal(|ui| {
+                if account == Account::Busy {
+                    crate::design::spinner(ui);
+                }
+                design::status(ui, state);
+            });
+        }
         match account {
             Account::Connected => {
                 small(
                     ui,
                     "The access token refreshes automatically while Splat is open.",
                 );
-            }
-            Account::KeyringWarning => {
-                small(ui, "You will need to connect again next time Splat opens.");
             }
             Account::RefreshFailing => {
                 small(
@@ -346,9 +407,30 @@ impl Settings {
             design::message(ui, Tone::Error, error);
         }
         if let Some(warning) = &self.warning {
-            design::message(ui, Tone::Warning, warning);
+            design::message(
+                ui,
+                Tone::Warning,
+                if account == Account::KeyringWarning {
+                    "Your desktop keyring did not save the session. Unlock the keyring, then select Connect again, or connect again next time."
+                } else {
+                    warning
+                },
+            );
         }
-        if matches!(account, Account::NotConnected | Account::Failed) {
+        if matches!(account, Account::RefreshFailing | Account::KeyringWarning)
+            && design::Action::secondary(if account == Account::RefreshFailing {
+                "Sign in again"
+            } else {
+                "Connect again"
+            })
+            .show(ui)
+            .clicked()
+        {
+            self.sign_in_again = true;
+            ui.ctx()
+                .data_mut(|data| data.insert_temp(egui::Id::new("focus_cookie"), true));
+        }
+        if self.sign_in_again || matches!(account, Account::NotConnected | Account::Failed) {
             small(
                 ui,
                 "Connect your account to import campaigns and read characters.",
@@ -373,12 +455,20 @@ impl Settings {
                         .desired_width(420.0_f32.min(ui.available_width() - 2.0 * design::S)),
                 );
                 design::named(ui, &response, "Paste session cookie");
+                if ui
+                    .ctx()
+                    .data_mut(|data| data.remove_temp::<bool>(egui::Id::new("focus_cookie")))
+                    .unwrap_or(false)
+                {
+                    response.request_focus();
+                    response.scroll_to_me(Some(egui::Align::Center));
+                }
             });
             ui.checkbox(&mut self.remember, "Remember session in desktop keyring");
             if self.cookie_input.trim().is_empty() {
                 small(ui, "Paste your session cookie to connect.");
             }
-            if design::Action::primary("Connect")
+            if design::Action::secondary("Connect")
                 .blocked_if(
                     self.cookie_input.trim().is_empty(),
                     "Paste your session cookie first.",
@@ -386,6 +476,7 @@ impl Settings {
                 .show(ui)
                 .clicked()
             {
+                self.sign_in_again = false;
                 let cookie = Zeroizing::new(self.cookie_input.trim().to_owned());
                 self.send(
                     crate::credentials::Action::Connect {

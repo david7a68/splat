@@ -66,7 +66,7 @@ HP and initiative hold their place because the font's digits have one width.
 | `StatLabel` / `Stat` | SmText 13 / 18 | Stat block rows |
 | `Mono` | Monospace 13 | Markdown source |
 
-**Measure.** `READER_MEASURE` is 488 px at `Prose`, about 62 characters on average and
+**Measure.** Lists of rows with actions use `LIST_MEASURE` (880 px), so actions stay near the names. `READER_MEASURE` is 488 px at `Prose`, about 62 characters on average and
 at most 75 (T6.1). Prose never fills a wide window.
 
 **The run has its own scale.** `RunScale` holds a row height and type sizes, and
@@ -142,9 +142,9 @@ tooltips, and separators. Text cursors do not blink, because motion draws the ey
 
 | Part | Function | Notes |
 |---|---|---|
-| Page header | `page_header` | Title, one line of context, actions on the right |
+| Page header | `page_header` | Title and one `Small` muted state or count on the same baseline; actions on the right; a hairline below. Never repeat the campaign name |
 | Nav item | `nav_item` | Icon and word. Accent bar when selected |
-| Buttons | `Action::primary / secondary / quiet / destructive` | `.blocked(reason)` disables and shows why (G1). `.key("N")` shows the key beside the word |
+| Buttons | `Action::primary / secondary / quiet / destructive` | `.blocked(reason)` disables; put `blocked_reason` beside it in visible `Small` text (G1). `.key("N")` shows the key beside the word |
 | Split button | `split_action` | An `Action` that does the default, and a caret that opens a menu of the other ways |
 | Field | `field` | Label, control, help, error; names the control for accessibility |
 | Text fields | `text_field`, `text_input`, `number_field`, `search_field`, `named` | Always have an accessible name and a 26 px target. Numbers align left, so the caret never lies on a digit |
@@ -157,13 +157,24 @@ tooltips, and separators. Text cursors do not blink, because motion draws the ey
 | Status | `status`, `status_link`, `Status` | Icon, word, colour. `status_link` also leads to where the DM can act |
 | Stat tile | `stat_tile` | A label over a large value, with no box |
 | HP | `hp_bar`, `hp_readout`, `hp_state` | Fixed slots. Temp HP is separate |
-| Empty state | `empty_state` | What this is, and the one next step |
+| Empty state | `empty_state` | What this is, and the one next step. At the top of the empty pane, with its normal padding |
+| Group heading | `group_heading` | `Type::Label` in capitals and a muted count after it. No rule. Serif headings belong to readers and stat blocks |
+| Row menu | `row_menu` | Quiet `⋯` at the right edge, named `More actions for <name>`. Put Remove and Delete here |
 | Message | `message`, `Tone` | Inline. Never modal |
 | Side panel | `side_panel_width`, `panel_header` | One width rule for Lookup, Notes and the run. Above 820 px, the run's panel has two columns |
 | Column | `Column::left / right / panel` | Every side column: the rail, a page's list, a panel. A drag handle on its inner edge. Natural width until dragged, then the DM's width, here and after a restart. A drag always leaves the page its room, and the run's roster keeps `RUN_LIST_KEEPS`. What sits beside a column reaches its edge, so no blank band opens between them. Text keeps its measure inside that room |
 | Link | `link` | A real `Link` role, at least 24 px high |
 | Number | `number`, `number_width` | Right-aligned digits |
 | Count | `count` | `1 entry`, `2 entries` |
+
+Header actions have at most one bordered secondary button, for `New …`. Other header actions are quiet and come before it.
+The Library scope control sits at the top of its category column. At a narrow width, it sits above the list.
+
+One accent-filled primary action can be in view. On other pages while a run is open, the run strip owns `Back to run` and the primary fill.
+A page uses `status_link`, for example `Running · Round 2`, to show a run's state and open it.
+An on toggle uses `selected`, its icon or a check, and its word. It does not use the accent fill.
+Delete and Remove belong in a row menu, away from the primary action. A save row has the save-state word and quiet `Discard` at the left, and `Save` at the right.
+Use red only for an action that loses something.
 
 Icons support words. They replace a word only where the meaning is universal, and then the
 control still has an accessible name and a tooltip.
