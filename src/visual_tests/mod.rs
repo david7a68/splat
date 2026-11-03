@@ -12,7 +12,8 @@
 //! - `SPLAT_VISUAL_ENFORCE` is `baseline` (default), `strict` (any violation fails)
 //!   or `report` (never fails on a check).
 //! - `SPLAT_VISUAL_UPDATE_BASELINE=1` rewrites `baseline.json` from this run.
-//! - `SPLAT_VISUAL_SCENARIOS=party,settings` runs only those scenarios.
+//! - `SPLAT_VISUAL_SCENARIOS=party,settings` runs only those scenarios and collects
+//!   every reached text expectation before failing. Action failures still stop a scenario.
 //! - `SPLAT_VISUAL_DIAGNOSE=1` collects text expectations, then still fails the run.
 //! - `SPLAT_VISUAL_TIMINGS=1` prints stage timings without changing captures.
 //! - `SPLAT_VISUAL_SLOTS` overrides the machine-wide suite limit (default 2).

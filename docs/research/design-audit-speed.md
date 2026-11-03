@@ -1074,3 +1074,124 @@ summaries, pixel counts and per-file comparisons are under ignored
 Saved executables and profiler libraries are under `target/`. No instrumentation
 remains in source, and no `artifacts/design-audit/` files are committed.
 `git diff --check` passed.
+
+## Eighth scan: complete targeted feedback by default
+
+2026-11-03. Merged `origin/main` first; base
+`cce50bc1c80e6179bb8cbbd68b09de9a3894323d`. Used the lead's warm `target/`
+without setting `CARGO_TARGET_DIR`. This scan extends the second scan's opt-in
+text collection; it does not repeat the build, admission or renderer trials.
+
+### Retained change and measurements
+
+`visual-test --only` now collects all reached `d.expect(...)` failures by default.
+The suite still fails, including in report mode, and a missing expectation still
+prevents an eligible chrome observation. Existing baseline reporting already
+prints every measured chrome increase and decrease before failing; allowing the
+script to continue supplies the later measurements in that same run.
+
+Collection is separate from diagnostic timeouts. Targeted runs retain the normal
+180-second painted-text wait. Only explicit `SPLAT_VISUAL_DIAGNOSE=1` uses the
+existing five-second wait. Missing controls, raw assertions and timeouts still
+stop a scenario: collecting text does not make an unreachable action safe.
+Thus one run reports all **reached** text checks and measured chrome changes,
+not checks after an action that could not run. Full runs keep their existing
+fail-fast behavior; `audit-gate` still clears feedback settings.
+
+Timings below use `date +%s` inside a fresh `devenv shell --` from the worktree
+root, after shell entry. PNG capture is on and video explicitly off. Compilation
+is excluded except where stated. These are local observations without a host
+contention monitor, not a concurrent-implementer throughput claim.
+
+| Measurement | Before | After |
+| --- | ---: | ---: |
+| Warm nine-scenario passing run | 14 s | 14 s |
+| Controlled loop to reveal two missing phrases and five chrome changes | 28 s / 3 runs | 12 s / 1 run |
+| Original captures in the final controlled run | 60 | 60 |
+| Chrome changes in the first controlled run | 2 of 5 | 5 of 5 |
+| Missing phrases in the first controlled run | 1 of 2 | 2 of 2 |
+
+The representative selection was
+`party,settings,library-browse,library-author,library-navigation,run-lookup,world,world-places,nav-state`.
+It keeps all 209 PNGs, sizes and checks. The first baseline command took 35 s,
+including its initial Splat rebuild; its visual suite took 14.32 s. The next warm
+baseline took 14 s / 14.49 s inside the suite; retained source took 14 s /
+14.24 s. There is no claim that a passing run renders faster.
+
+The controlled probe adds two deliberately missing expectations after entering
+Settings, and lowers five existing Party/Settings chrome allowances by one.
+The original run stops at the first phrase, after only the Party scenario's
+32 PNGs (8 s). Removing that synthetic mismatch exposes the second in another
+8 s; removing the second allows all 60 PNGs and five chrome changes in 12 s.
+The two intervening rebuilds cost another 6 s and 3 s, excluded from the 28 s
+table total. The retained default reports both phrases and all five changes in
+12 s, with all 60 PNGs. Every probe exits 101. Missing-text runs create no chrome
+observation; the original third run, with only chrome regressions, correctly
+creates one. Fixing source or changing actual baseline counts still requires
+the complete final gate. All injected checks and baseline edits were restored.
+
+### Repeated work: measured, no new cache
+
+In the original nine-scenario run, the eight seeded fixtures took 1.86–2.35 s
+each, concurrently; the empty fixture took 9 microseconds. App/font/renderer
+setup took 40–127 ms per scenario. A temporary instrumented repeat then measured:
+
+| Work in the same nine-scenario selection | Count | Per-call time | Sum of overlapping wall times |
+| --- | ---: | ---: | ---: |
+| Construct font definitions | 9 | 32–51 microseconds | 0.00037 s |
+| Background `ContentIndex::load` | 30 | 134–571 ms; median 201 ms | 7.04 s |
+
+The instrumented run passed with all 209 PNGs in 20 s including a rebuild;
+its suite took 14.52 s. These sums are not serial costs or expected savings.
+Font-definition construction is too cheap to justify another cache. Atlas,
+texture and renderer state belong to each egui context and were not shared.
+The font-definition timer does not isolate lazy glyph rasterization in later frames.
+
+Content indexes include campaign identity, package paths, visibility, world
+notes and links. Loads recur after scenario edits and campaign changes; identical
+path strings alone do not prove identical file contents. A suite-wide index cache
+could hide the very updates these scenarios test. Fixture files likewise carry
+scenario identities and mutable paths. The earlier immutable SRD/definition,
+fixture-PNG and shared-field changes already cover the safe shared inputs.
+No additional cache, renderer sharing or scheduling change was retained.
+
+### Fidelity and final gate
+
+Both baseline nine-scenario capture sets and the retained set have byte-identical
+209 PNGs, ergonomics JSON/Markdown and chrome observations. The regression test
+now checks that targeted and diagnostic modes retain every missing expectation,
+while ordinary full mode still panics. No baseline allowance, original scenario,
+capture plan, wait, renderer or gate command changes.
+
+`SPLAT_VISUAL_VIDEO=0 devenv shell -- audit-gate speed-8` passed in 93 s,
+including shell entry, 18.70 s of Clippy/check work and an 8.44 s test build.
+All 740 tests passed (188 library + 552 binary), with the same 12 opt-in tests
+ignored; other binary/documentation targets passed. The isolated visual suite
+took 54.28 s and ran all 58 scenarios with all 1,235 PNGs. The saved original
+executable's full standalone capture passed in 56 s / 55.37 s inside the suite;
+this is not a before/after gate speed comparison.
+
+Full ergonomics JSON/Markdown and chrome observations are byte-identical to
+main. Both full inventories have 490 captures at 960×640, 488 at 1200×800,
+240 at 1920×1080 and 17 at 2400×1600. Every manifest hash was verified against
+its PNG, and all names and dimensions match.
+
+The unchanged comparator still finds existing full-suite pixel variation:
+
+| Full capture pair | Byte-identical PNGs | Within tolerance 2 | Above tolerance 2 |
+| --- | ---: | ---: | ---: |
+| Main / retained gate | 1,159 | 40 | 36 |
+| Main / unchanged-main repeat | 1,178 | 21 | 36 |
+
+Every above-tolerance file in the cross-version pair also differs above tolerance
+in the unchanged-main pair. They are in `book-to-package`, `dialogs`,
+`library-to-encounter`, `session-notes`, `session-recording` and `share-to-package`,
+including the previously documented generated-ID, equal-row ordering and transient
+notice states. The repeat passed in 54 s with all 1,235 captures and identical
+reports. Both optional comparisons correctly exit 101; no tolerance or mask
+changed. This is proof of matching coverage/reports and existing varying files,
+not a claim of byte-identical full-suite pixels. `git diff --check` passed.
+
+Raw logs, temporary probe scripts and instrumentation diffs are under ignored
+`artifacts/screenshots/audit-speed-8/`. Saved executables remain under `target/`;
+no large files were put in `/tmp`, and no design-audit artifacts are committed.
