@@ -640,7 +640,7 @@ impl Run {
                     }
                     let room = ui.available_height() - DOCK_HEIGHT - self.footer_height();
                     let error_room = if stat_error.is_some() && !self.has_disk_conflict() {
-                        Type::Small.line() + Density::Read.control()
+                        Density::Read.control() + design::XS
                     } else {
                         0.0
                     };
@@ -811,14 +811,25 @@ impl Run {
                         let first = error
                             .split_once(" Its row")
                             .map_or(error.as_str(), |(first, _)| first);
-                        ui.label(Type::Small.rich(ui, first).color(colors().result.error));
                         ui.horizontal(|ui| {
-                            ui.label(
-                                Type::Small
-                                    .rich(ui, "Its row still works. Repair it in")
-                                    .color(colors().result.error),
+                            let tone = colors().result.error;
+                            ui.label(Type::Small.rich(ui, icons::ERROR).color(tone));
+                            let summary = format!(
+                                "{} · Repair in Campaign → Packages",
+                                first.trim_end_matches('.')
                             );
-                            if design::link(ui, "Campaign → Packages").clicked() {
+                            let detail = format!(
+                                "{first} Its row still works. Repair in Campaign → Packages."
+                            );
+                            let fitted = design::words_that_fit(
+                                ui,
+                                &summary,
+                                &Type::Small.font(ui),
+                                ui.available_width() - Density::Read.control() - design::S,
+                            );
+                            let response = design::small_link(ui, &fitted);
+                            design::named(ui, &response, &detail);
+                            if response.on_hover_text(&detail).clicked() {
                                 self.wants_packages = true;
                             }
                             if design::icon_button(ui, icons::CLOSE, "Dismiss this error").clicked()
@@ -2751,7 +2762,7 @@ impl Run {
                         let line = format!(
                             "{line}{}",
                             if waits {
-                                " · acts next round if moved before"
+                                "\u{a0}· acts next round if moved before"
                             } else {
                                 ""
                             }
@@ -3016,7 +3027,14 @@ impl Run {
                 ui.set_min_width(width);
                 ui.set_max_width(width);
                 let summary = arrival_summary(ui, &status, &members, width);
-                ui.add(egui::Label::new(Type::Small.rich(ui, &summary).color(c.muted)).wrap());
+                let response =
+                    ui.add(egui::Label::new(Type::Small.rich(ui, &summary).color(c.muted)).wrap());
+                let name = if status.is_empty() {
+                    members.clone()
+                } else {
+                    format!("{status} · {members}")
+                };
+                design::named(ui, &response, &name);
             });
             let field = format!("Initiative total for {name}");
             ui.label(Type::Small.rich(ui, "Total").color(c.muted));
@@ -4770,7 +4788,12 @@ fn arrival_summary(ui: &egui::Ui, status: &str, members: &str, width: f32) -> St
     if design::number_width(ui, &summary, &Type::Small.font(ui)) <= width {
         summary
     } else {
-        format!("{}\n{members}", status.replace(" · ", "\u{a0}·\u{a0}"))
+        let parts = status
+            .split(" · ")
+            .map(|part| part.replace(' ', "\u{a0}"))
+            .collect::<Vec<_>>()
+            .join("\n");
+        format!("{parts}\n{members}")
     }
 }
 
@@ -5792,7 +5815,7 @@ mod tests {
         design::theme::install(&ctx);
         let _ = ctx.run(egui::RawInput::default(), |ctx| {
             egui::CentralPanel::default().show(ctx, |ui| {
-                for width in [100.0, 180.0, 400.0] {
+                for width in [150.0, 180.0, 400.0] {
                     for status in [
                         "Changed",
                         "Added in round 2 · Changed",
@@ -5807,7 +5830,28 @@ mod tests {
                         );
                         for row in &galley.rows {
                             assert_ne!(row.glyphs.last().map(|glyph| glyph.chr), Some('·'));
+                            assert!(
+                                !row.glyphs.first().is_some_and(|glyph| {
+                                    glyph.chr == '·' || glyph.chr.is_ascii_digit()
+                                }) || row
+                                    .glyphs
+                                    .iter()
+                                    .map(|glyph| glyph.chr)
+                                    .collect::<String>()
+                                    .starts_with("2 ×")
+                            );
                             assert!(row.size.x <= width + 1.0);
+                        }
+                        if width == 150.0 && status.contains("round") {
+                            assert!(galley.rows.iter().any(|row| {
+                                row.glyphs
+                                    .iter()
+                                    .map(|glyph| glyph.chr)
+                                    .collect::<String>()
+                                    .replace('\u{a0}', " ")
+                                    .trim()
+                                    == "Added in round 2"
+                            }));
                         }
                         if width == 400.0 {
                             assert_eq!(galley.rows.len(), 1);

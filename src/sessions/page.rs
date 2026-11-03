@@ -572,26 +572,6 @@ fn note_title(ui: &mut egui::Ui, title: &str, date: &str) {
     design::named(ui, &response, &format!("{title} · {date}"));
 }
 
-/// A played fight names its result and last round once, on the row's second line.
-fn played_fight_summary(event: &timeline::Event) -> String {
-    let state = |round: &str, paused, ended| {
-        round
-            .parse()
-            .ok()
-            .map(|round| crate::encounter_run::state_words(round, paused, ended))
-    };
-    if let Some((outcome, round)) = event.result.rsplit_once(", round ") {
-        state(round, false, true).map(|words| format!("{outcome} · {words}"))
-    } else if let Some(round) = event.result.strip_prefix("Ended in round ") {
-        state(round, false, true)
-    } else if let Some(round) = event.result.strip_prefix("Round ") {
-        state(round, true, false)
-    } else {
-        None
-    }
-    .unwrap_or_else(|| event.result.clone())
-}
-
 /// The words of one of the plan's add menus.
 struct PlanMenu<'a> {
     word: &'a str,
@@ -2218,9 +2198,10 @@ impl Sessions {
     fn record_line(&mut self, ui: &mut egui::Ui, settings: &ProcessingSettings) {
         if self.tab == Tab::Recordings
             && self.reading.is_none()
-            && self.live.as_ref().is_some_and(|live| {
-                Some(live.session) == self.selected && *live.recorder.health() == Health::Silent
-            })
+            && self
+                .live
+                .as_ref()
+                .is_some_and(|live| Some(live.session) == self.selected)
         {
             return;
         }
@@ -3607,7 +3588,7 @@ impl Sessions {
                         .is_some_and(|saved| saved.id == event.run && event.run.is_some()));
                     let saved = saved_fight.and_then(|fight| fight.saved.as_ref()).filter(|_| !running);
                     let summary = if event.run.is_some() {
-                        played_fight_summary(event)
+                        timeline::played_fight_summary(event)
                     } else {
                         event.summary(None)
                     };
@@ -4349,6 +4330,27 @@ impl Sessions {
                         ),
                     )
                     .color(c.result.warning),
+            );
+        }
+        if live
+            && !silent
+            && !stalled
+            && let Some(live) = &self.live
+        {
+            let sound = if *live.recorder.health() == Health::Starting {
+                "Waiting for sound"
+            } else if live.recorder.heard_just_now() {
+                "Hearing sound"
+            } else {
+                "Quiet"
+            };
+            ui.label(
+                Type::Small
+                    .rich(
+                        ui,
+                        format!("Recording {} · {sound}", clock(live.recorder.seconds())),
+                    )
+                    .color(c.muted),
             );
         }
         if stalled && let Some(live) = &self.live {
@@ -5767,7 +5769,7 @@ impl Sessions {
             return;
         };
         ui.add_space(design::XS);
-        let edited = design::text_field(
+        let edited = design::small_text_field(
             ui,
             "Session folder",
             &mut self.folder_text,
@@ -5986,6 +5988,7 @@ impl Sessions {
                     .clicked();
             }
             if self.view == View::Templates
+                && self.new_template.is_none()
                 && Action::secondary("New template")
                     .icon(icons::ADD)
                     .show(ui)

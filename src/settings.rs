@@ -458,7 +458,7 @@ impl Settings {
                     ui.label("4. Paste only the value below and select Connect.");
                 });
             });
-            design::field(ui, "Session cookie", None, None, |ui| {
+            let cookie_width = design::small_field(ui, "Session cookie", None, None, |ui| {
                 let response = ui.add(
                     egui::TextEdit::singleline(&mut self.cookie_input)
                         .password(true)
@@ -476,12 +476,14 @@ impl Settings {
                     response.request_focus();
                     response.scroll_to_me(Some(egui::Align::Center));
                 }
+                response.rect.width()
             });
             ui.checkbox(
                 &mut self.remember,
                 "Remember my D&D Beyond sign-in on this computer",
             );
             ui.horizontal(|ui| {
+                ui.set_max_width(cookie_width);
                 let reason = self
                     .cookie_input
                     .trim()
@@ -496,7 +498,12 @@ impl Settings {
                 } else {
                     design::Action::secondary("Connect")
                 };
-                if action.blocked(reason).show(ui).clicked() {
+                let clicked = ui
+                    .with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        action.blocked(reason).show(ui).clicked()
+                    })
+                    .inner;
+                if clicked {
                     self.sign_in_again = false;
                     let cookie = Zeroizing::new(self.cookie_input.trim().to_owned());
                     self.send(
