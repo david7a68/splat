@@ -24,6 +24,8 @@
 
   scripts.dev-run.exec = "cargo run --locked";
   scripts.check.exec = "cargo fmt --check && cargo clippy --locked --all-targets -- -D warnings";
+  # Run once in the seed worktree before copying target/ to implementers.
+  scripts.audit-warm.exec = "cargo test --locked --no-run && check";
   scripts.visual-test.exec = ''
     label="''${1:-latest}"
     case "$label" in
@@ -41,20 +43,38 @@
     SPLAT_VISUAL_DIR="$out" SPLAT_VISUAL_VIDEO="''${SPLAT_VISUAL_VIDEO:-1}" \
       cargo test --locked --bin splat visual_suite -- --nocapture
     status=$?
-    # Host ImageMagick: it must not load the Nix libraries on the shell's library path.
     if [ -n "''${SPLAT_VISUAL_SCENARIOS:-}" ]; then
       echo "Partial run: no contact sheet."
-    elif command -v montage >/dev/null; then
-      find "$out" -maxdepth 1 -name '*__*.png' ! -name '*@2x.png' | sort > "$out/.contact-sheet-files"
-      env -u LD_LIBRARY_PATH montage @"$out/.contact-sheet-files" \
-        -label '%t' -pointsize 9 -tile 8x -geometry 300x225+4+4 -background '#222222' -fill white \
-        "$out/contact-sheet.png" || echo "Could not write the contact sheet." >&2
-      rm -f "$out/.contact-sheet-files"
+    elif [ "''${SPLAT_VISUAL_CONTACT_SHEET:-0}" = 1 ]; then
+      visual-contact-sheet "$label"
     else
-      echo "montage not found: no contact sheet." >&2
+      echo "No contact sheet. Use: visual-contact-sheet $label"
     fi
     echo "Output: $out"
     exit "$status"
+  '';
+  # A sheet is optional and can be made from existing captures without rerunning tests.
+  scripts.visual-contact-sheet.exec = ''
+    if [ "$#" -ne 1 ]; then
+      echo "Use: visual-contact-sheet <label>" >&2
+      exit 2
+    fi
+    case "$1" in
+      "" | */* | .*) echo "Use a plain capture label." >&2; exit 2 ;;
+    esac
+    out="$PWD/artifacts/screenshots/$1"
+    if ! command -v montage >/dev/null; then
+      echo "montage not found: no contact sheet." >&2
+      exit 1
+    fi
+    # Host ImageMagick must not load the Nix libraries on the shell's library path.
+    find "$out" -maxdepth 1 -name '*__*.png' ! -name '*@2x.png' | sort > "$out/.contact-sheet-files"
+    trap 'rm -f "$out/.contact-sheet-files"' EXIT
+    mkdir -p "$PWD/target/imagemagick"
+    env -u LD_LIBRARY_PATH MAGICK_TEMPORARY_PATH="$PWD/target/imagemagick" \
+      montage @"$out/.contact-sheet-files" \
+      -label '%t' -pointsize 9 -tile 8x -geometry 300x225+4+4 -background '#222222' -fill white \
+      "$out/contact-sheet.png"
   '';
   # Which captures of two visual-test runs differ, above the rendering noise.
   scripts.visual-compare.exec = ''
