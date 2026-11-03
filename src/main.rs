@@ -448,7 +448,7 @@ impl Splat {
                 format!(
                     "D&D Beyond has not confirmed changes to {}. The saved run keeps HP, death saves and conditions, and asks you to choose when you next sync. {}",
                     names.join(", "),
-                    if self.encounters.run().is_some_and(|run| !run.unsent_only_here_names().is_empty()) { "Unsent spell slots and limited uses are lost." } else { "Undo stops here." }
+                    if self.encounters.run().is_some_and(|run| !run.unsent_only_here_names().is_empty()) { "Unsent spell slots and limited uses are lost." } else { "Closing ends Undo for this run." }
                 ),
                 Page::Run,
             ));

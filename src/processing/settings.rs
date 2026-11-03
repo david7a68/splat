@@ -361,12 +361,6 @@ impl ProcessingSettings {
             KeySlot::Speech => self.config.speech_key_fits(),
             KeySlot::Llm => self.config.llm_key_fits(),
         };
-        let service = if slot == KeySlot::Llm && self.config.provider == Provider::Anthropic {
-            "Anthropic"
-        } else {
-            "this service"
-        };
-        let missing = format!("No {service} key. Paste one.");
         let saved_for = match slot {
             KeySlot::Speech => &self.config.speech_key_for,
             KeySlot::Llm => &self.config.llm_key_for,
@@ -421,16 +415,13 @@ impl ProcessingSettings {
                         .password(true)
                         .desired_width(width)
                         .margin(egui::vec2(design::S, 5.0))
-                        .hint_text(if saved && !fits {
-                            &missing
-                        } else if saved {
+                        .hint_text(if saved && fits {
                             "Saved"
                         } else {
                             "Paste the key"
                         }),
                 );
                 design::named(ui, &response, label);
-                design::blocked_reason(ui, reason);
                 if show_save {
                     save = Action::secondary("Save key")
                         .name(&format!("Save key: {label}"))
@@ -438,6 +429,7 @@ impl ProcessingSettings {
                         .show(ui)
                         .clicked();
                 }
+                design::blocked_reason(ui, reason);
             });
         });
         if (saved || held) && !fits {

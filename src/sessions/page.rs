@@ -814,20 +814,28 @@ fn insert_at_caret(
 }
 
 /// A list row whose title wraps, because a session's title is often long.
-fn session_row(ui: &mut egui::Ui, selected: bool, title: &str, detail: &str) -> egui::Response {
+fn session_row(
+    ui: &mut egui::Ui,
+    selected: bool,
+    title: &str,
+    detail: &str,
+    state: Option<Status<'_>>,
+) -> egui::Response {
     let c = colors();
     let width = ui.available_width() - 2.0 * design::S;
     let font = if selected { Type::Strong } else { Type::Body };
     let galley = ui
         .painter()
         .layout(title.to_owned(), font.font(ui), c.text, width);
-    let second = ui.painter().layout(
-        detail.replace(
-            &format!("{} Playing", icons::RUN),
-            &format!("{}\u{a0}Playing", icons::RUN),
-        ),
-        Type::Small.font(ui),
-        c.muted,
+    let detail = detail.replace(
+        &format!("{} Playing", icons::RUN),
+        &format!("{}\u{a0}Playing", icons::RUN),
+    );
+    let word = state.map(|state| (format!("{} {}", state.icon, state.word), state.color));
+    let second = design::status_in_text(
+        ui,
+        &detail,
+        word.as_ref().map(|(word, color)| (word.as_str(), *color)),
         width,
     );
     let lines = galley.size().y + second.size().y;
@@ -999,7 +1007,7 @@ impl Sessions {
         book: &Book,
         run_open: bool,
     ) {
-        let stalled = self
+        let mut stalled = self
             .live
             .as_ref()
             .filter(|live| matches!(live.recorder.health(), Health::Stalled | Health::Stopped(_)))
@@ -1019,6 +1027,13 @@ impl Sessions {
                 && (self.list_beside || !self.list_only)
                 && self.reading.is_none()
         };
+        if self
+            .live
+            .as_ref()
+            .is_some_and(|live| row_here(live.session))
+        {
+            stalled = None;
+        }
         if stalled.is_none() && self.alerts.iter().all(|alert| row_here(alert.session)) {
             return;
         }
@@ -2007,6 +2022,13 @@ impl Sessions {
             return;
         }
         if let Some(live) = &self.live {
+            if self.tab == Tab::Recordings
+                && self.reading.is_none()
+                && self.selected == Some(live.session)
+                && !self.recordings.is_empty()
+            {
+                return;
+            }
             let name = if Some(live.session) == self.selected {
                 "Stop recording".to_owned()
             } else {
@@ -2580,13 +2602,13 @@ impl Sessions {
                     for note in &self.notes {
                         let job = self.job.as_ref().map(|(_, session)| *session);
                         let result = self.notice_session.filter(|_| self.job_done);
-                        let detail = if live == Some(note.id) {
-                            let state = self
-                                .recording_status()
-                                .map_or("Recording", |(_, word, _)| word);
-                            state.to_owned()
-                        } else if job == Some(note.id) {
-                            "Processing".to_owned()
+                        let state = if live == Some(note.id) || job == Some(note.id) {
+                            self.rail_recording_status()
+                        } else {
+                            None
+                        };
+                        let detail = if let Some(state) = state {
+                            format!("{} {}", state.icon, state.word)
                         } else if result == Some(note.id) {
                             let word = if self.job_warned {
                                 "Processed, with a warning"
@@ -2602,8 +2624,14 @@ impl Sessions {
                         } else {
                             detail
                         };
-                        if session_row(ui, self.selected == Some(note.id), &note.label(), &detail)
-                            .clicked()
+                        if session_row(
+                            ui,
+                            self.selected == Some(note.id),
+                            &note.label(),
+                            &detail,
+                            state,
+                        )
+                        .clicked()
                         {
                             choose = Some(note.id);
                         }
@@ -4061,6 +4089,13 @@ impl Sessions {
         if !processing {
             design::status(ui, Status { icon, word, color }).on_hover_text(word);
         }
+        let stalled = live
+            && self.live.as_ref().is_some_and(|live| {
+                matches!(live.recorder.health(), Health::Stalled | Health::Stopped(_))
+            });
+        if stalled && let Some(live) = &self.live {
+            ui.add(egui::Label::new(Type::Small.rich(ui, format!("{}: not saving audio after {}. What was saved is kept. Record again starts a new file.", live.label, spoken_length(live.recorder.seconds()))).color(c.muted)).wrap());
+        }
         if let Some(words) = stored.as_ref().filter(|_| !live && !processing) {
             ui.horizontal_wrapped(|ui| {
                 ui.spacing_mut().item_spacing.x = 0.0;
@@ -4113,6 +4148,9 @@ impl Sessions {
         let mut stop = false;
         let mut record_again = false;
         ui.horizontal_wrapped(|ui| {
+            if stalled {
+                record_again = Action::secondary("Record again").show(ui).clicked();
+            }
             if !live
                 && !job_here
                 && stored
@@ -4234,11 +4272,13 @@ impl Sessions {
         if stop {
             self.finish_recording();
         }
-        if record_again
-            && let Some(session) = self.selected
-            && let Err(error) = self.start_recording(settings, session)
-        {
-            self.notice = Some((Tone::Error, error));
+        if record_again && let Some(session) = self.selected {
+            if stalled {
+                self.finish_recording();
+            }
+            if let Err(error) = self.start_recording(settings, session) {
+                self.notice = Some((Tone::Error, error));
+            }
         }
         if again {
             self.confirm_again = Some(recording.path.clone());
@@ -4579,7 +4619,16 @@ impl Sessions {
                         "> This is a draft from an LLM. Check it against your own memory.\n",
                         "",
                     );
-                    let body = body.as_str();
+                    let heading = format!("## {}", reading.parts[reading.part].0);
+                    let body = if count > 1 {
+                        body.trim_start()
+                            .strip_prefix(&heading)
+                            .filter(|rest| rest.starts_with('\n'))
+                            .map(str::trim_start)
+                            .unwrap_or(&body)
+                    } else {
+                        &body
+                    };
                     let at = reading
                         .marker
                         .as_ref()
@@ -4719,6 +4768,7 @@ impl Sessions {
             .id_salt(("session_recordings", self.selected))
             .auto_shrink([false, false])
             .show(ui, |ui| {
+                ui.set_max_width(ui.available_width().min(design::LIST_MEASURE));
                 for recording in &recordings {
                     ui.add_space(design::S);
                     ui.scope_builder(

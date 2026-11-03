@@ -1083,11 +1083,11 @@ pub mod encounter_run {
             format!("The row gains the condition and keeps its HP. Nothing was typed: {row}"),
         );
 
-        // F3 keeps whole words in a fixed slot and the full action in its accessible name.
+        // The label keeps the action and direction; accessibility keeps the full target.
         let undo_text = format!("{UNDO}{CONDITION} on {TARGET}");
         d.observe(
             "T1.6",
-            d.in_view(&undo_text) && d.visible_passage(&format!("{UNDO}{CONDITION}")),
+            d.in_view(&undo_text) && d.visible_passage(&format!("{CONDITION} on")),
             format!("At 960x640, Undo shows its action and keeps the full name: {undo_text}"),
         );
         d.click_containing(UNDO);
@@ -1701,6 +1701,15 @@ pub mod run_absent_player {
 
     pub fn run(d: &mut Driver<'_>) {
         run_saved_encounter(d, ENCOUNTER);
+        d.observe_both(
+            "F2/P8",
+            "The blocked reason ends at Begin combat's right edge",
+            |d| {
+                d.painted_right("need initiative.")
+                    .zip(d.place_of(BEGIN))
+                    .is_some_and(|(right, button)| (right - button.right()).abs() < 2.0)
+            },
+        );
         d.click(&format!("Absent: {PLAYER}"));
         d.click(ROLL_NPCS);
         // The keyboard path skips the absent: after the roll, and after each Enter.
@@ -1731,6 +1740,15 @@ pub mod run_absent_player {
             }
         }
         d.state("ready-with-one-absent", Sizes::All);
+        d.observe_both(
+            "F2/P8",
+            "The ready line ends at Begin combat's right edge",
+            |d| {
+                d.painted_right("Everyone is ready")
+                    .zip(d.place_of(BEGIN))
+                    .is_some_and(|(right, button)| (right - button.right()).abs() < 2.0)
+            },
+        );
         d.observe(
             "Absent player",
             !d.has("Turn order") && d.has("Technical details"),
@@ -3777,7 +3795,7 @@ pub mod signed_in {
             "T10.3",
             d.visible_text(&format!("Changes for {MEMBER} {STRANDED}"))
                 && !d.visible_text("Nothing is lost")
-                && d.visible_text("Undo stops"),
+                && d.visible_text("Closing ends Undo for this run."),
             "Closing after that names the changes that were never sent, and promises only what it keeps",
         );
         d.state("close-with-unsent-changes", Sizes::Default);
@@ -5091,7 +5109,7 @@ pub mod session_recording {
         d.expect("Hearing sound");
         d.state("recording-hearing", Sizes::AllAndHiDpi);
         d.click("Recordings");
-        d.expect("· Recording");
+        d.expect(&format!("{} Recording", crate::design::icons::RECORD));
         d.state("recording-listed", Sizes::Default);
         write_note(d);
 
@@ -5141,7 +5159,7 @@ pub mod session_recording {
             "T11.5",
             d.has_containing("not saving audio after")
                 && d.has_containing("What was saved is kept"),
-            "A stall takes a banner, in words, on the session's page too",
+            "The stalled row owns its reason and its recovery action",
         );
 
         // A failing recording reaches the DM on any other page.
@@ -5551,7 +5569,7 @@ pub mod encounter_groups {
         });
         d.observe(
             "T13.3",
-            found && invalid && !d.has("Changes for Unknown creature"),
+            found && invalid && d.has("Changes for Unknown creature"),
             "The editor says why a creature is unavailable, and that a change cannot stand",
         );
         d.state("group-unavailable-creature", Sizes::Default);
@@ -5580,6 +5598,18 @@ pub mod encounter_groups {
         d.goal("make an encounter group");
         d.click("Back to encounters");
         d.expect("GROUPS");
+
+        // Repair is a separate workflow; it does not change the build goal's cost.
+        d.click(&format!("Edit group {GROUP_LOST}"));
+        d.click("Changes for Unknown creature");
+        d.type_into("Replacement creature", "Ember");
+        d.expect("Use Ember Cultist");
+        d.state("group-member-replacement-search", Sizes::Default);
+        d.click("Use Ember Cultist");
+        d.expect("Changes for Ember Cultist");
+        d.state("group-member-replaced", Sizes::Default);
+        d.click("Discard");
+        d.click("Back to encounters");
 
         // Removal and recovery are their own task, outside the build and arrival costs.
         d.begin_task();
@@ -6848,6 +6878,12 @@ pub mod npc_in_encounter {
         d.click(RUN_ENCOUNTER);
         d.expect("Initiative for Rook Ambry");
         d.state("npc-in-setup", Sizes::All);
+        d.observe_both("P5", "Setup names the NPC's creature once", |d| {
+            d.painted_in(egui::Rect::EVERYTHING)
+                .matches("as\u{a0}Guard")
+                .count()
+                == 1
+        });
         let cost = d.interaction_count() - started;
         d.observe("W6", cost <= 8, format!("Prepare an encounter with a named NPC and start setup: {cost} interactions, target 8"));
     }

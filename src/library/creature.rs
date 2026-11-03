@@ -376,7 +376,7 @@ pub(super) fn vitals(ui: &mut egui::Ui, entry: &Entry, values: Option<&super::vi
                         {
                             ui.label(
                                 Type::Small
-                                    .rich(ui, format!("printed {text}"))
+                                    .rich(ui, format!("printed {}", unbroken_dice(&text)))
                                     .color(c.muted),
                             );
                         }
@@ -385,6 +385,21 @@ pub(super) fn vitals(ui: &mut egui::Ui, entry: &Entry, values: Option<&super::vi
             }
         },
     );
+}
+
+fn unbroken_dice(text: &str) -> String {
+    let mut in_dice = false;
+    text.chars()
+        .map(|c| {
+            if c == '(' {
+                in_dice = true;
+            }
+            if c == ')' {
+                in_dice = false;
+            }
+            if in_dice && c == ' ' { '\u{a0}' } else { c }
+        })
+        .collect()
 }
 
 /// The body line that gives this creature's hit points, such as `HP 22 (4d8 + 4)`. The

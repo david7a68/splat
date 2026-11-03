@@ -806,6 +806,16 @@ fn roster_name(
 }
 
 fn replace_missing_creature(ui: &mut egui::Ui, slot: &mut Slot, snapshot: &Snapshot) -> bool {
+    let Some(creature) = choose_replacement_creature(ui, snapshot) else {
+        return false;
+    };
+    slot.creature = Some(creature);
+    slot.party_slot = None;
+    slot.overrides.clear();
+    true
+}
+
+fn choose_replacement_creature(ui: &mut egui::Ui, snapshot: &Snapshot) -> Option<EntryRef> {
     let key = ui.id().with("replacement_creature");
     let mut search = ui
         .ctx()
@@ -820,7 +830,7 @@ fn replace_missing_creature(ui: &mut egui::Ui, slot: &mut Slot, snapshot: &Snaps
         width,
     );
     let query = search.to_lowercase();
-    let mut replaced = false;
+    let mut replaced = None;
     for creature in snapshot
         .creatures
         .iter()
@@ -831,10 +841,7 @@ fn replace_missing_creature(ui: &mut egui::Ui, slot: &mut Slot, snapshot: &Snaps
             .show(ui)
             .clicked()
         {
-            slot.creature = Some(EntryRef::id(creature.id));
-            slot.party_slot = None;
-            slot.overrides.clear();
-            replaced = true;
+            replaced = Some(EntryRef::id(creature.id));
         }
     }
     ui.ctx().data_mut(|data| data.insert_temp(key, search));

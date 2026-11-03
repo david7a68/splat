@@ -680,12 +680,14 @@ If a package creature is deleted on disk, its encounter row keeps the last known
 
 New creature entries start with AC 10 and HP 1, with the HP value selected in the editor. A renamed copy also renames its first H1 when it matches the source name. Package creation shows a **Folder** field and the full destination path. `package-file-changed`, `package-delete-entry` and `book-to-package` cover these disk and copy paths.
 
-The run header keeps two lines after each action. Undo has a fixed slot; hover gives the
-full action. Recording silence stays ahead of connection notices, while a sync conflict
+The run header keeps two lines after each action. Undo uses the space after the notice.
+A short label keeps the action, amount and copy number; hover gives the full action.
+An empty Undo says why. Recording silence stays ahead of connection notices, while a sync conflict
 comes first. Keys keeps its word beside each panel. When several unfinished copies of
 one encounter exist, the save word and the rail hover identify the open copy.
 
 Recording and processing keep one linked rail slot above the account state. An open
-recording row owns its error message. Other pages show the banner. A live row has
+recording row owns its error or stall message. Other pages show the banner. A live row has
 **Stop recording** before **Process**. A processed row keeps **Process again…** in its
-menu above **Delete…**, with confirmation before it replaces results.
+menu above **Delete…**, with confirmation before it replaces results. The Recordings tab
+keeps Stop recording on the row. Its list has a width limit; result readers keep the full pane.

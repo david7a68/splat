@@ -1069,6 +1069,39 @@ pub fn status(ui: &mut Ui, state: Status<'_>) -> Response {
     status_label(ui, state, false)
 }
 
+/// A painted row keeps its status word in the shared status colour.
+pub fn status_in_text(
+    ui: &Ui,
+    text: &str,
+    status: Option<(&str, Color32)>,
+    width: f32,
+) -> Arc<egui::Galley> {
+    let mut job = LayoutJob::default();
+    job.wrap.max_width = width;
+    let (before, word, after, color) = status
+        .and_then(|(word, color)| {
+            text.split_once(word)
+                .map(|(before, after)| (before, word, after, color))
+        })
+        .unwrap_or((text, "", "", colors().muted));
+    for (text, color) in [
+        (before, colors().muted),
+        (word, color),
+        (after, colors().muted),
+    ] {
+        job.append(
+            text,
+            0.0,
+            egui::TextFormat {
+                font_id: Type::Small.font(ui),
+                color,
+                ..Default::default()
+            },
+        );
+    }
+    ui.fonts_mut(|fonts| fonts.layout_job(job))
+}
+
 /// Rail notices wrap so their cause stays visible in a narrow column.
 pub fn wrapped_status(ui: &mut Ui, state: Status<'_>) -> Response {
     status_label(ui, state, true)
