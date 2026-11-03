@@ -1,5 +1,6 @@
 //! Desk work in World, including a real disk edit while the app stays open.
 use super::*;
+use crate::design;
 use std::fs;
 use uuid::Uuid;
 
@@ -212,7 +213,23 @@ pub fn tables(d: &mut Driver<'_>) {
     d.click(NAV_WORLD);
     d.click("Table Workshop · ");
     d.state("authored-table-validation", Sizes::All);
-    d.type_into("Typed roll on 1d6", "4");
+    d.observe_both(
+        "World typed roll field",
+        "The typed roll field shares the Roll button edges and has an S gap",
+        |d| {
+            let Some(button) = d.place_of("Roll 1d6") else {
+                return false;
+            };
+            let Some(field) = d.place_of("Typed roll for Valid") else {
+                return false;
+            };
+            (button.top() - field.top()).abs() <= 1.0
+                && (button.bottom() - field.bottom()).abs() <= 1.0
+                && (field.left() - button.right() - design::S).abs() <= 1.0
+                && (design::XXL * 3.0..=design::XXL * 3.0 + design::S).contains(&field.width())
+        },
+    );
+    d.type_into("Typed roll for Valid", "4");
     d.press(Key::Enter);
     d.observe(
         "World table author",

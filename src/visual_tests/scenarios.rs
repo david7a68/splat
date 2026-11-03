@@ -3984,7 +3984,7 @@ pub mod world {
             d.visible_text("d20"),
             "The roll table names its first column",
         );
-        d.state("world-table-rolled", Sizes::Default);
+        d.state("world-table-rolled", Sizes::All);
 
         d.click(NAV_ENCOUNTERS);
         resume_run_from_cold_start(d);
