@@ -1852,7 +1852,41 @@ pub mod prep_to_table {
             !row_moved,
             "Rows do not move during initiative entry",
         );
-        d.state("all-initiative-entered", Sizes::Default);
+        d.state("all-initiative-entered", Sizes::All);
+        for size in [SMALL, DEFAULT] {
+            let (aligned, compact) = d.at_size(size, |d| {
+                let nodes = d.nodes();
+                let aligned = nodes
+                    .iter()
+                    .filter(|node| node.name.starts_with("Initiative for "))
+                    .all(|field| {
+                        let name = field.name.trim_start_matches("Initiative for ");
+                        let controls = [
+                            format!("Roll for {name}"),
+                            format!("Absent: {name}"),
+                            format!("More actions for {name}"),
+                        ];
+                        controls.iter().all(|name| {
+                            nodes.iter().filter(|node| node.name == *name).all(|node| {
+                                (node.rect.center().y - field.rect.center().y).abs() <= 1.0
+                                    && node.rect.left() > field.rect.right()
+                            })
+                        })
+                    });
+                let compact = nodes.iter().any(|node| {
+                    node.name.starts_with("Brannoch Vale · ")
+                        && node.rect.height() <= crate::design::RUN_REGULAR.row
+                });
+                (aligned, compact)
+            });
+            d.observe(
+                "Setup row controls",
+                aligned && compact,
+                format!(
+                    "At {size:?}, controls share the initiative centre and an untied row fits RUN_REGULAR: aligned {aligned}, compact {compact}"
+                ),
+            );
+        }
         d.goal("enter the other players' initiative");
         d.state("resolve-ties", Sizes::Default);
         // Tied rows keep their arrows in two fixed places, so that a second click on one lands

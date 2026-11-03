@@ -314,7 +314,7 @@ the panel, those words open the second line instead, so that a name is never cut
   keep `Add` and say which round they joined. No step asks for confirmation, because Undo
   names the addition.
 
-Setup keeps fixed initiative, Roll, Absent and menu columns. Empty Roll slots keep player totals aligned. Tie arrows have two fixed slots below each total, and the header always reports ties. Undo stays at the top right in setup and live play. The blocked Begin combat reason sits directly below that button. Setup's row menu opens Correct for that participant.
+Setup keeps fixed initiative, Roll, Absent and menu columns. All controls share the name line, centred with the initiative field. Empty Roll slots keep player totals aligned. Only tied rows have Tie and two fixed arrow slots below the total. Other rows fit their two text lines and Scan padding, with RUN_REGULAR as the minimum height. The header always reports ties. Undo stays at the top right in setup and live play. The blocked Begin combat reason sits directly below that button. Setup's row menu opens Correct for that participant.
 
 Death-save counts and actions occupy one line below the panel tabs at zero HP. Clicking a count edits it; Correct has no duplicate fields. Correct initiative and DM notes show a short reason beside a blocked commit action.
 

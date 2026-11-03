@@ -3279,8 +3279,8 @@ impl Run {
         closed
     }
 
-    /// Name and initiative first. Enter moves to the next missing total. The rarely
-    /// used controls wait behind a row expander.
+    /// Controls share the name line. Only tied totals get a second line of controls.
+    /// Enter moves to the next missing total; rare controls wait in the row menu.
     fn setup_row(&mut self, ui: &mut egui::Ui, index: usize) -> Option<Command> {
         let mut command = None;
         let p = self.state.participants[index].clone();
@@ -3325,9 +3325,8 @@ impl Run {
             p.present,
         );
         let expanded = self.setup_expanded == Some(index);
-        let row = Density::Scan.control() + design::XL + design::XS;
         let mut enter = false;
-        ui.horizontal(|ui| {
+        ui.horizontal_top(|ui| {
             ui.spacing_mut().item_spacing.x = design::XS;
             // Keep the worded toggle in every width; party rows give up their per-row Roll.
             let presence_slot = design::L * 6.0;
@@ -3335,13 +3334,6 @@ impl Run {
             let actions =
                 72.0 + roll_slot + Density::Read.control() + presence_slot + 4.0 * design::XS;
             let name_width = (ui.available_width() - actions).max(design::XL);
-            if selected {
-                ui.painter().rect_filled(
-                    Rect::from_min_size(ui.cursor().min, vec2(ui.available_width(), row)),
-                    0.0,
-                    colors().selected,
-                );
-            }
             let side = "";
             let plain = format!("{absent}{side}{numbers}");
             // Changed values keep their mark beside the setup numbers.
@@ -3358,28 +3350,44 @@ impl Run {
                 }
             };
             let row_name = format!("{name} · {detail}");
+            let width = name_width - 2.0 * design::S;
+            let title =
+                ui.painter()
+                    .layout(name.clone(), Type::Body.font(ui), colors().text, width);
+            let detail = ui
+                .painter()
+                .layout(detail, Type::Small.font(ui), colors().muted, width);
+            let first_line = Density::Scan.control().max(title.size().y);
+            let tie_height = if self.setup_tie_directions(index).is_some() {
+                Density::Read.control()
+            } else {
+                0.0
+            };
+            let row = design::RUN_REGULAR
+                .row
+                .max(first_line + detail.size().y.max(tie_height) + 2.0 * design::XS);
+            let control_top = design::XS + (first_line - Density::Scan.control()) / 2.0;
+            if selected {
+                ui.painter().rect_filled(
+                    Rect::from_min_size(ui.cursor().min, vec2(ui.available_width(), row)),
+                    0.0,
+                    colors().selected,
+                );
+            }
             let response = ui
                 .allocate_ui(vec2(name_width, row), |ui| {
-                    let width = name_width - 2.0 * design::S;
-                    let title = ui.painter().layout(
-                        name.clone(),
-                        Type::Body.font(ui),
-                        colors().text,
-                        width,
-                    );
-                    let detail =
-                        ui.painter()
-                            .layout(detail, Type::Small.font(ui), colors().muted, width);
-                    let height = row.max(title.size().y + detail.size().y + design::S);
-                    design::row(ui, height, selected, &row_name, |ui, rect| {
+                    design::row(ui, row, selected, &row_name, |ui, rect| {
                         let top = rect.top() + design::XS;
                         ui.painter().galley(
-                            pos2(rect.left() + design::S, top),
+                            pos2(
+                                rect.left() + design::S,
+                                top + (first_line - title.size().y) / 2.0,
+                            ),
                             title.clone(),
                             colors().text,
                         );
                         ui.painter().galley(
-                            pos2(rect.left() + design::S, top + title.size().y),
+                            pos2(rect.left() + design::S, top + first_line),
                             detail,
                             colors().muted,
                         );
@@ -3401,6 +3409,8 @@ impl Run {
             }
             ui.allocate_ui_with_layout(vec2(72.0, row), Layout::top_down(Align::LEFT), |ui| {
                 ui.set_width(72.0);
+                ui.spacing_mut().item_spacing.y = 0.0;
+                ui.add_space(control_top);
                 let text = self
                     .setup_inputs
                     .entry(index)
@@ -3435,6 +3445,7 @@ impl Run {
                 Layout::top_down(Align::LEFT),
                 |ui| {
                     ui.set_width(roll_slot);
+                    ui.add_space(control_top);
                     if npc
                         && Action::quiet("Roll")
                             .plain()
@@ -3459,6 +3470,7 @@ impl Run {
                     Layout::top_down(Align::LEFT),
                     |ui| {
                         ui.set_width(presence_slot);
+                        ui.add_space(control_top);
                         let button = egui::Button::new(
                             Type::Body.rich(ui, format!("{} {word}", icons::ABSENT)),
                         )
@@ -3479,19 +3491,26 @@ impl Run {
             if pressed {
                 command = Some(Command::Presence(index, !present));
             }
-            design::row_menu(ui, &name, |ui| {
-                if Action::quiet("Correct…").show(ui).clicked() {
-                    self.selected = index;
-                    self.panel = Panel::Record;
-                    self.close_lookup = true;
-                    ui.close();
-                }
-                if Action::quiet("NPC and roll mode").show(ui).clicked() {
-                    self.setup_expanded = if expanded { None } else { Some(index) };
-                    self.return_focus = self.lookup_open;
-                    ui.close();
-                }
-            });
+            ui.allocate_ui_with_layout(
+                vec2(Density::Read.control(), row),
+                Layout::top_down(Align::LEFT),
+                |ui| {
+                    ui.add_space(design::XS + (first_line - Density::Read.control()) / 2.0);
+                    design::row_menu(ui, &name, |ui| {
+                        if Action::quiet("Correct…").show(ui).clicked() {
+                            self.selected = index;
+                            self.panel = Panel::Record;
+                            self.close_lookup = true;
+                            ui.close();
+                        }
+                        if Action::quiet("NPC and roll mode").show(ui).clicked() {
+                            self.setup_expanded = if expanded { None } else { Some(index) };
+                            self.return_focus = self.lookup_open;
+                            ui.close();
+                        }
+                    });
+                },
+            );
         });
         if enter {
             // The next row without a total, after this one, then from the top.
@@ -3585,8 +3604,7 @@ impl Run {
             .count()
     }
 
-    /// Two fixed arrow slots under Init keep totals and targets aligned on every row.
-    fn setup_tie_controls(&self, ui: &mut egui::Ui, index: usize) -> Option<Command> {
+    fn setup_tie_directions(&self, index: usize) -> Option<(usize, bool, bool)> {
         let position = self.state.order.iter().position(|i| *i == index)?;
         let p = &self.state.participants[index];
         let tied = |other: Option<&usize>| {
@@ -3596,6 +3614,13 @@ impl Run {
         };
         let up = position > 0 && tied(self.state.order.get(position - 1));
         let down = tied(self.state.order.get(position + 1));
+        (up || down).then_some((position, up, down))
+    }
+
+    /// Tied rows alone have two fixed arrow slots under Init.
+    fn setup_tie_controls(&self, ui: &mut egui::Ui, index: usize) -> Option<Command> {
+        let (position, up, down) = self.setup_tie_directions(index)?;
+        let p = &self.state.participants[index];
         let mut command = None;
         ui.horizontal(|ui| {
             ui.spacing_mut().item_spacing.x = 0.0;
@@ -3612,7 +3637,7 @@ impl Run {
                         command = Some(Command::Move(position, destination));
                     }
                 } else {
-                    ui.allocate_space(vec2(design::XL, design::XL));
+                    ui.allocate_space(vec2(Density::Read.control(), Density::Read.control()));
                 }
             }
             if up || down {
