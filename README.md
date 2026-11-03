@@ -119,6 +119,7 @@ Session plan use the same fight state words. An open fight's Timeline round link
 back to the run and does not say **Paused**. Processing says **Processing**, with
 the full step on hover. Long rest starts the next new fight at full from both Session
 and Timeline. Both pages show the ruling and let you turn it off or on, with Undo.
+Both pages name only saved, unfinished fights past Setup as keeping their saved HP.
 
 Library has **New entry** in its header. Its form opens in the reader column and closes after creation. World has **New ▾** for a plain note, a note with a type, an NPC, a location, or a generated NPC. Type headings use capitals and a count. World folder headings keep normal-case paths. Page headers show state or nonzero counts beside the title, with a rule and an `L` gap below. Counts use thousands separators.
 

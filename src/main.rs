@@ -802,7 +802,7 @@ impl Splat {
                         color,
                     },
                 );
-                let full = if state == "Processed" {
+                let full = if state == "Processing warning" {
                     sessions::page::processed_warning().word.to_owned()
                 } else {
                     self.sessions
@@ -1336,11 +1336,13 @@ impl Splat {
             Page::Sessions => {
                 if let Some(campaign) = &active {
                     let fights = self.encounters.plan_fights();
+                    let saved_runs = self.encounters.saved_runs();
                     let groups = self.encounters.plan_groups();
                     let blocked = self.encounters.plan_blocked();
                     let group_blocked = self.encounters.plan_group_blocked();
                     let group_open = self.encounters.group_open_in_plan();
                     let group_discarded = self.encounters.group_discarded_in_plan();
+                    let group_discarded_name = self.encounters.discarded_group_name();
                     let arrivals_open = self.encounters.run_takes_arrivals();
                     let run_directory = self.encounters.run_directory(campaign);
                     let open_state = self
@@ -1355,10 +1357,12 @@ impl Splat {
                     };
                     let plan = sessions::page::Plan {
                         fights: &fights,
+                        saved_runs: &saved_runs,
                         groups: &groups,
                         group_blocked,
                         group_open,
                         group_discarded,
+                        group_discarded_name,
                         arrivals_open,
                         group_editor: std::cell::RefCell::new(&mut group_editor),
                         blocked,
@@ -1381,6 +1385,7 @@ impl Splat {
                     let links = self.sessions.links();
                     let current = self.sessions.current();
                     self.timeline_page.open_run = self.run_fact.as_ref().map(|fact| fact.id);
+                    self.timeline_page.saved_runs = self.encounters.saved_runs();
                     self.timeline_page.dated = self.sessions.current_dated();
                     self.timeline_page.places = self
                         .lookup

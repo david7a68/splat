@@ -593,7 +593,7 @@ impl CampaignContent {
                         }
                         if let Some((_, text)) =
                             self.discarded_repair.as_ref().filter(|(p, _)| p == path)
-                            && design::draft_discarded(ui)
+                            && design::draft_discarded(ui, path.rsplit('/').next().unwrap_or(path))
                         {
                             *draft = text.clone();
                             self.discarded_repair = None;
@@ -712,7 +712,7 @@ impl CampaignContent {
             }
             if !changed
                 && self.discarded_selections.is_some()
-                && design::draft_discarded(ui)
+                && design::draft_discarded(ui, "Campaign packages")
                 && let Some(selections) = self.discarded_selections.take()
             {
                 document.selections = selections;

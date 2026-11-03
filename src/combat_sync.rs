@@ -1049,7 +1049,10 @@ impl CombatSync {
         ui.checkbox(&mut self.enabled, "Sync this sheet with D&D Beyond");
         ui.label(
             crate::design::Type::Small
-                .rich(ui, "Runs sync the party from the encounter.")
+                .rich(
+                    ui,
+                    "During a fight, Sync party in the run turns sync on for the whole party.",
+                )
                 .color(crate::design::colors().muted),
         );
         if was && !self.enabled {

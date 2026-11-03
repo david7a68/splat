@@ -332,7 +332,7 @@ pub fn components(ui: &mut egui::Ui) {
             });
         });
     });
-    let _ = draft_discarded(ui);
+    let _ = draft_discarded(ui, "Fireball");
     hanging_add_strip(ui, |ui| {
         use crate::timeline::Kind;
         for (word, icon) in [
@@ -440,7 +440,7 @@ pub fn messages(ui: &mut egui::Ui) {
     style::measure(ui, |ui| {
         style::title(ui, "Entry title");
         style::subtitle(ui, "Spell · Level 3 · D&D 2024");
-        style::identity(ui, "Medium humanoid, unaligned");
+        style::identity(ui, "Level 3 Evocation (Sorcerer, Wizard)");
         style::facts(
             ui,
             &[

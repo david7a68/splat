@@ -651,7 +651,7 @@ pub fn package_file_changed(d: &mut Driver<'_>) {
     d.click(EDIT_MARKDOWN);
     d.expect("Save");
     assert!(
-        !d.has("Undo discard"),
+        !d.has_containing("Undo discard"),
         "a later disk edit clears the discarded draft"
     );
     d.state("package-yaml-repair-editor", Sizes::All);

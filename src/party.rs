@@ -547,15 +547,16 @@ impl Party {
             return;
         };
         let before = self.page;
+        let tabs = ["Overview", "Actions", "Spells", "Equipment", "Features"];
         design::segmented(
             ui,
             &mut self.page,
             &[
-                (0, "Overview"),
-                (1, "Actions"),
-                (2, "Spells"),
-                (3, "Equipment"),
-                (4, "Features"),
+                (0, tabs[0]),
+                (1, tabs[1]),
+                (2, tabs[2]),
+                (3, tabs[3]),
+                (4, tabs[4]),
             ],
         );
         if before != self.page {
@@ -568,7 +569,7 @@ impl Party {
                     ui,
                     "Filter this page",
                     &mut self.search,
-                    "Filter entries…",
+                    &format!("Filter {}…", tabs[self.page].to_lowercase()),
                     240.0_f32.min(ui.available_width() - 70.0),
                 );
                 if !self.search.is_empty()

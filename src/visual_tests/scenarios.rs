@@ -161,7 +161,7 @@ pub mod library_author {
     const OVERWRITE: &str = "Overwrite with my draft";
     const RELOAD_DISK: &str = "Reload and lose my draft";
     const SHOW_DISK: &str = "Next difference";
-    const UNDO_DISCARD: &str = "Undo discard";
+    const UNDO_DISCARD: &str = "Undo discard of Ash Exposure";
     const CHANGED_ON_DISK: &str = "This entry changed on disk";
     const PACKAGE_ACTIONS: &str = "Packages";
     const MANAGE_PACKAGES: &str = "Manage packages…";
@@ -5793,7 +5793,8 @@ pub mod session_recording {
         d.settle();
         d.observe(
             "T11.6",
-            d.has_containing("Processed, with a warning") && d.rail_words().contains("Processed"),
+            d.has_containing("Processed, with a warning")
+                && d.rail_words().contains("Processing warning"),
             "A processed result keeps its warning in the rail and on other pages",
         );
         d.state("processing-warned-elsewhere", Sizes::Default);
@@ -6009,7 +6010,9 @@ pub mod encounter_groups {
         d.click(&format!("More actions for {GROUP_GOBLINS}"));
         d.click("Remove…");
         d.expect("Undo remove group");
-        d.state("group-removed", Sizes::Default);
+        d.expect("Lost Patrol draft discarded.");
+        assert!(d.has("Undo discard of Lost Patrol"));
+        d.state("group-removed", Sizes::All);
         d.observe(
             "F15",
             !d.has(&format!("Edit group {GROUP_GOBLINS}")),
@@ -7144,6 +7147,7 @@ pub mod session_plan {
             "Undo removes both the rest and the full-HP ruling",
         );
         d.click("Add Long rest");
+        assert!(d.has("Long rest added. Everyone starts the next fight at full."));
         d.state("long-rest-restores", Sizes::Default);
         d.click("Long rest");
         d.click("Not at full");
@@ -7186,6 +7190,7 @@ pub mod session_plan {
         assert!(!crate::timeline::party_state(&d.app_mut().timeline.events, session).rested);
         d.click("Add Long rest");
         d.expect("Everyone at full");
+        assert!(d.has("Long rest added. Everyone starts the next fight at full."));
         d.state("timeline-long-rest-restores", Sizes::All);
         d.click("Not at full");
         assert!(!crate::timeline::party_state(&d.app_mut().timeline.events, session).rested);

@@ -132,7 +132,10 @@ impl Repair {
                         self.draft = self.baseline.clone();
                     }
                     if let Some(discarded) = &self.discarded
-                        && design::draft_discarded(ui)
+                        && design::draft_discarded(
+                            ui,
+                            self.path.rsplit('/').next().unwrap_or(&self.path),
+                        )
                     {
                         self.draft = discarded.clone();
                         self.discarded = None;
