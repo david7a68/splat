@@ -540,34 +540,36 @@ fn list_row(
         },
     );
     if let Some(problem) = &group.problem {
-        ui.add_space(-design::S);
+        ui.add_space(-design::L);
         ui.scope(|ui| {
             ui.spacing_mut().item_spacing.y = design::XS;
-            for fault in problem.lines() {
-                ui.horizontal_wrapped(|ui| {
-                    ui.add_space(design::S);
-                    ui.add(
-                        egui::Label::new(
-                            Type::Small
-                                .rich(
-                                    ui,
-                                    format!(
-                                        "{} {}",
-                                        icons::WARN,
-                                        fault.trim_end_matches(" Campaign → Packages.")
-                                    ),
-                                )
-                                .color(colors().result.warning),
-                        )
-                        .wrap(),
-                    );
-                    if fault.contains("Campaign → Packages") && packages_link(ui) {
-                        ui.data_mut(|data| {
-                            data.insert_temp(egui::Id::new("open_campaign_packages"), true)
-                        });
-                    }
-                });
-            }
+            let faults = problem
+                .lines()
+                .map(|fault| {
+                    format!(
+                        "{} {}",
+                        icons::WARN,
+                        fault.trim_end_matches(" Campaign → Packages.")
+                    )
+                })
+                .collect::<Vec<_>>()
+                .join("\n");
+            ui.horizontal_wrapped(|ui| {
+                ui.add(
+                    egui::Label::new(
+                        Type::Small
+                            .rich(ui, faults)
+                            .line_height(Some(Type::Small.line()))
+                            .color(colors().result.warning),
+                    )
+                    .wrap(),
+                );
+                if problem.contains("Campaign → Packages") && packages_link(ui) {
+                    ui.data_mut(|data| {
+                        data.insert_temp(egui::Id::new("open_campaign_packages"), true)
+                    });
+                }
+            });
         });
     }
 }
@@ -1854,7 +1856,7 @@ fn members(
                     .custom_formatter(|value, _| super::grouped(value as u64))
                     .custom_parser(|text| text.replace(',', "").parse().ok()));
                 design::named(ui, &count, &format!("How many of {name}"));
-                if entry.is_some() && Action::quiet("Edit").density(Density::Read).name(&button).selected(is_open).show(ui).clicked() {
+                if Action::quiet("Edit").density(Density::Read).name(&button).selected(is_open).show(ui).clicked() {
                     *expanded = if is_open { None } else { show_form_when_it_opens(ui); Some(key.clone()) };
                 }
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
@@ -1870,11 +1872,15 @@ fn members(
                 design::message(
                     ui,
                     Tone::Warning,
-                    "This campaign cannot find this creature. Check the packages it uses, or remove this member.",
+                    "This campaign cannot find this creature. Choose a replacement, check the packages it uses, or remove this member.",
                 )
                 .on_hover_text(member.creature.label());
                 if packages_link(ui) {
                     ui.data_mut(|data| data.insert_temp(egui::Id::new("open_campaign_packages"), true));
+                }
+                if is_open && let Some(creature) = super::choose_replacement_creature(ui, snapshot) {
+                    member.creature = creature;
+                    *expanded = None;
                 }
             }
             if let Some(entry) = entry {

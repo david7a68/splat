@@ -625,9 +625,31 @@ impl Run {
                     // A message goes in the room under the list, so it moves no row while
                     // the DM's eye is on them. The next action clears it. A long one wraps.
                     let notice = self.notice.as_ref().map(|detail| {
-                        self.notice_summary
+                        let summary = self
+                            .notice_summary
                             .clone()
-                            .unwrap_or_else(|| detail.clone())
+                            .unwrap_or_else(|| detail.clone());
+                        let boundaries: Vec<_> = self
+                            .state
+                            .participants
+                            .iter()
+                            .filter(|p| detail.contains(&format!("Undo for {} stops here", p.name)))
+                            .map(|p| {
+                                format!(
+                                    "Undo for {} stops here",
+                                    p.name.split_whitespace().next().unwrap_or(&p.name)
+                                )
+                            })
+                            .collect();
+                        let full = format!("{summary} · {}", boundaries.join(" · "));
+                        if !boundaries.is_empty()
+                            && design::number_width(ui, &full, &Type::Small.font(ui))
+                                <= ui.available_width() - design::L * 6.0
+                        {
+                            full
+                        } else {
+                            summary
+                        }
                     });
                     let width = ui.available_width();
                     let notice_height = notice.as_ref().map_or(0.0, |notice| {
@@ -675,7 +697,7 @@ impl Run {
                                     .clone()
                                     .filter(|summary| {
                                         design::number_width(ui, summary, &Type::Small.font(ui))
-                                            <= ui.available_width() - design::XL * 3.0
+                                            <= ui.available_width() - design::L * 6.0
                                     })
                                     .unwrap_or_else(|| {
                                         format!(
@@ -683,17 +705,31 @@ impl Run {
                                             design::count(self.notice_changes, "sheet", "sheets")
                                         )
                                     });
-                                let shown = if compact {
+                                let shown = if compact
+                                    && design::number_width(ui, &notice, &Type::Small.font(ui))
+                                        > ui.available_width() - design::L * 6.0
+                                {
                                     words.as_str()
                                 } else {
                                     notice.as_str()
                                 };
-                                let response = ui.add(
-                                    egui::Label::new(
-                                        Type::Small.rich(ui, shown).color(colors().result.warning),
+                                let text_room = ui.available_width() - design::L * 6.0;
+                                let response = ui
+                                    .allocate_ui_with_layout(
+                                        vec2(text_room, notice_height),
+                                        Layout::left_to_right(Align::TOP),
+                                        |ui| {
+                                            ui.add(
+                                                egui::Label::new(
+                                                    Type::Small
+                                                        .rich(ui, shown)
+                                                        .color(colors().result.warning),
+                                                )
+                                                .wrap(),
+                                            )
+                                        },
                                     )
-                                    .wrap(),
-                                );
+                                    .inner;
                                 let detail = self.notice.as_deref().unwrap_or(shown);
                                 design::named(ui, &response, detail);
                                 response.on_hover_text(detail);
@@ -829,7 +865,7 @@ impl Run {
             },
         );
         ui.add_space(6.0);
-        // Line two keeps the notice at the left and a fixed Undo slot at the right.
+        // Measure the notice first; Undo takes the remaining room on line two.
         let undo_label = self.undo_label();
         let mut undo = false;
         let mut review_conflict = false;
@@ -879,22 +915,101 @@ impl Run {
             vec2(ui.available_width(), Density::Read.control()),
             Layout::right_to_left(Align::Center),
             |ui| {
-                let slot = (ui.available_width() / 2.0).min(design::READER_MEASURE / 2.0);
+                let font = Type::Small.font(ui);
+                let notice = if self.recording_notice.is_some() && strip.conflict.is_none() {
+                    format!(
+                        "{} Recording silence · {}",
+                        icons::WARN,
+                        sync_alert.as_ref().map_or("", |alert| alert.short.as_str())
+                    )
+                } else if let Some(alert) = &sync_alert {
+                    format!(
+                        "{} {}",
+                        alert.text,
+                        if needs_connection {
+                            "Connect to sync"
+                        } else if self.hide_panel && strip.conflict.is_some() {
+                            "Review"
+                        } else {
+                            ""
+                        }
+                    )
+                } else if nobody_present {
+                    "No participants are present".to_owned()
+                } else {
+                    strip
+                        .next
+                        .as_ref()
+                        .map_or(String::new(), |next| format!("Next: {next}"))
+                };
+                let action_font = Type::Strong.font(ui);
+                let mut minimum = undo_label
+                    .strip_prefix("Undo: ")
+                    .unwrap_or(&undo_label)
+                    .to_owned();
+                if self.history.is_empty() && self.undo_stopped {
+                    minimum = "Undo stopped".to_owned();
+                }
+                if let Some(target) = self
+                    .state
+                    .participants
+                    .iter()
+                    .filter(|p| minimum.contains(&p.name))
+                    .max_by_key(|p| p.name.len())
+                {
+                    minimum = minimum.replacen(
+                        &target.name,
+                        &dock_name(ui, &target.name, &action_font, design::L * 5.0),
+                        1,
+                    );
+                }
+                let minimum = self.undo_action(&minimum).natural_width(ui) + design::XS;
+                let notice_width = (design::number_width(ui, &notice, &font) + design::S)
+                    .min((ui.available_width() - minimum - design::L).max(0.0));
+                let slot = ui.available_width() - notice_width - design::L;
                 let overhead = self.undo_action("").natural_width(ui);
-                let shown = design::words_that_fit(
+                let shown = undo_words(
                     ui,
                     &undo_label,
+                    &self.state.participants,
                     &Type::Strong.font(ui),
-                    slot - overhead,
+                    slot - overhead - design::XS,
                 );
                 ui.allocate_ui_with_layout(
                     vec2(slot, Density::Read.control()),
                     Layout::right_to_left(Align::Center),
                     |ui| {
+                        let reason = if self.history.is_empty() && !self.undo_stopped {
+                            Some(if self.reopened {
+                                "since reopening"
+                            } else {
+                                "Nothing to undo"
+                            })
+                        } else {
+                            None
+                        };
+                        let reason_width = reason.map_or(0.0, |reason| {
+                            design::number_width(ui, reason, &font) + design::S
+                        });
+                        if reason_width + self.undo_action(&shown).natural_width(ui) <= slot {
+                            design::blocked_reason(ui, reason);
+                        }
+                        let full = if self.history.is_empty() && !self.undo_stopped {
+                            format!(
+                                "{undo_label} · {}",
+                                if self.reopened {
+                                    "Nothing to undo since this run reopened"
+                                } else {
+                                    "Nothing to undo yet."
+                                }
+                            )
+                        } else {
+                            undo_label.clone()
+                        };
                         undo = self
                             .undo_action(&shown)
                             .name(&undo_label)
-                            .hint(&undo_label)
+                            .hint(&full)
                             .show(ui)
                             .clicked();
                     },
@@ -935,16 +1050,32 @@ impl Run {
                         };
                         let full = &alert.text;
                         let link_width = design::number_width(ui, link, &font) + design::S;
-                        let full_fits = design::number_width(ui, full, &font) + link_width
-                            <= ui.available_width();
+                        let fits_link = !link.is_empty()
+                            && design::number_width(ui, &alert.short, &font)
+                                + link_width
+                                + design::XS
+                                <= ui.available_width();
+                        let text_width = ui.available_width()
+                            - if fits_link {
+                                link_width + design::XS
+                            } else {
+                                0.0
+                            };
+                        let full_fits = design::number_width(ui, full, &font) <= text_width;
                         let words = if full_fits { full } else { &alert.short };
-                        ui.add(
-                            egui::Label::new(Type::Small.rich(ui, words).color(alert.color))
-                                .truncate(),
-                        )
-                        .on_hover_text(full);
-                        let fits_link = design::number_width(ui, link, &font) + design::XS
-                            <= ui.available_width();
+                        ui.allocate_ui_with_layout(
+                            vec2(text_width, Density::Read.control()),
+                            Layout::left_to_right(Align::Center),
+                            |ui| {
+                                ui.add(
+                                    egui::Label::new(
+                                        Type::Small.rich(ui, words).color(alert.color),
+                                    )
+                                    .truncate(),
+                                )
+                                .on_hover_text(full);
+                            },
+                        );
                         if !link.is_empty() && fits_link && design::small_link(ui, link).clicked() {
                             if link == "Review" {
                                 review_conflict = true;
@@ -1898,7 +2029,11 @@ impl Run {
                 return;
             }
             if self.closing {
-                closed = self.close_confirmation(ui, "The run stays saved. Undo and sync stop.");
+                let note = close_saved_words(
+                    !self.history.is_empty(),
+                    self.syncs.values().any(|sync| sync.enabled),
+                );
+                closed = self.close_confirmation(ui, &note);
                 return;
             }
             // Five actions share the narrowest row. None of them may lose a letter.
@@ -2062,7 +2197,7 @@ impl Run {
             } else if stranded.is_empty() {
                 ui.add(egui::Label::new(note).wrap());
             } else {
-                ui.add(egui::Label::new(format!("Changes for {} were not sent to D&D Beyond. The saved run keeps HP, death saves and conditions for the next sync. Undo stops here.", stranded.join(", "))).wrap());
+                ui.add(egui::Label::new(format!("Changes for {} were not sent to D&D Beyond. The saved run keeps HP, death saves and conditions for the next sync. Closing ends Undo for this run.", stranded.join(", "))).wrap());
             }
             if !lost.is_empty() {
                 ui.add(
@@ -3439,15 +3574,21 @@ impl Run {
                 setup_origin + vec2(0.0, Density::Glance.control() + design::XS),
                 vec2(setup_width, Density::Read.control()),
             );
-            ui.put(
-                rect,
-                egui::Label::new(
-                    Type::Small
-                        .rich(ui, format!("{} {text}", icons::OK))
-                        .color(colors().muted),
-                )
-                .wrap()
-                .halign(Align::RIGHT),
+            ui.scope_builder(
+                egui::UiBuilder::new()
+                    .max_rect(rect)
+                    .layout(Layout::right_to_left(Align::Center)),
+                |ui| {
+                    ui.add(
+                        egui::Label::new(
+                            Type::Small
+                                .rich(ui, format!("{} {text}", icons::OK))
+                                .color(colors().muted),
+                        )
+                        .wrap()
+                        .halign(Align::RIGHT),
+                    );
+                },
             );
         }
         ui.allocate_ui_with_layout(
@@ -3607,9 +3748,6 @@ impl Run {
             display(p.hp),
             display(p.max_hp)
         );
-        if p.npc_identity() {
-            numbers = format!("as {} · {numbers}", p.definition.name);
-        }
         let absent = if p.present {
             String::new()
         } else {
@@ -3620,8 +3758,8 @@ impl Run {
         }
         // A changed creature's AC may be part of what changed.
         numbers.push_str(&format!(" · AC {}", display(p.armor_class)));
-        if let Some((_, word, _)) = hp_word(&p) {
-            numbers.push_str(&format!(" · {word}"));
+        if let Some((icon, word, _)) = hp_word(&p) {
+            numbers.push_str(&format!(" · {icon} {word}"));
         }
         let selected = self.panel == Panel::Record && self.selected == index;
         let (name, npc, mode, bonus, initiative, present) = (
@@ -3637,7 +3775,12 @@ impl Run {
         ui.horizontal_top(|ui| {
             ui.spacing_mut().item_spacing.x = 0.0;
             // Keep the worded toggle in every width; party rows give up their per-row Roll.
-            let presence_slot = design::L * 5.0;
+            let presence_slot = design::number_width(
+                ui,
+                &format!("{} Absent", icons::ABSENT),
+                &Type::Body.font(ui),
+            ) + ui.spacing().button_padding.x * 2.0
+                + design::S;
             let roll_slot = design::L * 4.0;
             let number_slot = design::L * 3.0;
             let place_slot = design::XL;
@@ -3689,14 +3832,20 @@ impl Run {
                 }
                 detail = next;
             }
-            let detail = ui.painter().layout(
-                detail
-                    .split(" · ")
-                    .map(|part| part.replace(' ', "\u{a0}"))
-                    .collect::<Vec<_>>()
-                    .join("\u{a0}· "),
-                Type::Small.font(ui),
-                colors().muted,
+            if p.npc_identity() {
+                detail.push_str(&format!(" · as {}", p.definition.name));
+            }
+            let detail = detail
+                .split(" · ")
+                .map(|part| part.replace(' ', "\u{a0}"))
+                .collect::<Vec<_>>()
+                .join("\u{a0}· ");
+            let status =
+                hp_word(&p).map(|(icon, word, color)| (format!("{icon}\u{a0}{word}"), color));
+            let detail = design::status_in_text(
+                ui,
+                &detail,
+                status.as_ref().map(|(word, color)| (word.as_str(), *color)),
                 detail_width,
             );
             let row = design::RUN_REGULAR
@@ -3846,6 +3995,7 @@ impl Run {
                                     colors().text
                                 }),
                         )
+                        .wrap_mode(egui::TextWrapMode::Extend)
                         .selected(!present)
                         .fill(if present {
                             colors().page
@@ -4339,6 +4489,46 @@ fn ordinal(place: usize) -> String {
     format!("{place}{suffix}")
 }
 
+fn close_saved_words(undo: bool, sync: bool) -> String {
+    match (undo, sync) {
+        (false, false) => "The run stays saved. Resume it from Encounters.",
+        (true, false) => "The run stays saved. Closing ends Undo for this run.",
+        (false, true) => "The run stays saved. Sync stops.",
+        (true, true) => "The run stays saved. Closing ends Undo for this run. Sync stops.",
+    }
+    .to_owned()
+}
+
+/// Cut only the target, keeping action words, amounts and copy numbers.
+fn undo_words(
+    ui: &egui::Ui,
+    label: &str,
+    participants: &[Participant],
+    font: &egui::FontId,
+    width: f32,
+) -> String {
+    if design::number_width(ui, label, font) <= width {
+        return label.to_owned();
+    }
+    let action = label.strip_prefix("Undo: ").unwrap_or(label);
+    if design::number_width(ui, action, font) <= width {
+        return action.to_owned();
+    }
+    if action == "Undo stopped at sheet update" {
+        return "Undo stopped".to_owned();
+    }
+    let target = participants
+        .iter()
+        .filter(|p| action.contains(&p.name))
+        .max_by_key(|p| p.name.len());
+    if let Some(target) = target {
+        let (before, after) = action.split_once(&target.name).expect("target in action");
+        let room = width - design::number_width(ui, &format!("{before}{after}"), font);
+        return format!("{before}{}{after}", dock_name(ui, &target.name, font, room));
+    }
+    action.to_owned()
+}
+
 /// Keep the copy suffix when a name needs fewer words.
 fn dock_name(ui: &egui::Ui, name: &str, font: &egui::FontId, width: f32) -> String {
     let fitted = design::words_that_fit(ui, name, font, width);
@@ -4369,15 +4559,7 @@ fn dock_name(ui: &egui::Ui, name: &str, font: &egui::FontId, width: f32) -> Stri
     if design::number_width(ui, &candidate, font) <= width {
         candidate
     } else {
-        design::words_that_fit(
-            ui,
-            &format!(
-                "{} {last}",
-                name.split_whitespace().rev().nth(1).unwrap_or("")
-            ),
-            font,
-            width,
-        )
+        format!("… {last}")
     }
 }
 
@@ -4546,6 +4728,19 @@ impl RowLayout {
         fit: RowFit,
         longest_name: f32,
     ) -> Self {
+        Self::measured(ui, width, p, sync, scale, (fit, 2), longest_name)
+    }
+
+    fn measured(
+        ui: &egui::Ui,
+        width: f32,
+        p: &Participant,
+        sync: Option<SyncState>,
+        scale: RunScale,
+        fit_and_count: (RowFit, usize),
+        longest_name: f32,
+    ) -> Self {
+        let (fit, condition_count) = fit_and_count;
         let c = colors();
         // Fixed columns from the left of the numbers. A name stays near its HP.
         // The smallest scale has one set of columns, compressed or not, so that a list that
@@ -4633,7 +4828,7 @@ impl RowLayout {
             .conditions
             .iter()
             .take(if fit == RowFit::Summary && p.conditions.len() > 3 {
-                2
+                condition_count
             } else {
                 p.conditions.len()
             })
@@ -4658,7 +4853,8 @@ impl RowLayout {
             condition_spans.push((
                 "Run conditions".into(),
                 add(
-                    &design::count(p.conditions.len() - 2, "more", "more"),
+                    &design::count(p.conditions.len() - condition_count, "more", "more")
+                        .replace(' ', "\u{a0}"),
                     c.participant.condition,
                 ),
             ));
@@ -4701,6 +4897,21 @@ impl RowLayout {
             );
         }
         let second_line = (!job.is_empty()).then(|| ui.fonts_mut(|fonts| fonts.layout_job(job)));
+        if fit == RowFit::Summary
+            && p.conditions.len() > 3
+            && condition_count > 0
+            && second_line.as_ref().is_some_and(|line| line.rows.len() > 1)
+        {
+            return Self::measured(
+                ui,
+                width,
+                p,
+                sync,
+                scale,
+                (fit, condition_count - 1),
+                longest_name,
+            );
+        }
         let name = ui.fonts_mut(|fonts| {
             fonts.layout(
                 p.name.clone(),
@@ -5133,6 +5344,56 @@ mod tests {
     use super::*;
     use serde_yaml_ng::Mapping;
     use splat::content::{Entry, overrides::Overrides};
+
+    #[test]
+    fn undo_keeps_actions_directions_amounts_and_copy_numbers() {
+        let entry = Entry::parse("wolf.md", &format!("---\nsplat_schema: 1\nsplat_id: {}\nsplat_kind: creature\nsplat_name: Cinder Wolf 3\nsplat_creature: {{type: beast}}\nsplat_stats: {{max_hp: {{value: 33}}}}\n---\n", Uuid::new_v4())).unwrap();
+        let p = Participant::new(
+            "wolf".into(),
+            "enemies".into(),
+            entry,
+            &Mapping::new(),
+            true,
+        )
+        .unwrap();
+        let ctx = egui::Context::default();
+        design::theme::install(&ctx);
+        let _ = ctx.run(egui::RawInput::default(), |ctx| {
+            egui::CentralPanel::default().show(ctx, |ui| {
+                let font = Type::Strong.font(ui);
+                for (before, after) in [
+                    ("7 damage to ", ""),
+                    ("Frightened on ", ""),
+                    ("Frightened off ", ""),
+                    ("", " present"),
+                    ("", " absent"),
+                    ("initiative for ", ""),
+                ] {
+                    let full = format!("Undo: {before}{}{after}", p.name);
+                    let width =
+                        design::number_width(ui, &format!("{before}Cinder… 3{after}"), &font);
+                    let shown = undo_words(ui, &full, std::slice::from_ref(&p), &font, width);
+                    assert!(
+                        shown.starts_with(before) && shown.ends_with(after),
+                        "{shown}"
+                    );
+                    assert!(shown.contains("… 3"), "{shown}");
+                    assert!(design::number_width(ui, &shown, &font) <= width, "{shown}");
+                }
+            });
+        });
+    }
+
+    #[test]
+    fn close_names_only_the_live_losses() {
+        assert_eq!(
+            close_saved_words(false, false),
+            "The run stays saved. Resume it from Encounters."
+        );
+        assert!(!close_saved_words(false, true).contains("Undo"));
+        assert!(!close_saved_words(true, false).contains("Sync stops"));
+        assert!(close_saved_words(true, true).contains("Undo for this run. Sync stops."));
+    }
 
     #[test]
     fn dock_names_keep_copy_suffixes_and_change_previews_keep_units() {

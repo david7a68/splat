@@ -596,7 +596,7 @@ const MAX_FROM_SHEET: &str =
 pub(crate) const NOBODY_PRESENT: &str =
     "No participants are present. Mark one present or end the encounter.";
 const CLOSE_BLOCKED: &str =
-    "Wait for pending sync changes, resolve conflicts, or turn off combat sync before closing.";
+    "Wait for pending sync changes, resolve conflicts, or stop sync for them before closing.";
 /// What the one party action does when pressed.
 enum PartySync {
     Start(Vec<usize>),

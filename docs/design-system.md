@@ -281,9 +281,11 @@ the panel, those words open the second line instead, so that a name is never cut
   scrolls.
 - **Header:** the round and the current turn in bold sans, larger than any row's name, and
   `Next turn`. The header always has two lines. Line two keeps the notice at the left
-  and a fixed Undo slot at the right. A cut Undo label ends with an ellipsis and drops a
-  trailing joining word, such as to, of, on, from or and. Undo fits whole words; hover and
-  its accessible name keep the full action. A sync conflict comes first, then recording silence, then other
+  and Undo at the right. Measure the notice first; Undo takes the remaining width, less an L gap.
+  If needed, drop `Undo:`, then shorten only the target name, keeping a copy's number.
+  Keep action words, amounts and condition directions. Hover and the accessible name keep
+  the full action. An empty history shows `Nothing to undo`, or `since reopening` after a restart.
+  A sync conflict comes first, then recording silence, then other
   sync notices, then the next name. Silence and the short sync state stay together when
   space is short. Connect to sync gives up its link before either state gives up its word.
 - **Dock:** a fixed place above the footer. `Amount`, `Damage`, `Heal`, `Temp HP`, then the
@@ -399,7 +401,7 @@ icons are glyphs or painter shapes. `design::icons` names only the glyphs in use
 
 ## Recording and content recovery
 
-The rail has one recording status link at its foot. It includes the saved audio time and opens the recording. It uses the same words as the session header. A stalled recording uses the bottom banner instead of a second header warning or stop control.
+The rail has one recording status link at its foot. It includes the saved audio time and opens the recording. It uses the same words as the session header and list status. A stalled recording puts its reason and Record again on the visible recording row; other pages keep the bottom banner.
 
 Each recording keeps its failure or stop reason beside its status, including the last processing step. Dismissing a banner does not remove that row state. While a recording is live or processing, its stored stop or cancellation reason stays hidden. A cancellation says which part stopped and offers Continue processing. Failed and Stopped use the error icon and colour; Cancelled uses warning. A stopped recording keeps its Settings link to the recording input. Silence uses the warning colour on every page. The result viewer uses one segmented control for Summary, Clean transcript, What the check changed, and Raw transcript. Every generated view uses the same Small draft notice. If the check did not run, the row says `No check ran` beside Raw transcript. The row menu stays beside the title, and L space separates its actions from the events heading. The result viewer has its back link and muted date on the first line, with Add to notes at the right on Summary. Its view choices start at the left on a second line. The segmented control never wraps; if the full set does not fit, one dropdown shows the current view name. Tabs and page headers omit zero counts. Templates names its own page and uses Campaign as the owner word.
 
@@ -517,8 +519,10 @@ Attack and damage changes sit directly below the affected action, with an XS gap
 and an L gap below. Encounter and group change forms use the run's condition grid.
 
 Recording and processing keep one linked rail slot above account status. A recording row
-owns its failure or stopped message while it is open; other pages keep the banner.
-A live row puts Stop recording before the blocked Process action. A stopped row keeps
+owns its failure, stopped or stalled message while it is open; other pages keep the banner.
+A live row owns Stop recording on the Recordings tab; other tabs keep the header button.
+The recordings list and its events keep LIST_MEASURE; result readers use the full pane.
+A stopped row keeps
 Record again beside Process, so recovery stays one press. A processed row puts
 Process again… in its menu above Delete…, with the same inline confirmation.
 Keep the recording is secondary. The consent step hides the header Record action.
