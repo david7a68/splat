@@ -56,7 +56,7 @@ impl Kind {
     pub fn word(self) -> &'static str {
         match self {
             Self::Day => "Day",
-            Self::Encounter => "Encounter",
+            Self::Encounter => "Fight",
             Self::ShortRest => "Short rest",
             Self::LongRest => "Long rest",
             Self::Travel => "Travel",
@@ -322,7 +322,7 @@ pub fn reference(event: &Event, day: u32) -> String {
 }
 
 /// Call `found` with each timeline link in a text: the ID and the label, if it has one.
-fn each_reference<'a>(
+pub(crate) fn each_reference<'a>(
     text: &'a str,
     mut found: impl FnMut(usize, usize, &'a str, Option<&'a str>),
 ) {
@@ -806,22 +806,6 @@ impl Book {
         Some(id)
     }
 
-    /// Move an event up or down the list. Returns false at either end.
-    pub fn move_by(&mut self, id: &str, by: isize) -> bool {
-        let Some(index) = self.events.iter().position(|event| event.id == id) else {
-            return false;
-        };
-        let Some(target) = index
-            .checked_add_signed(by)
-            .filter(|target| *target < self.events.len())
-        else {
-            return false;
-        };
-        self.events.swap(index, target);
-        self.touch();
-        true
-    }
-
     /// Every run sits on the timeline without a step from the DM. The DM's words stay, and
     /// so does the DM's undo, because a new round is not an edit.
     /// What a run says now. `played` means it changed while open, and it was not only opened.
@@ -1121,9 +1105,17 @@ mod tests {
         book.add(Kind::LongRest, None);
         book.add(Kind::Day, None);
         assert_eq!(day_numbers(&book.events), [0, 1, 1, 2]);
-        assert!(book.move_by(&first, -1));
+        book.place_after(&first, None);
         assert_eq!(day_numbers(&book.events), [1, 1, 1, 2]);
-        assert!(!book.move_by(&book.events[0].id.clone(), -1));
+        let order: Vec<_> = book.events.iter().map(|event| event.id.clone()).collect();
+        book.place_after(&first, None);
+        assert_eq!(
+            book.events
+                .iter()
+                .map(|event| &event.id)
+                .collect::<Vec<_>>(),
+            order.iter().collect::<Vec<_>>()
+        );
     }
 
     #[test]

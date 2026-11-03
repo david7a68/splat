@@ -32,6 +32,7 @@ pub struct Party {
     /// The DM asked to go where this campaign's D&D Beyond link is set.
     pub wants_link_page: bool,
     pub wants_settings: bool,
+    pub run_open: bool,
 }
 impl Party {
     #[cfg(test)]
@@ -154,8 +155,17 @@ impl Party {
 
     pub fn show(&mut self, ui: &mut egui::Ui, session: Option<Session>, linked: bool) {
         let c = colors();
+        let fetched = self
+            .reader
+            .selected
+            .as_ref()
+            .and_then(|id| self.reader.sheets.get(id))
+            .filter(|_| !self.combat.ready())
+            .map(|record| format!(" · Fetched {}", record_age(record)))
+            .unwrap_or_default();
+        let connect_reason = format!("Not connected{fetched} · Connect to refresh");
         let can_refresh = if session.is_none() {
-            Some("Connect to D&D Beyond in Settings to refresh.")
+            Some(connect_reason.as_str())
         } else if !linked {
             Some("Link this campaign to D&D Beyond first.")
         } else if self.reader.loading() {
@@ -163,11 +173,6 @@ impl Party {
         } else {
             None
         };
-        let cached = self
-            .reader
-            .selected
-            .as_ref()
-            .and_then(|id| self.reader.sheets.get(id));
         let checked = self.reader.selected.as_ref().is_some_and(|id| {
             self.reader.online_ids.contains(id) && !self.reader.errors.contains_key(id)
         }) && self.reader.error.is_none();
@@ -192,11 +197,7 @@ impl Party {
                 c.connection.connected,
             )
         };
-        let age = cached
-            .filter(|_| !self.combat.ready())
-            .map(|record| format!(" · Fetched {}", record_age(record)))
-            .unwrap_or_default();
-        let context = format!("{status_icon} {status_word}{age}");
+        let context = format!("{status_icon} {status_word}{fetched}");
         let mut refresh = false;
         let mut open_link = false;
         design::page_header(ui, "Party", Some(&context), |ui| {
@@ -206,9 +207,12 @@ impl Party {
                     .blocked(can_refresh)
                     .show(ui)
                     .clicked();
+                if session.is_none() && design::link(ui, "Connect to refresh").clicked() {
+                    self.wants_settings = true;
+                }
             }
         });
-        if linked {
+        if linked && session.is_some() {
             design::blocked_reason(ui, can_refresh);
         }
         if refresh && let Some(session) = session.clone() {
@@ -231,9 +235,21 @@ impl Party {
                 |ui| {
                     // Linking needs a session, so that comes first.
                     if session.is_none() {
-                        self.wants_settings |=
-                            Action::primary("Connect D&D Beyond").show(ui).clicked();
-                    } else if Action::primary("Link this campaign").show(ui).clicked() {
+                        self.wants_settings |= if self.run_open {
+                            Action::secondary("Connect D&D Beyond")
+                        } else {
+                            Action::primary("Connect D&D Beyond")
+                        }
+                        .show(ui)
+                        .clicked();
+                    } else if if self.run_open {
+                        Action::secondary("Link this campaign")
+                    } else {
+                        Action::primary("Link this campaign")
+                    }
+                    .show(ui)
+                    .clicked()
+                    {
                         open_link = true;
                     }
                 },
@@ -244,11 +260,30 @@ impl Party {
         if let Some(e) = &self.reader.error {
             design::message(ui, Tone::Error, e);
         }
-        self.storage_notices(ui, session.is_some());
+        if !self.reader.warnings.is_empty()
+            || !self.reader.archived.is_empty()
+            || !self.reader.conflicts.is_empty()
+        {
+            egui::ScrollArea::vertical()
+                .id_salt("party_storage_notices")
+                .max_height(ui.available_height() / 3.0)
+                .auto_shrink([false, true])
+                .show(ui, |ui| self.storage_notices(ui, session.is_some()));
+        }
         ui.ctx().request_repaint_after(Duration::from_secs(1));
         if self.reader.members.is_empty() {
             if self.reader.loaded {
-                ui.label("This campaign has no party members.");
+                design::empty_state(
+                    ui,
+                    icons::PARTY,
+                    "This campaign has no party members.",
+                    "Add characters in D&D Beyond, then refresh the party.",
+                    |ui| {
+                        if design::link(ui, "Open Settings").clicked() {
+                            self.wants_settings = true;
+                        }
+                    },
+                );
             } else if !self.reader.loading() {
                 design::empty_state(
                     ui,
@@ -256,7 +291,14 @@ impl Party {
                     "No local characters yet",
                     "Connect to D&D Beyond in Settings to load this party.",
                     |ui| {
-                        if Action::primary("Open Settings").show(ui).clicked() {
+                        if if self.run_open {
+                            Action::secondary("Open Settings")
+                        } else {
+                            Action::primary("Open Settings")
+                        }
+                        .show(ui)
+                        .clicked()
+                        {
                             self.wants_settings = true;
                         }
                     },
@@ -336,57 +378,83 @@ impl Party {
             .show_inside(ui, |ui| self.sheet_view(ui, session));
     }
 
-    /// Local storage warnings, campaign notes with local edits and the way to replace them, and
-    /// where replaced edits went. Force read needs no confirmation, because the edits stay in
-    /// an archive. A read that failed for a character who is not selected says so here, because
-    /// its sheet is not on the page.
+    /// Keep local edits until the DM chooses to replace them. Replacement keeps a copy.
     fn storage_notices(&mut self, ui: &mut egui::Ui, connected: bool) {
-        // One failing disk can say the same words for each character.
         let warnings: std::collections::BTreeSet<_> = self.reader.warnings.values().collect();
         for warning in warnings {
             design::message(ui, Tone::Warning, &format!("Local storage: {warning}"));
         }
         if !self.reader.archived.is_empty() {
-            let paths = self
+            let names = self
                 .reader
                 .archived
                 .iter()
-                .map(|path| path.display().to_string())
+                .filter_map(|path| path.file_name())
+                .map(|name| name.to_string_lossy())
                 .collect::<Vec<_>>()
                 .join(", ");
-            let words = format!("Force read replaced local edits. Your versions: {paths}");
+            let words = format!(
+                "D&D Beyond sheets replaced local edits. Your versions are kept as copies: {names}"
+            );
             if design::message_with_action(ui, Tone::Success, &words, "Dismiss") {
                 self.reader.archived.clear();
             }
         }
-        let Some(first) = self.reader.conflicts.values().next() else {
-            return;
-        };
-        let first = splat::character::CampaignCopyError::Conflict(first.clone());
-        let mut words = format!("Local storage: {first}");
-        let others = self.reader.conflicts.len() - 1;
-        if others > 0 {
-            words += &format!(
-                " {} also have local edits.",
-                design::count(others, "other character", "other characters")
+        let conflicts = self.reader.conflicts.clone();
+        for (id, path) in &conflicts {
+            let name = self.reader.member_name(id).to_owned();
+            design::message(
+                ui,
+                Tone::Warning,
+                &format!("{name}'s sheet file has your own edits, so Splat stopped updating it."),
             );
-        }
-        words += " Force read replaces edited notes with the D&D Beyond sheet and keeps your versions in archive files.";
-        if self.reader.force_waiting() {
-            words += " Force read is waiting for D&D Beyond.";
-            design::message(ui, Tone::Warning, &words);
-        } else if !connected {
-            words += " Connect to D&D Beyond in Settings to use it.";
-            design::message(ui, Tone::Warning, &words);
-        } else if design::message_with_action(ui, Tone::Warning, &words, "Force read") {
-            self.reader.force_read();
+            ui.label(
+                Type::Small
+                    .rich(ui, "Your version is kept as a copy.")
+                    .color(colors().muted),
+            );
+            ui.horizontal(|ui| {
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    if self.reader.force_waiting() {
+                        ui.label(
+                            Type::Small
+                                .rich(ui, "Waiting for D&D Beyond.")
+                                .color(colors().muted),
+                        );
+                    } else if connected {
+                        if Action::quiet("Replace with D&D Beyond sheet")
+                            .density(Density::Read)
+                            .show(ui)
+                            .clicked()
+                        {
+                            if conflicts.len() == 1 {
+                                self.reader.force_read();
+                            } else {
+                                self.reader.force_read_character(id);
+                            }
+                        }
+                    } else if design::link(ui, "Open Settings").clicked() {
+                        self.wants_settings = true;
+                    }
+                    if design::link(ui, "Show file")
+                        .on_hover_text(path.display().to_string())
+                        .clicked()
+                        && let Ok(url) = reqwest::Url::from_file_path(path)
+                    {
+                        ui.ctx().open_url(egui::OpenUrl::new_tab(url.to_string()));
+                    }
+                });
+            });
         }
         for id in self.reader.conflicts.keys() {
             if self.reader.selected.as_ref() != Some(id)
                 && let Some(error) = self.reader.errors.get(id)
             {
-                let name = self.reader.member_name(id);
-                design::message(ui, Tone::Error, &format!("{name}: {error}"));
+                design::message(
+                    ui,
+                    Tone::Error,
+                    &format!("{}: {error}", self.reader.member_name(id)),
+                );
             }
         }
     }
@@ -482,7 +550,7 @@ impl Party {
             self.search.clear();
         }
         design::rule(ui);
-        if self.page > 0 {
+        if self.page > 0 && sheet_entries(record, self.page).len() > 8 {
             ui.horizontal(|ui| {
                 design::search_field(
                     ui,
@@ -535,7 +603,7 @@ impl Party {
                 sheet_page(ui, record, self.page, &self.search, live.as_ref());
                 if self.page == 0 {
                     ui.add_space(design::M);
-                    design::quiet_section(ui, "Source & parity", |ui| {
+                    design::quiet_section(ui, "Technical details", |ui| {
                         source_and_parity(
                             ui,
                             record,
@@ -986,7 +1054,7 @@ fn source_and_parity(
     };
     small(
         ui,
-        "Displayed totals come directly from D&D Beyond’s computed-character service. Splat does not add modifiers to these totals.".into(),
+        "D&D Beyond supplies these totals. Splat does not add to them.".into(),
     );
     for message in &record.coverage {
         small(ui, message.clone());
@@ -1019,7 +1087,7 @@ fn source_and_parity(
             small(
                 ui,
                 format!(
-                    "{} conversion gaps; {} engine adapters still needed.",
+                    "{} rules still need to be read; {} rules still need support in Splat.",
                     list("gaps").len(),
                     list("engine_gaps")
                         .iter()
@@ -1029,7 +1097,7 @@ fn source_and_parity(
                 ),
             );
             for (title, key) in [
-                ("Rule conversion gaps", "gaps"),
+                ("Rules still to read", "gaps"),
                 ("Required character or encounter inputs", "required_inputs"),
             ] {
                 design::quiet_section(ui, title, |ui| {
@@ -1057,9 +1125,9 @@ fn source_and_parity(
     }
     small(
         ui,
-        "A cache read or a successful fetch does not prove that the two Beyond services represent the same edit. The next check can reconcile delayed results.".into(),
+        "D&D Beyond can take time to show a change in every service. Splat checks again for delayed changes.".into(),
     );
-    design::quiet_section(ui, "Technical details", |ui| {
+    design::quiet_section(ui, "File details", |ui| {
         small(
             ui,
             format!(
@@ -1214,11 +1282,12 @@ fn array(v: &Value) -> &[Value] {
     v.as_array().map(Vec::as_slice).unwrap_or(&[])
 }
 fn section_heading(ui: &mut egui::Ui, title: &str) {
-    design::reader::section_heading(ui, title);
+    ui.add_space(design::S);
+    design::group_heading(ui, title, 0);
 }
 fn subsection_heading(ui: &mut egui::Ui, title: &str) {
     ui.add_space(design::XS);
-    ui.label(Type::Heading.rich(ui, title).color(colors().text));
+    design::group_heading(ui, title, 0);
 }
 const TILE_WIDTH: f32 = 112.0;
 
@@ -1316,22 +1385,35 @@ pub(crate) fn overview(ui: &mut egui::Ui, record: &EntitySnapshot, live: Option<
         }
     });
     section_heading(ui, "Saving throws & skills");
-    let saves = |ui: &mut egui::Ui| {
-        subsection_heading(ui, "Saving throws");
-        egui::Grid::new("saves").show(ui, |ui| {
-            for ability in ABILITIES {
-                ui.label(signed(record, &format!("{ability}_save")));
+    let across = if ui.available_width() >= design::READER_MEASURE {
+        3
+    } else {
+        2
+    };
+    subsection_heading(ui, "Saving throws");
+    ui.columns(across, |cols| {
+        for (at, ability) in ABILITIES.iter().enumerate() {
+            cols[at % across].horizontal(|ui| {
+                ui.label(
+                    Type::Numeral
+                        .rich(ui, signed(record, &format!("{ability}_save")))
+                        .color(colors().text),
+                );
                 let mut name = ability.to_string();
                 name[..1].make_ascii_uppercase();
                 ui.label(name);
-                ui.end_row();
-            }
-        });
-    };
-    let skills = |ui: &mut egui::Ui, salt: usize, skip: usize, take: usize| {
-        egui::Grid::new(("skills", salt)).show(ui, |ui| {
-            for skill in record.character.skills.iter().skip(skip).take(take) {
-                ui.label(signed(record, &skill.stat));
+            });
+        }
+    });
+    subsection_heading(ui, "Skills");
+    ui.columns(across, |cols| {
+        for (at, skill) in record.character.skills.iter().enumerate() {
+            cols[at % across].horizontal(|ui| {
+                ui.label(
+                    Type::Numeral
+                        .rich(ui, signed(record, &skill.stat))
+                        .color(colors().text),
+                );
                 let flags = format!(
                     "{}{}{}",
                     if skill.expertise {
@@ -1346,25 +1428,10 @@ pub(crate) fn overview(ui: &mut egui::Ui, record: &EntitySnapshot, live: Option<
                     if skill.advantage { " Adv" } else { "" },
                     if skill.disadvantage { " Dis" } else { "" }
                 );
-                ui.label(format!("{}{flags}", skill.name));
-                ui.end_row();
-            }
-        });
-    };
-    if narrow {
-        saves(ui);
-        subsection_heading(ui, "Skills");
-        skills(ui, 0, 0, usize::MAX);
-    } else {
-        ui.columns(3, |cols| {
-            saves(&mut cols[0]);
-            subsection_heading(&mut cols[1], "Skills");
-            skills(&mut cols[1], 1, 0, 9);
-            // The same list, continued, under the same heading's level.
-            subsection_heading(&mut cols[2], " ");
-            skills(&mut cols[2], 2, 9, usize::MAX);
-        });
-    }
+                ui.add(egui::Label::new(format!("{}{flags}", skill.name)).wrap());
+            });
+        }
+    });
     ui.add(
         egui::Label::new(
             Type::Small
@@ -1378,7 +1445,7 @@ pub(crate) fn overview(ui: &mut egui::Ui, record: &EntitySnapshot, live: Option<
     );
     section_heading(ui, "Resources");
     if record.definition.splat_resources.is_empty() {
-        ui.label("No limited-use pools returned.");
+        ui.weak("No limited-use pools returned.");
     }
     for (key, pool) in &record.definition.splat_resources {
         ui.label(format!(
@@ -1460,7 +1527,9 @@ pub(crate) fn overview(ui: &mut egui::Ui, record: &EntitySnapshot, live: Option<
         });
     }
 }
-pub(crate) fn details(ui: &mut egui::Ui, record: &EntitySnapshot, page: usize, search: &str) {
+type SheetEntry = (String, String, String, Option<u64>);
+
+fn sheet_entries(record: &EntitySnapshot, page: usize) -> Vec<SheetEntry> {
     let d = &record.source.raw;
     let mut entries: Vec<(String, String, String, Option<u64>)> = Vec::new();
     let mut add = |v: &Value, source: &str| {
@@ -1565,6 +1634,70 @@ pub(crate) fn details(ui: &mut egui::Ui, record: &EntitySnapshot, page: usize, s
     };
     match page {
         1 => {
+            for (source, values) in d["actions"].as_object().into_iter().flat_map(|o| o.iter()) {
+                for v in array(values) {
+                    add(v, source);
+                }
+            }
+            for v in array(&d["customActions"]) {
+                add(v, "Custom action");
+            }
+        }
+        2 => {
+            for (source, values) in d["spells"].as_object().into_iter().flat_map(|o| o.iter()) {
+                for v in array(values) {
+                    add(v, source);
+                }
+            }
+            for class in array(&d["classSpells"]) {
+                for v in array(&class["spells"]) {
+                    add(v, "Class spell");
+                }
+            }
+        }
+        3 => {
+            for v in array(&d["inventory"]) {
+                add(v, "");
+            }
+            for v in array(&d["customItems"]) {
+                add(v, "Custom item");
+            }
+        }
+        _ => {
+            for v in array(&d["race"]["racialTraits"]) {
+                add(v, "Species");
+            }
+            for class in array(&d["classes"]) {
+                for v in array(&class["classFeatures"]) {
+                    if v["definition"]["requiredLevel"].as_u64().unwrap_or(0)
+                        <= class["level"].as_u64().unwrap_or(0)
+                    {
+                        add(v, text(&class["definition"]["name"]));
+                    }
+                }
+            }
+            for v in array(&d["feats"]) {
+                add(v, "Feat");
+            }
+        }
+    }
+    entries.sort_by(|a, b| {
+        if page == 2 {
+            a.3.cmp(&b.3).then_with(|| a.0.cmp(&b.0))
+        } else {
+            a.0.cmp(&b.0)
+        }
+    });
+    if page != 3 && page != 1 {
+        entries.dedup();
+    }
+    entries
+}
+
+fn detail_intro(ui: &mut egui::Ui, record: &EntitySnapshot, page: usize, search: &str) {
+    let d = &record.source.raw;
+    match page {
+        1 => {
             design::group_heading(ui, "Attacks", record.character.attacks.len());
             for attack in &record.character.attacks {
                 let value = &attack["damage"]["value"];
@@ -1603,14 +1736,6 @@ pub(crate) fn details(ui: &mut egui::Ui, record: &EntitySnapshot, page: usize, s
                 }
             }
             ui.add_space(design::S);
-            for (source, values) in d["actions"].as_object().into_iter().flat_map(|o| o.iter()) {
-                for v in array(values) {
-                    add(v, source);
-                }
-            }
-            for v in array(&d["customActions"]) {
-                add(v, "Custom action");
-            }
         }
         2 => {
             section_heading(ui, "Spellcasting");
@@ -1654,24 +1779,8 @@ pub(crate) fn details(ui: &mut egui::Ui, record: &EntitySnapshot, page: usize, s
                     pool.max
                 ));
             }
-            for (source, values) in d["spells"].as_object().into_iter().flat_map(|o| o.iter()) {
-                for v in array(values) {
-                    add(v, source);
-                }
-            }
-            for class in array(&d["classSpells"]) {
-                for v in array(&class["spells"]) {
-                    add(v, "Class spell");
-                }
-            }
         }
         3 => {
-            for v in array(&d["inventory"]) {
-                add(v, "");
-            }
-            for v in array(&d["customItems"]) {
-                add(v, "Custom item");
-            }
             ui.label(format!(
                 "Coins · {} cp · {} sp · {} ep · {} gp · {} pp",
                 d["currencies"]["cp"],
@@ -1681,34 +1790,13 @@ pub(crate) fn details(ui: &mut egui::Ui, record: &EntitySnapshot, page: usize, s
                 d["currencies"]["pp"]
             ));
         }
-        _ => {
-            for v in array(&d["race"]["racialTraits"]) {
-                add(v, "Species");
-            }
-            for class in array(&d["classes"]) {
-                for v in array(&class["classFeatures"]) {
-                    if v["definition"]["requiredLevel"].as_u64().unwrap_or(0)
-                        <= class["level"].as_u64().unwrap_or(0)
-                    {
-                        add(v, text(&class["definition"]["name"]));
-                    }
-                }
-            }
-            for v in array(&d["feats"]) {
-                add(v, "Feat");
-            }
-        }
+        _ => {}
     }
-    entries.sort_by(|a, b| {
-        if page == 2 {
-            a.3.cmp(&b.3).then_with(|| a.0.cmp(&b.0))
-        } else {
-            a.0.cmp(&b.0)
-        }
-    });
-    if page != 3 && page != 1 {
-        entries.dedup();
-    }
+}
+
+pub(crate) fn details(ui: &mut egui::Ui, record: &EntitySnapshot, page: usize, search: &str) {
+    detail_intro(ui, record, page, search);
+    let entries = sheet_entries(record, page);
     let search = search.to_lowercase();
     let filtered: Vec<_> = entries
         .iter()
@@ -1729,7 +1817,7 @@ pub(crate) fn details(ui: &mut egui::Ui, record: &EntitySnapshot, page: usize, s
         *level_counts.entry(row.3).or_insert(0) += 1;
     }
     if filtered.is_empty() {
-        ui.label(if search.is_empty() {
+        ui.weak(if search.is_empty() {
             "No entries returned for this character."
         } else {
             "No entries match this filter."

@@ -790,6 +790,14 @@ impl Reader {
         self.refresh_requested = true;
         self.next = None;
     }
+    /// Replace only the named character's edited notes, keeping the other drafts intact.
+    pub fn force_read_character(&mut self, id: &str) {
+        if self.conflicts.contains_key(id) {
+            self.force.insert(id.to_owned());
+            self.refresh_requested = true;
+            self.next = None;
+        }
+    }
     pub fn force_waiting(&self) -> bool {
         !self.force.is_empty() || !self.forcing.is_empty()
     }
@@ -907,6 +915,24 @@ mod tests {
         assert!(reader.take_changed().is_empty());
         assert!(reader.last_roster.is_none());
     }
+    #[test]
+    fn replacing_one_characters_sheet_keeps_the_other_characters_edits() {
+        let mut reader = Reader::default();
+        reader
+            .conflicts
+            .insert("12".into(), "/campaign/12.md".into());
+        reader
+            .conflicts
+            .insert("13".into(), "/campaign/13.md".into());
+        reader.force_read_character("12");
+        reader.force_read_character("missing");
+        assert_eq!(
+            reader.force.iter().map(String::as_str).collect::<Vec<_>>(),
+            ["12"]
+        );
+        assert!(reader.conflicts.contains_key("13"));
+    }
+
     #[test]
     fn a_warning_stays_until_the_same_thing_saves_and_force_reads_at_once() {
         let mut reader = Reader::default();

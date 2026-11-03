@@ -824,6 +824,8 @@ const HEROES: [Hero; 5] = [
                 "Hurl a mote of fire at a creature or object.",
             ),
             ("Mage Hand", 0, "A spectral hand appears within range."),
+            // Nine spells keep the long-list filter covered by the navigation scenarios.
+            ("Light", 0, "A small object gives light."),
             (
                 "Shield",
                 1,

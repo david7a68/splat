@@ -851,6 +851,7 @@ pub struct Encounters {
 }
 /// One encounter, as a session's plan offers it.
 pub struct PlanFight {
+    pub saved: Option<crate::encounter_run::SavedRunInfo>,
     pub name: String,
     pub path: String,
     pub summary: String,
@@ -1005,6 +1006,14 @@ impl Encounters {
                 .templates
                 .iter()
                 .map(|template| PlanFight {
+                    saved: snapshot
+                        .runs
+                        .iter()
+                        .find(|run| {
+                            run.source == Some(template.id)
+                                && run.standing == crate::encounter_run::Standing::Unfinished
+                        })
+                        .cloned(),
                     name: template.name.clone(),
                     path: template.path.clone(),
                     summary: template.summary.clone().unwrap_or_default(),
@@ -1753,7 +1762,7 @@ impl Encounters {
         self.read_runs_again(active);
         true
     }
-    fn read_runs_again(&mut self, active: &Campaign) {
+    pub fn read_runs_again(&mut self, active: &Campaign) {
         if let Some(s) = &mut self.snapshot {
             match s
                 .options
