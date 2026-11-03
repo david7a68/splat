@@ -367,33 +367,47 @@ impl Campaigns {
         } else {
             Some("Reload valid campaign settings in Settings first.")
         };
-        ui.add_enabled_ui(self.writable && blocked.is_none(), |ui| {
-            // A name wraps to two lines here, rather than ending in dots.
-            // Small type, so a name fits in two lines. A fixed height, so the items below it stay
-            // in one place, whichever campaign is open.
-            let top = ui.cursor().top();
-            let combo = egui::ComboBox::from_id_salt("active_campaign")
-                .icon(design::combo_icon)
-                .width(ui.available_width())
-                .wrap()
-                .selected_text(Type::Small.rich(ui, label).color(colors().text))
-                .show_ui(ui, |ui| {
-                    ui.set_min_width(220.0);
+        // The name, lock and caret share a fixed-height control.
+        let top = ui.cursor().top();
+        let locked = reason.is_some();
+        let combo = egui::ComboBox::from_id_salt("active_campaign")
+            .icon(move |ui, rect, visuals, open| {
+                if locked {
+                    ui.painter().text(
+                        rect.center(),
+                        egui::Align2::CENTER_CENTER,
+                        icons::READ_ONLY,
+                        Type::Body.font(ui),
+                        colors().muted,
+                    );
+                } else {
+                    design::combo_icon(ui, rect, visuals, open);
+                }
+            })
+            .width(ui.available_width())
+            .wrap()
+            .selected_text(Type::Small.rich(ui, label).color(colors().text))
+            .show_ui(ui, |ui| {
+                ui.set_min_width(220.0);
+                if let Some(reason) = reason {
+                    design::blocked_reason(ui, Some(reason));
+                    ui.add_space(design::L);
+                }
+                ui.add_enabled_ui(reason.is_none(), |ui| {
                     ui.selectable_value(&mut selected, None, "No campaign");
                     for campaign in &self.data.campaigns {
                         ui.selectable_value(&mut selected, Some(campaign.id), &campaign.name);
                     }
                 });
-            design::named(ui, &combo.response, &format!("Active campaign: {label}"));
-            let response = combo.response;
-            match reason {
-                Some(reason) => response.on_disabled_hover_text(reason),
-                None => response.on_hover_text(label),
-            };
-            let used = ui.cursor().top() - top;
-            ui.add_space((SELECTOR_HEIGHT - used).max(0.0));
-        });
-        design::blocked_reason(ui, reason);
+            });
+        design::named(ui, &combo.response, &format!("Active campaign: {label}"));
+        if let Some(reason) = reason {
+            ui.ctx()
+                .accesskit_node_builder(combo.response.id, |node| node.set_description(reason));
+        }
+        combo.response.on_hover_text(reason.unwrap_or(label));
+        let used = ui.cursor().top() - top;
+        ui.add_space((SELECTOR_HEIGHT - used).max(0.0));
         if selected != current {
             self.select(selected);
         }
@@ -724,8 +738,10 @@ impl Campaigns {
         }
     }
 
-    fn form(&mut self, ui: &mut egui::Ui, inline: bool, primary: bool) {
+    fn form(&mut self, ui: &mut egui::Ui, _inline: bool, primary: bool) {
         let editing = self.editing.is_some();
+        let form_id = ui.make_persistent_id(("campaign_form", self.editing));
+        let mut added = false;
         egui::CollapsingHeader::new(if editing {
             "Edit campaign details"
         } else {
@@ -770,10 +786,8 @@ impl Campaigns {
             ui.horizontal(|ui| {
                 let submit = if editing {
                     "Save details"
-                } else if inline {
-                    "Add campaign"
                 } else {
-                    "Open campaign"
+                    "Add campaign"
                 };
                 let missing = self.name.trim().is_empty() || self.path.trim().is_empty();
                 let action = if primary {
@@ -781,13 +795,19 @@ impl Campaigns {
                 } else {
                     Action::secondary(submit)
                 };
+                design::blocked_reason(
+                    ui,
+                    missing.then_some("Enter a campaign name and a folder first."),
+                );
                 if action
                     .blocked_if(missing, "Enter a campaign name and a folder first.")
                     .show(ui)
                     .clicked()
-                    && let Err(error) = self.save_form()
                 {
-                    self.error = Some(error);
+                    match self.save_form() {
+                        Ok(()) => added = !editing,
+                        Err(error) => self.error = Some(error),
+                    }
                 }
                 if (editing || !missing || self.remote.is_some())
                     && Action::quiet("Cancel").show(ui).clicked()
@@ -795,18 +815,19 @@ impl Campaigns {
                     self.clear_form();
                 }
             });
-            // What it is waiting for, without a hover.
-            if self.name.trim().is_empty() || self.path.trim().is_empty() {
-                ui.label(
-                    Type::Small
-                        .rich(ui, "Enter a campaign name and a folder.")
-                        .color(colors().muted),
-                );
-            }
             if let Some(error) = &self.error {
                 design::message(ui, Tone::Error, error);
             }
         });
+        if added {
+            let mut state = egui::collapsing_header::CollapsingState::load_with_default_open(
+                ui.ctx(),
+                form_id,
+                false,
+            );
+            state.set_open(false);
+            state.store(ui.ctx());
+        }
     }
 }
 

@@ -52,6 +52,11 @@ fn violations(line: &str) -> Vec<&'static str> {
             found.push("raw-colour");
         }
     }
+    for symbol in ['⋯', '⚠', 'ⓘ', '▾', '▸', '✕'] {
+        if code.contains(symbol) && !code.contains(".name(") {
+            found.push("raw-symbol");
+        }
+    }
     // A moving spinner draws from the clock, so captures of one state would differ.
     if code.contains("ui.spinner()") {
         found.push("raw-spinner");
@@ -141,6 +146,8 @@ fn the_lint_finds_what_it_should() {
     assert_eq!(violations("egui::Color32::from_gray(205)"), ["raw-colour"]);
     assert_eq!(violations("RichText::new(x).size(17.0)"), ["raw-size"]);
     assert_eq!(violations("egui::FontId::proportional(13.0)"), ["raw-size"]);
+    assert_eq!(violations("ui.menu_button(\"⋯\", add)"), ["raw-symbol"]);
+    assert!(violations("design::row_menu(ui, name, add)").is_empty());
     assert!(violations("Type::Body.size()").is_empty());
     assert!(violations("// Color32::RED in a comment").is_empty());
     assert!(violations("Color32::TRANSPARENT").is_empty());

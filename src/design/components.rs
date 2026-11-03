@@ -117,6 +117,7 @@ pub fn page_header(ui: &mut Ui, title: &str, context: Option<&str>, actions: imp
         },
     );
     rule(ui);
+    ui.add_space(L);
 }
 
 /// A list group, with its nonzero count in muted type and no rule.
@@ -132,7 +133,7 @@ pub fn group_heading_text(ui: &Ui, title: &str, count: usize) -> LayoutJob {
             if count == 0 {
                 String::new()
             } else {
-                format!(" {count}")
+                format!(" {}", self::count(count, "", ""))
             },
             colors().muted,
         ),
@@ -260,6 +261,43 @@ pub fn nav_item(
         }
     }
     response
+}
+
+/// A paused run's name may shorten in the rail; hover and accessibility keep it whole.
+pub fn paused_run_nav(ui: &mut Ui, fights: usize, name: &str, state: &str) -> Response {
+    let label = if fights == 1 {
+        "Paused run"
+    } else {
+        "Paused runs"
+    };
+    let detail = if fights == 1 {
+        name.to_owned()
+    } else {
+        count(fights, "fight", "fights")
+    };
+    let full = if fights == 1 {
+        format!("{name} · {state}")
+    } else {
+        detail.clone()
+    };
+    let width = (ui.available_width() - S * 4.0 - XS).max(S);
+    let mut fitted = detail.clone();
+    while !fitted.is_empty() && number_width(ui, &fitted, &Type::Small.font(ui)) > width {
+        fitted.pop();
+    }
+    if fitted != detail {
+        while !fitted.is_empty()
+            && number_width(ui, &format!("{fitted}…"), &Type::Small.font(ui)) > width
+        {
+            fitted.pop();
+        }
+        fitted.push('…');
+    }
+    let response = nav_item(ui, icons::RUN, label, Some(&fitted), false);
+    named(ui, &response, &format!("{label} · {full}"));
+    ui.ctx()
+        .accesskit_node_builder(response.id, |node| node.set_description(full.clone()));
+    response.on_hover_text(full)
 }
 
 /// A rail control that opens a panel beside the page. It is not a place, so it never
@@ -426,6 +464,9 @@ impl<'a> Action<'a> {
         // `add_enabled` keeps the parent's layout, so wrapped rows still wrap.
         let mut response = ui.add_enabled(enabled, |ui: &mut Ui| self.paint(ui));
         if let Some(reason) = self.blocked {
+            ui.ctx().accesskit_node_builder(response.id, |node| {
+                node.set_description(reason);
+            });
             response = response.on_disabled_hover_text(reason);
         }
         if let Some(hint) = self.hint {
@@ -434,17 +475,34 @@ impl<'a> Action<'a> {
         response
     }
 
-    fn paint(&self, ui: &mut Ui) -> Response {
-        let c = colors();
-        let font = if self.kind == Kind::Primary {
+    fn font(&self) -> Type {
+        if self.kind == Kind::Primary {
             Type::Heading
         } else if self.plain {
             Type::Body
         } else {
             Type::Strong
-        };
-        let font = font.font(ui);
-        let padding = if self.kind == Kind::Quiet { S } else { M };
+        }
+    }
+
+    fn padding(&self) -> f32 {
+        if self.kind == Kind::Quiet { S } else { M }
+    }
+
+    /// The width before any text is cut, using the same parts as the painted button.
+    pub fn natural_width(&self, ui: &Ui) -> f32 {
+        let icon = self.icon.map_or(0.0, |_| Type::Body.size() + XS + 2.0);
+        let key = self
+            .key
+            .map_or(0.0, |key| number_width(ui, key, &Type::Small.font(ui)) + S);
+        (number_width(ui, self.label, &self.font().font(ui)) + 2.0 * self.padding() + icon + key)
+            .max(self.height)
+    }
+
+    fn paint(&self, ui: &mut Ui) -> Response {
+        let c = colors();
+        let font = self.font().font(ui);
+        let padding = self.padding();
         let icon_width = self.icon.map_or(0.0, |_| Type::Body.size() + XS + 2.0);
         let room =
             ui.available_width() - 2.0 * padding - icon_width - self.key.map_or(0.0, |_| 30.0);
@@ -923,7 +981,7 @@ pub fn status(ui: &mut Ui, state: Status<'_>) -> Response {
     job.append(state.icon, 0.0, format.clone());
     job.append(" ", 0.0, format.clone());
     job.append(state.word, 0.0, format);
-    ui.add(egui::Label::new(job).truncate())
+    ui.add(egui::Label::new(job).wrap())
 }
 
 /// A status that also leads to where the DM can act on it. The line wraps, because the
@@ -1094,6 +1152,9 @@ pub fn signed(value: i64) -> String {
 
 /// A count and the right word for it: `1 entry`, `2 entries`.
 pub fn count(n: usize, one: &str, many: &str) -> String {
+    if n == 0 {
+        return String::new();
+    }
     let digits = n.to_string();
     let mut grouped = String::new();
     for (i, digit) in digits.chars().enumerate() {
@@ -1102,7 +1163,12 @@ pub fn count(n: usize, one: &str, many: &str) -> String {
         }
         grouped.push(digit);
     }
-    format!("{grouped} {}", if n == 1 { one } else { many })
+    let unit = if n == 1 { one } else { many };
+    if unit.is_empty() {
+        grouped
+    } else {
+        format!("{grouped} {unit}")
+    }
 }
 
 /// What this place is, and the one next step.
@@ -1183,20 +1249,29 @@ pub fn draft_discarded(ui: &mut Ui) -> bool {
 
 /// A message with one action beside it. Returns true when the action is used.
 pub fn message_with_action(ui: &mut Ui, tone: Tone, text: &str, action: &str) -> bool {
-    let room = number_width(ui, action, &Type::Strong.font(ui)) + 3.0 * S;
+    let button = Action::quiet(action).density(Density::Read);
+    let button_width = button.natural_width(ui);
+    let icon_width = number_width(ui, tone.parts().0, &Type::Body.font(ui));
+    let inset = S + 1.0 + icon_width + ui.spacing().item_spacing.x * 2.0 - XS;
+    let text_width = number_width(ui, text, &Type::Body.font(ui)) + inset;
+    let gap = ui.spacing().item_spacing.x;
     let mut pressed = false;
-    ui.horizontal_top(|ui| {
-        let width = (ui.available_width() - room).max(0.0);
-        ui.allocate_ui_with_layout(vec2(width, 0.0), Layout::top_down(Align::Min), |ui| {
-            // Level with the action, on the message's first line.
-            ui.add_space((Density::Read.control() - Type::Body.line()) / 2.0);
-            message(ui, tone, text)
+    if ui.available_width() < text_width + gap + button_width {
+        message(ui, tone, text);
+        ui.horizontal(|ui| {
+            ui.add_space((inset - gap).max(0.0));
+            pressed = button.show(ui).clicked();
         });
-        pressed = Action::quiet(action)
-            .density(Density::Read)
-            .show(ui)
-            .clicked();
-    });
+    } else {
+        ui.horizontal_top(|ui| {
+            let width = (ui.available_width() - button_width - gap).max(0.0);
+            ui.allocate_ui_with_layout(vec2(width, 0.0), Layout::top_down(Align::Min), |ui| {
+                ui.add_space((Density::Read.control() - Type::Body.line()) / 2.0);
+                message(ui, tone, text)
+            });
+            pressed = button.show(ui).clicked();
+        });
+    }
     pressed
 }
 
@@ -1391,6 +1466,38 @@ pub fn add_strip(ui: &mut Ui, actions: impl FnOnce(&mut Ui)) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn counts_use_separators_and_hide_zero() {
+        assert_eq!(count(0, "entry", "entries"), "");
+        assert_eq!(count(1, "entry", "entries"), "1 entry");
+        assert_eq!(count(2108, "entry", "entries"), "2,108 entries");
+        assert_eq!(count(1234567, "", ""), "1,234,567");
+    }
+
+    #[test]
+    fn a_wrapped_message_keeps_its_whole_action() {
+        for width in [240.0, 360.0, 440.0, 880.0] {
+            let mut harness = egui_kittest::Harness::builder()
+                .with_size(vec2(width, 240.0))
+                .build_ui(|ui| {
+                    message_with_action(ui, Tone::Info,
+                        "The party has full HP after this long rest. Every changed value is kept for undo.",
+                        "Undo delete saved run");
+                });
+            super::super::theme::install(&harness.ctx);
+            harness.run_steps(2);
+            let cut = crate::visual_tests::ergonomics::cut_text(
+                &harness.output().shapes,
+                &[],
+                &[],
+                "message",
+                "wrapped",
+                "test",
+            );
+            assert!(cut.is_empty(), "width {width}: {cut:?}");
+        }
+    }
 
     #[test]
     fn bloodied_is_half_or_less_and_zero_stands_alone() {

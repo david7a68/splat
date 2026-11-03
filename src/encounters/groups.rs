@@ -1183,13 +1183,12 @@ fn conditions_row(ui: &mut egui::Ui, conditions: &mut Vec<String>) {
         ui.horizontal(|ui| {
             ui.label(Type::Small.rich(ui, &effect).color(colors().muted));
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                let menu = ui.menu_button("⋯", |ui| {
+                design::row_menu(ui, &effect, |ui| {
                     if ui.button("Remove").clicked() {
                         conditions.retain(|c| c != &effect);
                         ui.close();
                     }
                 });
-                design::named(ui, &menu.response, &format!("More actions for {effect}"));
             });
         });
     }

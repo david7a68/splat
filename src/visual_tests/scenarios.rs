@@ -1200,20 +1200,45 @@ pub mod settings {
         d.expect(EDIT_FORM);
         d.state("edit-campaign", Sizes::Default);
         d.click(CANCEL);
-        d.expect("connect your account");
-        d.state("add-from-remote", Sizes::Default);
         d.click(REMOVE_CAMPAIGN);
         d.click("Remove…");
         d.expect(REMOVE_TITLE);
         d.state("confirm-remove-campaign", Sizes::Default);
         d.press(Key::Escape);
         d.goal("edit a campaign's details");
-        d.click(REMOVE_CAMPAIGN);
-        d.state("campaign-row-menu", Sizes::Default);
+        d.app_mut().settings.simulate(Account::Connected);
+        d.settle();
+        d.click("Add from D&D Beyond");
+        d.wait_for_text("Salt Road");
+        d.click("Add Salt Road from D&D Beyond");
+        d.state_prepared("add-from-remote", Sizes::Default, |d| {
+            if !d.has("Campaign name") {
+                d.click("Add from D&D Beyond");
+            }
+            d.row_of("Campaign name");
+            d.wait_for_text("D&D Beyond ID");
+            assert_eq!(d.field_text("Campaign name").as_deref(), Some("Salt Road"));
+        });
+        d.click(CANCEL);
+        d.app_mut().settings.simulate(Account::NotConnected);
+        d.settle();
+
+        d.state_prepared("campaign-row-menu", Sizes::Default, |d| {
+            if !d.in_view("Remove…") {
+                d.click(REMOVE_CAMPAIGN);
+            }
+            d.wait_for_text("Remove…");
+        });
         d.press(Key::Escape);
         d.click(COOKIE_HELP);
         d.expect(COOKIE_HELP_TEXT);
-        d.state("cookie-help", Sizes::Default);
+        d.state_prepared("cookie-help", Sizes::Default, |d| {
+            if !d.has(COOKIE_HELP_TEXT) {
+                d.click(COOKIE_HELP);
+            }
+            d.row_of(COOKIE_HELP_TEXT);
+            d.wait_for_text(COOKIE_HELP_TEXT);
+        });
     }
 }
 
@@ -1295,7 +1320,7 @@ pub mod empty {
     const ADD_CAMPAIGN: &str = "Add campaign";
     const NAME_FIELD: &str = "Campaign name";
     const FOLDER_FIELD: &str = "Folder";
-    const OPEN_CAMPAIGN: &str = "Open campaign";
+    const OPEN_CAMPAIGN: &str = "Add campaign";
     const NEW_CAMPAIGN: &str = "Ashes of Emberfall";
     const NEW_FOLDER: &str = "new-campaign";
     const NO_ENTRIES: &str = "This campaign has no entries of its own yet";
@@ -1342,7 +1367,7 @@ pub mod empty {
         std::fs::create_dir_all(&folder).expect("create campaign folder");
         d.type_into(NAME_FIELD, NEW_CAMPAIGN);
         d.type_into(FOLDER_FIELD, &folder.display().to_string());
-        d.click(OPEN_CAMPAIGN);
+        d.click_below(FOLDER_FIELD, OPEN_CAMPAIGN);
         d.expect(NEW_CAMPAIGN);
         d.state("campaign-added", Sizes::Default);
         d.goal("add a first campaign");
@@ -2507,6 +2532,10 @@ pub mod gallery {
         d.click("More actions for Bridge Ambush");
         d.state("row-menu", Sizes::Default);
         d.press(Key::Escape);
+        d.scroll_until(pos2(600.0, 300.0), "One cause, one sentence", 30);
+        d.state("blocked-cause", Sizes::Default);
+        d.scroll_until(pos2(600.0, 300.0), "Paused runs", 30);
+        d.state("paused-runs", Sizes::Default);
         let temp = crate::design::temp_hp_text(5);
         for _ in 0..30 {
             if d.visible_text(&temp) {
@@ -2793,7 +2822,7 @@ pub mod run_restart {
             "The rail keeps the paused run in view",
         );
         let before_resume = d.interaction_count();
-        d.click_starting("Run · Round");
+        d.click_starting("Paused run ·");
         d.expect(NEXT_TURN);
         d.state("paused-run-resumed-from-rail", Sizes::All);
         d.observe(
@@ -3273,7 +3302,7 @@ pub mod signed_in {
     const SYNC_SECTION: &str = "Combat sync";
     const SYNC_ON: &str = "Combat sync · On";
     const SYNC_OFF: &str = "Combat sync · Off";
-    const RAIL_STOPPED: &str = "Party sync stopped";
+    const RAIL_STOPPED: &str = "Sync stopped";
     const SYNC_TOGGLE: &str = "Sync combat stats with D&D Beyond";
     const STOPPED: &str = "Combat sync stopped";
     const FIRST_READ: &str = "First read";
@@ -3284,7 +3313,7 @@ pub mod signed_in {
     const EDIT_DETAILS: &str = "Edit details";
     const CONFLICT: &str = "Conflict";
     const RAIL_FAILING: &str = "Sign-in failing";
-    const RAIL_OFFLINE: &str = "Not connected";
+    const RAIL_OFFLINE: &str = "Signed out of D&D Beyond";
     const STOPPED_ROW: &str = "Sync stopped";
     const NOT_SENT: &str = "Not sent";
     const NOTHING_TO_SEND: &str = "Iselle Marrowind";
@@ -3303,7 +3332,13 @@ pub mod signed_in {
         d.state("settings-connected", Sizes::All);
         d.click(REMOTE);
         d.expect(REMOTE_NAME);
-        d.state("remote-campaign-list", Sizes::Default);
+        d.state_prepared("remote-campaign-list", Sizes::Default, |d| {
+            if !d.has("Add Salt Road from D&D Beyond") {
+                d.click(REMOTE);
+            }
+            d.row_of(REMOTE_NAME);
+            d.wait_for_text(REMOTE_NAME);
+        });
         d.goal("see the remote campaign list");
         d.observe(
             "Added campaigns",
@@ -4702,13 +4737,20 @@ pub mod session_recording {
         );
         d.scroll_until(pos2(600.0, 400.0), "LLM service", 12);
         d.click("LLM service");
-        d.state("processing-llm-choices", Sizes::Default);
+        d.state_prepared("processing-llm-choices", Sizes::Default, |d| {
+            if !d.has("Anthropic") {
+                d.click("LLM service");
+            }
+            d.wait_for_text("Anthropic");
+        });
         d.click("Anthropic");
         d.state("processing-settings-anthropic", Sizes::Default);
         d.click("LLM service");
         d.click("Codex CLI, GPT-6.1 Sol");
         d.click("Account and campaigns");
 
+        d.app_mut().processing.config.provider = crate::processing::Provider::OpenAiCompatible;
+        d.app_mut().processing.config.llm_url = crate::processing::OPENAI_URL.to_owned();
         d.app_mut().processing.simulate_keys();
         d.settle();
         // A key saved for one service is not sent to another.
@@ -4721,6 +4763,7 @@ pub mod session_recording {
             d.has_containing("for another service"),
             "A saved key does not follow the DM to a different service",
         );
+        d.expect("Remove OpenAI key");
         d.state("key-for-another-service", Sizes::Default);
         d.click("LLM service");
         d.click("Codex CLI, GPT-6.1 Sol");

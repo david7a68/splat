@@ -25,7 +25,7 @@ const CHROME_CORNER: f32 = 24.0;
 /// counts stay visible, but apart from what app code and the design system control.
 pub const CHROME_SUFFIX: &str = "/egui-chrome";
 
-pub const CHECKS: [&str; 10] = [
+pub const CHECKS: [&str; 11] = [
     "target-size",
     "accessible-name",
     "in-viewport",
@@ -36,6 +36,7 @@ pub const CHECKS: [&str; 10] = [
     "accessible-name/egui-chrome",
     "no-overlap/egui-chrome",
     "workflow",
+    "missing-glyph",
 ];
 
 #[derive(Clone, Debug, Serialize)]
@@ -438,6 +439,67 @@ pub fn cut_text(
             role: "Text".into(),
             rect: [rect.left(), rect.top(), rect.width(), rect.height()],
             detail: format!("{how}: {text}"),
+        })
+        .collect()
+}
+
+/// Every painted character must exist in its font family, including its fallbacks.
+pub fn missing_glyphs(
+    ctx: &egui::Context,
+    shapes: &[egui::epaint::ClippedShape],
+    scenario: &str,
+    state: &str,
+    window: &str,
+) -> Vec<Violation> {
+    fn visit(
+        ctx: &egui::Context,
+        shape: &egui::Shape,
+        clip: egui::Rect,
+        found: &mut Vec<(char, egui::Rect, String)>,
+    ) {
+        match shape {
+            egui::Shape::Vec(shapes) => {
+                for shape in shapes {
+                    visit(ctx, shape, clip, found);
+                }
+            }
+            egui::Shape::Text(text) if text.visual_bounding_rect().intersects(clip) => {
+                for section in &text.galley.job.sections {
+                    let words = &text.galley.job.text[section.byte_range.clone()];
+                    for character in words
+                        .chars()
+                        .filter(|c| !c.is_control() && !c.is_whitespace())
+                    {
+                        if !ctx
+                            .fonts_mut(|fonts| fonts.has_glyph(&section.format.font_id, character))
+                        {
+                            found.push((
+                                character,
+                                text.visual_bounding_rect(),
+                                text.galley.job.text.clone(),
+                            ));
+                        }
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+    let mut found = Vec::new();
+    for shape in shapes {
+        visit(ctx, &shape.shape, shape.clip_rect, &mut found);
+    }
+    found
+        .into_iter()
+        .map(|(character, rect, words)| Violation {
+            check: "missing-glyph".into(),
+            scenario: scenario.into(),
+            state: state.into(),
+            window: window.into(),
+            node: words.chars().take(40).collect(),
+            role: "Text".into(),
+            rect: [rect.left(), rect.top(), rect.width(), rect.height()],
+            detail: format!("No glyph for U+{:04X} in {words:?}", character as u32),
         })
         .collect()
 }
@@ -930,6 +992,26 @@ mod tests {
 
     fn at(x: f32, y: f32, width: f32, height: f32) -> egui::Rect {
         egui::Rect::from_min_size(egui::pos2(x, y), egui::vec2(width, height))
+    }
+
+    #[test]
+    fn missing_glyph_fails_for_an_unassigned_character_and_accepts_app_icons() {
+        let mut harness = Harness::builder().build_ui(|ui| {
+            ui.label(format!("Known {} × →", crate::design::icons::EXPAND));
+            ui.label("Missing \u{0378}");
+        });
+        crate::design::theme::install(&harness.ctx);
+        harness.run_steps(2);
+        let found = missing_glyphs(
+            &harness.ctx,
+            &harness.output().shapes,
+            "seeded",
+            "state",
+            "400x300",
+        );
+        assert_eq!(found.len(), 1, "{found:?}");
+        assert_eq!(found[0].check, "missing-glyph");
+        assert!(found[0].detail.contains("U+0378"));
     }
 
     /// Every check can fail. A check that is 0 everywhere looks the same as a broken one.

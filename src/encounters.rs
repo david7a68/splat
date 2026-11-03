@@ -650,10 +650,15 @@ fn roster_summary(setup: &Setup) -> String {
     } else {
         ""
     };
-    format!(
-        "{party} party · {}{changed}",
-        design::count(others, "other", "others")
-    )
+    let sides = [
+        design::count(party, "party", "party"),
+        design::count(others, "other", "others"),
+    ]
+    .into_iter()
+    .filter(|part| !part.is_empty())
+    .collect::<Vec<_>>()
+    .join(" · ");
+    format!("{sides}{changed}")
 }
 /// Keep a stat label with its value. A second line can break between facts.
 fn stat_line(text: &str) -> String {
@@ -1061,6 +1066,15 @@ impl Encounters {
             .runs
             .iter()
             .find(|run| run.standing == crate::encounter_run::Standing::Unfinished)
+    }
+    pub fn paused_run_count(&self) -> usize {
+        self.snapshot.as_ref().map_or(0, |snapshot| {
+            snapshot
+                .runs
+                .iter()
+                .filter(|run| run.standing == crate::encounter_run::Standing::Unfinished)
+                .count()
+        })
     }
     /// A new encounter from a session's plan. It joins the plan, and back leads there.
     /// Whether a fight is open that has not ended.
@@ -3628,9 +3642,9 @@ mod tests {
         d.add(id, false);
         slot_override(&mut d, 0, "{side: party}");
         d.save(&campaign, &[]).unwrap();
-        assert_eq!(roster_summary(&d.setup), "1 party · 0 others · Changed");
+        assert_eq!(roster_summary(&d.setup), "1 party · Changed");
         slot_override(&mut d, 0, "{side: ' party '}");
-        assert_eq!(roster_summary(&d.setup), "1 party · 0 others · Changed");
+        assert_eq!(roster_summary(&d.setup), "1 party · Changed");
         slot_override(&mut d, 0, "{side: party}");
         let editor = Encounters {
             active: Some(campaign.clone()),

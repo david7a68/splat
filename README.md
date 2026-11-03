@@ -2,7 +2,7 @@
 
 A desktop foundation for D&D 2024 encounter planning and simulation.
 Built with Rust and egui (eframe). The design system is in [docs/design-system.md](docs/design-system.md).
-The sidebar has one flat level: **Run** (while a run is open or paused), **Encounters**, **Session**, **Timeline**, **World**, **Party**,
+The sidebar has one flat level: **Run** (while a run is open), **Paused run** (one unfinished fight) or **Paused runs** (several unfinished fights), **Encounters**, **Session**, **Timeline**, **World**, **Party**,
 **Library**, **Campaign**, and **Settings**. The campaign switcher is always above them. **Lookup** (Ctrl+K) searches every entry, every session note and the timeline, and
 opens beside any page. While a run is open, other pages show a strip with the turn, primary **Next turn**, and secondary **Back to run**. Each page keeps its
 state, and the app reopens on the last page or the open run. Drag the edge of the sidebar, a page's list, or a panel to
@@ -54,10 +54,10 @@ the host's `ffmpeg` and `montage`.
   party,settings` is the same, and keeps the captures of the label's other scenarios.
 - `SPLAT_VISUAL_VIDEO=0` turns video off for `visual-test`.
 
-Library has **New entry** in its header. Its form opens in the reader column and closes after creation. World has **New ▾** for an NPC, a location, or a generated NPC. List headings use capitals and a count. Page headers show state or counts beside the title, with a rule below.
+Library has **New entry** in its header. Its form opens in the reader column and closes after creation. World has **New ▾** for an NPC, a location, or a generated NPC. List headings use capitals and a count. Page headers show state or nonzero counts beside the title, with a rule and an `L` gap below. Counts use thousands separators.
 
-The `gallery` scenario captures every design token and component, including page headers, blocked reasons, row menus and status links. `src/design/lint.rs` fails on raw
-colours and text sizes outside `src/design/`, and `src/design/tokens.rs` tests WCAG contrast.
+The `gallery` scenario captures every design token and component, including page headers, blocked reasons, full rows with menus, paused runs and message actions. The `missing-glyph` check rejects painted characters missing from the app fonts. `src/design/lint.rs` fails on raw
+colours, text sizes and raw icon text outside `src/design/`, and `src/design/tokens.rs` tests WCAG contrast.
 
 Scenario labels are at the top of each scenario in `src/visual_tests/scenarios.rs`, and the
 ones they share are in `steps.rs`. Goals use the test IDs in `docs/ux-intent.md` section 8.

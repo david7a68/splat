@@ -18,7 +18,7 @@
 mod compare;
 mod dm_audit;
 mod driver;
-mod ergonomics;
+pub(crate) mod ergonomics;
 mod fixture;
 mod scenarios;
 mod steps;

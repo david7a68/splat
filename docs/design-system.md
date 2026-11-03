@@ -142,9 +142,9 @@ tooltips, and separators. Text cursors do not blink, because motion draws the ey
 
 | Part | Function | Notes |
 |---|---|---|
-| Page header | `page_header` | Title and one `Small` muted state or count on the same baseline; actions on the right; a hairline below. Never repeat the campaign name |
+| Page header | `page_header` | Title and one `Small` muted state or count on the same baseline; actions on the right; a hairline below, then an `L` gap. Never repeat the campaign name |
 | Nav item | `nav_item` | Icon and word. Accent bar when selected |
-| Buttons | `Action::primary / secondary / quiet / destructive` | `.blocked(reason)` disables; put `blocked_reason` beside it in visible `Small` text (G1). `.key("N")` shows the key beside the word |
+| Buttons | `Action::primary / secondary / quiet / destructive` | `.blocked(reason)` disables and adds a hover reason and accessible description. For one blocked control, put `blocked_reason` directly beside it in visible `Small` text, then an `L` gap before the next action. `.key("N")` shows the key beside the word |
 | Split button | `split_action` | An `Action` that does the default, and a caret that opens a menu of the other ways |
 | Field | `field` | Label, control, help, error; names the control for accessibility |
 | Text fields | `text_field`, `text_input`, `number_field`, `search_field`, `named` | Always have an accessible name and a 26 px target. Numbers align left, so the caret never lies on a digit |
@@ -161,12 +161,12 @@ tooltips, and separators. Text cursors do not blink, because motion draws the ey
 | Group heading | `group_heading` | `Type::Label` in capitals and a muted, nonzero count after it. No rule. Serif headings belong to readers and stat blocks |
 | Row menu | `row_menu` | Quiet `⋯` at the right edge, named `More actions for <name>`. Put Remove and Delete here |
 | Add strip | `add_strip` | `Add` in `Label`, then quiet icon-and-word buttons that wrap. Fight, Group (plan only), Day, Long rest, Short rest, Travel, Major event |
-| Message | `message`, `Tone` | Inline. Never modal |
+| Message | `message`, `message_with_action`, `Tone` | Inline. Measure the full action, including padding. Move it below the text, aligned with the text, when both cannot fit on one line |
 | Side panel | `side_panel_width`, `panel_header` | One width rule for Lookup, Notes and the run. The run separates participant tabs from fight tabs |
 | Column | `Column::left / right / panel` | Every side column: the rail, a page's list, a panel. A drag handle on its inner edge. Natural width until dragged, then the DM's width, here and after a restart. A drag always leaves the page its room, and the run's roster keeps `RUN_LIST_KEEPS`. What sits beside a column reaches its edge, so no blank band opens between them. Text keeps its measure inside that room |
 | Link | `link` | A real `Link` role, at least 24 px high |
 | Number | `number`, `number_width` | Right-aligned digits |
-| Count | `count` | `1 entry`, `2 entries` |
+| Count | `count` | `1 entry`, `2,108 entries`; zero returns no text. Empty unit words return only the formatted number |
 
 Header actions have at most one bordered secondary button, for `New …`. Other header actions are quiet and come before it.
 The Library scope control sits at the top of its category column. At a narrow width, it sits above the list.
@@ -178,6 +178,12 @@ A page uses `status_link`, for example `Running · Round 2`, to show a run's sta
 An on toggle uses `selected`, its icon or a check, and its word. It does not use the accent fill.
 Delete and Remove belong in a row menu, away from the primary action. A save row has the save-state word and quiet `Discard` at the left, and `Save` at the right.
 Use red only for an action that loses something.
+
+When one cause blocks several controls, state the reason once at the cause: the draft's save row, the run strip, or the recording row. Other blocked controls use the same reason as hover text and accessible description. The rail never repeats the sentence. Its campaign switcher keeps its height and shows a lock; its popup starts with the reason and disables campaign choices. A package draft does not block a campaign switch.
+
+Every icon comes from `design::icons`. Do not pass a raw symbol as widget text. The `missing-glyph` ergonomics check reads painted text and fails if the selected font and its fallbacks lack a character. Its unit test seeds an unassigned character.
+
+Empty readers use `No entry open` or `No note open`, then “Choose one from the list, or make a new one.”
 
 Icons support words. They replace a word only where the meaning is universal, and then the
 control still has an accessible name and a tooltip.
@@ -228,7 +234,7 @@ status link `Running · Round 2`. The strip owns the primary `Next turn` and sec
 the run ends, its encounter returns to Ready to run. With `Keep in Ready during a run`
 on, its Ready row keeps `Start fight` blocked and says to resume from In progress.
 History opens a read-only final state and log in place. It never takes the live-run slot.
-A paused run stays in the rail and resumes in one click.
+One paused run uses `Paused run` in the rail and the encounter name below, cut to fit. Hover and accessibility keep the full name and state, for example `Bridge Ambush · Round 2`. It resumes in one click. With two or more, the rail uses `Paused runs` and `2 fights`; it opens Encounters. An open run keeps `Run` and its round or `Setup`.
 
 Roster rows have the name and second line, side menu, quiet `Edit`, then `⋯`.
 The menu holds ordering, duplication, `Make it yours`, and removal. A creature
@@ -372,3 +378,7 @@ A copy starts with the original name selected. Its destination and dependency pr
 An incoming sheet change removes only undo steps for that character. Remaining snapshots keep the current sheet values. An atomic step that also affects another participant ends older affected steps if retaining them would restore stale values; the Log names each removed step. A DM choice in a conflict is a named undo step.
 
 Campaign repair opens at the reader measure, with the invalid-note reason above it. Needed by your entries is a campaign-wide list outside the package tabs; its rows open Lookup. A rolled World table selects the matching row, marks it with a dice icon, and states the result below in UI sans.
+
+Settings uses `CAMPAIGNS` and `D&D BEYOND ACCOUNT` group headings in both layouts. In the compact layout, the open account form replaces the status line and its `Connect…` link. The account verb is `Connect`; states include `Not connected` and `Signed out of D&D Beyond`. A keyring warning owns its `Connect again` action. `Disconnect` is quiet and follows the trust text. The add-campaign form closes after a successful add.
+
+Recording settings clip at the tab rule, with `L` above each section. Visible field labels are `Service`, `Address`, `Model` and `API key`; accessible names keep the service context. The page header names the processing state, such as `Speech key missing` or `Ready to process`. A remove-key button names the saved key's service.
