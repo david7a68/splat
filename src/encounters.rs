@@ -362,8 +362,16 @@ impl Draft {
             match (&slot.creature, &slot.party_slot) {
                 (Some(reference), None) => {
                     let id = snapshot.catalogue.resolve_ref(reference).map_err(|_| {
+                        let count = self.setup.roster.iter().filter(|other| other.creature.as_ref() == Some(reference)).count();
+                        let mut named = slot.clone();
+                        named.overrides.remove("name");
+                        let name = roster_name(&named, None, &snapshot.known_creature_names);
                         reference.id.and_then(|id| snapshot.catalogue.unreadable.get(&id))
-                            .map_or_else(|| format!("{} is not found. Choose a replacement in the roster.", roster_name(slot, None, &snapshot.known_creature_names)),
+                            .map_or_else(|| if count > 1 {
+                                format!("{count} {name} rows have no creature. Their package entry was deleted. Choose a replacement in the roster.")
+                            } else {
+                                format!("{name} has no creature. Its package entry was deleted. Choose a replacement in the roster.")
+                            },
                                 |note| format!("{}. Open in Library to fix it.", note.word))
                     })?;
                     if !snapshot.creatures.iter().any(|c| c.id == id) { return Err(format!("{}: creature is unavailable in campaign content.", slot.key)); }
@@ -1153,6 +1161,8 @@ pub struct Encounters {
     draft: Option<Draft>,
     search: String,
     error: Option<String>,
+    validation_error: Option<String>,
+    validation_path: Option<String>,
     message: Option<String>,
     /// The draft `Discard changes` last dropped, for one step of undo.
     discarded: Option<Draft>,
@@ -1233,6 +1243,37 @@ const BLOCKED_BY_RUN: &str = "Close the open run first.";
 const BLOCKED_BY_DRAFT: &str = "Save or discard the open encounter first.";
 const BLOCKED_BY_CREATURE: &str = "Save or discard the changes to this creature first.";
 impl Encounters {
+    fn refresh_validation_error(&mut self, group: bool) {
+        let path = if group {
+            self.group_draft.as_ref().map(GroupDraft::path)
+        } else {
+            self.draft.as_ref().map(|draft| draft.path.as_str())
+        };
+        if path != self.validation_path.as_deref() {
+            self.validation_error = None;
+            return;
+        }
+        if self.validation_error.is_none()
+            || (self.error.is_some() && self.error != self.validation_error)
+        {
+            return;
+        }
+        let Some(snapshot) = &self.snapshot else {
+            return;
+        };
+        self.error = if group {
+            self.group_draft
+                .as_ref()
+                .and_then(|draft| draft.validate(snapshot, None).err())
+        } else {
+            self.draft
+                .as_ref()
+                .and_then(|draft| draft.validate(snapshot).err())
+        };
+        if self.error.is_some() {
+            self.validation_error = self.error.clone();
+        }
+    }
     #[cfg(test)]
     pub fn busy(&self) -> bool {
         self.pending.is_some()
@@ -1741,6 +1782,16 @@ impl Encounters {
         let Some(draft) = self.draft.as_mut() else {
             return;
         };
+        self.validation_path = Some(draft.path.clone());
+        if let Some(error) = self
+            .snapshot
+            .as_ref()
+            .and_then(|snapshot| draft.validate(snapshot).err())
+        {
+            self.validation_error = Some(error.clone());
+            self.error = Some(error);
+            return;
+        }
         let outcome = draft.save(active, modules);
         let groups_saved = std::mem::take(&mut draft.groups_written);
         // The group being built stays in view, because it still takes what the search adds.
@@ -1768,7 +1819,14 @@ impl Encounters {
                         .sort_by_key(|template| template.name.to_lowercase());
                 }
             }
-            Err(e) => self.error = Some(e),
+            Err(e) => {
+                self.validation_error = self
+                    .snapshot
+                    .as_ref()
+                    .and_then(|snapshot| draft.validate(snapshot).err())
+                    .filter(|validation| *validation == e);
+                self.error = Some(e);
+            }
         }
         if groups_saved {
             self.refreshing = true;
@@ -2610,13 +2668,32 @@ impl Encounters {
     }
 
     fn open_run(&mut self, active: &Campaign, modules: &[Module]) {
+        self.validation_path = self.draft.as_ref().map(|draft| draft.path.clone());
+        if let Some(error) = self
+            .snapshot
+            .as_ref()
+            .zip(self.draft.as_ref())
+            .and_then(|(snapshot, draft)| draft.validate(snapshot).err())
+        {
+            self.validation_error = Some(error.clone());
+            self.error = Some(error);
+            return;
+        }
         match self.start_run(active, modules) {
             Ok(run) => {
                 self.run = Some(run);
                 self.go_to_run = true;
                 self.error = None;
             }
-            Err(error) => self.error = Some(error),
+            Err(error) => {
+                self.validation_error = self
+                    .snapshot
+                    .as_ref()
+                    .zip(self.draft.as_ref())
+                    .and_then(|(snapshot, draft)| draft.validate(snapshot).err())
+                    .filter(|validation| *validation == error);
+                self.error = Some(error);
+            }
         }
     }
 
@@ -2874,6 +2951,7 @@ impl Encounters {
         {
             self.error = Some(e);
         }
+        self.refresh_validation_error(false);
         if let Some(e) = &self.error {
             design::message(ui, Tone::Error, e);
         }
@@ -2887,27 +2965,29 @@ impl Encounters {
         let draft = self.draft.as_mut().expect("the editor has a draft");
         let mut pane = self.editor_pane;
         if compact {
-            // The count stays on screen, so that Add shows a result on the other tab.
-            let roster = if draft.setup.roster.is_empty() {
-                "Roster".to_owned()
-            } else {
-                format!("Roster ({})", grouped(draft.setup.roster.len() as u64))
-            };
-            design::segmented(
-                ui,
-                &mut pane,
-                &[
-                    (EditorPane::Roster, roster.as_str()),
-                    (
+            ui.horizontal(|ui| {
+                ui.spacing_mut().item_spacing.x = 0.0;
+                design::counted_tab(
+                    ui,
+                    &mut pane,
+                    EditorPane::Roster,
+                    "Roster",
+                    draft.setup.roster.len(),
+                    ("participant", "participants"),
+                );
+                design::segmented(
+                    ui,
+                    &mut pane,
+                    &[(
                         EditorPane::Add,
                         if open_creature {
                             "This creature"
                         } else {
                             "Add participants"
                         },
-                    ),
-                ],
-            );
+                    )],
+                );
+            });
             self.editor_pane = pane;
         }
         let search = &mut self.search;
@@ -3371,6 +3451,8 @@ impl Encounters {
                 };
                 let side_icon = if slot.side == "party" { icons::PARTY } else if slot.side == "enemies" { icons::ENCOUNTERS } else { icons::GROUP };
                 let identity = definition.filter(|_| slot.overrides.contains_key("name")).map(|entry| format!(" · as {}", entry.name)).unwrap_or_default();
+                let changed = definition.is_some_and(|entry| !(slot.overrides.is_empty()
+                    || slot.overrides.len() == 1 && snapshot.npc_name_for(entry, &slot.overrides).is_some()));
                 let side = design::reader::human_label(&slot.side);
                 let detail = if missing {
                     format!("{side} · {} {}", icons::WARN, unreadable.map_or(MISSING_CREATURE, |note| note.word.as_str()))
@@ -3426,6 +3508,24 @@ impl Encounters {
                             if missing {
                                 ui.add(egui::Label::new(Type::Small.rich(ui, &detail).color(colors().result.warning)).wrap());
                             } else if !detail.is_empty() {
+                                if changed && !is_open {
+                                    ui.spacing_mut().interact_size.y = 0.0;
+                                    ui.horizontal(|ui| {
+                                        ui.spacing_mut().item_spacing.x = design::XS;
+                                        let change_width = design::number_width(ui, "Changed", &Type::Small.font(ui));
+                                        let budget = (ui.available_width() - change_width - design::S).max(0.0);
+                                        let fitted = design::words_that_fit(ui, &detail, &Type::Small.font(ui), budget);
+                                        let detail_rect = ui.label(Type::Small.rich(ui, stat_line(&fitted)).color(colors().muted)).on_hover_text(&detail).rect;
+                                        // Keep the text baseline and row pitch. The 24 px target extends into the row's padding.
+                                        let at = egui::pos2(detail_rect.right() + design::XS, detail_rect.center().y - design::XL / 2.0);
+                                        let mut inline = ui.new_child(egui::UiBuilder::new().max_rect(egui::Rect::from_min_size(at, egui::vec2(change_width, design::XL))).layout(egui::Layout::top_down(egui::Align::Min)));
+                                        if design::small_link(&mut inline, "Changed").clicked() {
+                                            groups::show_form_when_it_opens(ui);
+                                            *expanded = Some(slot.key.clone());
+                                        }
+                                    });
+                                    return;
+                                }
                                 // What a player has left is the reason to look, so all of it shows.
                                 ui.spacing_mut().interact_size.y = 0.0;
                                 ui.horizontal_wrapped(|ui| {
@@ -3444,13 +3544,6 @@ impl Encounters {
                     });
                 });
                 let member_row = member_row.response.rect;
-                if let Some(entry) = definition
-                    && !(slot.overrides.len() == 1 && snapshot.npc_name_for(entry, &slot.overrides).is_some())
-                    && groups::changes_link(ui, &slot.overrides, entry, &slot.side, is_open)
-                {
-                    groups::show_form_when_it_opens(ui);
-                    *expanded = Some(slot.key.clone());
-                }
                 if is_open && missing && unreadable.is_none() {
                     if let Some((creature, all)) = replace_missing_creature(ui, snapshot, missing_counts[i], &name) { replacement = Some((i, creature, all)); *expanded = None; }
                 } else if is_open && !missing {
@@ -3818,6 +3911,52 @@ mod tests {
             .unwrap()
             .clone();
         assert_eq!(roster_name(slot, None, &BTreeMap::new()), "Last known wolf");
+    }
+
+    #[test]
+    fn edited_roster_rechecks_a_failed_start_and_undo_restores_its_reason() {
+        let dir = tempfile::tempdir().unwrap();
+        let active = campaign(dir.path());
+        let id = creature(dir.path(), "Cinder Wolf", false);
+        let old = Snapshot::load(&active, &[]).unwrap();
+        fs::remove_file(dir.path().join("Cinder Wolf.md")).unwrap();
+        let mut snapshot = Snapshot::load(&active, &[]).unwrap();
+        snapshot.keep_edited_settings(&old);
+        let mut draft = Draft::new();
+        draft.add(id, false);
+        draft.add(id, false);
+        let error = draft.validate(&snapshot).unwrap_err();
+        assert!(error.starts_with("2 Cinder Wolf rows have no creature."));
+        let mut encounters = Encounters {
+            snapshot: Some(snapshot),
+            validation_path: Some(draft.path.clone()),
+            draft: Some(draft),
+            error: Some(error.clone()),
+            validation_error: Some(error),
+            ..Default::default()
+        };
+        encounters.draft.as_mut().unwrap().setup.roster.pop();
+        encounters.refresh_validation_error(false);
+        assert!(
+            encounters
+                .error
+                .as_ref()
+                .unwrap()
+                .starts_with("Cinder Wolf has no creature.")
+        );
+        let missing = encounters.draft.as_ref().unwrap().setup.roster.clone();
+        encounters.draft.as_mut().unwrap().setup.roster.clear();
+        encounters.refresh_validation_error(false);
+        assert!(encounters.error.is_none());
+        encounters.draft.as_mut().unwrap().setup.roster = missing;
+        encounters.refresh_validation_error(false);
+        assert!(
+            encounters
+                .error
+                .as_ref()
+                .unwrap()
+                .starts_with("Cinder Wolf has no creature.")
+        );
     }
 
     #[test]

@@ -224,7 +224,7 @@ impl GroupDraft {
         });
     }
     /// An encounter being saved with this group counts as there, though it is not on disk yet.
-    fn validate(&self, snapshot: &Snapshot, saving: Option<Uuid>) -> Result<(), String> {
+    pub(super) fn validate(&self, snapshot: &Snapshot, saving: Option<Uuid>) -> Result<(), String> {
         let name = self.name.trim();
         if name.is_empty() {
             return Err("Enter a group name.".into());
@@ -1408,6 +1408,16 @@ impl Encounters {
         let Some(draft) = self.group_draft.as_mut() else {
             return;
         };
+        self.validation_path = Some(draft.path.clone());
+        if let Some(error) = self
+            .snapshot
+            .as_ref()
+            .and_then(|snapshot| draft.validate(snapshot, None).err())
+        {
+            self.validation_error = Some(error.clone());
+            self.error = Some(error);
+            return;
+        }
         let old_name = draft.baseline.as_ref().map(|_| draft.saved_name.clone());
         // Only a group for any encounter can be linked in a plan.
         let was_linkable = draft.saved_setup.encounter.is_none();
@@ -1437,7 +1447,14 @@ impl Encounters {
                     self.close_group_in_plan();
                 }
             }
-            Err(e) => self.error = Some(e),
+            Err(e) => {
+                self.validation_error = self
+                    .snapshot
+                    .as_ref()
+                    .and_then(|snapshot| draft.validate(snapshot, None).err())
+                    .filter(|validation| *validation == e);
+                self.error = Some(e);
+            }
         }
     }
 
@@ -1581,6 +1598,7 @@ impl Encounters {
             self.save_group_draft(ui.ctx(), active, campaigns.modules());
         }
         self.discard_undo(ui);
+        self.refresh_validation_error(true);
         if let Some(e) = &self.error {
             design::message(ui, Tone::Error, e);
         }
@@ -1593,20 +1611,24 @@ impl Encounters {
         };
         let mut pane = self.editor_pane;
         if compact {
-            let count: u64 = draft.setup.members.iter().map(|member| member.count).sum();
-            let members = if count == 0 {
-                "Members".to_owned()
-            } else {
-                format!("Members ({})", super::grouped(count))
-            };
-            design::segmented(
-                ui,
-                &mut pane,
-                &[
-                    (EditorPane::Roster, members.as_str()),
-                    (EditorPane::Add, "Add creatures"),
-                ],
-            );
+            let count = draft
+                .setup
+                .members
+                .iter()
+                .map(|member| member.count as usize)
+                .sum();
+            ui.horizontal(|ui| {
+                ui.spacing_mut().item_spacing.x = 0.0;
+                design::counted_tab(
+                    ui,
+                    &mut pane,
+                    EditorPane::Roster,
+                    "Members",
+                    count,
+                    ("member", "members"),
+                );
+                design::segmented(ui, &mut pane, &[(EditorPane::Add, "Add creatures")]);
+            });
             self.editor_pane = pane;
         }
         let search = &mut self.search;
@@ -1929,6 +1951,41 @@ mod tests {
         )
         .unwrap();
         id
+    }
+
+    #[test]
+    fn a_group_edit_rechecks_the_last_validation_failure() {
+        let dir = tempfile::tempdir().unwrap();
+        let active = campaign(dir.path());
+        let id = creature(dir.path(), "Scout");
+        let snapshot = Snapshot::load(&active, &[]).unwrap();
+        let mut group = GroupDraft::new();
+        group.add(id);
+        group.name.clear();
+        let error = group.validate(&snapshot, None).unwrap_err();
+        let mut encounters = Encounters {
+            validation_path: Some(group.path.clone()),
+            validation_error: Some(error.clone()),
+            error: Some(error),
+            snapshot: Some(snapshot),
+            group_draft: Some(group),
+            ..Default::default()
+        };
+        encounters.group_draft.as_mut().unwrap().name = "Scouts".into();
+        encounters.refresh_validation_error(true);
+        assert!(encounters.error.is_none());
+        encounters
+            .group_draft
+            .as_mut()
+            .unwrap()
+            .setup
+            .members
+            .clear();
+        encounters.refresh_validation_error(true);
+        assert_eq!(
+            encounters.error.as_deref(),
+            Some("This group is empty. Add at least one creature.")
+        );
     }
 
     #[test]

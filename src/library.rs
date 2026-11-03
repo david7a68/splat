@@ -24,6 +24,11 @@ use uuid::Uuid;
 
 const BUILTIN_NAME: &str = "D&D 2024 · SRD 5.2.1";
 
+fn copy_destination_reason(campaigns: &Campaigns) -> Option<&'static str> {
+    (campaigns.modules().is_empty() && campaigns.all().is_empty())
+        .then_some("Add a campaign or a package to create entries.")
+}
+
 /// Who owns an entry, and so whether and where it can be saved.
 #[derive(Clone, Default, PartialEq, Debug)]
 enum Owner {
@@ -110,6 +115,42 @@ fn scope_label(ui: &egui::Ui, selected: &str, budget: f32) -> String {
     format!("{cut}…")
 }
 
+fn section_row(ui: &mut egui::Ui, label: &str, count: usize, selected: bool) -> egui::Response {
+    design::row(
+        ui,
+        Density::Read.row(),
+        selected,
+        &format!("{label}   {}", design::count(count, "", "").trim()),
+        |ui, rect| {
+            let c = colors();
+            let font = if selected { Type::Strong } else { Type::Body };
+            let galley = design::one_line(
+                ui,
+                label,
+                font.font(ui),
+                if selected { c.text } else { c.muted },
+                rect.width() - 44.0,
+            );
+            ui.painter().galley(
+                egui::pos2(
+                    rect.left() + design::S,
+                    rect.center().y - galley.size().y / 2.0,
+                ),
+                galley,
+                c.text,
+            );
+            design::number(
+                ui.painter(),
+                rect.right() - design::S,
+                rect.center().y,
+                design::count(count, "", "").trim(),
+                &Type::Small.font(ui),
+                c.muted,
+            );
+        },
+    )
+}
+
 /// What the catalogue shows. The default is what the active campaign can use.
 #[derive(Clone, Copy, Debug, Default, Hash, PartialEq)]
 enum Scope {
@@ -129,6 +170,25 @@ struct Note {
     owner: Owner,
 }
 impl Note {
+    fn unreadable_kind(&self) -> Section {
+        let declared = self
+            .text
+            .lines()
+            .find_map(|line| line.strip_prefix("splat_kind: "))
+            .map(|kind| Section::for_kind(kind.trim().trim_matches(['\'', '"'])))
+            .unwrap_or(Section::Unreadable);
+        if ![Section::Other, Section::Unreadable].contains(&declared) {
+            return declared;
+        }
+        self.text
+            .lines()
+            .find_map(|line| {
+                let kind = line.strip_prefix("splat_")?.split_once(':')?.0;
+                let section = Section::for_kind(kind);
+                (![Section::Other, Section::Unreadable].contains(&section)).then_some(section)
+            })
+            .unwrap_or(Section::Unreadable)
+    }
     fn name(&self) -> &str {
         self.entry.as_ref().map_or(&self.path, |e| &e.name)
     }
@@ -157,8 +217,54 @@ struct Loaded {
     uses: Option<std::collections::HashSet<Uuid>>,
     subtitles: std::sync::OnceLock<Vec<String>>,
     counts: std::sync::OnceLock<Vec<(Section, usize)>>,
+    duplicate_ids: std::sync::OnceLock<std::collections::HashSet<Uuid>>,
 }
 impl Loaded {
+    fn duplicate_ids(&self) -> &std::collections::HashSet<Uuid> {
+        self.duplicate_ids.get_or_init(|| {
+            let mut seen = std::collections::HashSet::new();
+            self.notes
+                .iter()
+                .filter_map(|note| note.entry.as_ref())
+                .filter_map(|entry| (!seen.insert(entry.id)).then_some(entry.id))
+                .collect()
+        })
+    }
+    fn dependents(&self, note: &Note) -> Vec<String> {
+        let Some(id) = crate::content_workspace::note_id(&note.text) else {
+            return Vec::new();
+        };
+        self.notes
+            .iter()
+            .filter_map(|other| {
+                let entry = other.entry.as_ref()?;
+                (entry.id != id
+                    && content::required_references(entry).is_ok_and(|refs| {
+                        refs.contains(&content::Reference::Id(id))
+                            || note
+                                .entry
+                                .as_ref()
+                                .and_then(|entry| entry.key.as_ref())
+                                .is_some_and(|key| {
+                                    refs.contains(&content::Reference::Key(key.clone()))
+                                })
+                    }))
+                .then(|| entry.name.clone())
+            })
+            .collect()
+    }
+    fn duplicates(&self, index: usize) -> Vec<usize> {
+        let Some(id) = self.notes[index].entry.as_ref().map(|entry| entry.id) else {
+            return Vec::new();
+        };
+        self.notes
+            .iter()
+            .enumerate()
+            .filter_map(|(i, note)| {
+                (i != index && note.entry.as_ref().is_some_and(|entry| entry.id == id)).then_some(i)
+            })
+            .collect()
+    }
     /// Checks all the loaded content as one, so that a reference can resolve to built-in
     /// content or to another package. The check of one package alone cannot see those.
     fn refresh_diagnostics(&mut self) {
@@ -212,6 +318,10 @@ impl Loaded {
                 None => true,
                 Some(uses) => {
                     matches!(note.owner, Owner::Campaign(_))
+                        || note
+                            .entry
+                            .as_ref()
+                            .is_some_and(|entry| self.duplicate_ids().contains(&entry.id))
                         || note.entry.as_ref().is_some_and(|e| uses.contains(&e.id))
                 }
             },
@@ -273,6 +383,7 @@ impl Loaded {
     fn invalidate(&mut self) {
         self.subtitles.take();
         self.counts.take();
+        self.duplicate_ids.take();
     }
     fn build_subtitles(&self) -> Vec<String> {
         let mut subtitles: Vec<_> = self
@@ -284,10 +395,26 @@ impl Loaded {
                     Owner::Package(module) => Some(module.name.as_str()),
                     Owner::Campaign(_) => Some("Campaign"),
                 };
-                let line = note
+                let line = note.entry.as_ref().map_or_else(
+                    || {
+                        let (_, line) =
+                            crate::campaign_content::repair_problem(&note.path, &note.text);
+                        line.map_or_else(
+                            || "Cannot be read".to_owned(),
+                            |line| format!("Line {line}"),
+                        )
+                    },
+                    presentation::subtitle,
+                );
+                let line = if note
                     .entry
                     .as_ref()
-                    .map_or_else(|| "Cannot be read".to_owned(), presentation::subtitle);
+                    .is_some_and(|entry| self.duplicate_ids().contains(&entry.id))
+                {
+                    format!("Duplicate identity · {}", note.path)
+                } else {
+                    line
+                };
                 presentation::list_subtitle(&line, source)
             })
             .collect();
@@ -930,6 +1057,13 @@ struct DependencyUndo {
     copied_text: String,
 }
 
+struct IdentityUndo {
+    root: PathBuf,
+    path: String,
+    before: String,
+    after: String,
+}
+
 #[derive(Default)]
 pub struct Library {
     /// The list should scroll to the selected entry, which arrived by a link.
@@ -939,6 +1073,7 @@ pub struct Library {
     /// The note's owner and path, and the discarded words.
     discarded: Option<(Option<Uuid>, String, String)>,
     discarded_note: Option<Note>,
+    identity_undo: Option<IdentityUndo>,
     /// A save was refused because the file changed. The draft waits for the DM's choice.
     disk_change: Option<DiskChange>,
     /// The note on screen was saved, and has not changed since.
@@ -964,6 +1099,7 @@ pub struct Library {
     search: String,
     matches: Option<(Section, String, Vec<usize>)>,
     section: Section,
+    unreadable_kind: Option<Section>,
     error: Option<String>,
     form: bool,
     path: String,
@@ -1064,6 +1200,62 @@ struct BackStep {
     search: String,
 }
 impl Library {
+    fn give_new_identity(&mut self) -> Result<(), String> {
+        let index = self.selected.ok_or("Open the copy first.")?;
+        let note = &self.loaded.as_ref().unwrap().notes[index];
+        let entry = note.entry.as_ref().ok_or("Repair this entry first.")?;
+        let root = note
+            .owner
+            .root()
+            .ok_or("Built-in entries are read only.")?
+            .to_path_buf();
+        let before = note.text.clone();
+        let id = Uuid::new_v4();
+        let redirected = crate::content_workspace::redirect_reference(&before, entry, id)?;
+        let after = crate::content_workspace::patch_fields(
+            &redirected,
+            &[
+                ("splat_id", Some(id.to_string().into())),
+                ("splat_key", None),
+            ],
+        )?;
+        let updated = write_note(&root, &note.path, Some(&before), &after)?;
+        self.identity_undo = Some(IdentityUndo {
+            root: root.clone(),
+            path: note.path.clone(),
+            before,
+            after: after.clone(),
+        });
+        let loaded = self.loaded.as_mut().unwrap();
+        loaded.notes[index].entry = Some(updated);
+        loaded.notes[index].text = after.clone();
+        loaded.invalidate();
+        loaded.refresh_diagnostics();
+        self.draft = after;
+        self.stale = true;
+        self.content_changed = Some(root);
+        Ok(())
+    }
+
+    fn undo_new_identity(&mut self) -> Result<(), String> {
+        let undo = self.identity_undo.as_ref().ok_or("Nothing to undo.")?;
+        write_note(&undo.root, &undo.path, Some(&undo.after), &undo.before)?;
+        self.stale = true;
+        self.content_changed = Some(undo.root.clone());
+        if let Some(index) = self.selected {
+            let note = &mut self.loaded.as_mut().unwrap().notes[index];
+            if note.path == undo.path && note.owner.root() == Some(undo.root.as_path()) {
+                note.text = undo.before.clone();
+                note.entry = Entry::parse(&note.path, &note.text).ok();
+                self.draft = note.text.clone();
+            }
+        }
+        self.identity_undo = None;
+        self.loaded.as_mut().unwrap().invalidate();
+        self.loaded.as_mut().unwrap().refresh_diagnostics();
+        Ok(())
+    }
+
     #[cfg(test)]
     pub(crate) fn selected_name(&self) -> Option<&str> {
         self.selected
@@ -1258,13 +1450,18 @@ impl Library {
                 .ok()
                 .and_then(|path| fs::read_to_string(path).ok());
             if text.as_deref() != Some(&note.text) {
-                let moved = text
-                    .is_none()
-                    .then(|| {
-                        crate::content_workspace::note_id(&note.text)
-                            .and_then(|id| moved_note(root, id, &note.path).ok().flatten())
-                    })
-                    .flatten();
+                let moved = (text.is_none()
+                    && self
+                        .loaded
+                        .as_ref()
+                        .unwrap()
+                        .duplicates(self.selected.unwrap())
+                        .is_empty())
+                .then(|| {
+                    crate::content_workspace::note_id(&note.text)
+                        .and_then(|id| moved_note(root, id, &note.path).ok().flatten())
+                })
+                .flatten();
                 self.disk_change = Some(DiskChange {
                     text: moved.as_ref().map(|(_, text)| text.clone()).or(text),
                     moved_to: moved.map(|(path, _)| path),
@@ -1725,47 +1922,53 @@ impl Library {
                                     if count == 0 {
                                         continue;
                                     }
-                                    let selected = self.section == section && !searching;
-                                    let label = section.label();
-                                    let response = design::row(
-                                        ui,
-                                        Density::Read.row(),
-                                        selected,
-                                        &format!(
-                                            "{label}   {}",
-                                            design::count(count, "", "").trim()
-                                        ),
-                                        |ui, rect| {
-                                            let c = colors();
-                                            let font =
-                                                if selected { Type::Strong } else { Type::Body };
-                                            let galley = design::one_line(
+                                    if section == Section::Unreadable {
+                                        for kind in Section::GROUPS
+                                            .iter()
+                                            .flat_map(|(_, sections)| sections.iter())
+                                            .copied()
+                                        {
+                                            let count = loaded
+                                                .notes
+                                                .iter()
+                                                .filter(|note| {
+                                                    note.error.is_some()
+                                                        && loaded.in_scope(note, scope)
+                                                        && note.unreadable_kind() == kind
+                                                })
+                                                .count();
+                                            if count == 0 {
+                                                continue;
+                                            }
+                                            let label = if kind == Section::Unreadable {
+                                                "Entries"
+                                            } else {
+                                                kind.label()
+                                            };
+                                            if section_row(
                                                 ui,
                                                 label,
-                                                font.font(ui),
-                                                if selected { c.text } else { c.muted },
-                                                rect.width() - 44.0,
-                                            );
-                                            ui.painter().galley(
-                                                egui::pos2(
-                                                    rect.left() + design::S,
-                                                    rect.center().y - galley.size().y / 2.0,
-                                                ),
-                                                galley,
-                                                c.text,
-                                            );
-                                            design::number(
-                                                ui.painter(),
-                                                rect.right() - design::S,
-                                                rect.center().y,
-                                                design::count(count, "", "").trim(),
-                                                &Type::Small.font(ui),
-                                                c.muted,
-                                            );
-                                        },
-                                    );
+                                                count,
+                                                self.section == section
+                                                    && self.unreadable_kind == Some(kind)
+                                                    && !searching,
+                                            )
+                                            .clicked()
+                                            {
+                                                self.section = section;
+                                                self.unreadable_kind = Some(kind);
+                                                self.matches = None;
+                                                self.search.clear();
+                                            }
+                                        }
+                                        continue;
+                                    }
+                                    let selected = self.section == section && !searching;
+                                    let label = section.label();
+                                    let response = section_row(ui, label, count, selected);
                                     if response.clicked() {
                                         self.section = section;
+                                        self.unreadable_kind = None;
                                         self.search.clear();
                                     }
                                 }
@@ -1798,7 +2001,15 @@ impl Library {
                 .notes
                 .iter()
                 .enumerate()
-                .filter(|(_, n)| loaded.in_scope(n, scope) && n.matches(self.section, &query))
+                .filter(|(_, n)| {
+                    loaded.in_scope(n, scope)
+                        && n.matches(self.section, &query)
+                        && (!query.is_empty()
+                            || self.section != Section::Unreadable
+                            || self
+                                .unreadable_kind
+                                .is_none_or(|kind| n.unreadable_kind() == kind))
+                })
                 .map(|(i, _)| i)
                 .collect();
             if !query.is_empty() {
@@ -2771,8 +2982,10 @@ impl Library {
         };
         let note = &self.loaded.as_ref().unwrap().notes[i];
         let mut file_gone = file_gone;
-        if file_gone
-            || note_path(note.owner.root().unwrap(), &note.path).is_ok_and(|path| !path.exists())
+        if self.loaded.as_ref().unwrap().duplicates(i).is_empty()
+            && (file_gone
+                || note_path(note.owner.root().unwrap(), &note.path)
+                    .is_ok_and(|path| !path.exists()))
         {
             let moved = crate::content_workspace::note_id(&note.text)
                 .map(|id| moved_note(note.owner.root().unwrap(), id, &note.path))
@@ -2819,7 +3032,11 @@ impl Library {
                 .any(|(other, n)| {
                     other != i
                         && n.entry.as_ref().is_some_and(|e| {
-                            e.id == entry.id || (entry.key.is_some() && e.key == entry.key)
+                            (e.id == entry.id
+                                && note.entry.as_ref().is_none_or(|old| old.id != entry.id))
+                                || (entry.key.is_some()
+                                    && e.key == entry.key
+                                    && note.entry.as_ref().is_none_or(|old| old.key != entry.key))
                         })
                 })
             {
@@ -2872,9 +3089,30 @@ impl Library {
     }
 
     fn editor_pane(&mut self, ui: &mut egui::Ui, subtitle: &str, campaigns: &Campaigns) {
+        let gone_notice = self.discarded_note.as_ref().map(|note| {
+            let names = self
+                .loaded
+                .as_ref()
+                .map(|loaded| loaded.dependents(note))
+                .unwrap_or_default();
+            if names.is_empty() {
+                format!("{} let go.", note.name())
+            } else {
+                format!(
+                    "{} let go. {} now needs a missing entry.",
+                    note.name(),
+                    name_list(&names)
+                )
+            }
+        });
         if self.discarded_note.is_some()
             && !self.dirty()
-            && design::draft_discarded(ui)
+            && design::message_with_action(
+                ui,
+                Tone::Info,
+                gone_notice.as_deref().unwrap(),
+                "Undo discard",
+            )
             && let Some((_, _, draft)) = self.discarded.take()
             && let Some(note) = self.discarded_note.take()
             && let Some(loaded) = self.loaded.as_mut()
@@ -2940,6 +3178,16 @@ impl Library {
         }
         let editable = note.owner.editable();
         let conflict = self.disk_change.is_some();
+        let duplicate_paths: Vec<_> = self
+            .loaded
+            .as_ref()
+            .unwrap()
+            .duplicates(i)
+            .iter()
+            .map(|&other| self.loaded.as_ref().unwrap().notes[other].path.clone())
+            .collect();
+        let mut new_identity = false;
+        let mut undo_identity = false;
         let editor_width = if conflict {
             ui.available_width()
         } else {
@@ -2979,6 +3227,9 @@ impl Library {
                 } else {
                     format!("Used here · {used} of {} entries", entries.len())
                 }
+            }
+            Owner::Package(module) if note.error.is_some() => {
+                format!("{} · Cannot be read", module.name)
             }
             Owner::Package(module) => format!(
                 "{} · {}",
@@ -3048,6 +3299,7 @@ impl Library {
             .entry
             .as_ref()
             .is_some_and(|e| !["package", "campaign", "reference"].contains(&e.kind.as_str()));
+        let copy_reason = draft_reason.or_else(|| copy_destination_reason(campaigns));
         let can_make = matches!(note.owner, Owner::Campaign(_))
             && note.entry.as_ref().is_some_and(|e| e.kind == "creature");
         let mut copy_clicked = false;
@@ -3118,7 +3370,7 @@ impl Library {
                         if can_copy {
                             copy_clicked = Action::quiet("Copy to…")
                                 .icon(icons::COPY)
-                                .blocked(draft_reason)
+                                .blocked(copy_reason)
                                 .show(ui)
                                 .clicked();
                         }
@@ -3138,7 +3390,7 @@ impl Library {
                     copy_clicked = Action::quiet("Copy to…")
                         .icon(icons::COPY)
                         .density(Density::Read)
-                        .blocked(draft_reason)
+                        .blocked(copy_reason)
                         .show(ui)
                         .clicked();
                 }
@@ -3184,6 +3436,11 @@ impl Library {
             }
         }
         if let Some(root) = note.owner.root() {
+            let moved_path = self
+                .disk_change
+                .as_ref()
+                .and_then(|change| change.moved_to.as_deref());
+            let shown_path = moved_path.unwrap_or(&note.path);
             let obsidian = matches!(note.owner, Owner::Campaign(_))
                 || root
                     .ancestors()
@@ -3226,7 +3483,7 @@ impl Library {
                     use_every = Some(module.clone());
                 }
                 if !file_below {
-                    crate::world::entry_file_parts(ui, root, &note.path, obsidian);
+                    crate::world::entry_file_parts(ui, root, shown_path, obsidian);
                 }
             };
             if file_below {
@@ -3235,7 +3492,15 @@ impl Library {
                 ui.horizontal(owner_line);
             }
             if file_below {
-                ui.horizontal(|ui| crate::world::entry_file_parts(ui, root, &note.path, obsidian));
+                ui.horizontal(|ui| crate::world::entry_file_parts(ui, root, shown_path, obsidian));
+            }
+            if moved_path.is_some() {
+                let from = Path::new(&note.path).parent().unwrap_or(Path::new(""));
+                ui.label(
+                    Type::Small
+                        .rich(ui, format!("moved from {}/", from.display()))
+                        .color(colors().muted),
+                );
             }
         } else {
             design::status(
@@ -3246,6 +3511,27 @@ impl Library {
                     color: d.read_only,
                 },
             );
+        }
+        if !duplicate_paths.is_empty() {
+            design::message(
+                ui,
+                Tone::Warning,
+                &format!(
+                    "Duplicate identity with {}. Treat this file as the copy to give it a new identity.",
+                    duplicate_paths.join(", ")
+                ),
+            );
+            new_identity = Action::quiet("Give the copy a new identity")
+                .blocked(draft_reason)
+                .show(ui)
+                .clicked();
+        }
+        if self.identity_undo.is_some() {
+            undo_identity = Action::quiet("Undo new identity")
+                .icon(icons::UNDO)
+                .blocked(draft_reason)
+                .show(ui)
+                .clicked();
         }
         // Save and Discard are one row, as far apart as the pane allows.
         if save_row && !conflict {
@@ -3288,28 +3574,40 @@ impl Library {
                     Type::Small.font(ui),
                 )
                 .size()
-                .y;
+                .y
+                .max(Density::Read.control() + design::XS);
             let (slot, _) =
                 ui.allocate_exact_size(egui::vec2(editor_width, height), egui::Sense::hover());
-            if let Some(reason) = draft_reason {
-                ui.scope_builder(
+            if draft_reason.is_some() || discard_is_for(self.discarded.as_ref(), note) {
+                let mut slot_ui = ui.new_child(
                     egui::UiBuilder::new()
                         .max_rect(slot)
-                        .layout(egui::Layout::left_to_right(egui::Align::Min)),
-                    |ui| {
-                        ui.add(
-                            egui::Label::new(Type::Small.rich(ui, reason).color(colors().muted))
-                                .wrap(),
-                        );
-                    },
+                        .layout(egui::Layout::left_to_right(egui::Align::Center)),
                 );
+                let ui = &mut slot_ui;
+                if discard_is_for(self.discarded.as_ref(), note) && self.draft == note.text {
+                    ui.label(Type::Small.rich(ui, "Draft discarded."));
+                    if Action::secondary("Undo discard")
+                        .density(Density::Read)
+                        .show(ui)
+                        .clicked()
+                        && let Some((_, _, text)) = self.discarded.take()
+                    {
+                        self.draft = text;
+                    }
+                } else if let Some(reason) = draft_reason {
+                    ui.add(
+                        egui::Label::new(Type::Small.rich(ui, reason).color(colors().muted)).wrap(),
+                    );
+                }
             }
         }
         // Live, because Discard in this same frame changed the draft.
         if self.draft != note.text {
             self.discarded = None;
         }
-        if discard_is_for(self.discarded.as_ref(), note)
+        if !save_row
+            && discard_is_for(self.discarded.as_ref(), note)
             && design::draft_discarded(ui)
             && let Some((_, _, text)) = self.discarded.take()
         {
@@ -3328,6 +3626,16 @@ impl Library {
                     "This entry's file has gone from disk. Your draft is safe here until you choose."
                 },
             );
+            if change.text.is_none() {
+                let names = self.loaded.as_ref().unwrap().dependents(note);
+                if !names.is_empty() {
+                    ui.label(
+                        Type::Small
+                            .rich(ui, format!("{} needs this entry.", name_list(&names)))
+                            .color(colors().muted),
+                    );
+                }
+            }
             ui.horizontal(|ui| {
                 let save_word = change.moved_to.as_ref().map_or_else(
                     || {
@@ -3437,7 +3745,9 @@ impl Library {
             .show(ui, |ui| {
                 if let Some(change) = &mut self.disk_change {
                     if let Some(text) = &change.text {
-                        design::draft_comparison(ui, &self.draft, text, (&note.path, text));
+                        let face = egui::TextStyle::Monospace.resolve(ui.style());
+                        let height = ui.fonts_mut(|fonts| fonts.row_height(&face));
+                        design::draft_comparison_styled(ui, &self.draft, text, (&note.path, text), face, height);
                     } else {
                         design::group_heading(ui, "Your draft", 0);
                         let mut draft = self.draft.as_str();
@@ -3689,6 +3999,16 @@ impl Library {
         if save {
             self.save_selected(file_gone);
         }
+        let identity_result = if new_identity {
+            self.give_new_identity()
+        } else if undo_identity {
+            self.undo_new_identity()
+        } else {
+            Ok(())
+        };
+        if let Err(error) = identity_result {
+            self.error = Some(error);
+        }
         if let Some(index) = open_link {
             if dirty {
                 // Keep the draft. The linked entry opens beside it, in Lookup.
@@ -3756,6 +4076,159 @@ mod tests {
             }),
             ..Default::default()
         }
+    }
+
+    #[test]
+    fn copying_without_a_destination_is_blocked() {
+        let campaigns = Campaigns::default();
+        assert_eq!(
+            copy_destination_reason(&campaigns),
+            Some("Add a campaign or a package to create entries.")
+        );
+    }
+
+    #[test]
+    fn duplicate_package_id_save_keeps_both_files() {
+        let temp = tempfile::tempdir().unwrap();
+        let module = create_module(&temp.path().join("package"), "Test", "test").unwrap();
+        let text = note_text("Wolf", "creature", None);
+        fs::write(module.path.join("Wolf.md"), &text).unwrap();
+        let copy = format!("{text}\nVariant on disk.\n");
+        fs::write(module.path.join("Wolf copy.md"), &copy).unwrap();
+        let loaded = load(Some(&module)).unwrap();
+        let selected = loaded
+            .notes
+            .iter()
+            .position(|n| n.path == "Wolf.md")
+            .unwrap();
+        let mut library = Library {
+            loaded: Some(loaded),
+            selected: Some(selected),
+            draft: format!("{text}\nEdited original.\n"),
+            ..Default::default()
+        };
+        library.save_selected(false);
+        assert!(library.error.is_none());
+        assert_eq!(
+            fs::read_to_string(module.path.join("Wolf.md")).unwrap(),
+            library.draft
+        );
+        assert_eq!(
+            fs::read_to_string(module.path.join("Wolf copy.md")).unwrap(),
+            copy
+        );
+        let id = crate::content_workspace::note_id(&text).unwrap();
+        let catalogue = Catalogue::load(std::slice::from_ref(&module), None).unwrap();
+        assert!(!catalogue.entries.contains_key(&id));
+        let closure = catalogue.closure(
+            &[crate::content_workspace::PackageSelection {
+                name: Some(module.name.clone()),
+                package: crate::content_workspace::EntryRef::id(module.id),
+                selection: crate::content_workspace::Selection::All,
+            }],
+            Uuid::new_v4(),
+        );
+        assert!(!closure.direct.contains(&id));
+        assert!(
+            closure
+                .errors
+                .iter()
+                .any(|error| error.contains("duplicate identity"))
+        );
+        assert!(
+            catalogue.unreadable[&id]
+                .word
+                .contains("duplicate identity")
+        );
+        let copy_index = library
+            .loaded
+            .as_ref()
+            .unwrap()
+            .notes
+            .iter()
+            .position(|n| n.path == "Wolf copy.md")
+            .unwrap();
+        library.selected = Some(copy_index);
+        library.draft = format!("{copy}\nEdited copy.\n");
+        library.save_selected(false);
+        let original = fs::read_to_string(module.path.join("Wolf.md")).unwrap();
+        let saved_copy = library.draft.clone();
+        library.give_new_identity().unwrap();
+        assert_ne!(crate::content_workspace::note_id(&library.draft), Some(id));
+        assert_eq!(
+            fs::read_to_string(module.path.join("Wolf.md")).unwrap(),
+            original
+        );
+        assert!(
+            Catalogue::load(std::slice::from_ref(&module), None)
+                .unwrap()
+                .entries
+                .contains_key(&id)
+        );
+        library.undo_new_identity().unwrap();
+        assert_eq!(
+            fs::read_to_string(module.path.join("Wolf copy.md")).unwrap(),
+            saved_copy
+        );
+        assert_eq!(
+            library
+                .loaded
+                .as_ref()
+                .unwrap()
+                .duplicates(copy_index)
+                .len(),
+            1
+        );
+        library.give_new_identity().unwrap();
+        fs::write(module.path.join("Wolf copy.md"), "A later disk edit.").unwrap();
+        assert!(library.undo_new_identity().is_err());
+        assert_eq!(
+            fs::read_to_string(module.path.join("Wolf copy.md")).unwrap(),
+            "A later disk edit."
+        );
+        assert_eq!(
+            fs::read_to_string(module.path.join("Wolf.md")).unwrap(),
+            original
+        );
+    }
+
+    #[test]
+    fn deleted_duplicate_is_not_treated_as_a_move_to_the_other_file() {
+        let temp = tempfile::tempdir().unwrap();
+        let module = create_module(&temp.path().join("package"), "Test", "test").unwrap();
+        let text = note_text("Wolf", "creature", None);
+        fs::write(module.path.join("Wolf.md"), &text).unwrap();
+        fs::write(module.path.join("Wolf copy.md"), &text).unwrap();
+        let loaded = load(Some(&module)).unwrap();
+        let selected = loaded
+            .notes
+            .iter()
+            .position(|note| note.path == "Wolf.md")
+            .unwrap();
+        let mut library = Library {
+            loaded: Some(loaded),
+            selected: Some(selected),
+            draft: format!("{text}\nMy draft.\n"),
+            ..Default::default()
+        };
+        fs::remove_file(module.path.join("Wolf.md")).unwrap();
+        library.refresh_destination(&module.path, &egui::Context::default());
+        assert!(library.disk_change.as_ref().unwrap().moved_to.is_none());
+        library.save_selected(false);
+        assert!(!module.path.join("Wolf.md").exists());
+        assert_eq!(
+            fs::read_to_string(module.path.join("Wolf copy.md")).unwrap(),
+            text
+        );
+        library.save_selected(true);
+        assert_eq!(
+            fs::read_to_string(module.path.join("Wolf.md")).unwrap(),
+            library.draft
+        );
+        assert_eq!(
+            fs::read_to_string(module.path.join("Wolf copy.md")).unwrap(),
+            text
+        );
     }
 
     #[test]

@@ -378,67 +378,14 @@ fn plan_summary(summary: &str) -> String {
 
 /// The recording count belongs to the tab's label and click target.
 fn recordings_tab(ui: &mut egui::Ui, shown: &mut Tab, count: usize) -> bool {
-    if count == 0 {
-        return design::segmented(ui, shown, &[(Tab::Recordings, "Recordings")]);
-    }
-    let c = colors();
-    let selected = *shown == Tab::Recordings;
-    let font = if selected { Type::Strong } else { Type::Body }.font(ui);
-    let color = if selected { c.text } else { c.muted };
-    let mut job = egui::text::LayoutJob::default();
-    job.append(
+    design::counted_tab(
+        ui,
+        shown,
+        Tab::Recordings,
         "Recordings",
-        0.0,
-        egui::TextFormat::simple(font.clone(), color),
-    );
-    job.append(
-        &format!(" {}", design::count(count, "", "")),
-        0.0,
-        egui::TextFormat::simple(font, c.muted),
-    );
-    let galley = ui.fonts_mut(|fonts| fonts.layout_job(job));
-    let (rect, response) = ui.allocate_exact_size(
-        egui::vec2(galley.size().x + 2.0 * design::S, Density::Read.control()),
-        egui::Sense::click(),
-    );
-    response.widget_info(|| {
-        egui::WidgetInfo::selected(
-            egui::WidgetType::SelectableLabel,
-            ui.is_enabled(),
-            selected,
-            format!(
-                "Recordings, {}",
-                design::count(count, "recording", "recordings")
-            ),
-        )
-    });
-    if ui.is_rect_visible(rect) {
-        if response.hovered() {
-            ui.painter()
-                .rect_filled(rect, design::RADIUS_CONTROL, c.hover);
-        }
-        ui.painter()
-            .galley(rect.center() - galley.size() / 2.0, galley, color);
-        if selected {
-            let inset = design::XS / 2.0;
-            ui.painter().rect_filled(
-                egui::Rect::from_min_max(
-                    egui::pos2(rect.left() + inset, rect.bottom() - inset),
-                    egui::pos2(rect.right() - inset, rect.bottom()),
-                ),
-                0.0,
-                c.accent,
-            );
-        }
-        if response.has_focus() {
-            design::focus_ring(ui, rect);
-        }
-    }
-    if response.clicked() && !selected {
-        *shown = Tab::Recordings;
-        return true;
-    }
-    false
+        count,
+        ("recording", "recordings"),
+    )
 }
 
 fn wrapped_words(ui: &mut egui::Ui, kind: Type, words: impl Into<String>, color: Color32) {

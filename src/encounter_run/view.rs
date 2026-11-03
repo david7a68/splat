@@ -2887,6 +2887,11 @@ impl Run {
     fn group_row(&mut self, ui: &mut egui::Ui, group: &super::RunGroup) -> bool {
         let c = colors();
         let name = &group.name;
+        let changed = group
+            .members
+            .iter()
+            .any(|member| !member.overrides.is_empty());
+        let change_hint = if changed { " Changed." } else { "" };
         let creatures = group.creature_count();
         let grip = ui.allocate_response(
             vec2(ui.available_width(), Density::Read.control()),
@@ -2897,7 +2902,10 @@ impl Run {
             egui::WidgetInfo::labeled(
                 egui::WidgetType::Other,
                 true,
-                format!("Drag {name} to the initiative list"),
+                format!(
+                    "Drag {name} to the initiative list{}",
+                    if changed { ". Changed." } else { "" }
+                ),
             )
         });
         let totals = ui.painter().text(
@@ -2939,7 +2947,7 @@ impl Run {
             .filter(|_| group.encounter != self.source)
             .map_or_else(String::new, |name| format!("For {name}. "));
         let grip = grip.on_hover_text(format!(
-            "{name}. {context}{} {}",
+            "{name}.{change_hint} {context}{} {}",
             group.notes.trim(),
             self.initiative.grouping.arrival_rule()
         ));
@@ -2965,7 +2973,11 @@ impl Run {
                 painter.galley(place, galley, c.accent);
             }
         }
-        let members = group.member_summary_wrapped();
+        let members = if changed {
+            format!("Changed · {}", group.member_summary_wrapped())
+        } else {
+            group.member_summary_wrapped()
+        };
         let added = self
             .state
             .participants

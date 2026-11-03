@@ -149,8 +149,8 @@ pub(super) fn use_vital(
     let mut stats = entry.fields["splat_stats"].clone();
     stats[key]["value"] = value.into();
     let changed = splat::content::patch_fields(text, &[("splat_stats", Some(stats))])?;
-    Entry::parse(&entry.path, &changed)?;
-    Ok(changed)
+    let updated = Entry::parse(&entry.path, &changed)?;
+    crate::content_workspace::creature_copy_fields(&changed, &updated)
 }
 fn value(entry: &Entry, key: &str) -> String {
     stat(entry, key).map_or_else(|| "—".into(), |v| v.to_string())
@@ -754,6 +754,22 @@ mod tests {
         assert_eq!(stat(&entry, "max_hp"), Some(45));
         assert!(!without_vitals(&entry, &entry.body).contains("**Hit Points**"));
         assert!(!crate::library::note_text("New", "creature", None).contains("**Hit Points**"));
+    }
+
+    #[test]
+    fn copied_stat_action_keeps_one_line_per_stat_in_book_order() {
+        let source =
+            splat::content::definitions::source_file("definitions/creatures/aboleth.md").unwrap();
+        let entry = Entry::parse("Aboleth.md", source).unwrap();
+        let text = crate::content_workspace::creature_copy_fields(source, &entry).unwrap();
+        let entry = Entry::parse("Aboleth.md", &text).unwrap();
+        let changed = use_vital(&text, &entry, "max_hp", 180).unwrap();
+        assert!(
+            changed.contains("splat_stats:\n  max_hp: {value: 180}\n"),
+            "{}",
+            changed.chars().take(1800).collect::<String>()
+        );
+        assert!(!changed.contains("    value:"));
     }
 
     #[test]

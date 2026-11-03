@@ -251,6 +251,7 @@ pub struct Catalogue {
     keys: BTreeMap<String, Uuid>,
     pub errors: Vec<String>,
     pub unreadable: BTreeMap<Uuid, UnreadableNote>,
+    duplicate_ids: BTreeSet<Uuid>,
     files: BTreeMap<Uuid, (PathBuf, String)>,
     namespaces: BTreeSet<String>,
     neighbours: BTreeMap<String, String>,
@@ -287,6 +288,38 @@ fn needed_by(names: &BTreeSet<String>) -> String {
     }
 }
 impl Catalogue {
+    fn insert_file(
+        &mut self,
+        entry: Entry,
+        owner: Uuid,
+        private: bool,
+        root: &Path,
+    ) -> Result<(), String> {
+        let path = note_path(root, &entry.path)?;
+        if self.entries.contains_key(&entry.id) || self.duplicate_ids.contains(&entry.id) {
+            self.duplicate_ids.insert(entry.id);
+            self.entries.remove(&entry.id);
+            self.files.remove(&entry.id);
+            self.keys.retain(|_, id| *id != entry.id);
+            let word = format!(
+                "{} has a duplicate identity. Give the copy a new identity in Library.",
+                entry.name
+            );
+            self.errors.push(word.clone());
+            self.unreadable
+                .insert(entry.id, UnreadableNote { path, word });
+            return Ok(());
+        }
+        self.files.insert(
+            entry.id,
+            (
+                path.clone(),
+                fs::read_to_string(&path).map_err(|e| e.to_string())?,
+            ),
+        );
+        self.insert(entry, owner, private)
+    }
+
     fn remember_unreadable(&mut self, root: &Path, errors: &[content::Diagnostic]) {
         for error in errors {
             let Ok(path) = note_path(root, &error.path) else {
@@ -429,15 +462,7 @@ impl Catalogue {
             let ids = entries.iter().map(|e| e.id).collect();
             let name = manifests[0].name.clone();
             for entry in entries {
-                let path = note_path(&module.path, &entry.path)?;
-                result.files.insert(
-                    entry.id,
-                    (
-                        path.clone(),
-                        fs::read_to_string(&path).map_err(|e| e.to_string())?,
-                    ),
-                );
-                result.insert(entry, module.id, false)?;
+                result.insert_file(entry, module.id, false, &module.path)?;
             }
             result.modules.push(ModuleIndex {
                 id: module.id,
@@ -476,21 +501,13 @@ impl Catalogue {
                         return Err(format!("Duplicate owner namespace: {ns}"));
                     }
                 }
-                let path = note_path(&campaign.path, &entry.path)?;
-                result.files.insert(
-                    entry.id,
-                    (
-                        path.clone(),
-                        fs::read_to_string(&path).map_err(|e| e.to_string())?,
-                    ),
-                );
                 // The campaign package is private to this campaign, like its other notes.
                 let package = manifest
                     .as_ref()
                     .filter(|_| campaign_package::in_folder(&entry.path))
                     .map(|(id, _)| *id);
                 package_entries.extend(package.map(|_| entry.id));
-                result.insert(entry, package.unwrap_or(campaign.id), true)?;
+                result.insert_file(entry, package.unwrap_or(campaign.id), true, &campaign.path)?;
             }
             if let Some((id, name)) = manifest {
                 result.modules.push(ModuleIndex {
@@ -526,7 +543,17 @@ impl Catalogue {
                 }
             };
             match &selection.selection {
-                Selection::All => result.direct.extend(module.entries.iter().copied()),
+                Selection::All => {
+                    for &id in &module.entries {
+                        if self.entries.contains_key(&id) {
+                            result.direct.insert(id);
+                        } else if let Some(note) = self.unreadable.get(&id)
+                            && !result.errors.contains(&note.word)
+                        {
+                            result.errors.push(note.word.clone());
+                        }
+                    }
+                }
                 Selection::Selected { entries } => {
                     for reference in entries {
                         match self.resolve_ref(reference) {
@@ -1009,7 +1036,7 @@ pub struct CopyPlan {
 }
 
 /// Copies use the same creature fields as a new note. Keep every prose block.
-fn creature_copy_fields(text: &str, entry: &Entry) -> Result<String, String> {
+pub(crate) fn creature_copy_fields(text: &str, entry: &Entry) -> Result<String, String> {
     use pulldown_cmark::{Event, Options, Parser, Tag, TagEnd};
     if entry.kind != "creature" {
         return Ok(text.to_owned());
@@ -1053,7 +1080,101 @@ fn creature_copy_fields(text: &str, entry: &Entry) -> Result<String, String> {
                 .map(|value| (key, Some(value.clone())))
         })
         .collect();
-    patch_fields(&output, &changes)
+    let mut output = patch_fields(&output, &changes)?;
+    for (key, order) in [
+        (
+            "splat_creature",
+            &["size", "type", "alignment", "cr_text"][..],
+        ),
+        (
+            "splat_stats",
+            &[
+                "max_hp",
+                "armor_class",
+                "initiative",
+                "speed",
+                "strength",
+                "dexterity",
+                "constitution",
+                "intelligence",
+                "wisdom",
+                "charisma",
+                "save_strength",
+                "save_dexterity",
+                "save_constitution",
+                "save_intelligence",
+                "save_wisdom",
+                "save_charisma",
+            ][..],
+        ),
+    ] {
+        let Some(map) = entry.fields.get(key).and_then(Value::as_mapping) else {
+            continue;
+        };
+        if map.is_empty() {
+            continue;
+        }
+        let start = output
+            .find(&format!("\n{key}:\n"))
+            .ok_or("Missing creature fields")?
+            + 1;
+        let end = output[start..].find('\n').unwrap() + start + 1;
+        let length = output[end..]
+            .split_inclusive('\n')
+            .take_while(|line| line.starts_with(' '))
+            .map(str::len)
+            .sum::<usize>();
+        let mut keys: Vec<_> = map.keys().filter_map(Value::as_str).collect();
+        keys.sort_by_key(|name| {
+            (
+                order
+                    .iter()
+                    .position(|key| key == name)
+                    .unwrap_or(order.len()),
+                *name,
+            )
+        });
+        let mut block = format!("{key}:\n");
+        for name in keys {
+            block.push_str(&format!("  {name}: {}\n", flow_yaml(&map[name])?));
+        }
+        output.replace_range(start..end + length, &block);
+    }
+    Ok(output)
+}
+
+fn flow_yaml(value: &Value) -> Result<String, String> {
+    Ok(match value {
+        Value::String(text) => serde_json::to_string(text).map_err(|e| e.to_string())?,
+        Value::Mapping(map) => format!(
+            "{{{}}}",
+            map.iter()
+                .map(|(key, value)| {
+                    let key = key
+                        .as_str()
+                        .filter(|key| {
+                            !key.is_empty()
+                                && key.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
+                        })
+                        .map_or_else(|| flow_yaml(key), |key| Ok(key.to_owned()))?;
+                    Ok(format!("{key}: {}", flow_yaml(value)?))
+                })
+                .collect::<Result<Vec<_>, String>>()?
+                .join(", ")
+        ),
+        Value::Sequence(items) => format!(
+            "[{}]",
+            items
+                .iter()
+                .map(flow_yaml)
+                .collect::<Result<Vec<_>, _>>()?
+                .join(", ")
+        ),
+        _ => serde_yaml_ng::to_string(value)
+            .map_err(|e| e.to_string())?
+            .trim()
+            .to_owned(),
+    })
 }
 
 impl CopyPlan {
@@ -1398,6 +1519,34 @@ mod tests {
         let plan =
             CopyPlan::prepare(&source, temp.path(), None, "Watch Aboleth", "", &catalogue).unwrap();
         let copied = Entry::parse(&plan.relative, &plan.text).unwrap();
+        let stats = plan.text.split("splat_stats:\n").nth(1).unwrap();
+        assert!(stats.starts_with("  max_hp: {value: 150}\n"));
+        let names: Vec<_> = stats
+            .lines()
+            .take_while(|line| line.starts_with(' '))
+            .map(|line| {
+                assert!(
+                    line.starts_with("  ") && !line.starts_with("    "),
+                    "one line per stat: {line}"
+                );
+                line.trim().split(':').next().unwrap()
+            })
+            .collect();
+        assert_eq!(
+            &names[..10],
+            &[
+                "max_hp",
+                "armor_class",
+                "initiative",
+                "speed",
+                "strength",
+                "dexterity",
+                "constitution",
+                "intelligence",
+                "wisdom",
+                "charisma"
+            ]
+        );
         for key in ["splat_creature", "splat_stats"] {
             assert_eq!(copied.fields.get(key), source.entry.fields.get(key));
             assert!(
