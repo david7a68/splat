@@ -8,6 +8,6 @@ dnd2024:class_features/bard_level_3_bard_subclass:
       Choose a Bard subclass. Your subclass grants additional features as you gain Bard levels.
 
       You gain all features from your chosen subclass whose required level is equal to or below your Bard level.
-    related_heading: Available in this package
+    related_heading: Subclasses
     related:
       dnd2024:subclasses/bard_college_of_lore: College of Lore

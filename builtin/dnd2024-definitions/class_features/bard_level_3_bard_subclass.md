@@ -17,7 +17,7 @@ splat_reading:
 
     You gain all features from your chosen subclass whose required level is equal to or below your Bard
     level.'
-  related_heading: Available in this package
+  related_heading: Subclasses
   related:
     dnd2024:subclasses/bard_college_of_lore: College of Lore
 ---

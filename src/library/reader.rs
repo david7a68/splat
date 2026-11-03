@@ -273,7 +273,9 @@ pub(super) fn show(
     builtin: bool,
     has_summary: bool,
 ) {
-    ui.add_space(crate::design::S);
+    if !has_summary {
+        ui.add_space(crate::design::L);
+    }
     if let Some(entry) = entry {
         let printed = sections
             .iter()
@@ -317,18 +319,13 @@ pub(super) fn show(
                         style::identity(ui, &identity);
                     }
                 }
-                let (cards, details): (Vec<_>, Vec<_>) =
-                    facts.into_iter().partition(|(label, value)| {
-                        !matches!(
-                            label.as_str(),
-                            "Components" | "Equipment" | "Prerequisites" | "Prerequisite"
-                        ) && value.len() < 70
-                    });
-                style::facts(ui, &cards);
-                for (label, value) in details {
-                    style::detail(ui, &label, &value);
-                }
-                ui.add_space(crate::design::S);
+                ui.scope(|ui| {
+                    ui.spacing_mut().item_spacing.y = crate::design::XS / 2.0;
+                    for (label, value) in facts {
+                        style::detail(ui, &label, &value);
+                    }
+                });
+                ui.add_space(crate::design::M);
                 style::source_prose(ui, &presentation::overview_markdown(&prose));
             } else {
                 // An intro has no printed heading, so the reader adds none.

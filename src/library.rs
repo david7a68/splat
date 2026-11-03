@@ -78,6 +78,19 @@ fn reader_subtitle(owner: &Owner, listed: &str, class_level: Option<String>) -> 
     }
 }
 
+fn scope_label(ui: &egui::Ui, selected: &str, budget: f32) -> String {
+    let font = Type::Strong.font(ui);
+    let fitted = design::words_that_fit(ui, selected, &font, budget);
+    if design::number_width(ui, &fitted, &font) <= budget {
+        return fitted;
+    }
+    let mut cut = fitted.trim_end_matches('…').to_owned();
+    while !cut.is_empty() && design::number_width(ui, &format!("{cut}…"), &font) > budget {
+        cut.pop();
+    }
+    format!("{cut}…")
+}
+
 /// What the catalogue shows. The default is what the active campaign can use.
 #[derive(Clone, Copy, Debug, Default, Hash, PartialEq)]
 enum Scope {
@@ -150,6 +163,20 @@ impl Loaded {
                     .filter_map(|n| n.error.as_ref().map(|e| format!("{}: {e}", n.path))),
             )
             .collect();
+        for note in self
+            .notes
+            .iter()
+            .filter(|note| note.owner != Owner::Builtin)
+        {
+            if let Some(entry) = &note.entry
+                && let Some((old, _)) = presentation::heading_fix(&note.text, entry)
+            {
+                self.diagnostics.push(format!(
+                    "{}: The first heading says {old}, but the name is {}.",
+                    note.path, entry.name
+                ));
+            }
+        }
     }
 
     fn in_scope(&self, note: &Note, scope: Scope) -> bool {
@@ -404,9 +431,16 @@ pub(crate) fn note_text(name: &str, kind: &str, namespace: Option<&str>) -> Stri
     }
     if kind == "creature" {
         fields.insert(
+            "splat_creature".into(),
+            serde_yaml_ng::from_str::<serde_yaml_ng::Value>(
+                "size: medium\ntype: humanoid\nalignment: neutral\ncr_text: '1 (XP 200; PB +2)'\n",
+            )
+            .expect("creature identity"),
+        );
+        fields.insert(
             "splat_stats".into(),
             serde_yaml_ng::from_str::<serde_yaml_ng::Value>(
-                "max_hp: {value: 1}\narmor_class: {value: 10}\ninitiative: {value: 0}\n",
+                "max_hp: {value: 1}\narmor_class: {value: 10}\ninitiative: {value: 0}\nspeed: {value: 30, unit: ft}\nstrength: {value: 10}\ndexterity: {value: 10}\nconstitution: {value: 10}\nintelligence: {value: 10}\nwisdom: {value: 10}\ncharisma: {value: 10}\n",
             )
             .expect("creature fields"),
         );
@@ -425,7 +459,7 @@ pub(crate) fn note_text(name: &str, kind: &str, namespace: Option<&str>) -> Stri
         yaml,
         name,
         if kind == "creature" {
-            "Medium Humanoid, Neutral\n\nSpeed 30 ft.\n\nStr 10 (+0) Dex 10 (+0) Con 10 (+0) Int 10 (+0) Wis 10 (+0) Cha 10 (+0)\n\nCR 1 (XP 200; PB +2)\n\n## Traits\n\n**Trait.** Describe the trait.\n\n## Actions\n\n**Attack.** Describe the attack.\n\n"
+            "## Traits\n\n**Trait.** Describe the trait.\n\n## Actions\n\n**Attack.** Describe the attack.\n\n"
         } else if kind == "spell" {
             "Level 1 Evocation\n\n**Casting Time:** Action\n\n**Range:** 60 feet\n\n**Components:** V, S\n\n**Duration:** Instantaneous\n\nDescribe the spell.\n"
         } else if kind == "item" {
@@ -488,7 +522,6 @@ pub(crate) fn folder_field(
         Some("Type a new folder, or choose one. New folders are made when you save."),
         None,
         |ui| {
-            ui.set_max_width(ui.available_width() - design::S);
             egui::Frame::new()
                 .fill(colors().well)
                 .stroke(egui::Stroke::new(
@@ -496,16 +529,16 @@ pub(crate) fn folder_field(
                     colors().field_border,
                 ))
                 .corner_radius(design::RADIUS_CONTROL as u8)
-                .inner_margin(egui::Margin::symmetric(design::XS as i8, 0))
+                .inner_margin(egui::Margin::symmetric(design::S as i8, 0))
                 .show(ui, |ui| {
                     ui.horizontal(|ui| {
-                        let width = (ui.available_width()
-                            - Action::quiet("").icon(icons::DOWN).natural_width(ui)
-                            - ui.spacing().item_spacing.x)
-                            .max(design::XXL);
+                        let width =
+                            (ui.available_width() - design::XL - ui.spacing().item_spacing.x)
+                                .max(design::XXL);
                         let response = ui.add(
                             egui::TextEdit::singleline(value)
                                 .frame(false)
+                                .font(Type::Strong.font(ui))
                                 .margin(egui::Vec2::ZERO)
                                 .desired_width(width)
                                 .min_size(egui::vec2(width, design::XL))
@@ -877,6 +910,7 @@ pub struct Library {
     selection_undo: Option<SelectionUndo>,
     link_choices: Vec<Uuid>,
     vital_undo: Option<(String, String, String)>,
+    heading_undo: Option<(String, String, String)>,
 }
 /// Sort so that "Level 2" comes before "Level 18".
 fn natural_key(name: &str) -> Vec<(String, u64)> {
@@ -1693,6 +1727,15 @@ impl Library {
                 }
                 if matches.is_empty() {
                     ui.add_space(design::S);
+                    if let Scope::Package(id) = scope && !searching
+                        && !loaded.notes.iter().any(|note| note.owner.id() == Some(id) && note.entry.as_ref().is_some_and(|entry| entry.kind != "package")) {
+                        let name = campaigns.modules().iter().find(|m| m.id == id).map_or("this package", |m| m.name.as_str());
+                        let mut create = false;
+                        design::empty_state(ui, icons::LIBRARY, &format!("No entries in {name} yet."), "Create the first entry.", |ui| {
+                            create = Action::secondary("New entry").icon(icons::ADD).show(ui).clicked();
+                        });
+                        if create { self.new_form = true; self.focus_new_name = true; self.new_kind = "creature".into(); }
+                    } else {
                     let text = if scope == Scope::Campaign && !searching {
                         "No campaign entries yet. Copy an entry here with Copy to…, or create one with New entry."
                     } else if searching {
@@ -1703,6 +1746,7 @@ impl Library {
                     ui.add(
                         egui::Label::new(Type::Body.rich(ui, text).color(colors().muted)).wrap(),
                     );
+                    }
                 }
                 ui.spacing_mut().item_spacing.y = 0.0;
                 let mut list = egui::ScrollArea::vertical()
@@ -1831,17 +1875,8 @@ impl Library {
                 Scope::Campaign => "Own entries".to_owned(),
                 _ => label(scope),
             };
-            let font = Type::Strong.font(ui);
             let budget = width - design::XXL - design::L;
-            let mut fitted = selected.clone();
-            if design::number_width(ui, &selected, &font) > budget {
-                let room = budget - design::number_width(ui, "…", &font);
-                fitted = design::words_that_fit(ui, &selected, &font, room);
-                while !fitted.is_empty() && design::number_width(ui, &fitted, &font) > room {
-                    fitted.pop();
-                }
-                fitted.push('…');
-            }
+            let fitted = scope_label(ui, &selected, budget);
             let combo = egui::ComboBox::from_id_salt("library_scope")
                 .icon(design::combo_icon)
                 .width(width)
@@ -1980,13 +2015,15 @@ impl Library {
                 ui.set_max_width(ui.available_width().min(design::FORM_WIDTH));
                 ui.horizontal(|ui| {
                     design::group_label(ui, "Manage packages");
-                    if Action::quiet("Close")
-                        .name("Close the package form")
-                        .show(ui)
-                        .clicked()
-                    {
-                        self.form = false;
-                    }
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        if Action::quiet("Close")
+                            .name("Close the package form")
+                            .show(ui)
+                            .clicked()
+                        {
+                            self.form = false;
+                        }
+                    });
                 });
                 design::group_label(ui, "Add a package folder");
                 ui.horizontal(|ui| {
@@ -1995,7 +2032,10 @@ impl Library {
                         "Package folder",
                         &mut self.path,
                         "Choose a folder",
-                        (ui.available_width() - design::XXL * 3.0).max(design::XXL),
+                        (ui.available_width()
+                            - Action::secondary("Browse…").natural_width(ui)
+                            - ui.spacing().item_spacing.x)
+                            .max(design::XXL),
                     );
                     if Action::secondary("Browse…")
                         .blocked(locked)
@@ -2279,7 +2319,7 @@ impl Library {
             design::group_label(ui, "New entry");
             ui.label(
                 Type::Small
-                    .rich(ui, "Creates the note, then opens it in the editor.")
+                    .rich(ui, "Creates the entry, then opens it in the editor.")
                     .color(colors().muted),
             );
             ui.vertical(|ui| {
@@ -2735,12 +2775,51 @@ impl Library {
         let save_row = editable && (self.source || dirty);
         let mut go_back =
             ui.input_mut(|input| input.consume_key(egui::Modifiers::ALT, egui::Key::ArrowLeft));
-        ui.horizontal_wrapped(|ui| {
+        let can_copy = note
+            .entry
+            .as_ref()
+            .is_some_and(|e| !["package", "campaign", "reference"].contains(&e.kind.as_str()));
+        let can_make = matches!(note.owner, Owner::Campaign(_))
+            && note.entry.as_ref().is_some_and(|e| e.kind == "creature");
+        let mut copy_clicked = false;
+        let mut make_clicked = false;
+        let back = Action::quiet("Back")
+            .icon(icons::BACK)
+            .density(Density::Read);
+        let edit_label = if editable {
+            "Edit Markdown"
+        } else {
+            "Markdown source"
+        };
+        let base_width = Action::quiet("Read").natural_width(ui)
+            + Action::quiet(edit_label).natural_width(ui)
+            + if self.history.is_empty() {
+                0.0
+            } else {
+                back.natural_width(ui) + design::S
+            };
+        let extras = if can_copy {
+            Action::quiet("Copy to…")
+                .icon(icons::COPY)
+                .density(Density::Read)
+                .natural_width(ui)
+                + design::S
+        } else {
+            0.0
+        } + if can_make {
+            Action::quiet("Make NPC note").natural_width(ui) + design::S
+        } else {
+            0.0
+        };
+        let with_key = base_width
+            + extras
+            + design::number_width(ui, "Alt+Left", &Type::Small.font(ui))
+            + design::L;
+        let show_key = with_key <= ui.available_width();
+        let overflow = base_width + extras > ui.available_width();
+        ui.horizontal(|ui| {
             if !self.history.is_empty()
-                && Action::quiet("Back")
-                    .icon(icons::BACK)
-                    .density(Density::Read)
-                    .key("Alt+Left")
+                && (if show_key { back.key("Alt+Left") } else { back })
                     .hint(
                         "Return to the entry before this link. During a draft, read it in Lookup.",
                     )
@@ -2759,41 +2838,46 @@ impl Library {
             if self.source != was_source {
                 self.scope_notice = None;
             }
-            if note
-                .entry
-                .as_ref()
-                .is_some_and(|e| !["package", "campaign", "reference"].contains(&e.kind.as_str()))
-                && Action::quiet("Copy to…")
-                    .icon(icons::COPY)
-                    .density(Density::Read)
-                    .blocked(draft_reason)
-                    .show(ui)
-                    .clicked()
-            {
-                self.copy = Some(crate::content_workspace::CopySource {
-                    entry: note.entry.as_ref().unwrap().clone(),
-                    text: note.text.clone(),
-                    root: note.owner.root().map(Path::to_path_buf),
-                    campaign: match &note.owner {
-                        Owner::Campaign(campaign) => Some(campaign.clone()),
-                        _ => None,
-                    },
+            if overflow {
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    egui::containers::menu::MenuButton::from_button(
+                        egui::Button::new(Type::Strong.rich(ui, "More"))
+                            .frame(false)
+                            .min_size(egui::vec2(0.0, Density::Read.control())),
+                    )
+                    .ui(ui, |ui| {
+                        if can_copy {
+                            copy_clicked = Action::quiet("Copy to…")
+                                .icon(icons::COPY)
+                                .blocked(draft_reason)
+                                .show(ui)
+                                .clicked();
+                        }
+                        if can_make {
+                            make_clicked = Action::quiet("Make NPC note")
+                                .blocked(draft_reason)
+                                .show(ui)
+                                .clicked();
+                        }
+                        if copy_clicked || make_clicked {
+                            ui.close();
+                        }
+                    });
                 });
-            }
-            if let (Owner::Campaign(campaign), Some(entry)) = (&note.owner, &note.entry)
-                && entry.kind == "creature"
-                && Action::quiet("Make NPC note")
-                    .blocked(draft_reason)
-                    .show(ui)
-                    .clicked()
-            {
-                match crate::world::make_npc_note(campaign, entry) {
-                    Ok(id) => {
-                        self.stale = true;
-                        self.content_changed = Some(campaign.path.clone());
-                        self.open_world_npc = Some(id);
-                    }
-                    Err(error) => self.error = Some(error),
+            } else {
+                if can_copy {
+                    copy_clicked = Action::quiet("Copy to…")
+                        .icon(icons::COPY)
+                        .density(Density::Read)
+                        .blocked(draft_reason)
+                        .show(ui)
+                        .clicked();
+                }
+                if can_make {
+                    make_clicked = Action::quiet("Make NPC note")
+                        .blocked(draft_reason)
+                        .show(ui)
+                        .clicked();
                 }
             }
             if let Owner::Package(module) = &note.owner
@@ -2808,6 +2892,28 @@ impl Library {
                 self.use_entry = Some((module.id, entry.id));
             }
         });
+        if copy_clicked {
+            self.copy = Some(crate::content_workspace::CopySource {
+                entry: note.entry.as_ref().unwrap().clone(),
+                text: note.text.clone(),
+                root: note.owner.root().map(Path::to_path_buf),
+                campaign: match &note.owner {
+                    Owner::Campaign(campaign) => Some(campaign.clone()),
+                    _ => None,
+                },
+            });
+        }
+        if make_clicked && let (Owner::Campaign(campaign), Some(entry)) = (&note.owner, &note.entry)
+        {
+            match crate::world::make_npc_note(campaign, entry) {
+                Ok(id) => {
+                    self.stale = true;
+                    self.content_changed = Some(campaign.path.clone());
+                    self.open_world_npc = Some(id);
+                }
+                Err(error) => self.error = Some(error),
+            }
+        }
         if let Some(root) = note.owner.root() {
             let obsidian = matches!(note.owner, Owner::Campaign(_))
                 || root
@@ -2893,14 +2999,7 @@ impl Library {
                     .show(ui)
                     .clicked();
                     ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
-                        design::status(ui, state);
-                        if dirty
-                            && !conflict
-                            && Action::quiet("Discard")
-                                .density(Density::Read)
-                                .show(ui)
-                                .clicked()
-                        {
+                        if design::save_row_state(ui, state, dirty && !conflict, None) {
                             self.discarded =
                                 Some((note.owner.id(), note.path.clone(), self.draft.clone()));
                             self.draft = note.text.clone();
@@ -2960,6 +3059,38 @@ impl Library {
         }
         if let Some(error) = &note.error {
             design::message_with_code(ui, Tone::Error, error);
+        }
+        if editable
+            && !conflict
+            && let Ok(entry) = &parsed
+        {
+            if let Some((old, after)) = presentation::heading_fix(&self.draft, entry)
+                && design::message_with_action(
+                    ui,
+                    Tone::Warning,
+                    &format!(
+                        "The first heading says {old}, but the name is {}.",
+                        entry.name
+                    ),
+                    &format!("Use {}", entry.name),
+                )
+            {
+                self.heading_undo = Some((note.path.clone(), self.draft.clone(), after.clone()));
+                self.draft = after;
+                save = true;
+            }
+            if let Some((path, before, after)) = &self.heading_undo
+                && path == &note.path
+                && after == &self.draft
+                && Action::quiet("Undo heading change")
+                    .icon(icons::UNDO)
+                    .show(ui)
+                    .clicked()
+            {
+                self.draft = before.clone();
+                self.heading_undo = None;
+                save = true;
+            }
         }
         if self.source && !conflict {
             if editable && let Ok(entry) = &parsed {
@@ -3034,7 +3165,11 @@ impl Library {
                             if !about {
                                 ui.label(Type::Small.rich(ui, format!("Library / {}", note.section().label())).color(colors().muted));
                             }
-                            let subtitle = reading_subtitle.as_str();
+                            let reading_subtitle = match &note.owner {
+                                Owner::Package(module) => reading_subtitle.strip_suffix(&format!(" · {}", module.name)).unwrap_or(&reading_subtitle),
+                                _ => &reading_subtitle,
+                            };
+                            let subtitle = reading_subtitle;
                             let subtitle = subtitle.strip_suffix(" · Campaign").unwrap_or(subtitle);
                             let subtitle = if subtitle == "Campaign" { note.section().label().trim_end_matches('s') } else { subtitle };
                             view::title_with_art(ui, title, subtitle, parsed.as_ref().ok());
@@ -3305,6 +3440,69 @@ mod tests {
             }),
             ..Default::default()
         }
+    }
+
+    #[test]
+    fn scope_picker_cuts_two_words_with_one_ellipsis() {
+        let ctx = egui::Context::default();
+        let _ = ctx.run(Default::default(), |ctx| {
+            egui::CentralPanel::default().show(ctx, |ui| {
+                let budget = design::number_width(ui, "Ashen…", &Type::Strong.font(ui));
+                assert_eq!(scope_label(ui, "Ashen Marches", budget), "Ashen…");
+                assert_eq!(
+                    scope_label(ui, "Ashen Marches", budget / 2.0)
+                        .matches('…')
+                        .count(),
+                    1
+                );
+            });
+        });
+    }
+
+    #[test]
+    fn creature_template_uses_fields_on_every_read_surface() {
+        let text = note_text("Copper Drake", "creature", None);
+        let entry = Entry::parse("Copper Drake.md", &text).unwrap();
+        assert_eq!(
+            entry.fields["splat_creature"]["type"].as_str(),
+            Some("humanoid")
+        );
+        for key in [
+            "strength",
+            "dexterity",
+            "constitution",
+            "intelligence",
+            "wisdom",
+            "charisma",
+        ] {
+            assert_eq!(entry.fields["splat_stats"][key]["value"].as_i64(), Some(10));
+        }
+        assert_eq!(
+            presentation::challenge_text(&entry),
+            Some("1 (XP 200; PB +2)")
+        );
+        assert_eq!(presentation::subtitle(&entry), "Creature · CR 1");
+        assert!(!entry.body.contains("Speed 30"));
+        assert!(!entry.body.contains("Str 10"));
+        assert!(!entry.body.contains("CR 1"));
+        let mut conflicting = entry.clone();
+        conflicting.body.push_str("\nCR 9 (XP 5,000; PB +4)\n");
+        assert_eq!(
+            presentation::challenge_text(&conflicting),
+            Some("1 (XP 200; PB +2)")
+        );
+        assert_eq!(presentation::subtitle(&conflicting), "Creature · CR 1");
+    }
+
+    #[test]
+    fn heading_repair_changes_only_the_first_h1() {
+        let text = note_text("Watch Ashfall", "spell", None)
+            .replace("# Watch Ashfall", "# Ashfall")
+            + "\n# Another heading\n";
+        let entry = Entry::parse("Ashfall.md", &text).unwrap();
+        let (old, after) = presentation::heading_fix(&text, &entry).unwrap();
+        assert_eq!(old, "Ashfall");
+        assert_eq!(after, text.replacen("# Ashfall", "# Watch Ashfall", 1));
     }
 
     #[test]
@@ -3946,7 +4144,7 @@ mod tests {
                 "Bard Subclass",
                 "Bard · Level 3 · D&D 2024 · SRD 5.2.1",
                 "Choose a Bard subclass.",
-                "Available in this package",
+                "Subclasses",
                 "Source text",
             ] {
                 assert!(rendered.contains(expected), "{rendered}");

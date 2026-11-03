@@ -246,6 +246,7 @@ fn content(
 ) -> Option<usize> {
     let mut open_link = None;
     if let Some(reading) = reading {
+        ui.add_space(design::L);
         style::markdown(ui, &reading.summary);
     }
     if let Some(entry) = styled {

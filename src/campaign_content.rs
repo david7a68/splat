@@ -596,20 +596,10 @@ impl CampaignContent {
                         }
                         if let Some((_, text)) =
                             self.discarded_repair.as_ref().filter(|(p, _)| p == path)
+                            && design::draft_discarded(ui)
                         {
-                            ui.label(
-                                Type::Small
-                                    .rich(ui, "Draft discarded.")
-                                    .color(colors().muted),
-                            );
-                            if Action::secondary("Undo discard")
-                                .density(Density::Read)
-                                .show(ui)
-                                .clicked()
-                            {
-                                *draft = text.clone();
-                                self.discarded_repair = None;
-                            }
+                            *draft = text.clone();
+                            self.discarded_repair = None;
                         }
                         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                             let pressed = Action::secondary("Save repaired note")
@@ -700,17 +690,11 @@ impl CampaignContent {
                         self.saved_selections.clone(),
                     ));
                 }
-            } else if self.discarded_selections.is_some() {
-                ui.label(Type::Small.rich(ui, "Selections discarded.").color(c.muted));
-                if Action::secondary("Undo discard")
-                    .density(Density::Read)
-                    .hint("Bring back the selection changes you discarded")
-                    .show(ui)
-                    .clicked()
-                    && let Some(selections) = self.discarded_selections.take()
-                {
-                    document.selections = selections;
-                }
+            } else if self.discarded_selections.is_some()
+                && design::draft_discarded(ui)
+                && let Some(selections) = self.discarded_selections.take()
+            {
+                document.selections = selections;
             }
             if !dirty && !self.repairs.iter().any(|(_, b, d)| b != d) {
                 reload = Action::quiet("Reload from disk")
@@ -828,7 +812,14 @@ impl CampaignContent {
                 .ok()
                 .is_none_or(|id| !catalogue.modules.iter().any(|module| module.id == id))
         });
-        if !errors.is_empty() && self.repairs.is_empty() && !missing_package {
+        if !errors.is_empty()
+            && self.repairs.is_empty()
+            && !missing_package
+            && !self
+                .removed_package
+                .as_ref()
+                .is_some_and(|removed| removed.campaign == active.id && !removed.users.is_empty())
+        {
             design::section(
                 ui,
                 if affected.is_empty() {
@@ -1023,6 +1014,26 @@ impl CampaignContent {
                                 });
                             let mut enabled = count > 0;
                             ui.push_id(module.id, |ui| {
+                                let rect = egui::Rect::from_min_size(
+                                    ui.cursor().min,
+                                    egui::vec2(
+                                        ui.available_width(),
+                                        Density::Glance.row() + design::XS,
+                                    ),
+                                );
+                                let selected = !self.dependencies && self.module == Some(module.id);
+                                let hovered = ui.rect_contains_pointer(rect);
+                                if selected || hovered {
+                                    ui.painter().rect_filled(
+                                        rect,
+                                        design::RADIUS_CONTROL,
+                                        if selected {
+                                            colors().selected
+                                        } else {
+                                            colors().hover
+                                        },
+                                    );
+                                }
                                 ui.horizontal(|ui| {
                                     let check = ui.add(
                                         egui::Checkbox::new(&mut enabled, "")
@@ -1113,7 +1124,10 @@ impl CampaignContent {
             }))
             .show_inside(ui, |ui| {
                 if self.dependencies {
-                    design::group_heading(ui, "Needed by your entries", closure.required.len());
+                    ui.horizontal(|ui| {
+                        ui.set_min_height(Density::Read.control());
+                        design::group_heading(ui, "Needed by your entries", closure.required.len());
+                    });
                     design::search_field(
                         ui,
                         "Find a needed entry",
@@ -1187,13 +1201,22 @@ impl CampaignContent {
                 let all = selection_index
                     .is_some_and(|i| document.selections[i].selection == Selection::All);
                 ui.horizontal_wrapped(|ui| {
-                    ui.label(Type::Section.rich(ui, &module.name).color(c.text));
-                    if Action::secondary("Use all")
-                        .density(Density::Read)
-                        .blocked_if(all, "This whole package is already in use.")
-                        .hint("Every entry, including future additions")
-                        .show(ui)
-                        .clicked()
+                    ui.set_min_height(Density::Read.control());
+                    design::group_heading(ui, &module.name, entry_ids.len());
+                    if all {
+                        ui.label(
+                            Type::Small
+                                .rich(ui, "Whole package, with future additions")
+                                .color(c.muted),
+                        );
+                    }
+                    if !all
+                        && Action::secondary("Use all")
+                            .density(Density::Read)
+                            .blocked_if(all, "This whole package is already in use.")
+                            .hint("Every entry, including future additions")
+                            .show(ui)
+                            .clicked()
                     {
                         if let Some(i) = selection_index {
                             document.selections[i].selection = Selection::All;
@@ -1214,18 +1237,9 @@ impl CampaignContent {
                     {
                         document.selections.remove(i);
                     }
-                    ui.label(
-                        Type::Small
-                            .rich(
-                                ui,
-                                if all {
-                                    "Whole package, with future additions"
-                                } else {
-                                    "Chosen entries only"
-                                },
-                            )
-                            .color(c.muted),
-                    );
+                    if !all {
+                        ui.label(Type::Small.rich(ui, "Chosen entries only").color(c.muted));
+                    }
                 });
                 design::search_field(
                     ui,

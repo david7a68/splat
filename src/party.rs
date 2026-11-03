@@ -1886,6 +1886,7 @@ pub(crate) fn details(ui: &mut egui::Ui, record: &EntitySnapshot, page: usize, s
     let mut last_level = None;
     for (i, (name, meta, description, level)) in filtered.into_iter().enumerate() {
         if page == 2 && (i == 0 || last_level != *level) {
+            ui.add_space(design::L);
             design::group_heading(
                 ui,
                 &match level {

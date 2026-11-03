@@ -3310,6 +3310,7 @@ impl Run {
                             colors().muted,
                         )
                     };
+                    ui.add_space(design::L);
                     design::group_heading(ui, "Correct initiative", 0);
                     let field = format!("Initiative for {}", p.name);
                     let text = self.setup_inputs.entry(index).or_default();
@@ -3342,15 +3343,16 @@ impl Run {
                     });
                     ui.add(egui::Label::new(Type::Small.rich(ui, words).color(color)).wrap());
                 }
-                design::group_label(ui, "DM notes");
+                ui.add_space(design::L);
+                design::group_heading(ui, "DM notes", 0);
                 ui.horizontal(|ui| {
                     correction_label(ui, "Note");
                     design::text_input(
                         ui,
                         "DM note",
                         &mut self.note,
-                        "",
-                        (ui.available_width() - design::S * 30.0).max(design::S * 8.0),
+                        "Type a note first.",
+                        (ui.available_width() - Action::secondary("Add note").density(Density::Read).natural_width(ui) - ui.spacing().item_spacing.x).max(design::XXL),
                     );
                     if Action::secondary("Add note")
                         .name("Add note")
@@ -3361,7 +3363,6 @@ impl Run {
                     {
                         command = Some(Command::Note(index, self.note.clone()));
                     }
-                    design::blocked_reason(ui, self.note.trim().is_empty().then_some("Type a note first."));
                 });
                 if !p.notes.is_empty() {
                     ui.add(
@@ -3369,7 +3370,8 @@ impl Run {
                     );
                 }
                 if p.definition.fields.contains_key("splat_external") {
-                    design::group_label(ui, "D&D Beyond combat sync");
+                    ui.add_space(design::L);
+                    design::group_heading(ui, "D&D Beyond combat sync", 0);
                     let sync = self.syncs.entry(index).or_default();
                     let was = sync.enabled;
                     ui.push_id(index, |ui| {

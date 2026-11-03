@@ -1167,6 +1167,26 @@ impl Lookup {
         }
     }
 
+    pub(crate) fn back_key(&mut self, ctx: &egui::Context, library_page: bool) {
+        if !self.open
+            || !ctx.input(|input| input.modifiers.alt && input.key_pressed(egui::Key::ArrowLeft))
+        {
+            return;
+        }
+        let focused_here = ctx
+            .memory(|memory| memory.focused())
+            .and_then(|id| ctx.read_response(id))
+            .is_some_and(|response| {
+                ctx.data(|data| data.get_temp::<egui::Rect>(egui::Id::new("lookup_rect")))
+                    .is_some_and(|rect| rect.contains(response.rect.center()))
+            });
+        if (!library_page || focused_here)
+            && ctx.input_mut(|input| input.consume_key(egui::Modifiers::ALT, egui::Key::ArrowLeft))
+        {
+            self.back();
+        }
+    }
+
     pub fn show(&mut self, ctx: &egui::Context) {
         let width = design::side_panel_width(ctx.content_rect().width());
         design::Column::panel("lookup", width)
@@ -1181,6 +1201,8 @@ impl Lookup {
     }
 
     fn panel(&mut self, ui: &mut egui::Ui) {
+        ui.ctx()
+            .data_mut(|data| data.insert_temp(egui::Id::new("lookup_rect"), ui.max_rect()));
         ui.ctx().data_mut(|data| {
             data.insert_temp(egui::Id::new("reader_surface"), egui::Id::new("lookup"))
         });
@@ -1188,7 +1210,11 @@ impl Lookup {
         ui.horizontal(|ui| {
             ui.label(Type::Heading.rich(ui, "Lookup"));
             if !self.history.is_empty()
-                && Action::quiet("Back").icon(icons::BACK).show(ui).clicked()
+                && Action::quiet("Back")
+                    .icon(icons::BACK)
+                    .key("Alt+Left")
+                    .show(ui)
+                    .clicked()
             {
                 self.back();
             }
@@ -1704,16 +1730,30 @@ pub(crate) fn generated_card(
             }
         });
     }
-    for problem in problems {
-        design::message(ui, Tone::Warning, problem);
-        if let Some((path, _)) = problem.split_once(':')
-            && design::link(ui, &format!("Open {path}")).clicked()
-        {
-            ui.ctx().data_mut(|data| {
-                data.insert_temp(egui::Id::new("markdown_clicked_note"), path.to_owned())
-            });
+    ui.scope(|ui| {
+        ui.set_max_width(ui.available_width().min(design::READER_MEASURE));
+        for problem in problems {
+            design::message(ui, Tone::Warning, problem);
+            if let Some((path, _)) = problem.split_once(':')
+                && design::link(ui, &format!("Open {path}")).clicked()
+            {
+                ui.ctx().data_mut(|data| {
+                    data.insert_temp(egui::Id::new("markdown_clicked_note"), path.to_owned())
+                });
+            }
         }
-    }
+    });
+    ui.label(
+        Type::Small
+            .rich(
+                ui,
+                format!(
+                    "Will save NPCs/{}.md",
+                    crate::sessions::file_safe(&npc.name)
+                ),
+            )
+            .color(colors().muted),
+    );
     let (mut saved, mut again, mut discard) = (false, false, false);
     ui.horizontal_wrapped(|ui| {
         saved = (if run_open {

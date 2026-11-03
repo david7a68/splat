@@ -299,7 +299,8 @@ pub fn generator(d: &mut Driver<'_>) {
     d.click("Generate NPC");
     d.observe(
         "W14",
-        d.visible_text("cannot be used") && d.visible_text("the built-in list stands in"),
+        d.visible_text("the npc-name table stops at 1, but 1d6 rolls up to 6.")
+            && d.visible_text("Built-in names stand in until it is fixed."),
         "A bad campaign table states why the built-in list stands in",
     );
     d.state("generator-bad-table", Sizes::All);
@@ -388,6 +389,17 @@ pub fn package_rename(d: &mut Driver<'_>) {
     d.click("Read the watch spell");
     d.wait_for_text("Watch Ashfall");
     d.state("linked-entry-renamed-on-disk", Sizes::All);
+    d.click("Use Watch Ashfall");
+    d.wait_for_text("Undo heading change");
+    d.state("renamed-entry-heading-fixed", Sizes::All);
+    d.click("Undo heading change");
+    d.wait_for_text("Use Watch Ashfall");
+    assert!(
+        fs::read_to_string(package.join("Spells/Watch Ashfall.md"))
+            .unwrap()
+            .contains("# Ashfall")
+    );
+    d.click("Use Watch Ashfall");
 
     let moved = d.root.join("modules/watch-package");
     fs::rename(&package, &moved).unwrap();
@@ -611,12 +623,18 @@ pub fn book_to_package(d: &mut Driver<'_>) {
 
 pub fn world_note_deleted(d: &mut Driver<'_>) {
     entry(d, "Locations/Watch House.md", "Watch House", "location", "");
+    let block_text = crate::library::note_text("Watchkeeper Guard", "creature", None);
+    let block = splat::content::Entry::parse("Watchkeeper Guard.md", &block_text).unwrap();
+    fs::write(root(d).join("Watchkeeper Guard.md"), block_text).unwrap();
     entry(
         d,
         "NPCs/Watchkeeper.md",
         "Watchkeeper",
         "npc",
-        "  in: '[[Watch House]]'\n",
+        &format!(
+            "  in: '[[Watch House]]'\n  creature: {{id: {}}}\n",
+            block.id
+        ),
     );
     reload(d);
     d.click(NAV_WORLD);
@@ -631,4 +649,20 @@ pub fn world_note_deleted(d: &mut Driver<'_>) {
     look_up(d, "Watchkeeper");
     d.wait_for_text("In Watch House · Not found");
     d.state("npc-place-deleted-in-lookup", Sizes::All);
+    d.press(Key::Escape);
+    fs::remove_file(root(d).join("Watchkeeper Guard.md")).unwrap();
+    d.focus_window(false);
+    d.focus_window(true);
+    d.wait_for_text("Stat block not found");
+    d.type_into("Search the world", "Watchkeeper");
+    d.state("npc-stat-block-deleted-in-world", Sizes::All);
+    look_up(d, "Watchkeeper");
+    d.wait_for_text("Stat block not found");
+    d.state("npc-stat-block-deleted-in-lookup", Sizes::All);
+    d.press(Key::Escape);
+    go_encounters(d);
+    d.click(NEW_ENCOUNTER);
+    d.type_into(FIND_CREATURE, "Watchkeeper");
+    d.expect("No creatures match");
+    d.state("npc-deleted-stat-block-encounter-search", Sizes::All);
 }

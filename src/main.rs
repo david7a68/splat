@@ -1991,6 +1991,7 @@ impl eframe::App for Splat {
             self.encounters.has_run(),
         );
         design::reserve_primary(ctx, false);
+        self.lookup.back_key(ctx, self.page == Page::Library);
         self.run_strip(ctx);
         design::reserve_primary(ctx, self.encounters.has_run() && self.page != Page::Run);
         // With no panel left, going on typing must reach the note and never change the run.

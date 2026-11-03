@@ -476,6 +476,21 @@ pub fn create_entry(campaign: &Campaign, name: &str, kind: &str) -> Result<Uuid,
 }
 
 /// A new NPC from the generator, with its attributes as the note's text.
+pub(crate) fn broken_links(item: &Item, index: &ContentIndex) -> Vec<&'static str> {
+    let mut problems = Vec::new();
+    if world_field(&item.entry, "in").is_some_and(|value| !value.is_null())
+        && index.place_of(item.entry.id).is_none()
+    {
+        problems.push("Place not found");
+    }
+    if let Some(reference) = creature(&item.entry)
+        && index.position_of(&reference).is_none()
+    {
+        problems.push("Stat block not found");
+    }
+    problems
+}
+
 pub fn create_generated(
     campaign: &Campaign,
     npc: &crate::npc_generator::Generated,
@@ -913,7 +928,13 @@ impl Reader {
             design::message(ui, Tone::Warning, warning);
         }
         if item.entry.kind == "world" {
-            go = self.entry_controls(ui, item, index, campaign);
+            go = ui
+                .scope(|ui| {
+                    ui.spacing_mut().item_spacing.y =
+                        design::Density::Scan.row() - design::Density::Scan.control();
+                    self.entry_controls(ui, item, index, campaign)
+                })
+                .inner;
         }
         if item.is_note() {
             let followed = style::measure(ui, |ui| {
@@ -1045,6 +1066,87 @@ impl Reader {
         }
     }
 
+    fn relationship_width(ui: &egui::Ui, item: &Item, index: &ContentIndex) -> f32 {
+        let mut width = design::XXL;
+        for key in ["creature", "in", "status"] {
+            let target = if key == "in" {
+                index.place_of(item.entry.id)
+            } else if key == "creature" {
+                creature(&item.entry).and_then(|r| index.position_of(&r))
+            } else {
+                None
+            };
+            let text = target
+                .map(|at| index.items[at].entry.name.clone())
+                .unwrap_or_else(|| {
+                    world_field(&item.entry, key)
+                        .and_then(Value::as_str)
+                        .map(|s| {
+                            if key == "status" {
+                                s.to_owned()
+                            } else {
+                                format!("{} · Not found", s.trim_matches(['[', ']']))
+                            }
+                        })
+                        .unwrap_or_else(|| "not set".into())
+                });
+            width = width.max(design::number_width(ui, &text, &Type::Body.font(ui)) + design::L);
+        }
+        width.min(
+            (ui.available_width()
+                - design::XXL * 3.0
+                - Action::quiet("Change").natural_width(ui)
+                - design::L)
+                .max(design::XXL),
+        )
+    }
+
+    fn relationship_row(
+        ui: &mut egui::Ui,
+        label: &str,
+        width: f32,
+        value: impl FnOnce(&mut egui::Ui),
+    ) -> bool {
+        let name = format!("Change {label}");
+        let change = Action::quiet("Change")
+            .density(design::Density::Scan)
+            .name(&name);
+        if ui.available_width() < design::READER_MEASURE {
+            let clicked = ui
+                .horizontal(|ui| {
+                    ui.label(Type::Small.rich(ui, label).color(colors().muted));
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        change.show(ui).clicked()
+                    })
+                    .inner
+                })
+                .inner;
+            value(ui);
+            clicked
+        } else {
+            ui.horizontal(|ui| {
+                ui.allocate_ui_with_layout(
+                    egui::vec2(design::XXL * 3.0, design::Density::Scan.control()),
+                    egui::Layout::left_to_right(egui::Align::Center),
+                    |ui| {
+                        ui.set_min_width(design::XXL * 3.0);
+                        ui.label(Type::Small.rich(ui, label).color(colors().muted));
+                    },
+                );
+                ui.allocate_ui_with_layout(
+                    egui::vec2(width, design::Density::Scan.control()),
+                    egui::Layout::left_to_right(egui::Align::Center),
+                    |ui| {
+                        ui.set_min_width(width);
+                        value(ui);
+                    },
+                );
+                change.show(ui).clicked()
+            })
+            .inner
+        }
+    }
+
     fn relationships(
         &mut self,
         ui: &mut egui::Ui,
@@ -1053,6 +1155,7 @@ impl Reader {
         campaign: &Campaign,
     ) -> Option<Go> {
         let mut go = None;
+        let value_width = Self::relationship_width(ui, item, index);
         for (key, label) in [("creature", "Stat block"), ("in", "In")] {
             if key == "creature" && world_type(&item.entry) != "npc" {
                 continue;
@@ -1063,19 +1166,7 @@ impl Reader {
                 creature(&item.entry).and_then(|r| index.position_of(&r))
             };
             ui.push_id(key, |ui| {
-                ui.horizontal_wrapped(|ui| {
-                    ui.allocate_ui_with_layout(
-                        egui::vec2(design::XXL * 3.0, design::Density::Read.control()),
-                        egui::Layout::left_to_right(egui::Align::Center),
-                        |ui| {
-                            ui.set_min_width(design::XXL * 3.0);
-                            ui.label(
-                                Type::Small
-                                    .rich(ui, format!("{label}: "))
-                                    .color(colors().muted),
-                            );
-                        },
-                    );
+                if Self::relationship_row(ui, label, value_width, |ui| {
                     if let Some(at) = target {
                         if design::link(ui, &index.items[at].entry.name).clicked() {
                             go = Some(Go::Item(at, None));
@@ -1085,56 +1176,55 @@ impl Reader {
                             Type::Small
                                 .rich(
                                     ui,
-                                    format!(
-                                        "{} · Not found",
-                                        value
-                                            .as_str()
-                                            .map(str::to_owned)
-                                            .unwrap_or_else(|| "Entry".into())
-                                            .trim_matches(['[', ']'])
-                                    ),
+                                    if key == "creature" {
+                                        format!("{} Stat block not found", design::icons::WARN)
+                                    } else {
+                                        format!(
+                                            "{} {} · Not found",
+                                            design::icons::WARN,
+                                            value
+                                                .as_str()
+                                                .unwrap_or("Entry")
+                                                .trim_matches(['[', ']'])
+                                        )
+                                    },
                                 )
                                 .color(colors().result.warning),
                         );
                     } else {
                         ui.label(Type::Small.rich(ui, "none").color(colors().muted));
                     }
-                    if Action::quiet("Change")
-                        .name(&format!("Change {label}"))
+                }) {
+                    self.picker = Some(Picker {
+                        key,
+                        focus: true,
+                        ..Default::default()
+                    });
+                }
+                if let Some(change) = &self.undo
+                    && change.path == item.entry.path
+                    && change.word
+                        == if key == "in" {
+                            "Place changed."
+                        } else {
+                            "Stat block changed."
+                        }
+                {
+                    ui.label(Type::Small.rich(ui, &change.word).color(colors().muted));
+                    if Action::quiet("Undo")
+                        .name("Undo World change")
                         .show(ui)
                         .clicked()
                     {
-                        self.picker = Some(Picker {
-                            key,
-                            focus: true,
-                            ..Default::default()
-                        });
-                    }
-                    if let Some(change) = &self.undo
-                        && change.path == item.entry.path
-                        && change.word
-                            == if key == "in" {
-                                "Place changed."
-                            } else {
-                                "Stat block changed."
+                        match change.undo(campaign) {
+                            Ok(_) => {
+                                self.undo = None;
+                                go = Some(Go::Reload(item.entry.id));
                             }
-                    {
-                        ui.label(Type::Small.rich(ui, &change.word).color(colors().muted));
-                        if Action::quiet("Undo")
-                            .name("Undo World change")
-                            .show(ui)
-                            .clicked()
-                        {
-                            match change.undo(campaign) {
-                                Ok(_) => {
-                                    self.undo = None;
-                                    go = Some(Go::Reload(item.entry.id));
-                                }
-                                Err(error) => self.error = Some(error),
-                            }
+                            Err(error) => self.error = Some(error),
                         }
                     }
-                })
+                }
             });
         }
         let Some(picker) = &mut self.picker else {
@@ -1249,6 +1339,16 @@ impl Reader {
                     }
                 }
             });
+            if broken_links(item, index).contains(&"Stat block not found") {
+                design::status(
+                    ui,
+                    design::Status {
+                        icon: design::icons::WARN,
+                        word: "Stat block not found",
+                        color: colors().result.warning,
+                    },
+                );
+            }
             if index.place_of(item.entry.id).is_none()
                 && let Some(place) = world_field(&item.entry, "in").and_then(Value::as_str)
             {
@@ -1256,7 +1356,11 @@ impl Reader {
                     Type::Small
                         .rich(
                             ui,
-                            format!("In {} · Not found", place.trim_matches(['[', ']'])),
+                            format!(
+                                "{} In {} · Not found",
+                                design::icons::WARN,
+                                place.trim_matches(['[', ']'])
+                            ),
                         )
                         .color(colors().result.warning),
                 );
@@ -1270,32 +1374,19 @@ impl Reader {
         {
             return Some(go);
         }
-        ui.add_space(design::XS);
         if !self.compact {
+            let value_width = Self::relationship_width(ui, item, index);
             if !self.status_editing {
-                ui.horizontal(|ui| {
-                    ui.allocate_ui_with_layout(
-                        egui::vec2(design::XXL * 3.0, design::Density::Read.control()),
-                        egui::Layout::left_to_right(egui::Align::Center),
-                        |ui| {
-                            ui.set_min_width(design::XXL * 3.0);
-                            ui.label(Type::Small.rich(ui, "Status:").color(colors().muted));
-                        },
-                    );
-                    let value = status(&item.entry);
+                let value = status(&item.entry);
+                if Self::relationship_row(ui, "Status", value_width, |ui| {
                     ui.label(
                         Type::Small
                             .rich(ui, if value.is_empty() { "not set" } else { value })
                             .color(colors().muted),
                     );
-                    if Action::quiet("Change")
-                        .name("Change status")
-                        .show(ui)
-                        .clicked()
-                    {
-                        self.status_editing = true;
-                    }
-                });
+                }) {
+                    self.status_editing = true;
+                }
             }
             if self.status_editing {
                 let response = design::text_field(ui, "Status", &mut self.status, None, None);

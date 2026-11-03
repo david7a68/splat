@@ -558,6 +558,9 @@ fn without_line(body: &str, line: Option<&str>) -> String {
 }
 
 fn detail(entry: &Entry, key: &str) -> Option<String> {
+    if key == "cr_text" {
+        return presentation::challenge_text(entry).map(str::to_owned);
+    }
     if let Some(text) = field(entry, key) {
         return Some(text.to_owned());
     }
@@ -574,7 +577,11 @@ fn detail(entry: &Entry, key: &str) -> Option<String> {
             }
             let amount = data.get("value")?.as_i64()?;
             let unit = data.get("unit").and_then(|v| v.as_str()).unwrap_or("");
-            Some(format!("{} {amount} {unit}", key.replace('_', " ")))
+            Some(if key == "speed" {
+                format!("{amount} {unit}")
+            } else {
+                format!("{} {amount} {unit}", key.replace('_', " "))
+            })
         })
         .collect::<Vec<_>>();
     Some(movement.join(", "))
