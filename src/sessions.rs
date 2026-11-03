@@ -1531,6 +1531,7 @@ mod tests {
             dndbeyond_campaign_id: None,
             dndbeyond_campaign_name: None,
         };
+        CampaignDocument::new(&campaign).unwrap().save().unwrap();
         let path = save_folder(&campaign, "Meetings").unwrap();
         fs::create_dir_all(&path).unwrap();
         fs::rename(&path, dir.path().join("Moved meetings")).unwrap();

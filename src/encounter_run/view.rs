@@ -5312,7 +5312,7 @@ impl RowLayout {
         }
         // A change is never hidden. What the run cannot apply is on the row, for the roll.
         // A number stays with its word when the line wraps.
-        if p.named_stat_block() {
+        if p.npc_identity() {
             add(&format!("as {}", p.definition.name), c.muted);
         }
         let mut bonus_start = None;
@@ -6226,6 +6226,19 @@ mod tests {
                         && detail.text().contains("Blessed")
                         && detail.text().contains("Changed")
                 );
+                assert_eq!(detail.rows.len(), 1, "{}", detail.text());
+                Arc::make_mut(&mut live.definition).name = "Ember Cultist".into();
+                let layout = RowLayout::new(
+                    ui,
+                    442.40625,
+                    &live,
+                    None,
+                    design::RUN_REGULAR,
+                    RowFit::Summary,
+                    0.0,
+                );
+                let detail = layout.second_line.as_ref().unwrap();
+                assert!(detail.text().contains("Blessed") && detail.text().contains("Changed"));
                 assert_eq!(detail.rows.len(), 1, "{}", detail.text());
             });
         });

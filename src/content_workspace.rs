@@ -1296,6 +1296,7 @@ impl CampaignDocument {
         Ok(())
     }
 
+    #[cfg(test)]
     pub fn save_metadata(campaign: &Campaign, previous: Option<&Campaign>) -> Result<(), String> {
         crate::file_batch::apply(&[Self::metadata_change(campaign, previous)?])
     }

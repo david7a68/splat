@@ -12,7 +12,7 @@ pub struct Campaigns {
     data: UserData,
     error: Option<String>,
     manifest_errors: std::collections::BTreeMap<Uuid, String>,
-    held_manifests: std::collections::BTreeMap<Uuid, (String, String)>,
+    held_manifests: std::cell::RefCell<std::collections::BTreeMap<Uuid, (String, String)>>,
     campaign_copy: Option<(crate::content_workspace::PackageCopy, UserData)>,
     writable: bool,
     editing: Option<Uuid>,
@@ -376,6 +376,7 @@ impl Campaigns {
                             );
                         } else if let Ok(document) = CampaignDocument::load(campaign) {
                             self.held_manifests
+                                .get_mut()
                                 .insert(campaign.id, (document.path, document.text));
                         }
                     }
@@ -421,6 +422,7 @@ impl Campaigns {
         for campaign in &self.data.campaigns {
             if let Ok(document) = CampaignDocument::load(campaign) {
                 self.held_manifests
+                    .get_mut()
                     .insert(campaign.id, (document.path, document.text));
             }
         }
@@ -428,11 +430,18 @@ impl Campaigns {
         Ok(())
     }
 
+    pub fn remember_campaign_document(&self, document: &CampaignDocument) {
+        self.held_manifests.borrow_mut().insert(
+            document.campaign.id,
+            (document.path.clone(), document.text.clone()),
+        );
+    }
+
     pub fn write_campaign_again(
         &self,
         campaign: &Campaign,
     ) -> Result<crate::content_workspace::ManifestWrite, String> {
-        if let Some((path, text)) = self.held_manifests.get(&campaign.id) {
+        if let Some((path, text)) = self.held_manifests.borrow().get(&campaign.id) {
             crate::content_workspace::ManifestWrite::restore_campaign(campaign, path, text)
         } else {
             let document = CampaignDocument::new(campaign)?;
@@ -1239,6 +1248,9 @@ mod tests {
         );
         std::fs::write(&path, &text).unwrap();
         campaigns.reload();
+        let text = format!("{text}\nLatest words read by the Campaign page.\n");
+        std::fs::write(&path, &text).unwrap();
+        campaigns.remember_campaign_document(&CampaignDocument::load(&campaign).unwrap());
         std::fs::remove_file(&path).unwrap();
         campaigns.reload();
         assert!(!path.exists(), "Reload must never recreate the manifest");

@@ -442,6 +442,7 @@ impl CampaignContent {
                     self.repairs = repairs;
                     match result {
                         Ok(snapshot) => {
+                            campaigns.remember_campaign_document(&snapshot.document);
                             self.saved_selections = snapshot.document.selections.clone();
                             if self.module.is_none() {
                                 self.dependencies = true;
