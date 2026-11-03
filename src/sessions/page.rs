@@ -284,6 +284,7 @@ pub struct Sessions {
     /// The Sessions page is showing, so a button there need not lead here.
     pub on_page: bool,
     pub wants_processing_settings: bool,
+    pub wants_speech_key: bool,
     pub wants_recording_input: bool,
     /// The DM asked to see the session this is about.
     pub wants_sessions_page: bool,
@@ -4278,7 +4279,14 @@ impl Sessions {
             .is_some_and(|(job, _)| job.recording == recording.path);
         ui.label(
             Type::Small
-                .rich(ui, format!("{length} · {}", megabytes(recording.bytes)))
+                .rich(
+                    ui,
+                    if live {
+                        megabytes(recording.bytes)
+                    } else {
+                        format!("{length} · {}", megabytes(recording.bytes))
+                    },
+                )
                 .color(c.muted),
         );
         let stored = &recording.status;
@@ -4357,13 +4365,13 @@ impl Sessions {
                 Type::Small
                     .rich(
                         ui,
-                        format!("Recording {} · {sound}", clock(live.recorder.seconds())),
+                        format!("{} recorded · {sound}", clock(live.recorder.seconds())),
                     )
                     .color(c.muted),
             );
         }
         if stalled && let Some(live) = &self.live {
-            ui.add(egui::Label::new(Type::Small.rich(ui, format!("Not saving audio after {}. What was saved is kept. Record again starts a new file.", spoken_length(live.recorder.seconds()))).color(c.muted)).wrap());
+            ui.add(egui::Label::new(Type::Small.rich(ui, format!("Stopped saving after {}. What was saved is kept. Record again starts a new file.", spoken_length(live.recorder.seconds()))).color(c.muted)).wrap());
         }
         if let Some(words) = stored.as_ref().filter(|_| !live && !processing) {
             ui.add(
@@ -4376,7 +4384,7 @@ impl Sessions {
             );
         }
         if let Some(warning) = recording.warning.as_ref().filter(|_| !live && !processing) {
-            design::message(ui, Tone::Warning, warning);
+            ui.add(egui::Label::new(Type::Small.rich(ui, warning).color(c.muted)).wrap());
         }
         let job_here = self
             .job
@@ -4501,12 +4509,16 @@ impl Sessions {
                 } else {
                     "Process"
                 };
-                let pressed = Action::secondary(label)
+                let destination = recording_destination(settings, recording);
+                let response = Action::secondary(label)
                     .name(&format!("{label}: {}", recording.name))
                     .density(Density::Read)
                     .blocked(reason.as_deref())
-                    .show(ui)
-                    .clicked();
+                    .show(ui);
+                ui.ctx().accesskit_node_builder(response.id, |node| {
+                    node.set_description(reason.as_deref().unwrap_or(&destination))
+                });
+                let pressed = response.on_hover_text(&destination).clicked();
                 if live {
                     design::blocked_reason(ui, Some("Stop recording first."));
                 }
@@ -4526,12 +4538,32 @@ impl Sessions {
                     };
                     if design::link(ui, &named).clicked() {
                         self.wants_processing_settings = true;
+                        self.wants_speech_key =
+                            reason.starts_with("Save an API key for this speech service");
                     }
                 }
                 process = pressed && !recording.summary;
                 ui.add_space(design::L);
             }
         });
+        if !live
+            && !job_here
+            && !recording.summary
+            && self.job.is_none()
+            && settings.problem().is_none()
+        {
+            ui.scope(|ui| {
+                ui.set_max_width(ui.available_width().min(design::READER_MEASURE));
+                ui.add(
+                    egui::Label::new(
+                        Type::Small
+                            .rich(ui, recording_destination(settings, recording))
+                            .color(c.muted),
+                    )
+                    .wrap(),
+                );
+            });
+        }
         if self.confirm_again.as_deref() == Some(recording.path.as_path()) {
             design::message(
                 ui,
@@ -5035,28 +5067,6 @@ impl Sessions {
                     ui.scope_builder(
                         egui::UiBuilder::new().id(("recording_row", &recording.path)),
                         |ui| {
-                            if !recording.summary
-                                && self.live.is_none()
-                                && self.job.is_none()
-                                && settings.problem().is_none()
-                            {
-                                ui.scope(|ui| {
-                                    ui.set_max_width(
-                                        ui.available_width().min(design::READER_MEASURE),
-                                    );
-                                    ui.add(
-                                        egui::Label::new(
-                                            Type::Small
-                                                .rich(
-                                                    ui,
-                                                    recording_destination(settings, recording),
-                                                )
-                                                .color(colors().muted),
-                                        )
-                                        .wrap(),
-                                    );
-                                });
-                            }
                             self.recording_row(ui, recording, settings, book);
                         },
                     );
@@ -5070,7 +5080,9 @@ impl Sessions {
     }
 
     fn delete_dialog(&mut self, ctx: &egui::Context) {
+        let focus_id = egui::Id::new("delete_recording_default_focused");
         let Some(path) = self.confirm_delete.clone() else {
+            ctx.data_mut(|data| data.remove::<bool>(focus_id));
             return;
         };
         let mut keep = ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Escape));
@@ -5090,15 +5102,22 @@ impl Sessions {
                 |ui| {
                     delete = Action::destructive("Delete recording").show(ui).clicked();
                     ui.add_space(design::L);
-                    keep |= Action::secondary("Keep the recording").show(ui).clicked();
+                    let response = Action::secondary("Keep the recording").show(ui);
+                    if !ui.data(|data| data.get_temp::<bool>(focus_id).unwrap_or(false)) {
+                        response.request_focus();
+                        ui.data_mut(|data| data.insert_temp(focus_id, true));
+                    }
+                    keep |= response.clicked();
                 },
             );
         });
         if keep {
             self.confirm_delete = None;
+            ctx.data_mut(|data| data.remove::<bool>(focus_id));
         }
         if delete {
             self.confirm_delete = None;
+            ctx.data_mut(|data| data.remove::<bool>(focus_id));
             self.reading = None;
             self.notice_session = None;
             self.notice = Some(match delete_recording(&path) {
@@ -5779,7 +5798,7 @@ impl Sessions {
         };
         ui.add_space(design::XS);
         design::group_heading(ui, "Session folder", 0);
-        let edited = design::small_text_field(
+        let response = ui.add_enabled_ui(locked.is_none(), |ui| design::small_text_field(
             ui,
             "Folder",
             &mut self.folder_text,
@@ -5787,9 +5806,13 @@ impl Sessions {
                 "Inside the campaign folder, unless the path is absolute. A name such as 30 Sessions is fine.",
             ),
             self.folder_error.as_deref(),
-        )
-        .changed();
-        if edited {
+        )).inner;
+        if let Some(reason) = locked {
+            ui.ctx()
+                .accesskit_node_builder(response.id, |node| node.set_description(reason));
+            response.clone().on_disabled_hover_text(reason);
+        }
+        if response.changed() {
             self.folder_notice = None;
         }
         if let Some(folder) = &self.folder {

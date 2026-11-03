@@ -114,8 +114,11 @@ keeps its state in the session list; a missing input offers **Choose an input**.
 that the audio is not sent again. With a partial transcript, it names the remaining
 audio parts. Recording silence has no elapsed time in its status word. The Session
 page shows the recorded time in the detail; the rail keeps it on hover. On Recordings,
-the live row owns the sound state, recorded time and input help. Timeline and the
-Session plan use the same fight state words. An open fight's Timeline round links
+the live row owns the sound state, recorded time and input help.
+Session folder is read-only while a run is open. Campaign forms keep their fields,
+Browse and save actions on one right edge. A dirty details form offers Discard and
+Undo discard. Missing speech-key links focus that key in Settings.
+Timeline and the Session plan use the same fight state words. An open fight's Timeline round links
 back to the run and does not say **Paused**. Processing says **Processing**, with
 the full step on hover. Long rest starts the next new fight at full from both Session
 and Timeline. Both pages show the ruling and let you turn it off or on, with Undo.

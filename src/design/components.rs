@@ -1212,6 +1212,24 @@ pub fn wrapped_status(ui: &mut Ui, state: Status<'_>) -> Response {
     status_label(ui, state, true)
 }
 
+/// Two rail lines share the word's left edge, leaving the icon in its own column.
+pub fn rail_status_detail(ui: &mut Ui, state: Status<'_>, detail: &str) -> Response {
+    ui.horizontal_top(|ui| {
+        ui.spacing_mut().item_spacing.x = S;
+        ui.add_sized(
+            vec2(Type::Body.line(), Type::Small.line()),
+            egui::Label::new(Type::Small.rich(ui, state.icon).color(state.color)),
+        );
+        ui.vertical(|ui| {
+            ui.spacing_mut().item_spacing.y = 0.0;
+            let response = ui.label(Type::Small.rich(ui, state.word).color(state.color));
+            response.union(ui.label(Type::Small.rich(ui, detail).color(state.color)))
+        })
+        .inner
+    })
+    .inner
+}
+
 fn status_label(ui: &mut Ui, state: Status<'_>, wrap: bool) -> Response {
     let mut job = LayoutJob::default();
     let format = egui::TextFormat {

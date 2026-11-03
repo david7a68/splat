@@ -625,7 +625,7 @@ impl Splat {
                         discard = Action::secondary(discard_label).show(ui).clicked();
                     }
                     let response = Action::secondary(keep_label).show(ui);
-                    let id = ui.id().with("app_close_default_focused");
+                    let id = egui::Id::new("app_close_default_focused");
                     if !ui.data(|data| data.get_temp::<bool>(id).unwrap_or(false)) {
                         response.request_focus();
                         ui.data_mut(|data| data.insert_temp(id, true));
@@ -763,6 +763,9 @@ impl Splat {
             let status_height = statuses
                 .iter()
                 .map(|state| {
+                    if state.word == "Connected · not remembered" {
+                        return Type::Small.line() * 2.0 + 2.0;
+                    }
                     ui.painter()
                         .layout(
                             format!("{} {}", state.icon, state.word),
@@ -830,6 +833,8 @@ impl Splat {
                         self.page = Page::Party;
                     }
                     response
+                } else if state.word == "Connected · not remembered" {
+                    design::rail_status_detail(ui, Status { word: "Connected", ..state }, "Not remembered")
                 } else { design::wrapped_status(ui, state) }.on_hover_text(full);
                 if full != state.word {
                     design::named(ui, &response, full);
@@ -1829,6 +1834,7 @@ impl Splat {
         if std::mem::take(&mut self.sessions.wants_processing_settings) {
             self.page = Page::Settings;
             self.settings_tab = SettingsTab::Recording;
+            self.processing.focus_speech_key = std::mem::take(&mut self.sessions.wants_speech_key);
         }
         if let Some(id) = self.sessions.wants_event.take() {
             self.timeline_page.reveal(&id, &self.timeline);
@@ -1909,6 +1915,9 @@ impl eframe::App for Splat {
         }
         if self.confirm_close {
             self.close_prompt(ctx);
+        }
+        if !self.confirm_close {
+            ctx.data_mut(|data| data.remove::<bool>(egui::Id::new("app_close_default_focused")));
         }
         self.apply_focus_step(ctx);
         self.settings.poll(ctx);

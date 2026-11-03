@@ -2723,9 +2723,11 @@ impl Run {
                 }
                 self.add_creature_form(ui);
                 if let Some(previous) = self.history.last().filter(|_| {
-                    self.state.log.last().is_some_and(|line| {
-                        line.starts_with(super::GROUP_ADDED) || line.starts_with(super::ONE_ADDED)
-                    })
+                    self.ad_hoc.query.trim().is_empty()
+                        && self.state.log.last().is_some_and(|line| {
+                            line.starts_with(super::GROUP_ADDED)
+                                || line.starts_with(super::ONE_ADDED)
+                        })
                 }) {
                     let start = previous.participants.len();
                     let tied = self

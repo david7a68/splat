@@ -57,6 +57,12 @@ pub fn broken(d: &mut Driver<'_>) {
         splat::character::stable_id("repaired-watchkeeper")
     );
     d.replace_text_in("Note text", &fixed);
+    d.observe_both(
+        "iter-18-A-world-lock",
+        "A World repair states the campaign switch lock",
+        |d| d.visible_text(crate::encounters::draft_switch_reason()),
+    );
+    d.state("broken-note-draft", Sizes::Default);
     d.click("Setting · ");
     d.click_containing("Notes/Broken.md");
     d.observe(

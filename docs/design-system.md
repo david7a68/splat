@@ -653,7 +653,8 @@ have an L gap between characters. An ended sign-in uses muted recovery text; a f
 Connect keeps its error state. A warned result says Processed in the rail, with its full
 warning on hover and in its accessible name. A stalled row omits its session name.
 
-Processing destinations show beside Process and Continue processing, and in the
+Processing destinations show under the enabled Process and Continue processing action
+line, in Small muted text at the reader measure, and in the
 Process again confirmation. Continue processing names the raw transcript and session
 context when transcription is complete, and says that the audio is not sent again. A saved key field invites a replacement key.
 With a partial transcript, Continue processing names the remaining audio parts and
@@ -668,7 +669,8 @@ use a warning. Finished note-link updates use success.
 
 Plan row actions align with the name line. In notes ends at the button text's inner
 edge. Timeline detail headers end at the form fields' right edge. Campaign details put
-state and Cancel at the left and Save details at the right. A folder change names a
+state and Discard at the left and Save details at the right. Discard restores the saved
+details and offers Undo discard; a clean form uses Cancel to close. A folder change names a
 hidden unfinished run and its state. Sync stopped links to Party and states how to recover.
 Compact Party rows omit a missing spell save DC; wide tables keep their empty cell.
 
