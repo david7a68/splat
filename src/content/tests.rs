@@ -11,6 +11,37 @@ fn parse(key: &str, kind: &str, extra: &str, body: &str) -> Entry {
     Entry::parse(key, &note(key, kind, extra, body)).unwrap()
 }
 
+#[test]
+fn editing_cloned_fields_keeps_other_entries_and_serialization_independent() {
+    let source = parse(
+        "shared",
+        "creature",
+        "splat_creature: {}\ncustom:\n  hp: 12",
+        "Body",
+    );
+    let original = serde_json::to_value(&source).unwrap();
+    let mut edited = source.clone();
+    let peer = source.clone();
+    edited.fields["custom"]["hp"] = Value::from(99);
+    edited.fields.remove("splat_name");
+    assert_eq!(source.fields["custom"]["hp"].as_i64(), Some(12));
+    assert_eq!(serde_json::to_value(&source).unwrap(), original);
+    assert_eq!(serde_json::to_value(&peer).unwrap(), original);
+
+    let mut expected = original;
+    expected["fields"]["custom"]["hp"] = 99.into();
+    expected["fields"]
+        .as_object_mut()
+        .unwrap()
+        .remove("splat_name");
+    let wire = serde_json::to_value(&edited).unwrap();
+    assert_eq!(wire, expected);
+    let mut restored: Entry = serde_json::from_value(wire).unwrap();
+    restored.fields["custom"]["hp"] = Value::from(7);
+    assert_eq!(edited.fields["custom"]["hp"].as_i64(), Some(99));
+    assert_eq!(restored.fields["custom"]["hp"].as_i64(), Some(7));
+}
+
 fn table(marker: &str, rows: &str) -> String {
     format!(
         "<!-- splat:inventory{marker} -->\n\n| Key | Item | Quantity | Equipment |\n| --- | --- | --- | --- |\n{rows}\n"
