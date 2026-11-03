@@ -671,7 +671,10 @@ impl TimelinePage {
             notes.event_link_offer(ui, book, &id);
             let event = &mut book.events[index];
             ui.add_space(design::M);
-            design::field(ui, "Kind", None, None, |ui| {
+            let day_start = starts
+                .filter(|_| event.kind == Kind::Day)
+                .map(|start| format!("Starts: {}", clock_words(start)));
+            design::field(ui, "Kind", day_start.as_deref(), None, |ui| {
                 let inner = egui::ComboBox::from_id_salt("timeline_event_kind")
                     .selected_text(event.kind.word())
                     .width(ui.available_width().min(design::FORM_WIDTH))
@@ -685,8 +688,8 @@ impl TimelinePage {
                     });
                 design::named(ui, &inner.response, "Kind of event");
             });
-            ui.add_space(design::M);
             if event.kind != Kind::Day {
+                ui.add_space(design::M);
                 design::field(
                     ui,
                     "How long",
@@ -709,7 +712,7 @@ impl TimelinePage {
                     },
                 );
             }
-            if let Some(start) = starts {
+            if let Some(start) = starts.filter(|_| event.kind != Kind::Day) {
                 ui.horizontal_wrapped(|ui| {
                     ui.label(
                         Type::Small

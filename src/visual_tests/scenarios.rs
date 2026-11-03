@@ -789,7 +789,7 @@ pub mod party {
         });
     }
     const FORCE_READ: &str = "Replace with D&D Beyond sheet";
-    const CONNECT_FIRST: &str = "Connect D&D Beyond";
+    const CONNECT_FIRST: &str = "Connect to refresh";
     const REPLACED: &str = "sheet now matches D&D Beyond. Your edited version is kept.";
     const DISMISS: &str = "Dismiss";
     const EDITED_NOTE: &str = "My own words";
@@ -2517,7 +2517,7 @@ pub mod party_from_run {
             d.visible_text("Fire Bolt"),
             "The spells page beside the run lists a caster's spells",
         );
-        d.click_row(MEMBER);
+        d.click_row("Brannoch Vale");
         d.observe(
             "Spells beside run",
             !d.has(SHEET_SUBPAGE) && d.visible_text(SHEET_ONLY_TEXT),
@@ -2526,15 +2526,15 @@ pub mod party_from_run {
         d.state("sheet-with-no-spells", Sizes::Default);
         d.begin_task();
         d.click(SHEET_PAGE);
-        d.expect("Current HP");
-        d.state("record-tab", Sizes::Default);
+        d.wait_for_text("This row moves. The current turn stays.");
+        d.state("correct-tab", Sizes::Default);
         d.click(SHEET_TAB);
         d.expect(SHEET_ONLY_TEXT);
-        d.state("back-in-the-run", Sizes::Default);
         d.goal("read a page and return to the run");
 
         // The hardest rows: 0 HP, absent, and many conditions. Words, not only colour.
         d.click_row(MEMBER);
+        d.state("sheet-returned-to-kestrel", Sizes::Default);
         let correct_y = d.place_of("Correct").map(|rect| rect.min.y);
         d.type_text(ZERO_DAMAGE);
         d.press(Key::Enter);
@@ -2909,7 +2909,10 @@ pub mod column_resize {
             action > 0.0 && action < page,
             format!("An event in the plan has its action, at {action} of {page}"),
         );
-        d.state("session-events-fill-their-column", Sizes::All);
+        d.state_prepared("session-events-fill-their-column", Sizes::All, |d| {
+            show_plan(d);
+            d.wait_for_text("Add to notes");
+        });
     }
 
     pub fn run(d: &mut Driver<'_>) {
@@ -2971,7 +2974,12 @@ pub mod column_resize {
         d.expect(MEMBER);
         d.state("party-beside-wide-rail", Sizes::All);
         d.click(BACK_TO_RUN);
-        d.state("run-beside-wide-rail", Sizes::All);
+        d.observe(
+            CHECK,
+            near(rail_edge(d), RAIL_WIDTH),
+            "The run limits the rail to keep room for its roster",
+        );
+        d.state("run-rail-keeps-roster-room", Sizes::All);
         d.click(NAV_LOOKUP);
         d.settle();
         d.expect("Close Lookup");
@@ -4353,7 +4361,8 @@ pub mod session_notes {
         );
         d.state_prepared("session-read-linked", Sizes::Default, |d| {
             read_note(d);
-            d.wait_for_text("Long rest");
+            d.wait_for_text("Write");
+            d.wait_for_text("What happened");
         });
         let reads_as_words = !d.visible_text("[[Timeline");
         d.observe(
@@ -4391,6 +4400,7 @@ pub mod session_notes {
         );
         // Renaming keeps notes unchanged until the DM accepts the update.
         d.expect("Update 1 link in notes");
+        d.expect_same("The rename offer is already in the event detail. Checking it leaves the view unchanged.");
         d.state("event-link-update-offered", Sizes::Default);
         d.click("Update 1 link in notes");
         d.expect("Undo update links");
@@ -4558,7 +4568,7 @@ pub mod session_notes {
         d.expect("Save without moving");
         d.state("session-folder-move-offered", Sizes::All);
         d.click("Move files and save");
-        d.expect("Saved");
+        d.expect("Moved 1 note, 4 events, 2 templates and 1 recording to 30 Sessions.");
         d.state("session-folder-moved", Sizes::Default);
         d.click(NAV_SESSIONS);
         d.expect(&format!("Session 1: {TITLE}"));
@@ -4938,6 +4948,20 @@ pub mod session_notes {
             "The running fight moves to this session without leaving the page",
         );
         d.state("run-moved-to-session", Sizes::Default);
+        d.expect("Bridge Ambush moved to Session 3.");
+        d.expect("Undo move");
+        d.click("Undo move");
+        let restored = d
+            .app_mut()
+            .timeline
+            .events
+            .iter()
+            .any(|event| event.run.is_some() && event.session != current);
+        d.observe(
+            "iter-6-S2",
+            restored,
+            "Undo move restores the run's previous session",
+        );
 
         // Setup beside the notes. Each digit must stay in its field.
         d.click(BACK_TO_RUN);
@@ -5824,7 +5848,7 @@ pub mod encounter_history {
                     == 1
                 && !d.has(RESUME)
                 && d.is_disabled(RUN_ENCOUNTER)
-                && d.visible_text("Resume it in In progress"),
+                && d.visible_text("Go back to the run"),
             "Keep in Ready adds only a blocked Start fight with a reason, never a second run link",
         );
         d.state("keep-in-ready-blocked", Sizes::All);
@@ -5902,7 +5926,7 @@ pub mod encounter_owned_groups {
         d.type_text(NEW_NAME);
         d.observe(
             "T13.6",
-            d.has(&format!("Add to: {NEW_NAME}"))
+            d.has(&format!("Adding to {NEW_NAME}"))
                 && d.has(&format!("Belongs to: {SHRINE}"))
                 && d.has_containing("No members yet. Add creatures from the search."),
             "A new group belongs to this encounter, and takes what the search adds",
@@ -6409,7 +6433,7 @@ pub mod session_plan {
         d.observe(
             "T12.1",
             !d.visible_text("[[") && d.visible_text("2 fights, in the plan"),
-            "Read summarizes fights already shown in the plan and keeps the links in the file",
+            "The tab layout summarizes planned fights and keeps the links in the file",
         );
         d.state("note-read-with-links", Sizes::Default);
         show_plan(d);

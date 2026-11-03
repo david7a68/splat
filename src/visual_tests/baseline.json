@@ -3,7 +3,7 @@
     "accessible-name/egui-chrome": {
       "book-to-package": 22,
       "campaign-content": 59,
-      "column-resize": 90,
+      "column-resize": 91,
       "dialogs": 45,
       "empty": 15,
       "encounter-build": 55,
@@ -77,7 +77,7 @@
     "target-size/egui-chrome": {
       "book-to-package": 22,
       "campaign-content": 59,
-      "column-resize": 90,
+      "column-resize": 91,
       "dialogs": 44,
       "empty": 15,
       "encounter-build": 55,

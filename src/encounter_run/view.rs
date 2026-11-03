@@ -3150,6 +3150,11 @@ impl Run {
                 if hp != p.hp || max != p.max_hp {
                     command = Some(Command::Health(index, hp, max));
                 }
+                ui.add(
+                    egui::Label::new(Type::Small.rich(ui,
+                        "You resolve conditions, Concentration, death saves and recovery. Zero HP does not remove a turn."
+                    ).color(colors().muted)).wrap(),
+                );
                 if self.state.phase == Phase::Setup {
                     let mut bonus = p.initiative_bonus;
                     optional_number(ui, "Initiative bonus", &mut bonus, -1000..=1000);
@@ -3166,7 +3171,7 @@ impl Run {
                         )
                     } else {
                         (
-                            "Correct initiative. This row moves, and the current turn stays.",
+                            "This row moves. The current turn stays.",
                             colors().muted,
                         )
                     };
@@ -3175,7 +3180,7 @@ impl Run {
                     let text = self.setup_inputs.entry(index).or_default();
                     let total = text.trim().parse::<i64>().ok();
                     ui.horizontal(|ui| {
-                        ui.add_sized(vec2(design::L * 6.0, Density::Read.control()), egui::Label::new(Type::Body.rich(ui, "Initiative")).halign(Align::LEFT));
+                        correction_label(ui, "Initiative");
                         let response = design::number_field(
                             ui,
                             &field,
@@ -3202,24 +3207,14 @@ impl Run {
                     });
                     ui.add(egui::Label::new(Type::Small.rich(ui, words).color(color)).wrap());
                 }
-                ui.add(
-                    egui::Label::new(
-                        Type::Small
-                            .rich(
-                                ui,
-                                "You resolve conditions, Concentration, death saves and recovery. Zero HP does not remove a turn.",
-                            )
-                            .color(colors().muted),
-                    )
-                    .wrap(),
-                );
                 design::group_label(ui, "DM notes");
                 ui.horizontal(|ui| {
+                    correction_label(ui, "Note");
                     design::text_input(
                         ui,
                         "DM note",
                         &mut self.note,
-                        "Note",
+                        "",
                         (ui.available_width() - design::S * 30.0).max(design::S * 8.0),
                     );
                     if Action::secondary("Add note")
@@ -3607,9 +3602,6 @@ impl Run {
             display(p.hp),
             display(p.max_hp)
         );
-        if p.npc_identity() {
-            numbers = format!("as {} · {numbers}", p.definition.name);
-        }
         let absent = if p.present {
             String::new()
         } else {
@@ -3622,6 +3614,9 @@ impl Run {
         numbers.push_str(&format!(" · AC {}", display(p.armor_class)));
         if let Some((_, word, _)) = hp_word(&p) {
             numbers.push_str(&format!(" · {word}"));
+        }
+        if p.npc_identity() {
+            numbers.push_str(&format!(" · as {}", p.definition.name));
         }
         let selected = self.panel == Panel::Record && self.selected == index;
         let (name, npc, mode, bonus, initiative, present) = (
@@ -5091,6 +5086,14 @@ fn paint_row(
 
 /// A number that can be unknown. `Mark unknown` clears it, away from the value,
 /// so that a click meant for the number cannot lose it.
+fn correction_label(ui: &mut egui::Ui, label: &str) {
+    let size = vec2(design::L * 6.0, Density::Read.control());
+    ui.allocate_ui_with_layout(size, egui::Layout::left_to_right(Align::Center), |ui| {
+        ui.set_min_size(size);
+        ui.label(Type::Body.rich(ui, label).color(colors().text));
+    });
+}
+
 fn optional_number(
     ui: &mut egui::Ui,
     label: &str,
@@ -5099,10 +5102,7 @@ fn optional_number(
 ) {
     // Its words stay on one line, in any width of panel.
     ui.horizontal(|ui| {
-        ui.add_sized(
-            vec2(design::L * 6.0, Density::Read.control()),
-            egui::Label::new(Type::Body.rich(ui, label).color(colors().text)).halign(Align::LEFT),
-        );
+        correction_label(ui, label);
         if let Some(n) = value {
             let response = ui.add(egui::DragValue::new(n).range(range));
             design::named(ui, &response, label);

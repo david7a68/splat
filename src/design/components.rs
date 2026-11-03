@@ -1131,9 +1131,7 @@ pub fn stat_tile(ui: &mut Ui, label: &str, value: &str) {
     let c = colors();
     ui.vertical(|ui| {
         ui.spacing_mut().item_spacing.y = 0.0;
-        ui.add(
-            egui::Label::new(Type::Label.rich(ui, label.to_uppercase()).color(c.muted)).truncate(),
-        );
+        ui.add(egui::Label::new(Type::Small.rich(ui, label).color(c.muted)).truncate());
         ui.label(Type::NumeralLarge.rich(ui, value).color(c.text));
     });
 }
