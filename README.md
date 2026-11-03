@@ -38,8 +38,12 @@ not in `/tmp` (a RAM filesystem on the audit machine).
 
 After a set of edits, run `check` first for fast compiler and lint feedback, then
 `cargo test --locked`. `cargo check --locked --tests` is also useful while editing,
-but does not replace either gate. Before merging, run both gates and a full
-`visual-test` run, and review all captures. `--only` is for local feedback.
+but does not replace either gate. Before merging, run
+`devenv shell -- audit-gate final` and review all captures. This runs `check` and
+every unit test, with the full visual suite capturing in the same test run.
+It avoids running the scenarios once without captures and again with captures.
+The separate `cargo test --locked`, `check`, and full `visual-test` commands remain
+valid. `--only` is for local feedback.
 
 Splat's test profile keeps file and line information for backtraces, but omits
 local-variable debug information. Normal app builds keep full debug information.
@@ -57,6 +61,7 @@ D&D Beyond.
 ```sh
 devenv shell -- visual-test iter-0
 devenv shell -- visual-test work --only run-lookup,party
+devenv shell -- audit-gate final
 ```
 
 This also writes to `artifacts/screenshots/iter-0/`: a PNG for each state at 960x640,
@@ -86,6 +91,9 @@ or set `SPLAT_VISUAL_CONTACT_SHEET=1` to make it with a full `visual-test` run.
 - `SPLAT_VISUAL_SCENARIOS=party,settings` runs only those scenarios. `visual-test <label> --only
   party,settings` is the same, and keeps the captures of the label's other scenarios.
 - `SPLAT_VISUAL_VIDEO=0` turns video off for `visual-test`.
+- `audit-gate [label]` runs formatting, Clippy, all tests and all captures. It
+  clears scenario filters and baseline-update mode, and enforces the baseline.
+  Video and optional contact-sheet settings work as for `visual-test`.
 
 Library has **New entry** in its header. Its form opens in the reader column and closes after creation. World has **New ▾** for a plain note, a note with a type, an NPC, a location, or a generated NPC. List headings use capitals and a count. Page headers show state or nonzero counts beside the title, with a rule and an `L` gap below. Counts use thousands separators.
 
