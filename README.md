@@ -589,3 +589,7 @@ Recording failures and stops remain on each recording’s row after you dismiss 
 Lookup keeps up to five results above the reader and marks the open one. New NPC and New location include the proposed name, and appear only when no exact match exists. A copy keeps the original name by default and offers Edit the copy after saving. Wide reader tables keep their first column and header in view. World rolls mark their matched row.
 
 Campaign repair shows invalid notes in place. The campaign-wide Needed by your entries list opens entries in Lookup. A session note conflict shows your draft and the disk text side by side, with changed lines marked.
+
+Library keeps its search when you change scope, and hides empty categories. Draft guidance stays in its save row. New World notes show their Obsidian file and a Show file link. Lookup keeps Back and Open in Library on its title line.
+
+Campaign puts Needed by your entries below the packages in the left column. Select it to search dependencies and open one in Lookup. Invalid YAML marks its error line and says what to fix. Package and run settings keep their save state in the save row.

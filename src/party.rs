@@ -1802,16 +1802,18 @@ pub(crate) fn details(ui: &mut egui::Ui, record: &EntitySnapshot, page: usize, s
         .iter()
         .filter(|(name, source, _, _)| format!("{name} {source}").to_lowercase().contains(&search))
         .collect();
-    design::group_heading(
-        ui,
-        match page {
-            1 => "Action descriptions",
-            2 => "Spells",
-            3 => "Equipment & coins",
-            _ => "Features & traits",
-        },
-        filtered.len(),
-    );
+    if page != 2 {
+        design::group_heading(
+            ui,
+            match page {
+                1 => "Action descriptions",
+                2 => "Spells",
+                3 => "Equipment & coins",
+                _ => "Features & traits",
+            },
+            filtered.len(),
+        );
+    }
     let mut level_counts = std::collections::BTreeMap::new();
     for row in &filtered {
         *level_counts.entry(row.3).or_insert(0) += 1;

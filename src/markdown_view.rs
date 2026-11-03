@@ -159,7 +159,7 @@ fn show_with_density(ui: &mut egui::Ui, markdown: &str, dense: bool) {
                 }
             }
             Event::End(TagEnd::Table) => {
-                if let Some(rows) = table.take() {
+                if let Some(mut rows) = table.take() {
                     if dense && rows.first().is_some_and(|row| row == &["Field", "Value"]) {
                         show_fields(ui, &rows[1..]);
                         inventory_table = false;
@@ -197,6 +197,12 @@ fn show_with_density(ui: &mut egui::Ui, markdown: &str, dense: bool) {
                             cell.to_owned()
                         }
                     };
+                    if let Some(Ok((_, dice))) = &rolls
+                        && let Some(header) = rows.first_mut().and_then(|row| row.first_mut())
+                        && header.trim().is_empty()
+                    {
+                        *header = dice.clone();
+                    }
                     let mut widths = column_widths(ui, &rows, &columns, &display);
                     if rolls.is_some() && !widths.is_empty() {
                         // Reserve the roll mark so it never wraps above the row label.
@@ -548,11 +554,25 @@ fn reader_table(
                 } else {
                     egui::scroll_area::ScrollBarVisibility::AlwaysHidden
                 };
+                let document = ui
+                    .ctx()
+                    .data(|data| data.get_temp::<uuid::Uuid>(egui::Id::new("reader_document")));
+                let surface = ui
+                    .ctx()
+                    .data(|data| data.get_temp::<egui::Id>(egui::Id::new("reader_surface")));
+                let offset_id = egui::Id::new(("reader_table_offset", surface, document, rows));
+                let offset = ui
+                    .ctx()
+                    .data(|data| data.get_temp::<f32>(offset_id))
+                    .unwrap_or_default();
                 let output = egui::ScrollArea::horizontal()
-                    .id_salt(ui.next_auto_id())
+                    .id_salt(("reader_table", rows))
+                    .horizontal_scroll_offset(offset)
                     .max_width(ui.available_width())
                     .scroll_bar_visibility(bars)
                     .show(ui, &mut show);
+                ui.ctx()
+                    .data_mut(|data| data.insert_temp(offset_id, output.state.offset.x));
                 moving_clip = outer_clip.intersect(output.inner_rect);
             } else {
                 ui.allocate_ui_with_layout(
@@ -572,6 +592,11 @@ fn reader_table(
     // The header follows the top edge until the final row leaves the reader.
     if let Some(header) = cells.first() {
         let header_top = top.max(outer_clip.top()).min(top + height - heights[0]);
+        let header_rect = egui::Rect::from_min_max(
+            egui::pos2(left, header_top),
+            egui::pos2(outer_clip.right(), header_top + heights[0]),
+        );
+        painter.rect_filled(header_rect, egui::CornerRadius::ZERO, colors().page);
         let fixed = egui::Rect::from_min_size(
             egui::pos2(left, header_top),
             egui::vec2(widths[0], heights[0]),
@@ -581,6 +606,11 @@ fn reader_table(
             fixed.min + egui::vec2(0.0, design::XS),
             header[0].clone(),
             colors().text,
+        );
+        painter.hline(
+            header_rect.x_range(),
+            header_rect.bottom(),
+            egui::Stroke::new(design::HAIRLINE_WIDTH, colors().hairline),
         );
         if widths.len() > 1 {
             let painter = painter.with_clip_rect(moving_clip);

@@ -166,7 +166,7 @@ pub mod library_author {
     const CHANGED_ON_DISK: &str = "This note changed on disk";
     const PACKAGE_ACTIONS: &str = "Packages";
     const MANAGE_PACKAGES: &str = "Manage packages…";
-    const MANAGE_TITLE: &str = "Manage packages";
+    const MANAGE_TITLE: &str = "MANAGE PACKAGES";
     const CLOSE_WINDOW: &str = "Close the package form";
     const NEW_ENTRY: &str = "New entry";
     const CREATE_ENTRY: &str = "Create entry";
@@ -445,7 +445,14 @@ pub mod reader_tables {
             d.visible_text("Ninth-slot"),
             "The last column is readable after scrolling across the Library table",
         );
+        d.set_base(DEFAULT);
+        d.observe(
+            "Table resize",
+            d.visible_text("Ninth-slot"),
+            "The table keeps its sideways position when resized to 1200x800",
+        );
         d.state("last-column-in-library", Sizes::All);
+        d.set_base(SMALL);
 
         go_encounters(d);
         resume_run_from_cold_start(d);
@@ -575,14 +582,14 @@ pub mod campaign_content {
         d.state("repair-needed", Sizes::Default);
         d.observe(
             "T9.2",
-            d.is_disabled(SAVE_SELECTIONS) && d.visible_text("before saving"),
+            d.is_disabled(SAVE_SELECTIONS) && d.visible_text("Fix Notes/Broken.md first."),
             "Save disabled by a repair states its reason",
         );
         // The repair opens here, with the note's text in it.
         d.state("repair-open", Sizes::Default);
         d.observe(
             "Repair says why",
-            d.visible_text("Invalid YAML"),
+            d.visible_text("line 3 opens a list"),
             "The repair says what is wrong before the DM edits anything",
         );
         d.observe(
@@ -1298,7 +1305,7 @@ pub mod empty {
     const OPEN_CAMPAIGN: &str = "Open campaign";
     const NEW_CAMPAIGN: &str = "Ashes of Emberfall";
     const NEW_FOLDER: &str = "new-campaign";
-    const NO_ENTRIES: &str = "This campaign has no entries of its own yet";
+    const NO_ENTRIES: &str = "Use Copy to… from any entry, or make a new one here.";
     const OPEN_SETTINGS: &str = "Add a campaign";
     const NO_CAMPAIGN_ENCOUNTERS: &str = "No campaign yet";
     const NO_CAMPAIGN_PARTY: &str = "No campaign yet";
@@ -2528,7 +2535,7 @@ pub mod gallery {
 /// The widths come back after a restart.
 pub mod column_resize {
     use super::*;
-    use crate::design::{PANEL_MIN_WIDTH, RAIL_DRAG_MAX_WIDTH, RAIL_WIDTH, S, side_panel_width};
+    use crate::design::{PANEL_MIN_WIDTH, RAIL_DRAG_MAX_WIDTH, RAIL_WIDTH, S};
 
     const CHECK: &str = "Column resize";
     const MEMBER: &str = "Brannoch Vale";
@@ -2710,12 +2717,21 @@ pub mod column_resize {
         d.click(BACK_TO_RUN);
         d.state("run-beside-wide-rail", Sizes::All);
         d.click(NAV_LOOKUP);
+        d.settle();
+        d.expect("Close Lookup");
         d.state("lookup-beside-wide-rail", Sizes::All);
         // Lookup gives the page what it needs, here beside a rail of the widest kind.
-        let lookup_edge = (DEFAULT.0 - side_panel_width(DEFAULT.0))
-            .max(RAIL_DRAG_MAX_WIDTH + crate::design::PANEL_LEAVES_PAGE);
-        d.drag_column_edge(lookup_edge, FAR_LEFT);
-        d.state("lookup-wide-beside-wide-rail", Sizes::All);
+        let lookup_edge = d.column_edge("lookup");
+        let before = d.place_of(crate::lookup::SEARCH_NAME).unwrap().width();
+        d.drag_column_edge(lookup_edge, FAR_RIGHT);
+        d.settle();
+        d.expect("Close Lookup");
+        d.observe(
+            CHECK,
+            d.place_of(crate::lookup::SEARCH_NAME).unwrap().width() < before,
+            "Lookup is narrower before its capture",
+        );
+        d.state("lookup-narrow-beside-wide-rail", Sizes::All);
         d.click(NAV_LOOKUP);
         d.expect(NEXT_TURN);
         d.click(NEXT_TURN);
@@ -3242,6 +3258,11 @@ pub mod library_scope {
         d.expect(USES);
         d.state("scope-menu", Sizes::Default);
         d.click(EVERYTHING);
+        d.observe(
+            "Library scope search",
+            d.field_text("Search the Library").as_deref() == Some("fireball"),
+            "A scope change keeps the query and selected Fireball",
+        );
         d.state("scope-everything", Sizes::Default);
         d.observe(
             "Reader selection",
@@ -3774,11 +3795,11 @@ pub mod world {
         d.expect("Type a name first.");
         d.state("world-new-npc-form", Sizes::All);
         d.type_into("Name", "Watchkeeper");
-        d.click("Create note");
+        d.click("Create NPC");
         d.expect("Watchkeeper");
         d.observe(
             "World creation",
-            !d.has("Create note") && d.has_containing("Watchkeeper"),
+            !d.has("Create NPC") && d.has_containing("Watchkeeper"),
             "Creating a World note closes the form and opens the note",
         );
         d.state("world-new-note-created", Sizes::Default);
