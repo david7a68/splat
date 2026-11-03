@@ -301,7 +301,7 @@ impl TimelinePage {
         let c = colors();
         let selected = self.selected.as_deref() == Some(event.id.as_str());
         let title = event.label(day);
-        let mut detail = event.summary(session);
+        let mut detail = event.summary_with_result(session, &super::played_fight_summary(event));
         // Filters and scrolling hide the Day rows, so each row says its own.
         if event.kind != Kind::Day && day > 0 {
             detail = if detail.is_empty() {
@@ -828,7 +828,11 @@ impl TimelinePage {
             if !event.result.is_empty() {
                 ui.add_space(design::M);
                 design::field(ui, "From the run", None, None, |ui| {
-                    ui.label(Type::Body.rich(ui, &event.result).color(c.text));
+                    ui.label(
+                        Type::Body
+                            .rich(ui, super::played_fight_summary(event))
+                            .color(c.text),
+                    );
                 });
             }
             ui.add_space(design::M);

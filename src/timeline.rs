@@ -15,6 +15,26 @@ use std::{
 };
 use uuid::Uuid;
 
+/// A played fight names its result and last round once, on the row's second line.
+pub fn played_fight_summary(event: &Event) -> String {
+    let state = |round: &str, paused, ended| {
+        round
+            .parse()
+            .ok()
+            .map(|round| crate::encounter_run::state_words(round, paused, ended))
+    };
+    if let Some((outcome, round)) = event.result.rsplit_once(", round ") {
+        state(round, false, true).map(|words| format!("{outcome} · {words}"))
+    } else if let Some(round) = event.result.strip_prefix("Ended in round ") {
+        state(round, false, true)
+    } else if let Some(round) = event.result.strip_prefix("Round ") {
+        state(round, true, false)
+    } else {
+        None
+    }
+    .unwrap_or_else(|| event.result.clone())
+}
+
 pub const FILE: &str = "Timeline.md";
 const VERSION: u32 = 1;
 const SAVE_AFTER: Duration = Duration::from_secs(1);
@@ -151,6 +171,10 @@ impl Event {
 
     /// The second line of a row: what is known, with the session if one is given.
     pub fn summary(&self, session: Option<&str>) -> String {
+        self.summary_with_result(session, &self.result)
+    }
+
+    fn summary_with_result(&self, session: Option<&str>, result: &str) -> String {
         let mut parts = Vec::new();
         // An untitled event already shows its kind as its name.
         if self.kind != Kind::Day
@@ -159,9 +183,9 @@ impl Event {
         {
             parts.push(self.kind.word());
         }
-        for part in [&self.duration, &self.place, &self.result] {
+        for part in [self.duration.as_str(), self.place.as_str(), result] {
             if !part.trim().is_empty() {
-                parts.push(part.as_str());
+                parts.push(part);
             }
         }
         if self.time_not_read() {
@@ -984,6 +1008,35 @@ impl Book {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn fight_summary_uses_run_state_words_without_changing_stored_result() {
+        let mut event = event(Kind::Encounter, "");
+        for (stored, shown) in [
+            ("Round 2", "Round 2 · Paused"),
+            ("Ended in round 3", "Ended · Round 3"),
+            (
+                "Held the bridge, round 1",
+                "Held the bridge · Ended · Round 1",
+            ),
+            ("A custom result", "A custom result"),
+        ] {
+            event.result = stored.into();
+            assert_eq!(played_fight_summary(&event), shown);
+            assert!(
+                event
+                    .summary_with_result(None, &played_fight_summary(&event))
+                    .contains(shown)
+            );
+            assert!(event.summary(None).contains(stored));
+            assert!(
+                render(&[event.clone()], &BTreeMap::new())
+                    .unwrap()
+                    .contains(stored)
+            );
+            assert_eq!(event.result, stored);
+        }
+    }
 
     fn book(folder: &Path) -> Book {
         let mut book = Book::default();

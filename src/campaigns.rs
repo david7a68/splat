@@ -644,12 +644,6 @@ impl Campaigns {
         let c = colors();
         ui.set_max_width(ui.available_width().min(design::LIST_MEASURE));
         self.remove_dialog(ui.ctx());
-        if let Some(added) = self.added.clone()
-            && design::message_with_action(ui, Tone::Success, &added, "Build an encounter")
-        {
-            self.wants_encounters = true;
-            self.added = None;
-        }
         ui.horizontal(|ui| {
             design::group_heading(ui, "Campaigns", self.data.campaigns.len());
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
@@ -783,6 +777,12 @@ impl Campaigns {
             if let Some(id) = open {
                 self.select(Some(id));
             }
+            if let Some(added) = self.added.clone()
+                && design::message_with_action(ui, Tone::Success, &added, "Build an encounter")
+            {
+                self.wants_encounters = true;
+                self.added = None;
+            }
             ui.add_space(design::S);
             dndbeyond.show_import(ui, session.clone(), self);
             if self.editing.is_none() && self.remote.is_none() {
@@ -833,7 +833,7 @@ impl Campaigns {
             let empty = self.data.campaigns.is_empty();
             let mut fields = |ui: &mut egui::Ui| {
                 ui.add_space(design::XS);
-                let name = design::text_field(ui, "Campaign name", &mut self.name, None, None);
+                let name = design::small_text_field(ui, "Campaign name", &mut self.name, None, None);
                 if std::mem::take(&mut self.focus_name) {
                     name.request_focus();
                 }
@@ -842,7 +842,7 @@ impl Campaigns {
                 let field = ui
                     .vertical(|ui| {
                         ui.set_max_width((room - BROWSE_WIDTH).max(120.0));
-                        design::text_field(ui, "Folder", &mut self.path, None, None)
+                        design::small_text_field(ui, "Folder", &mut self.path, None, None)
                     })
                     .inner;
                 let browse = egui::Rect::from_min_size(
