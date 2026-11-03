@@ -7,8 +7,9 @@ use std::{
     time::{Duration, Instant},
 };
 
-// One full suite measured over 25 GiB including swap on this 31 GiB host.
-const DEFAULT_SLOTS: usize = 1;
+// Shared parsed fields reduced a full suite to 6.25 GiB on the 31 GiB host.
+// Two suites leave ample memory for the app, builds and filesystem cache.
+const DEFAULT_SLOTS: usize = 2;
 
 pub(super) struct Permit {
     index: usize,
@@ -94,7 +95,7 @@ fn try_acquire(temp: &Path, count: usize) -> io::Result<Option<Permit>> {
 
 #[test]
 fn slot_count_requires_a_positive_integer() {
-    assert_eq!(slot_count(None), Ok(1));
+    assert_eq!(slot_count(None), Ok(2));
     assert_eq!(slot_count(Some("2")), Ok(2));
     for invalid in ["", "0", "-1", "two", "1.5"] {
         assert!(slot_count(Some(invalid)).is_err(), "{invalid}");

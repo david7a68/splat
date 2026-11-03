@@ -142,6 +142,14 @@ pub fn places(d: &mut Driver<'_>) {
         "Give an NPC a stat block in three interactions",
     );
     d.expect("Stat block changed.");
+    assert!(
+        fs::read_to_string(root(d).join("NPCs/Rook Ambry.md"))
+            .unwrap()
+            .contains("creature:")
+    );
+    d.expect_same(
+        "Adding the stat block changes only its short link and the confirmation message.",
+    );
     d.state("npc-stat-block-changed", Sizes::All);
     d.click("Undo World change");
     d.observe(
@@ -411,6 +419,7 @@ pub fn package_rename(d: &mut Driver<'_>) {
     d.wait_for_text("Read the watch spell");
     d.click("Read the watch spell");
     d.wait_for_text("Watch Ashfall");
+    d.expect_same("Restoring the moved package preserves the same linked reader content.");
     d.state("package-folder-restored-with-links", Sizes::All);
 }
 
@@ -433,6 +442,7 @@ pub fn package_about(d: &mut Driver<'_>) {
     d.state("package-every-entry-used", Sizes::All);
     d.click("Undo package use");
     d.wait_for_text("Used here · 5 of 6 entries");
+    d.expect_same("Undo package use restores the original package selection and About reader.");
     d.state("package-use-undone", Sizes::All);
     d.click(EDIT_MARKDOWN);
     let original = d.editor_text().unwrap();
@@ -561,6 +571,7 @@ pub fn package_delete_entry(d: &mut Driver<'_>) {
     d.state("deleted-package-entry-replaced", Sizes::All);
     d.click("Undo replacement");
     d.expect("Not found. Its package entry was deleted.");
+    d.expect_same("Undo replacement restores the original missing-creature rows and warning.");
     d.state("deleted-package-entry-replacement-undone", Sizes::All);
 }
 

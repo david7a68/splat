@@ -15,7 +15,7 @@
 //! - `SPLAT_VISUAL_SCENARIOS=party,settings` runs only those scenarios.
 //! - `SPLAT_VISUAL_DIAGNOSE=1` collects text expectations, then still fails the run.
 //! - `SPLAT_VISUAL_TIMINGS=1` prints stage timings without changing captures.
-//! - `SPLAT_VISUAL_SLOTS` overrides the machine-wide suite limit (default 1).
+//! - `SPLAT_VISUAL_SLOTS` overrides the machine-wide suite limit (default 2).
 //!   Set the same positive count in every worktree; each slot needs full-suite RAM.
 //! - Linux isolates temporary files with a mount namespace when available.
 //!   `SPLAT_VISUAL_ISOLATE=0` retains the shared-world lock for comparison.

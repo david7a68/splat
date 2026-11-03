@@ -91,7 +91,7 @@ pub fn quick_add(
 ) -> Option<String> {
     let blocked = book.unreadable.is_some();
     let mut added = None;
-    design::add_strip(ui, |ui| {
+    design::hanging_add_strip(ui, |ui| {
         first(ui);
         for &kind in kinds {
             if Action::quiet(kind.word())

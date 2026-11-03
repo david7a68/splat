@@ -1405,7 +1405,10 @@ impl Encounters {
             }
             Ok(_) if self.has_run() => self.error = Some(BLOCKED_BY_RUN.to_owned()),
             Ok(_) => match crate::encounter_run::Run::open(path, active.id) {
-                Ok(run) => {
+                Ok(mut run) => {
+                    if let Some(carry) = &self.carry {
+                        run.rest_saved_setup(carry.rest_order);
+                    }
                     self.run = Some(run);
                     self.go_to_run = true;
                     self.error = None;
@@ -2074,11 +2077,7 @@ impl Encounters {
         if fresh.setup.combat_sync && campaign.dndbeyond_campaign_id.is_some() {
             run.keep_party_synced();
         }
-        if let Some(carry) = self
-            .carry
-            .as_ref()
-            .filter(|carry| !sheets.is_empty() || !carry.missing.is_empty())
-        {
+        if let Some(carry) = self.carry.as_ref() {
             run.note_carry(carry, sheets);
         }
         Ok(run)

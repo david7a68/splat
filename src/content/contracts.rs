@@ -209,7 +209,7 @@ pub fn declarations(entry: &Entry) -> Result<Vec<Interface>, String> {
 
 pub fn specification(entry: &Entry) -> Result<Json, String> {
     let mut fields = serde_json::Map::new();
-    for (key, value) in &entry.fields {
+    for (key, value) in entry.fields.iter() {
         let key = key.as_str().ok_or("Schema field name must be a string")?;
         if key.starts_with("splat_")
             && ![

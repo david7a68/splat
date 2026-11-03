@@ -215,7 +215,7 @@ pub fn note_entry(path: &str, name: &str, body: String) -> Entry {
         key: None,
         name: name.to_owned(),
         kind: NOTE_KIND.to_owned(),
-        fields: Mapping::new(),
+        fields: Mapping::new().into(),
         body,
         inventory: Vec::new(),
         inventory_containers: Vec::new(),
