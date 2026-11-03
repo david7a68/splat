@@ -215,7 +215,9 @@ fn short_field(
     hint: &str,
     width: f32,
 ) -> bool {
+    ui.add_space(design::M);
     ui.label(Type::Small.rich(ui, word).color(colors().muted));
+    ui.add_space(design::XS);
     let response = design::number_field(ui, name, text, hint, width, Density::Read.control());
     response.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter))
 }

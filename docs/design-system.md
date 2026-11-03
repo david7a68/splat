@@ -470,3 +470,21 @@ Share both copies a campaign dependency with its entry and reconnects the new re
 The warning action copies and reconnects one dependency. Undo restores the reference and removes the unchanged copy.
 A compact NPC reader shows Fights as and In on one read-only line; both names open in Lookup.
 Lookup keeps Back and its close icon on the title line, with Clear beside search.
+
+## Run and encounter audit, iteration 4
+
+The run dock and footer use the roster column's fixed width. A panel never covers
+their words. The dock fits whole words at every width and keeps the last word or
+number that distinguishes a participant. Its hover text and accessible name keep
+the full name. An off Absent toggle uses muted text and no fill.
+
+Setup keeps roster rows in place. A muted ordinal follows each initiative field,
+updates after each total or tie ruling, and the ready line names who goes first.
+The compact fight menu reads Fight and uses the tab underline. Its panel title
+names the open fight tab.
+
+Every change field shows its printed value and result, including changes added by
+hand. Editors, run cards and fault details share the same preview. Done closes a
+change form and returns to its member row. An empty group blocks Save group with
+Add a creature first. A tied arrival states who it tied with and offers Move before
+as one step with Undo. Member summaries wrap between members, never inside a name.

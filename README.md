@@ -97,7 +97,8 @@ or set `SPLAT_VISUAL_CONTACT_SHEET=1` to make it with a full `visual-test` run.
 
 Library has **New entry** in its header. Its form opens in the reader column and closes after creation. World has **New ▾** for a plain note, a note with a type, an NPC, a location, or a generated NPC. List headings use capitals and a count. Page headers show state or nonzero counts beside the title, with a rule and an `L` gap below. Counts use thousands separators.
 
-The `gallery` scenario captures every design token and component, including page headers, blocked reasons, full rows with menus, paused runs and message actions. The `missing-glyph` check rejects painted characters missing from the app fonts. `src/design/lint.rs` fails on raw
+The `gallery` scenario captures every design token and component, including page headers, blocked reasons, full rows with menus, paused runs and message actions. The `missing-glyph` check rejects painted characters missing from the app fonts. The
+`clipped` check also catches text partly covered by a later opaque pane. `src/design/lint.rs` fails on raw
 colours, text sizes and raw icon text outside `src/design/`, and `src/design/tokens.rs` tests WCAG contrast.
 
 Scenario labels are at the top of each scenario in `src/visual_tests/scenarios.rs`, and the
@@ -121,7 +122,9 @@ in Settings; character sheets with combat sync are available in **Party**. Chara
 The encounter builder uses these local character copies. Manual DM runs are available.
 Encounter and group searches also find NPCs with a stat block. Add keeps the NPC's
 name through the existing encounter override. Shared NPC initiative rolls stay quiet;
-only equal totals from different rolls need a tie ruling. Changing the run folder
+only equal totals from different rolls need a tie ruling. Setup shows each participant’s
+place beside initiative and names who goes first. A tied arrival offers **Move before**,
+with Undo. Change fields show the printed value and result. Changing the run folder
 warns about saved runs and offers **Move runs and save** or **Save without moving**.
 Close the open run before saving run settings.
 
