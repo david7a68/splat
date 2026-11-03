@@ -621,6 +621,7 @@ pub(super) fn add_target(ui: &mut egui::Ui, draft: &mut Draft, snapshot: &Snapsh
     // Beside the search, because the group itself can be out of view or on another tab.
     let result = draft
         .target_group()
+        .filter(|group| !group.setup.members.is_empty())
         .map(|group| members_heading(group, snapshot));
     let shown = draft
         .target_group()
