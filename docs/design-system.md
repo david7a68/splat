@@ -669,4 +669,3 @@ Plan group summaries put XP first, then members, Changed and side. They measure
 against their own action. Tabbed member and roster views omit the repeated count.
 Sheet group headings use an L gap. Death-save counts use words; Correct HP has an
 L gap after death saves. Missing encounter entries have a warning icon.
-
