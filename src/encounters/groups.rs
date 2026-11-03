@@ -390,9 +390,13 @@ pub(super) fn load(
                     .ok()
                     .and_then(|id| Some((id, creatures.iter().find(|c| c.id == id)?)))
                 else {
-                    problems.push(
-                        "Unavailable creature: check the packages this campaign uses.".to_owned(),
-                    );
+                    let stored = match &member.creature {
+                        splat::content::Reference::Id(id) => id.to_string(),
+                        splat::content::Reference::Key(key) => key.clone(),
+                    };
+                    problems.push(format!(
+                        "{what}, {stored}: not in this campaign's packages. Campaign → Packages."
+                    ));
                     unavailable = unavailable.saturating_add(member.count);
                     continue;
                 };
@@ -402,7 +406,11 @@ pub(super) fn load(
                     Some(format!("{what}: {} has a D&D Beyond sheet.", entry.name))
                 } else {
                     match &resolved {
-                        Err(error) => Some(format!("{what} ({}): {error}", entry.name)),
+                        Err(error) => Some(format!(
+                            "{what}, {}: {}",
+                            entry.name,
+                            error.replace("1000000", "1,000,000").replace('-', "−")
+                        )),
                         Ok(resolved) if resolved.max_hp.is_none() => Some(format!(
                             "{what}: {} has no maximum HP. Set it in this member's overrides.",
                             entry.name
@@ -439,7 +447,7 @@ pub(super) fn load(
                 xp,
                 xp_unknown,
                 unavailable,
-                problem: (!problems.is_empty()).then(|| problems.join(" ")),
+                problem: (!problems.is_empty()).then(|| problems.join("\n")),
             }))
         })
         .collect();
@@ -465,12 +473,16 @@ fn list_row(ui: &mut egui::Ui, group: &RunGroup, blocked: Option<&'static str>) 
                         .truncate(),
                 );
                 if let Some(problem) = &group.problem {
-                    ui.add(
-                        egui::Label::new(
-                            Type::Small.rich(ui, problem).color(colors().result.warning),
-                        )
-                        .wrap(),
-                    );
+                    for fault in problem.lines() {
+                        ui.add(
+                            egui::Label::new(
+                                Type::Small
+                                    .rich(ui, format!("{} {fault}", icons::WARN))
+                                    .color(colors().result.warning),
+                            )
+                            .wrap(),
+                        );
+                    }
                 }
             });
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
@@ -858,7 +870,7 @@ pub(super) fn show_changes(
                 ui,
                 Status {
                     icon: icons::CHANGED,
-                    word: "Overrides, here only",
+                    word: "Changed",
                     color: colors().participant.changed,
                 },
             );
@@ -995,9 +1007,9 @@ pub(super) fn overrides_form(
     let heading = design::group_label(
         ui,
         if sides.is_some() {
-            "Overrides, for this encounter only"
+            "Changes in this encounter"
         } else {
-            "Overrides, for this group only"
+            "Changes in this group"
         },
     );
     if ui
@@ -1110,43 +1122,85 @@ pub(super) fn overrides_form(
     }
 }
 
-/// Names split by commas. The words stay as typed while the field has the keyboard, or a
-/// comma just typed would vanish.
+/// The same official names and local Other effect as the run.
 fn conditions_row(ui: &mut egui::Ui, conditions: &mut Vec<String>) {
-    const NAME: &str = "Starting conditions";
-    ui.horizontal(|ui| {
-        let (rect, _) = ui.allocate_exact_size(
-            egui::vec2(LABEL_WIDTH, Density::Read.control()),
-            egui::Sense::hover(),
-        );
-        ui.painter().text(
-            rect.left_center(),
-            egui::Align2::LEFT_CENTER,
-            NAME,
-            Type::Small.font(ui),
-            colors().muted,
-        );
-        let id = ui.id().with(NAME);
-        let mut text = ui
-            .data(|data| data.get_temp::<String>(id))
-            .unwrap_or_else(|| conditions.join(", "));
-        let width = (ui.available_width() - design::S).clamp(120.0, 320.0);
-        let response = design::text_input(ui, NAME, &mut text, "Poisoned, Prone", width);
-        if response.has_focus() {
-            ui.data_mut(|data| data.insert_temp(id, text.clone()));
-        } else {
-            ui.data_mut(|data| data.remove_temp::<String>(id));
-        }
-        if response.changed() {
-            let mut seen = Vec::<String>::new();
-            for name in text.split(',').map(str::trim).filter(|n| !n.is_empty()) {
-                if !seen.iter().any(|other| same_condition(other, name)) {
-                    seen.push(name.to_owned());
+    design::group_label(ui, "Starting conditions");
+    ui.horizontal_wrapped(|ui| {
+        for (_, name) in crate::combat_sync::CONDITIONS {
+            let found = conditions.iter().position(|c| same_condition(c, name));
+            if crate::encounter_run::view::toggle(
+                ui,
+                name,
+                if found.is_some() {
+                    icons::OK
+                } else {
+                    icons::ADD
+                },
+                found.is_some(),
+                name,
+                Density::Read,
+            )
+            .clicked()
+            {
+                if let Some(at) = found {
+                    conditions.remove(at);
+                } else {
+                    conditions.push(name.to_owned());
                 }
             }
-            *conditions = seen;
         }
     });
+    let official = |c: &str| {
+        crate::combat_sync::CONDITIONS
+            .iter()
+            .any(|(_, name)| same_condition(c, name))
+    };
+    let custom: Vec<_> = conditions
+        .iter()
+        .filter(|c| !official(c))
+        .cloned()
+        .collect();
+    for effect in custom {
+        ui.horizontal(|ui| {
+            ui.label(Type::Small.rich(ui, &effect).color(colors().muted));
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                let menu = ui.menu_button("⋯", |ui| {
+                    if ui.button("Remove").clicked() {
+                        conditions.retain(|c| c != &effect);
+                        ui.close();
+                    }
+                });
+                design::named(ui, &menu.response, &format!("More actions for {effect}"));
+            });
+        });
+    }
+    let id = ui.id().with("starting_other_effect");
+    let mut text = ui
+        .data(|data| data.get_temp::<String>(id))
+        .unwrap_or_default();
+    ui.horizontal(|ui| {
+        let field = design::text_input(
+            ui,
+            "Other effect",
+            &mut text,
+            "Other effect",
+            design::FORM_WIDTH.min(ui.available_width() - design::L * 8.0),
+        );
+        let enter = field.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
+        if (Action::secondary("Add effect")
+            .density(Density::Read)
+            .show(ui)
+            .clicked()
+            || enter)
+            && !text.trim().is_empty()
+        {
+            if !conditions.iter().any(|c| same_condition(c, text.trim())) {
+                conditions.push(text.trim().to_owned());
+            }
+            text.clear();
+        }
+    });
+    ui.data_mut(|data| data.insert_temp(id, text));
 }
 
 impl Encounters {
@@ -1222,6 +1276,7 @@ impl Encounters {
         campaigns: &Campaigns,
         in_plan: bool,
     ) {
+        let has_run = self.has_run();
         let dirty = self.draft_dirty();
         // The Session page has no save of its own to give this key to.
         let save_key = in_plan
@@ -1241,39 +1296,43 @@ impl Encounters {
         let (mut back, mut save, mut discard) = (false, false, false);
         // The title and its actions need more room than the panes do.
         let two_rows = ui.available_width() < 1040.0;
-        let title = |ui: &mut egui::Ui, back: &mut bool, draft: &mut GroupDraft| {
-            *back = Action::quiet(back_word)
-                .icon(icons::BACK)
-                .name(back_name)
-                .blocked_if(dirty, "Save or discard this group first.")
-                .show(ui)
-                .clicked();
-            let room = if two_rows { 150.0 } else { 450.0 };
-            let width = (ui.available_width() - room).clamp(120.0, 360.0);
-            let response = ui.add(
-                egui::TextEdit::singleline(&mut draft.name)
-                    .id(design::focus_id(NAME_FIELD))
-                    .desired_width(width)
-                    .min_size(egui::vec2(0.0, Density::Scan.control()))
-                    .margin(egui::vec2(design::S, 5.0))
-                    .font(Type::Heading.font(ui)),
-            );
-            design::named(ui, &response, &format!("Group name: {}", draft.name));
-            if focus_name {
-                design::focus_and_select(ui, response.id, &draft.name);
-            }
-            let (icon, word, color) = if dirty {
-                (icons::DRAFT, "Unsaved", colors().document.unsaved)
-            } else if let Some(note) = &saved_note {
-                (icons::OK, note.as_str(), colors().document.saved)
-            } else {
-                (icons::OK, "No changes", colors().muted)
+        let title =
+            |ui: &mut egui::Ui, back: &mut bool, discard: &mut bool, draft: &mut GroupDraft| {
+                *back = Action::quiet(back_word)
+                    .icon(icons::BACK)
+                    .name(back_name)
+                    .blocked_if(dirty, "Save or discard this group first.")
+                    .show(ui)
+                    .clicked();
+                let room = if two_rows { 150.0 } else { 450.0 };
+                let width = (ui.available_width() - room).clamp(120.0, 360.0);
+                let response = ui.add(
+                    egui::TextEdit::singleline(&mut draft.name)
+                        .id(design::focus_id(NAME_FIELD))
+                        .desired_width(width)
+                        .min_size(egui::vec2(0.0, Density::Scan.control()))
+                        .margin(egui::vec2(design::S, 5.0))
+                        .font(Type::Heading.font(ui)),
+                );
+                design::named(ui, &response, &format!("Group name: {}", draft.name));
+                if focus_name {
+                    design::focus_and_select(ui, response.id, &draft.name);
+                }
+                let (icon, word, color) = if dirty {
+                    (icons::DRAFT, "Unsaved", colors().document.unsaved)
+                } else if let Some(note) = &saved_note {
+                    (icons::OK, note.as_str(), colors().document.saved)
+                } else {
+                    (icons::OK, "No changes", colors().muted)
+                };
+                design::status(ui, Status { icon, word, color });
+                if dirty {
+                    *discard = Action::quiet("Discard").show(ui).clicked();
+                }
             };
-            design::status(ui, Status { icon, word, color });
-        };
-        let actions = |ui: &mut egui::Ui, save: &mut bool, discard: &mut bool| {
+        let actions = |ui: &mut egui::Ui, save: &mut bool| {
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                *save = if dirty {
+                *save = if dirty && !has_run {
                     Action::primary("Save group")
                 } else {
                     Action::secondary("Save group")
@@ -1282,19 +1341,15 @@ impl Encounters {
                 .key("Ctrl+S")
                 .show(ui)
                 .clicked();
-                ui.add_space(design::XL);
-                if dirty {
-                    *discard = Action::destructive("Discard changes").show(ui).clicked();
-                }
             });
         };
         if two_rows {
-            ui.horizontal(|ui| title(ui, &mut back, draft));
-            ui.horizontal(|ui| actions(ui, &mut save, &mut discard));
+            ui.horizontal(|ui| title(ui, &mut back, &mut discard, draft));
+            ui.horizontal(|ui| actions(ui, &mut save));
         } else {
             ui.horizontal(|ui| {
-                title(ui, &mut back, draft);
-                actions(ui, &mut save, &mut discard);
+                title(ui, &mut back, &mut discard, draft);
+                actions(ui, &mut save);
             });
         }
         design::rule(ui);
@@ -1527,7 +1582,7 @@ fn members(
                 || "Unavailable creature".to_owned(),
                 |entry| entry.name.clone(),
             );
-            let button = format!("Overrides for {name}");
+            let button = format!("Changes for {name}");
             let name = if entry.is_some() {
                 shown_name(&member.overrides, name)
             } else {

@@ -193,3 +193,11 @@ pub fn copy_open_entry_to_campaign(d: &mut Driver<'_>) {
 pub fn add_group(name: &str) -> String {
     format!("Add {name} to the initiative list")
 }
+
+/// Fight tabs share a menu when the panel has no room for all six words.
+pub fn fight_tab(d: &mut Driver<'_>, tab: &str) {
+    if !d.has(tab) {
+        d.click("Fight ▾");
+    }
+    d.click(tab);
+}

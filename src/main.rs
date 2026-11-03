@@ -439,8 +439,9 @@ impl Splat {
         if !names.is_empty() {
             items.push((
                 format!(
-                    "D&D Beyond has not confirmed changes to {}. The saved run keeps HP, death saves and conditions, and asks you to choose when you next sync. Unsent spell slots and limited uses are lost.",
-                    names.join(", ")
+                    "D&D Beyond has not confirmed changes to {}. The saved run keeps HP, death saves and conditions, and asks you to choose when you next sync. {}",
+                    names.join(", "),
+                    if self.encounters.run().is_some_and(|run| !run.unsent_only_here_names().is_empty()) { "Unsent spell slots and limited uses are lost." } else { "Undo stops here." }
                 ),
                 Page::Run,
             ));
@@ -490,6 +491,11 @@ impl Splat {
             return;
         }
         let only_sync = items.len() == 1 && !self.encounters.pending_sync_names().is_empty();
+        let only_run_unsaved = items.len() == 1 && self.encounters.run_not_saved().is_some();
+        let sync_loss = self
+            .encounters
+            .run()
+            .is_some_and(|run| !run.unsent_only_here_names().is_empty());
         let background =
             usize::from(self.sessions.recording()) + usize::from(self.sessions.processing());
         let (title, keep_label, discard_label, advice) = if items.len() == background {
@@ -499,12 +505,23 @@ impl Splat {
                 "Stop and close",
                 "Nothing already saved is lost either way.",
             )
+        } else if only_run_unsaved {
+            (
+                "This run could not be saved",
+                "Keep running",
+                "Close and lose changes",
+                "Closing loses changes since the last save.",
+            )
         } else if only_sync {
             (
                 "Sync has not finished",
-                "Return to run",
-                "Close anyway",
-                "Return, and wait for sync or resolve the conflict. Or close, and lose what is named above.",
+                "Keep running",
+                if sync_loss {
+                    "Close and lose changes"
+                } else {
+                    "Close now"
+                },
+                "Keep running to finish sync. Closing keeps the saved run.",
             )
         } else {
             (
@@ -516,23 +533,51 @@ impl Splat {
         };
         let mut keep = ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Escape));
         let mut discard = false;
+        let mut save_new = false;
         design::dialog(ctx, "unsaved_on_close", title, |ui| {
             for (item, _) in &items {
                 ui.add(egui::Label::new(item.as_str()).wrap());
             }
             ui.label(Type::Small.rich(ui, advice).color(colors().muted));
             ui.add_space(design::S);
+            let loses = !(only_sync && !sync_loss);
             ui.horizontal(|ui| {
-                keep |= Action::primary(keep_label).show(ui).clicked();
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    if only_run_unsaved {
+                        save_new = Action::primary("Save as a new run and close")
+                            .show(ui)
+                            .clicked();
+                    } else if !loses {
+                        discard = Action::secondary(discard_label).show(ui).clicked();
+                    }
+                    let response = Action::secondary(keep_label).show(ui);
+                    let id = ui.id().with("app_close_default_focused");
+                    if !ui.data(|data| data.get_temp::<bool>(id).unwrap_or(false)) {
+                        response.request_focus();
+                        ui.data_mut(|data| data.insert_temp(id, true));
+                    }
+                    keep |= response.clicked();
+                });
+            });
+            if loses {
                 ui.add_space(design::L);
                 discard = Action::destructive(discard_label).show(ui).clicked();
-            });
+            }
         });
         if keep {
             self.confirm_close = false;
             // The first thing named is where the DM goes, if anything needs them there.
             if items.len() != background {
                 self.page = items[0].1;
+            }
+        }
+        if save_new && let Some(run) = self.encounters.run_mut() {
+            match run.save_as_new_run() {
+                Ok(()) => discard = true,
+                Err(_) => {
+                    self.confirm_close = false;
+                    self.page = Page::Run;
+                }
             }
         }
         if discard {
@@ -691,6 +736,12 @@ impl Splat {
     /// What the World page, Lookup and the roll tables in them need from the rest of the app.
     fn follow_world(&mut self, ctx: &egui::Context) {
         let sides = self.encounters.run().map(|run| run.side_names());
+        let in_run = self
+            .encounters
+            .run()
+            .map(|run| run.arrivals_in_run())
+            .unwrap_or_default();
+        self.lookup.run_open = self.encounters.has_run();
         if let Some(words) = self.world_page.ask_lookup.take() {
             self.notes_give_way();
             self.lookup.search_for(&words);
@@ -698,6 +749,13 @@ impl Splat {
         let mut refresh = std::mem::take(&mut self.world_page.reload);
         for reader in [&mut self.world_page.reader, &mut self.lookup.reader] {
             reader.sides = sides.clone();
+            reader.in_run = in_run.clone();
+            if let Some(index) = reader.select_run.take()
+                && let Some(run) = self.encounters.run_mut()
+            {
+                run.select_arrival(index);
+                self.page = Page::Run;
+            }
             if let Some(id) = reader.open_timeline.take() {
                 self.timeline_page.reveal(&id, &self.timeline);
                 self.page = Page::Timeline;
@@ -1417,6 +1475,20 @@ impl Splat {
                 self.run_origin = self.page;
             }
             self.page = Page::Run;
+        }
+        if let Some(run) = self.encounters.run_mut() {
+            if std::mem::take(&mut run.wants_sign_in) {
+                self.page = Page::Settings;
+                self.settings_tab = SettingsTab::default();
+                self.settings.focus_sign_in();
+            }
+            let group = run.wants_group_editor.take();
+            if let Some(path) = group
+                && let Some(campaign) = &active
+            {
+                self.encounters.open_group_in_plan(&path, campaign);
+                self.page = Page::Encounters;
+            }
         }
         if std::mem::take(&mut self.party.wants_settings) {
             self.page = Page::Settings;
