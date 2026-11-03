@@ -1046,7 +1046,12 @@ impl CombatSync {
     }
     pub fn show(&mut self, ui: &mut egui::Ui) {
         let was = self.enabled;
-        ui.checkbox(&mut self.enabled, "Sync party with D&D Beyond");
+        ui.checkbox(&mut self.enabled, "Sync this sheet with D&D Beyond");
+        ui.label(
+            crate::design::Type::Small
+                .rich(ui, "Runs sync the party from the encounter.")
+                .color(crate::design::colors().muted),
+        );
         if was && !self.enabled {
             self.stop();
         }

@@ -360,8 +360,8 @@ the panel, those words open the second line instead, so that a name is never cut
 - **Changed:** a creature with overrides has `Changed` on its second line, then anything the
   run cannot apply, such as `Attack +1` or `Speed 40 ft`, because the DM needs it at the table. A setup
   row has the word `Changed` only. The second line starts under the name at every scale. If the list still does not fit after name-only rows shrink, keep the first table bonus and a `more` link to the full changes. A long condition list keeps the conditions that fit and a count link to Conditions. Its card lists changes at the top of the stat block's tab, except AC, maximum HP and initiative bonus, which the value trio already shows. What
-  the run cannot apply comes first, in larger type, and says `add by hand`. The stat block uses the
-  run's AC, maximum HP and initiative bonus, with the printed value below each changed value.
+  the run cannot apply comes first, in larger type, on one `Add by hand` summary line. The stat block uses the
+  run's AC, current / maximum HP and initiative bonus, with the printed value below each changed maximum or bonus.
   The list scrolls with the stat block, and each participant keeps its own place in it.
   A side of its own also has its word on a live row. Setup and live rows use the same side,
   HP, temporary HP and AC parts. `Correct` holds the correction fields.
@@ -478,7 +478,7 @@ icons are glyphs or painter shapes. `design::icons` names only the glyphs in use
 The rail has one recording status link at its foot. It includes the saved audio time
 while hearing sound and opens the recording. The session list keeps Failed, Stopped
 or Cancelled until retry or dismissal. A missing input puts Choose an input first in
-both the banner and the recording row. A stalled recording puts its reason and Record
+both the banner and the recording row. On the Recordings tab, a silent recording puts its duration and input help in its row, beside Stop recording, and hides the header status line. Processing uses the word Processing in the rail and session list; hover keeps the full step. A stalled recording puts its reason and Record
 again on the visible recording row; other pages keep the bottom banner.
 
 Each recording keeps its failure or stop reason beside its status, including the last processing step. Dismissing a banner does not remove that row state. While a recording is live or processing, its stored stop or cancellation reason stays hidden. A cancellation says which part stopped and offers Continue processing. Failed and Stopped use the error icon and colour; Cancelled uses warning. A recording stopped by a missing input offers Choose an input before Record again and Process. Silence uses the warning colour on every page. The result viewer uses one segmented control for Summary, Clean transcript, What the check changed, and Raw transcript. Every generated view uses the same Small draft notice. If the check did not run, the row says `No check ran` beside Raw transcript. The row menu stays beside the title, and L space separates its actions from the events heading. The result viewer has its back link and muted date on the first line, with Add to notes at the right on Summary. Its view choices start at the left on a second line. The segmented control never wraps; if the full set does not fit, one dropdown shows the current view name. Tabs and page headers omit zero counts. Templates names its own page and uses Campaign as the owner word.
@@ -495,11 +495,11 @@ Library keeps search and the selected result when its scope changes. Empty categ
 
 Inline creation forms use a Label title, fields, then a named Create action, its Small blocked reason, an L gap, and quiet Cancel. A Library draft states its cause once in the existing save row; controls that share the cause use its hover text. Typing never inserts a line above the editor. Campaign save state also belongs only in its save row. Lookup Back and Open in Library share the title line. Plain World notes use one-line rows. A typed table roll has the well fill, a centred placeholder, and the dice as its column heading. Fixed table headers cover passing rows with page fill and a hairline.
 
-Settings uses `CAMPAIGNS` and `D&D BEYOND ACCOUNT` group headings in both layouts. In the compact layout, the open account form replaces the status line and its `Connect…` link. The account verb is `Connect`; states include `Not connected` and `Signed out of D&D Beyond`. A keyring warning owns its `Connect again` action. `Disconnect` is quiet and follows the trust text. A quiet action on its own line aligns its word with the text above it; its target can extend into the gutter. The add-campaign form closes after a successful add.
+Settings uses `CAMPAIGNS` and `D&D BEYOND ACCOUNT` group headings in both layouts. In the compact layout while a run is open, the account comes before the locked campaign list. The open account form replaces the status line and its `Connect…` link. The account verb is `Connect`; states include `Not connected` and `Signed out of D&D Beyond`. A keyring warning owns its `Connect again` action. `Disconnect` is quiet and follows the trust text. A quiet action on its own line aligns its word with the text above it; its target can extend into the gutter. The add-campaign form closes after a successful add. Add and edit forms keep Cancel on the left and their commit action at the right edge. Folder help names the files kept there and permits a folder in an Obsidian vault.
 
-Settings shows one Connecting status, and Cancel aligns with the column. Connect is primary when a cookie is entered, no campaign form is open and no run owns the primary action. An unchanged campaign form blocks Save details with No changes to save. Settings leaves its header context empty; campaign counts stay on their list heading. The rail shows Connected · not remembered when it fits, or Connected with the warning icon and colour; its hover text and accessible name keep the full state. The import form keeps the campaign name in its field and omits the remote identifier, repeated heading and open row's Add action. An API key saved for another service keeps Save key visible with Paste a key first; removing that other key is a separate quiet action.
+Settings shows one Connecting status, and Cancel aligns with the column. Connect is primary when a cookie is entered, no campaign form is open and no run owns the primary action. An unchanged campaign form blocks Save details with No changes to save. Settings leaves its header context empty; campaign counts stay on their list heading. The rail wraps Connected · not remembered across two lines; its hover text and accessible name keep the full state. The import form keeps the campaign name in its field and omits the remote identifier, repeated heading and open row's Add action. An API key saved for another service keeps Save key visible with Paste a key first; removing that other key is a separate quiet action.
 
-Recording settings clip at the tab rule, with `L` above each section. Visible field labels are `Service`, `Address`, `Model` and `API key`; accessible names keep the service context. A remove-key button names its slot and service, for example Remove speech key (OpenAI). It sits below the key state at the column’s left edge. A saved key for the chosen service with no replacement typed hides Save key and its empty-field reason.
+Recording settings clip at the tab rule, with `L` above each section. Recording, Speech service and LLM use `group_heading`; their field labels use muted Small text through `small_field` and `small_text_field`. Visible field labels are `Service`, `Address`, `Model` and `API key`; accessible names keep the service context. A remove-key button names its slot and service, for example Remove speech key (OpenAI). It sits below the key state at the column’s left edge. A saved key for the chosen service with no replacement typed hides Save key and its empty-field reason.
 
 Recording retries say Continue processing. Process again is reserved for replacing existing results; its one info message names the transcript and context sent to the chosen LLM, and says the audio is not sent again. Its confirmation has secondary Not now and red Replace the results. A live row puts Stop recording first, beside Process. A job shows one spinner and one Processing progress line. The session list omits the date while a recording or job runs. Not processed uses the neutral file icon. Transcript marker actions sit beside the marker in the text.
 
@@ -739,3 +739,11 @@ and offer Open in Library. Validation messages update after encounter or group e
 Changed stays at the end of a roster row's second line; shorten muted detail first.
 Arrivals puts Changed before member names. Roster, Members and Recordings share
 an underlined tab with a muted, nonzero count.
+
+## Run and session audit, iteration 12
+
+Setup counts tied rows only across independent rolls, in both the header and the
+overflow band. The band says `2 tied`. Ordering arrows still work inside a shared
+roll. Run notices keep a result icon beside their text. Arrivals separates status
+from members when the summary wraps and never ends a line with a separator.
+Plan additions offer `Undo add`. Templates uses the shared quiet back action.

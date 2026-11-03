@@ -1810,7 +1810,7 @@ impl Sessions {
         if self.processing() {
             return Some(Status {
                 icon: icons::AUDIO,
-                word: "Processing audio",
+                word: "Processing",
                 color: c.connection.busy,
             });
         }
@@ -1867,6 +1867,9 @@ impl Sessions {
     }
 
     pub fn recording_hover(&self) -> Option<String> {
+        if let Some((job, _)) = &self.job {
+            return Some(format!("Processing · {}", job.progress.words()));
+        }
         if let Some(live) = &self.live
             && *live.recorder.health() == Health::Silent
         {
@@ -2213,6 +2216,14 @@ impl Sessions {
 
     /// The live state, or the step before it. Always in the same place.
     fn record_line(&mut self, ui: &mut egui::Ui, settings: &ProcessingSettings) {
+        if self.tab == Tab::Recordings
+            && self.reading.is_none()
+            && self.live.as_ref().is_some_and(|live| {
+                Some(live.session) == self.selected && *live.recorder.health() == Health::Silent
+            })
+        {
+            return;
+        }
         // While a recording runs, the line keeps one height, so the note below never moves.
         let live = self.live.as_ref().is_some_and(|live| {
             !matches!(live.recorder.health(), Health::Stalled | Health::Stopped(_))
@@ -4017,7 +4028,7 @@ impl Sessions {
                     format!("{} added{to}.", just.label)
                 },
             );
-            if design::message_with_action(ui, Tone::Success, &words, "Undo") {
+            if design::message_with_action(ui, Tone::Success, &words, "Undo add") {
                 book.remove(&id);
                 self.added = None;
             }
@@ -4322,6 +4333,24 @@ impl Sessions {
             && self.live.as_ref().is_some_and(|live| {
                 matches!(live.recorder.health(), Health::Stalled | Health::Stopped(_))
             });
+        let silent = live
+            && self
+                .live
+                .as_ref()
+                .is_some_and(|live| *live.recorder.health() == Health::Silent);
+        if silent && let Some(live) = &self.live {
+            ui.label(
+                Type::Small
+                    .rich(
+                        ui,
+                        format!(
+                            "Silent for over a minute · {} recorded",
+                            clock(live.recorder.seconds())
+                        ),
+                    )
+                    .color(c.result.warning),
+            );
+        }
         if stalled && let Some(live) = &self.live {
             ui.add(egui::Label::new(Type::Small.rich(ui, format!("Not saving audio after {}. What was saved is kept. Record again starts a new file.", spoken_length(live.recorder.seconds()))).color(c.muted)).wrap());
         }
@@ -4402,6 +4431,14 @@ impl Sessions {
                     .density(Density::Read)
                     .show(ui)
                     .clicked();
+                if silent
+                    && Action::quiet("Check the input in Settings")
+                        .density(Density::Read)
+                        .show(ui)
+                        .clicked()
+                {
+                    self.wants_processing_settings = true;
+                }
             }
             if job_here {
                 let words = self
@@ -5495,7 +5532,11 @@ impl Sessions {
     }
 
     fn template_list(&mut self, ui: &mut egui::Ui, choose: &mut Option<String>) {
-        if design::link(ui, "← Sessions").clicked() {
+        if Action::quiet("Sessions")
+            .icon(icons::BACK)
+            .show(ui)
+            .clicked()
+        {
             self.view = View::Notes;
         }
         ui.add_space(design::S);

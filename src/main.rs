@@ -817,20 +817,12 @@ impl Splat {
                     self.page = Page::Sessions;
                 }
             }
-            for mut state in statuses {
+            for state in statuses {
                 let full = match state.word {
                     "Signed out" => "Signed out of D&D Beyond",
                     "Sync stopped" => "Party sync stopped when D&D Beyond disconnected. Connect, then turn sync on in Party.",
                     _ => state.word,
                 };
-                if state.word == "Connected · not remembered"
-                    && design::number_width(ui, state.word, &Type::Small.font(ui))
-                        + Type::Small.line()
-                        + design::S
-                        > ui.available_width()
-                {
-                    state.word = "Connected";
-                }
                 let response = if state.word == "Sync stopped" {
                     let response = design::status_link(ui, state);
                     if response.clicked() {
@@ -1328,10 +1320,16 @@ impl Splat {
                                 }
                             });
                         } else {
-                            list(ui, &mut self.campaigns, &mut self.dndbeyond);
-                            ui.add_space(design::L);
                             self.settings.campaign_form_open = self.campaigns.form_open();
-                            self.settings.show_compact(ui);
+                            if self.encounters.has_run() {
+                                self.settings.show_compact(ui);
+                                ui.add_space(design::L);
+                                list(ui, &mut self.campaigns, &mut self.dndbeyond);
+                            } else {
+                                list(ui, &mut self.campaigns, &mut self.dndbeyond);
+                                ui.add_space(design::L);
+                                self.settings.show_compact(ui);
+                            }
                         }
                     });
             }
