@@ -1114,7 +1114,7 @@ pub mod settings {
     use crate::settings::Account;
     const ACCOUNT_WORDS: [(Account, &str); 5] = [
         (Account::Busy, "Connecting"),
-        (Account::Connected, "Connected to D&D Beyond"),
+        (Account::Connected, "Connected"),
         (Account::NotConnected, "Not connected"),
         (Account::Failed, "Not connected"),
         (Account::KeyringWarning, "Connected · not remembered"),
@@ -1142,12 +1142,6 @@ pub mod settings {
         d.goal("open settings");
 
         d.click("Connect…");
-        d.row_of(COOKIE_HELP);
-        d.click(COOKIE_HELP);
-        d.expect(COOKIE_HELP_TEXT);
-        d.state("cookie-help", Sizes::Default);
-        d.click(COOKIE_HELP);
-        d.row_of(COOKIE_FIELD);
         d.type_into(COOKIE_FIELD, SYNTHETIC_COOKIE);
         d.state("cookie-entered", Sizes::Default);
         d.click(CONNECT);
@@ -1202,6 +1196,10 @@ pub mod settings {
         d.goal("edit a campaign's details");
         d.click(REMOVE_CAMPAIGN);
         d.state("campaign-row-menu", Sizes::Default);
+        d.press(Key::Escape);
+        d.click(COOKIE_HELP);
+        d.expect(COOKIE_HELP_TEXT);
+        d.state("cookie-help", Sizes::Default);
     }
 }
 

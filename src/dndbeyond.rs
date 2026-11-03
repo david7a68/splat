@@ -246,7 +246,10 @@ impl DndBeyond {
                     self.refresh(session, ui.ctx());
                 }
                 if self.pending.is_some() {
-                    crate::design::spinner(ui);
+                    ui.horizontal(|ui| {
+                        crate::design::spinner(ui);
+                        crate::design::blocked_reason(ui, Some("Already refreshing."));
+                    });
                 }
                 if let Some(error) = &self.error {
                     crate::design::message(ui, crate::design::Tone::Error, error);
@@ -351,24 +354,31 @@ impl DndBeyond {
                     .unwrap_or_else(|| format!("Campaign {id}"))
             })
             .unwrap_or_else(|| "Not linked".into());
-        let dropdown = egui::ComboBox::from_id_salt(("ddb_link", campaign.id))
-            .icon(crate::design::combo_icon)
-            .width(ui.available_width().min(520.0))
-            .selected_text(label)
-            .show_ui(ui, |ui| {
-                ui.selectable_value(&mut selected, None, "Not linked");
-                for remote in &self.campaigns {
-                    let used = local.linked_elsewhere(&remote.id);
-                    ui.add_enabled_ui(!used, |ui| {
-                        let name = if used {
-                            format!("{} (already linked)", remote.name)
-                        } else {
-                            remote.name.clone()
-                        };
-                        ui.selectable_value(&mut selected, Some(remote.id.clone()), name);
-                    });
-                }
-            });
+        let dropdown =
+            egui::ComboBox::from_id_salt(("ddb_link", campaign.id))
+                .icon(crate::design::combo_icon)
+                .width(ui.available_width().min(520.0))
+                .selected_text(crate::design::Type::Body.rich(ui, label).color(
+                    if ui.is_enabled() {
+                        crate::design::colors().text
+                    } else {
+                        crate::design::colors().disabled
+                    },
+                ))
+                .show_ui(ui, |ui| {
+                    ui.selectable_value(&mut selected, None, "Not linked");
+                    for remote in &self.campaigns {
+                        let used = local.linked_elsewhere(&remote.id);
+                        ui.add_enabled_ui(!used, |ui| {
+                            let name = if used {
+                                format!("{} (already linked)", remote.name)
+                            } else {
+                                remote.name.clone()
+                            };
+                            ui.selectable_value(&mut selected, Some(remote.id.clone()), name);
+                        });
+                    }
+                });
         crate::design::named(ui, &dropdown.response, "D&D Beyond campaign link");
         if ui.is_rect_visible(dropdown.response.rect) {
             self.visible_last_frame = true;

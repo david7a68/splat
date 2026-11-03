@@ -4,7 +4,7 @@ A desktop foundation for D&D 2024 encounter planning and simulation.
 Built with Rust and egui (eframe). The design system is in [docs/design-system.md](docs/design-system.md).
 The sidebar has one flat level: **Run** (while a run is open), **Encounters**, **Session**, **Timeline**, **World**, **Party**,
 **Library**, **Campaign**, and **Settings**. The campaign switcher is always above them. **Lookup** (Ctrl+K) searches every entry, every session note and the timeline, and
-opens beside any page. While a run is open, other pages show a strip with the turn, **Next turn**, and the primary **Back to run** action. Each page keeps its
+opens beside any page. While a run is open, other pages show a strip with the turn, the primary **Next turn** action, and secondary **Back to run**. Each page keeps its
 state, and the app reopens on the last page or the open run. Drag the edge of the sidebar, a page's list, or a panel to
 change its width. The app keeps that width after a restart. Simulation is later work.
 

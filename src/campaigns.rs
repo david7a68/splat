@@ -568,10 +568,7 @@ impl Campaigns {
                 ui.add_space(design::XS);
                 ui.label(
                     Type::Body
-                        .rich(
-                            ui,
-                            "No campaigns yet. Add one below, from a folder or from D&D Beyond.",
-                        )
+                        .rich(ui, "No campaign yet. Add one below.")
                         .color(c.muted),
                 );
             }

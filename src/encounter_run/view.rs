@@ -2418,12 +2418,10 @@ impl Run {
         let p = &self.state.participants[index];
         let definition = &p.definition;
         if definition.path == "Made up in this fight" {
-            design::empty_state(
-                ui,
-                icons::ENCOUNTERS,
-                "Made-up creature",
-                "Made up in this fight. It has no stat block.",
-                |_| {},
+            ui.label(
+                Type::Body
+                    .rich(ui, "Made up in this fight. It has no stat block.")
+                    .color(colors().muted),
             );
             ui.horizontal(|ui| {
                 design::stat_tile(

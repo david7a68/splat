@@ -119,7 +119,7 @@ pub fn page_header(ui: &mut Ui, title: &str, context: Option<&str>, actions: imp
     rule(ui);
 }
 
-/// A list group, with its count in muted type and no rule.
+/// A list group, with its nonzero count in muted type and no rule.
 pub fn group_heading(ui: &mut Ui, title: &str, count: usize) {
     ui.label(group_heading_text(ui, title, count));
 }
@@ -128,7 +128,14 @@ pub fn group_heading_text(ui: &Ui, title: &str, count: usize) -> LayoutJob {
     let mut job = LayoutJob::default();
     for (text, color) in [
         (title.to_uppercase(), colors().text),
-        (format!(" {count}"), colors().muted),
+        (
+            if count == 0 {
+                String::new()
+            } else {
+                format!(" {count}")
+            },
+            colors().muted,
+        ),
     ] {
         job.append(
             &text,

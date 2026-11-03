@@ -43,7 +43,13 @@ impl WorldPage {
             "World",
             Some(&design::count(count, "note", "notes")),
             |ui| {
-                create = new_menu(ui);
+                create = design::locked(
+                    ui,
+                    index
+                        .is_none()
+                        .then_some("Wait for the notes to load before creating a note."),
+                    new_menu,
+                );
             },
         );
         if let Some(kind) = create.take() {
@@ -53,8 +59,8 @@ impl WorldPage {
             ui.horizontal(|ui| {
                 design::spinner(ui);
                 ui.label(
-                    Type::Body
-                        .rich(ui, "Reading the notes…")
+                    Type::Small
+                        .rich(ui, "Wait for the notes to load before creating a note.")
                         .color(colors().muted),
                 );
             });
@@ -273,7 +279,11 @@ impl WorldPage {
 /// The same next step in the header and in an empty reader.
 fn new_menu(ui: &mut egui::Ui) -> Option<&'static str> {
     let mut choice = None;
-    let response = design::Action::secondary("New ▾").icon(icons::ADD).show(ui);
+    let label = format!("New {}", icons::DOWN);
+    let response = design::Action::secondary(&label)
+        .name("New ▾")
+        .icon(icons::ADD)
+        .show(ui);
     egui::Popup::menu(&response).show(|ui| {
         for (word, kind) in [
             ("NPC", "npc"),

@@ -294,7 +294,7 @@ impl Settings {
                 "Signed out of D&D Beyond",
                 c.connection.offline,
             ),
-            Account::Failed => (icons::ERROR, "Connection failed", c.result.error),
+            Account::Failed => (icons::ERROR, "Not connected", c.result.error),
             Account::Busy => (icons::BUSY, "Connecting", c.connection.busy),
             Account::RefreshFailing => (icons::WARN, "Sign-in failing", c.result.warning),
             Account::KeyringWarning => {

@@ -3138,9 +3138,9 @@ fn ready_list(
     design::group_heading(ui, "Ready to run", page.ready.len());
     if page.ready.is_empty() {
         let words = if templates.is_empty() {
-            "No encounters yet. Create one with New encounter."
+            "No encounters yet. Select New encounter."
         } else {
-            "Each encounter has been run. Run one again from History, or create one with New encounter."
+            "None ready. Select New encounter."
         };
         ui.add(egui::Label::new(Type::Body.rich(ui, words).color(colors().muted)).wrap());
     }

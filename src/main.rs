@@ -770,7 +770,11 @@ impl Splat {
                 } else {
                     "Not connected"
                 },
-                color: c.connection.offline,
+                color: if self.settings.connection_failed() {
+                    c.result.error
+                } else {
+                    c.connection.offline
+                },
             },
         }];
         for (dirty, word) in [
@@ -924,7 +928,7 @@ impl Splat {
                     }
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         if strip.running
-                            && Action::secondary("Next turn")
+                            && Action::primary("Next turn")
                                 .icon(icons::NEXT)
                                 .show(ui)
                                 .clicked()
@@ -933,7 +937,7 @@ impl Splat {
                             run.next_turn();
                             self.sessions.after_a_step_back_to_note(self.notes_gave_way);
                         }
-                        if Action::primary("Back to run").show(ui).clicked() {
+                        if Action::secondary("Back to run").show(ui).clicked() {
                             self.page = Page::Run;
                         }
                         if strip.not_saved {
@@ -1465,6 +1469,8 @@ impl Splat {
             self.page = Page::Run;
         }
         if std::mem::take(&mut self.party.wants_settings) {
+            self.settings_tab = SettingsTab::Account;
+            ctx.data_mut(|data| data.insert_temp(egui::Id::new("focus_cookie"), true));
             self.page = Page::Settings;
         }
         if std::mem::take(&mut self.party.wants_link_page) {

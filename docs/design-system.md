@@ -157,8 +157,8 @@ tooltips, and separators. Text cursors do not blink, because motion draws the ey
 | Status | `status`, `status_link`, `Status` | Icon, word, colour. `status_link` also leads to where the DM can act |
 | Stat tile | `stat_tile` | A label over a large value, with no box |
 | HP | `hp_bar`, `hp_readout`, `hp_state` | Fixed slots. Temp HP is separate |
-| Empty state | `empty_state` | What this is, and the one next step. At the top of the empty pane, with its normal padding |
-| Group heading | `group_heading` | `Type::Label` in capitals and a muted count after it. No rule. Serif headings belong to readers and stat blocks |
+| Empty state | `empty_state` | What this is, and the one next step. At the top of an empty pane or page, with its normal padding |
+| Group heading | `group_heading` | `Type::Label` in capitals and a muted, nonzero count after it. No rule. Serif headings belong to readers and stat blocks |
 | Row menu | `row_menu` | Quiet `⋯` at the right edge, named `More actions for <name>`. Put Remove and Delete here |
 | Message | `message`, `Tone` | Inline. Never modal |
 | Side panel | `side_panel_width`, `panel_header` | One width rule for Lookup, Notes and the run. Above 820 px, the run's panel has two columns |
@@ -170,7 +170,9 @@ tooltips, and separators. Text cursors do not blink, because motion draws the ey
 Header actions have at most one bordered secondary button, for `New …`. Other header actions are quiet and come before it.
 The Library scope control sits at the top of its category column. At a narrow width, it sits above the list.
 
-One accent-filled primary action can be in view. On other pages while a run is open, the run strip owns `Back to run` and the primary fill.
+**R-6: Empty states.** The full `empty_state` (icon, serif title and text) belongs to an empty pane or page only. An empty section inside a list page shows one muted line under its heading, with no `0` count.
+
+One accent-filled primary action can be in view. On other pages while a run is open, the run strip's `Next turn` owns the primary fill. `Back to run` is secondary.
 A page uses `status_link`, for example `Running · Round 2`, to show a run's state and open it.
 An on toggle uses `selected`, its icon or a check, and its word. It does not use the accent fill.
 Delete and Remove belong in a row menu, away from the primary action. A save row has the save-state word and quiet `Discard` at the left, and `Save` at the right.

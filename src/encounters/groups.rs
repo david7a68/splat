@@ -509,12 +509,13 @@ pub(super) fn list(
     let owned = snapshot.groups.len() - any.len() - orphans.len();
     design::group_heading(ui, "Groups", any.len() + orphans.len());
     if snapshot.groups.is_empty() {
-        design::empty_state(
-            ui,
-            icons::GROUP,
-            "No groups yet",
-            "A group is a set of creatures that arrive together. Select New group to prepare one.",
-            |_| {},
+        ui.add(
+            egui::Label::new(
+                Type::Body
+                    .rich(ui, "No groups yet. Select New group.")
+                    .color(colors().muted),
+            )
+            .wrap(),
         );
     }
     for group in any {
