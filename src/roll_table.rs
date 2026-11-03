@@ -142,7 +142,13 @@ pub fn table_rows(dice: &str, rows: &[Vec<String>]) -> Result<Vec<RollRow>, Stri
     parsed.sort_by_key(|row| row.min);
     let mut next = low;
     for row in &parsed {
-        if row.min != next || row.max < row.min {
+        if row.min < next {
+            return Err(format!(
+                "{dice} has an overlap at {}. Use each result once.",
+                row.min
+            ));
+        }
+        if row.min > next || row.max < row.min {
             return Err(format!("{dice} needs a row for {next}. It has a gap here."));
         }
         next = row.max + 1;
@@ -207,7 +213,9 @@ pub fn roll_control(
                     design::XXL * 2.0 - design::S,
                     Density::Read.control(),
                 ))
-                .hint_text(Type::Small.rich(ui, "Typed roll"))
+                .margin(egui::vec2(design::S, design::XS))
+                .font(Type::Numeral.font(ui))
+                .hint_text(Type::Small.rich(ui, "Typed roll").color(colors().faint))
                 .background_color(colors().well)
                 .horizontal_align(egui::Align::Center),
         );

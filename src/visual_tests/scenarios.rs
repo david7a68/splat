@@ -14,6 +14,7 @@ use super::{
     steps::*,
 };
 use eframe::egui::{self, Key, Pos2, pos2};
+pub mod world_build;
 
 /// The middle of the reading pane and of the entry list, at the minimum window.
 const READER: Pos2 = pos2(720.0, 400.0);

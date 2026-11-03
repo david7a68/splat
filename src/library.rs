@@ -676,6 +676,7 @@ pub struct Library {
     path: String,
     name: String,
     pub run_open: bool,
+    pub open_world_npc: Option<Uuid>,
     pending_edit: Option<Entry>,
     scope_notice: Option<String>,
     new_form: bool,
@@ -2196,6 +2197,22 @@ impl Library {
                         _ => None,
                     },
                 });
+            }
+            if let (Owner::Campaign(campaign), Some(entry)) = (&note.owner, &note.entry)
+                && entry.kind == "creature"
+                && Action::quiet("Make NPC note")
+                    .blocked(draft_reason)
+                    .show(ui)
+                    .clicked()
+            {
+                match crate::world::make_npc_note(campaign, entry) {
+                    Ok(id) => {
+                        self.stale = true;
+                        self.content_changed = Some(campaign.path.clone());
+                        self.open_world_npc = Some(id);
+                    }
+                    Err(error) => self.error = Some(error),
+                }
             }
             if !save_row {
                 design::status(ui, state);

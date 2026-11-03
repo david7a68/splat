@@ -413,3 +413,10 @@ Inline creation forms use a Label title, fields, then a named Create action, its
 Settings uses `CAMPAIGNS` and `D&D BEYOND ACCOUNT` group headings in both layouts. In the compact layout, the open account form replaces the status line and its `Connect…` link. The account verb is `Connect`; states include `Not connected` and `Signed out of D&D Beyond`. A keyring warning owns its `Connect again` action. `Disconnect` is quiet and follows the trust text. The add-campaign form closes after a successful add.
 
 Recording settings clip at the tab rule, with `L` above each section. Visible field labels are `Service`, `Address`, `Model` and `API key`; accessible names keep the service context. The page header names the processing state, such as `Speech key missing` or `Ready to process`. A remove-key button names the saved key's service.
+
+World readers show the relative file path with Edit in Obsidian and Show file on every note.
+NPCs show Stat block and In below that line; locations show In. Each has a quiet Change picker.
+The search takes keyboard focus. A saved choice changes only its key and offers Undo. An undo
+checks the file before writing. Broken notes stay in a Cannot be read group and open the same
+source editor as Campaign repair. Its draft stays in memory and warns before app close or a
+campaign switch. A generator card names its table sources below the attributes.

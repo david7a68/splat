@@ -601,7 +601,10 @@ fn reader_table(
         let header_top = top.max(outer_clip.top()).min(top + height - heights[0]);
         let header_rect = egui::Rect::from_min_max(
             egui::pos2(left, header_top),
-            egui::pos2(outer_clip.right(), header_top + heights[0]),
+            egui::pos2(
+                (left + width).min(outer_clip.right()),
+                header_top + heights[0],
+            ),
         );
         painter.rect_filled(header_rect, egui::CornerRadius::ZERO, colors().page);
         let fixed = egui::Rect::from_min_size(

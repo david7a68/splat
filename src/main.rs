@@ -384,7 +384,8 @@ impl Splat {
             Some("Wait for processing to finish, or cancel it, to change campaigns.")
         } else if self.sessions.busy_with_edit() || self.timeline.not_saved() {
             Some("Resolve the unsaved session file to change campaigns.")
-        } else if self.campaign_content.dirty()
+        } else if self.world_page.dirty()
+            || self.campaign_content.dirty()
             || self.encounters.dirty()
             || self.library.campaign_draft()
         {
@@ -411,6 +412,12 @@ impl Splat {
             items.push((
                 format!("Package choices for {campaign} have unsaved changes."),
                 Page::Campaign,
+            ));
+        }
+        if self.world_page.dirty() {
+            items.push((
+                "A World note repair has unsaved changes.".into(),
+                Page::World,
             ));
         }
         let name = self.encounters.draft_name().unwrap_or_default();
@@ -837,6 +844,20 @@ impl Splat {
             self.notes_give_way();
             self.lookup.search_for(&words);
         }
+        if let Some(path) = self.lookup.open_world_repair.take()
+            && let Some(campaign) = self.campaigns.active_campaign()
+        {
+            self.world_page.open_repair(&campaign, &path);
+            self.lookup.close();
+            self.page = Page::World;
+        }
+        if let Some(id) = self.library.open_world_npc.take()
+            && let Some(campaign) = self.campaigns.active_campaign()
+        {
+            self.world_page.reveal(campaign.id, id);
+            self.lookup.refresh();
+            self.page = Page::World;
+        }
         let mut refresh = std::mem::take(&mut self.world_page.reload);
         for reader in [&mut self.world_page.reader, &mut self.lookup.reader] {
             reader.sides = sides.clone();
@@ -930,6 +951,7 @@ impl Splat {
         }];
         for (dirty, word) in [
             (self.library.dirty(), "Library draft"),
+            (self.world_page.dirty(), "World repair draft"),
             (
                 self.encounters.encounter_dirty(),
                 self.encounters.draft_word(),
@@ -1727,6 +1749,7 @@ impl eframe::App for Splat {
             self.sessions.flush();
             self.timeline.save();
             if (self.library.dirty()
+                || self.world_page.dirty()
                 || self.campaign_content.dirty()
                 || self.encounters.unsaved()
                 || self.encounters.pending_sync()
