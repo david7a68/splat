@@ -1342,7 +1342,7 @@ pub mod settings {
     const OFFLINE_ERROR: &str = "Could not reach D&D Beyond";
     const CAMPAIGNS_SECTION: &str = "CAMPAIGNS";
     const EDIT_DETAILS: &str = "Edit details";
-    const EDIT_FORM: &str = "CAMPAIGN NAME";
+    const EDIT_FORM: &str = "Campaign name";
     const CANCEL: &str = "Cancel";
 
     pub fn run(d: &mut Driver<'_>) {
@@ -1355,6 +1355,11 @@ pub mod settings {
         d.click("Connect…");
         d.type_into(COOKIE_FIELD, SYNTHETIC_COOKIE);
         d.wait_for_text("Remember my D&D Beyond sign-in on this computer");
+        d.observe_both("iter-13-U2", "Connect ends at the cookie field edge", |d| {
+            d.place_of(CONNECT)
+                .zip(d.place_of(COOKIE_FIELD))
+                .is_some_and(|(button, field)| (button.right() - field.right()).abs() < 1.0)
+        });
         d.state("cookie-entered", Sizes::Default);
         d.click(CONNECT);
         d.expect(OFFLINE_ERROR);
@@ -1428,7 +1433,7 @@ pub mod settings {
                 d.click("Add from D&D Beyond");
             }
             d.row_of("Campaign name");
-            d.wait_for_text("CAMPAIGN NAME");
+            d.wait_for_text("Campaign name");
             assert_eq!(d.field_text("Campaign name").as_deref(), Some("Salt Road"));
             for _ in 0..4 {
                 if d.nodes()
@@ -2004,7 +2009,7 @@ pub mod run_absent_player {
             "A long initiative Undo does not move the roster down",
         );
         d.state("initiative-set-in-combat", Sizes::Default);
-        d.expect("Brannoch Vale joins at 20 · acts next round.");
+        d.expect("Brannoch Vale joins at\u{a0}20\u{a0}· acts next round.");
         let order: Vec<String> = roster_places(d).into_iter().map(|row| row.0).collect();
         d.observe(
             "Absent player",
@@ -4807,6 +4812,11 @@ pub mod session_notes {
         d.type_into_editor("Edited in the template.\n");
         d.click("New template");
         d.type_into("Template name", "Downtime");
+        d.observe(
+            "iter-13-S1",
+            !d.has("New template") && d.has("Cancel"),
+            "An open new-template form cannot be reset from the header",
+        );
         d.state("templates-new", Sizes::Default);
         d.click("Create template");
         d.expect("Downtime");
@@ -4820,7 +4830,7 @@ pub mod session_notes {
         d.click("Sessions");
         d.click("Campaign");
         d.click("Link and folder");
-        d.expect("SESSION FOLDER");
+        d.expect("Session folder");
         d.state("session-folder-in-campaign", Sizes::All);
         d.app_mut().timeline.save();
         d.replace_text_in("Session folder", "30 Sessions");
@@ -5205,7 +5215,7 @@ pub mod session_notes {
         d.click(NAV_TIMELINE);
         d.observe(
             "T11.3",
-            d.has_containing("Fight · Round 2 · Session 2"),
+            d.has_containing("Fight · Round 2 · Paused · Session 2"),
             "A run went to the newest session, with no step, though an older note was read",
         );
         d.goal("use the timeline during a run");
@@ -5392,7 +5402,25 @@ pub mod session_recording {
         d.state("recording-hearing", Sizes::AllAndHiDpi);
         d.click_starting("Recordings");
         d.expect(&format!("{} Recording", crate::design::icons::RECORD));
+        d.expect("Recording 0:00 · Hearing sound");
         d.state("recording-listed", Sizes::Default);
+        let tabs_top = |d: &Driver<'_>| {
+            d.place_of("Plan")
+                .or_else(|| d.place_of("Plan and notes"))
+                .map(|rect| rect.top())
+        };
+        let hearing_top = tabs_top(d).expect("Session tabs are visible");
+        d.app_mut()
+            .sessions
+            .simulate_recorder_health(Health::Silent);
+        d.settle();
+        assert_eq!(tabs_top(d), Some(hearing_top));
+        d.expect("Silent for over a minute · 0:00 recorded");
+        d.app_mut()
+            .sessions
+            .simulate_recorder_health(Health::Hearing);
+        d.settle();
+        assert_eq!(tabs_top(d), Some(hearing_top));
         write_note(d);
 
         d.app_mut()
@@ -5784,9 +5812,15 @@ pub mod session_recording {
             "Recording again clears the error",
         );
         // An input chosen now cannot reach the recording that is running.
+        d.app_mut().processing.focus_input = true;
         go_settings(d);
         d.click("Recording and processing");
         d.expect("A new input applies to the next recording");
+        d.observe_both(
+            "iter-13-R4",
+            "Recording heading and input stay in view",
+            |d| d.visible_text("RECORDING") && d.in_view("Recording input"),
+        );
         d.state("input-during-recording", Sizes::Default);
         d.click_containing("Recording 0:");
         d.click("Stop recording");
@@ -6068,7 +6102,7 @@ pub mod encounter_groups {
         let before = current_participant(d);
         d.click("Move Rival Team before Rival Team");
         d.at_size(DEFAULT, |d| {
-            d.expect("Rival Captain 2 moved before Rival Team at 14")
+            d.expect("Rival Captain 2 moved before Rival Team at\u{a0}14")
         });
         d.observe(
             "F4",
@@ -6991,6 +7025,12 @@ pub mod session_plan {
             "Final HP names each character in the plan, with no run to reopen",
         );
         d.click(FIRST);
+
+        d.click(NAV_TIMELINE);
+        assert!(d.has_containing("Held the bridge · Ended · Round 1"));
+        d.state("timeline-after-fight", Sizes::All);
+        d.click(NAV_SESSIONS);
+        show_plan(d);
 
         // T14.4: a patrol can be planned again after it is played.
         d.click("Add a fight");

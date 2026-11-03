@@ -1072,7 +1072,7 @@ impl Run {
                             .find_map(|other| other.initiative);
                         let total = match held {
                             Some(total) => {
-                                words.push(format!("Joins {} at {total}", p.side));
+                                words.push(format!("Joins {} at\u{a0}{total}", p.side));
                                 total
                             }
                             None => {
@@ -1129,7 +1129,7 @@ impl Run {
                 .map(|p| (p, total))
         }) {
             initiative.push_str(&format!(
-                ". Tied with {} at {total} · placed after",
+                ". Tied with {} at\u{a0}{total}\u{a0}· placed after",
                 Self::roll_block_name(state, p)
             ));
         }
@@ -1388,10 +1388,14 @@ impl Run {
                         .unwrap_or(next.cursor);
                 }
                 format!(
-                    "{} moved before {target} at {}{}.",
+                    "{} moved before {target} at\u{a0}{}{}.",
                     next.participants[first].name,
                     display(next.participants[before].initiative),
-                    if waits { " · acts next round" } else { "" }
+                    if waits {
+                        "\u{a0}· acts next round"
+                    } else {
+                        ""
+                    }
                 )
             }
             Command::Move(from, to) => {
@@ -1485,9 +1489,13 @@ impl Run {
                 .position(|i| *i == index)
                 .is_some_and(|at| at < self.state.cursor);
             self.notice = Some(format!(
-                "{} joins at {total}{}.",
+                "{} joins at\u{a0}{total}{}.",
                 self.state.participants[index].name,
-                if waits { " · acts next round" } else { "" }
+                if waits {
+                    "\u{a0}· acts next round"
+                } else {
+                    ""
+                }
             ));
         }
         self.last_initiative = initiative_edit;
@@ -5244,10 +5252,36 @@ mod tests {
             let current = run.current();
             run.apply(Command::Initiative(0, Some(total))).unwrap();
             let notice = run.notice.as_deref().unwrap();
-            assert!(notice.contains(&format!("joins at {total}")), "{notice}");
+            assert!(
+                notice.contains(&format!("joins at\u{a0}{total}")),
+                "{notice}"
+            );
             assert_eq!(notice.contains("acts next round"), waits, "{notice}");
+            assert_arrival_wraps(notice);
             assert_eq!(run.current(), current);
         }
+    }
+
+    fn assert_arrival_wraps(message: &str) {
+        let ctx = egui::Context::default();
+        crate::design::theme::install(&ctx);
+        let _ = ctx.run(egui::RawInput::default(), |ctx| {
+            egui::CentralPanel::default().show(ctx, |ui| {
+                for width in [240.0, 280.0, 320.0] {
+                    let galley = ui.painter().layout(
+                        message.to_owned(),
+                        crate::design::Type::Small.font(ui),
+                        crate::design::colors().text,
+                        width,
+                    );
+                    for row in &galley.rows {
+                        let text: String = row.glyphs.iter().map(|glyph| glyph.chr).collect();
+                        assert!(!text.trim_start().starts_with('·'), "{text}");
+                        assert!(!text.trim_end().ends_with(" at"), "{text}");
+                    }
+                }
+            });
+        });
     }
 
     #[test]
@@ -5920,6 +5954,10 @@ mod tests {
             .unwrap();
         run.apply(Command::AddGroup(guard_group("Second wave", 2), Some(15)))
             .unwrap();
+        assert_arrival_wraps(&format!(
+            "{}\u{a0}· acts next round if moved before",
+            run.state.log.last().unwrap()
+        ));
         assert!(
             run.state
                 .log
@@ -5934,6 +5972,7 @@ mod tests {
         let current = run.current();
         let order = run.state.order.clone();
         run.apply(Command::MoveArrivalBefore(5, 4)).unwrap();
+        assert_arrival_wraps(run.state.log.last().unwrap());
         assert_eq!(run.state.order, vec![0, 1, 5, 6, 3, 4, 2]);
         assert_eq!(run.current(), current);
         assert!(
@@ -5941,7 +5980,7 @@ mod tests {
                 .log
                 .last()
                 .unwrap()
-                .contains("moved before First wave at 15 · acts next round")
+                .contains("moved before First wave at\u{a0}15\u{a0}· acts next round")
         );
         run.undo();
         assert_eq!(run.state.order, order);
@@ -6508,7 +6547,7 @@ mod tests {
                 .log
                 .last()
                 .unwrap()
-                .contains("Joins enemies at 20")
+                .contains("Joins enemies at\u{a0}20")
         );
     }
     #[test]

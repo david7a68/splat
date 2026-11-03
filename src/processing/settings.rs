@@ -493,7 +493,12 @@ impl ProcessingSettings {
 
     fn input_section(&mut self, ui: &mut egui::Ui) {
         let c = colors();
-        design::group_heading(ui, "Recording", 0);
+        let heading = ui
+            .scope(|ui| design::group_heading(ui, "Recording", 0))
+            .response;
+        if self.focus_input {
+            heading.scroll_to_me(Some(egui::Align::TOP));
+        }
         match &self.probe {
             None => {
                 ui.label(
@@ -563,7 +568,6 @@ impl ProcessingSettings {
                         design::named(ui, &inner.response, "Recording input");
                         if std::mem::take(&mut self.focus_input) {
                             inner.response.request_focus();
-                            inner.response.scroll_to_me(Some(egui::Align::TOP));
                         }
                     });
                     if changed {

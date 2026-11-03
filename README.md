@@ -113,7 +113,10 @@ keeps its state in the session list; a missing input offers **Choose an input**.
 **Continue processing** also names what it sends. With a complete transcript, it says
 that the audio is not sent again. With a partial transcript, it names the remaining
 audio parts. Recording silence has no elapsed time in its status word. The Session
-page shows the recorded time in the detail; the rail keeps it on hover. On Recordings, the silent row owns this detail and its input help. Processing says **Processing**, with the full step on hover.
+page shows the recorded time in the detail; the rail keeps it on hover. On Recordings,
+the live row owns the sound state, recorded time and input help. Timeline and the
+Session plan use the same fight state words. Processing says **Processing**, with
+the full step on hover.
 
 Library has **New entry** in its header. Its form opens in the reader column and closes after creation. World has **New ▾** for a plain note, a note with a type, an NPC, a location, or a generated NPC. Type headings use capitals and a count. World folder headings keep normal-case paths. Page headers show state or nonzero counts beside the title, with a rule and an `L` gap below. Counts use thousands separators.
 

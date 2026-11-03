@@ -760,6 +760,8 @@ roll. Run notices keep a result icon beside their text. Arrivals separates statu
 from members when the summary wraps and never ends a line with a separator.
 Plan additions offer `Undo add`. Templates uses the shared quiet back action.
 
+## Library and preparation audit, iteration 13
+
 Library copies do not count hidden SRD provenance lines
 as broken links. SRD page targets count as found. Table faults use list warnings
 and the World header's repair link. World folder groups use normal-case paths
@@ -770,3 +772,19 @@ Groups list side, count, XP, changes and members. Encounter group frames keep
 ownership in Move to…; full editors keep Belongs to. Named NPC results say
 In roster after Add. Paired sheet cells share the taller cell's row height.
 Undo messages use the quiet action and undo icon, with the action below when needed.
+
+## Run and session audit, iteration 13
+
+When an arrival summary wraps, each status part keeps its words together on its
+own line above the members. Arrival messages keep `at` with its total and keep a
+separator with the word before it. Stat-block errors use the run notice icon and
+one fitted line, with the full error on hover.
+
+On Recordings, the live row owns the sound state and recorded time. Plan and notes
+keeps its live header line. Timeline and the plan share the same fight summary.
+New template hides while its form is open. Discard recovery uses Small text and
+a quiet Undo icon action on one line.
+
+Settings fields under group headings use sentence-case labels. Connect stays at
+the cookie field's right edge. Input focus scrolls to the Recording heading.
+The campaign-added message follows the campaign rows, below their heading.

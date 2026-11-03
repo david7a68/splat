@@ -1529,11 +1529,13 @@ pub fn save_row_state(ui: &mut Ui, state: Status<'_>, dirty: bool, blocked: Opti
 pub fn draft_discarded(ui: &mut Ui) -> bool {
     let mut pressed = false;
     ui.horizontal(|ui| {
-        ui.vertical(|ui| {
-            ui.add_space((Density::Read.control() - Type::Body.line()) / 2.0);
-            message(ui, Tone::Info, "Draft discarded.");
-        });
-        pressed = Action::secondary("Undo discard")
+        ui.label(
+            Type::Small
+                .rich(ui, "Draft discarded.")
+                .color(colors().muted),
+        );
+        pressed = Action::quiet("Undo discard")
+            .icon(icons::UNDO)
             .density(Density::Read)
             .show(ui)
             .clicked();
