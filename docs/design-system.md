@@ -316,8 +316,9 @@ New templates say `Starts with the title line only.` below the name field.
 
 The roster is the screen. Every row has fixed columns: initiative, side mark, name, AC,
 temporary HP, HP with its bar, then a state column for `Bloodied`, `0 HP` and the sync
-word. Conditions take one second line before the HP column. When they would wrap, a count
-replaces the remaining conditions. Long local effects show four words and `more`.
+word. Conditions take one second line before the HP column. Measure them without change bonuses;
+shorten bonuses first, then use a count only for conditions that do not fit. Keep the first condition.
+Long local effects show four words and `more`.
 The count opens their full text in `Conditions`. When a window has no room for the state column, as at 960x640 beside
 the panel, those words open the second line instead, so that a name is never cut.
 
@@ -335,7 +336,7 @@ the panel, those words open the second line instead, so that a name is never cut
   If needed, drop `Undo:`, then shorten only the target name, keeping a copy's number.
   Keep action words, amounts and condition directions. Hover and the accessible name keep
   the full action. An empty history shows `Nothing to undo`, or `Nothing to undo since reopening`.
-  Both screens put this reason to the left of blocked Undo. A narrow slot uses
+  After a sheet update, the reason names whose sheet changed. Both screens put this reason to the left of blocked Undo. A narrow slot uses
   `Nothing to undo`; hover and accessibility keep the full reason.
   A sync conflict comes first, then recording silence, then other
   sync notices, then the next name. Silence and the short sync state stay together when
@@ -458,7 +459,7 @@ icons are glyphs or painter shapes. `design::icons` names only the glyphs in use
 
 ## Recording and content recovery
 
-The rail has one recording status link at its foot. It includes the saved audio time and opens the recording. It uses the same words as the session header and list status. A stalled recording puts its reason and Record again on the visible recording row; other pages keep the bottom banner.
+The rail has one recording status link at its foot. It includes the saved audio time and opens the recording. The session list keeps Failed, Stopped or Cancelled until retry or dismissal. A missing-input banner puts Choose an input first and keeps Record again quiet. A stalled recording puts its reason and Record again on the visible recording row; other pages keep the bottom banner.
 
 Each recording keeps its failure or stop reason beside its status, including the last processing step. Dismissing a banner does not remove that row state. While a recording is live or processing, its stored stop or cancellation reason stays hidden. A cancellation says which part stopped and offers Continue processing. Failed and Stopped use the error icon and colour; Cancelled uses warning. A stopped recording keeps its Settings link to the recording input. Silence uses the warning colour on every page. The result viewer uses one segmented control for Summary, Clean transcript, What the check changed, and Raw transcript. Every generated view uses the same Small draft notice. If the check did not run, the row says `No check ran` beside Raw transcript. The row menu stays beside the title, and L space separates its actions from the events heading. The result viewer has its back link and muted date on the first line, with Add to notes at the right on Summary. Its view choices start at the left on a second line. The segmented control never wraps; if the full set does not fit, one dropdown shows the current view name. Tabs and page headers omit zero counts. Templates names its own page and uses Campaign as the owner word.
 
@@ -480,7 +481,7 @@ Settings shows one Connecting status, and Cancel aligns with the column. Connect
 
 Recording settings clip at the tab rule, with `L` above each section. Visible field labels are `Service`, `Address`, `Model` and `API key`; accessible names keep the service context. A remove-key button names its slot and service, for example Remove speech key (OpenAI). It sits below the key state at the column’s left edge. A saved key for the chosen service with no replacement typed hides Save key and its empty-field reason.
 
-Recording retries say Continue processing. Process again is reserved for replacing existing results; its confirmation has secondary Not now and red Replace the results. A live row puts Stop recording first. beside Process. A job shows one spinner and one Processing progress line. The session list omits the date while a recording or job runs. Not processed uses the neutral file icon. Transcript marker actions sit beside the marker in the text.
+Recording retries say Continue processing. Process again is reserved for replacing existing results; its one info message names the transcript and context sent to the chosen LLM, and says the audio is not sent again. Its confirmation has secondary Not now and red Replace the results. A live row puts Stop recording first, beside Process. A job shows one spinner and one Processing progress line. The session list omits the date while a recording or job runs. Not processed uses the neutral file icon. Transcript marker actions sit beside the marker in the text.
 
 Settings and the rail use one account status function. The rail shortens Signed out of D&D Beyond to Signed out with the full words on hover. Settings shows the recovery step once. Campaign import opens directly under the chosen row with a new sibling folder filled in. Editing details hides the row's Edit details action and uses a plain Details heading. The removal dialog is centred. Reload from disk names the local reload action.
 
@@ -549,7 +550,7 @@ their words. The dock fits whole words at every width and keeps the last word or
 number that distinguishes a participant. Its hover text and accessible name keep
 the full name. An off Absent toggle uses muted text and no fill.
 
-Setup keeps roster rows in place. A muted ordinal follows each initiative field,
+Setup keeps roster rows in place. Once every present row has initiative, a muted ordinal follows each initiative field,
 updates after each total or tie ruling, and the ready line names who goes first.
 The compact fight menu reads Fight and uses the tab underline. Its panel title
 names the open fight tab.

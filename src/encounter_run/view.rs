@@ -480,7 +480,7 @@ impl Run {
         }
     }
 
-    fn undo_action<'a>(&self, label: &'a str) -> Action<'a> {
+    fn undo_action<'a>(&'a self, label: &'a str) -> Action<'a> {
         let action = Action::secondary(label)
             .icon(icons::UNDO)
             .density(Density::Read);
@@ -489,18 +489,15 @@ impl Run {
         } else {
             action
         };
-        action.blocked_if(
-            self.history.is_empty(),
-            if self.undo_stopped {
-                "Undo stopped at sheet update. See Log."
-            } else {
-                self.empty_undo_reason()
-            },
-        )
+        action.blocked_if(self.history.is_empty(), self.empty_undo_reason())
     }
 
-    fn empty_undo_reason(&self) -> &'static str {
-        if self.reopened {
+    fn empty_undo_reason(&self) -> &str {
+        if self.undo_stopped {
+            self.undo_boundary
+                .as_deref()
+                .unwrap_or("Nothing to undo since the sheets changed")
+        } else if self.reopened {
             "Nothing to undo since reopening"
         } else {
             "Nothing to undo"
@@ -696,7 +693,11 @@ impl Run {
                     // keeps its point on one line, with the whole of it on hover and in the log.
                     let tightest = self.tightest_roster(ui, width, room);
                     let compact = notice.is_some() && tightest > room - notice_height;
-                    let notice_height = if compact { MESSAGE_LINE } else { notice_height };
+                    let notice_height = if compact || self.notice_summary.is_some() {
+                        MESSAGE_LINE
+                    } else {
+                        notice_height
+                    };
                     // With an error line up too, one more line would scroll even a compressed
                     // list. The error comes first, and the message returns when it is dismissed.
                     let notice = notice.filter(|_| tightest <= room - notice_height);
@@ -731,15 +732,28 @@ impl Run {
                                             design::count(self.notice_changes, "sheet", "sheets")
                                         )
                                     });
-                                let shown = if compact
-                                    && design::number_width(ui, &notice, &Type::Small.font(ui))
-                                        > ui.available_width() - design::L * 6.0
+                                let shown = if self.notice_summary.is_some()
+                                    || (compact
+                                        && design::number_width(ui, &notice, &Type::Small.font(ui))
+                                            > ui.available_width() - design::L * 6.0)
                                 {
                                     words.as_str()
                                 } else {
                                     notice.as_str()
                                 };
-                                let text_room = ui.available_width() - design::L * 6.0;
+                                let text_room = ui.available_width() - design::L * 6.0 - design::S;
+                                let fitted = undo_words(
+                                    ui,
+                                    self.notice_summary.as_deref().unwrap_or(shown),
+                                    &self.state.participants,
+                                    &Type::Small.font(ui),
+                                    text_room,
+                                );
+                                let shown = if self.notice_summary.is_some() {
+                                    fitted.as_str()
+                                } else {
+                                    shown
+                                };
                                 let response = ui
                                     .allocate_ui_with_layout(
                                         vec2(text_room, notice_height),
@@ -751,7 +765,11 @@ impl Run {
                                                         .rich(ui, shown)
                                                         .color(colors().result.warning),
                                                 )
-                                                .wrap(),
+                                                .wrap_mode(if self.notice_summary.is_some() {
+                                                    egui::TextWrapMode::Extend
+                                                } else {
+                                                    egui::TextWrapMode::Wrap
+                                                }),
                                             )
                                         },
                                     )
@@ -973,9 +991,6 @@ impl Run {
                     .strip_prefix("Undo: ")
                     .unwrap_or(&undo_label)
                     .to_owned();
-                if self.history.is_empty() && self.undo_stopped {
-                    minimum = "Undo stopped".to_owned();
-                }
                 if let Some(target) = self
                     .state
                     .participants
@@ -991,7 +1006,7 @@ impl Run {
                 }
                 let minimum = self.undo_action(&minimum).natural_width(ui)
                     + design::XS
-                    + if self.history.is_empty() && !self.undo_stopped {
+                    + if self.history.is_empty() {
                         design::number_width(ui, "Nothing to undo", &font) + design::S
                     } else {
                         0.0
@@ -1011,7 +1026,7 @@ impl Run {
                     vec2(slot, Density::Read.control()),
                     Layout::right_to_left(Align::Center),
                     |ui| {
-                        undo = if self.history.is_empty() && !self.undo_stopped {
+                        undo = if self.history.is_empty() {
                             self.empty_undo(ui)
                         } else {
                             self.undo_action(&shown)
@@ -2140,17 +2155,29 @@ impl Run {
             }
         };
         let path = self.path().map(|path| path.display().to_string());
-        let word = self
-            .copy_label
-            .as_ref()
-            .map(|copy| format!("{} · {copy}", status.word));
+        let word = self.copy_label.as_ref().map(|copy| {
+            format!(
+                "{} · copy {}",
+                status.word,
+                copy.strip_prefix("saved ").unwrap_or(copy)
+            )
+        });
         let status = Status {
             word: word.as_deref().unwrap_or(status.word),
             ..status
         };
         let response = design::status(ui, status);
+        let full = self.copy_label.as_ref().map(|copy| {
+            format!(
+                "{} · {copy}",
+                if self.dirty { "Not saved" } else { "Saved" }
+            )
+        });
+        if let Some(full) = &full {
+            design::named(ui, &response, full);
+        }
         if let Some(path) = path {
-            response.on_hover_text(path);
+            response.on_hover_text(full.map_or(path.clone(), |full| format!("{full}\n{path}")));
         }
     }
 
@@ -2660,7 +2687,7 @@ impl Run {
                     .state
                     .log
                     .last()
-                    .filter(|line| line.starts_with("Arrival moved before"))
+                    .filter(|line| line.starts_with("Move ") && line.contains(" before "))
                 {
                     design::message(ui, Tone::Success, line);
                 }
@@ -3097,11 +3124,14 @@ impl Run {
             );
             ui.horizontal(|ui| {
                 for (label, value) in [
-                    ("HP", format!("{} / {}", display(p.hp), display(p.max_hp))),
-                    ("AC", display(p.armor_class)),
+                    ("ARMOR CLASS", display(p.armor_class)),
+                    (
+                        "HIT POINTS",
+                        format!("{} / {}", display(p.hp), display(p.max_hp)),
+                    ),
                     ("INITIATIVE", display(p.initiative)),
                 ] {
-                    if label == "AC" && p.armor_class.is_none() {
+                    if label == "ARMOR CLASS" && p.armor_class.is_none() {
                         continue;
                     }
                     ui.vertical(|ui| {
@@ -3607,7 +3637,7 @@ impl Run {
             Layout::right_to_left(Align::Center),
             |ui| {
                 let label = self.undo_label();
-                let undo = if self.history.is_empty() && !self.undo_stopped {
+                let undo = if self.history.is_empty() {
                     self.empty_undo(ui)
                 } else {
                     self.undo_action(&label)
@@ -3961,14 +3991,18 @@ impl Run {
                 Layout::top_down(Align::LEFT),
                 |ui| {
                     ui.add_space(control_top);
-                    let place = present
-                        .then(|| {
-                            initiative
-                                .and_then(|_| self.state.order.iter().position(|i| *i == index))
-                        })
-                        .flatten()
-                        .map(|place| ordinal(place + 1))
-                        .unwrap_or_default();
+                    let place = (present
+                        && self
+                            .state
+                            .participants
+                            .iter()
+                            .all(|p| !p.present || p.initiative.is_some()))
+                    .then(|| {
+                        initiative.and_then(|_| self.state.order.iter().position(|i| *i == index))
+                    })
+                    .flatten()
+                    .map(|place| ordinal(place + 1))
+                    .unwrap_or_default();
                     let response = ui.add_sized(
                         vec2(place_slot, Density::Scan.control()),
                         egui::Label::new(Type::Small.rich(ui, &place).color(colors().muted)),
@@ -4446,7 +4480,13 @@ pub(crate) fn change_rows(ui: &mut egui::Ui, rows: &[Row]) {
     let c = colors();
     // What the DM must do comes first, in larger type. The rest the run has done.
     let (by_hand, applied): (Vec<&Row>, Vec<&Row>) = rows.iter().partition(|row| row.by_hand);
+    let separate = !by_hand.is_empty() && !applied.is_empty();
+    let mut was_by_hand = false;
     for row in by_hand.into_iter().chain(applied) {
+        if separate && was_by_hand && !row.by_hand {
+            ui.add_space(design::S);
+        }
+        was_by_hand = row.by_hand;
         let font = if row.by_hand {
             Type::Body.font(ui)
         } else {
@@ -4540,8 +4580,20 @@ fn undo_words(
     if design::number_width(ui, action, font) <= width {
         return action.to_owned();
     }
-    if action == "Undo stopped at sheet update" {
-        return "Undo stopped".to_owned();
+    if let Some((moved, target)) = action
+        .strip_prefix("move ")
+        .and_then(|words| words.split_once(" before "))
+    {
+        let room = width - design::number_width(ui, "move  before ", font);
+        let target_room = design::number_width(ui, target, font).min(room / 2.0);
+        let moved = dock_name(ui, moved, font, room - target_room);
+        let target = dock_name(
+            ui,
+            target,
+            font,
+            room - design::number_width(ui, &moved, font),
+        );
+        return format!("move {moved} before {target}");
     }
     let target = participants
         .iter()
@@ -4760,14 +4812,7 @@ impl RowLayout {
             p,
             sync,
             scale,
-            (
-                fit,
-                if fit == RowFit::Summary && p.conditions.len() > 3 {
-                    2
-                } else {
-                    p.conditions.len()
-                },
-            ),
+            (fit, p.conditions.len()),
             longest_name,
         )
     }
@@ -4904,6 +4949,7 @@ impl RowLayout {
         if p.npc_identity() {
             add(&format!("as {}", p.definition.name), c.muted);
         }
+        let mut bonus_start = None;
         if let Some(changes) = p.changes.as_ref().filter(|_| p.stat_changes()) {
             add(
                 &format!("{}\u{a0}Changed", icons::CHANGED),
@@ -4915,7 +4961,8 @@ impl RowLayout {
             } else {
                 bonuses.len()
             }) {
-                add(&bonus.replace(' ', "\u{a0}"), c.participant.changed);
+                let span = add(&bonus.replace(' ', "\u{a0}"), c.participant.changed);
+                bonus_start.get_or_insert(span.start);
             }
             if fit == RowFit::Summary && bonuses.len() > 1 {
                 condition_spans.push(("Run changes".into(), add("more", c.participant.changed)));
@@ -4933,8 +4980,47 @@ impl RowLayout {
                 },
             );
         }
+        let mut conditions = job.clone();
+        if let Some(start) = bonus_start {
+            let end = conditions
+                .text
+                .char_indices()
+                .nth(start)
+                .map_or(conditions.text.len(), |(at, _)| at);
+            conditions.text.truncate(end);
+            conditions.text = conditions
+                .text
+                .trim_end_matches([' ', '·', '\u{a0}'])
+                .to_owned();
+            let end = conditions.text.len();
+            conditions
+                .sections
+                .retain(|section| section.byte_range.start < end);
+            for section in &mut conditions.sections {
+                section.byte_range.end = section.byte_range.end.min(end);
+            }
+        }
+        let conditions_wrap = ui
+            .fonts_mut(|fonts| fonts.layout_job(conditions))
+            .rows
+            .len()
+            > 1;
         let second_line = (!job.is_empty()).then(|| ui.fonts_mut(|fonts| fonts.layout_job(job)));
-        if condition_count > 0 && second_line.as_ref().is_some_and(|line| line.rows.len() > 1) {
+        if bonus_start.is_some()
+            && fit != RowFit::Summary
+            && second_line.as_ref().is_some_and(|line| line.rows.len() > 1)
+        {
+            return Self::measured(
+                ui,
+                width,
+                p,
+                sync,
+                scale,
+                (RowFit::Summary, condition_count),
+                longest_name,
+            );
+        }
+        if condition_count > 1 && conditions_wrap {
             return Self::measured(
                 ui,
                 width,
@@ -5510,6 +5596,11 @@ mod tests {
                                 vec2(width, layout.height(scale)),
                             );
                             let detail = layout.second_line.as_ref().unwrap();
+                            assert!(
+                                detail.text().contains("Blessed"),
+                                "first condition missing: {}",
+                                detail.text()
+                            );
                             assert!(
                                 layout.second_y(scale, rect) + detail.size().y < rect.bottom(),
                                 "detail crosses row rule at width {width} and scale {}",

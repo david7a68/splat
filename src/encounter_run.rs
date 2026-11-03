@@ -522,6 +522,7 @@ pub(crate) struct Run {
     live_initiative: Option<usize>,
     /// A value reached the run with no step of its own, so Undo stops there.
     undo_stopped: bool,
+    undo_boundary: Option<String>,
     setup_inputs: BTreeMap<usize, String>,
     /// The participant whose initiative the last step set, to merge keystrokes.
     last_initiative: Option<usize>,
@@ -812,6 +813,7 @@ impl Run {
             copy_label: None,
             account_status: None,
             undo_stopped: false,
+            undo_boundary: None,
             setup_inputs: BTreeMap::new(),
             last_initiative: None,
             hide_panel: false,
@@ -1371,7 +1373,8 @@ impl Run {
                         .unwrap_or(next.cursor);
                 }
                 format!(
-                    "Arrival moved before {target} at {}{}.",
+                    "Move {} before {target} at {}{}.",
+                    next.participants[first].name,
                     display(next.participants[before].initiative),
                     if waits { " · acts next round" } else { "" }
                 )
@@ -1730,7 +1733,11 @@ impl Run {
             Command::Begin => "begin combat".into(),
             Command::Next => "next turn".into(),
             Command::Move(..) => "tie order".into(),
-            Command::MoveArrivalBefore(..) => "move arrival before".into(),
+            Command::MoveArrivalBefore(first, before) => format!(
+                "move {} before {}",
+                name(first),
+                Self::roll_block_name(&self.state, &self.state.participants[*before])
+            ),
             Command::End(_) => "end encounter".into(),
             Command::Health(i, ..) => format!("HP correction on {}", name(i)),
             Command::TempHp(i, amount) => format!("{amount} temporary HP on {}", name(i)),
@@ -1809,16 +1816,9 @@ impl Run {
         }
     }
     fn undo_label(&self) -> String {
-        self.history_labels.last().map_or_else(
-            || {
-                if self.undo_stopped {
-                    "Undo stopped at sheet update".to_owned()
-                } else {
-                    "Undo".to_owned()
-                }
-            },
-            |label| format!("Undo: {label}"),
-        )
+        self.history_labels
+            .last()
+            .map_or_else(|| "Undo".to_owned(), |label| format!("Undo: {label}"))
     }
     fn next_up(&self) -> Option<usize> {
         if self.state.phase != Phase::Running {
@@ -2548,35 +2548,49 @@ impl Run {
             what.push(format!("In the sync panel: {}.", from_panel.join("; ")));
         }
         let what = what.join(" ");
-        self.notice_changes = from_sheet.len() + from_panel.len();
-        self.notice_summary = from_sheet
-            .first()
-            .or_else(|| from_panel.first())
-            .map(|first| {
-                let more = self.notice_changes.saturating_sub(1);
-                let first = self
-                    .state
-                    .participants
-                    .iter()
-                    .find_map(|participant| {
-                        first.strip_prefix(&participant.name).map(|rest| {
-                            format!(
-                                "{}'s sheet changed:{}",
-                                participant.name,
-                                rest.trim_start_matches(':')
-                            )
-                        })
-                    })
-                    .unwrap_or_else(|| first.clone());
-                if more == 0 {
-                    first
-                } else {
-                    format!(
-                        "{first} and {} more",
-                        crate::design::count(more, "", "").trim()
-                    )
+        let mut changes: Vec<String> = Vec::new();
+        for line in from_sheet.iter().chain(from_panel) {
+            for (index, part) in line.split(", ").enumerate() {
+                if index == 0
+                    || self
+                        .state
+                        .participants
+                        .iter()
+                        .any(|p| part.starts_with(&p.name))
+                {
+                    changes.push(part.to_owned());
+                } else if let Some(last) = changes.last_mut() {
+                    last.push_str(", ");
+                    last.push_str(part);
                 }
-            });
+            }
+        }
+        self.notice_changes = changes.len();
+        self.notice_summary = changes.first().map(|first| {
+            let more = self.notice_changes.saturating_sub(1);
+            let first = self
+                .state
+                .participants
+                .iter()
+                .find_map(|participant| {
+                    first.strip_prefix(&participant.name).map(|rest| {
+                        format!(
+                            "{}'s sheet changed:{}",
+                            participant.name,
+                            rest.trim_start_matches(':')
+                        )
+                    })
+                })
+                .unwrap_or_else(|| first.clone());
+            if more == 0 {
+                first
+            } else {
+                format!(
+                    "{first} and {} more",
+                    crate::design::count(more, "", "").trim()
+                )
+            }
+        });
         self.state.log.push(what.clone());
         for previous in &mut self.history {
             previous.log.push(what.clone());
@@ -2594,6 +2608,17 @@ impl Run {
             format!("{what} {}.", names.join(". "))
         });
         self.undo_stopped = true;
+        let names: Vec<_> = self
+            .state
+            .participants
+            .iter()
+            .filter(|p| from_sheet.iter().any(|line| line.starts_with(&p.name)))
+            .map(|p| p.name.as_str())
+            .collect();
+        self.undo_boundary = Some(match names.as_slice() {
+            [name] => format!("Nothing to undo since {name}'s sheet changed"),
+            _ => "Nothing to undo since the sheets changed".to_owned(),
+        });
     }
     /// A sheet changed outside Splat, with these words for what changed.
     #[cfg(test)]
@@ -2993,6 +3018,7 @@ impl Run {
             copy_label: None,
             account_status: None,
             undo_stopped: false,
+            undo_boundary: None,
             setup_inputs: BTreeMap::new(),
             last_initiative: None,
             hide_panel: false,
@@ -5739,11 +5765,50 @@ mod tests {
         let after = run.state.order.clone();
         let current = run.current();
         run.apply(Command::MoveArrivalBefore(3, 1)).unwrap();
+        assert_eq!(
+            run.undo_label(),
+            format!(
+                "Undo: move {} before {}",
+                run.state.participants[3].name, run.state.participants[1].name
+            )
+        );
+        assert!(
+            run.state
+                .log
+                .last()
+                .unwrap()
+                .starts_with(&format!("Move {} before ", run.state.participants[3].name))
+        );
         assert_eq!(run.state.order, vec![0, 3, 4, 1, 2]);
         assert_eq!(run.current(), current);
         run.undo();
         assert_eq!(run.state.order, after);
         assert_eq!(run.current(), current);
+    }
+
+    #[test]
+    fn sheet_notice_counts_characters_in_a_combined_update() {
+        let mut run = run();
+        let first = run.state.participants[0].name.clone();
+        let second = run.state.participants[1].name.clone();
+        run.note_sync_changes(
+            &[format!(
+                "{first} HP 20 → 18, temp HP 2 → 0, {second} HP 20 → 10"
+            )],
+            &[],
+        );
+        assert_eq!(run.notice_changes, 2);
+        assert_eq!(
+            run.notice_summary.as_deref(),
+            Some(format!("{first}'s sheet changed: HP 20 → 18, temp HP 2 → 0 and 1 more").as_str())
+        );
+        assert!(
+            run.state
+                .log
+                .last()
+                .unwrap()
+                .contains(&format!("{second} HP 20 → 10"))
+        );
     }
 
     #[test]

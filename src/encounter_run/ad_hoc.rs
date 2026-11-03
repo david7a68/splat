@@ -279,12 +279,28 @@ impl Run {
             let matches = matches_for(&known, &typed);
             for creature in matches.iter().take(MATCHES_SHOWN) {
                 // The whole name typed is already the one the button adds.
-                let row = design::two_line_row(
+                let row = design::row(
                     ui,
                     Density::Scan.row() + design::S,
                     creature.lower == typed,
                     &creature.entry.name,
-                    &creature.detail,
+                    |_, _| {},
+                );
+                ui.scope_builder(
+                    egui::UiBuilder::new()
+                        .accessibility_parent(row.id)
+                        .max_rect(row.rect.shrink2(egui::vec2(design::S, design::XS))),
+                    |ui| {
+                        ui.spacing_mut().item_spacing.y = 0.0;
+                        ui.label(Type::Body.rich(ui, &creature.entry.name).color(c.text));
+                        let parts: Vec<_> = creature.detail.split(" · ").collect();
+                        let source = parts.last().copied().filter(|part| {
+                            !["CR ", "HP ", "AC "]
+                                .iter()
+                                .any(|prefix| part.starts_with(prefix))
+                        });
+                        crate::encounters::detail_columns(ui, &creature.detail, source);
+                    },
                 );
                 design::named(ui, &row, &format!("Choose {}", creature.entry.name));
                 if row.clicked() {

@@ -98,6 +98,11 @@ or set `SPLAT_VISUAL_CONTACT_SHEET=1` to make it with a full `visual-test` run.
   clears scenario filters and baseline-update mode, and enforces the baseline.
   Video and optional contact-sheet settings work as for `visual-test`.
 
+Live run rows keep their first condition and shorten change bonuses first. Setup
+shows places once every present participant has initiative. Recording recovery
+keeps its state in the session list; a missing input offers **Choose an input**.
+**Process again** reuses the raw transcript and names what it sends in its confirmation.
+
 Library has **New entry** in its header. Its form opens in the reader column and closes after creation. World has **New ▾** for a plain note, a note with a type, an NPC, a location, or a generated NPC. List headings use capitals and a count. Page headers show state or nonzero counts beside the title, with a rule and an `L` gap below. Counts use thousands separators.
 
 With no campaigns, the switcher says **No campaign** and offers **Add campaign…**.
