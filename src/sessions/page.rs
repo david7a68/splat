@@ -41,6 +41,7 @@ const TWO_COLUMNS_FROM: f32 = 640.0;
 /// The plan and the note stand side by side from here.
 const PLAN_BESIDE_NOTE_FROM: f32 = 720.0;
 const PLAN_WIDTH: f32 = 330.0;
+const PLAN_MAX_WIDTH: f32 = 480.0;
 /// A list longer than this gets a search, and it scrolls instead of leaving the window.
 const FIGHT_SEARCH_FROM: usize = 8;
 const FIGHT_MENU_WIDTH: f32 = 240.0;
@@ -344,6 +345,79 @@ pub fn processed_warning() -> Status<'static> {
 }
 
 /// Words that wrap at the width they are given.
+fn plan_summary(summary: &str) -> String {
+    summary
+        .split(" · ")
+        .map(|part| part.replace(' ', "\u{a0}"))
+        .collect::<Vec<_>>()
+        .join(" ·\u{a0}")
+}
+
+/// The recording count belongs to the tab's label and click target.
+fn recordings_tab(ui: &mut egui::Ui, shown: &mut Tab, count: usize) -> bool {
+    if count == 0 {
+        return design::segmented(ui, shown, &[(Tab::Recordings, "Recordings")]);
+    }
+    let c = colors();
+    let selected = *shown == Tab::Recordings;
+    let font = if selected { Type::Strong } else { Type::Body }.font(ui);
+    let color = if selected { c.text } else { c.muted };
+    let mut job = egui::text::LayoutJob::default();
+    job.append(
+        "Recordings",
+        0.0,
+        egui::TextFormat::simple(font.clone(), color),
+    );
+    job.append(
+        &format!(" {}", design::count(count, "", "")),
+        0.0,
+        egui::TextFormat::simple(font, c.muted),
+    );
+    let galley = ui.fonts_mut(|fonts| fonts.layout_job(job));
+    let (rect, response) = ui.allocate_exact_size(
+        egui::vec2(galley.size().x + 2.0 * design::S, Density::Read.control()),
+        egui::Sense::click(),
+    );
+    response.widget_info(|| {
+        egui::WidgetInfo::selected(
+            egui::WidgetType::SelectableLabel,
+            ui.is_enabled(),
+            selected,
+            format!(
+                "Recordings, {}",
+                design::count(count, "recording", "recordings")
+            ),
+        )
+    });
+    if ui.is_rect_visible(rect) {
+        if response.hovered() {
+            ui.painter()
+                .rect_filled(rect, design::RADIUS_CONTROL, c.hover);
+        }
+        ui.painter()
+            .galley(rect.center() - galley.size() / 2.0, galley, color);
+        if selected {
+            let inset = design::XS / 2.0;
+            ui.painter().rect_filled(
+                egui::Rect::from_min_max(
+                    egui::pos2(rect.left() + inset, rect.bottom() - inset),
+                    egui::pos2(rect.right() - inset, rect.bottom()),
+                ),
+                0.0,
+                c.accent,
+            );
+        }
+        if response.has_focus() {
+            design::focus_ring(ui, rect);
+        }
+    }
+    if response.clicked() && !selected {
+        *shown = Tab::Recordings;
+        return true;
+    }
+    false
+}
+
 fn wrapped_words(ui: &mut egui::Ui, kind: Type, words: impl Into<String>, color: Color32) {
     ui.add(egui::Label::new(kind.rich(ui, words).color(color)).wrap());
 }
@@ -3514,7 +3588,7 @@ impl Sessions {
                                 design::status(ui, Status { icon: icons::RUN,
                                     word: &plan_saved_status(saved), color: c.muted });
                             } else if !summary.is_empty() {
-                                wrapped_words(ui, Type::Small, &summary, c.muted);
+                                wrapped_words(ui, Type::Small, plan_summary(&summary), c.muted);
                             }
                             if event.kind == Kind::LongRest && event.restores {
                                 design::status(ui, Status { icon: icons::OK,
@@ -3604,7 +3678,7 @@ impl Sessions {
                                 }
                             } else if let Some(saved) = &fight.saved {
                                 design::status(ui, Status { icon: icons::RUN, word: &plan_saved_status(saved), color: c.muted });
-                            } else { wrapped_words(ui, Type::Small, &fight.summary, c.muted); }
+                            } else { wrapped_words(ui, Type::Small, plan_summary(&fight.summary), c.muted); }
                         }, |ui| {
                             design::row_menu(ui, &fight.name, |ui| {
                                 if Action::quiet("Remove from tonight").show(ui).clicked() {
@@ -3657,8 +3731,9 @@ impl Sessions {
                         plan_row(ui, &widths, icons::GROUP, |ui| {
                             if design::wrapped_link(ui, &group.name).clicked() { read_group = true; }
                         }, |ui| {
-                            let summary = group.summary().split(" · ").map(|part| part.replace(' ', "\u{a0}")).collect::<Vec<_>>().join(" ·\u{a0}");
-                            wrapped_words(ui, Type::Small, summary, c.muted);
+                            let summary = plan_summary(&group.summary());
+                            let shown = design::words_that_fit(ui, &summary, &Type::Small.font(ui), ui.available_width());
+                            ui.label(Type::Small.rich(ui, shown).color(c.muted)).on_hover_text(group.summary());
                             if let Some(problem) = &group.problem { wrapped_words(ui, Type::Small, problem, c.result.warning); }
                         }, |ui| {
                             design::row_menu(ui, &group.name, |ui| {
@@ -4998,18 +5073,20 @@ impl Sessions {
             return;
         };
         let title_on_own_line = ui.available_width() < TWO_COLUMNS_FROM;
-        ui.with_layout(egui::Layout::right_to_left(egui::Align::Min), |ui| {
-            self.record_control(ui, settings);
-            if !title_on_own_line
-                || self
-                    .draft
-                    .as_ref()
-                    .is_some_and(|draft| draft.state == DraftState::Conflict)
-            {
-                self.session_details_action(ui, &note);
-            }
-            ui.with_layout(egui::Layout::left_to_right(egui::Align::Min), |ui| {
-                note_title(ui, &note.label(), &note.date);
+        ui.horizontal(|ui| {
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                self.record_control(ui, settings);
+                if !title_on_own_line
+                    || self
+                        .draft
+                        .as_ref()
+                        .is_some_and(|draft| draft.state == DraftState::Conflict)
+                {
+                    self.session_details_action(ui, &note);
+                }
+                ui.with_layout(egui::Layout::left_to_right(egui::Align::Min), |ui| {
+                    note_title(ui, &note.label(), &note.date);
+                });
             });
         });
         self.record_line(ui, settings);
@@ -5132,28 +5209,21 @@ impl Sessions {
             self.tab
         };
         let tabs: &[(Tab, &str)] = if beside {
-            &[
-                (Tab::Plan, "Plan and notes"),
-                (Tab::Recordings, "Recordings"),
-            ]
+            &[(Tab::Plan, "Plan and notes")]
         } else {
-            &[
-                (Tab::Plan, "Plan"),
-                (Tab::Note, "Note"),
-                (Tab::Recordings, "Recordings"),
-            ]
+            &[(Tab::Plan, "Plan"), (Tab::Note, "Note")]
         };
         ui.horizontal(|ui| {
-            if design::segmented(ui, &mut shown, tabs) {
+            let changed = ui
+                .horizontal(|ui| {
+                    ui.spacing_mut().item_spacing.x = 0.0;
+                    let changed = design::segmented(ui, &mut shown, tabs);
+                    recordings_tab(ui, &mut shown, self.recordings.len()) || changed
+                })
+                .inner;
+            if changed {
                 self.tab = shown;
                 self.clear_success();
-            }
-            if !self.recordings.is_empty() {
-                ui.label(
-                    Type::Small
-                        .rich(ui, design::count(self.recordings.len(), "", "").trim())
-                        .color(c.muted),
-                );
             }
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 if title_on_own_line {
@@ -5180,10 +5250,11 @@ impl Sessions {
         match shown {
             Tab::Plan if beside => {
                 let height = ui.available_height();
-                let note_width = ui.available_width() - PLAN_WIDTH - design::L;
+                let plan_width = (ui.available_width() * 0.4).clamp(PLAN_WIDTH, PLAN_MAX_WIDTH);
+                let note_width = ui.available_width() - plan_width - design::L;
                 ui.horizontal_top(|ui| {
                     ui.spacing_mut().item_spacing.x = design::L;
-                    page_column(ui, PLAN_WIDTH, height, |ui| {
+                    page_column(ui, plan_width, height, |ui| {
                         self.plan_pane(ui, book, plan);
                     });
                     page_column(ui, note_width, height, |ui| {
@@ -5356,7 +5427,7 @@ impl Sessions {
                 ..Default::default()
             }))
             .show_inside(ui, |ui| {
-                ui.add(
+                if self.new_template.is_none() { ui.add(
                     egui::Label::new(
                         Type::Small
                             .rich(
@@ -5366,7 +5437,7 @@ impl Sessions {
                             .color(c.muted),
                     )
                     .wrap(),
-                );
+                ); }
                 if let Some((name, _)) = self.deleted_template.clone()
                     && design::message_with_action(
                         ui,
@@ -5433,7 +5504,9 @@ impl Sessions {
         let Some(mut name) = self.new_template.take() else {
             return;
         };
+        ui.add_space(design::L);
         design::group_label(ui, "New template");
+        ui.add_space(design::M);
         design::text_field(
             ui,
             "Template name",
@@ -5924,6 +5997,33 @@ impl Sessions {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn narrow_plan_summaries_never_end_a_line_with_a_separator() {
+        let ctx = egui::Context::default();
+        design::theme::install(&ctx);
+        let _ = ctx.run(egui::RawInput::default(), |ctx| {
+            egui::CentralPanel::default().show(ctx, |ui| {
+                for summary in [
+                    "Held the bridge · Ended · Round 1",
+                    "5 party · 2 × Cinder Wolf · Ember Cultist",
+                ] {
+                    for width in [140.0, 180.0, 220.0, 330.0] {
+                        let galley = ui.painter().layout(
+                            plan_summary(summary),
+                            Type::Small.font(ui),
+                            colors().muted,
+                            width,
+                        );
+                        for row in &galley.rows {
+                            let text: String = row.glyphs.iter().map(|glyph| glyph.chr).collect();
+                            assert!(!text.trim_end().ends_with('·'), "{width}: {text}");
+                        }
+                    }
+                }
+            });
+        });
+    }
 
     #[test]
     fn removing_one_planned_fight_keeps_other_links_prose_and_sections() {

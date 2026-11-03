@@ -622,7 +622,7 @@ pub(super) fn history_list(
 
 fn history_summary(ui: &mut egui::Ui, summary: &FightSummary) {
     ui.indent("history_summary", |ui| {
-        ui.horizontal(|ui| {
+        ui.horizontal_wrapped(|ui| {
             design::status(
                 ui,
                 Status {

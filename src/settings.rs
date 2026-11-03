@@ -378,7 +378,10 @@ impl Settings {
             );
         }
         let small = |ui: &mut egui::Ui, text: &str| {
-            ui.add(egui::Label::new(Type::Small.rich(ui, text).color(c.muted)).wrap());
+            ui.scope(|ui| {
+                ui.set_max_width(ui.available_width().min(design::READER_MEASURE));
+                ui.add(egui::Label::new(Type::Small.rich(ui, text).color(c.muted)).wrap());
+            });
         };
         self.sign_in_again |= ui.ctx().data(|data| {
             data.get_temp::<bool>(egui::Id::new("focus_cookie"))

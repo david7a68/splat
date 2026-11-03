@@ -1545,9 +1545,6 @@ impl Encounters {
             });
         });
         ui.horizontal_wrapped(|ui| {
-            if dirty {
-                discard = Action::quiet("Discard").show(ui).clicked();
-            }
             let (icon, word, color) = if dirty {
                 (icons::DRAFT, "Unsaved", colors().document.unsaved)
             } else if let Some(note) = saved_note.as_deref() {
@@ -1556,7 +1553,7 @@ impl Encounters {
                 (icons::OK, "No changes", colors().muted)
             };
             if dirty || saved_note.is_some() {
-                design::status(ui, Status { icon, word, color });
+                discard = design::save_row_state(ui, Status { icon, word, color }, dirty, None);
             }
             if dirty && in_plan {
                 super::blocked_reason(ui, Some(super::draft_switch_reason()));
@@ -1973,6 +1970,33 @@ mod tests {
             Some(("Ash Pack".to_owned(), "Cinder Pack".to_owned()))
         );
         assert!(!encounters.group_open_in_plan());
+    }
+
+    #[test]
+    fn a_different_group_clears_search_but_the_same_group_keeps_it() {
+        let dir = tempfile::tempdir().unwrap();
+        let campaign = campaign(dir.path());
+        let scout = creature(dir.path(), "Scout");
+        let ctx = egui::Context::default();
+        let mut encounters = Encounters::default();
+        let mut paths = Vec::new();
+        for name in ["Ash Pack", "Rival Team"] {
+            encounters.new_group_in_plan();
+            let draft = encounters.group_draft.as_mut().unwrap();
+            draft.name = name.into();
+            draft.add(scout);
+            paths.push(draft.path.clone());
+            encounters.save_group_draft(&ctx, &campaign, &[]);
+        }
+        assert!(encounters.open_group_in_plan(&paths[0], &campaign));
+        encounters.search = "wolf".into();
+        assert!(encounters.open_group_in_plan(&paths[0], &campaign));
+        assert_eq!(encounters.search, "wolf");
+        assert!(encounters.open_group_in_plan(&paths[1], &campaign));
+        assert!(encounters.search.is_empty());
+        encounters.search = "scout".into();
+        encounters.start_new_draft();
+        assert!(encounters.search.is_empty());
     }
 
     #[test]

@@ -1467,6 +1467,13 @@ impl Encounters {
     pub fn open_group_in_plan(&mut self, path: &str, active: &Campaign) -> bool {
         match GroupDraft::open(&active.path, path) {
             Ok(draft) => {
+                if self
+                    .group_draft
+                    .as_ref()
+                    .is_none_or(|open| open.path() != draft.path())
+                {
+                    self.search.clear();
+                }
                 self.group_draft = Some(draft);
                 self.discarded_group = None;
                 self.group_in_plan = true;
@@ -1531,6 +1538,7 @@ impl Encounters {
         self.plan_on_save = true;
     }
     fn start_new_draft(&mut self) {
+        self.search.clear();
         let mut draft = Draft::new();
         // Nearly every fight has the party in it, so nearly every draft starts that way.
         if let Some(snapshot) = &self.snapshot {
@@ -2325,7 +2333,7 @@ impl Encounters {
                     story.sessions,
                 );
                 let mut counts = Vec::new();
-                let ready = page.ready.iter().filter(|row| !row.unfinished_run).count();
+                let ready = page.ready.len();
                 if ready > 0 {
                     counts.push(design::count(ready, "ready", "ready"));
                 }
@@ -2372,6 +2380,7 @@ impl Encounters {
             return;
         }
         if new_group {
+            self.search.clear();
             self.group_in_plan = false;
             self.group_draft = Some(GroupDraft::new());
             self.expanded = None;
@@ -2456,6 +2465,7 @@ impl Encounters {
                 self.start_new_draft();
             }
             if create_group {
+                self.search.clear();
                 self.group_in_plan = false;
                 self.group_draft = Some(GroupDraft::new());
                 self.expanded = None;
@@ -2508,6 +2518,7 @@ impl Encounters {
             ListAction::BackToRun => self.go_to_run = true,
             ListAction::OpenGroup(path) => match GroupDraft::open(&active.path, &path) {
                 Ok(draft) => {
+                    self.search.clear();
                     self.group_in_plan = false;
                     self.group_draft = Some(draft);
                     self.expanded = None;
@@ -2563,6 +2574,7 @@ impl Encounters {
             }
             ListAction::Edit(path) => match Draft::open(&active.path, &path) {
                 Ok(d) => {
+                    self.search.clear();
                     self.draft = Some(d);
                     self.from_session = false;
                     self.plan_on_save = false;
@@ -3687,6 +3699,9 @@ pub(crate) fn draft_switch_reason() -> &'static str {
 fn roster_detail(detail: &str) -> String {
     let parts: Vec<_> = detail.split(" · ").collect();
     let mut result = Vec::new();
+    if let Some(cr) = parts.iter().find(|p| p.starts_with("CR ")) {
+        result.push((*cr).to_owned());
+    }
     if let Some(hp) = parts.iter().find(|p| p.starts_with("HP ")) {
         let mut hp = (*hp).to_owned();
         if let Some(temp) = parts.iter().find_map(|p| p.strip_prefix("Temp ")) {
@@ -3700,7 +3715,12 @@ fn roster_detail(detail: &str) -> String {
     result.extend(
         parts
             .iter()
-            .filter(|p| !p.starts_with("HP ") && !p.starts_with("AC ") && !p.starts_with("Temp "))
+            .filter(|p| {
+                !p.starts_with("CR ")
+                    && !p.starts_with("HP ")
+                    && !p.starts_with("AC ")
+                    && !p.starts_with("Temp ")
+            })
             .map(|p| (*p).to_owned()),
     );
     result.join(" · ")
@@ -3709,6 +3729,14 @@ fn roster_detail(detail: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn roster_stats_use_the_search_order_and_keep_other_details_last() {
+        assert_eq!(
+            roster_detail("HP 11 · AC 12 · CR 1/4 · Temp 5 · as Guard"),
+            format!("CR 1/4 · HP 11 {} +5 · AC 12 · as Guard", icons::TEMP_HP)
+        );
+        assert_eq!(roster_detail("HP 11 · AC 12"), "HP 11 · AC 12");
+    }
     #[test]
     fn missing_roster_names_never_fall_back_to_reference_keys() {
         let mut draft = Draft::new();
