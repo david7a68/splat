@@ -758,7 +758,6 @@ pub fn link(ui: &mut Ui, label: &str) -> Response {
 }
 
 /// A Small inline link with the same target and accessible role as the body link.
-#[allow(dead_code)] // Settings adopts this shared API in Package C.
 pub fn small_link(ui: &mut Ui, label: &str) -> Response {
     text_link(ui, label, Type::Small)
 }

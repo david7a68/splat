@@ -78,6 +78,8 @@ pub struct Control {
     pub name: String,
     pub placeholder: Option<String>,
     pub role: Role,
+    /// An interactive ancestor that owns a label painted inside its bounds.
+    pub label_owner: Option<u64>,
     pub rect: egui::Rect,
     pub disabled: bool,
     /// The top-level pane or window that holds this control.
@@ -323,11 +325,22 @@ pub fn controls(harness: &Harness<'_, Splat>) -> Vec<Control> {
             if access.role() == Role::Label
                 && let Some(rect) = rect_of(&access)
             {
+                let mut parent = node.parent();
+                let mut label_owner = None;
+                while let Some(ancestor) = parent {
+                    let access = ancestor.accesskit_node();
+                    if control_role(access.role()) {
+                        label_owner = Some(access.id().0);
+                        break;
+                    }
+                    parent = ancestor.parent();
+                }
                 out.push(Control {
                     id: access.id().0,
                     name: access.label().unwrap_or_default(),
                     placeholder: None,
                     role: Role::Label,
+                    label_owner,
                     rect,
                     disabled: false,
                     scope,
@@ -350,6 +363,7 @@ pub fn controls(harness: &Harness<'_, Splat>) -> Vec<Control> {
                     .unwrap_or_default(),
                 placeholder: access.placeholder().map(str::to_owned),
                 role: access.role(),
+                label_owner: None,
                 rect,
                 disabled: access.is_disabled(),
                 scope,
@@ -713,7 +727,18 @@ pub fn inspect(
                 matches!(inner.role, Role::Link | Role::CheckBox)
                     && outer.rect.contains_rect(inner.rect)
             };
-            if nested(first, second) || nested(second, first) {
+            // A row can own real status widgets. Its own child labels are its content;
+            // labels beside it still participate in the overlap check.
+            let owned_label = |inner: &Control, outer: &Control| {
+                inner.is_label()
+                    && inner.label_owner == Some(outer.id)
+                    && outer.rect.contains_rect(inner.rect)
+            };
+            if nested(first, second)
+                || nested(second, first)
+                || owned_label(first, second)
+                || owned_label(second, first)
+            {
                 continue;
             }
             if overlap.width() > OVERLAP_TOLERANCE && overlap.height() > OVERLAP_TOLERANCE {
@@ -1105,6 +1130,7 @@ mod tests {
             name: name.to_owned(),
             placeholder: None,
             role: Role::Button,
+            label_owner: None,
             rect,
             disabled: false,
             scope: 1,
@@ -1188,6 +1214,38 @@ mod tests {
         let a = control("Save", at(10.0, 10.0, 80.0, 30.0));
         let b = control("Send", at(20.0, 10.0, 80.0, 30.0));
         assert!(checks_for(&[a, b]).contains(&"no-overlap".to_owned()));
+    }
+
+    #[test]
+    fn a_label_inside_its_own_interactive_ancestor_does_not_overlap_it() {
+        let row = control("Kestrel", at(10.0, 10.0, 200.0, 50.0));
+        let mut label = control("Bloodied", at(20.0, 40.0, 70.0, 16.0));
+        label.role = Role::Label;
+        label.label_owner = Some(row.id);
+        assert!(!checks_for(&[row, label]).contains(&"no-overlap".to_owned()));
+    }
+
+    #[test]
+    fn a_sibling_control_still_overlaps_an_owned_label() {
+        let row = control("Kestrel", at(10.0, 10.0, 200.0, 50.0));
+        let mut label = control("Bloodied", at(20.0, 40.0, 70.0, 16.0));
+        label.role = Role::Label;
+        label.label_owner = Some(row.id);
+        let sibling = control("Refresh", at(30.0, 38.0, 80.0, 24.0));
+        let viewport = at(0.0, 0.0, 400.0, 300.0);
+        let found = inspect(
+            &[row, sibling, label],
+            &[],
+            viewport,
+            "seeded",
+            "owned-label-with-sibling",
+            "400x300",
+        );
+        assert!(found.iter().any(|violation| {
+            violation.check == "no-overlap"
+                && violation.node == "Refresh"
+                && violation.detail.starts_with("Overlaps Bloodied")
+        }));
     }
 
     #[test]

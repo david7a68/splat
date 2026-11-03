@@ -778,7 +778,15 @@ pub mod party {
             d.focused_name().as_deref() == Some("Paste session cookie"),
             "The cookie field is focused before capture",
         );
-        d.state("connect-to-refresh", Sizes::Default);
+        d.state_prepared("connect-to-refresh", Sizes::Default, |d| {
+            d.click("Paste session cookie");
+            d.settle();
+            d.observe(
+                "iter-5-P13",
+                d.focused_name().as_deref() == Some("Paste session cookie"),
+                "The cookie field is focused after each capture resize",
+            );
+        });
     }
     const FORCE_READ: &str = "Replace with D&D Beyond sheet";
     const CONNECT_FIRST: &str = "Connect D&D Beyond";
@@ -798,7 +806,7 @@ pub mod encounter_build {
     const SAVED_FIRST_SLOT: &str = "1. Brannoch Vale";
     const SYNC_OPTION: &str = "Sync party with D&D Beyond";
     const PARTY_NOW: &str = "Party now: HP";
-    const LIVE_ROW: &str = "HP\u{a0}11/41 · AC\u{a0}15 · Bloodied · Poisoned";
+    const LIVE_ROW: &str = "HP\u{a0}11/41";
     const LOCAL_ONLY: &str = "Nothing in this encounter reaches D&D Beyond";
     const VIRTUALISED_LIMIT: usize = 100;
     const RESULT_NAME: &str = "Wolf";
@@ -970,7 +978,10 @@ pub mod encounter_build {
         let (option, together, row) = (
             d.has(SYNC_OPTION),
             d.visible_text(PARTY_NOW),
-            d.visible_text(LIVE_ROW),
+            d.visible_text(LIVE_ROW)
+                && d.visible_text("AC\u{a0}15")
+                && d.visible_text("Bloodied")
+                && d.visible_text("Poisoned"),
         );
         d.observe(
             "T5.6",
@@ -2611,10 +2622,21 @@ pub mod library_to_encounter {
         d.begin_task();
 
         d.click(SAVE_ENCOUNTER);
+        let detail = d
+            .place_of(&format!("6. {COPY_NAME}"))
+            .map_or_else(String::new, |title| {
+                d.painted_in(egui::Rect::from_min_max(
+                    title.left_bottom(),
+                    pos2(title.left() + 400.0, title.bottom() + 18.0),
+                ))
+                .replace('\u{a0}', " ")
+            });
         d.observe(
             "C17",
-            d.has_containing("HP 150 · AC 17 · CR 10 · Campaign"),
-            "The roster identifies the campaign-owned copy",
+            ["HP 150", "AC 17", "CR 10", "Campaign"]
+                .iter()
+                .all(|word| detail.contains(word)),
+            format!("The copied Aboleth's roster detail identifies its campaign source: {detail}"),
         );
         d.state("copy-in-encounter", Sizes::All);
         d.goal("save the encounter with the copy");
@@ -4275,7 +4297,10 @@ pub mod session_notes {
             !d.has("Undo"),
             "Undo goes at the next thing the DM does, so it cannot undo the wrong event",
         );
-        d.state("session-event-in-notes", Sizes::Default);
+        d.state_prepared("session-event-in-notes", Sizes::Default, |d| {
+            show_plan(d);
+            d.wait_for_text("In notes");
+        });
         write_note(d);
         let linked = d.editor_text().is_some_and(|text| {
             let what = text.find("## What happened");
@@ -4295,7 +4320,10 @@ pub mod session_notes {
             !d.has("ON THE TIMELINE") && !d.has("LINKED IN THIS NOTE"),
             "The note has inline links, with no repeated lists",
         );
-        d.state("session-read-linked", Sizes::Default);
+        d.state_prepared("session-read-linked", Sizes::Default, |d| {
+            read_note(d);
+            d.wait_for_text("Long rest");
+        });
         let reads_as_words = !d.visible_text("[[Timeline");
         d.observe(
             "T11.4",
@@ -4356,6 +4384,11 @@ pub mod session_notes {
         write_note(d);
         d.click(NAV_TIMELINE);
         d.click("Rests");
+        d.observe(
+            "iter-5-S1",
+            d.in_view("Title"),
+            "Changing a Timeline filter resets the selected detail to the top",
+        );
         d.expect("of 4 events");
         d.state("timeline-filtered", Sizes::Default);
         d.observe(
@@ -4407,6 +4440,24 @@ pub mod session_notes {
             "A conflict shows the file's words, so the DM chooses knowing both",
         );
         d.state("note-conflict", Sizes::Default);
+        d.click("Record this session");
+        d.expect("Start recording");
+        d.observe(
+            "iter-5-S2",
+            d.has("Overwrite with my draft"),
+            "Recording consent opens while the note conflict stays unresolved",
+        );
+        d.state("note-conflict-record", Sizes::Default);
+        d.click("Start recording");
+        d.expect("Stop recording");
+        let recording_in_conflict = d.app_mut().sessions.recording();
+        d.observe(
+            "iter-5-S2",
+            recording_in_conflict,
+            "Audio recording starts while the note conflict stays unresolved",
+        );
+        d.state("note-conflict-recording", Sizes::Default);
+        d.click("Stop recording");
         d.click(NAV_TIMELINE);
         d.observe(
             "T11.4",
@@ -4800,6 +4851,11 @@ pub mod session_notes {
 
         d.click(NAV_TIMELINE);
         d.expect(RUN);
+        d.observe(
+            "iter-5-S1",
+            d.in_view("Title"),
+            "Opening Timeline resets its selected detail to the top",
+        );
         d.state("timeline-with-run", Sizes::All);
         // Beside a panel at the minimum window, the list keeps its room.
         d.press_ctrl(Key::K);
@@ -5336,7 +5392,7 @@ pub mod session_recording {
         d.type_into_editor("Words typed after the rename.\n");
         d.app_mut().sessions.simulate_file_renamed();
         d.press_ctrl(Key::S);
-        d.expect("File gone");
+        d.expect("Notes not saved");
         d.state("note-file-gone", Sizes::Default);
         d.click("Save my words as a new file");
         d.expect("Notes saved");
@@ -6185,10 +6241,16 @@ pub mod session_plan_groups {
         d.type_into(FIND_CREATURE, "wolf");
         d.click_beside_exact("Wolf", ADD);
         d.click_starting("Session 1: The Crossing ·");
-        d.expect("Go to it");
+        d.expect("A group is being assembled in Session 2.");
+        d.expect("Open Session 2");
+        d.observe(
+            "iter-5-P8",
+            !d.has("Go to it"),
+            "One warning names the draft session and one link opens it",
+        );
         d.state("plan-group-in-another-session", Sizes::Default);
         let stays_out = !d.has("Save group");
-        d.click("Go to it");
+        d.click("Open Session 2");
         d.click("Save group");
         d.expect("Go to Arrivals for Border Watch");
         d.click_starting("Session 1: The Crossing ·");
@@ -6292,14 +6354,28 @@ pub mod session_plan {
         d.click(&format!("Start fight: {FIRST}"));
         d.goal_within("T12.1", "start a planned fight from the session", 1);
         d.expect(&format!("{RUN_HEADING}{FIRST}"));
-        d.state("setup-with-read-aloud", Sizes::All);
+        d.state_prepared("setup-with-read-aloud", Sizes::All, |d| {
+            if d.has("Technical details") {
+                fight_tab(d, "Prep");
+            }
+            d.wait_for_text("Wolves hold the far bank");
+        });
         d.observe(
             "T12.7",
             d.visible_text("Wolves hold the far bank") && !d.visible_text("roster:"),
             "Setup shows what to read to the table, and no YAML",
         );
         fight_tab(d, "Prep");
-        d.state("prep-tab", Sizes::Default);
+        d.state_prepared("prep-technical-details", Sizes::Default, |d| {
+            if !d.has("Technical details") {
+                fight_tab(d, "Prep");
+            }
+            if !d.visible_text("Phases, assumptions") {
+                d.click("Technical details");
+            }
+            d.wait_for_text("Phases, assumptions");
+        });
+        d.click("Technical details");
         d.observe(
             "T12.7",
             d.has("Technical details") && !d.visible_text("roster:"),
@@ -6444,7 +6520,7 @@ pub mod session_plan {
         d.click(FIRST);
         d.observe(
             "S3",
-            d.has("Held the bridge · ended in round 1"),
+            d.has("Held the bridge · Ended · Round 1"),
             "A played fight gives its result and last round on one line",
         );
         d.goal_within("T12.5", "read how a fight ended", 1);

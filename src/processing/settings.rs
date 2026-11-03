@@ -399,7 +399,6 @@ impl ProcessingSettings {
         let remove_name = format!("{remove}: {label}");
         let held = self.held(slot).is_some();
         let mut save = false;
-        let mut forget = false;
         design::field(ui, "API key", None, None, |ui| {
             ui.horizontal(|ui| {
                 let field = self.field(slot);
@@ -409,17 +408,11 @@ impl ProcessingSettings {
                 let reason_width = reason.map_or(0.0, |text| {
                     design::number_width(ui, text, &Type::Small.font(ui)) + design::S
                 });
-                let remove_width = if (saved || held) && fits {
-                    Action::quiet(&remove).natural_width(ui) + design::L
-                } else {
-                    0.0
-                };
                 let room = if show_save {
                     Action::secondary("Save key").natural_width(ui)
                 } else {
                     0.0
                 } + reason_width
-                    + remove_width
                     + design::S * 3.0;
                 let width = (ui.available_width() - room - design::S * 2.0)
                     .clamp(design::L * 4.0, design::FORM_WIDTH / 2.0);
@@ -445,10 +438,6 @@ impl ProcessingSettings {
                         .show(ui)
                         .clicked();
                 }
-                if (saved || held) && fits {
-                    ui.add_space(design::L);
-                    forget = Action::quiet(&remove).name(&remove_name).show(ui).clicked();
-                }
             });
         });
         if (saved || held) && !fits {
@@ -457,7 +446,6 @@ impl ProcessingSettings {
                 Tone::Warning,
                 "The saved key is for another service, so Splat will not send it here. Save a key for this service.",
             );
-            forget = Action::quiet(&remove).name(&remove_name).show(ui).clicked();
         }
         if save {
             match slot {
@@ -477,15 +465,6 @@ impl ProcessingSettings {
                     ctx.request_repaint();
                 });
             }
-        } else if forget {
-            *self.held(slot) = None;
-            if let Some(tx) = tx {
-                credentials::in_background(move || {
-                    let result = credentials::forget_key(slot);
-                    let _ = tx.send(Reply::Forgot(slot, result));
-                    ctx.request_repaint();
-                });
-            }
         }
         let field = self.field(slot);
         if let Some(error) = &field.error {
@@ -500,6 +479,23 @@ impl ProcessingSettings {
                     .rich(ui, format!("{} Saved in the desktop keyring.", icons::OK))
                     .color(colors().document.saved),
             );
+        }
+        if (saved || held)
+            && Action::quiet(&remove)
+                .line_start()
+                .name(&remove_name)
+                .show(ui)
+                .clicked()
+        {
+            *self.held(slot) = None;
+            if let Some(tx) = self.replies.as_ref().map(|(tx, _)| tx.clone()) {
+                let ctx = ui.ctx().clone();
+                credentials::in_background(move || {
+                    let result = credentials::forget_key(slot);
+                    let _ = tx.send(Reply::Forgot(slot, result));
+                    ctx.request_repaint();
+                });
+            }
         }
     }
 
@@ -765,23 +761,6 @@ impl ProcessingSettings {
         });
         if changed {
             self.persist();
-        }
-    }
-
-    pub fn context(&self) -> &'static str {
-        if self.config.problem().is_some() {
-            "Check processing settings"
-        } else if !self.has_key(KeySlot::Speech) && !super::is_local(&self.config.speech_url) {
-            "Speech key missing"
-        } else if self.config.provider == Provider::CodexCli && !self.codex_found {
-            "Codex not found"
-        } else if self.config.provider != Provider::CodexCli
-            && !self.has_key(KeySlot::Llm)
-            && !super::is_local(&self.config.llm_url)
-        {
-            "LLM key missing"
-        } else {
-            "Ready to process"
         }
     }
 

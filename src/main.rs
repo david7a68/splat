@@ -782,7 +782,7 @@ impl Splat {
                 (
                     self.sessions.busy_with_edit(),
                     if self.sessions.notes_changed_on_disk() {
-                        "Notes changed on disk"
+                        "Changed on disk"
                     } else {
                         "Notes not saved"
                     },
@@ -794,30 +794,38 @@ impl Splat {
                     Page::Timeline,
                 ),
             ] {
-                if lost
-                    && design::status_link(
+                if lost {
+                    let response = design::status_link(
                         ui,
                         Status {
-                            icon: if target == Page::Sessions
-                                && self.sessions.notes_changed_on_disk()
-                            {
-                                icons::WARN
-                            } else {
-                                icons::ERROR
-                            },
+                            icon: self
+                                .sessions
+                                .attention_status()
+                                .filter(|_| target == Page::Sessions)
+                                .map_or(icons::ERROR, |state| state.icon),
                             word,
-                            color: if target == Page::Sessions
-                                && self.sessions.notes_changed_on_disk()
-                            {
-                                colors().document.external
-                            } else {
-                                colors().document.invalid
-                            },
+                            color: self
+                                .sessions
+                                .attention_status()
+                                .filter(|_| target == Page::Sessions)
+                                .map_or(colors().document.invalid, |state| state.color),
                         },
-                    )
-                    .clicked()
-                {
-                    self.page = target;
+                    );
+                    if target == Page::Sessions && self.sessions.notes_changed_on_disk() {
+                        design::named(ui, &response, "Notes changed on disk");
+                    }
+                    if response
+                        .on_hover_text(
+                            if target == Page::Sessions && self.sessions.notes_changed_on_disk() {
+                                "Notes changed on disk"
+                            } else {
+                                word
+                            },
+                        )
+                        .clicked()
+                    {
+                        self.page = target;
+                    }
                 }
             }
             ui.add_space(design::XS);
@@ -1213,12 +1221,7 @@ impl Splat {
         let (_, session) = self.settings.campaign_session();
         match self.page {
             Page::Settings => {
-                let context = if self.settings_tab == SettingsTab::Recording {
-                    self.processing.context().to_owned()
-                } else {
-                    design::count(self.campaigns.all().len(), "campaign", "campaigns")
-                };
-                design::page_header(ui, "Settings", Some(&context), |_| {});
+                design::page_header(ui, "Settings", None, |_| {});
                 let tab_changed = design::segmented(
                     ui,
                     &mut self.settings_tab,
@@ -1232,16 +1235,26 @@ impl Splat {
                 }
                 design::rule(ui);
                 if self.settings_tab == SettingsTab::Recording {
-                    let clip = ui.available_rect_before_wrap().intersect(ui.clip_rect());
-                    egui::ScrollArea::vertical()
-                        .id_salt("recording_settings")
-                        .auto_shrink([false, false])
-                        .show(ui, |ui| {
-                            ui.set_clip_rect(ui.clip_rect().intersect(clip));
-                            ui.add_space(design::L);
-                            ui.set_max_width(design::FORM_WIDTH + design::XXL);
-                            self.processing.show(ui);
-                        });
+                    // Line-start quiet actions use the gutter for their hit area.
+                    // Keep fields at the usual column edge inside the wider viewport.
+                    let mut viewport = ui.available_rect_before_wrap();
+                    viewport.min.x -= design::S;
+                    let clip = viewport.intersect(ui.clip_rect());
+                    ui.scope_builder(egui::UiBuilder::new().max_rect(viewport), |ui| {
+                        egui::ScrollArea::vertical()
+                            .id_salt("recording_settings")
+                            .auto_shrink([false, false])
+                            .show(ui, |ui| {
+                                ui.set_clip_rect(ui.clip_rect().intersect(clip));
+                                ui.add_space(design::L);
+                                let mut fields = ui.available_rect_before_wrap();
+                                fields.min.x += design::S;
+                                ui.scope_builder(egui::UiBuilder::new().max_rect(fields), |ui| {
+                                    ui.set_max_width(design::FORM_WIDTH + design::XXL);
+                                    self.processing.show(ui);
+                                });
+                            });
+                    });
                     return;
                 }
                 let blocked = self.blocked_switch();
@@ -1277,6 +1290,8 @@ impl Splat {
                                         if place == 0 {
                                             list(ui, &mut self.campaigns, &mut self.dndbeyond);
                                         } else {
+                                            self.settings.campaign_form_open =
+                                                self.campaigns.form_open();
                                             account(ui, &mut self.settings);
                                         }
                                     });
@@ -1285,6 +1300,7 @@ impl Splat {
                         } else {
                             list(ui, &mut self.campaigns, &mut self.dndbeyond);
                             ui.add_space(design::L);
+                            self.settings.campaign_form_open = self.campaigns.form_open();
                             self.settings.show_compact(ui);
                         }
                     });
@@ -1330,6 +1346,9 @@ impl Splat {
                 }
             }
             Page::Timeline => {
+                if self.shown_page != Page::Timeline {
+                    self.timeline_page.reopen();
+                }
                 if let Some(campaign) = &active {
                     let links = self.sessions.links();
                     let current = self.sessions.current();

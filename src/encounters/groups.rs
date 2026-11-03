@@ -1504,6 +1504,9 @@ impl Encounters {
                 - if draft.setup.members.is_empty() {
                     design::number_width(ui, "Add a creature first", &Type::Small.font(ui))
                         + design::L
+                } else if !dirty {
+                    design::number_width(ui, "No changes to save.", &Type::Small.font(ui))
+                        + design::L
                 } else {
                     0.0
                 })
@@ -1537,11 +1540,13 @@ impl Encounters {
                 .clicked();
                 super::blocked_reason(
                     ui,
-                    draft
-                        .setup
-                        .members
-                        .is_empty()
-                        .then_some("Add a creature first"),
+                    if draft.setup.members.is_empty() {
+                        Some("Add a creature first")
+                    } else if !dirty {
+                        Some("No changes to save.")
+                    } else {
+                        None
+                    },
                 );
             });
         });
@@ -1556,7 +1561,9 @@ impl Encounters {
             } else {
                 (icons::OK, "No changes", colors().muted)
             };
-            design::status(ui, Status { icon, word, color });
+            if dirty || saved_note.is_some() {
+                design::status(ui, Status { icon, word, color });
+            }
             if dirty && in_plan {
                 super::blocked_reason(ui, Some(super::draft_switch_reason()));
             }
