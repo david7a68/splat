@@ -1301,3 +1301,12 @@ mod tests {
         assert_eq!(hp_state(Some(0), None), HpState::Zero);
     }
 }
+
+/// The shared Add strip. Callers supply quiet, worded actions in their screen's order.
+pub fn add_strip(ui: &mut Ui, actions: impl FnOnce(&mut Ui)) {
+    ui.horizontal_wrapped(|ui| {
+        ui.spacing_mut().item_spacing.x = XS;
+        ui.label(Type::Label.rich(ui, "Add").color(colors().muted));
+        actions(ui);
+    });
+}

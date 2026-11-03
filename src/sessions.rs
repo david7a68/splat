@@ -385,11 +385,11 @@ pub struct Template {
 pub const BUILT_IN_TEMPLATES: [(&str, &str); 2] = [
     (
         "Standard session",
-        "# Session {{number}}: {{title}}\n\n{{date}}, {{campaign}}\n\n## Recap of last time\n\n\n\n## Plan for tonight\n\n\n\n## What happened\n\n\n\n## People and places\n\n\n\n## Loot and rewards\n\n\n\n## Open threads\n\n",
+        "# Session {{number}}: {{title}}\n\n{{date}}, {{campaign}}\n\n## Recap of last time\n\n## Plan for tonight\n\n## What happened\n\n## People and places\n\n## Loot and rewards\n\n## Open threads\n\n",
     ),
     (
         "Short notes",
-        "# Session {{number}}: {{title}}\n\n{{date}}\n\n## What happened\n\n\n\n## Next time\n\n",
+        "# Session {{number}}: {{title}}\n\n{{date}}\n\n## What happened\n\n## Next time\n\n",
     ),
 ];
 

@@ -158,6 +158,7 @@ tooltips, and separators. Text cursors do not blink, because motion draws the ey
 | Stat tile | `stat_tile` | A label over a large value, with no box |
 | HP | `hp_bar`, `hp_readout`, `hp_state` | Fixed slots. Temp HP is separate |
 | Empty state | `empty_state` | What this is, and the one next step |
+| Add strip | `add_strip` | `Add` in `Label`, then quiet icon-and-word buttons that wrap. Fight, Group (plan only), Day, Long rest, Short rest, Travel, Major event |
 | Message | `message`, `Tone` | Inline. Never modal |
 | Side panel | `side_panel_width`, `panel_header` | One width rule for Lookup, Notes and the run. Above 820 px, the run's panel has two columns |
 | Column | `Column::left / right / panel` | Every side column: the rail, a page's list, a panel. A drag handle on its inner edge. Natural width until dragged, then the DM's width, here and after a restart. A drag always leaves the page its room, and the run's roster keeps `RUN_LIST_KEEPS`. What sits beside a column reaches its edge, so no blank band opens between them. Text keeps its measure inside that room |
@@ -196,10 +197,9 @@ moves the rarely wanted sections (source, engine support, technical details) to 
 
 The Session page is a list the DM works down, beside the note. A row is an icon, a link and a second line, with one action on
 the right. A row opens in place, and its fields use the same form parts as the Timeline page. The first fight to come has
-the primary button and the others the secondary, so the eye goes to the next thing to do. The word for a fight is **Start
+the primary button when no run is open, and the others the secondary. A saved unfinished run offers Resume, with Start a new run and Delete the saved run in its menu. The open run has a status link; the strip owns the primary. The word for a fight is **Start
 fight**, on this page and on Encounters. Add buttons stay at the foot of the plan, and a message opens above them, so
-that they do not move under the pointer. A fight's row lists the party first, with HP right-aligned in the run's tints, and
-everyone else behind one word. In a page narrower than 720 px, the plan and the note have a tab each.
+that they do not move under the pointer. An empty plan uses `empty_state` above the strip. A played fight opens its last round, one line of party HP, and quiet Log, Whole run and Timeline links. Remove stays in its row menu. A long rest and its full-HP ruling share one message and one Undo; Not at full waits inside the opened row. In a page narrower than 720 px, the plan and the note have a tab each.
 
 ## The live run
 
@@ -246,6 +246,8 @@ the panel, those words open the second line instead, so that a name is never cut
 
 ## Sessions and the timeline
 
+The session title and muted date share one line. Last time is one line: a link to the previous session and the first line of its recap, with the full recap in the link's tooltip. Read and Write sit on the content tab row. Templates is a quiet header action with a Sessions back link. The session folder setting belongs to Campaign, Link and folder. An older session shows one warning and a link to the session being played; the list marks that session as Playing. Built-in templates leave one blank line below each heading. Read view shows Obsidian links inline, without a second list of the same links.
+
 Notes are Markdown in the campaign's folder. `Write` styles the source as it is typed, in the Reader's faces: a heading
 is large, has the Reader's rule, and `*these words*` are italic. Markup stays in view in the plain face and `faint`, so the
 file is exactly what was typed and Obsidian reads the same text. The box fills its column, and `Read` uses the same width,
@@ -255,7 +257,9 @@ table nobody stops to press Save. A file changed elsewhere stops saving and asks
 The timeline is a ledger, not a chart. It is one column in story order, with a hairline spine and an icon and
 a word for each kind. A day opens with a rule, as a heading does, and numbers itself. It has no card and no
 colour for kinds, because a kind is not a state. An event's detail sits beside the list, with the same width
-rule as Lookup.
+rule as Lookup. The detail column exists only when an event is selected. Its header stays above the scrolling form: kind, title, save state, Copy link and a row menu with Remove. Selecting a different event resets the fields to the top. A copy uses a check and Copied on the button for two seconds. Link text stays in a quiet section; Place after is the one ordering control. Adds to shares the filter line. Notices have their own line and never cover the header.
+
+Party uses one group-heading style throughout Overview. Saving throws and skills use two or three columns. Lists with eight or fewer entries have no filter or count line. Local-edit warnings name the character, keep actions at the right edge and say that replacement keeps a copy. Technical details stays closed.
 
 A live microphone has the only colour here. `Record` takes a second, inline step that says to tell the table.
 While it records, the rail keeps the word and the time in view on every page. The time counts audio in the file, so it

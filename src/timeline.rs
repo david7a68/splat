@@ -56,7 +56,7 @@ impl Kind {
     pub fn word(self) -> &'static str {
         match self {
             Self::Day => "Day",
-            Self::Encounter => "Encounter",
+            Self::Encounter => "Fight",
             Self::ShortRest => "Short rest",
             Self::LongRest => "Long rest",
             Self::Travel => "Travel",
@@ -322,7 +322,7 @@ pub fn reference(event: &Event, day: u32) -> String {
 }
 
 /// Call `found` with each timeline link in a text: the ID and the label, if it has one.
-fn each_reference<'a>(
+pub(crate) fn each_reference<'a>(
     text: &'a str,
     mut found: impl FnMut(usize, usize, &'a str, Option<&'a str>),
 ) {

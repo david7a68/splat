@@ -605,7 +605,7 @@ pub mod party {
         ("Features", "page-features"),
     ];
     const OVERVIEW: &str = "Overview";
-    const SOURCE: &str = "Source & parity";
+    const SOURCE: &str = "Technical details";
     const COMPARE: [&str; 3] = ["AC 19", "HP 58/62", "Level 6 Fighter"];
     const NO_CHARACTERS: &str = "No local characters yet";
     const NOT_LINKED: &str = "Link this campaign to D&D Beyond";
@@ -641,6 +641,13 @@ pub mod party {
         for (page, state) in PAGES {
             d.click(page);
             d.state(state, Sizes::Default);
+            if page == "Equipment" {
+                d.observe(
+                    "P29",
+                    !d.has("Filter this page"),
+                    "A short list needs no filter",
+                );
+            }
             d.observe(
                 "T7.2",
                 d.in_view_containing(FRESHNESS),
@@ -706,9 +713,9 @@ pub mod party {
             "Dismiss removes the report of where the edits went",
         );
     }
-    const FORCE_READ: &str = "Force read";
-    const CONNECT_FIRST: &str = "Connect to D&D Beyond in Settings to use it.";
-    const REPLACED: &str = "Force read replaced local edits";
+    const FORCE_READ: &str = "Replace with D&D Beyond sheet";
+    const CONNECT_FIRST: &str = "Open Settings";
+    const REPLACED: &str = "D&D Beyond sheets replaced local edits";
     const DISMISS: &str = "Dismiss";
     const EDITED_NOTE: &str = "My own words";
 }
@@ -3736,7 +3743,6 @@ pub mod session_notes {
     const TITLE: &str = "Ash on the Road";
     const LONG_TITLE: &str =
         "The Long Road from Emberfall Through the Ash Marshes to the Drowned Mill";
-    const NEW_EVENTS_COMBO: usize = 1;
     const UNDO_NEXT_TURN: &str = "Undo: next turn";
     const ADD_DAY: &str = "Add Day";
     const ADD_LONG_REST: &str = "Add Long rest";
@@ -3781,7 +3787,7 @@ pub mod session_notes {
         d.begin_task();
         d.click(ADD_LONG_REST);
         d.goal_within("T11.2", "put a long rest on the timeline", 2);
-        d.expect("Long rest added to Session 1.");
+        d.expect("Long rest added. Everyone starts the next fight at full.");
         d.state("session-event-added", Sizes::Default);
         d.click(ADD_SHORT_REST);
         d.observe(
@@ -3789,7 +3795,7 @@ pub mod session_notes {
             d.has_containing("Short rest added to Session 1."),
             "An event added here says so, in words",
         );
-        d.click("Undo add");
+        d.click("Undo");
         d.observe(
             "T11.2",
             !d.has("Short rest") && d.has_containing("Removed"),
@@ -3798,17 +3804,25 @@ pub mod session_notes {
         d.click("Undo remove");
         d.expect("Short rest");
         d.click("Short rest");
-        d.scroll_until(pos2(780.0, 400.0), "Remove this event", 10);
+        d.click("More actions for Short rest");
         d.click("Remove this event");
         d.click(NAV_SESSIONS);
         d.click(ADD_TRAVEL);
+        d.type_text("Travel");
+        d.press(Key::Enter);
+        d.observe(
+            "S13",
+            d.has("Travel"),
+            "A new event accepts its title directly",
+        );
+        d.state("plan-event-title", Sizes::Default);
         d.click(ADD_EVENT);
         d.state("session-events", Sizes::Default);
         d.click("Add to notes: Long rest");
         d.expect("In notes");
         d.observe(
             "T11.2",
-            !d.has("Undo add"),
+            !d.has("Undo"),
             "Undo goes at the next thing the DM does, so it cannot undo the wrong event",
         );
         d.state("session-event-in-notes", Sizes::Default);
@@ -3826,7 +3840,11 @@ pub mod session_notes {
         );
         d.press_ctrl(Key::S);
         read_note(d);
-        d.expect("ON THE TIMELINE");
+        d.observe(
+            "S2",
+            !d.has("ON THE TIMELINE") && !d.has("LINKED IN THIS NOTE"),
+            "The note has inline links, with no repeated lists",
+        );
         d.state("session-read-linked", Sizes::Default);
         let reads_as_words = !d.visible_text("[[Timeline");
         d.observe(
@@ -3848,7 +3866,7 @@ pub mod session_notes {
         }
         d.state("timeline-day-added", Sizes::All);
         d.click_containing("Long rest · Day 1 · Session 1");
-        d.expect("LINK");
+        d.expect("Link text");
         d.replace_text_in("Title", "Rest at the mill");
         d.type_into("Where", "Old mill");
         d.press_ctrl(Key::S);
@@ -3876,12 +3894,12 @@ pub mod session_notes {
         d.click("Rests");
         d.state("timeline-filtered", Sizes::Default);
         d.observe(
-            "T11.3",
-            d.is_disabled("Move earlier"),
-            "A filtered list cannot move an event past one it hides",
+            "S16",
+            !d.has("Move earlier") && !d.has("Move later") && d.has("Place this event after"),
+            "Place after is the one way to change an event's position",
         );
         d.click("All");
-        d.scroll_until(pos2(780.0, 400.0), "Remove this event", 10);
+        d.click("More actions for Rest at the mill");
         d.click("Remove this event");
         d.expect("Undo remove");
         d.state("timeline-removed", Sizes::Default);
@@ -3916,11 +3934,11 @@ pub mod session_notes {
         d.click(NAV_TIMELINE);
         d.observe(
             "T11.4",
-            d.has_containing("Notes not saved"),
+            d.has_containing("Notes changed on disk"),
             "A note that could not be saved stays in the rail on other pages",
         );
         d.state("note-conflict-elsewhere", Sizes::Default);
-        d.click("Notes not saved");
+        d.click("Notes changed on disk");
         d.expect("Overwrite with my draft");
         d.click(NAV_TIMELINE);
         d.click_containing("Rest at the mill");
@@ -3965,20 +3983,23 @@ pub mod session_notes {
         d.state("templates-new", Sizes::Default);
         d.click("Create template");
         d.expect("Downtime");
+        d.click("More actions for Downtime");
         d.click("Delete this template");
         d.expect("Undo delete");
         d.state("templates-deleted", Sizes::Default);
         d.click("Undo delete");
         d.expect("Downtime");
 
-        d.click("Folder");
+        d.click("← Sessions");
+        d.click("Campaign");
+        d.click("Link and folder");
         d.expect("SESSION FOLDER");
-        d.state("session-folder", Sizes::Default);
-        d.click("Session notes");
+        d.state("session-folder-in-campaign", Sizes::All);
+        d.click(NAV_SESSIONS);
 
         // Reading last week's note does not send tonight's run there.
         d.click(NAV_TIMELINE);
-        d.open_combo_at(NEW_EVENTS_COMBO);
+        d.click("Session for new events");
         d.click("No session");
         d.click(NAV_SESSIONS);
         d.click("New session");
@@ -3995,7 +4016,9 @@ pub mod session_notes {
         show_plan(d);
         d.observe(
             "T11.3",
-            d.has_containing("These go to Session 1, not the session being played (Session 2)."),
+            d.has_containing(
+                "Session 1 is not the session being played. What you write and add goes here.",
+            ),
             "Adding an event to an older session says so before it happens",
         );
         d.state("session-events-older", Sizes::Default);
@@ -4003,7 +4026,7 @@ pub mod session_notes {
         d.observe(
             "T11.8",
             d.has_containing(
-                "You are writing in Session 1, not the session being played (Session 2).",
+                "Session 1 is not the session being played. What you write and add goes here.",
             ),
             "Writing in an older note says so",
         );
@@ -4304,7 +4327,7 @@ pub mod session_notes {
         d.click(NAV_TIMELINE);
         d.observe(
             "T11.3",
-            d.has_containing("Encounter · Round 2 · Session 2"),
+            d.has_containing("Fight · Round 2 · Session 2"),
             "A run went to the newest session, with no step, though an older note was read",
         );
         d.goal("use the timeline during a run");
@@ -4381,7 +4404,7 @@ pub mod session_notes {
             d.has_containing("Everyone is ready. 2 tied."),
             "Notes hide the order of ties, so setup says that there are ties",
         );
-        d.click("Turn order");
+        d.click("Open Correct");
         d.observe(
             "T11.8",
             !d.has("Close notes") && d.has_containing(" ties"),
@@ -5504,8 +5527,9 @@ pub mod session_plan {
         d.state("new-session-with-last-time", Sizes::All);
         d.observe(
             "T12.6",
-            d.has_containing("Last time: Session 1: The Road")
-                && d.visible_text("Hobb the miller says the toll collectors have not been paid."),
+            d.has("Last time:")
+                && d.has("Session 1: The Road")
+                && d.visible_text("Hobb the miller says"),
             "A new session shows what the last one left, with nothing to open",
         );
 
@@ -5551,7 +5575,11 @@ pub mod session_plan {
             d.has("Technical details") && !d.visible_text("roster:"),
             "Prep keeps the setup's YAML closed under Technical details",
         );
-        d.click("Turn order");
+        d.observe(
+            "S22",
+            !d.has("Turn order"),
+            "Setup shows Prep without a second roster",
+        );
         roll_and_begin(d);
         d.click("Begin combat");
         d.expect(CURRENT_TURN);
@@ -5684,7 +5712,11 @@ pub mod session_plan {
         d.state("plan-after-a-fight", Sizes::All);
         d.begin_task();
         d.click(FIRST);
-        d.expect("FINAL HP");
+        d.observe(
+            "S3",
+            d.has_containing("Ended in round"),
+            "A played fight states its last round",
+        );
         d.goal_within("T12.5", "read how a fight ended", 1);
         d.state("fight-in-place", Sizes::All);
         d.observe(
@@ -5730,10 +5762,42 @@ pub mod session_plan {
 
         // T12.2: a long rest is the DM's ruling, and the next fight follows it.
         show_plan(d);
+        d.expect(&format!("Resume: {SECOND}"));
+        d.state("plan-saved-run-resume", Sizes::All);
+        d.click(&format!("More actions for {SECOND}"));
+        d.click("Delete the saved run");
+        d.observe(
+            "S1",
+            !d.has(&format!("Resume: {SECOND}")) && d.has("Undo delete run"),
+            "Deleting the saved run offers one step of undo",
+        );
+        d.state("plan-saved-run-deleted", Sizes::Default);
+        d.click("Undo delete run");
+        d.expect(&format!("Resume: {SECOND}"));
+        d.click(&format!("Resume: {SECOND}"));
+        d.observe(
+            "S1",
+            kestrel(d).contains("HP 11/41"),
+            "Resume keeps the saved setup's HP",
+        );
+        close_run(d);
+        show_plan(d);
         d.click("Add Long rest");
-        d.click("Everyone to full");
+        d.observe(
+            "S4",
+            d.has("Undo") && !d.has("Undo everyone to full"),
+            "The long rest has one Undo",
+        );
+        d.click("Undo");
+        d.observe(
+            "S4",
+            !d.has("Everyone at full"),
+            "Undo removes both the rest and the full-HP ruling",
+        );
+        d.click("Add Long rest");
         d.state("long-rest-restores", Sizes::Default);
-        d.click(&format!("Start fight: {SECOND}"));
+        d.click(&format!("More actions for {SECOND}"));
+        d.click("Start a new run");
         d.observe(
             "T12.2",
             kestrel(d).contains("HP 41/41"),

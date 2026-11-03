@@ -632,7 +632,11 @@ impl Splat {
             for (lost, word, target) in [
                 (
                     self.sessions.busy_with_edit(),
-                    "Notes not saved",
+                    if self.sessions.notes_changed_on_disk() {
+                        "Notes changed on disk"
+                    } else {
+                        "Notes not saved"
+                    },
                     Page::Sessions,
                 ),
                 (
@@ -645,9 +649,21 @@ impl Splat {
                     && design::status_link(
                         ui,
                         Status {
-                            icon: icons::ERROR,
+                            icon: if target == Page::Sessions
+                                && self.sessions.notes_changed_on_disk()
+                            {
+                                icons::WARN
+                            } else {
+                                icons::ERROR
+                            },
                             word,
-                            color: colors().document.invalid,
+                            color: if target == Page::Sessions
+                                && self.sessions.notes_changed_on_disk()
+                            {
+                                colors().document.external
+                            } else {
+                                colors().document.invalid
+                            },
                         },
                     )
                     .clicked()
@@ -1119,6 +1135,8 @@ impl Splat {
                         blocked,
                         run_directory,
                         open_run: self.run_fact.as_ref().map(|fact| fact.id),
+                        open_round: self.run_fact.as_ref().map_or(0, |fact| fact.round),
+                        open_encounter: self.run_fact.as_ref().map(|fact| fact.name.as_str()),
                     };
                     self.sessions
                         .show(ui, &self.processing, &mut self.timeline, &plan);
@@ -1192,6 +1210,7 @@ impl Splat {
                 }
             }
             Page::Party => {
+                self.party.run_open = self.run_fact.is_some();
                 if active.is_some() {
                     self.party.show(
                         ui,
@@ -1252,6 +1271,8 @@ impl Splat {
                                 design::locked(ui, blocked, |ui| {
                                     self.campaigns.show_active(ui, session, &mut self.dndbeyond);
                                     self.campaigns.show_form_if_editing(ui);
+                                    design::rule(ui);
+                                    self.sessions.folder_view(ui, &self.timeline);
                                 });
                             });
                     }
@@ -1382,7 +1403,14 @@ impl Splat {
         if std::mem::take(&mut self.encounters.wants_session) {
             self.page = Page::Sessions;
         }
+        if std::mem::take(&mut self.sessions.wants_campaign_link) {
+            self.page = Page::Campaign;
+            self.campaign_tab = CampaignTab::Link;
+        }
         if let Some(campaign) = &active {
+            if std::mem::take(&mut self.sessions.wants_runs_refresh) {
+                self.encounters.read_runs_again(campaign);
+            }
             let asked =
                 self.sessions.wants_fight.is_some() || self.sessions.wants_saved_run.is_some();
             if let Some(path) = self.sessions.wants_fight.take() {

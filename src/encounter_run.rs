@@ -700,7 +700,7 @@ impl Run {
             setup_details,
             syncs: BTreeMap::new(),
             sync_shadows: BTreeMap::new(),
-            panel: Panel::default(),
+            panel: Panel::Encounter,
             closing: false,
             ending: false,
             focus_amount: false,
@@ -973,6 +973,7 @@ impl Run {
         }
         let undo_label = self.describe(&command);
         // Work on a copy so failed commands cannot partly change the run or dice stream.
+        let began = matches!(command, Command::Begin);
         let follow_turn = matches!(command, Command::Begin | Command::Next);
         let mut next = self.state.clone();
         let label = match command {
@@ -1155,6 +1156,9 @@ impl Run {
         }
         self.dm_steps += 1;
         self.history.push(std::mem::replace(&mut self.state, next));
+        if began {
+            self.panel = Panel::Reference;
+        }
         self.history_labels.push(undo_label);
         self.last_initiative = initiative_edit;
         if follow_turn && let Some(current) = self.current() {
@@ -2364,6 +2368,11 @@ impl Run {
         {
             return Err("Saved run state is invalid; its file has not been changed.".into());
         }
+        let panel = if saved.state.phase == Phase::Setup {
+            Panel::Encounter
+        } else {
+            Panel::Reference
+        };
         let syncs = saved
             .state
             .participants
@@ -2407,7 +2416,7 @@ impl Run {
             confirm_close: false,
             syncs,
             sync_shadows: BTreeMap::new(),
-            panel: Panel::default(),
+            panel,
             closing: false,
             ending: false,
             focus_amount: true,
@@ -2567,6 +2576,7 @@ pub enum Standing {
 }
 
 /// One saved run, as the Encounters page lists it.
+#[derive(Clone)]
 pub struct SavedRunInfo {
     pub path: PathBuf,
     pub id: Option<Uuid>,
@@ -2636,6 +2646,7 @@ pub struct Carry {
 
 /// One fight after the fact: how each participant ended, and what the log says.
 pub struct FightSummary {
+    pub round: u64,
     /// Combat ended, so these are the final values. A run can also be closed mid-fight.
     pub ended: bool,
     pub rows: Vec<FightRow>,
@@ -2681,6 +2692,7 @@ pub fn party_at_end(path: &Path, campaign: Uuid) -> Result<BTreeMap<Uuid, (i64, 
 pub fn fight_summary(path: &Path, campaign: Uuid) -> Result<FightSummary, String> {
     let state = read_saved(path, campaign)?.state;
     Ok(FightSummary {
+        round: state.round,
         ended: matches!(state.phase, Phase::Ended { .. }),
         rows: state
             .order

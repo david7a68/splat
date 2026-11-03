@@ -2707,7 +2707,7 @@ impl Run {
             Some(if self.hide_panel {
                 format!("{missing_hp} need valid HP.")
             } else {
-                format!("{missing_hp} need valid HP. Open Record to set it.")
+                format!("{missing_hp} need valid HP. Open Correct to set it.")
             })
         } else if missing_initiative > 0 {
             Some(format!("{missing_initiative} need initiative."))
@@ -2772,15 +2772,10 @@ impl Run {
                     .rich(ui, "Everyone is ready.")
                     .color(colors().result.success),
             });
-            // Notes hide the panel with Record and the order of ties, so one word leads there.
+            // Notes hide corrections and tie order, so one link leads there.
             if self.hide_panel {
-                let (word, panel) = if missing_hp > 0 {
-                    ("Open Record", Panel::Record)
-                } else {
-                    ("Turn order", Panel::Reference)
-                };
-                if design::link(ui, word).clicked() {
-                    self.panel = panel;
+                if design::link(ui, "Open Correct").clicked() {
+                    self.panel = Panel::Record;
                     self.close_lookup = true;
                 }
             }
@@ -3083,8 +3078,7 @@ impl Run {
             ui,
             &mut self.panel,
             &[
-                (Panel::Reference, "Turn order"),
-                (Panel::Record, "Record"),
+                (Panel::Record, "Correct"),
                 (Panel::Log, "Log"),
                 (Panel::Encounter, "Prep"),
                 (Panel::Groups, "Arrivals"),
@@ -3094,19 +3088,7 @@ impl Run {
         self.sync_block(ui);
         match self.panel {
             Panel::Reference | Panel::Conditions | Panel::Keys => {
-                // What the DM reads to the table comes before anyone rolls.
-                let (prep, _) = self.prep();
-                if !prep.is_empty() {
-                    design::group_label(ui, READ_ALOUD);
-                    let room = ui.available_height() * 0.4;
-                    egui::ScrollArea::vertical()
-                        .id_salt("run_setup_prep")
-                        .max_height(room)
-                        .auto_shrink([false, true])
-                        .show(ui, |ui| style::markdown(ui, prep));
-                    design::rule(ui);
-                }
-                self.turn_order_preview(ui);
+                self.notes_tab(ui);
             }
             Panel::Record => {
                 ui.label(
@@ -3122,6 +3104,7 @@ impl Run {
                 );
                 changes_block(ui, p, false);
                 self.record_tab(ui, self.selected);
+                design::quiet_section(ui, "Resolve ties", |ui| self.turn_order_preview(ui));
             }
             Panel::Log => self.log_tab(ui),
             Panel::Encounter => self.notes_tab(ui),
@@ -3203,6 +3186,9 @@ impl Run {
                     };
                     let up = position > 0 && tied(order.get(position - 1));
                     let down = tied(order.get(position + 1));
+                    if !up && !down {
+                        continue;
+                    }
                     ui.push_id(index, |ui| {
                         ui.horizontal(|ui| {
                             ui.set_min_height(Density::Read.control());

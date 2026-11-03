@@ -151,25 +151,29 @@ late responses cannot apply an old name to a new link.
 still to come. **Fight** adds a saved encounter to the plan, or starts a new one, as a line such as `- [[Bridge Ambush]]`
 under `Plan for tonight` in the note, so the file holds the plan. **Start fight** goes straight to setup, and **Close run**
 comes back to the page the run began on. A row opens in place: a fight shows its final HP and log, and any event has its
-title, length, place and notes. Add buttons stay at the foot of the plan. At the top, **Last time** shows what the previous note says happened and what it left open.
+title, length, place and notes. Add buttons stay at the foot of the plan. At the top, **Last time** links to the previous session and shows the first line of its recap. The title and date share one line. A **Playing** status marks the session being played.
 In a narrow window, the plan and the note have a tab each. **Read** and **Write** turn the note between its two forms, and
-Read leaves out headings with nothing under them.
+Read leaves out headings with nothing under them and shows note links in place. **Templates** opens from the page header; **← Sessions** returns to the notes.
 
 A fight resumed under a later session also counts as part of that session. During a session, a new run starts each player from where the fights so far left them, and setup says so. A player who
 missed the last fight stands where an earlier one left them. If a fight's run cannot be read, setup says that too. **Use the sheets'
-HP** goes back to the sheets, as one step of undo. **Everyone to full** on a long rest records your ruling that the next fight
-starts everyone at full HP. Party shows the same HP, and says where it came from. A starting HP written in the encounter
+HP** goes back to the sheets, as one step of undo. Adding **Long rest** records your ruling that the next fight
+starts everyone at full HP. One **Undo** removes the rest and that ruling. Open the rest and choose **Not at full** to keep the rest without the ruling. Party shows the same HP, and says where it came from. A starting HP written in the encounter
 wins over both. With sync on, a first read still takes the sheet's value for HP from a fight. Full HP from a rest is your ruling, so a sheet that differs is a conflict to settle. Conditions do
 not carry over.
 
 **Session** holds session notes and session templates, as Markdown in the campaign's session folder (`Sessions`
-by default, and you can change it there). **Timeline** holds every encounter, rest, travel interval, day and other
+by default; change it under **Campaign → Link and folder**). **Timeline** holds every encounter, rest, travel interval, day and other
 major event in story order, in `Timeline.md` in the same folder. It is also the campaign's one clock, in hours, counted
 from the first **Day**. A **Day** moves to the start of the next day. A rest adds 8 hours or 1 hour unless you say otherwise,
 and any event adds its length when it reads as a number and a unit, such as `3 days` or `an hour`. A length it cannot read
 moves nothing, and the row says so. A fight does not move the clock. The list in its frontmatter is the record, and Splat
 writes the body from it. An encounter run adds its own event when combat begins. New events and runs go to the newest
 session unless you choose another on the Timeline page. **Notes** (Ctrl+J) opens that session's note beside any page.
+
+A planned fight with a saved run offers **Resume**. Its menu holds **Start a new run** and **Delete the saved run**, with undo for deletion. The open fight has a status link in the plan; the run strip keeps **Back to run**. A played fight opens its final party HP with **Log**, **Whole run** and **Timeline** links.
+
+Session and Timeline use the same quiet **Add** strip: **Fight**, **Group** (plan only), **Day**, **Long rest**, **Short rest**, **Travel**, **Major event**. A new event opens with **Title** focused. On Timeline, **Adds to** chooses the session. The detail column opens only when an event is selected. Its title, save state, **Copy link** and row menu stay above the fields as they scroll. **Place after** sets the event order.
 
 Each event has a reference such as `[[Timeline#^t-1a2b3c4d5e|Rest at the mill]]`. Paste it in any note: it is a block
 link in Obsidian, and Splat lists the notes that link to an event.
@@ -347,14 +351,12 @@ are in Settings and in **Campaign → Link and folder**.
 
 Open **Party** to read the linked D&D Beyond party. Select a character
 and browse Overview, Actions, Spells, Equipment, and Features. **Refresh party**
-gets the latest sheets. Computed totals come directly from D&D Beyond. Local
+gets the latest sheets and states why it cannot refresh when signed out. Saves and skills use two or three columns. A sheet list gets a filter only when it has more than eight entries. **Technical details** keeps source and rule checks out of the main sheet. Computed totals come directly from D&D Beyond. Local
 creature records remain available offline, and open sheets use the event stream
 with polling fallback. No character changes are sent to D&D Beyond. See [viewer details and streaming findings](docs/character-viewer.md).
 
 If you edit a generated campaign note, Splat keeps your edit and stops updating that character's notes. To
-get updates again, move the note aside or use **Force read** on the warning. Force read reads the sheet again and
-replaces each note that has edits. Your version stays beside the note in a `.splat-archive` file, and the page lists
-those files. Personal notes carry over when Splat can still find them.
+get updates again, use **Show file** to inspect it or choose **Replace with D&D Beyond sheet** on the warning. Splat reads that character again and replaces its edited notes. Your version stays beside the note in a `.splat-archive` file. When signed out, **Open Settings** takes you to the connection. Personal notes carry over when Splat can still find them.
 
 ## Encounter builder
 

@@ -160,9 +160,7 @@ fn before_the_session(a: &mut Audit<'_, '_>) {
     a.click(Do, "Create session");
 
     a.task("Recall what happened last session, and where the story stands");
-    a.act(Find, "open Last time", |d| {
-        d.click_starting("Last time: ");
-    });
+    a.d.expect("Last time:");
     a.shot("before-recap");
 
     a.task("Compare the party's passive Perception, to plan an ambush");
@@ -275,9 +273,7 @@ fn during_the_session(a: &mut Audit<'_, '_>) {
     a.d.settle();
 
     a.task("Read last session's recap aloud");
-    a.act(Find, "open Last time", |d| {
-        d.click_starting("Last time: ");
-    });
+    a.d.expect("Last time:");
 
     a.task("A player asks who Captain Varra is");
     a.act(Panel, "open Lookup", |d| d.press_ctrl(Key::K));
