@@ -320,13 +320,14 @@ impl Campaigns {
         }
         let store = self.store.as_mut().ok_or("Settings are unavailable.")?;
         store.check_save(&data)?;
+        let mut changes = Vec::new();
         for campaign in &data.campaigns {
             let previous = self.data.campaigns.iter().find(|c| c.id == campaign.id);
             if previous != Some(campaign) {
-                CampaignDocument::save_metadata(campaign, previous)?;
+                changes.push(CampaignDocument::metadata_change(campaign, previous)?);
             }
         }
-        store.save(&data)?;
+        store.save_with(&data, changes)?;
         self.data = data;
         self.error = None;
         Ok(())

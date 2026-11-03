@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use std::{collections::HashSet, fs, io::Write, path::PathBuf};
+use std::{collections::HashSet, fs, path::PathBuf};
 use uuid::Uuid;
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
@@ -241,20 +241,28 @@ impl Store {
         Ok(())
     }
 
+    #[cfg(test)]
     pub fn save(&mut self, data: &UserData) -> Result<(), String> {
+        self.save_with(data, Vec::new())
+    }
+
+    pub(crate) fn save_with(
+        &mut self,
+        data: &UserData,
+        mut changes: Vec<crate::file_batch::Change>,
+    ) -> Result<(), String> {
         self.check_save(data)?;
         let parent = self.path.parent().ok_or("Invalid settings directory.")?;
         fs::create_dir_all(parent).map_err(|_| "Could not create the settings directory.")?;
         let mut bytes =
             serde_json::to_vec_pretty(data).map_err(|_| "Could not encode settings.")?;
         bytes.push(b'\n');
-        let mut temp = tempfile::NamedTempFile::new_in(parent)
-            .map_err(|_| "Could not create a temporary settings file.")?;
-        temp.write_all(&bytes)
-            .and_then(|_| temp.as_file().sync_all())
-            .map_err(|_| "Could not write settings. Your previous file is unchanged.")?;
-        temp.persist(&self.path)
-            .map_err(|_| "Could not replace settings. Your previous file is unchanged.")?;
+        changes.push(crate::file_batch::Change {
+            path: self.path.clone(),
+            before: self.baseline.clone(),
+            after: Some(bytes.clone()),
+        });
+        crate::file_batch::apply(&changes)?;
         self.baseline = Some(bytes);
         Ok(())
     }

@@ -139,25 +139,23 @@ impl PackageCopy {
                 ));
             }
         }
-        for (written, (path, before, after)) in self.files.iter().enumerate() {
-            let (from, to) = if undo {
-                (after, before)
-            } else {
-                (before, after)
-            };
-            if let Err(error) = write_note(&self.module.path, path, Some(from), to) {
-                for (path, before, after) in self.files[..written].iter().rev() {
-                    let (from, to) = if undo {
-                        (before, after)
-                    } else {
-                        (after, before)
-                    };
-                    let _ = write_note(&self.module.path, path, Some(from), to);
-                }
-                return Err(error);
-            }
-        }
-        Ok(())
+        let changes = self
+            .files
+            .iter()
+            .map(|(path, before, after)| {
+                let (from, to) = if undo {
+                    (after, before)
+                } else {
+                    (before, after)
+                };
+                Ok(crate::file_batch::Change::text(
+                    note_path(&self.module.path, path)?,
+                    Some(from),
+                    Some(to),
+                ))
+            })
+            .collect::<Result<Vec<_>, String>>()?;
+        crate::file_batch::apply(&changes)
     }
 
     pub fn undo(&self) -> Result<(), String> {
@@ -1088,6 +1086,13 @@ impl CampaignDocument {
     }
 
     pub fn save_metadata(campaign: &Campaign, previous: Option<&Campaign>) -> Result<(), String> {
+        crate::file_batch::apply(&[Self::metadata_change(campaign, previous)?])
+    }
+
+    pub(crate) fn metadata_change(
+        campaign: &Campaign,
+        previous: Option<&Campaign>,
+    ) -> Result<crate::file_batch::Change, String> {
         let document = Self::load(campaign)?;
         let entry = Entry::parse(&document.path, &document.text)?;
         if let Some(previous) = previous
@@ -1116,13 +1121,11 @@ impl CampaignDocument {
                 ),
             ],
         )?;
-        write_note(
-            &campaign.path,
-            &document.path,
+        Ok(crate::file_batch::Change::text(
+            note_path(&campaign.path, &document.path)?,
             document.baseline.as_deref(),
-            &text,
-        )?;
-        Ok(())
+            Some(&text),
+        ))
     }
 
     pub fn load(campaign: &Campaign) -> Result<Self, String> {

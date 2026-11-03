@@ -11,6 +11,7 @@ mod dndbeyond;
 mod encounter_run;
 mod encounter_settings;
 mod encounters;
+mod file_batch;
 mod hermetic;
 mod library;
 mod lookup;
@@ -36,6 +37,20 @@ use design::{Action, Density, Status, Tone, Type, colors, icons};
 use eframe::egui;
 
 fn main() -> eframe::Result {
+    let _instance = if let Some(dirs) = directories::ProjectDirs::from("", "", "splat") {
+        match ui_state::InstanceLock::acquire(&dirs.config_dir().join("instance.lock")) {
+            Ok(lock) => Some(lock),
+            Err(error) => {
+                rfd::MessageDialog::new()
+                    .set_title("Splat is already open")
+                    .set_description(error)
+                    .show();
+                return Ok(());
+            }
+        }
+    } else {
+        None
+    };
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
             .with_inner_size([1200.0, 800.0])
@@ -229,7 +244,7 @@ impl Splat {
             && open.campaign == active.id
         {
             self.encounters
-                .restore_run(&open.path, active.id, &open.synced);
+                .restore_run(&open.path, active, &open.synced);
         }
     }
 
@@ -300,8 +315,8 @@ impl Splat {
                 for (run, name) in state.fights {
                     let read = directory
                         .as_ref()
-                        .map(|directory| directory.join(format!("{run}.json")))
                         .ok_or_else(String::new)
+                        .and_then(|directory| encounter_run::find_run(directory, campaign.id, run))
                         .and_then(|path| encounter_run::party_at_end(&path, campaign.id));
                     match read {
                         // A later fight has the newer word on anyone who was in it.
@@ -1736,6 +1751,10 @@ impl Splat {
         if std::mem::take(&mut self.sessions.wants_campaign_link) {
             self.page = Page::Campaign;
             self.campaign_tab = CampaignTab::Link;
+        }
+        if std::mem::take(&mut self.encounters.wants_run_folder) {
+            self.page = Page::Campaign;
+            self.campaign_tab = CampaignTab::RunSettings;
         }
         if let Some(campaign) = &active {
             if std::mem::take(&mut self.sessions.wants_runs_refresh) {
