@@ -65,6 +65,8 @@ pub struct TimelinePage {
     opened: bool,
     /// The run open now, whose event must stay while it runs.
     pub open_run: Option<Uuid>,
+    /// Saved runs from the same campaign snapshot used by the Session plan.
+    pub saved_runs: Vec<crate::encounter_run::SavedRunInfo>,
     /// The DM followed an open fight's status back to the run.
     pub wants_back_to_run: bool,
     /// Filters and the selection belong to one campaign.
@@ -577,14 +579,8 @@ impl TimelinePage {
                 event.filter(|event| event.kind == Kind::LongRest && event.restores)
             {
                 long_rest_added_message(
-                    book.events
-                        .iter()
-                        .filter(|fight| {
-                            fight.is_in(event.session)
-                                && fight.run.is_some()
-                                && !fight.result.is_empty()
-                        })
-                        .map(|fight| fight.title.clone()),
+                    super::fights_that_keep_hp(&book.events, event.session, &self.saved_runs)
+                        .into_iter(),
                 )
             } else {
                 format!("{label} added.")
@@ -1081,6 +1077,7 @@ impl TimelinePage {
         {
             *self = Self {
                 open_run: self.open_run,
+                saved_runs: std::mem::take(&mut self.saved_runs),
                 ..Default::default()
             };
         }

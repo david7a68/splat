@@ -772,6 +772,7 @@ Groups list side, count, XP, changes and members. Encounter group frames keep
 ownership in Move to…; full editors keep Belongs to. Named NPC results say
 In roster after Add. Paired sheet cells share the taller cell's row height.
 Undo messages use the quiet action and undo icon, with the action below when needed.
+Discard messages name the draft. Their Undo control names the same draft for accessibility.
 
 ## Run and session audit, iteration 13
 

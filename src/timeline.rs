@@ -5,6 +5,7 @@
 pub mod page;
 
 use crate::design::icons;
+use crate::encounter_run::{SavedRunInfo, Standing};
 use serde::{Deserialize, Serialize};
 use std::{
     collections::BTreeMap,
@@ -14,6 +15,28 @@ use std::{
     time::{Duration, Instant},
 };
 use uuid::Uuid;
+
+/// Saved, unfinished fights past Setup keep their HP after a long rest.
+pub fn fights_that_keep_hp(
+    events: &[Event],
+    session: Option<Uuid>,
+    saved_runs: &[SavedRunInfo],
+) -> Vec<String> {
+    let runs: Vec<_> = saved_runs
+        .iter()
+        .filter(|run| run.standing == Standing::Unfinished && !run.label.starts_with("Setup"))
+        .filter_map(|run| run.id)
+        .collect();
+    events
+        .iter()
+        .filter(|event| {
+            event.kind == Kind::Encounter
+                && event.is_in(session)
+                && event.run.is_some_and(|id| runs.contains(&id))
+        })
+        .map(|event| event.title.clone())
+        .collect()
+}
 
 /// A played fight names its result and last round once, on the row's second line.
 pub fn played_fight_summary(event: &Event, open: bool) -> String {
@@ -1231,6 +1254,74 @@ mod tests {
             continued_in: None,
             played_order: 0,
         }
+    }
+
+    fn hp_fight(label: &str, standing: Standing) -> (Event, SavedRunInfo) {
+        let mut fight = event(Kind::Encounter, "");
+        fight.title = "Bridge Ambush".into();
+        fight.session = Some(Uuid::new_v4());
+        fight.run = Some(Uuid::new_v4());
+        let run = SavedRunInfo {
+            path: PathBuf::new(),
+            id: fight.run,
+            source: None,
+            encounter: fight.title.clone(),
+            label: label.into(),
+            standing,
+            saved_at: None,
+            unsent: Vec::new(),
+        };
+        (fight, run)
+    }
+
+    #[test]
+    fn fights_that_keep_hp_with_no_saved_runs() {
+        let (fight, _) = hp_fight("Round 2 · Paused", Standing::Unfinished);
+        assert!(fights_that_keep_hp(std::slice::from_ref(&fight), fight.session, &[]).is_empty());
+    }
+
+    #[test]
+    fn fights_that_keep_hp_excludes_setup() {
+        let (fight, run) = hp_fight("Setup · Paused", Standing::Unfinished);
+        assert!(
+            fights_that_keep_hp(std::slice::from_ref(&fight), fight.session, &[run]).is_empty()
+        );
+    }
+
+    #[test]
+    fn fights_that_keep_hp_includes_paused_round_two_in_its_session() {
+        let (fight, run) = hp_fight("Round 2 · Paused", Standing::Unfinished);
+        let events = std::slice::from_ref(&fight);
+        let runs = std::slice::from_ref(&run);
+        assert_eq!(
+            fights_that_keep_hp(events, fight.session, runs),
+            ["Bridge Ambush"]
+        );
+        assert!(fights_that_keep_hp(events, Some(Uuid::new_v4()), runs).is_empty());
+        let continued = Uuid::new_v4();
+        let mut fight = fight.clone();
+        fight.continued_in = Some(continued);
+        assert_eq!(
+            fights_that_keep_hp(&[fight], Some(continued), runs),
+            ["Bridge Ambush"]
+        );
+    }
+
+    #[test]
+    fn fights_that_keep_hp_excludes_ended() {
+        let (fight, run) = hp_fight("Ended · Round 1", Standing::Ended);
+        assert!(
+            fights_that_keep_hp(std::slice::from_ref(&fight), fight.session, &[run]).is_empty()
+        );
+    }
+
+    #[test]
+    fn fights_that_keep_hp_includes_the_open_run() {
+        let (fight, run) = hp_fight("Round 2", Standing::Unfinished);
+        assert_eq!(
+            fights_that_keep_hp(std::slice::from_ref(&fight), fight.session, &[run]),
+            ["Bridge Ambush"]
+        );
     }
 
     #[test]

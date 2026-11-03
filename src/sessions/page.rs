@@ -78,6 +78,7 @@ enum Tab {
 /// What the rest of the app tells this page about fights.
 pub struct Plan<'a> {
     pub fights: &'a [PlanFight],
+    pub saved_runs: &'a [crate::encounter_run::SavedRunInfo],
     pub groups: &'a [std::sync::Arc<crate::encounter_run::RunGroup>],
     /// Why no group can be assembled now.
     pub group_blocked: Option<&'a str>,
@@ -85,6 +86,7 @@ pub struct Plan<'a> {
     pub group_open: bool,
     /// A new group started in the plan was discarded there.
     pub group_discarded: bool,
+    pub group_discarded_name: String,
     /// A fight is open that something can still join.
     pub arrivals_open: bool,
     pub group_editor: std::cell::RefCell<&'a mut dyn FnMut(&mut egui::Ui)>,
@@ -1813,7 +1815,7 @@ impl Sessions {
         }
         if self.job_warned() {
             return Some(Status {
-                word: "Processed",
+                word: "Processing warning",
                 ..processed_warning()
             });
         }
@@ -3455,7 +3457,7 @@ impl Sessions {
                 self.select(self.group_session);
             }
         }
-        if plan.group_discarded && here && design::draft_discarded(ui) {
+        if plan.group_discarded && here && design::draft_discarded(ui, &plan.group_discarded_name) {
             self.wants_group_undo = true;
         }
         if let Some(problem) = &self.rename_problem {
@@ -3923,7 +3925,7 @@ impl Sessions {
     fn deleted_run_message(&mut self, ui: &mut egui::Ui) {
         if let Some(deleted) = &self.deleted_run {
             let words = deleted.message();
-            if design::message_with_action(
+            if design::undo_message(
                 ui,
                 if deleted.unsent.is_empty() {
                     Tone::Info
@@ -3986,15 +3988,8 @@ impl Sessions {
                 just.id.clone(),
                 if restores {
                     let names =
-                        plan.fights
-                            .iter()
-                            .filter(|fight| {
-                                fight.saved.as_ref().is_some_and(|saved| {
-                                    !plan_saved_status(saved).starts_with("Setup")
-                                })
-                            })
-                            .map(|fight| fight.name.clone());
-                    long_rest_added_message(names)
+                        timeline::fights_that_keep_hp(&book.events, session, plan.saved_runs);
+                    long_rest_added_message(names.into_iter())
                 } else {
                     format!("{} added{to}.", just.label)
                 },

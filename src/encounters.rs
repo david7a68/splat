@@ -1423,6 +1423,23 @@ impl Encounters {
             .map(|d| d.name.clone())
             .or_else(|| self.group_draft.as_ref().map(GroupDraft::name))
     }
+    /// The saved runs used by the Session plan and Timeline.
+    pub fn saved_runs(&self) -> Vec<crate::encounter_run::SavedRunInfo> {
+        let mut runs = self
+            .snapshot
+            .as_ref()
+            .map_or_else(Vec::new, |snapshot| snapshot.runs.clone());
+        if let Some(open) = self
+            .run
+            .as_ref()
+            .and_then(crate::encounter_run::Run::live_info)
+        {
+            runs.retain(|run| run.id != open.id);
+            runs.push(open);
+        }
+        runs
+    }
+
     /// Every encounter the campaign has, for a session's plan.
     pub fn plan_fights(&self) -> Vec<PlanFight> {
         self.snapshot.as_ref().map_or_else(Vec::new, |snapshot| {
@@ -1556,6 +1573,11 @@ impl Encounters {
     pub fn group_discarded_in_plan(&self) -> bool {
         // The plan shows it again, so an encounter draft left open cannot hide it there.
         self.group_in_plan && self.group_draft.is_none() && self.discarded_group.is_some()
+    }
+    pub fn discarded_group_name(&self) -> String {
+        self.discarded_group
+            .as_ref()
+            .map_or_else(String::new, GroupDraft::name)
     }
     pub fn undo_group_discard_in_plan(&mut self) {
         if self.group_discarded_in_plan() {
@@ -2315,7 +2337,9 @@ impl Encounters {
         }
         // Each undo waits while the other kind of draft is open. Restored behind that editor,
         // a draft could be neither reached nor closed.
-        if self.encounter_undo_ready() && design::draft_discarded(ui) {
+        if self.encounter_undo_ready()
+            && design::draft_discarded(ui, &self.discarded.as_ref().unwrap().name)
+        {
             self.draft = self.discarded.take();
             self.message = None;
             self.error = None;
@@ -2323,7 +2347,9 @@ impl Encounters {
         if self.group_draft.as_ref().is_some_and(GroupDraft::dirty) {
             self.discarded_group = None;
         }
-        if self.group_undo_ready() && design::draft_discarded(ui) {
+        if self.group_undo_ready()
+            && design::draft_discarded(ui, &self.discarded_group.as_ref().unwrap().name())
+        {
             self.group_draft = self.discarded_group.take();
             self.message = None;
             self.error = None;
@@ -2344,7 +2370,7 @@ impl Encounters {
             return;
         };
         let words = deleted.message();
-        if design::message_with_action(
+        if design::undo_message(
             ui,
             if deleted.unsent.is_empty() {
                 Tone::Info
@@ -3783,7 +3809,7 @@ impl Encounters {
                 }
                 if !changed
                     && self.discarded_options.is_some()
-                    && design::draft_discarded(ui)
+                    && design::draft_discarded(ui, "Rules and runs")
                     && let Some(options) = self.discarded_options.take()
                 {
                     snapshot.options = options;

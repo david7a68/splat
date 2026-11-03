@@ -1525,16 +1525,17 @@ pub fn save_row_state(ui: &mut Ui, state: Status<'_>, dirty: bool, blocked: Opti
     dirty && Action::quiet("Discard").blocked(blocked).show(ui).clicked()
 }
 
-/// `Draft discarded.` beside its undo. Returns true when the undo is pressed.
-pub fn draft_discarded(ui: &mut Ui) -> bool {
+/// Names the discarded draft beside its undo. Returns true when undo is pressed.
+pub fn draft_discarded(ui: &mut Ui, name: &str) -> bool {
     let mut pressed = false;
     ui.horizontal(|ui| {
         ui.label(
             Type::Small
-                .rich(ui, "Draft discarded.")
+                .rich(ui, format!("{name} draft discarded."))
                 .color(colors().muted),
         );
         pressed = Action::quiet("Undo discard")
+            .name(&format!("Undo discard of {name}"))
             .icon(icons::UNDO)
             .density(Density::Read)
             .show(ui)

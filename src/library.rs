@@ -3894,8 +3894,9 @@ impl Library {
                 );
                 let ui = &mut slot_ui;
                 if discard_is_for(self.discarded.as_ref(), note) && self.draft == note.text {
-                    ui.label(Type::Small.rich(ui, "Draft discarded."));
+                    ui.label(Type::Small.rich(ui, format!("{} draft discarded.", note.name())));
                     if Action::quiet("Undo discard")
+                        .name(&format!("Undo discard of {}", note.name()))
                         .icon(icons::UNDO)
                         .density(Density::Read)
                         .show(ui)
@@ -3917,7 +3918,12 @@ impl Library {
         }
         if !save_row
             && discard_is_for(self.discarded.as_ref(), note)
-            && design::undo_message(ui, Tone::Info, "Draft discarded.", "Undo discard")
+            && design::undo_message(
+                ui,
+                Tone::Info,
+                &format!("{} draft discarded.", note.name()),
+                &format!("Undo discard of {}", note.name()),
+            )
             && let Some((_, _, text)) = self.discarded.take()
         {
             self.draft = text;
