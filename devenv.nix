@@ -26,6 +26,32 @@
   scripts.check.exec = "cargo fmt --check && cargo clippy --locked --all-targets -- -D warnings";
   # Run once in the seed worktree before copying target/ to implementers.
   scripts.audit-warm.exec = "cargo test --locked --no-run && check";
+  # The full merge gate: run visual scenarios once, with captures, among all tests.
+  scripts.audit-gate.exec = ''
+    if [ "$#" -gt 1 ]; then
+      echo "Use: audit-gate [label]" >&2
+      exit 2
+    fi
+    label="''${1:-latest}"
+    case "$label" in
+      "" | */* | .*) echo "Use a plain capture label." >&2; exit 2 ;;
+    esac
+    # Feedback-only settings must not turn a merge gate into a partial/report run.
+    unset SPLAT_VISUAL_SCENARIOS SPLAT_VISUAL_UPDATE_BASELINE
+    export SPLAT_VISUAL_ENFORCE=baseline
+    check || exit "$?"
+    out="$PWD/artifacts/screenshots/$label"
+    SPLAT_VISUAL_DIR="$out" SPLAT_VISUAL_VIDEO="''${SPLAT_VISUAL_VIDEO:-1}" \
+      cargo test --locked -- --nocapture
+    status=$?
+    if [ "''${SPLAT_VISUAL_CONTACT_SHEET:-0}" = 1 ]; then
+      visual-contact-sheet "$label"
+    else
+      echo "No contact sheet. Use: visual-contact-sheet $label"
+    fi
+    echo "Output: $out"
+    exit "$status"
+  '';
   scripts.visual-test.exec = ''
     label="''${1:-latest}"
     case "$label" in
