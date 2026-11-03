@@ -1088,14 +1088,19 @@ impl CombatSync {
         });
         self.conflicts(ui);
         let Some(remote) = &self.remote else {
-            ui.label(
-                "Waiting for the first sheet read. If it does not come, check the connection.",
-            );
-            if crate::design::link(ui, "Settings").clicked() {
+            ui.horizontal_wrapped(|ui| {
+            ui.spacing_mut().item_spacing.x = 0.0;
+            for word in "Waiting for the first sheet read. If it does not come, check the connection in ".split_inclusive(' ') {
+                ui.label(crate::design::Type::Small.rich(ui, word).color(crate::design::colors().muted));
+            }
+            let width = crate::design::number_width(ui, "Settings", &crate::design::Type::Small.font(ui));
+            if ui.add_sized(egui::vec2(width, crate::design::XL), egui::Link::new(crate::design::Type::Small.rich(ui, "Settings"))).clicked() {
                 ui.ctx().data_mut(|data| {
                     data.insert_temp(egui::Id::new("open_account_settings"), true)
                 });
             }
+            ui.label(crate::design::Type::Small.rich(ui, ".").color(crate::design::colors().muted));
+            });
             return;
         };
         if !remote.can_edit {

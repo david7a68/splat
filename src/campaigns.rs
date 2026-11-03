@@ -14,6 +14,7 @@ pub struct Campaigns {
     writable: bool,
     editing: Option<Uuid>,
     focus_name: bool,
+    form_open: bool,
     add_name: String,
     add_path: String,
     name: String,
@@ -38,6 +39,7 @@ impl Default for Campaigns {
             writable: false,
             editing: None,
             focus_name: false,
+            form_open: false,
             add_name: String::new(),
             add_path: String::new(),
             name: String::new(),
@@ -233,6 +235,7 @@ impl Campaigns {
             writable: true,
             editing: None,
             focus_name: false,
+            form_open: false,
             add_name: String::new(),
             add_path: String::new(),
             name: String::new(),
@@ -796,6 +799,10 @@ impl Campaigns {
         }
     }
 
+    pub fn form_open(&self) -> bool {
+        self.editing.is_some() || self.form_open
+    }
+
     fn form(&mut self, ui: &mut egui::Ui, _inline: bool, primary: bool) {
         let editing = self.editing.is_some();
         // Keep the add form's open state when Settings changes between one and two columns.
@@ -847,10 +854,23 @@ impl Campaigns {
                     } else {
                         "Add campaign"
                     };
+                    let unchanged = self
+                        .editing
+                        .and_then(|id| {
+                            self.data
+                                .campaigns
+                                .iter()
+                                .find(|campaign| campaign.id == id)
+                        })
+                        .is_some_and(|campaign| {
+                            campaign.name == self.name.trim()
+                                && campaign.path == std::path::Path::new(self.path.trim())
+                        });
                     let reason = match (self.name.trim().is_empty(), self.path.trim().is_empty()) {
                         (true, true) => Some("Enter a campaign name and a folder first."),
                         (true, false) => Some("Enter a campaign name first."),
                         (false, true) => Some("Choose a folder first."),
+                        (false, false) if unchanged => Some("No changes to save."),
                         (false, false) => None,
                     };
                     let missing = reason.is_some();
@@ -892,6 +912,11 @@ impl Campaigns {
                         .show(ui, fields),
                 )
             };
+            self.form_open = !added
+                && (direct
+                    || form
+                        .as_ref()
+                        .is_some_and(|form| form.body_response.is_some()));
             if added && let Some(form) = form {
                 let mut state = egui::collapsing_header::CollapsingState::load_with_default_open(
                     ui.ctx(),
@@ -978,6 +1003,7 @@ mod tests {
             writable: true,
             editing: None,
             focus_name: false,
+            form_open: false,
             add_name: String::new(),
             add_path: String::new(),
             name: String::new(),

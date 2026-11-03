@@ -1,7 +1,7 @@
 //! Character viewer, with combat sync on from the time Splat connects to D&D Beyond.
 use crate::{
     auth::Session,
-    design::{self, Action, Density, Tone, Type, colors, icons},
+    design::{self, Action, Density, Status, Tone, Type, colors, icons},
     party_sync::{Reader, Stored},
 };
 use eframe::egui;
@@ -956,8 +956,8 @@ fn member_row(
     // A narrow list has no room for columns, so the same numbers take a line of their own.
     let wide = ui.available_width() >= COMPARE_FROM;
     let height = if wide { MEMBER_ROW } else { MEMBER_ROW + 16.0 };
-    design::row(ui, height, selected, &name, |ui, rect| {
-        let painter = ui.painter();
+    let response = design::row(ui, height, selected, &name, |ui, rect| {
+        let painter = ui.painter().clone();
         let hp_right = rect.right() - design::S;
         let line = rect.top() + 18.0;
         let picture = egui::Rect::from_center_size(
@@ -976,7 +976,7 @@ fn member_row(
         if wide {
             for (at, value) in compare.iter().enumerate() {
                 design::number(
-                    painter,
+                    &painter,
                     compare_right(hp_right, at),
                     line,
                     value,
@@ -985,64 +985,7 @@ fn member_row(
                 );
             }
         }
-        let mut job = egui::text::LayoutJob::default();
-        job.wrap.max_width = rect.right() - HP_WIDTH - design::M - text_left;
-        job.wrap.max_rows = 1;
         let small = Type::Small.font(ui);
-        job.append(
-            &summary,
-            0.0,
-            egui::TextFormat {
-                font_id: small.clone(),
-                color: c.muted,
-                ..Default::default()
-            },
-        );
-        if local_edits {
-            job.append(
-                &format!(" · {} Local edits", icons::DRAFT),
-                0.0,
-                egui::TextFormat {
-                    font_id: small.clone(),
-                    color: c.document.unsaved,
-                    ..Default::default()
-                },
-            );
-        }
-        // The same word as the run's, so that colour is never all that says it.
-        let state_word = match design::hp_state(hp, max_hp) {
-            design::HpState::Zero => Some(("0 HP", c.hp.zero)),
-            design::HpState::Bloodied => Some(("Bloodied", c.hp.bloodied)),
-            _ => None,
-        };
-        if let Some((word, color)) = state_word {
-            job.append(
-                &format!(" · {word}"),
-                0.0,
-                egui::TextFormat {
-                    font_id: small.clone(),
-                    color,
-                    ..Default::default()
-                },
-            );
-        }
-        for condition in &conditions {
-            job.append(
-                &format!(" · {condition}"),
-                0.0,
-                egui::TextFormat {
-                    font_id: small.clone(),
-                    color: c.participant.condition,
-                    ..Default::default()
-                },
-            );
-        }
-        let second = ui.fonts_mut(|fonts| fonts.layout_job(job));
-        painter.galley(
-            egui::pos2(text_left, rect.top() + MEMBER_ROW - 22.0),
-            second,
-            c.muted,
-        );
         if !wide {
             painter.text(
                 egui::pos2(text_left, rect.top() + MEMBER_ROW - 6.0),
@@ -1053,7 +996,7 @@ fn member_row(
             );
         }
         design::number(
-            painter,
+            &painter,
             hp_right - HP_WIDTH,
             line,
             &ac.map_or_else(|| "?".to_owned(), |n| n.to_string()),
@@ -1062,7 +1005,7 @@ fn member_row(
         );
         let left = design::hp_readout(
             ui,
-            painter,
+            &painter,
             hp_right,
             line,
             hp,
@@ -1082,13 +1025,64 @@ fn member_row(
             egui::pos2(hp_right - 86.0, rect.bottom() - 12.0),
             egui::pos2(hp_right, rect.bottom() - 9.0),
         );
-        design::hp_bar(painter, bar, hp, max_hp, temp);
+        design::hp_bar(&painter, bar, hp, max_hp, temp);
         painter.hline(
             rect.x_range(),
             rect.bottom() - 0.5,
             egui::Stroke::new(design::HAIRLINE_WIDTH, c.hairline),
         );
-    })
+    });
+    let rect = response.rect;
+    let text_left = rect.left() + design::S * 2.0 + ROW_PORTRAIT;
+    let detail_rect = egui::Rect::from_min_size(
+        egui::pos2(text_left, rect.top() + MEMBER_ROW - 22.0),
+        egui::vec2(
+            rect.right() - HP_WIDTH - design::M - text_left,
+            Type::Small.line(),
+        ),
+    );
+    let mut detail_ui = ui.new_child(
+        egui::UiBuilder::new()
+            .accessibility_parent(response.id)
+            .max_rect(detail_rect)
+            .layout(egui::Layout::left_to_right(egui::Align::Center)),
+    );
+    detail_ui.set_clip_rect(detail_ui.clip_rect().intersect(detail_rect));
+    detail_ui.spacing_mut().item_spacing.x = 0.0;
+    detail_ui.spacing_mut().interact_size.y = 0.0;
+    detail_ui.label(Type::Small.rich(&detail_ui, &summary).color(c.muted));
+    if local_edits {
+        detail_ui.label(
+            Type::Small
+                .rich(&detail_ui, format!(" · {} Local edits", icons::DRAFT))
+                .color(c.document.unsaved),
+        );
+    }
+    match design::hp_state(hp, max_hp) {
+        design::HpState::Bloodied => {
+            detail_ui.label(Type::Small.rich(&detail_ui, " · ").color(c.muted));
+            design::status(
+                &mut detail_ui,
+                Status {
+                    icon: icons::BLOODIED,
+                    word: "Bloodied",
+                    color: c.hp.bloodied,
+                },
+            );
+        }
+        design::HpState::Zero => {
+            detail_ui.label(Type::Small.rich(&detail_ui, " · 0 HP").color(c.hp.zero));
+        }
+        _ => {}
+    }
+    for condition in &conditions {
+        detail_ui.label(
+            Type::Small
+                .rich(&detail_ui, format!(" · {condition}"))
+                .color(c.participant.condition),
+        );
+    }
+    response
 }
 
 /// The technical record behind a sheet. It stays collapsed: most DMs never need it.
@@ -1743,7 +1737,6 @@ fn sheet_entries(record: &EntitySnapshot, page: usize) -> Vec<SheetEntry> {
 }
 
 fn detail_intro(ui: &mut egui::Ui, record: &EntitySnapshot, page: usize, search: &str) {
-    let d = &record.source.raw;
     match page {
         1 => {
             design::group_heading(ui, "Attacks", record.character.attacks.len());
@@ -1828,16 +1821,6 @@ fn detail_intro(ui: &mut egui::Ui, record: &EntitySnapshot, page: usize, search:
                 ));
             }
         }
-        3 => {
-            ui.label(format!(
-                "Coins · {} cp · {} sp · {} ep · {} gp · {} pp",
-                d["currencies"]["cp"],
-                d["currencies"]["sp"],
-                d["currencies"]["ep"],
-                d["currencies"]["gp"],
-                d["currencies"]["pp"]
-            ));
-        }
         _ => {}
     }
 }
@@ -1861,6 +1844,17 @@ pub(crate) fn details(ui: &mut egui::Ui, record: &EntitySnapshot, page: usize, s
             },
             filtered.len(),
         );
+    }
+    if page == 3 {
+        let d = &record.source.raw;
+        ui.label(format!(
+            "Coins · {} cp · {} sp · {} ep · {} gp · {} pp",
+            d["currencies"]["cp"],
+            d["currencies"]["sp"],
+            d["currencies"]["ep"],
+            d["currencies"]["gp"],
+            d["currencies"]["pp"]
+        ));
     }
     let mut level_counts = std::collections::BTreeMap::new();
     for row in &filtered {
@@ -1898,7 +1892,11 @@ pub(crate) fn details(ui: &mut egui::Ui, record: &EntitySnapshot, page: usize, s
         };
         let row = design::row(
             ui,
-            ENTRY_ROW,
+            if meta.is_empty() {
+                Density::Scan.row()
+            } else {
+                ENTRY_ROW
+            },
             state.is_open(),
             &format!("{name} · {meta}"),
             |ui, rect| {

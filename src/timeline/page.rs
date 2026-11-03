@@ -186,7 +186,7 @@ impl TimelinePage {
         self.filter = Filter::All;
         self.search.clear();
         self.session = None;
-        self.reset_detail = self.selected.as_deref() != Some(id);
+        self.reset_detail = true;
         self.selected = Some(id.to_owned());
         self.scroll_to = book.events.iter().position(|event| event.id == id);
     }
@@ -244,6 +244,7 @@ impl TimelinePage {
     }
 
     fn filters(&mut self, ui: &mut egui::Ui, sessions: &[SessionLink], current: Option<Uuid>) {
+        let before = (self.filter, self.search.clone(), self.session);
         let tabs = |ui: &mut egui::Ui, filter: &mut Filter| {
             design::segmented(
                 ui,
@@ -287,6 +288,13 @@ impl TimelinePage {
             inner.response.on_hover_text(label);
             self.new_events_line(ui, sessions, current);
         });
+        if before != (self.filter, self.search.clone(), self.session) {
+            self.reset_detail = true;
+        }
+    }
+
+    pub fn reopen(&mut self) {
+        self.reset_detail = true;
     }
 
     fn row(&mut self, ui: &mut egui::Ui, event: &Event, day: u32, session: Option<&str>) {
@@ -647,7 +655,9 @@ impl TimelinePage {
         if std::mem::take(&mut self.reset_detail) {
             area = area.vertical_scroll_offset(0.0);
         }
+        let clip = ui.available_rect_before_wrap().intersect(ui.clip_rect());
         area.show(ui, |ui| {
+            ui.set_clip_rect(ui.clip_rect().intersect(clip));
             ui.set_max_width(ui.available_width().min(design::FORM_WIDTH));
             let event = &mut book.events[index];
             ui.add_space(design::XS);
@@ -706,17 +716,19 @@ impl TimelinePage {
                             .rich(ui, format!("Starts: {}", clock_words(start)))
                             .color(c.muted),
                     );
-                    ui.label(
-                        Type::Small
-                            .rich(
-                                ui,
-                                format!(
-                                    "Ends: {}",
-                                    clock_words(start.saturating_add(event.minutes()))
-                                ),
-                            )
-                            .color(c.muted),
-                    );
+                    if event.kind != Kind::Day {
+                        ui.label(
+                            Type::Small
+                                .rich(
+                                    ui,
+                                    format!(
+                                        "Ends: {}",
+                                        clock_words(start.saturating_add(event.minutes()))
+                                    ),
+                                )
+                                .color(c.muted),
+                        );
+                    }
                 });
             }
             ui.add_space(design::M);

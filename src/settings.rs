@@ -13,6 +13,7 @@ use zeroize::{Zeroize, Zeroizing};
 pub struct Settings {
     cookie_input: String,
     focus_cookie: bool,
+    pub campaign_form_open: bool,
     sign_in_again: bool,
     session: Option<Session>,
     worker: Option<Worker>,
@@ -64,6 +65,7 @@ impl Default for Settings {
         Self {
             cookie_input: String::new(),
             focus_cookie: false,
+            campaign_form_open: false,
             sign_in_again: false,
             session: None,
             worker: None,
@@ -468,7 +470,10 @@ impl Settings {
                     .is_empty()
                     .then_some("Paste your session cookie first.");
                 design::blocked_reason(ui, reason);
-                let action = if reason.is_none() && account != Account::Connected {
+                let action = if reason.is_none()
+                    && account != Account::Connected
+                    && !self.campaign_form_open
+                {
                     design::Action::primary("Connect")
                 } else {
                     design::Action::secondary("Connect")

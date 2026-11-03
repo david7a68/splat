@@ -3574,7 +3574,7 @@ impl Run {
         closed
     }
 
-    /// Controls share the name line. Only tied totals get a second line of controls.
+    /// Controls share the name line. Ties have a fixed slot before the ordinal.
     /// Enter moves to the next missing total; rare controls wait in the row menu.
     fn setup_row(&mut self, ui: &mut egui::Ui, index: usize) -> Option<Command> {
         let mut command = None;
@@ -3625,17 +3625,19 @@ impl Run {
         let expanded = self.setup_expanded == Some(index);
         let mut enter = false;
         ui.horizontal_top(|ui| {
-            ui.spacing_mut().item_spacing.x = design::XS;
+            ui.spacing_mut().item_spacing.x = 0.0;
             // Keep the worded toggle in every width; party rows give up their per-row Roll.
-            let presence_slot = design::L * 6.0;
-            let roll_slot = design::S * 8.0;
+            let presence_slot = design::L * 5.0;
+            let roll_slot = design::L * 4.0;
+            let number_slot = design::L * 3.0;
             let place_slot = design::XL;
-            let actions = 72.0
+            let tie_slot = Density::Read.control() * 2.0;
+            let actions = number_slot
                 + place_slot
+                + tie_slot
                 + roll_slot
                 + Density::Read.control()
-                + presence_slot
-                + 5.0 * design::XS;
+                + presence_slot;
             let name_width = (ui.available_width() - actions).max(design::XL);
             let side = "";
             let plain = format!("{absent}{side}{numbers}");
@@ -3658,17 +3660,7 @@ impl Run {
                 ui.painter()
                     .layout(name.clone(), Type::Body.font(ui), colors().text, width);
             let first_line = Density::Scan.control().max(title.size().y);
-            let tie_height = if self.setup_tie_directions(index).is_some() {
-                Density::Read.control()
-            } else {
-                0.0
-            };
-            // The second line can use the empty control columns on an untied row.
-            let detail_width = if tie_height > 0.0 {
-                width
-            } else {
-                ui.available_width() - 2.0 * design::S
-            };
+            let detail_width = ui.available_width() - 2.0 * design::S;
             let detail = ui.painter().layout(
                 detail
                     .split(" · ")
@@ -3681,8 +3673,8 @@ impl Run {
             );
             let row = design::RUN_REGULAR
                 .row
-                .max(first_line + detail.size().y.max(tie_height) + design::XS);
-            let padding = (row - first_line - detail.size().y.max(tie_height)) / 2.0;
+                .max(first_line + detail.size().y + design::XS);
+            let padding = (row - first_line - detail.size().y) / 2.0;
             let control_top = padding + (first_line - Density::Scan.control()) / 2.0;
             if selected {
                 ui.painter().rect_filled(
@@ -3724,35 +3716,43 @@ impl Run {
                 self.for_note = Some(typed);
                 self.return_focus = true;
             }
-            ui.allocate_ui_with_layout(vec2(72.0, row), Layout::top_down(Align::LEFT), |ui| {
-                ui.set_width(72.0);
-                ui.spacing_mut().item_spacing.y = 0.0;
-                ui.add_space(control_top);
-                let text = self
-                    .setup_inputs
-                    .entry(index)
-                    .or_insert_with(|| initiative.map_or_else(String::new, |n| n.to_string()));
-                let response = design::number_field(
-                    ui,
-                    &field_name,
-                    text,
-                    "Init",
-                    72.0,
-                    Density::Scan.control(),
-                );
-                let parsed = text.parse::<i64>().ok();
-                if response.changed() {
-                    if parsed != initiative {
-                        command = Some(Command::Initiative(index, parsed));
+            ui.allocate_ui_with_layout(
+                vec2(number_slot, row),
+                Layout::top_down(Align::LEFT),
+                |ui| {
+                    ui.set_width(number_slot);
+                    ui.spacing_mut().item_spacing.y = 0.0;
+                    ui.add_space(control_top);
+                    let text = self
+                        .setup_inputs
+                        .entry(index)
+                        .or_insert_with(|| initiative.map_or_else(String::new, |n| n.to_string()));
+                    let response = design::number_field(
+                        ui,
+                        &field_name,
+                        text,
+                        "Init",
+                        number_slot,
+                        Density::Scan.control(),
+                    );
+                    let parsed = text.parse::<i64>().ok();
+                    if response.changed() {
+                        if parsed != initiative {
+                            command = Some(Command::Initiative(index, parsed));
+                        }
+                    } else if !response.has_focus() && parsed != initiative {
+                        *text = initiative.map_or_else(String::new, |n| n.to_string());
                     }
-                } else if !response.has_focus() && parsed != initiative {
-                    *text = initiative.map_or_else(String::new, |n| n.to_string());
-                }
-                enter = response.lost_focus() && ui.input(|i| i.key_pressed(Key::Enter));
-                if self.focus_field == Some(index) {
-                    self.focus_field = None;
-                    response.request_focus();
-                }
+                    enter = response.lost_focus() && ui.input(|i| i.key_pressed(Key::Enter));
+                    if self.focus_field == Some(index) {
+                        self.focus_field = None;
+                        response.request_focus();
+                    }
+                },
+            );
+            ui.allocate_ui_with_layout(vec2(tie_slot, row), Layout::top_down(Align::LEFT), |ui| {
+                ui.set_width(tie_slot);
+                ui.add_space(control_top);
                 if let Some(picked) = self.setup_tie_controls(ui, index) {
                     command = Some(picked);
                 }
@@ -3995,22 +3995,7 @@ impl Run {
                     if design::icon_button(ui, icon, &name).clicked() {
                         command = Some(Command::Move(position, destination));
                     }
-                } else {
-                    ui.allocate_space(vec2(Density::Read.control(), Density::Read.control()));
                 }
-            }
-            let warning = self
-                .state
-                .participants
-                .iter()
-                .enumerate()
-                .any(|(other, q)| {
-                    other != index
-                        && q.initiative == p.initiative
-                        && !self.shared_initiative(index, other)
-                });
-            if warning {
-                ui.label(Type::Small.rich(ui, "Tie").color(colors().result.warning));
             }
         });
         command
