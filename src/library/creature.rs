@@ -185,9 +185,27 @@ pub(super) fn spell_references(entry: &Entry) -> Vec<Reference> {
         .collect()
 }
 
-fn prose(ui: &mut egui::Ui, text: &str, spell_links: &mut impl FnMut(&mut egui::Ui, &str)) {
+fn prose(
+    ui: &mut egui::Ui,
+    text: &str,
+    values: Option<&super::view::RunValues>,
+    spell_links: &mut impl FnMut(&mut egui::Ui, &str),
+) {
     for paragraph in text.split("\n\n").map(str::trim).filter(|s| !s.is_empty()) {
         reader_style::source_prose(ui, paragraph);
+        if (paragraph.contains("Attack Roll:") || paragraph.contains("to hit"))
+            && let Some(values) = values
+            && !values.by_hand.is_empty()
+        {
+            ui.add(
+                egui::Label::new(
+                    Type::Small
+                        .rich(ui, format!("{} · add by hand", values.by_hand.join(", ")))
+                        .color(colors().participant.changed),
+                )
+                .wrap(),
+            );
+        }
         if paragraph.starts_with("Spellcasting.") {
             spell_links(ui, paragraph);
         }
@@ -268,15 +286,55 @@ fn vital_rows(entry: &Entry) -> Vec<(&'static str, String)> {
     .collect()
 }
 
-fn vitals(ui: &mut egui::Ui, entry: &Entry) {
+fn vitals(ui: &mut egui::Ui, entry: &Entry, values: Option<&super::view::RunValues>) {
     let c = colors();
     ui.horizontal_wrapped(|ui| {
         ui.spacing_mut().item_spacing = egui::vec2(design::L, 2.0);
-        for (label, text) in vital_rows(entry) {
+        let printed = vital_rows(entry);
+        let rows = if values.is_some() {
+            ["ARMOR CLASS", "HIT POINTS", "INITIATIVE"]
+                .into_iter()
+                .map(|label| {
+                    (
+                        label,
+                        printed
+                            .iter()
+                            .find(|(key, _)| *key == label)
+                            .map_or_else(|| "Unknown".to_owned(), |(_, text)| text.clone()),
+                    )
+                })
+                .collect()
+        } else {
+            printed
+        };
+        for (label, text) in rows {
             ui.vertical(|ui| {
                 ui.spacing_mut().item_spacing.y = 0.0;
                 ui.label(Type::Label.rich(ui, label).color(c.muted));
-                ui.label(Type::Prose.rich(ui, text).color(c.text));
+                let live = values.map(|values| match label {
+                    "ARMOR CLASS" => values.armor_class,
+                    "HIT POINTS" => values.hp,
+                    _ => values.initiative,
+                });
+                let printed = match label {
+                    "ARMOR CLASS" => stat(entry, "armor_class"),
+                    "HIT POINTS" => stat(entry, "max_hp"),
+                    _ => stat(entry, "initiative"),
+                };
+                let shown = live.map_or_else(
+                    || text.clone(),
+                    |n| n.map_or_else(|| "Unknown".to_owned(), |n| n.to_string()),
+                );
+                ui.label(Type::Prose.rich(ui, shown).color(c.text));
+                if let Some(live) = live
+                    && live != printed
+                {
+                    ui.label(
+                        Type::Small
+                            .rich(ui, format!("printed {text}"))
+                            .color(c.muted),
+                    );
+                }
             });
         }
     });
@@ -331,7 +389,7 @@ fn detail(entry: &Entry, key: &str) -> Option<String> {
 }
 
 /// Identity, vitals, abilities and details: what the entry has, and no empty cells.
-pub(super) fn stat_head(ui: &mut egui::Ui, entry: &Entry) {
+pub(super) fn stat_head(ui: &mut egui::Ui, entry: &Entry, values: Option<&super::view::RunValues>) {
     ui.add_space(design::S);
     let kind = field(entry, "type_options_text")
         .or_else(|| field(entry, "type"))
@@ -347,7 +405,7 @@ pub(super) fn stat_head(ui: &mut egui::Ui, entry: &Entry) {
     reader_style::identity(ui, &reader_style::human_label(&identity));
     heavy_rule(ui);
     ui.add_space(design::S);
-    vitals(ui, entry);
+    vitals(ui, entry, values);
     ui.add_space(design::S);
     // The rulebook's table: physical abilities beside mental ones.
     let two_columns = ui.available_width() >= 300.0;
@@ -399,13 +457,14 @@ pub(super) fn show(
     ui: &mut egui::Ui,
     entry: &Entry,
     sections: &[presentation::ReadingSection<'_>],
+    values: Option<&super::view::RunValues>,
     mut spell_links: impl FnMut(&mut egui::Ui, &str),
 ) {
-    stat_head(ui, entry);
+    stat_head(ui, entry, values);
     for section in sections {
         if section.title == "Source text" {
             let body = without_line(section.body, hit_points_line(entry));
-            prose(ui, &rules_prose(entry, &body), &mut spell_links);
+            prose(ui, &rules_prose(entry, &body), values, &mut spell_links);
         } else {
             let body = if section.body.contains("<!-- splat:") {
                 authored_prose(section.body)

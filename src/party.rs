@@ -1181,6 +1181,18 @@ fn source_and_parity(
     });
 }
 
+pub(crate) fn has_spells(record: &EntitySnapshot) -> bool {
+    let d = &record.source.raw;
+    d["spells"]
+        .as_object()
+        .into_iter()
+        .flat_map(|o| o.values())
+        .any(|v| !array(v).is_empty())
+        || array(&d["classSpells"])
+            .iter()
+            .any(|class| !array(&class["spells"]).is_empty())
+}
+
 /// One page of a sheet. The Party page and the run's side panel both use this.
 pub fn sheet_page(
     ui: &mut egui::Ui,

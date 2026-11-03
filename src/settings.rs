@@ -12,7 +12,8 @@ use zeroize::{Zeroize, Zeroizing};
 
 pub struct Settings {
     cookie_input: String,
-    pub focus_cookie: bool,
+    focus_cookie: bool,
+    sign_in_again: bool,
     session: Option<Session>,
     worker: Option<Worker>,
     generation: u64,
@@ -63,6 +64,7 @@ impl Default for Settings {
         Self {
             cookie_input: String::new(),
             focus_cookie: false,
+            sign_in_again: false,
             session: None,
             worker: None,
             generation: 0,
@@ -92,6 +94,10 @@ impl Drop for Settings {
 }
 
 impl Settings {
+    pub(crate) fn focus_sign_in(&mut self) {
+        self.focus_cookie = true;
+        self.sign_in_again = true;
+    }
     #[cfg(test)]
     pub fn busy(&self) -> bool {
         self.busy
@@ -213,6 +219,7 @@ impl Settings {
                                 if outcome.session.is_some() {
                                     // Kept only for a retry after a failed attempt.
                                     self.cookie_input.zeroize();
+                                    self.sign_in_again = false;
                                 }
                                 self.session = outcome.session;
                                 self.saved_session = false;
@@ -350,7 +357,7 @@ impl Settings {
         if let Some(warning) = &self.warning {
             design::message(ui, Tone::Warning, warning);
         }
-        if matches!(account, Account::NotConnected | Account::Failed) {
+        if matches!(account, Account::NotConnected | Account::Failed) || self.sign_in_again {
             small(
                 ui,
                 "Connect your account to import campaigns and read characters.",
@@ -405,6 +412,14 @@ impl Settings {
                 ui,
                 "Splat sends your session cookie only to D&D Beyond. In the keyring, it can reconnect at startup. The access token stays in memory.",
             );
+        }
+        if account == Account::RefreshFailing
+            && design::Action::quiet("Sign in again")
+                .density(Density::Read)
+                .show(ui)
+                .clicked()
+        {
+            self.focus_sign_in();
         }
         // Only when there is something to forget.
         if (!matches!(account, Account::NotConnected | Account::Failed)
