@@ -20,6 +20,9 @@ pub const SMALL: (f32, f32) = (960.0, 640.0);
 pub const DEFAULT: (f32, f32) = (1200.0, 800.0);
 pub const LARGE: (f32, f32) = (1920.0, 1080.0);
 const ASYNC_TIMEOUT: Duration = Duration::from_secs(180);
+// Diagnostic feedback may stop early, but must still fail on missing text.
+// The full gate retains the original allowance for slow background work.
+const DIAGNOSTIC_TEXT_TIMEOUT: Duration = Duration::from_secs(5);
 const TAB_LIMIT: usize = 80;
 
 /// The window sizes a state is captured and checked at.
@@ -73,6 +76,8 @@ pub struct Driver<'a> {
     failed_expectations: RefCell<Vec<String>>,
     diagnose: bool,
     timing: CaptureTiming,
+    repeated_captures: super::repeated_captures::RepeatedCaptures,
+    expect_same: Option<&'static str>,
 }
 
 #[derive(Default)]
@@ -215,6 +220,8 @@ impl<'a> Driver<'a> {
             failed_expectations: RefCell::default(),
             diagnose: std::env::var_os("SPLAT_VISUAL_DIAGNOSE").is_some(),
             timing: CaptureTiming::default(),
+            repeated_captures: Default::default(),
+            expect_same: None,
             outcome: Outcome {
                 violations: Vec::new(),
                 passes: Vec::new(),
@@ -487,11 +494,17 @@ impl<'a> Driver<'a> {
 
     pub fn wait_for_text(&mut self, text: &str) {
         let started = Instant::now();
+        let timeout = if self.diagnose {
+            DIAGNOSTIC_TEXT_TIMEOUT
+        } else {
+            ASYNC_TIMEOUT
+        };
         while !self.visible_text(text) {
             assert!(
-                started.elapsed() < ASYNC_TIMEOUT,
-                "{}: waiting for painted {text:?}",
-                self.scenario
+                started.elapsed() < timeout,
+                "{}: waiting for painted {text:?} after {timeout:?}.\n{}",
+                self.scenario,
+                self.describe()
             );
             self.harness.step();
         }
@@ -1508,10 +1521,17 @@ impl<'a> Driver<'a> {
         self.state_prepared(name, sizes, |_| {});
     }
 
+    /// The next capture step intentionally restores the previous view.
+    pub fn expect_same(&mut self, reason: &'static str) {
+        assert!(!reason.trim().is_empty(), "expect_same needs a reason");
+        self.expect_same = Some(reason);
+    }
+
     /// Restore transient UI after each resize, then verify the named state before capture.
     /// Repeating setup for another capture size is not another action in the DM's task.
     pub fn state_prepared(&mut self, name: &str, sizes: Sizes, mut prepare: impl FnMut(&mut Self)) {
         let task_interactions = self.interactions;
+        let expect_same = self.expect_same.take();
         self.states += 1;
         let label = format!("{:02}-{name}", self.states);
         let plan: &[((f32, f32), f32)] = match sizes {
@@ -1541,7 +1561,7 @@ impl<'a> Driver<'a> {
                         .filter(|violation| !violation.check.ends_with(ergonomics::CHROME_SUFFIX)),
                 );
             }
-            self.capture(&label, size, density);
+            self.capture(&label, size, density, expect_same);
         }
         self.resize(self.base, 1.0);
         prepare(self);
@@ -1606,7 +1626,7 @@ impl<'a> Driver<'a> {
         ));
     }
 
-    fn capture(&mut self, state: &str, size: (f32, f32), density: f32) {
+    fn capture(&mut self, state: &str, size: (f32, f32), density: f32, expect_same: Option<&str>) {
         let Some(directory) = &self.output else {
             return;
         };
@@ -1624,6 +1644,23 @@ impl<'a> Driver<'a> {
             .render()
             .unwrap_or_else(|error| panic!("{}: render failed: {error}", self.scenario));
         self.timing.render += started.elapsed();
+        let window = format!("{}x{}@{density}", size.0, size.1);
+        if let Some(reason) = expect_same {
+            self.outcome.passes.push(ergonomics::Pass {
+                check: "expect_same".into(),
+                scenario: self.scenario.into(),
+                state: state.into(),
+                detail: format!("{window}: {reason}"),
+            });
+        }
+        if let Some(failure) =
+            self.repeated_captures
+                .check(self.states, &window, state, image.as_raw(), expect_same)
+        {
+            self.failed_expectations
+                .borrow_mut()
+                .push(format!("{}: {failure}", self.scenario));
+        }
         let started = Instant::now();
         image
             .save(&path)
@@ -1641,7 +1678,8 @@ impl<'a> Driver<'a> {
         });
         self.harness.hover_at(rect.center());
         self.harness.run_steps(2);
-        self.capture(&label, self.base, 1.0);
+        let expect_same = self.expect_same.take();
+        self.capture(&label, self.base, 1.0, expect_same);
         self.harness.remove_cursor();
         self.settle();
     }
@@ -1815,4 +1853,26 @@ fn diagnostic_text_failures_remain_failures_and_normal_mode_still_panics() {
     assert_eq!(outcome.failed_expectations.len(), 2);
     assert!(outcome.failed_expectations[0].contains("phrase one"));
     assert!(outcome.failed_expectations[1].contains("phrase two"));
+}
+
+#[test]
+fn diagnostic_painted_text_wait_still_fails_for_absent_text() {
+    let root = tempfile::tempdir().unwrap();
+    let world = World::build(
+        root.path(),
+        root.path(),
+        "painted-text-check",
+        super::fixture::Seed::Empty,
+    )
+    .unwrap();
+    let mut driver = Driver::new(&world, "painted-text-check", root.path(), None, false);
+    driver.diagnose = true;
+    let started = Instant::now();
+    let failure = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        driver.wait_for_text("this phrase is deliberately absent");
+    }))
+    .expect_err("a missing painted phrase must still fail");
+    let message = failure.downcast_ref::<String>().unwrap();
+    assert!(message.contains("this phrase is deliberately absent"));
+    assert!(started.elapsed() < Duration::from_secs(15));
 }

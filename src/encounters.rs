@@ -3263,14 +3263,14 @@ impl Encounters {
                     None => detail,
                 };
                 let side_icon = if slot.side == "party" { icons::PARTY } else if slot.side == "enemies" { icons::ENCOUNTERS } else { icons::GROUP };
-                let identity = definition.filter(|entry| snapshot.npc_name_for(entry, &slot.overrides).is_some()).map(|entry| format!("as {} · ", entry.name)).unwrap_or_default();
+                let identity = definition.filter(|entry| snapshot.npc_name_for(entry, &slot.overrides).is_some()).map(|entry| format!(" · as {}", entry.name)).unwrap_or_default();
                 let side = design::reader::human_label(&slot.side);
                 let detail = if missing {
                     format!("{side} · {MISSING_CREATURE}")
                 } else if detail.is_empty() {
-                    format!("{identity}{side_icon} {side}")
+                    format!("{side_icon} {side}{identity}")
                 } else {
-                    format!("{identity}{side_icon} {side} · {detail}")
+                    format!("{side_icon} {side} · {detail}{identity}")
                 };
                 let is_open = expanded.as_deref() == Some(slot.key.as_str());
                 let member_row = ui.horizontal(|ui| {

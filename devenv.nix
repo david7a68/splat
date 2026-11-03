@@ -4,7 +4,7 @@
   ...
 }: {
   imports = [./nix/rust-toolchain.nix];
-  packages = with pkgs; [git pkg-config alejandra dbus];
+  packages = with pkgs; [git pkg-config alejandra dbus] ++ lib.optionals stdenv.isLinux [util-linux];
   languages.c.enable = false;
 
   env.LD_LIBRARY_PATH = lib.makeLibraryPath (with pkgs; [
@@ -37,7 +37,7 @@
       "" | */* | .*) echo "Use a plain capture label." >&2; exit 2 ;;
     esac
     # Feedback-only settings must not turn a merge gate into a partial/report run.
-    unset SPLAT_VISUAL_SCENARIOS SPLAT_VISUAL_UPDATE_BASELINE
+    unset SPLAT_VISUAL_SCENARIOS SPLAT_VISUAL_UPDATE_BASELINE SPLAT_VISUAL_DIAGNOSE
     export SPLAT_VISUAL_ENFORCE=baseline
     check || exit "$?"
     out="$PWD/artifacts/screenshots/$label"

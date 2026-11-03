@@ -91,6 +91,8 @@ or set `SPLAT_VISUAL_CONTACT_SHEET=1` to make it with a full `visual-test` run.
 - `SPLAT_VISUAL_SCENARIOS=party,settings` runs only those scenarios. `visual-test <label> --only
   party,settings` is the same, and keeps the captures of the label's other scenarios.
 - `SPLAT_VISUAL_VIDEO=0` turns video off for `visual-test`.
+- Consecutive capture steps at the same size must have different pixels. Use
+  `d.expect_same("reason")` before the second step only for an intended repeat.
 - `audit-gate [label]` runs formatting, Clippy, all tests and all captures. It
   clears scenario filters and baseline-update mode, and enforces the baseline.
   Video and optional contact-sheet settings work as for `visual-test`.
@@ -232,7 +234,11 @@ A planned fight with a saved run offers **Resume**, as the primary action for th
 
 Session and Timeline use the same quiet **Add** strip: **Fight**, **Group** (plan only), **Day**, **Long rest**, **Short rest**, **Travel**, **Major event**. A new plan event stays closed and uses its kind as its title. Open its row for **Title** and **Notes**, or follow **Timeline** for **How long** and **Where**. A new event on Timeline opens with **Title** focused. On Timeline, **Adds to** chooses the session. The detail column opens only when an event is selected. Its title, save state, **Copy link** and row menu stay above the fields as they scroll. **Place after** sets the event order. Opening Timeline or changing a filter resets the detail fields to the top. A Day shows its start time only.
 
-The note conflict view opens at the first line that differs, with a line count. **Next difference** appears when more than one line differs. **Record** remains available during a note conflict; recording writes its own file. **Reload and lose my draft** is red and separate from **Overwrite with my draft**. Starting a session during a fight offers **Move it here** to move its timeline event in one step.
+The note conflict view opens at the first line that differs, with a line count. **Next difference** appears when more than one line differs. **Record** remains available during a note conflict; recording writes its own file. **Reload and lose my draft** is red and separate from **Overwrite with my draft**. Starting a session during a fight offers **Move it here** to move its timeline event in one step. A message confirms the move and offers **Undo move** until the next note or plan edit.
+
+Read view leaves out a plan section that only repeats the fights in the adjacent plan.
+An otherwise empty note says **Nothing written yet.** and offers **Write**.
+When the plan has its own tab, Read keeps the fight count.
 
 Each event has a reference such as `[[Timeline#^t-1a2b3c4d5e|Rest at the mill]]`. Paste it in any note: it is a block
 link in Obsidian, and Splat lists the notes that link to an event. Renaming an event offers **Update links in notes** below its Title field. The update has one Undo in the Timeline list. That Undo clears at the next note or event edit or when you leave Timeline.

@@ -155,7 +155,7 @@ tooltips, and separators. Text cursors do not blink, because motion draws the ey
 | Segmented | `segmented` | Words with an underline, not a pill |
 | List row | `row`, `two_line_row` | Fixed height, for `show_rows`. Paints hover at the current frame |
 | Status | `status`, `status_link`, `Status` | Icon, word, colour. `status_link` also leads to where the DM can act |
-| Stat tile | `stat_tile` | A label over a large value, with no box |
+| Stat tile | `stat_tile` | A sentence-case `Small` muted label over a large value, with no box. Sheet group headings keep `Label` capitals and an `L` gap above |
 | HP | `hp_bar`, `hp_readout`, `hp_state` | Fixed slots. Temp HP is separate |
 | Empty state | `empty_state` | What this is, and the one next step. At the top of an empty pane or page, with its normal padding |
 | Group heading | `group_heading` | `Type::Label` in capitals and a muted, nonzero count after it. No rule. Serif headings belong to readers and stat blocks |
@@ -545,3 +545,21 @@ No changes to save beside Save group, with no second clean status.
 NPC search results keep CR, HP and AC in fixed columns and put NPC · as Guard after AC.
 An offline Party now line offers Connect to sync. The first-sheet-read help keeps its Settings link inside the Small sentence. Initiative tie arrows have one fixed slot
 before the ordinal and use the standard setup row height.
+
+## Session and preparation audit, iteration 6
+
+Read omits a fight-only plan section when the plan stands beside the note. An otherwise
+empty note shows Nothing written yet. with a Write link. The tab layout keeps the count.
+A moved run has a confirmation and Undo move in the message slot until the next note or plan edit.
+A folder move reports the file counts and destination, with no separate Saved label.
+A Day's start time is the Kind field's help line.
+
+Sheet rows without a second line use one Read row. Correct HP owns the HP help;
+Correct initiative says This row moves. The current turn stays. Correction field labels
+share one column. Signed-out sheet conflicts keep Show file as their only action.
+An open Ready run says Go back to the run. Paused rows include their saved date and time.
+NPC roster rows put as Guard last. Group frames choose where Add goes; the search shows
+Adding to as read-only text. Members and XP share one heading line.
+
+The capture suite rejects consecutive steps with identical pixels at the same size.
+An intended repeat needs expect_same with a reason on its second step.

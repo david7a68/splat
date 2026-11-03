@@ -27,7 +27,6 @@ const FOLDER: &str = "Encounter Groups";
 const DEFAULT_SIDE: &str = "enemies";
 const SIDE_FIELD: &str = "Default side";
 const BELONGS_TO: &str = "Belongs to";
-const ADD_TO: &str = "Add to";
 const ROSTER: &str = "Roster";
 const ANY_ENCOUNTER: &str = "Any encounter";
 const MISSING_ENCOUNTER: &str = "An encounter this campaign no longer has";
@@ -690,27 +689,11 @@ pub(super) fn add_target(ui: &mut egui::Ui, draft: &mut Draft, _snapshot: &Snaps
     let shown = draft
         .target_group()
         .map_or_else(|| ROSTER.to_owned(), |group| group.name.clone());
-    let Draft { groups, add_to, .. } = draft;
-    ui.horizontal(|ui| {
-        ui.label(Type::Small.rich(ui, ADD_TO).color(colors().muted));
-        let combo = egui::ComboBox::from_id_salt("add_to")
-            .icon(design::combo_icon)
-            .width(ui.available_width().min(240.0))
-            .truncate()
-            .selected_text(shown.as_str())
-            .show_ui(ui, |ui| {
-                if ui.selectable_label(add_to.is_none(), ROSTER).clicked() {
-                    *add_to = None;
-                }
-                for group in groups.iter() {
-                    let chosen = add_to.as_deref() == Some(group.path.as_str());
-                    if ui.selectable_label(chosen, &group.name).clicked() {
-                        *add_to = Some(group.path.clone());
-                    }
-                }
-            });
-        design::named(ui, &combo.response, &format!("{ADD_TO}: {shown}"));
-    });
+    ui.label(
+        Type::Small
+            .rich(ui, format!("Adding to {shown}"))
+            .color(colors().muted),
+    );
 }
 
 /// The groups that belong to an encounter, each in a frame of its own, built here and saved
@@ -931,7 +914,7 @@ fn belongs_to(
                     match current {
                         None => "A run of any encounter offers this group.",
                         Some(_) if shown == MISSING_ENCOUNTER => {
-                            "Choose another before you save. Only a run of the missing encounter offers this group."
+                            "No fight offers this group now. Choose an encounter, or Any encounter."
                         }
                         Some(_) => "Only runs of this encounter offer this group.",
                     },
@@ -1760,7 +1743,16 @@ fn group_fields(
         .iter()
         .map(|member| member.count)
         .sum::<u64>();
-    design::group_heading(ui, "Members", count as usize);
+    ui.horizontal(|ui| {
+        design::group_heading(ui, "Members", count as usize);
+        if !draft.setup.members.is_empty() {
+            ui.label(
+                Type::Small
+                    .rich(ui, format!("· {}", members_heading(draft, snapshot)))
+                    .color(colors().muted),
+            );
+        }
+    });
     if draft.setup.members.is_empty() {
         let empty = if open.is_some() {
             "No members yet. Add creatures from the search."
@@ -1768,12 +1760,6 @@ fn group_fields(
             "No members yet. Add creatures from the list on the right."
         };
         ui.add(egui::Label::new(Type::Small.rich(ui, empty).color(colors().muted)).wrap());
-    } else {
-        ui.label(
-            Type::Small
-                .rich(ui, members_heading(draft, snapshot))
-                .color(colors().muted),
-        );
     }
     members(ui, draft, snapshot, expanded);
     ui.add_space(if open.is_some() { design::S } else { design::M });

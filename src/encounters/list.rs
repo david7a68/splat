@@ -281,7 +281,16 @@ pub(super) fn in_progress_list(
                 },
             )
         } else {
-            run.label.clone()
+            run.saved_at.map_or_else(
+                || run.label.clone(),
+                |at| {
+                    format!(
+                        "{} · Saved {}",
+                        run.label,
+                        crate::encounter_run::calendar_time(at)
+                    )
+                },
+            )
         };
         if page
             .in_progress
@@ -405,7 +414,9 @@ pub(super) fn ready_list(
                 || (run.source.is_none() && run.encounter == template.name)
         });
         let open = unfinished.is_some_and(|run| live.is_some_and(|live| live.id == run.id));
-        let short_reason = if open || row.unfinished_run {
+        let short_reason = if open {
+            Some("Go back to the run".to_owned())
+        } else if row.unfinished_run {
             Some("Resume it in In progress".to_owned())
         } else if template.summary.as_deref().is_none_or(str::is_empty) {
             Some("Add participants first".to_owned())
