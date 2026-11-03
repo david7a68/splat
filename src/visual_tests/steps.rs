@@ -201,7 +201,7 @@ pub fn fight_tab(d: &mut Driver<'_>, tab: &str) {
         d.expect("This fight");
     } else {
         if !d.has(tab) {
-            d.click("Fight ▾");
+            d.click("Fight menu");
         }
         d.click(tab);
     }

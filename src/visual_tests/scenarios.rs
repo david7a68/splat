@@ -4922,8 +4922,12 @@ pub mod encounter_groups {
         );
         d.observe(
             "T13.1",
-            d.visible_text("XP not known") && d.has_containing("not in this campaign's packages"),
-            "XP that is not known says so, and a group that cannot be added says why",
+            d.visible_text("XP not known")
+                && d.has_containing(
+                    "Member 1, an unknown creature: not in this campaign's packages",
+                )
+                && d.visible_text("1 × unknown creature"),
+            "A broken member has a readable name in both its summary and its fault",
         );
         d.observe(
             "T13.1",

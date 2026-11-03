@@ -382,6 +382,7 @@ pub(super) fn load(
             let mut members = Vec::new();
             let mut problems = Vec::new();
             let mut unavailable = 0_u64;
+            let mut unavailable_members = Vec::new();
             let (mut xp, mut xp_unknown) = (0_u64, Vec::new());
             for (index, member) in group.members.iter().enumerate() {
                 let what = format!("Member {}", index + 1);
@@ -390,13 +391,25 @@ pub(super) fn load(
                     .ok()
                     .and_then(|id| Some((id, creatures.iter().find(|c| c.id == id)?)))
                 else {
-                    let stored = match &member.creature {
-                        splat::content::Reference::Id(id) => id.to_string(),
-                        splat::content::Reference::Key(key) => key.clone(),
-                    };
+                    let link_name = e.entry.fields.get("splat_encounter_group")
+                        .and_then(|group| group.get("members"))
+                        .and_then(|members| members.get(index))
+                        .and_then(|member| member.get("creature"))
+                        .and_then(|creature| creature.get("link"))
+                        .and_then(Value::as_str)
+                        .map(crate::sessions::plain_links)
+                        .filter(|name| Uuid::parse_str(name.trim()).is_err()
+                            && !splat::content::resource_key(name.trim()));
+                    let name = member.overrides.name.as_deref()
+                        .or(link_name.as_deref())
+                        .map(str::trim)
+                        .filter(|name| !name.is_empty())
+                        .unwrap_or("unknown creature");
+                    let fault_name = if name == "unknown creature" { "an unknown creature" } else { name };
                     problems.push(format!(
-                        "{what}, {stored}: not in this campaign's packages. Campaign → Packages."
+                        "{what}, {fault_name}: not in this campaign's packages. Campaign → Packages."
                     ));
+                    unavailable_members.push((index, member.count, name.to_owned()));
                     unavailable = unavailable.saturating_add(member.count);
                     continue;
                 };
@@ -447,6 +460,7 @@ pub(super) fn load(
                 xp,
                 xp_unknown,
                 unavailable,
+                unavailable_members,
                 problem: (!problems.is_empty()).then(|| problems.join("\n")),
             }))
         })
@@ -2087,12 +2101,67 @@ mod tests {
         .unwrap();
         let snapshot = Snapshot::load(&campaign, &[]).unwrap();
         let problem = snapshot.groups[0].problem.clone().unwrap();
-        assert!(problem.contains(&id.to_string()), "{problem}");
+        assert!(!problem.contains(&id.to_string()), "{problem}");
+        assert!(
+            problem.contains("Member 1, an unknown creature"),
+            "{problem}"
+        );
+        assert_eq!(snapshot.groups[0].member_summary(), "1 × unknown creature");
         assert!(
             problem.contains("not in this campaign's packages"),
             "{problem}"
         );
         assert!(snapshot.issues.iter().any(|issue| issue.contains("Stray")));
+    }
+
+    #[test]
+    fn missing_group_members_keep_display_names_without_exposing_keys() {
+        for (extra, name) in [
+            ("", "unknown creature"),
+            (", link: '[[missing:goblin_boss]]'", "unknown creature"),
+            (
+                ", link: '[[00000000-0000-4000-8000-000000000001]]'",
+                "unknown creature",
+            ),
+            (
+                ", link: '[[Creatures/Goblin Boss|Goblin Boss]]'",
+                "Goblin Boss",
+            ),
+        ] {
+            let dir = tempfile::tempdir().unwrap();
+            let campaign = campaign(dir.path());
+            write_note(dir.path(), "Stray.md", None, &format!(
+                "---\nsplat_schema: 1\nsplat_id: {}\nsplat_kind: encounter_group\nsplat_name: Stray\nsplat_encounter_group:\n  side: enemies\n  members:\n  - creature: {{key: 'missing:goblin_boss'{extra}}}\n    count: 2\n---\n", Uuid::new_v4()
+            )).unwrap();
+            let snapshot = Snapshot::load(&campaign, &[]).unwrap();
+            let group = &snapshot.groups[0];
+            let problem = group.problem.as_ref().unwrap();
+            assert!(problem.contains(name), "{problem}");
+            assert!(!problem.contains("missing:goblin_boss"), "{problem}");
+            assert!(
+                !problem.contains("00000000-0000-4000-8000-000000000001"),
+                "{problem}"
+            );
+            assert_eq!(group.member_summary(), format!("2 × {name}"));
+            assert_eq!(group.creature_count(), 2);
+        }
+        let dir = tempfile::tempdir().unwrap();
+        let campaign = campaign(dir.path());
+        let id = Uuid::new_v4();
+        write_note(dir.path(), "Stray.md", None, &format!(
+            "---\nsplat_schema: 1\nsplat_id: {}\nsplat_kind: encounter_group\nsplat_name: Stray\nsplat_encounter_group:\n  side: enemies\n  members:\n  - creature: {{id: {id}}}\n    overrides: {{name: Captain Varra}}\n---\n", Uuid::new_v4()
+        )).unwrap();
+        let snapshot = Snapshot::load(&campaign, &[]).unwrap();
+        let group = &snapshot.groups[0];
+        assert!(
+            group
+                .problem
+                .as_ref()
+                .unwrap()
+                .contains("Member 1, Captain Varra:")
+        );
+        assert!(!group.problem.as_ref().unwrap().contains(&id.to_string()));
+        assert_eq!(group.member_summary(), "1 × Captain Varra");
     }
 
     fn encounter(root: &std::path::Path, name: &str) -> Uuid {

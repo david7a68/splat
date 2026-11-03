@@ -105,6 +105,8 @@ pub(crate) struct RunGroup {
     pub xp_unknown: Vec<String>,
     /// How many creatures the note names that this campaign cannot find.
     pub unavailable: u64,
+    /// Missing members retain their position, count and display name for the summary.
+    pub unavailable_members: Vec<(usize, u64, String)>,
     /// Every reason this group cannot be added now.
     pub problem: Option<String>,
 }
@@ -140,6 +142,24 @@ impl RunGroup {
         } else {
             format!("XP {} + unknown", grouped_number(self.xp))
         }
+    }
+    pub(crate) fn member_summary(&self) -> String {
+        let mut members: Vec<_> = self
+            .members
+            .iter()
+            .map(|member| {
+                let base = Base::of(&member.entry, &self.side);
+                let name = member
+                    .overrides
+                    .resolve(&base)
+                    .map_or(base.name, |resolved| resolved.name);
+                format!("{} × {name}", member.count)
+            })
+            .collect();
+        for (position, count, name) in &self.unavailable_members {
+            members.insert((*position).min(members.len()), format!("{count} × {name}"));
+        }
+        members.join(", ")
     }
     /// Every creature the note names, whether or not it can be found now.
     pub(crate) fn creature_count(&self) -> u64 {
@@ -4773,6 +4793,69 @@ mod tests {
             vec![(creature(), count, Overrides::default())],
         )
     }
+    #[test]
+    fn run_icons_have_glyphs_at_each_capture_size() {
+        use crate::design::{self, Type, icons};
+        for (width, height) in [(960.0, 640.0), (1200.0, 800.0), (1920.0, 1080.0)] {
+            let ctx = egui::Context::default();
+            design::theme::install(&ctx);
+            let _ = ctx.run(
+                egui::RawInput {
+                    screen_rect: Some(egui::Rect::from_min_size(
+                        egui::Pos2::ZERO,
+                        egui::vec2(width, height),
+                    )),
+                    ..Default::default()
+                },
+                |ctx| {
+                    egui::CentralPanel::default().show(ctx, |ui| {
+                        for role in [
+                            Type::Small,
+                            Type::Body,
+                            Type::Strong,
+                            Type::Name,
+                            Type::Label,
+                        ] {
+                            let font = role.font(ui);
+                            for icon in [
+                                icons::DOWN,
+                                icons::TEMP_HP,
+                                icons::ABSENT,
+                                icons::CONCENTRATING,
+                                icons::MOVE_UP,
+                                icons::MOVE_DOWN,
+                                icons::WARN,
+                                icons::EDIT,
+                                icons::DRAG,
+                                icons::CHANGED,
+                                icons::OK,
+                                icons::ADD,
+                                icons::NEXT,
+                                icons::SESSIONS,
+                                icons::GROUP,
+                                icons::OFFLINE,
+                                icons::ERROR,
+                                icons::INFO,
+                                icons::KEYS,
+                                icons::DICE,
+                                icons::UNDO,
+                                icons::CLOSE,
+                                icons::SYNC_ON,
+                                "■",
+                                "◆",
+                                "•",
+                            ] {
+                                assert!(
+                                    ui.fonts_mut(|fonts| fonts.has_glyphs(&font, icon)),
+                                    "Missing icon {icon:?} at {width}×{height}"
+                                );
+                            }
+                        }
+                    });
+                },
+            );
+        }
+    }
     fn group_of(name: &str, side: &str, members: Vec<(Entry, u64, Overrides)>) -> Arc<RunGroup> {
         Arc::new(RunGroup {
             id: Uuid::new_v4(),
@@ -4793,6 +4876,7 @@ mod tests {
             xp: 0,
             xp_unknown: Vec::new(),
             unavailable: 0,
+            unavailable_members: Vec::new(),
             problem: None,
         })
     }

@@ -2119,7 +2119,7 @@ impl Run {
                         design::segmented(ui, &mut self.panel, &fight);
                     });
                 } else {
-                    ui.menu_button("Fight ▾", |ui| {
+                    let menu = ui.menu_button(format!("Fight {}", icons::DOWN), |ui| {
                         for (panel, label) in fight {
                             let action = egui::Button::new(label).selected(self.panel == panel);
                             let action = if panel == Panel::Groups {
@@ -2133,6 +2133,7 @@ impl Run {
                             }
                         }
                     });
+                    design::named(ui, &menu.response, "Fight menu");
                 }
             });
         });
@@ -2384,19 +2385,7 @@ impl Run {
                 painter.galley(place, galley, c.accent);
             }
         }
-        let members = group
-            .members
-            .iter()
-            .map(|member| {
-                let base = splat::content::overrides::Base::of(&member.entry, &group.side);
-                let shown = member
-                    .overrides
-                    .resolve(&base)
-                    .map_or(base.name, |resolved| resolved.name);
-                format!("{} × {shown}", member.count)
-            })
-            .collect::<Vec<_>>()
-            .join(", ");
+        let members = group.member_summary();
         let added = self
             .state
             .participants
@@ -3133,7 +3122,7 @@ impl Run {
         let side_icon = match p.side.as_str() {
             "party" => "■",
             "enemies" => "◆",
-            _ => "●",
+            _ => "•",
         };
         let mut numbers = format!(
             "{side_icon} {} · HP {}/{}",

@@ -529,6 +529,7 @@ pub fn npc_group(npc: &Entry, stat_block: &Entry, side: &str) -> Arc<RunGroup> {
         xp: 0,
         xp_unknown: Vec::new(),
         unavailable: 0,
+        unavailable_members: Vec::new(),
         problem,
     })
 }
