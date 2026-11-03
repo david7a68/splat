@@ -390,7 +390,12 @@ impl ProcessingSettings {
                 .filter(|s| !s.is_empty())
                 .unwrap_or("service")
         };
-        let remove = format!("Remove {owner} key");
+        let slot_word = if slot == KeySlot::Speech {
+            "speech"
+        } else {
+            "LLM"
+        };
+        let remove = format!("Remove {slot_word} key ({owner})");
         let remove_name = format!("{remove}: {label}");
         let held = self.held(slot).is_some();
         let mut save = false;
@@ -399,7 +404,8 @@ impl ProcessingSettings {
             ui.horizontal(|ui| {
                 let field = self.field(slot);
                 let empty = field.typing.trim().is_empty();
-                let reason = empty.then_some("Enter a key first.");
+                let show_save = !empty || (!saved && !held);
+                let reason = (empty && show_save).then_some("Enter a key first.");
                 let reason_width = reason.map_or(0.0, |text| {
                     design::number_width(ui, text, &Type::Small.font(ui)) + design::S
                 });
@@ -408,8 +414,11 @@ impl ProcessingSettings {
                 } else {
                     0.0
                 };
-                let room = Action::secondary("Save key").natural_width(ui)
-                    + reason_width
+                let room = if show_save {
+                    Action::secondary("Save key").natural_width(ui)
+                } else {
+                    0.0
+                } + reason_width
                     + remove_width
                     + design::S * 3.0;
                 let width = (ui.available_width() - room - design::S * 2.0)
@@ -429,11 +438,13 @@ impl ProcessingSettings {
                 );
                 design::named(ui, &response, label);
                 design::blocked_reason(ui, reason);
-                save = Action::secondary("Save key")
-                    .name(&format!("Save key: {label}"))
-                    .blocked_if(empty, "Enter a key first.")
-                    .show(ui)
-                    .clicked();
+                if !field.typing.trim().is_empty() || (!saved && !held) {
+                    save = Action::secondary("Save key")
+                        .name(&format!("Save key: {label}"))
+                        .blocked_if(empty, "Enter a key first.")
+                        .show(ui)
+                        .clicked();
+                }
                 if saved || held {
                     ui.add_space(design::L);
                     forget = Action::quiet(&remove).name(&remove_name).show(ui).clicked();

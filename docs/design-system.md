@@ -322,19 +322,21 @@ Arrivals uses group headings and one muted line for an empty group section. New 
 
 Recovery copies use a UTC save-time suffix and preserve the other file. The run closed last owns primary Resume. Saved rows show the last change, mark the preserved file Changed elsewhere, and keep an empty Edit slot when no encounter exists. Run state words come from one function: Setup, Setup · Paused, Round 2, Round 2 · Paused, Ended · Round 2.
 
-At the minimum width, a disconnected run keeps Sync party and Connect to sync together on the footer. End encounter… shortens to End… and Keys uses its named icon to keep the roster height.
+A disconnected run keeps Connect to sync on its header only. The footer's blocked Sync party uses the same cause as hover text. End encounter… shortens to End… and Keys uses its named icon to keep the roster height.
 
 The app-close dialog uses Keep running as its safe default. Recording and processing titles name the unfinished session. Stop and close is secondary when saved work is kept; an action is red only when it loses work.
 
 ## Sessions and the timeline
 
-The session title and muted date wrap together. At narrow widths they sit above the actions. The Notes panel uses the same title, date and save words, and opens with What happened at the top. Last time is one line: a link to the previous session and the first line of its recap, with the full recap in the link's tooltip. Read and Write sit on the content tab row. Templates is a quiet header action with a Sessions back link. The session folder setting belongs to Campaign, Link and folder. An older session shows one warning and a link to the session being played; the list marks that session as Playing. Built-in templates leave one blank line below each heading. Read view shows Obsidian links inline. A Plan for tonight section made only of fights already in the plan shows one Small muted count instead of repeated links; the file keeps the links. New plan events stay closed and use the kind word as their title. Open rows show Title and Notes; duration and place stay on Timeline. A caret and accessible expanded state mark open rows. Their details align with the name, and the hairline comes after them with an S gap.
+The session title and muted date wrap together. At narrow widths they sit above the actions. The Notes panel uses the same title, date and save words, and opens with What happened at the top. Last time is one line: a link to the previous session and its recap, with the full recap in the link's tooltip. When the recap is empty, use plain prose under What happened and skip link-only lines. With neither, show the session link alone. Read and Write sit on the content tab row when the note is visible. Templates is a quiet header action. Its list starts with a Sessions back link, and New template sits in the page header. Templates use the note's styled source editor at the full column width; template fields stay faint. The list has no selected row while the new-template form is open. The session folder setting belongs to Campaign, Link and folder. An older session shows one warning and a link to the session being played; the list marks that session as Playing. Built-in templates leave one blank line below each heading. Read view shows Obsidian links inline, with the link text exactly as written. Renaming a Timeline event never changes a note by itself. An explicit Update links in notes action changes old-title aliases in one batch, with Undo; custom aliases stay as written. A Plan for tonight section made only of fights already in the plan shows one Small muted count instead of repeated links; the file keeps the links. New plan events stay closed and use the kind word as their title. Open rows show Title and Notes; duration and place stay on Timeline. A caret and accessible expanded state mark open rows. Their details align with the name, and the hairline comes after them with an S gap.
 
 Notes are Markdown in the campaign's folder. `Write` styles the source as it is typed, in the Reader's faces: a heading
 is large, has the Reader's rule, and `*these words*` are italic. Markup stays in view in the plain face and `faint`, so the
 file is exactly what was typed and Obsidian reads the same text. The box fills its column, and `Read` uses the same width,
 so a note keeps its line breaks between the two views. A session's notes, events and recordings follow the column, because these are the DM's own working pages. The books' rules prose keeps `READER_MEASURE`. `Read` is the one Reader. The gallery's `Markdown` sheet shows both from one note. A draft saves two seconds after the last edit, because at the
-table nobody stops to press Save. A file changed elsewhere stops saving and asks, as in "Keeping a draft".
+table nobody stops to press Save. During the autosave delay, notes show Saving… in muted with the busy icon. A file changed elsewhere stops saving and asks, as in "Keeping a draft".
+
+Plan row actions show their message and Undo below the affected row with an S gap. Add-strip messages stay beside Add. A removed plan group stays in page state until the next note or plan edit. Duplicate saved-run names include their session or a file date, and Resume has the run icon. Conflict comparisons open with two lines of context above the first difference and name the nearest heading.
 
 The timeline is a ledger, not a chart. It is one column in story order, with a hairline spine and an icon and
 a word for each kind. A day uses the shared group-heading style, without a rule, and numbers itself. It has no card and no
@@ -348,8 +350,8 @@ Technical details stays closed and uses plain words for rules not read yet or no
 
 A live microphone has the only colour here. `Record` takes a second, inline step that says to tell the table.
 While it records, the rail keeps the word and the time in view on every page. The time counts audio in the file, so it
-stops when saving stops. The rail and the session's page say the same state: `Recording`, `Recording silence`, or `Not saving
-audio`. A stall takes a banner at the bottom of every page, with `Record again`, because at the table the DM looks at the roster and
+stops when saving stops. The rail and the session's page show the same state: `Recording`, `Recording silence`, or `Not saving
+audio`. In the rail, silence is shortened to `Silence 0:00`, with the full state in its hover text and accessible name. A stall takes a banner at the bottom of every page, with `Record again`, because at the table the DM looks at the roster and
 not at the rail. It is at the bottom so that it never moves `Next turn`. A recording or a job that fails takes the same banner, and
 the rail, until the DM dismisses it or tries again. Silence takes no banner, because a table goes quiet often. After a minute it shows in the rail,
 on the session's page, and on the run's own notice line.
@@ -412,4 +414,8 @@ Inline creation forms use a Label title, fields, then a named Create action, its
 
 Settings uses `CAMPAIGNS` and `D&D BEYOND ACCOUNT` group headings in both layouts. In the compact layout, the open account form replaces the status line and its `Connect…` link. The account verb is `Connect`; states include `Not connected` and `Signed out of D&D Beyond`. A keyring warning owns its `Connect again` action. `Disconnect` is quiet and follows the trust text. The add-campaign form closes after a successful add.
 
-Recording settings clip at the tab rule, with `L` above each section. Visible field labels are `Service`, `Address`, `Model` and `API key`; accessible names keep the service context. The page header names the processing state, such as `Speech key missing` or `Ready to process`. A remove-key button names the saved key's service.
+Recording settings clip at the tab rule, with `L` above each section. Visible field labels are `Service`, `Address`, `Model` and `API key`; accessible names keep the service context. The page header names the processing state, such as `Speech key missing` or `Ready to process`. A remove-key button names its slot and service, for example Remove speech key (OpenAI). A saved key with no replacement typed hides Save key and its empty-field reason.
+
+Recording retries say Continue processing. Process again is reserved for replacing existing results; its confirmation has secondary Not now and red Replace the results. A live row puts Stop recording first. beside Process. A job shows one spinner and one Processing progress line. The session list omits the date while a recording or job runs. Not processed uses the neutral file icon. Transcript marker actions sit beside the marker in the text.
+
+Settings and the rail use one account status function. The rail shortens Signed out of D&D Beyond to Signed out with the full words on hover. Settings shows the recovery step once. Campaign import opens directly under the chosen row with a new sibling folder filled in. Editing details hides the row's Edit details action and uses a plain Details heading. The removal dialog is centred. Reload from disk names the local reload action.
