@@ -429,7 +429,6 @@ fn plan_row(
                     summary(ui);
                 },
             );
-            ui.set_min_height(text.response.rect.height().max(Density::Read.control()));
             let action_rect = egui::Rect::from_min_size(
                 egui::pos2(ui.max_rect().right() - widths[1], left.y),
                 egui::vec2(
