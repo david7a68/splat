@@ -900,12 +900,10 @@ impl Splat {
                 },
                 word: if self.settings.connection_failed() {
                     "Connection failed"
+                } else if self.settings.signed_out() {
+                    "Signed out of D&D Beyond"
                 } else {
-                    if self.settings.signed_out() {
-                        "Signed out of D&D Beyond"
-                    } else {
-                        "Not connected"
-                    }
+                    "Not connected"
                 },
                 color: if self.settings.connection_failed() {
                     c.result.error

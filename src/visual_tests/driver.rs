@@ -1361,7 +1361,9 @@ impl<'a> Driver<'a> {
     }
 
     /// Restore transient UI after each resize, then verify the named state before capture.
+    /// Repeating setup for another capture size is not another action in the DM's task.
     pub fn state_prepared(&mut self, name: &str, sizes: Sizes, mut prepare: impl FnMut(&mut Self)) {
+        let task_interactions = self.interactions;
         self.states += 1;
         let label = format!("{:02}-{name}", self.states);
         let plan: &[((f32, f32), f32)] = match sizes {
@@ -1396,6 +1398,7 @@ impl<'a> Driver<'a> {
         self.resize(self.base, 1.0);
         prepare(self);
         self.settle();
+        self.interactions = task_interactions;
         self.hold();
     }
 

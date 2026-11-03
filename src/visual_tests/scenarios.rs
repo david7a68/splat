@@ -1233,7 +1233,7 @@ pub mod settings {
         d.click(COOKIE_HELP);
         d.expect(COOKIE_HELP_TEXT);
         d.state_prepared("cookie-help", Sizes::Default, |d| {
-            if !d.has(COOKIE_HELP_TEXT) {
+            if !d.has_containing(COOKIE_HELP_TEXT) {
                 d.click(COOKIE_HELP);
             }
             d.row_of(COOKIE_HELP_TEXT);
@@ -1369,7 +1369,12 @@ pub mod empty {
         d.type_into(FOLDER_FIELD, &folder.display().to_string());
         d.click_below(FOLDER_FIELD, OPEN_CAMPAIGN);
         d.expect(NEW_CAMPAIGN);
-        d.state("campaign-added", Sizes::Default);
+        d.state_prepared("campaign-added", Sizes::Default, |d| {
+            assert!(
+                !d.has(NAME_FIELD),
+                "A successful add closes the form at every window size"
+            );
+        });
         d.goal("add a first campaign");
         d.observe(
             "Campaign added",

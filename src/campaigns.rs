@@ -740,94 +740,97 @@ impl Campaigns {
 
     fn form(&mut self, ui: &mut egui::Ui, _inline: bool, primary: bool) {
         let editing = self.editing.is_some();
-        let form_id = ui.make_persistent_id(("campaign_form", self.editing));
-        let mut added = false;
-        egui::CollapsingHeader::new(if editing {
-            "Edit campaign details"
-        } else {
-            "Add campaign"
-        })
-        .icon(design::section_icon)
-        .icon(design::section_icon)
-        .id_salt(("campaign_form", self.editing))
-        .open((self.remote.is_some() || self.focus_name).then_some(true))
-        .default_open(editing || self.data.campaigns.is_empty())
-        .show(ui, |ui| {
-            ui.add_space(design::XS);
-            if let Some((id, name)) = &self.remote {
-                ui.label(format!("{name} · D&D Beyond ID {id}"));
-            }
-            let name = design::text_field(ui, "Campaign name", &mut self.name, None, None);
-            if std::mem::take(&mut self.focus_name) {
-                name.request_focus();
-            }
-            // The button sits on the field's line, and ends where the fields above end.
-            let room = ui.available_width();
-            let field = ui
-                .vertical(|ui| {
-                    ui.set_max_width((room - BROWSE_WIDTH).max(120.0));
-                    design::text_field(ui, "Folder", &mut self.path, None, None)
-                })
-                .inner;
-            let browse = egui::Rect::from_min_size(
-                egui::pos2(field.rect.right() + design::S, field.rect.top()),
-                egui::vec2(BROWSE_WIDTH, field.rect.height()),
-            );
-            ui.scope_builder(egui::UiBuilder::new().max_rect(browse), |ui| {
-                if Action::secondary("Browse…")
-                    .density(Density::Read)
-                    .show(ui)
-                    .clicked()
-                    && let Some(path) = crate::hermetic::pick_folder()
-                {
-                    self.path = path.to_string_lossy().into_owned();
+        // Keep the add form's open state when Settings changes between one and two columns.
+        let form_scope = egui::Id::new(("campaign_form", self.editing));
+        ui.scope_builder(egui::UiBuilder::new().id(form_scope), |ui| {
+            let mut added = false;
+            let form = egui::CollapsingHeader::new(if editing {
+                "Edit campaign details"
+            } else {
+                "Add campaign"
+            })
+            .icon(design::section_icon)
+            .icon(design::section_icon)
+            .id_salt(("campaign_form", self.editing))
+            .open((self.remote.is_some() || self.focus_name).then_some(true))
+            .default_open(editing || self.data.campaigns.is_empty())
+            .show(ui, |ui| {
+                ui.add_space(design::XS);
+                if let Some((id, name)) = &self.remote {
+                    ui.label(format!("{name} · D&D Beyond ID {id}"));
                 }
-            });
-            ui.horizontal(|ui| {
-                let submit = if editing {
-                    "Save details"
-                } else {
-                    "Add campaign"
-                };
-                let missing = self.name.trim().is_empty() || self.path.trim().is_empty();
-                let action = if primary {
-                    Action::primary(submit)
-                } else {
-                    Action::secondary(submit)
-                };
-                design::blocked_reason(
-                    ui,
-                    missing.then_some("Enter a campaign name and a folder first."),
+                let name = design::text_field(ui, "Campaign name", &mut self.name, None, None);
+                if std::mem::take(&mut self.focus_name) {
+                    name.request_focus();
+                }
+                // The button sits on the field's line, and ends where the fields above end.
+                let room = ui.available_width();
+                let field = ui
+                    .vertical(|ui| {
+                        ui.set_max_width((room - BROWSE_WIDTH).max(120.0));
+                        design::text_field(ui, "Folder", &mut self.path, None, None)
+                    })
+                    .inner;
+                let browse = egui::Rect::from_min_size(
+                    egui::pos2(field.rect.right() + design::S, field.rect.top()),
+                    egui::vec2(BROWSE_WIDTH, field.rect.height()),
                 );
-                if action
-                    .blocked_if(missing, "Enter a campaign name and a folder first.")
-                    .show(ui)
-                    .clicked()
-                {
-                    match self.save_form() {
-                        Ok(()) => added = !editing,
-                        Err(error) => self.error = Some(error),
+                ui.scope_builder(egui::UiBuilder::new().max_rect(browse), |ui| {
+                    if Action::secondary("Browse…")
+                        .density(Density::Read)
+                        .show(ui)
+                        .clicked()
+                        && let Some(path) = crate::hermetic::pick_folder()
+                    {
+                        self.path = path.to_string_lossy().into_owned();
                     }
-                }
-                if (editing || !missing || self.remote.is_some())
-                    && Action::quiet("Cancel").show(ui).clicked()
-                {
-                    self.clear_form();
+                });
+                ui.horizontal(|ui| {
+                    let submit = if editing {
+                        "Save details"
+                    } else {
+                        "Add campaign"
+                    };
+                    let missing = self.name.trim().is_empty() || self.path.trim().is_empty();
+                    let action = if primary {
+                        Action::primary(submit)
+                    } else {
+                        Action::secondary(submit)
+                    };
+                    design::blocked_reason(
+                        ui,
+                        missing.then_some("Enter a campaign name and a folder first."),
+                    );
+                    if action
+                        .blocked_if(missing, "Enter a campaign name and a folder first.")
+                        .show(ui)
+                        .clicked()
+                    {
+                        match self.save_form() {
+                            Ok(()) => added = !editing,
+                            Err(error) => self.error = Some(error),
+                        }
+                    }
+                    if (editing || !missing || self.remote.is_some())
+                        && Action::quiet("Cancel").show(ui).clicked()
+                    {
+                        self.clear_form();
+                    }
+                });
+                if let Some(error) = &self.error {
+                    design::message(ui, Tone::Error, error);
                 }
             });
-            if let Some(error) = &self.error {
-                design::message(ui, Tone::Error, error);
+            if added {
+                let mut state = egui::collapsing_header::CollapsingState::load_with_default_open(
+                    ui.ctx(),
+                    form.header_response.id,
+                    false,
+                );
+                state.set_open(false);
+                state.store(ui.ctx());
             }
         });
-        if added {
-            let mut state = egui::collapsing_header::CollapsingState::load_with_default_open(
-                ui.ctx(),
-                form_id,
-                false,
-            );
-            state.set_open(false);
-            state.store(ui.ctx());
-        }
     }
 }
 
