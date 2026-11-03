@@ -329,6 +329,7 @@ pub struct Reader {
     pub conflicts: BTreeMap<String, PathBuf>,
     /// Archives that hold edits a force read replaced. They stay listed until dismissed.
     pub archived: Vec<PathBuf>,
+    pub archived_owners: BTreeMap<PathBuf, String>,
     /// Characters whose next read replaces those edits. The DM asked for this.
     force: BTreeSet<String>,
     /// The characters that the running read replaces edits for.
@@ -773,6 +774,9 @@ impl Reader {
         match result {
             Ok(archived) => {
                 self.conflicts.remove(&id);
+                for path in &archived {
+                    self.archived_owners.insert(path.clone(), id.clone());
+                }
                 self.archived.extend(archived);
                 self.stored(what, Ok(()));
             }

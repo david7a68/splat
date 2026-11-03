@@ -304,6 +304,33 @@ fn wrapped_words(ui: &mut egui::Ui, kind: Type, words: impl Into<String>, color:
     ui.add(egui::Label::new(kind.rich(ui, words).color(color)).wrap());
 }
 
+/// Keep the note's words while removing the group link that adds it to the plan.
+fn unlink_group(body: &mut String, name: &str) {
+    let mut out = String::new();
+    let mut rest = body.as_str();
+    while let Some(start) = rest.find("[[") {
+        out.push_str(&rest[..start]);
+        rest = &rest[start..];
+        let Some(end) = rest.find("]]") else {
+            break;
+        };
+        let link = &rest[..end + 2];
+        let inner = &rest[2..end];
+        if inner
+            .split('|')
+            .next()
+            .is_some_and(|target| target.trim().eq_ignore_ascii_case(name))
+        {
+            out.push_str(inner.rsplit('|').next().unwrap_or(inner));
+        } else {
+            out.push_str(link);
+        }
+        rest = &rest[end + 2..];
+    }
+    out.push_str(rest);
+    *body = out;
+}
+
 /// One row of a session's plan: an icon and words, then the action at the end. The action has
 /// one height either way, so that the rows below never move.
 fn plan_row(
@@ -2564,6 +2591,25 @@ impl Sessions {
             return;
         }
         let c = colors();
+        let undo_id = ui.id().with(("removed_plan_group", session));
+        if let Some((before, after)) = ui.data(|data| data.get_temp::<(String, String)>(undo_id)) {
+            if let Some(draft) = &mut self.draft
+                && draft.body == after
+            {
+                if design::message_with_action(
+                    ui,
+                    Tone::Info,
+                    "Group removed from this plan.",
+                    "Undo remove from plan",
+                ) {
+                    draft.body = before;
+                    draft.edited();
+                    ui.data_mut(|data| data.remove::<(String, String)>(undo_id));
+                }
+            } else {
+                ui.data_mut(|data| data.remove::<(String, String)>(undo_id));
+            }
+        }
         problems(ui, book);
         if plan.group_open {
             let label = self
@@ -2674,6 +2720,7 @@ impl Sessions {
             .collect();
         let mut insert = None;
         let mut remove = None;
+        let mut remove_group = None;
         let mut delete_run = None;
         let mut toggle = None;
         let mut changed = false;
@@ -2828,9 +2875,16 @@ impl Sessions {
                         let mut read_group = false;
                         plan_row(ui, &widths, icons::GROUP, |ui| {
                             if design::wrapped_link(ui, &group.name).clicked() { read_group = true; }
-                            wrapped_words(ui, Type::Small, group.summary(), c.muted);
+                            let summary = group.summary().split(" · ").map(|part| part.replace(' ', "\u{a0}")).collect::<Vec<_>>().join(" · ");
+                            wrapped_words(ui, Type::Small, summary, c.muted);
                             if let Some(problem) = &group.problem { wrapped_words(ui, Type::Small, problem, c.result.warning); }
                         }, |ui| {
+                            design::row_menu(ui, &group.name, |ui| {
+                                if Action::quiet("Remove").name(&format!("Remove group {} from the plan", group.name))
+                                    .blocked(plan.group_blocked).show(ui).clicked() {
+                                    remove_group = Some(group.name.clone()); ui.close();
+                                }
+                            });
                             if plan.arrivals_open {
                                 if Action::secondary("Arrivals").icon(icons::GROUP)
                                     .name(&format!("Go to Arrivals for {}", group.name)).density(Density::Read).show(ui).clicked() {
@@ -2851,6 +2905,19 @@ impl Sessions {
                 }
             });
         });
+        if let Some(name) = remove_group
+            && let Some(draft) = &mut self.draft
+        {
+            let before = draft.body.clone();
+            unlink_group(&mut draft.body, &name);
+            draft.edited();
+            ui.data_mut(|data| {
+                data.insert_temp(
+                    ui.id().with(("removed_plan_group", session)),
+                    (before, draft.body.clone()),
+                )
+            });
+        }
         if changed {
             book.touch();
         }
