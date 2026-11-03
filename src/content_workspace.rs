@@ -166,25 +166,23 @@ impl PackageCopy {
                 ));
             }
         }
-        for (written, (path, before, after)) in self.files.iter().enumerate() {
-            let (from, to) = if undo {
-                (after, before)
-            } else {
-                (before, after)
-            };
-            if let Err(error) = write_note(&self.module.path, path, Some(from), to) {
-                for (path, before, after) in self.files[..written].iter().rev() {
-                    let (from, to) = if undo {
-                        (before, after)
-                    } else {
-                        (after, before)
-                    };
-                    let _ = write_note(&self.module.path, path, Some(from), to);
-                }
-                return Err(error);
-            }
-        }
-        Ok(())
+        let changes = self
+            .files
+            .iter()
+            .map(|(path, before, after)| {
+                let (from, to) = if undo {
+                    (after, before)
+                } else {
+                    (before, after)
+                };
+                Ok(crate::file_batch::Change::text(
+                    note_path(&self.module.path, path)?,
+                    Some(from),
+                    Some(to),
+                ))
+            })
+            .collect::<Result<Vec<_>, String>>()?;
+        crate::file_batch::apply(&changes)
     }
 
     pub fn undo(&self) -> Result<(), String> {
@@ -1299,6 +1297,13 @@ impl CampaignDocument {
     }
 
     pub fn save_metadata(campaign: &Campaign, previous: Option<&Campaign>) -> Result<(), String> {
+        crate::file_batch::apply(&[Self::metadata_change(campaign, previous)?])
+    }
+
+    pub(crate) fn metadata_change(
+        campaign: &Campaign,
+        previous: Option<&Campaign>,
+    ) -> Result<crate::file_batch::Change, String> {
         let document = if previous.is_none()
             && campaign_manifest(&campaign.path, Some(campaign.id))?.is_none()
         {
@@ -1312,7 +1317,11 @@ impl CampaignDocument {
             && entry.fields.contains_key("splat_dndbeyond_campaign_name")
             && campaign_metadata(&entry, campaign.clone())? == *campaign
         {
-            return Ok(());
+            return Ok(crate::file_batch::Change::text(
+                note_path(&campaign.path, &document.path)?,
+                document.baseline.as_deref(),
+                Some(&document.text),
+            ));
         }
         if let Some(previous) = previous
             && entry.fields.contains_key("splat_dndbeyond_campaign_id")
@@ -1340,13 +1349,11 @@ impl CampaignDocument {
                 ),
             ],
         )?;
-        write_note(
-            &campaign.path,
-            &document.path,
+        Ok(crate::file_batch::Change::text(
+            note_path(&campaign.path, &document.path)?,
             document.baseline.as_deref(),
-            &text,
-        )?;
-        Ok(())
+            Some(&text),
+        ))
     }
 
     /// Only a new campaign or an explicit repair may start with defaults.

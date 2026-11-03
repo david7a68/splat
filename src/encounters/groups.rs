@@ -47,6 +47,8 @@ struct MemberDraft {
     count: u64,
     #[serde(default, skip_serializing_if = "Mapping::is_empty")]
     overrides: Mapping,
+    #[serde(flatten)]
+    extra: Mapping,
 }
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 struct GroupSetup {
@@ -54,9 +56,12 @@ struct GroupSetup {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     encounter: Option<EntryRef>,
     members: Vec<MemberDraft>,
+    #[serde(flatten)]
+    extra: Mapping,
 }
 #[derive(Clone)]
 pub(super) struct GroupDraft {
+    recovery: super::disk::Recovery,
     path: String,
     baseline: Option<String>,
     source: String,
@@ -91,11 +96,13 @@ impl GroupDraft {
         let id = crate::hermetic::new_uuid();
         let name = "New group".to_owned();
         let setup = GroupSetup {
+            extra: Mapping::new(),
             side: DEFAULT_SIDE.into(),
             encounter: None,
             members: Vec::new(),
         };
         Self {
+            recovery: Default::default(),
             path: format!("{FOLDER}/{id}.md"),
             baseline: None,
             source: format!(
@@ -127,6 +134,7 @@ impl GroupDraft {
         .map_err(|e| format!("This group needs repair in Campaign → Campaign entries: {e}"))?;
         let notes = entry.body.trim().to_owned();
         Ok(Self {
+            recovery: Default::default(),
             path: path.into(),
             baseline: Some(text.clone()),
             source: text,
@@ -191,6 +199,7 @@ impl GroupDraft {
             return;
         }
         self.setup.members.push(MemberDraft {
+            extra: Mapping::new(),
             creature: EntryRef::id(id),
             count: 1,
             overrides: Mapping::new(),
@@ -209,15 +218,12 @@ impl GroupDraft {
         }
         Ok(())
     }
-    pub(super) fn delete_saved(&self, campaign: &Campaign) -> Result<(), String> {
-        self.check_delete(campaign)?;
-        if self.baseline.is_some() {
-            fs::remove_file(note_path(&campaign.path, &self.path)?).map_err(|e| e.to_string())?;
-        }
-        Ok(())
+    pub(super) fn has_file(&self) -> bool {
+        self.baseline.is_some()
     }
     pub(super) fn add_named(&mut self, id: Uuid, name: String) {
         self.setup.members.push(MemberDraft {
+            extra: Mapping::new(),
             creature: EntryRef::id(id),
             count: 1,
             overrides: Mapping::from_iter([("name".into(), name.into())]),
@@ -319,34 +325,89 @@ impl GroupDraft {
         let text = self.text()?;
         let entry = Entry::parse(&self.path, &text)?;
         if snapshot.catalogue.entries.values().any(|e| {
-            e.entry.id == entry.id && (e.owner != campaign.id || e.entry.path != self.path)
+            e.entry.id == entry.id
+                && (e.owner != campaign.id
+                    || (self.baseline.is_none() && e.entry.path != self.path))
         }) {
             return Err("Another note uses this group's identity.".into());
         }
         Ok(text)
     }
     fn save(&mut self, campaign: &Campaign, modules: &[Module]) -> Result<(), String> {
+        self.check_disk(campaign)?;
         let snapshot = Snapshot::load(campaign, modules)?;
         let text = self.checked(&snapshot, campaign, None)?;
         // Create the manifest first so a new campaign keeps its package selections.
-        let mut document = CampaignDocument::load(campaign)?;
+        let document = CampaignDocument::load(campaign)?;
         if document.baseline.is_none() {
-            document.save()?;
+            crate::file_batch::apply(&[
+                crate::file_batch::Change::text(
+                    note_path(&campaign.path, &document.path)?,
+                    None,
+                    Some(&document.text),
+                ),
+                self.change(campaign, Some(&text))?,
+            ])?;
+            self.saved_text(&text);
+            return Ok(());
         }
         self.write(campaign, &text)
+    }
+    pub(super) fn check_disk(&mut self, campaign: &Campaign) -> Result<(), String> {
+        self.recovery
+            .check(&campaign.path, &mut self.path, self.baseline.as_deref())
+    }
+    pub(super) fn has_disk_change(&self) -> bool {
+        self.recovery.change.is_some()
+    }
+    pub(super) fn disk_choice(
+        &mut self,
+        ui: &mut egui::Ui,
+        root: &std::path::Path,
+    ) -> Result<Option<bool>, String> {
+        let choice = self.recovery.show(ui, &self.text()?);
+        if let Some(keep) = choice {
+            if keep {
+                if let Some(change) = self.recovery.accept() {
+                    self.path = change.path;
+                    self.baseline = change.text.clone();
+                    if let Some(text) = change.text {
+                        self.source = text;
+                    }
+                }
+            } else {
+                *self = Self::open(root, &self.path)?;
+            }
+        }
+        Ok(choice)
     }
     pub(super) fn write(&mut self, campaign: &Campaign, text: &str) -> Result<(), String> {
         let path = note_path(&campaign.path, &self.path)?;
         fs::create_dir_all(path.parent().ok_or("Missing group folder")?)
             .map_err(|e| e.to_string())?;
         write_note(&campaign.path, &self.path, self.baseline.as_deref(), text)?;
+        self.saved_text(text);
+        Ok(())
+    }
+    pub(super) fn change(
+        &self,
+        campaign: &Campaign,
+        text: Option<&str>,
+    ) -> Result<crate::file_batch::Change, String> {
+        Ok(crate::file_batch::Change::text(
+            note_path(&campaign.path, &self.path)?,
+            self.baseline.as_deref(),
+            text,
+        ))
+    }
+    pub(super) fn saved_text(&mut self, text: &str) {
+        self.recovery = Default::default();
         self.source = text.to_owned();
         self.baseline = Some(text.to_owned());
         self.saved_name = self.name.clone();
         self.saved_setup = self.setup.clone();
         self.notes = self.notes.trim().to_owned();
         self.saved_notes = self.notes.clone();
-        Ok(())
     }
 }
 
@@ -641,6 +702,37 @@ impl RemovedGroup {
 }
 
 impl Encounters {
+    fn group_disk_view(
+        &mut self,
+        ui: &mut egui::Ui,
+        campaign: &Campaign,
+        modules: &[Module],
+    ) -> bool {
+        let Some(draft) = self.group_draft.as_mut() else {
+            return false;
+        };
+        if draft.recovery.change.is_none() {
+            return false;
+        }
+        if let Some(keep) = draft.recovery.show(ui, &draft.text().unwrap_or_default()) {
+            if keep {
+                if let Some(change) = draft.recovery.accept() {
+                    draft.path = change.path;
+                    draft.baseline = change.text.clone();
+                    if let Some(text) = change.text {
+                        draft.source = text;
+                    }
+                    self.save_group_draft(ui.ctx(), campaign, modules);
+                }
+            } else {
+                let path = draft.path.clone();
+                self.discarded_group = self.group_draft.take();
+                self.group_draft = GroupDraft::open(&campaign.path, &path).ok();
+                self.error = None;
+            }
+        }
+        true
+    }
     pub(super) fn group_remove_undo(
         &mut self,
         ui: &mut egui::Ui,
@@ -1509,6 +1601,9 @@ impl Encounters {
         campaigns: &Campaigns,
         in_plan: bool,
     ) {
+        if self.group_disk_view(ui, active, campaigns.modules()) {
+            return;
+        }
         let dirty = self.draft_dirty();
         let has_run = self.has_run();
         // The Session page has no save of its own to give this key to.
@@ -2752,12 +2847,13 @@ mod tests {
     }
 
     #[test]
-    fn a_group_changed_on_disk_is_not_overwritten_and_the_message_says_what_saved() {
+    fn a_group_changed_on_disk_blocks_the_whole_save_and_keeps_the_draft() {
         let dir = tempfile::tempdir().unwrap();
         let campaign = campaign(dir.path());
         let scout = creature(dir.path(), "Scout");
         let mut draft = encounter_with_a_group(scout);
         draft.save(&campaign, &[]).unwrap();
+        let saved_name = draft.name.clone();
         let note = dir.path().join(draft.groups[0].path());
         let external = format!("{}\nFrom outside.\n", fs::read_to_string(&note).unwrap());
         fs::write(&note, &external).unwrap();
@@ -2765,12 +2861,46 @@ mod tests {
         draft.name = "Renamed".into();
         draft.groups[0].name = "Changed".into();
         let error = draft.save(&campaign, &[]).unwrap_err();
-        assert!(error.contains("group Changed did not"), "{error}");
+        assert!(error.contains("Choose which version to keep"), "{error}");
+        assert!(draft.groups[0].recovery.change.is_some());
         assert_eq!(fs::read_to_string(&note).unwrap(), external);
         assert!(draft.dirty(), "the group's change is still here to save");
         assert_eq!(
             Draft::open(dir.path(), &draft.path).unwrap().name,
-            "Renamed"
+            saved_name
+        );
+    }
+
+    #[test]
+    fn integrity_d8_a_copied_group_keeps_both_files_and_offers_comparison() {
+        let dir = tempfile::tempdir().unwrap();
+        let campaign = campaign(dir.path());
+        let scout = creature(dir.path(), "Scout");
+        let mut group = GroupDraft::new();
+        group.name = "Scouts".into();
+        group.add(scout);
+        group.save(&campaign, &[]).unwrap();
+        let copy = dir.path().join("Copied group.md");
+        fs::copy(dir.path().join(group.path()), &copy).unwrap();
+        let bytes = fs::read(&copy).unwrap();
+        group.notes = "My plan".into();
+        assert!(group.save(&campaign, &[]).is_err());
+        assert!(
+            group
+                .recovery
+                .change
+                .as_ref()
+                .unwrap()
+                .copies
+                .contains(&"Copied group.md".into())
+        );
+        group.recovery.accept();
+        group.save(&campaign, &[]).unwrap();
+        assert_eq!(fs::read(copy).unwrap(), bytes);
+        assert!(
+            fs::read_to_string(dir.path().join(group.path()))
+                .unwrap()
+                .contains("My plan")
         );
     }
 

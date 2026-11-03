@@ -1921,6 +1921,7 @@ impl Run {
     pub fn timeline_fact(&self) -> crate::timeline::RunFact {
         crate::timeline::RunFact {
             id: self.id,
+            copied_from: self.recovery.copied_from,
             name: self.name.clone(),
             round: self.state.round,
             state: match &self.state.phase {
@@ -2713,8 +2714,36 @@ struct SavedRun {
 }
 struct Storage {
     path: PathBuf,
+    root: PathBuf,
     campaign: Uuid,
     baseline: Option<Vec<u8>>,
+}
+
+pub fn find_run(directory: &Path, campaign: Uuid, id: Uuid) -> Result<PathBuf, String> {
+    let mut found = Vec::new();
+    for file in fs::read_dir(directory).map_err(|e| format!("{}: {e}", directory.display()))? {
+        let path = file.map_err(|e| e.to_string())?.path();
+        if path.extension().is_some_and(|ext| ext == "json")
+            && read_saved(&path, campaign).is_ok_and(|run| run.id == id)
+        {
+            found.push(path);
+        }
+    }
+    match found.as_slice() {
+        [path] => Ok(path.clone()),
+        [] => Err(format!(
+            "Run {id} was not found in {}.",
+            directory.display()
+        )),
+        _ => Err(format!(
+            "Several files use run {id}: {}. Keep one identity before carrying HP.",
+            found
+                .iter()
+                .map(|path| path.display().to_string())
+                .collect::<Vec<_>>()
+                .join(", ")
+        )),
+    }
 }
 impl Run {
     fn refresh_portraits(&mut self) {
@@ -2793,11 +2822,21 @@ impl Run {
     ) -> Result<(), String> {
         self.initiative = initiative;
         self.storage = Some(Storage {
+            root: directory
+                .ancestors()
+                .find(|path| path.is_dir())
+                .ok_or("Campaign folder not found.")?
+                .to_owned(),
             path: directory.join(format!("{}.json", self.id)),
             campaign,
             baseline: None,
         });
         self.save()
+    }
+    pub fn guard_campaign(&mut self, root: &Path) {
+        if let Some(storage) = &mut self.storage {
+            storage.root = root.to_owned();
+        }
     }
     pub fn save(&mut self) -> Result<(), String> {
         let stopped_players = self.stopped_players();
@@ -2823,6 +2862,12 @@ impl Run {
         };
         let bytes = serde_json::to_vec_pretty(&saved).map_err(|e| e.to_string())?;
         let parent = storage.path.parent().ok_or("Invalid run location")?;
+        if !storage.root.is_dir() {
+            return Err(format!(
+                "Campaign or run folder is gone: {}. Choose folder before saving.",
+                storage.root.display()
+            ));
+        }
         fs::create_dir_all(parent).map_err(|e| format!("Could not create run folder: {e}"))?;
         let current = match fs::read(&storage.path) {
             Ok(b) => Some(b),
@@ -3022,6 +3067,7 @@ impl Run {
             state: saved.state,
             setup_details: saved.setup_details,
             storage: Some(Storage {
+                root: path.parent().ok_or("Invalid run location")?.to_owned(),
                 path: path.into(),
                 campaign,
                 baseline: Some(bytes),
@@ -3097,7 +3143,10 @@ impl Run {
     }
     pub fn list(directory: &Path, campaign: Uuid) -> Result<Vec<SavedRunInfo>, String> {
         if !directory.exists() {
-            return Ok(Vec::new());
+            return Err(format!(
+                "Run folder not found: {}. Choose folder in Campaign, Rules and runs.",
+                directory.display()
+            ));
         }
         let mut runs = Vec::new();
         let mut close_order = BTreeMap::new();
@@ -3108,7 +3157,7 @@ impl Run {
                 let modified = crate::hermetic::file_time(&path);
                 match Self::open(&path, campaign) {
                     Ok(run) => {
-                        close_order.insert(run.id, run.recovery.closed_order);
+                        close_order.insert(path.clone(), run.recovery.closed_order);
                         if let Some(original) = run.recovery.copied_from {
                             changed_elsewhere.insert(original);
                         }
@@ -3135,10 +3184,34 @@ impl Run {
                 run.label.insert_str(0, "Changed elsewhere · ");
             }
         }
+        let mut identities = BTreeMap::<Uuid, Vec<PathBuf>>::new();
+        for run in &runs {
+            if let Some(id) = run.id {
+                identities.entry(id).or_default().push(run.path.clone());
+            }
+        }
+        for run in &mut runs {
+            if let Some(paths) = run
+                .id
+                .and_then(|id| identities.get(&id))
+                .filter(|paths| paths.len() > 1)
+            {
+                run.label = format!(
+                    "Duplicate identity: {} · {}",
+                    paths
+                        .iter()
+                        .map(|path| path.display().to_string())
+                        .collect::<Vec<_>>()
+                        .join(", "),
+                    run.label
+                );
+            }
+        }
         // The run closed last owns Resume, including recovery copies.
         runs.sort_by(|a, b| {
-            b.id.and_then(|id| close_order.get(&id))
-                .cmp(&a.id.and_then(|id| close_order.get(&id)))
+            close_order
+                .get(&b.path)
+                .cmp(&close_order.get(&a.path))
                 .then_with(|| b.saved_at.cmp(&a.saved_at))
                 .then_with(|| a.encounter.cmp(&b.encounter))
                 .then_with(|| a.label.cmp(&b.label))
@@ -3147,10 +3220,7 @@ impl Run {
         if let Some(run) = runs
             .iter_mut()
             .find(|run| run.standing == Standing::Unfinished)
-            && run
-                .id
-                .and_then(|id| close_order.get(&id))
-                .is_some_and(|order| *order > 0)
+            && close_order.get(&run.path).is_some_and(|order| *order > 0)
         {
             run.label.insert_str(0, "Closed last · ");
         }
@@ -3630,6 +3700,77 @@ fn display(value: Option<i64>) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn integrity_d11_a_missing_run_folder_is_reported() {
+        let dir = tempfile::tempdir().unwrap();
+        let error = Run::list(&dir.path().join("gone"), Uuid::nil())
+            .err()
+            .unwrap();
+        assert!(error.contains("Run folder not found"));
+    }
+
+    #[test]
+    fn integrity_d23_renamed_runs_are_found_and_duplicates_are_named() {
+        let dir = tempfile::tempdir().unwrap();
+        let campaign = Uuid::new_v4();
+        let mut run = run();
+        begin(&mut run);
+        run.configure_storage(campaign, dir.path(), Initiative::default())
+            .unwrap();
+        let renamed = dir.path().join("Bridge fight.json");
+        fs::rename(run.path().unwrap(), &renamed).unwrap();
+        assert_eq!(find_run(dir.path(), campaign, run.id).unwrap(), renamed);
+        fs::copy(&renamed, dir.path().join("conflict.json")).unwrap();
+        let error = find_run(dir.path(), campaign, run.id).unwrap_err();
+        assert!(error.contains("Bridge fight.json") && error.contains("conflict.json"));
+        let rows = Run::list(dir.path(), campaign).unwrap();
+        assert_eq!(rows.len(), 2);
+        assert!(
+            rows.iter()
+                .all(|row| row.label.contains("Duplicate identity"))
+        );
+    }
+
+    #[test]
+    fn integrity_d25_a_moved_campaign_is_never_created_again() {
+        let dir = tempfile::tempdir().unwrap();
+        let campaign = dir.path().join("Campaign");
+        fs::create_dir_all(&campaign).unwrap();
+        let mut run = run();
+        begin(&mut run);
+        run.configure_storage(
+            Uuid::new_v4(),
+            &campaign.join("Runs"),
+            Initiative::default(),
+        )
+        .unwrap();
+        fs::rename(&campaign, dir.path().join("Moved campaign")).unwrap();
+        run.apply(Command::Damage(0, 1)).unwrap();
+        assert!(run.save().unwrap_err().contains("folder is gone"));
+        assert!(!campaign.exists());
+        assert!(run.needs_save());
+    }
+
+    #[test]
+    fn integrity_d25_an_external_run_folder_still_checks_the_campaign() {
+        let dir = tempfile::tempdir().unwrap();
+        let campaign = dir.path().join("Campaign");
+        fs::create_dir_all(&campaign).unwrap();
+        let mut run = run();
+        begin(&mut run);
+        run.configure_storage(
+            Uuid::new_v4(),
+            &dir.path().join("External runs"),
+            Initiative::default(),
+        )
+        .unwrap();
+        run.guard_campaign(&campaign);
+        fs::rename(&campaign, dir.path().join("Moved campaign")).unwrap();
+        run.apply(Command::Damage(0, 1)).unwrap();
+        assert!(run.save().is_err());
+        assert!(!campaign.exists());
+    }
     use crate::combat_sync::SyncState;
     fn creature() -> Entry {
         Entry::parse("monster.md", &format!("---\nsplat_schema: 1\nsplat_id: {}\nsplat_kind: creature\nsplat_name: Guard\nsplat_creature: {{type: humanoid}}\nsplat_stats:\n  max_hp: {{value: 20}}\n  armor_class: {{value: 16}}\n  initiative: {{value: 2}}\nsplat_initial:\n  hp: 17\n  temporary_hp: 3\n  conditions: [Poisoned]\n  death_saves: {{successes: 1, failures: 0}}\n---\n\n## Actions\nSpear attack.\n", Uuid::new_v4())).unwrap()
@@ -3919,7 +4060,13 @@ mod tests {
     fn saving_as_a_new_run_keeps_both_files() {
         let (dir, mut run, path, external, campaign) = run_with_changed_file();
         let hp = run.state.participants[0].hp;
+        let before = run.timeline_fact();
+        let mut story = crate::timeline::Book::default();
+        story.record_change(None, &before, None);
         run.save_as_new_run().unwrap();
+        story.record_change(Some(&before), &run.timeline_fact(), None);
+        assert_eq!(story.events.len(), 1);
+        assert_eq!(story.events[0].run, Some(run.id));
         assert!(!run.has_disk_conflict());
         assert_eq!(fs::read(&path).unwrap(), external);
         let new_path = run.path().unwrap().to_path_buf();

@@ -60,12 +60,36 @@ fn resolve(campaign: &Campaign, name: &str) -> Result<PathBuf, String> {
     })
 }
 
+pub(crate) fn missing_folder(folder: &Path) -> String {
+    format!(
+        "Session folder not found: {}. It may have been moved or renamed.",
+        folder.display()
+    )
+}
+
 pub fn folder(campaign: &Campaign) -> Result<PathBuf, String> {
-    resolve(campaign, &folder_setting(campaign)?)
+    let path = resolve(campaign, &folder_setting(campaign)?)?;
+    let document = CampaignDocument::load(campaign)?;
+    let entry = Entry::parse(&document.path, &document.text)?;
+    if entry.fields.contains_key(FOLDER_FIELD) && !path.is_dir() {
+        return Err(missing_folder(&path));
+    }
+    Ok(path)
+}
+
+pub(crate) fn open_folder(campaign: &Campaign) -> Result<PathBuf, String> {
+    let document = CampaignDocument::load(campaign)?;
+    let entry = Entry::parse(&document.path, &document.text)?;
+    if !entry.fields.contains_key(FOLDER_FIELD) {
+        save_folder(campaign, &folder_setting(campaign)?)
+    } else {
+        folder(campaign)
+    }
 }
 
 pub fn save_folder(campaign: &Campaign, name: &str) -> Result<PathBuf, String> {
     let path = resolve(campaign, name)?;
+    fs::create_dir_all(&path).map_err(|e| format!("Could not create session folder: {e}"))?;
     let document = CampaignDocument::load(campaign)?;
     let mut map = serde_yaml_ng::Mapping::new();
     map.insert("directory".into(), Value::String(name.trim().to_owned()));
@@ -167,18 +191,21 @@ fn parse_note(path: &Path, text: &str) -> Option<Note> {
 
 /// Every note in the folder, newest first. Other Markdown files there are not sessions.
 pub fn list_notes(folder: &Path) -> Vec<Note> {
-    let mut notes: Vec<Note> = fs::read_dir(folder)
+    let mut notes: Vec<Note> = note_paths(folder)
         .into_iter()
-        .flatten()
-        .flatten()
-        .filter(|file| file.path().extension().is_some_and(|e| e == "md"))
-        .filter_map(|file| {
-            let path = file.path();
-            parse_note(&path, &fs::read_to_string(&path).ok()?)
-        })
+        .filter_map(|path| parse_note(&path, &fs::read_to_string(&path).ok()?))
         .collect();
     // The plainest name first, so that a copy such as `Session 12 (conflict).md` never wins.
-    notes.sort_by_key(|note| (note.path.as_os_str().len(), note.path.clone()));
+    let known = known_notes(folder);
+    notes.sort_by_key(|note| {
+        (
+            known
+                .get(&note.id)
+                .is_none_or(|path| folder.join(path) != note.path),
+            note.path.as_os_str().len(),
+            note.path.clone(),
+        )
+    });
     let mut unique: Vec<Note> = Vec::new();
     for note in notes {
         match unique.iter_mut().find(|kept| kept.id == note.id) {
@@ -193,6 +220,86 @@ pub fn list_notes(folder: &Path) -> Vec<Note> {
             .then_with(|| a.path.cmp(&b.path))
     });
     unique
+}
+
+fn note_paths(folder: &Path) -> Vec<PathBuf> {
+    let mut paths = Vec::new();
+    for file in fs::read_dir(folder).into_iter().flatten().flatten() {
+        let path = file.path();
+        let name = file.file_name();
+        if name.to_string_lossy().starts_with('.') || name == TEMPLATES || name == RECORDINGS {
+            continue;
+        }
+        let Ok(kind) = file.file_type() else {
+            continue;
+        };
+        if kind.is_dir() {
+            paths.extend(note_paths(&path));
+        } else if kind.is_file() && path.extension().is_some_and(|ext| ext == "md") {
+            paths.push(path);
+        }
+    }
+    paths
+}
+
+const NOTE_PATHS: &str = ".splat-session-paths.json";
+
+pub(crate) struct IdentityUndo {
+    path: PathBuf,
+    before: String,
+    after: String,
+}
+
+pub(crate) fn new_identity(path: &Path) -> Result<IdentityUndo, String> {
+    let before = fs::read_to_string(path).map_err(|e| e.to_string())?;
+    let after = patch_fields(
+        &before,
+        &[(
+            "session_id",
+            Some(crate::hermetic::new_uuid().to_string().into()),
+        )],
+    )?;
+    if fs::read_to_string(path).ok().as_deref() != Some(before.as_str()) {
+        return Err("This session changed on disk. Reload before trying again.".into());
+    }
+    replace_file(path, &after)?;
+    Ok(IdentityUndo {
+        path: path.into(),
+        before,
+        after,
+    })
+}
+
+impl IdentityUndo {
+    pub fn undo(&self) -> Result<(), String> {
+        if fs::read_to_string(&self.path).ok().as_deref() != Some(self.after.as_str()) {
+            return Err("This session changed on disk. Undo did not replace it.".into());
+        }
+        replace_file(&self.path, &self.before)
+    }
+}
+
+fn known_notes(folder: &Path) -> std::collections::BTreeMap<Uuid, PathBuf> {
+    fs::read(folder.join(NOTE_PATHS))
+        .ok()
+        .and_then(|bytes| serde_json::from_slice(&bytes).ok())
+        .unwrap_or_default()
+}
+
+pub(crate) fn remember_notes(folder: &Path, notes: &[Note]) -> Result<(), String> {
+    let path = folder.join(NOTE_PATHS);
+    let mut known = known_notes(folder);
+    for note in notes {
+        known.insert(
+            note.id,
+            note.path
+                .strip_prefix(folder)
+                .map_err(|e| e.to_string())?
+                .into(),
+        );
+    }
+    let text = serde_json::to_string_pretty(&known).map_err(|e| e.to_string())?;
+    replace_file(&path, &text)
 }
 
 /// Notes that claim a session but cannot be read, by file name. Their files are safe.
@@ -328,6 +435,21 @@ pub(crate) fn storage_files(folder: &Path) -> Result<Vec<PathBuf>, String> {
     if folder.join("Timeline.md").exists() {
         out.push(folder.join("Timeline.md"));
     }
+    if folder.join(NOTE_PATHS).exists() {
+        out.push(folder.join(NOTE_PATHS));
+    }
+    for file in fs::read_dir(folder).map_err(|e| e.to_string())? {
+        let path = file.map_err(|e| e.to_string())?.path();
+        if path.extension().is_some_and(|ext| ext == "md") && !out.contains(&path) {
+            let text = fs::read_to_string(&path)
+                .map_err(|e| format!("{}: {e}. Move this file by hand first.", path.display()))?;
+            if text.lines().any(|line| {
+                line.starts_with("session_id:") || line.starts_with("timeline_version:")
+            }) {
+                out.push(path);
+            }
+        }
+    }
     files(&folder.join(TEMPLATES), &mut out)?;
     files(&folder.join(RECORDINGS), &mut out)?;
     Ok(out)
@@ -362,32 +484,97 @@ pub(crate) fn move_storage(campaign: &Campaign, name: &str) -> Result<PathBuf, S
             if let Some(parent) = target.parent() {
                 fs::create_dir_all(parent).map_err(|error| error.to_string())?;
             }
-            let mut output = fs::OpenOptions::new()
-                .write(true)
-                .create_new(true)
-                .open(target)
-                .map_err(|error| error.to_string())?;
+            transfer_file(source, target, false, || {})?;
             copied.push(target.clone());
-            let mut input = fs::File::open(source).map_err(|error| error.to_string())?;
-            std::io::copy(&mut input, &mut output).map_err(|error| error.to_string())?;
-            output.sync_all().map_err(|error| error.to_string())?;
         }
         save_folder(campaign, name)
     })();
-    if result.is_err() {
-        for path in copied {
-            let _ = fs::remove_file(path);
+    if let Err(error) = result {
+        let mut errors = vec![error];
+        for target in copied.into_iter().rev() {
+            let source = old.join(target.strip_prefix(&new).expect("storage target"));
+            if let Err(error) = transfer_file(&target, &source, false, || {}) {
+                errors.push(error);
+            }
         }
-    } else {
-        for path in files {
-            let _ = fs::remove_file(path);
+        return Err(errors.join(" "));
+    }
+    Ok(new)
+}
+
+fn transfer_file(
+    source: &Path,
+    target: &Path,
+    force_copy: bool,
+    before_delete: impl FnOnce(),
+) -> Result<(), String> {
+    #[cfg(target_os = "linux")]
+    if !force_copy {
+        use std::os::unix::ffi::OsStrExt;
+        let from =
+            std::ffi::CString::new(source.as_os_str().as_bytes()).map_err(|e| e.to_string())?;
+        let to =
+            std::ffi::CString::new(target.as_os_str().as_bytes()).map_err(|e| e.to_string())?;
+        // Both paths are valid C strings; RENAME_NOREPLACE protects an arriving sync file.
+        if unsafe {
+            libc::renameat2(
+                libc::AT_FDCWD,
+                from.as_ptr(),
+                libc::AT_FDCWD,
+                to.as_ptr(),
+                libc::RENAME_NOREPLACE,
+            )
+        } == 0
+        {
+            sync_folder(source.parent().ok_or("Missing source folder")?)?;
+            sync_folder(target.parent().ok_or("Missing target folder")?)?;
+            return Ok(());
+        }
+        if std::io::Error::last_os_error().raw_os_error() != Some(libc::EXDEV) {
+            return Err(format!(
+                "Could not move {}: {}",
+                source.display(),
+                std::io::Error::last_os_error()
+            ));
         }
     }
-    result
+    let bytes = fs::read(source).map_err(|e| format!("{}: {e}", source.display()))?;
+    let mut output =
+        tempfile::NamedTempFile::new_in(target.parent().ok_or("Missing target folder")?)
+            .map_err(|e| e.to_string())?;
+    output
+        .write_all(&bytes)
+        .and_then(|()| output.as_file().sync_all())
+        .map_err(|e| e.to_string())?;
+    output
+        .persist_noclobber(target)
+        .map_err(|e| e.to_string())?;
+    sync_folder(target.parent().ok_or("Missing target folder")?)?;
+    before_delete();
+    if fs::read(source).ok().as_deref() != Some(bytes.as_slice()) {
+        return Err(format!(
+            "{} changed during the move. Both files were kept.",
+            source.display()
+        ));
+    }
+    fs::remove_file(source).map_err(|e| e.to_string())?;
+    sync_folder(source.parent().ok_or("Missing source folder")?)?;
+    sync_folder(target.parent().ok_or("Missing target folder")?)
+}
+
+fn require_folder(folder: &Path) -> Result<(), String> {
+    if folder.is_dir() {
+        Ok(())
+    } else {
+        Err(format!(
+            "Session folder is gone: {}. Choose folder before saving.",
+            folder.display()
+        ))
+    }
 }
 
 pub fn create_note(folder: &Path, new: &NewNote<'_>) -> Result<Note, String> {
-    fs::create_dir_all(folder).map_err(|e| format!("Could not create the folder: {e}"))?;
+    require_folder(folder)?;
     let id = crate::hermetic::new_uuid();
     let path = note_path(folder, new.number, new.title);
     let mut front = serde_yaml_ng::Mapping::new();
@@ -398,14 +585,18 @@ pub fn create_note(folder: &Path, new: &NewNote<'_>) -> Result<Note, String> {
     let front = serde_yaml_ng::to_string(&front).map_err(|e| e.to_string())?;
     let text = format!("---\n{front}---\n{}", fill_template(new));
     write_new(&path, &text)?;
-    parse_note(&path, &text).ok_or_else(|| "The new note could not be read back.".to_owned())
+    let note = parse_note(&path, &text).ok_or("The new note could not be read back.")?;
+    remember_notes(folder, std::slice::from_ref(&note))?;
+    Ok(note)
 }
 
 fn write_new(path: &Path, text: &str) -> Result<(), String> {
     let parent = path.parent().ok_or("Invalid location.")?;
     let mut temp = tempfile::NamedTempFile::new_in(parent).map_err(|e| e.to_string())?;
     temp.write_all(text.as_bytes()).map_err(|e| e.to_string())?;
+    temp.as_file().sync_all().map_err(|e| e.to_string())?;
     temp.persist_noclobber(path).map_err(|e| e.to_string())?;
+    sync_folder(parent)?;
     Ok(())
 }
 
@@ -460,13 +651,24 @@ pub fn update_details(note: &Note, title: &str, date: &str, number: u32) -> Resu
     parse_note(&note.path, &patched).ok_or_else(|| "The note could not be read back.".to_owned())
 }
 
-fn replace_file(path: &Path, text: &str) -> Result<(), String> {
+pub(crate) fn replace_file(path: &Path, text: &str) -> Result<(), String> {
     let parent = path.parent().ok_or("Invalid location.")?;
     let mut temp = tempfile::NamedTempFile::new_in(parent).map_err(|e| e.to_string())?;
     temp.write_all(text.as_bytes())
         .and_then(|()| temp.as_file().sync_all())
         .map_err(|e| e.to_string())?;
     temp.persist(path).map_err(|e| e.to_string())?;
+    sync_folder(parent)?;
+    Ok(())
+}
+
+pub(crate) fn sync_folder(path: &Path) -> Result<(), String> {
+    #[cfg(unix)]
+    fs::File::open(path)
+        .and_then(|file| file.sync_all())
+        .map_err(|e| e.to_string())?;
+    #[cfg(not(unix))]
+    let _ = path;
     Ok(())
 }
 
@@ -519,12 +721,17 @@ pub fn list_templates(folder: &Path) -> Vec<Template> {
 }
 
 pub fn create_template(folder: &Path, name: &str, body: &str) -> Result<Template, String> {
+    require_folder(folder)?;
     let name = file_safe(name);
     if name.is_empty() {
         return Err("Enter a name for the template.".into());
     }
     let templates = folder.join(TEMPLATES);
-    fs::create_dir_all(&templates).map_err(|e| format!("Could not create the folder: {e}"))?;
+    match fs::create_dir(&templates) {
+        Ok(()) => {}
+        Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {}
+        Err(error) => return Err(format!("Could not create the folder: {error}")),
+    }
     let path = templates.join(format!("{name}.md"));
     if path.exists() {
         return Err(format!("A template named “{name}” already exists."));
@@ -584,39 +791,56 @@ pub fn recordings_folder(folder: &Path, session: Uuid) -> PathBuf {
 
 /// The newest first. The file name begins with the time it started.
 pub fn list_recordings(folder: &Path, session: Uuid) -> Vec<Recording> {
-    let mut recordings: Vec<Recording> = fs::read_dir(recordings_folder(folder, session))
-        .into_iter()
-        .flatten()
-        .flatten()
-        .filter(|file| file.path().extension().is_some_and(|e| e == "wav"))
-        .map(|file| {
-            let path = file.path();
-            Recording {
-                name: path
-                    .file_stem()
-                    .map(|stem| stem.to_string_lossy().into_owned())
-                    .unwrap_or_default(),
-                title: recording_title(&path),
-                seconds: crate::recording::Layout::read(&path)
-                    .ok()
-                    .map(|l| l.seconds()),
-                bytes: file.metadata().map_or(0, |metadata| metadata.len()),
-                transcript: crate::processing::transcript_path(&path).exists(),
-                summary: crate::processing::summary_path(&path).exists(),
-                marked: crate::processing::marked_path(&path).exists(),
-                review: crate::processing::review_path(&path).exists(),
-                warning: fs::read_to_string(crate::processing::warning_path(&path)).ok(),
-                status: fs::read_to_string(path.with_extension("state.txt")).ok(),
-                markers: [
-                    crate::processing::marked_path(&path),
-                    crate::processing::summary_path(&path),
+    let paths: std::collections::BTreeSet<PathBuf> =
+        fs::read_dir(recordings_folder(folder, session))
+            .into_iter()
+            .flatten()
+            .flatten()
+            .filter_map(|file| {
+                let path = file.path();
+                let name = path.file_name()?.to_str()?;
+                [
+                    ".wav",
+                    ".transcript.md",
+                    ".summary.md",
+                    ".marked.md",
+                    ".cleaned.md",
+                    ".review.md",
+                    ".warning.md",
+                    ".state.txt",
                 ]
                 .iter()
-                .filter_map(|made| fs::read_to_string(made).ok())
-                .flat_map(|text| crate::timeline::parse_markers(&text))
-                .collect(),
-                path,
-            }
+                .find_map(|suffix| name.strip_suffix(suffix))
+                .map(|stem| path.with_file_name(format!("{stem}.wav")))
+            })
+            .collect();
+    let mut recordings: Vec<Recording> = paths
+        .into_iter()
+        .map(|path| Recording {
+            name: path
+                .file_stem()
+                .map(|stem| stem.to_string_lossy().into_owned())
+                .unwrap_or_default(),
+            title: recording_title(&path),
+            seconds: crate::recording::Layout::read(&path)
+                .ok()
+                .map(|l| l.seconds()),
+            bytes: fs::metadata(&path).map_or(0, |metadata| metadata.len()),
+            transcript: crate::processing::transcript_path(&path).exists(),
+            summary: crate::processing::summary_path(&path).exists(),
+            marked: crate::processing::marked_path(&path).exists(),
+            review: crate::processing::review_path(&path).exists(),
+            warning: fs::read_to_string(crate::processing::warning_path(&path)).ok(),
+            status: fs::read_to_string(path.with_extension("state.txt")).ok(),
+            markers: [
+                crate::processing::marked_path(&path),
+                crate::processing::summary_path(&path),
+            ]
+            .iter()
+            .filter_map(|made| fs::read_to_string(made).ok())
+            .flat_map(|text| crate::timeline::parse_markers(&text))
+            .collect(),
+            path,
         })
         .collect();
     recordings.sort_by(|a, b| b.name.cmp(&a.name));
@@ -631,7 +855,6 @@ pub fn new_recording_path(folder: &Path, session: Uuid) -> PathBuf {
 
 /// Remove a recording and what was made from it.
 pub fn delete_recording(path: &Path) -> Result<(), String> {
-    fs::remove_file(path).map_err(|e| e.to_string())?;
     for made in [
         crate::processing::transcript_path(path),
         crate::processing::summary_path(path),
@@ -640,6 +863,7 @@ pub fn delete_recording(path: &Path) -> Result<(), String> {
         crate::processing::review_path(path),
         crate::processing::warning_path(path),
         path.with_extension("state.txt"),
+        path.to_path_buf(),
     ] {
         match fs::remove_file(made) {
             Ok(()) => {}
@@ -859,10 +1083,27 @@ pub fn insert_in_plan(body: &mut String, words: &str) {
 
 /// The links to a thing that has a new name, whatever their case. Returns whether any changed.
 pub fn rename_links(body: &mut String, old: &str, new: &str) -> bool {
+    let mut excluded = Vec::new();
+    let mut block = None;
+    for (event, range) in pulldown_cmark::Parser::new(body).into_offset_iter() {
+        match event {
+            pulldown_cmark::Event::Start(pulldown_cmark::Tag::CodeBlock(_)) => {
+                block = Some(range.start)
+            }
+            pulldown_cmark::Event::End(pulldown_cmark::TagEnd::CodeBlock) => {
+                if let Some(start) = block.take() {
+                    excluded.push(start..range.end);
+                }
+            }
+            pulldown_cmark::Event::Code(_) => excluded.push(range),
+            _ => {}
+        }
+    }
     let mut renamed = String::with_capacity(body.len());
     let mut rest = body.as_str();
     let mut changed = false;
     while let Some(start) = rest.find("[[") {
+        let offset = body.len() - rest.len() + start;
         let (before, after) = rest.split_at(start + 2);
         renamed.push_str(before);
         rest = after;
@@ -870,10 +1111,15 @@ pub fn rename_links(body: &mut String, old: &str, new: &str) -> bool {
             break;
         };
         let (name, tail) = after.split_at(end);
-        if name.trim().eq_ignore_ascii_case(old)
+        let (target, anchor) = name
+            .split_once('#')
+            .map_or((name, ""), |(target, _)| (target, &name[target.len()..]));
+        if !excluded.iter().any(|range| range.contains(&offset))
+            && target.trim().eq_ignore_ascii_case(old)
             && (tail.starts_with('|') || tail.starts_with("]]"))
         {
             renamed.push_str(new);
+            renamed.push_str(anchor);
             rest = tail;
             changed = true;
         }
@@ -941,12 +1187,14 @@ pub enum DraftState {
 #[derive(Clone)]
 pub struct Draft {
     pub path: PathBuf,
+    search_folder: PathBuf,
     prefix: String,
     pub body: String,
     baseline: Option<String>,
     pub state: DraftState,
     /// What the file holds now, once the DM asks to see it during a conflict.
     pub on_disk: Option<String>,
+    pub moved_to: Option<PathBuf>,
     /// This note's new ID, once it was saved again after its file went.
     pub restored: Option<Uuid>,
     /// The words the DM chose to lose, until the next edit.
@@ -960,11 +1208,19 @@ impl Draft {
         let (prefix, body) = split_note(&text).unwrap_or(("", &text));
         Ok(Self {
             path: path.to_owned(),
+            search_folder: path
+                .ancestors()
+                .skip(1)
+                .find(|folder| folder.join(NOTE_PATHS).is_file())
+                .or_else(|| path.parent())
+                .unwrap_or(path)
+                .to_owned(),
             prefix: prefix.to_owned(),
             body: body.to_owned(),
             baseline: Some(text.clone()),
             state: DraftState::Clean,
             on_disk: None,
+            moved_to: None,
             restored: None,
             dropped: None,
             last_edit: None,
@@ -1011,6 +1267,20 @@ impl Draft {
         }
         let current = fs::read_to_string(&self.path).ok();
         if current != self.baseline {
+            if current.is_none()
+                && let Some(note) = self
+                    .baseline
+                    .as_deref()
+                    .and_then(|text| parse_note(&self.path, text))
+            {
+                let matches: Vec<_> = list_notes(&self.search_folder)
+                    .into_iter()
+                    .filter(|found| found.id == note.id)
+                    .collect();
+                if matches.len() == 1 && matches[0].also.is_empty() {
+                    self.moved_to = Some(matches[0].path.clone());
+                }
+            }
             self.state = if current.is_none() {
                 DraftState::Missing
             } else {
@@ -1055,10 +1325,38 @@ impl Draft {
                 }
             }
         }
-        if let Some(parent) = self.path.parent() {
-            let _ = fs::create_dir_all(parent);
+        if self.path.parent().is_none_or(|parent| !parent.is_dir()) {
+            self.state =
+                DraftState::Failed("Session folder is gone. Choose folder before saving.".into());
+            return;
         }
-        self.write();
+        let text = format!("{}{}", self.prefix, self.body);
+        match write_new(&self.path, &text) {
+            Ok(()) => {
+                self.baseline = Some(text);
+                self.state = DraftState::Saved;
+            }
+            Err(error) => self.state = DraftState::Failed(format!("Not saved. {error}")),
+        }
+    }
+
+    pub fn save_moved(&mut self) {
+        if let Some(path) = self.moved_to.take() {
+            self.path = path;
+            self.state = DraftState::Unsaved;
+            self.save();
+        }
+    }
+
+    pub fn let_it_go(&mut self) {
+        self.dropped = Some(self.body.clone());
+        self.body = self
+            .baseline
+            .as_deref()
+            .map(body_of)
+            .unwrap_or_default()
+            .to_owned();
+        self.state = DraftState::Clean;
     }
 
     /// Read the file's own words, so that the DM can choose knowing both.
@@ -1124,6 +1422,138 @@ impl Draft {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn integrity_d10_new_notes_and_templates_refuse_a_gone_folder() {
+        let dir = tempfile::tempdir().unwrap();
+        let gone = dir.path().join("Gone");
+        assert!(create_note(&gone, &new_note(1, "", "Words")).is_err());
+        assert!(create_template(&gone, "Notes", "Words").is_err());
+        assert!(!gone.exists());
+    }
+
+    #[test]
+    fn integrity_d14_save_again_keeps_an_arriving_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let note = create_note(dir.path(), &new_note(1, "", "Before")).unwrap();
+        let mut draft = Draft::open(&note.path).unwrap();
+        fs::remove_file(&note.path).unwrap();
+        draft.body = "My draft".into();
+        draft.edited();
+        draft.save();
+        fs::write(&note.path, "DM's restored file").unwrap();
+        draft.save_again();
+        assert!(draft.unsaved());
+        assert_eq!(
+            fs::read_to_string(&note.path).unwrap(),
+            "DM's restored file"
+        );
+    }
+
+    #[test]
+    fn integrity_d14_moves_are_found_across_session_subfolders() {
+        let dir = tempfile::tempdir().unwrap();
+        let note = create_note(dir.path(), &new_note(1, "", "Before")).unwrap();
+        let past = dir.path().join("Past");
+        fs::create_dir(&past).unwrap();
+        let nested = past.join("Meeting.md");
+        fs::rename(&note.path, &nested).unwrap();
+        let mut draft = Draft::open(&nested).unwrap();
+        let moved = dir.path().join("Moved.md");
+        fs::rename(&nested, &moved).unwrap();
+        draft.body = "My draft".into();
+        draft.edited();
+        draft.save();
+        assert_eq!(draft.moved_to.as_deref(), Some(moved.as_path()));
+        draft.save_moved();
+        assert_eq!(draft.state, DraftState::Saved);
+        assert!(fs::read_to_string(moved).unwrap().contains("My draft"));
+    }
+
+    #[test]
+    fn integrity_d15_an_edit_during_copy_is_never_deleted() {
+        let dir = tempfile::tempdir().unwrap();
+        let source = dir.path().join("source.md");
+        let target = dir.path().join("target.md");
+        fs::write(&source, "Before").unwrap();
+        let error = transfer_file(&source, &target, true, || {
+            fs::write(&source, "DM's edit").unwrap()
+        })
+        .unwrap_err();
+        assert!(error.contains("Both files were kept"));
+        assert_eq!(fs::read_to_string(source).unwrap(), "DM's edit");
+        assert_eq!(fs::read_to_string(target).unwrap(), "Before");
+    }
+
+    #[test]
+    fn integrity_d16_links_keep_code_and_other_paths_and_follow_headings() {
+        let mut text = "[[Ash Pack#Members|the pack]] `[[Ash Pack]]`\n```md\n[[Ash Pack]]\n```\n[[Places/Ash Pack]]\n".to_owned();
+        rename_links(&mut text, "Ash Pack", "Cinder Pack");
+        assert_eq!(
+            text,
+            "[[Cinder Pack#Members|the pack]] `[[Ash Pack]]`\n```md\n[[Ash Pack]]\n```\n[[Places/Ash Pack]]\n"
+        );
+    }
+
+    #[test]
+    fn integrity_d9_new_identity_and_undo_keep_both_files() {
+        let dir = tempfile::tempdir().unwrap();
+        let note = create_note(dir.path(), &new_note(3, "", "DM's words")).unwrap();
+        let copy = dir.path().join("Session 4.md");
+        fs::copy(&note.path, &copy).unwrap();
+        let before = fs::read(&copy).unwrap();
+        let undo = new_identity(&copy).unwrap();
+        assert_eq!(list_notes(dir.path()).len(), 2);
+        assert!(fs::read_to_string(&copy).unwrap().contains("DM's words"));
+        undo.undo().unwrap();
+        assert_eq!(fs::read(copy).unwrap(), before);
+        assert_eq!(list_notes(dir.path()).len(), 1);
+    }
+
+    #[test]
+    fn integrity_d9_a_shorter_copy_cannot_take_over_the_known_session() {
+        let dir = tempfile::tempdir().unwrap();
+        let note =
+            create_note(dir.path(), &new_note(3, "A long meeting name", "My notes")).unwrap();
+        fs::copy(&note.path, dir.path().join("Session 4.md")).unwrap();
+        let notes = list_notes(dir.path());
+        assert_eq!(notes[0].path, note.path);
+        assert_eq!(notes[0].also.len(), 1);
+    }
+
+    #[test]
+    fn integrity_d10_a_missing_configured_session_folder_blocks_access() {
+        let dir = tempfile::tempdir().unwrap();
+        let campaign = Campaign {
+            id: Uuid::from_u128(9),
+            name: "Marches".into(),
+            path: dir.path().into(),
+            dndbeyond_campaign_id: None,
+            dndbeyond_campaign_name: None,
+        };
+        let path = save_folder(&campaign, "Meetings").unwrap();
+        fs::create_dir_all(&path).unwrap();
+        fs::rename(&path, dir.path().join("Moved meetings")).unwrap();
+        let error = folder(&campaign).unwrap_err();
+        assert!(error.contains("Session folder not found"));
+        assert!(!path.exists());
+    }
+
+    #[test]
+    fn integrity_d12_recordings_keep_results_without_audio() {
+        let dir = tempfile::tempdir().unwrap();
+        let id = Uuid::from_u128(3);
+        let folder = recordings_folder(dir.path(), id);
+        fs::create_dir_all(&folder).unwrap();
+        fs::write(folder.join("evening.transcript.md"), "Words").unwrap();
+        fs::write(folder.join("evening.summary.md"), "Summary").unwrap();
+        let rows = list_recordings(dir.path(), id);
+        assert_eq!(rows.len(), 1);
+        assert!(rows[0].transcript && rows[0].summary);
+        assert!(!rows[0].path.exists());
+        delete_recording(&rows[0].path).unwrap();
+        assert!(list_recordings(dir.path(), id).is_empty());
+    }
 
     #[test]
     fn a_new_name_follows_every_link_and_leaves_other_words() {
@@ -1392,13 +1822,26 @@ mod tests {
         let note = create_note(dir.path(), &new_note(4, "", "Start\n")).unwrap();
         let mut draft = Draft::open(&note.path).unwrap();
         // Renamed in Obsidian.
-        let renamed = dir.path().join("Renamed.md");
+        fs::create_dir_all(dir.path().join("Past")).unwrap();
+        let renamed = dir.path().join("Past/Renamed.md");
         fs::rename(&note.path, &renamed).unwrap();
         draft.body = "My words\n".into();
         draft.edited();
         draft.save();
         assert_eq!(draft.state, DraftState::Missing);
         assert!(draft.needs_attention() && draft.unsaved());
+        assert!(!note.path.exists());
+        assert_eq!(draft.moved_to.as_deref(), Some(renamed.as_path()));
+
+        let mut moved = draft.clone();
+        moved.save_moved();
+        assert_eq!(moved.state, DraftState::Saved);
+        assert_eq!(
+            parse_note(&renamed, &fs::read_to_string(&renamed).unwrap())
+                .unwrap()
+                .id,
+            note.id
+        );
         assert!(!note.path.exists());
 
         draft.save_again();
@@ -1652,7 +2095,7 @@ mod tests {
             dndbeyond_campaign_name: None,
         };
         CampaignDocument::new(&campaign).unwrap().save().unwrap();
-        let old = folder(&campaign).unwrap();
+        let old = open_folder(&campaign).unwrap();
         let note = create_note(&old, &new_note(1, "The Bridge", "My words.")).unwrap();
         let relative = [
             note.path.strip_prefix(&old).unwrap().to_path_buf(),

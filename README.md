@@ -261,6 +261,21 @@ late responses cannot apply an old name to a new link.
 
 ## Sessions and the timeline
 
+Timeline saves keep unknown properties and event fields. Comments outside the event list stay;
+comments inside the rewritten list are not guaranteed. If the body changed outside Splat, saving
+opens the draft beside the current file at the first difference, with disk-conflict choices,
+before it can replace those words. A repaired Timeline file is read
+again, and the open fight's latest result is applied.
+
+Session storage remembers each known note path in `.splat-session-paths.json`. A copied session
+shows both file names and offers **New identity**, with Undo. A moved draft can save to its new path
+with the same session ID. If a session or run folder is gone, choose its folder before making new
+files. Recording results stay listed as **Audio removed** when their WAV is gone.
+
+Encounter, group and creature drafts use the disk comparison when a file changes. A move follows
+the entry's ID. Multi-file saves stage all files before replacement and report any rollback failure.
+Splat uses an advisory lock to keep a second window from restoring and saving the same open run.
+
 On a wide page, the plan takes 40% of the available width, between 330 and 480 px.
 The recording count is part of the Recordings tab. Timeline puts its save state,
 Copy link and menu on the title line when they fit, and below it when they do not.

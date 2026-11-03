@@ -2,11 +2,11 @@
 //! recorder and the processing job live here, and keep going while the DM uses other pages.
 use super::{
     DEFAULT_FOLDER, Draft, DraftState, NewNote, Note, Recording, Template, body_of, create_note,
-    create_template, delete_recording, each_linked_name, folder as session_folder, folder_setting,
-    fresh_line_in_note, insert_in_note, insert_in_plan, linked_names, list_notes, list_recordings,
-    list_templates, nested_in_note, new_recording_path, parts_of, plain_links, recording_title,
-    rename_links, rename_links_in_file, save_folder, section_text, unreadable_notes,
-    update_details, without_empty_sections, without_own_heading,
+    create_template, delete_recording, each_linked_name, folder_setting, fresh_line_in_note,
+    insert_in_note, insert_in_plan, linked_names, list_notes, list_recordings, list_templates,
+    nested_in_note, new_recording_path, parts_of, plain_links, recording_title, rename_links,
+    rename_links_in_file, save_folder, section_text, unreadable_notes, update_details,
+    without_empty_sections, without_own_heading,
 };
 use crate::{
     credentials::{self, KeySlot},
@@ -189,6 +189,7 @@ struct LinkUndoState {
 
 #[derive(Default)]
 pub struct Sessions {
+    identity_undo: Option<super::IdentityUndo>,
     pub run_open: bool,
     campaign: Option<Campaign>,
     folder: Option<PathBuf>,
@@ -996,6 +997,11 @@ impl Sessions {
         if self.campaign.as_ref().map(|c| (c.id, &c.path)) != active.map(|c| (c.id, &c.path)) {
             self.open_campaign(active);
         }
+        book.session_links = self
+            .notes
+            .iter()
+            .map(|note| (note.id, note.link()))
+            .collect();
         book.open(self.folder.as_deref());
         if self.just_saved() {
             ctx.request_repaint_after(SAVED_WORD_FOR);
@@ -1310,7 +1316,7 @@ impl Sessions {
                 _ => None,
             };
             if let Some(words) = words {
-                let _ = fs::write(path.with_extension("state.txt"), words);
+                let _ = super::replace_file(&path.with_extension("state.txt"), &words);
             } else {
                 let _ = fs::remove_file(path.with_extension("state.txt"));
             }
@@ -1368,6 +1374,7 @@ impl Sessions {
 
     fn open_campaign(&mut self, active: Option<&Campaign>) {
         self.flush();
+        self.identity_undo = None;
         // A live recording blocks a campaign switch, so none is lost here.
         self.draft = None;
         self.template_draft = None;
@@ -1390,7 +1397,7 @@ impl Sessions {
             Some(campaign) => {
                 self.folder_text =
                     folder_setting(campaign).unwrap_or_else(|_| DEFAULT_FOLDER.to_owned());
-                match session_folder(campaign) {
+                match super::open_folder(campaign) {
                     Ok(folder) => self.folder = Some(folder),
                     Err(error) => {
                         self.folder = None;
@@ -1427,7 +1434,15 @@ impl Sessions {
             self.templates.clear();
             return;
         };
+        if !folder.is_dir() {
+            self.folder_error = Some(super::missing_folder(folder));
+            return;
+        }
+        self.folder_error = None;
         self.notes = list_notes(folder);
+        if let Err(error) = super::remember_notes(folder, &self.notes) {
+            self.folder_error = Some(error);
+        }
         self.unreadable = unreadable_notes(folder);
         self.templates = list_templates(folder);
         self.mentions = self
@@ -1987,7 +2002,7 @@ impl Sessions {
         };
         let path = live.recorder.stop();
         if let Some(words) = stopped {
-            let _ = fs::write(path.with_extension("state.txt"), words);
+            let _ = super::replace_file(&path.with_extension("state.txt"), &words);
         }
         let has_audio =
             crate::recording::Layout::read(&path).is_ok_and(|layout| layout.data_length > 0);
@@ -2064,6 +2079,13 @@ impl Sessions {
         book: &Book,
         session: Uuid,
     ) {
+        if !recording.exists() {
+            self.notice = Some((
+                Tone::Warning,
+                "Audio removed. Restore the WAV file to process it.".into(),
+            ));
+            return;
+        }
         let note = self
             .notes
             .iter()
@@ -2134,7 +2156,9 @@ impl Sessions {
 
     /// Why `Record` cannot start now, in words.
     fn record_blocked(&self, settings: &ProcessingSettings) -> Option<String> {
-        if let Some(live) = &self.live {
+        if self.folder.as_ref().is_none_or(|folder| !folder.is_dir()) {
+            Some("Session folder is gone. Choose folder before recording.".into())
+        } else if let Some(live) = &self.live {
             Some(format!("Stop the recording of {} first.", live.label))
         } else if settings.probing() {
             Some("Looking for a recorder.".to_owned())
@@ -2453,13 +2477,27 @@ impl Sessions {
                 design::message(
                     ui,
                     Tone::Warning,
-                    "This file is gone from the folder. It may have been moved or renamed. Your words are still here. Its recordings and events stay with the old session, and do not move to a new file. Other sessions wait until you save.",
+                    "This file is gone from the folder. Your words are still here. Choose where to save them, or let this draft go.",
                 );
+                if let Some(path) = &draft.moved_to {
+                    let label = format!(
+                        "Save my draft to {}",
+                        path.strip_prefix(&draft.search_folder)
+                            .unwrap_or(path)
+                            .display()
+                    );
+                    if Action::secondary(&label).show(ui).clicked() {
+                        draft.save_moved();
+                    }
+                }
                 if Action::secondary("Save my words as a new file")
                     .show(ui)
                     .clicked()
                 {
                     draft.save_again();
+                }
+                if Action::destructive("Let it go").show(ui).clicked() {
+                    draft.let_it_go();
                 }
             }
             DraftState::Failed(error) => {
@@ -3256,6 +3294,25 @@ impl Sessions {
 
     /// A saved group has a new name. Every note's link to it follows, so that no plan loses it.
     pub fn rename_links(&mut self, old: &str, new: &str) {
+        if let Some(campaign) = &self.campaign {
+            let other_entry =
+                splat::content::read_directory(&campaign.path).is_ok_and(|(entries, _)| {
+                    entries
+                        .iter()
+                        .any(|entry| entry.name.eq_ignore_ascii_case(old))
+                });
+            let session_folder = self.folder.as_deref().unwrap_or(&campaign.path);
+            let other_note = crate::world::scan(&campaign.path, session_folder)
+                .notes
+                .iter()
+                .any(|note| note.name.eq_ignore_ascii_case(old));
+            if other_entry || other_note {
+                self.rename_problem = Some(format!(
+                    "More than one note can answer to {old}. Links were kept. Choose the group in each note before renaming its link."
+                ));
+                return;
+            }
+        }
         if let (Some(draft), Some(session)) = (&mut self.draft, self.selected)
             && rename_links(&mut draft.body, old, new)
         {
@@ -3461,7 +3518,9 @@ impl Sessions {
         {
             self.removed_group = None;
         }
-        problems(ui, book);
+        if problems(ui, book) {
+            return;
+        }
         if plan.group_open && self.not_being_played().is_none() {
             let label = self
                 .notes
@@ -4083,10 +4142,9 @@ impl Sessions {
 
     /// How a fight ended, in place: final HP and the log, with no run to reopen.
     fn fight_block(&mut self, ui: &mut egui::Ui, run: Uuid, event_id: &str, plan: &Plan<'_>) {
-        let path = plan
-            .run_directory
-            .as_ref()
-            .map(|directory| directory.join(format!("{run}.json")));
+        let path = plan.run_directory.as_ref().and_then(|directory| {
+            crate::encounter_run::find_run(directory, self.campaign.as_ref()?.id, run).ok()
+        });
         if self.fight.as_ref().map(|(id, _)| *id) != Some(run) {
             let result = match (&path, &self.campaign) {
                 (Some(path), Some(campaign)) => fight_summary(path, campaign.id),
@@ -4209,9 +4267,17 @@ impl Sessions {
             .live
             .as_ref()
             .is_some_and(|live| live.recorder.path() == recording.path);
-        let length = recording
-            .seconds
-            .map_or_else(|| "Unknown length".to_owned(), spoken_length);
+        let length = recording.seconds.map_or_else(
+            || {
+                if recording.path.exists() {
+                    "Unknown length"
+                } else {
+                    "Audio removed"
+                }
+                .to_owned()
+            },
+            spoken_length,
+        );
         let mut delete = false;
         let mut again = false;
         ui.horizontal(|ui| {
@@ -4220,7 +4286,9 @@ impl Sessions {
                     if recording.summary
                         && Action::quiet("Process again…")
                             .name(&format!("Process again: {}", recording.name))
-                            .blocked(if live {
+                            .blocked(if !recording.path.exists() {
+                                Some("Audio removed. Restore the WAV file to process it.")
+                            } else if live {
                                 Some("Stop recording first.")
                             } else if self.job.is_some() {
                                 Some("Wait for processing to finish.")
@@ -4482,7 +4550,9 @@ impl Sessions {
                     }
                 }
             }
-            let reason = if live {
+            let reason = if !recording.path.exists() {
+                Some("Audio removed. Restore the WAV file to process it.".to_owned())
+            } else if live {
                 Some("Stop recording first.".to_owned())
             } else if self.job.is_some() {
                 Some("One recording is processed at a time.".to_owned())
@@ -5237,16 +5307,38 @@ impl Sessions {
                 });
             }
         }
-        if let Some(copy) = note.also.first() {
+        for copy in &note.also {
             design::message(
                 ui,
                 Tone::Warning,
                 &format!(
-                    "Another file claims this session: {}. Splat edits {}. Remove or rename the other one.",
+                    "Another file claims this session: {}. Splat edits {}. Give the copy a new identity to keep both sessions.",
                     copy.file_name().unwrap_or_default().to_string_lossy(),
                     note.path.file_name().unwrap_or_default().to_string_lossy()
                 ),
             );
+            if Action::secondary("New identity")
+                .name(&format!("New identity: {}", copy.display()))
+                .show(ui)
+                .clicked()
+            {
+                match super::new_identity(copy) {
+                    Ok(undo) => {
+                        self.identity_undo = Some(undo);
+                        self.refresh();
+                    }
+                    Err(error) => self.notice = Some((Tone::Error, error)),
+                }
+            }
+        }
+        if self.identity_undo.is_some() && Action::quiet("Undo new identity").show(ui).clicked() {
+            match self.identity_undo.as_ref().unwrap().undo() {
+                Ok(()) => {
+                    self.identity_undo = None;
+                    self.refresh();
+                }
+                Err(error) => self.notice = Some((Tone::Error, error)),
+            }
         }
         let today = self.today();
         let writing = self.tab != Tab::Recordings && !self.reading_note;
@@ -5988,12 +6080,13 @@ impl Sessions {
         book: &mut Book,
         plan: &Plan<'_>,
     ) {
+        let folder_missing = self.folder.as_ref().is_none_or(|folder| !folder.is_dir());
         let (page_title, count, singular, plural) = if self.view == View::Templates {
             ("Templates", self.templates.len(), "template", "templates")
         } else {
             ("Session", self.notes.len(), "session", "sessions")
         };
-        let context = if count == 0 {
+        let context = if count == 0 || folder_missing {
             String::new()
         } else {
             design::count(count, singular, plural)
@@ -6008,6 +6101,10 @@ impl Sessions {
             if self.view == View::Notes && !in_form && !empty {
                 new_session = Action::secondary("New session")
                     .icon(icons::ADD)
+                    .blocked_if(
+                        folder_missing,
+                        "Choose the session folder before making a session.",
+                    )
                     .blocked_if(locked, "Other sessions wait until you choose what to keep.")
                     .show(ui)
                     .clicked();
@@ -6039,17 +6136,29 @@ impl Sessions {
         if new_session {
             self.open_form();
         }
-        if self.folder.is_none() {
-            design::message(
-                ui,
-                Tone::Error,
-                self.folder_error
-                    .as_deref()
-                    .unwrap_or("The session folder is not available."),
-            );
-            if design::link(ui, "Open Campaign folder settings").clicked() {
-                self.wants_campaign_link = true;
-            }
+        if folder_missing {
+            let action = Action::quiet("Choose folder…").density(Density::Read);
+            let width =
+                ui.available_width() - action.natural_width(ui) - ui.spacing().item_spacing.x;
+            ui.horizontal_top(|ui| {
+                ui.allocate_ui_with_layout(
+                    egui::vec2(width, 0.0),
+                    egui::Layout::top_down(egui::Align::Min),
+                    |ui| {
+                        ui.add_space((Density::Read.control() - Type::Body.line()) / 2.0);
+                        design::message(
+                            ui,
+                            Tone::Error,
+                            self.folder_error
+                                .as_deref()
+                                .unwrap_or("The session folder is not available."),
+                        );
+                    },
+                );
+                if action.show(ui).clicked() {
+                    self.wants_campaign_link = true;
+                }
+            });
             return;
         }
         match self.view {
@@ -6125,6 +6234,65 @@ impl Sessions {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn integrity_d9_identity_undo_stays_with_its_campaign() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("Copy.md");
+        let before = format!("---\nsession_id: {}\n---\nDM's words\n", Uuid::new_v4());
+        fs::write(&path, before).unwrap();
+        let undo = super::super::new_identity(&path).unwrap();
+        let after = fs::read(&path).unwrap();
+        let mut sessions = Sessions {
+            identity_undo: Some(undo),
+            ..Default::default()
+        };
+        sessions.open_campaign(None);
+        assert!(sessions.identity_undo.is_none());
+        assert_eq!(fs::read(path).unwrap(), after);
+    }
+
+    #[test]
+    fn integrity_d16_a_same_named_world_note_keeps_ambiguous_links() {
+        let dir = tempfile::tempdir().unwrap();
+        let id = Uuid::new_v4();
+        let path = dir.path().join("Session.md");
+        fs::write(
+            &path,
+            format!("---\nsession_id: {id}\n---\n[[Ash Pack#Members]]\n"),
+        )
+        .unwrap();
+        fs::write(
+            dir.path().join("Ash Pack.md"),
+            "# Ash Pack\nA place, not the group.",
+        )
+        .unwrap();
+        let mut sessions = Sessions {
+            campaign: Some(Campaign {
+                id: Uuid::new_v4(),
+                name: "Campaign".into(),
+                path: dir.path().into(),
+                dndbeyond_campaign_id: None,
+                dndbeyond_campaign_name: None,
+            }),
+            folder: Some(dir.path().into()),
+            selected: Some(id),
+            draft: Some(Draft::open(&path).unwrap()),
+            ..Default::default()
+        };
+        sessions.rename_links("Ash Pack", "Cinder Pack");
+        assert_eq!(
+            sessions.draft.as_ref().unwrap().body,
+            "[[Ash Pack#Members]]\n"
+        );
+        assert!(sessions.rename_problem.is_some());
+        fs::remove_file(dir.path().join("Ash Pack.md")).unwrap();
+        sessions.rename_links("Ash Pack", "Cinder Pack");
+        assert_eq!(
+            sessions.draft.as_ref().unwrap().body,
+            "[[Cinder Pack#Members]]\n"
+        );
+    }
 
     #[test]
     fn group_removal_deletes_only_an_isolated_plan_link() {

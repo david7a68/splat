@@ -1,7 +1,7 @@
 //! Campaign run location and the selected initiative rule.
 use crate::{
     content_workspace::{CampaignDocument, Catalogue, EntryRef, patch_fields},
-    library::{note_path, write_note},
+    library::note_path,
     persistence::Campaign,
 };
 use serde::{Deserialize, Serialize};
@@ -303,13 +303,14 @@ impl Options {
         )?;
         fs::create_dir_all(rule_path.parent().ok_or("Invalid rules folder")?)
             .map_err(|e| e.to_string())?;
-        write_note(&campaign.path, relative, previous.as_deref(), &rule)?;
-        write_note(
-            &campaign.path,
-            &document.path,
-            document.baseline.as_deref(),
-            &text,
-        )?;
+        crate::file_batch::apply(&[
+            crate::file_batch::Change::text(rule_path, previous.as_deref(), Some(&rule)),
+            crate::file_batch::Change::text(
+                note_path(&campaign.path, &document.path)?,
+                document.baseline.as_deref(),
+                Some(&text),
+            ),
+        ])?;
         Ok(())
     }
 }
