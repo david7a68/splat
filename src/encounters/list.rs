@@ -622,27 +622,20 @@ pub(super) fn history_list(
 
 fn history_summary(ui: &mut egui::Ui, summary: &FightSummary) {
     ui.indent("history_summary", |ui| {
-        design::status(
-            ui,
-            Status {
-                icon: icons::READ_ONLY,
-                word: "Read-only",
-                color: colors().document.read_only,
-            },
-        );
         ui.horizontal_wrapped(|ui| {
-            for (label, value) in [
-                ("Outcome", summary.outcome.clone()),
-                ("End reason", summary.end_reason.clone()),
-                ("Final round", summary.round.to_string()),
-            ] {
-                ui.label(
-                    Type::Small
-                        .rich(ui, format!("{label}: {value}"))
-                        .color(colors().muted),
-                );
-                ui.add_space(design::L);
-            }
+            design::status(
+                ui,
+                Status {
+                    icon: icons::READ_ONLY,
+                    word: "Read-only",
+                    color: colors().document.read_only,
+                },
+            );
+            ui.label(
+                Type::Small
+                    .rich(ui, &summary.end_reason)
+                    .color(colors().muted),
+            );
         });
         design::group_label(ui, "Final state");
         for row in &summary.rows {

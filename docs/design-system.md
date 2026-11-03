@@ -238,6 +238,13 @@ Here and Mentioned in stay above them, at the reader measure.
 
 ## The session's plan
 
+Beside the note, the plan takes 40% of the page width, between 330 and 480 px.
+Fight summaries keep each part together and join a separator to the next part.
+Group summaries shorten to one line with the full text on hover. A recording count
+sits inside its tab, in muted text and in the tab's accessible name. Notes saved
+centres on the title's action row. A new template has an L gap above its heading
+and an M gap below it; the list's help stays out of the form.
+
 The Session page is a list the DM works down, beside the note. A row is an icon, a link and a second line, with one action on
 the right. A row opens in place, and its fields use the same form parts as the Timeline page. The first fight to come has
 the primary button when no run is open, and the others the secondary. A saved unfinished run offers Resume, with Start a new run and Delete the saved run in its menu. The open run has a status link; the strip owns the primary. The word for a fight is **Start
@@ -258,6 +265,10 @@ status link `Setup` or `Round 2`; its second line keeps only the saved time. The
 the run ends, its encounter returns to Ready to run. With `Keep in Ready during a run`
 on, its Ready row keeps `Start fight` blocked and says to resume from In progress.
 History opens a read-only final state and log in place. It never takes the live-run slot.
+The detail header shows only Read-only and the end reason; the row keeps the outcome
+and round. The page header counts every Ready row, including a repeatable fight
+with an unfinished run. Creature stats use CR, HP, AC in search, roster and group
+rows. Party rows keep HP, AC. A different draft starts with an empty search.
 One paused run uses `Paused run` in the rail and the encounter name below, cut to fit. Hover and accessibility keep the full name and state, for example `Bridge Ambush · Round 2`. It resumes in one click. With two or more, the rail uses `Paused runs` and `2 fights`; it opens Encounters. An open run keeps `Run` and its round or `Setup`.
 History rows keep only `Open` or `Close` and their row menu. Start and Edit stay in that menu.
 Ready rows name their creatures; an empty roster blocks Start with `Add participants first`.
@@ -367,6 +378,11 @@ A disconnected run keeps Connect to sync on its header only. The footer's blocke
 The app-close dialog uses Keep running for a run, Keep recording for audio, and Keep processing for a job. Recording and processing titles name the unfinished session. A sync conflict names the character and offers Review conflict. Stop and close is secondary when saved work is kept; an action is red only when it loses work.
 
 ## Sessions and the timeline
+
+Timeline keeps the save state, Copy link and menu on the title line when all parts
+fit. Otherwise, the actions take a second line above the scrolling form. Account
+help and trust text keep READER_MEASURE in both column and stacked Settings layouts.
+The gallery shows clean, dirty and discarded save rows and the hanging Add strip.
 
 The session title and muted date wrap together, with Record on the title line. Below 640 px, the save word and Details sit beside Read on the content tab row. The Notes panel uses the same title, date and save words, and opens with What happened at the top. Last time is one line: a link to the previous session and its recap, with the full recap in the link's tooltip. When the recap is empty, use plain prose under What happened and skip link-only lines. With neither, show the session link alone. Read and Write sit on the content tab row when the note is visible. Templates is a quiet header action. Its list starts with a Sessions back link, and New template sits in the page header. Templates use the note's styled source editor at the full column width; template fields stay faint. The list has no selected row while the new-template form is open. The session folder setting belongs to Campaign, Link and folder. A folder change counts the notes, events, templates and recordings left behind. It offers Move files and save or Save without moving. Moving refuses file collisions and copies every owned file before changing the manifest. A new session uses a Label heading and shows its note path as the fields change. An older session shows one warning and a link to the session being played; the list marks that session as Playing. Built-in templates leave one blank line below each heading. Read view shows Obsidian links inline, with the link text exactly as written. Renaming a Timeline event never changes a note by itself. An explicit Update links in notes action changes old-title aliases in one batch, with Undo; custom aliases stay as written. The offer names the old and new titles and sits directly below Title in the event detail. Its Undo message stays in the Timeline list column only, until any note or event edit or until the DM leaves Timeline. It never appears in a conflict. A Plan for tonight section made only of fights already in the plan shows one Small muted count instead of repeated links; the file keeps the links. New plan events stay closed and use the kind word as their title. Open rows show Title and Notes; duration and place stay on Timeline. A caret and accessible expanded state mark open rows. Their details align with the name, and the hairline comes after them with an S gap.
 

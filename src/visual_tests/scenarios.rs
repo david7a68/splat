@@ -2803,8 +2803,8 @@ pub mod gallery {
         d.click(MESSAGES);
         d.state("messages", Sizes::AllAndHiDpi);
         let edges = (
-            d.painted_left("Undo long rest"),
-            d.painted_left("The party has full HP after this long rest."),
+            d.painted_left("Use the saved HP"),
+            d.painted_left("Party HP is full after the long rest."),
         );
         d.observe(
             "U6",
@@ -2827,12 +2827,8 @@ pub mod gallery {
         d.click("More actions for Bridge Ambush");
         d.state("row-menu", Sizes::Default);
         d.press(Key::Escape);
-        d.scroll_until(pos2(600.0, 300.0), "ONE CAUSE, ONE SENTENCE", 30);
-        d.scroll_at(pos2(600.0, 300.0), 1);
-        d.state("blocked-cause", Sizes::Default);
-        d.scroll_until(pos2(600.0, 300.0), "Paused runs", 30);
-        d.scroll_at(pos2(600.0, 300.0), 1);
-        d.state("paused-runs", Sizes::Default);
+        d.scroll_until(pos2(600.0, 300.0), "Major event", 30);
+        d.state("save-rows-and-add-strip", Sizes::All);
         let temp = crate::design::temp_hp_text(5);
         for _ in 0..30 {
             if d.visible_text(&temp) {
@@ -3050,7 +3046,7 @@ pub mod column_resize {
         d.settle();
         d.expect("Close Lookup");
         d.state("lookup-beside-run-rail", Sizes::All);
-        // Lookup gives the page what it needs, here beside a rail of the widest kind.
+        // Lookup gives the run room beside its natural-width rail.
         let lookup_edge = d.column_edge("lookup");
         let before = d.place_of(crate::lookup::SEARCH_NAME).unwrap().width();
         d.drag_column_edge(lookup_edge, FAR_RIGHT);
@@ -3061,7 +3057,7 @@ pub mod column_resize {
             d.place_of(crate::lookup::SEARCH_NAME).unwrap().width() < before,
             "Lookup is narrower before its capture",
         );
-        d.state("lookup-narrow-beside-wide-rail", Sizes::All);
+        d.state("lookup-narrow-beside-run-rail", Sizes::All);
         d.observe_both(
             "iter-4-F1",
             "The dock label names exactly one participant with Lookup open",
@@ -4687,6 +4683,11 @@ pub mod session_notes {
             ),
             "Writing in an older note says so",
         );
+        d.observe(
+            "iter-8-S3",
+            d.has("Recordings, 1 recording"),
+            "The Recordings tab includes its count in its accessible name",
+        );
         d.state("session-write-older", Sizes::Default);
         go_encounters(d);
         resume_run(d, RUN);
@@ -5172,7 +5173,7 @@ pub mod session_recording {
         d.expect("Hearing sound");
         d.expect_same("Only the small sound-health label changes from Waiting to Hearing sound.");
         d.state("recording-hearing", Sizes::AllAndHiDpi);
-        d.click("Recordings");
+        d.click_starting("Recordings");
         d.expect(&format!("{} Recording", crate::design::icons::RECORD));
         d.state("recording-listed", Sizes::Default);
         write_note(d);
@@ -5558,7 +5559,7 @@ pub mod session_recording {
         d.click("Record this session");
         d.click("Start recording");
         d.click("Stop recording");
-        d.click("Recordings");
+        d.click_starting("Recordings");
         d.click_containing("Process:");
         d.expect("Summary");
         d.click("Summary");
@@ -6339,7 +6340,7 @@ pub mod session_plan_groups {
         d.goal("assemble a group in the session's plan");
         d.observe(
             "T14.6",
-            d.has_containing("2\u{a0}creatures") && !d.has("Back to the plan"),
+            d.has_containing("2 creatures") && !d.has("Back to the plan"),
             "A group saved from the plan is linked in it, with what it holds",
         );
         go_library(d);
@@ -6701,7 +6702,9 @@ pub mod session_plan {
         d.click(FIRST);
         d.observe(
             "S3",
-            d.has("Held the bridge · Ended · Round 1"),
+            d.nodes().iter().any(|node| {
+                node.name.replace('\u{a0}', " ") == "Held the bridge · Ended · Round 1"
+            }),
             "A played fight gives its result and last round on one line",
         );
         d.goal_within("T12.5", "read how a fight ended", 1);

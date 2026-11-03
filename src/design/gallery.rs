@@ -293,6 +293,62 @@ pub fn components(ui: &mut egui::Ui) {
             .blocked(Some("Paste your session cookie first."))
             .show(ui);
     });
+    design_group(ui, "Save rows");
+    ui.push_id("clean_save_row", |ui| {
+        ui.horizontal(|ui| {
+            let _ = save_row_state(
+                ui,
+                Status {
+                    icon: icons::OK,
+                    word: "No changes",
+                    color: c.muted,
+                },
+                false,
+                None,
+            );
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                let _ = Action::secondary("Save")
+                    .blocked(Some("No changes to save."))
+                    .show(ui);
+                blocked_reason(ui, Some("No changes to save."));
+            });
+        });
+    });
+    ui.push_id("dirty_save_row", |ui| {
+        ui.horizontal(|ui| {
+            let _ = save_row_state(
+                ui,
+                Status {
+                    icon: icons::DRAFT,
+                    word: "Unsaved",
+                    color: c.document.unsaved,
+                },
+                true,
+                None,
+            );
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                let _ = Action::primary("Save").show(ui);
+            });
+        });
+    });
+    let _ = draft_discarded(ui);
+    hanging_add_strip(ui, |ui| {
+        use crate::timeline::Kind;
+        for (word, icon) in [
+            ("Fight", icons::ENCOUNTERS),
+            ("Group", icons::GROUP),
+            ("Day", Kind::Day.icon()),
+            ("Long rest", Kind::LongRest.icon()),
+            ("Short rest", Kind::ShortRest.icon()),
+            ("Travel", Kind::Travel.icon()),
+            ("Major event", Kind::Event.icon()),
+        ] {
+            let _ = Action::quiet(word)
+                .icon(icon)
+                .density(Density::Read)
+                .show(ui);
+        }
+    });
     design_group(ui, "Paused runs");
     ui.horizontal_top(|ui| {
         ui.vertical(|ui| {
@@ -362,12 +418,12 @@ pub fn messages(ui: &mut egui::Ui) {
     message(ui, Tone::Warning, "This changed on disk.");
     message(ui, Tone::Error, "This could not be saved. State the fix.");
     ui.scope(|ui| {
-        ui.set_max_width(360.0);
+        ui.set_max_width(READER_MEASURE / 2.0);
         let _ = message_with_action(
             ui,
             Tone::Info,
-            "The party has full HP after this long rest. Every changed value is kept for undo.",
-            "Undo long rest",
+            "Party HP is full after the long rest.",
+            "Use the saved HP",
         );
     });
     design_group(ui, "Sections");

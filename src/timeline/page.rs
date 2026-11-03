@@ -578,73 +578,104 @@ impl TimelinePage {
             ui.ctx().request_repaint_after(COPIED_FOR);
         }
         let event = &book.events[index];
-        ui.horizontal(|ui| {
-            ui.label(
-                Type::Small
-                    .rich(ui, format!("{} {}", event.kind.icon(), event.kind.word()))
-                    .color(c.muted),
-            );
-            let title = event.label(days[index]);
+        let title = event.label(days[index]);
+        let kind = format!("{} {}", event.kind.icon(), event.kind.word());
+        let status_word = if blocked.is_some() {
+            if unsaved { "Unsaved" } else { "Saving blocked" }
+        } else if unsaved {
+            "Saving…"
+        } else {
+            "Saved"
+        };
+        let copied = self
+            .copied
+            .as_ref()
+            .is_some_and(|(copied, _)| *copied == id);
+        let copy_word = if copied { "Copied" } else { "Copy link" };
+        let needed = design::number_width(ui, &title, &Type::Heading.font(ui))
+            + design::number_width(ui, &kind, &Type::Small.font(ui))
+            + design::number_width(ui, status_word, &Type::Small.font(ui))
+            + design::number_width(ui, icons::OK, &Type::Small.font(ui))
+            + Action::secondary(copy_word)
+                .icon(icons::COPY)
+                .density(Density::Read)
+                .natural_width(ui)
+            + Density::Read.control()
+            + design::S * 5.0;
+        let title_line = |ui: &mut egui::Ui| {
+            ui.label(Type::Small.rich(ui, &kind).color(c.muted));
             let shown =
                 design::words_that_fit(ui, &title, &Type::Heading.font(ui), ui.available_width());
             ui.label(Type::Heading.rich(ui, shown).color(c.text))
-                .on_hover_text(title);
-        });
-        ui.allocate_ui_with_layout(
-            egui::vec2(ui.available_width(), Density::Read.control()),
-            egui::Layout::right_to_left(egui::Align::Center),
-            |ui| {
-                let (icon, word, color) = if blocked.is_some() {
-                    (
-                        icons::WARN,
-                        if unsaved { "Unsaved" } else { "Saving blocked" },
-                        c.document.external,
-                    )
-                } else if unsaved {
-                    (icons::BUSY, "Saving…", c.muted)
-                } else {
-                    (icons::OK, "Saved", c.document.clean)
-                };
+                .on_hover_text(&title);
+        };
+        let mut actions = |ui: &mut egui::Ui| {
+            let (icon, word, color) = if blocked.is_some() {
+                (
+                    icons::WARN,
+                    if unsaved { "Unsaved" } else { "Saving blocked" },
+                    c.document.external,
+                )
+            } else if unsaved {
+                (icons::BUSY, "Saving…", c.muted)
+            } else {
+                (icons::OK, "Saved", c.document.clean)
+            };
 
-                let more = design::icon_button(
-                    ui,
-                    icons::EXPAND,
-                    &format!("More actions for {}", event.label(days[index])),
-                );
-                egui::Popup::menu(&more).show(|ui| {
-                    let open_run = event.run.is_some() && event.run == self.open_run;
-                    removed = Action::quiet("Remove")
-                        .name("Remove this event")
-                        .blocked_if(open_run, "This run is open. Close it first.")
-                        .show(ui)
-                        .clicked();
-                    if open_run {
-                        ui.label(
-                            Type::Small
-                                .rich(ui, "This run is open. Close it first.")
-                                .color(c.muted),
-                        );
-                    }
-                    if removed {
-                        ui.close();
-                    }
-                });
-                let copied = self
-                    .copied
-                    .as_ref()
-                    .is_some_and(|(copied, _)| *copied == id);
-                if Action::secondary(if copied { "Copied" } else { "Copy link" })
-                    .icon(if copied { icons::OK } else { icons::COPY })
-                    .density(Density::Read)
+            let more = design::icon_button(
+                ui,
+                icons::EXPAND,
+                &format!("More actions for {}", event.label(days[index])),
+            );
+            egui::Popup::menu(&more).show(|ui| {
+                let open_run = event.run.is_some() && event.run == self.open_run;
+                removed = Action::quiet("Remove")
+                    .name("Remove this event")
+                    .blocked_if(open_run, "This run is open. Close it first.")
                     .show(ui)
-                    .clicked()
-                {
-                    ui.ctx().copy_text(link.clone());
-                    self.copied = Some((id.clone(), Instant::now()));
+                    .clicked();
+                if open_run {
+                    ui.label(
+                        Type::Small
+                            .rich(ui, "This run is open. Close it first.")
+                            .color(c.muted),
+                    );
                 }
-                design::status(ui, design::Status { icon, word, color });
-            },
-        );
+                if removed {
+                    ui.close();
+                }
+            });
+            let copied = self
+                .copied
+                .as_ref()
+                .is_some_and(|(copied, _)| *copied == id);
+            if Action::secondary(if copied { "Copied" } else { "Copy link" })
+                .icon(if copied { icons::OK } else { icons::COPY })
+                .density(Density::Read)
+                .show(ui)
+                .clicked()
+            {
+                ui.ctx().copy_text(link.clone());
+                self.copied = Some((id.clone(), Instant::now()));
+            }
+            design::status(ui, design::Status { icon, word, color });
+        };
+        if needed <= ui.available_width() {
+            ui.horizontal(|ui| {
+                title_line(ui);
+                ui.with_layout(
+                    egui::Layout::right_to_left(egui::Align::Center),
+                    &mut actions,
+                );
+            });
+        } else {
+            ui.horizontal(title_line);
+            ui.allocate_ui_with_layout(
+                egui::vec2(ui.available_width(), Density::Read.control()),
+                egui::Layout::right_to_left(egui::Align::Center),
+                actions,
+            );
+        }
         if let Some(reason) = blocked {
             ui.label(Type::Small.rich(ui, reason).color(c.muted));
         }
