@@ -606,18 +606,18 @@ impl Run {
                             - header_height(design::RUN_REGULAR)
                             - 32.0
                             - DOCK_HEIGHT
-                            - FOOTER_HEIGHT,
+                            - self.footer_height(),
                         ui.available_width(),
                         self.state.order.len(),
                     );
                     self.live_header(ui, scale);
                     self.error_line(ui);
-                    let room = ui.available_height() - DOCK_HEIGHT - FOOTER_HEIGHT;
+                    let room = ui.available_height() - DOCK_HEIGHT - self.footer_height();
                     // A message goes in the room under the list, so it moves no row while
                     // the DM's eye is on them. The next action clears it. A long one wraps.
                     let notice = self.notice.as_ref().map(|_| {
                         format!(
-                            "{}. Undo stopped. See Log",
+                            "{}; see Log.",
                             design::count(self.notice_changes, "sheet change", "sheet changes")
                         )
                     });
@@ -672,9 +672,9 @@ impl Run {
                                     )
                                     .wrap(),
                                 );
-                                if compact {
-                                    response.on_hover_text(&notice);
-                                }
+                                let detail = self.notice.as_deref().unwrap_or(shown);
+                                design::named(ui, &response, detail);
+                                response.on_hover_text(detail);
                                 if dismiss {
                                     self.notice = None;
                                     self.return_focus = self.lookup_open;
@@ -1710,6 +1710,19 @@ impl Run {
         }
     }
 
+    fn sync_needs_sign_in(&self) -> bool {
+        !self.connected && !self.simulate_connection && !self.linked_participants().is_empty()
+    }
+
+    fn footer_height(&self) -> f32 {
+        FOOTER_HEIGHT
+            + if self.sync_needs_sign_in() {
+                Type::Small.line()
+            } else {
+                0.0
+            }
+    }
+
     /// Sync and the closing controls. These are kept far from Next turn.
     fn live_footer(&mut self, ui: &mut egui::Ui) -> bool {
         let mut closed = false;
@@ -1804,6 +1817,13 @@ impl Run {
                 self.sync_party_button(ui);
             });
         });
+        if self.sync_needs_sign_in() {
+            ui.label(
+                Type::Small
+                    .rich(ui, "Sign in to sync")
+                    .color(colors().muted),
+            );
+        }
         closed
     }
 
@@ -3052,7 +3072,7 @@ impl Run {
                 .iter()
                 .position(|p| p.initiative.is_none() && p.present);
         }
-        let room = ui.available_height() - FOOTER_HEIGHT - design::M;
+        let room = ui.available_height() - self.footer_height() - design::M;
         let rows = ui.allocate_ui_with_layout(
             vec2(ui.available_width(), room),
             Layout::top_down(Align::LEFT),
@@ -4153,7 +4173,8 @@ impl RowLayout {
             .map_or(second_height, |line| line.size().y);
         let name_line = self.name_line(scale);
         if self.fit == RowFit::Compressed {
-            return (1.0 + name_line + self.name_extra() + second + 1.0).max(self.even);
+            return (name_line + self.name_extra() + second + design::HAIRLINE_WIDTH)
+                .max(self.even);
         }
         let top = ((scale.row - name_line - second_height) / 2.0).max(1.0);
         scale

@@ -462,6 +462,8 @@ pub struct CombatSync {
     refresh_only: bool,
     pub error: Option<String>,
     pub updated: bool,
+    /// A conflict choice made by the DM, consumed by the run as a named undo step.
+    pub chose_remote: bool,
     session_lost: bool,
     /// The last sheet values read before this sync was started again. What the run changed
     /// since then is the DM's own, and the next first read must not replace it unasked.
@@ -843,6 +845,7 @@ impl CombatSync {
         self.desired.insert(key.into(), local);
     }
     pub fn use_remote(&mut self, key: &str) {
+        self.chose_remote = true;
         self.updated = true;
         if let Some(value) = self.remote.as_ref().and_then(|r| r.groups.get(key)) {
             self.desired.insert(key.to_owned(), value.clone());

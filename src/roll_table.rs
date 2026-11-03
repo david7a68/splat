@@ -30,10 +30,8 @@ impl TableRoll {
             .iter()
             .find(|row| (row.min..=row.max).contains(&value))
             .map_or("No row has this result.", |row| row.text.as_str());
-        match faces {
-            Some(faces) => format!("{} {}: {faces:?} = {value}. {row}", self.key, self.dice),
-            None => format!("{}: {value}, typed. {row}", self.key),
-        }
+        let word = if faces.is_some() { "Rolled" } else { "Typed" };
+        format!("{word} {value} on {}: {row}", self.dice)
     }
 
     /// Roll, or take the typed result, on this stream of dice.
@@ -161,6 +159,7 @@ pub fn table_rows(dice: &str, rows: &[Vec<String>]) -> Result<Vec<RollRow>, Stri
 struct RollState {
     typed: String,
     result: Option<String>,
+    value: Option<i64>,
 }
 
 fn roll_state_id(key: &str) -> egui::Id {
@@ -196,7 +195,6 @@ pub fn roll_control(
         if Action::secondary(&format!("Roll {dice}"))
             .icon(design::icons::DICE)
             .density(Density::Read)
-            .name(&format!("Roll {key}"))
             .show(ui)
             .clicked()
         {
@@ -204,11 +202,14 @@ pub fn roll_control(
         }
         let response = ui.add(
             egui::TextEdit::singleline(&mut state.typed)
-                .desired_width(48.0)
-                .min_size(egui::vec2(48.0, Density::Read.control()))
-                .hint_text("or type"),
+                .desired_width(design::XXL * 2.0 - design::S)
+                .min_size(egui::vec2(
+                    design::XXL * 2.0 - design::S,
+                    Density::Read.control(),
+                ))
+                .hint_text(Type::Small.rich(ui, "Typed roll")),
         );
-        design::named(ui, &response, &format!("Typed result for {key}"));
+        design::named(ui, &response, &format!("Typed roll on {dice}"));
         if response.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)) {
             match state.typed.trim().parse::<i64>() {
                 Ok(value) => request = Some(Some(value)),
@@ -228,7 +229,7 @@ pub fn roll_control(
         ui.data_mut(|data| data.insert_temp(request_id(), roll));
     }
     if let Some(result) = &state.result {
-        ui.label(Type::Stat.rich(ui, result).color(colors().text));
+        ui.label(Type::Body.rich(ui, result).color(colors().text));
     }
     ui.data_mut(|data| data.insert_temp(id, state));
 }
@@ -242,9 +243,29 @@ pub fn settle_roll(ctx: &egui::Context, key: &str, result: String) {
     let id = roll_state_id(key);
     ctx.data_mut(|data| {
         let mut state: RollState = data.get_temp(id).unwrap_or_default();
+        state.value = result
+            .split_whitespace()
+            .nth(1)
+            .and_then(|word| word.parse().ok());
         state.result = Some(result);
         data.insert_temp(id, state);
     });
+}
+
+pub fn matched_row(
+    ui: &egui::Ui,
+    marker: &Result<(String, String), String>,
+    table: &[Vec<String>],
+) -> Option<usize> {
+    let (key, dice) = marker.as_ref().ok()?;
+    let value = ui
+        .data(|data| data.get_temp::<RollState>(roll_state_id(key)))?
+        .value?;
+    table_rows(dice, table)
+        .ok()?
+        .iter()
+        .position(|row| (row.min..=row.max).contains(&value))
+        .map(|row| row + 1)
 }
 
 /// With no run open, a result only shows. It uses dice of its own.
@@ -286,7 +307,7 @@ mod tests {
                 text: "A potion".into(),
             }],
         };
-        assert_eq!(roll_alone(&roll).unwrap(), "gifts: 4, typed. A potion");
+        assert_eq!(roll_alone(&roll).unwrap(), "Typed 4 on 1d6: A potion");
     }
 
     #[test]

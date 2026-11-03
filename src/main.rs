@@ -454,7 +454,7 @@ impl Splat {
         let mut items = Vec::new();
         if let Some((name, owner)) = self.library.draft_place() {
             items.push((
-                format!("Library entry \u{201c}{name}\u{201d} in {owner} has unsaved changes."),
+                format!("\u{201c}{name}\u{201d} in {owner} has unsaved changes."),
                 Page::Library,
             ));
         }
@@ -583,6 +583,7 @@ impl Splat {
             )
         };
         let mut keep = ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Escape));
+        let mut save_close = false;
         let mut discard = false;
         let mut save_new = false;
         design::dialog(ctx, "unsaved_on_close", title, |ui| {
@@ -598,6 +599,8 @@ impl Splat {
                         save_new = Action::primary("Save as a new run and close")
                             .show(ui)
                             .clicked();
+                    } else if items.len() == 1 && self.library.can_save_and_close() {
+                        save_close = Action::secondary("Save and close").show(ui).clicked();
                     } else if !loses {
                         discard = Action::secondary(discard_label).show(ui).clicked();
                     }
@@ -621,6 +624,10 @@ impl Splat {
             if items.len() != background {
                 self.page = items[0].1;
             }
+        }
+        if save_close && self.library.save_for_close() {
+            ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+            self.confirm_close = false;
         }
         if save_new && let Some(run) = self.encounters.run_mut() {
             match run.save_as_new_run() {
@@ -668,6 +675,11 @@ impl Splat {
                 ui.spacing_mut().interact_size.y = Density::Read.control();
                 self.campaigns.selector(ui, blocked);
             });
+            if self.sessions.recording()
+                && let Some(reason) = blocked
+            {
+                ui.label(Type::Small.rich(ui, reason).color(c.muted));
+            }
             if self.encounters.draft_dirty() {
                 ui.add(
                     egui::Label::new(
@@ -715,7 +727,6 @@ impl Splat {
                     self.page = Page::Run;
                 }
             }
-            let recording = self.sessions.recording_detail();
             let review = self.campaign_content.review_detail();
             for (page, icon) in [
                 (Page::Encounters, icons::ENCOUNTERS),
@@ -728,7 +739,6 @@ impl Splat {
             ] {
                 let current = self.visible_page() == Some(page);
                 let detail = match page {
-                    Page::Sessions => recording.as_deref(),
                     Page::Campaign => review.as_deref(),
                     _ => None,
                 };
@@ -738,7 +748,12 @@ impl Splat {
             }
             // Push the rest down in tree order, so Tab still follows reading order.
             let statuses = self.statuses(connection);
-            let status_height = statuses.len() as f32 * (Type::Small.line() + 2.0);
+            let status_height = statuses.len() as f32 * (Type::Small.line() + 2.0)
+                + if self.sessions.recording() {
+                    Density::Read.control()
+                } else {
+                    0.0
+                };
             let lost = usize::from(self.sessions.busy_with_edit())
                 + usize::from(self.timeline.not_saved());
             let bottom = 3.0 * (Density::Scan.control() + 2.0)
@@ -746,6 +761,22 @@ impl Splat {
                 + lost as f32 * (Density::Read.control() + 2.0)
                 + design::S;
             ui.add_space((ui.available_height() - bottom).max(0.0));
+            if let (Some((icon, _, color)), Some(word)) = (
+                self.sessions.recording_status(),
+                self.sessions.recording_detail(),
+            ) && design::status_link(
+                ui,
+                Status {
+                    icon,
+                    word: &word,
+                    color,
+                },
+            )
+            .clicked()
+            {
+                self.sessions.open_live_recording();
+                self.page = Page::Sessions;
+            }
             for state in statuses {
                 design::status(ui, state);
             }
@@ -945,9 +976,6 @@ impl Splat {
                     color: c.document.unsaved,
                 });
             }
-        }
-        if let Some((icon, word, color)) = self.sessions.recording_status() {
-            statuses.push(Status { icon, word, color });
         }
         for word in self.sessions.alert_words() {
             statuses.push(Status {
@@ -1617,6 +1645,9 @@ impl Splat {
         if std::mem::take(&mut self.sessions.wants_back_to_run) {
             self.page = Page::Run;
         }
+        if let Some(id) = self.campaign_content.open_lookup.take() {
+            self.lookup.open_id(id);
+        }
         if let Some(name) = self.sessions.wants_lookup.take() {
             self.notes_give_way();
             if !self.lookup.open_name(&name) {
@@ -1743,6 +1774,9 @@ impl eframe::App for Splat {
         self.lookup.poll(ctx, &self.campaigns);
         self.encounters.poll(ctx, &self.campaigns);
         self.lookup.library_draft = self.library.dirty();
+        self.sessions.run_open = self.encounters.has_run();
+        self.library.run_open = self.encounters.has_run();
+        self.campaign_content.run_open = self.encounters.has_run();
         self.processing.poll(ctx);
         self.processing.recording_now = self.sessions.recording();
         let open = self.campaigns.active_campaign();
@@ -1830,7 +1864,12 @@ impl eframe::App for Splat {
         self.encounters
             .tick_sync(ctx, session, epoch, active.as_ref());
         self.sessions.on_page = self.page == Page::Sessions;
-        self.sessions.banner(ctx, &self.processing);
+        self.sessions.banner(
+            ctx,
+            &self.processing,
+            &self.timeline,
+            self.encounters.has_run(),
+        );
         design::reserve_primary(ctx, false);
         self.run_strip(ctx);
         design::reserve_primary(ctx, self.encounters.has_run() && self.page != Page::Run);
@@ -1872,6 +1911,10 @@ impl eframe::App for Splat {
         if let Some(dialog) = &mut self.copy_dialog {
             dialog.draft = self.encounters.draft_name();
             let open = dialog.show(ctx, &self.campaigns);
+            if let Some(entry) = dialog.edit_copy.take() {
+                self.library.edit_copy(entry);
+                self.page = Page::Library;
+            }
             if let Some(id) = dialog.add_to_draft.take() {
                 self.encounters.add_to_draft(id);
             }

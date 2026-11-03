@@ -129,6 +129,19 @@ impl Campaigns {
         &self.data.campaigns
     }
 
+    pub fn package_folder(&self, name: &str) -> Result<PathBuf, String> {
+        let store = self
+            .store
+            .as_ref()
+            .ok_or("The settings folder is not available.")?;
+        Ok(store
+            .path
+            .parent()
+            .ok_or("The settings folder is not available.")?
+            .join("packages")
+            .join(name))
+    }
+
     pub fn modules(&self) -> &[crate::persistence::Module] {
         &self.data.modules
     }

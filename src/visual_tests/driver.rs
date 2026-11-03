@@ -1417,6 +1417,10 @@ impl<'a> Driver<'a> {
         self.outcome.violations.extend(ergonomics::cut_text(
             &self.harness.output().shapes,
             &horizontal_regions,
+            &ergonomics::lookup_results(&self.harness)
+                .into_iter()
+                .map(|(full, rect)| (full, rect * scale))
+                .collect::<Vec<_>>(),
             self.scenario,
             state,
             &window,

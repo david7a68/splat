@@ -291,6 +291,22 @@ fn can_scroll_sideways(rect: egui::Rect, clip: egui::Rect, regions: &[egui::Rect
     })
 }
 
+/// Lookup may shorten only a result's muted detail. The row must retain its
+/// complete text in accessibility, and its name must remain fully visible.
+pub fn lookup_results(harness: &Harness<'_, Splat>) -> Vec<(String, egui::Rect)> {
+    let mut rows = Vec::new();
+    visit_nodes(harness, |node, _| {
+        let access = node.accesskit_node();
+        if access.data().role_description() == Some("Lookup result")
+            && let Some(rect) = rect_of(&access)
+            && let Some(label) = access.label()
+        {
+            rows.push((label, rect));
+        }
+    });
+    rows
+}
+
 /// Controls, and labels for the overlap and clipping checks. See `Control::is_label`.
 pub fn controls(harness: &Harness<'_, Splat>) -> Vec<Control> {
     let mut out = Vec::new();
@@ -355,10 +371,11 @@ const ELISION_ALLOWED: &[(&str, &str)] = &[(
 
 /// Painted text that lost its end to an ellipsis, or runs past the edge of its pane. A
 /// tooltip does not help a DM reading across a table, so all of it is reported, whatever
-/// painted it, unless it is in the named list above.
+/// painted it, except the named field above and the specified Lookup detail suffix.
 pub fn cut_text(
     shapes: &[egui::epaint::ClippedShape],
     horizontal_regions: &[egui::Rect],
+    lookup_results: &[(String, egui::Rect)],
     scenario: &str,
     state: &str,
     window: &str,
@@ -400,6 +417,13 @@ pub fn cut_text(
     }
     found
         .into_iter()
+        .filter(|(text, rect, how)| {
+            !(*how == "Cut to an ellipsis"
+                && text.starts_with(" · ")
+                && lookup_results
+                    .iter()
+                    .any(|(full, row)| full.ends_with(text) && row.contains_rect(*rect)))
+        })
         .filter(|(text, ..)| {
             !ELISION_ALLOWED
                 .iter()
@@ -1002,11 +1026,22 @@ mod tests {
         };
         assert!(check(&[]) > 0, "the column starts partly outside the pane");
         assert_eq!(check(&regions), 0);
-        assert!(!cut_text(&harness.output().shapes, &[], "seeded", "state", "300x240").is_empty());
+        assert!(
+            !cut_text(
+                &harness.output().shapes,
+                &[],
+                &[],
+                "seeded",
+                "state",
+                "300x240"
+            )
+            .is_empty()
+        );
         assert!(
             cut_text(
                 &harness.output().shapes,
                 &regions,
+                &[],
                 "seeded",
                 "state",
                 "300x240"
@@ -1104,6 +1139,66 @@ mod tests {
 
     /// Painted text has no node for the other checks to find, so this reads the shapes.
     #[test]
+    fn lookup_elision_requires_the_full_accessible_detail_and_keeps_checking_names() {
+        const DETAIL: &str = " · Heading in a long campaign note · Campaign";
+        let mut harness = Harness::builder()
+            .with_size(egui::vec2(200.0, 100.0))
+            .build_state(
+                |ctx, _: &mut crate::Splat| {
+                    egui::CentralPanel::default().show(ctx, |ui| {
+                        ui.add(
+                            egui::Label::new("A long name that must not lose its end").truncate(),
+                        );
+                        let response = crate::design::row(
+                            ui,
+                            28.0,
+                            false,
+                            &format!("Entry{DETAIL}"),
+                            |ui, rect| {
+                                let text = crate::design::one_line(
+                                    ui,
+                                    DETAIL,
+                                    egui::FontId::proportional(14.0),
+                                    egui::Color32::WHITE,
+                                    rect.width(),
+                                );
+                                ui.painter().galley(rect.min, text, egui::Color32::WHITE);
+                            },
+                        );
+                        ui.ctx().accesskit_node_builder(response.id, |node| {
+                            node.set_role_description("Lookup result");
+                        });
+                    });
+                },
+                crate::Splat::default(),
+            );
+        harness.run_steps(2);
+        let check = |rows: &[(String, egui::Rect)]| {
+            cut_text(
+                &harness.output().shapes,
+                &[],
+                rows,
+                "seeded",
+                "state",
+                "200x100",
+            )
+        };
+        assert_eq!(check(&[]).len(), 2, "both painted strings are shortened");
+        let mut rows = lookup_results(&harness);
+        assert_eq!(rows.len(), 1);
+        let found = check(&rows);
+        assert_eq!(found.len(), 1);
+        assert!(found[0].detail.contains("A long name"), "names still fail");
+        rows[0].0 = "Entry".into();
+        assert_eq!(
+            check(&rows).len(),
+            2,
+            "missing accessible detail still fails"
+        );
+    }
+
+    /// Painted text has no node for the other checks to find, so this reads the shapes.
+    #[test]
     fn cut_text_fails_on_a_truncated_label_and_past_a_pane_edge() {
         let mut harness = Harness::builder()
             .with_size(egui::vec2(200.0, 100.0))
@@ -1129,11 +1224,17 @@ mod tests {
                 crate::Splat::default(),
             );
         harness.run_steps(2);
-        let details: Vec<String> =
-            cut_text(&harness.output().shapes, &[], "seeded", "state", "200x100")
-                .into_iter()
-                .map(|violation| violation.detail)
-                .collect();
+        let details: Vec<String> = cut_text(
+            &harness.output().shapes,
+            &[],
+            &[],
+            "seeded",
+            "state",
+            "200x100",
+        )
+        .into_iter()
+        .map(|violation| violation.detail)
+        .collect();
         assert!(
             details.iter().any(|d| d.starts_with("Cut to an ellipsis")),
             "{details:?}"

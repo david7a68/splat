@@ -1,50 +1,50 @@
 {
   "violations": {
     "accessible-name/egui-chrome": {
-      "campaign-content": 67,
-      "column-resize": 92,
-      "dialogs": 37,
-      "empty": 16,
+      "campaign-content": 72,
+      "column-resize": 89,
+      "dialogs": 45,
+      "empty": 15,
       "encounter-build": 49,
       "encounter-groups": 72,
       "encounter-history": 30,
       "encounter-owned-groups": 67,
-      "encounter-run": 52,
+      "encounter-run": 53,
       "gallery": 30,
-      "library-author": 60,
-      "library-browse": 88,
-      "library-navigation": 35,
-      "library-scope": 10,
-      "library-to-encounter": 22,
-      "nav-state": 26,
+      "library-author": 50,
+      "library-browse": 79,
+      "library-navigation": 31,
+      "library-scope": 8,
+      "library-to-encounter": 20,
+      "nav-state": 24,
       "party": 43,
       "party-from-run": 29,
       "prep-to-table": 29,
-      "reader-tables": 50,
+      "reader-tables": 48,
       "run-absent-player": 33,
       "run-add-creature": 30,
       "run-edge-states": 26,
       "run-folder-defect": 1,
       "run-large-roster": 16,
-      "run-long-names": 24,
+      "run-long-names": 22,
       "run-lookup": 35,
       "run-no-groups": 2,
       "run-overrides": 33,
-      "run-restart": 27,
+      "run-restart": 26,
       "run-resume": 7,
       "run-roster-conflict": 18,
       "run-sync-conflict": 28,
-      "run-sync-states": 21,
-      "session-notes": 132,
+      "run-sync-states": 20,
+      "session-notes": 131,
       "session-plan": 121,
       "session-plan-groups": 41,
-      "session-recording": 102,
+      "session-recording": 108,
       "settings": 27,
       "signed-in": 38,
-      "world": 44
+      "world": 43
     },
-    "clipped": {
-      "column-resize": 9
+    "in-viewport/egui-chrome": {
+      "campaign-content": 6
     },
     "no-overlap/egui-chrome": {
       "dialogs": 4,
@@ -52,55 +52,55 @@
       "encounter-run": 4,
       "gallery": 1,
       "library-author": 2,
-      "library-browse": 9,
+      "library-browse": 6,
       "library-scope": 5,
-      "session-recording": 7,
+      "session-plan": 21,
+      "session-recording": 10,
       "settings": 1,
-      "world": 3,
-      "session-plan": 21
+      "world": 3
     },
     "target-size/egui-chrome": {
-      "campaign-content": 67,
-      "column-resize": 92,
-      "dialogs": 36,
-      "empty": 16,
+      "campaign-content": 72,
+      "column-resize": 89,
+      "dialogs": 44,
+      "empty": 15,
       "encounter-build": 49,
       "encounter-groups": 72,
       "encounter-history": 30,
       "encounter-owned-groups": 66,
-      "encounter-run": 51,
+      "encounter-run": 52,
       "gallery": 29,
-      "library-author": 59,
-      "library-browse": 88,
-      "library-navigation": 35,
-      "library-scope": 9,
-      "library-to-encounter": 22,
-      "nav-state": 26,
+      "library-author": 49,
+      "library-browse": 79,
+      "library-navigation": 31,
+      "library-scope": 7,
+      "library-to-encounter": 20,
+      "nav-state": 24,
       "party": 43,
       "party-from-run": 29,
       "prep-to-table": 29,
-      "reader-tables": 50,
+      "reader-tables": 48,
       "run-absent-player": 33,
       "run-add-creature": 30,
       "run-edge-states": 26,
       "run-folder-defect": 1,
       "run-large-roster": 16,
-      "run-long-names": 24,
+      "run-long-names": 22,
       "run-lookup": 35,
       "run-no-groups": 2,
       "run-overrides": 33,
-      "run-restart": 27,
+      "run-restart": 26,
       "run-resume": 7,
       "run-roster-conflict": 18,
       "run-sync-conflict": 28,
-      "run-sync-states": 21,
-      "session-notes": 132,
+      "run-sync-states": 20,
+      "session-notes": 131,
       "session-plan": 118,
       "session-plan-groups": 41,
-      "session-recording": 101,
+      "session-recording": 104,
       "settings": 26,
       "signed-in": 38,
-      "world": 43
+      "world": 42
     }
   },
   "task_cost": {
@@ -115,7 +115,7 @@
     },
     "dialogs": {
       "ask to close with unsaved changes": 8,
-      "copy an entry to a campaign": 7,
+      "copy an entry to a campaign": 6,
       "open the copy dialog": 3,
       "return to the draft": 1
     },
@@ -173,7 +173,7 @@
       "A9: show everything": 2
     },
     "library-to-encounter": {
-      "copy an entry and use it in an encounter": 9,
+      "copy an entry and use it in an encounter": 8,
       "save the encounter with the copy": 1
     },
     "nav-state": {
@@ -232,7 +232,7 @@
     },
     "run-overrides": {
       "read a changed creature's card in a run": 2,
-      "start a run with a changed creature": 6
+      "start a run with a changed creature": 5
     },
     "run-restart": {
       "be in a run": 3,
@@ -260,7 +260,7 @@
       "use the timeline during a run": 79
     },
     "session-plan": {
-      "T12.0: make a creature your own": 5,
+      "T12.0: make a creature your own": 4,
       "T12.1: go back from a finished fight": 1,
       "T12.1: start a planned fight from the session": 1,
       "T12.2: go back to the sheets' HP": 1,
@@ -273,13 +273,13 @@
       "assemble a group in the session's plan": 15
     },
     "session-recording": {
-      "record a session and process it": 77
+      "record a session and process it": 76
     },
     "settings": {
       "edit a campaign's details": 5,
       "find campaign management": 0,
       "open settings": 1,
-      "try to connect without a network": 5
+      "try to connect without a network": 4
     },
     "signed-in": {
       "see the remote campaign list": 2

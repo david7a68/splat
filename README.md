@@ -562,8 +562,7 @@ log say what it became. A message from sync stays under the list until you dismi
 A save from an earlier version can hold unsent values as its last match, so on its first read every
 difference asks, once. Its new `started` field is optional, and earlier saves load. Spell slots and
 limited uses are not in the saved run: an unsent one asks at the next first read in the same session,
-and closing says it will be lost. Undo stops wherever a value reached the run from the sheet or the
-sync panel, and the notice and the log say what changed, from what to what.
+and closing says it will be lost. A sheet change ends undo only for the character it changes. A conflict choice in the sync panel is a named undo step. The notice and the Log say what changed, from what to what.
 
 Sync covers current and temporary HP, death saves, official conditions,
 ordinary and pact spell slots spent, and supported action/spell limited uses.
@@ -574,7 +573,7 @@ visible and offer a choice of local or remote values. Unconfirmed changes are no
 retried without review. The service has no verified atomic compare-and-set API,
 so another client can still change values between a read and a write.
 
-Health or condition values taken from the sheet clear the run's undo history, and a message says so. In a small
+Health or condition values taken from a sheet remove undo steps for that character. Other steps stay. If an atomic step makes older steps unsafe, the Log names the removed steps. In a small
 window with a full roster, the list can leave no room for that message, so only the Log records the change. Wait for sync
 or disable it before closing a run with pending changes. Disabling sync cancels
 queued work but cannot recall a request already sent. A change made on Party is still sent after you
@@ -584,3 +583,9 @@ again. Run sync remains active while that run is open, until the encounter ends.
 Transport and conflict handling are tested with simulated responses. Live writes
 have not been verified with an authenticated D&D Beyond character. Endpoint
 sources and limits are recorded in [the research notes](docs/research/dndbeyond-combat-writes.md).
+
+Recording failures and stops remain on each recording’s row after you dismiss a banner. Process again retries a failed job from its banner. The result viewer switches directly between its available texts. The rail’s recording status opens the recording in one click.
+
+Lookup keeps up to five results above the reader and marks the open one. New NPC and New location include the proposed name, and appear only when no exact match exists. A copy keeps the original name by default and offers Edit the copy after saving. Wide reader tables keep their first column and header in view. World rolls mark their matched row.
+
+Campaign repair shows invalid notes in place. The campaign-wide Needed by your entries list opens entries in Lookup. A session note conflict shows your draft and the disk text side by side, with changed lines marked.

@@ -44,7 +44,7 @@ pub mod library_browse {
     const CREATURE: &str = "Adult Black Dragon";
     const SPELL_ROW: &str = "Fireball · ";
     const CLASS_ROW: &str = "Wizard · Class";
-    const CREATURES_SECTION: &str = "Creatures   ";
+    const CREATURES_SECTION: &str = "Creatures";
     const CREATURES_COUNT: &str = "CREATURES 336";
     const NEXT_CREATURE: &str = "Aboleth";
     const BACK: &str = "Back";
@@ -134,8 +134,8 @@ pub mod library_browse {
             "frame times are not stable while scenarios share the CPU",
         );
 
-        d.click(CLEAR_SEARCH);
-        d.click_containing(CREATURES_SECTION);
+        d.click("Section");
+        d.click(&format!("Library section: {CREATURES_SECTION}"));
         d.expect(CREATURES_COUNT);
         d.state("creature-list", Sizes::Default);
         d.click_containing(NEXT_CREATURE);
@@ -166,7 +166,7 @@ pub mod library_author {
     const CHANGED_ON_DISK: &str = "This note changed on disk";
     const PACKAGE_ACTIONS: &str = "Packages";
     const MANAGE_PACKAGES: &str = "Manage packages…";
-    const MANAGE_TITLE: &str = "Register an existing package folder";
+    const MANAGE_TITLE: &str = "Manage packages";
     const CLOSE_WINDOW: &str = "Close the package form";
     const NEW_ENTRY: &str = "New entry";
     const CREATE_ENTRY: &str = "Create entry";
@@ -420,7 +420,7 @@ pub mod reader_tables {
         go_library(d);
         d.click("New entry");
         d.type_into("Entry name", "Spell Progression");
-        d.open_combo_at(2);
+        d.click("Kind of entry");
         d.click("Rule");
         d.click("Create entry");
         d.type_into_editor(
@@ -476,12 +476,11 @@ pub mod campaign_content {
     const SIBLING_ENTRY: &str = "Bridge Ambush";
     const SAVE_ENTRY: &str = "Save";
     const SAVED: &str = "Saved";
-    const REQUIRED: &str = "Required dependencies";
-    const REQUIRED_BY: &str = "required by";
-    const ENTRIES_LISTING: &str = "Entries";
+    const REQUIRED: &str = "Needed by your entries";
+    const REQUIRED_BY: &str = "needed by";
     const OWN_ENTRY_SEARCH: &str = "varra";
     const RELOAD: &str = "Reload content";
-    const REPAIR: &str = "Repair invalid note";
+    const REPAIR: &str = "Repair";
     const SAVE_SELECTIONS: &str = "Save selections";
     const BROKEN_NOTE: &str = "campaigns/emberfall/Notes/Broken.md";
 
@@ -495,14 +494,13 @@ pub mod campaign_content {
         let counted = d.has_containing(REQUIRED);
         // The list fills its pane, rather than stopping short of the end.
         d.state("required-dependencies", Sizes::All);
-        d.click(ENTRIES_LISTING);
         d.observe(
             "T9.1",
             reasons && counted,
             "Required dependencies and their reasons are on screen, with the built-in package open",
         );
         d.begin_task();
-        d.click_containing(MODULE_ROW);
+        d.click_starting(MODULE_ROW);
         d.expect(PARTIAL);
         d.state("packages-partial-selection", Sizes::All);
         d.goal("see a partial package selection");
@@ -581,7 +579,6 @@ pub mod campaign_content {
             "Save disabled by a repair states its reason",
         );
         // The repair opens here, with the note's text in it.
-        d.click_containing(REPAIR);
         d.state("repair-open", Sizes::Default);
         d.observe(
             "Repair says why",
@@ -1223,7 +1220,7 @@ pub mod settings {
 /// The copy dialog, and the unsaved-changes prompt when closing.
 pub mod dialogs {
     use super::*;
-    const CREATURES_SECTION: &str = "Creatures   ";
+    const CREATURES_SECTION: &str = "Creatures";
     const CREATURE: &str = "Aboleth";
     const COPY_TITLE: &str = "Copy entry";
     const CLOSE_WINDOW: &str = "Cancel";
@@ -1234,8 +1231,9 @@ pub mod dialogs {
     pub fn run(d: &mut Driver<'_>) {
         go_library(d);
         d.begin_task();
-        d.click_containing(CREATURES_SECTION);
-        d.click_containing(CREATURE);
+        d.click("Section");
+        d.click(&format!("Library section: {CREATURES_SECTION}"));
+        d.expect(CREATURE);
         d.click(COPY_TO);
         d.expect(COPY_TITLE);
         d.state("copy-dialog", Sizes::All);
@@ -1249,11 +1247,10 @@ pub mod dialogs {
             d.visible_text(&format!("Campaign · {CAMPAIGN}")),
             "The dialog starts on the active campaign",
         );
-        d.open_combo_at(COPY_DESTINATION_DROPDOWN);
+        d.click("Destination");
         d.state("copy-destination-menu", Sizes::Default);
         d.click(&format!("Campaign · {CAMPAIGN}"));
-        d.click(REVIEW_COPY);
-        d.expect("Ready to copy");
+        d.expect("Will create");
         d.state("copy-review", Sizes::All);
         d.observe(
             "Copy review actions",
@@ -1263,7 +1260,9 @@ pub mod dialogs {
         d.click(CREATE_COPY);
         d.expect("Saved: ");
         d.state("copy-complete", Sizes::Default);
-        d.click(CLOSE_COPY);
+        d.click("Edit the copy");
+        d.expect("Markdown editor");
+        d.state("edit-the-copy", Sizes::All);
         d.goal("copy an entry to a campaign");
 
         open_local_package(d, MODULE);
@@ -1398,11 +1397,11 @@ pub mod run_lookup {
         d.expect(SPELL);
         d.state("reading-spell-beside-run", Sizes::All);
         d.goal_within("T2.1", "read a spell from a run", 3);
-        // In a short panel the text gets the height, and the list is one click away.
+        // The top match opens with the other results still visible.
         d.observe(
             "T2.1",
-            d.has("Show the results") && !d.has_containing(SECOND_RESULT),
-            "At 960x640 the best match opens by itself, with its results closed",
+            d.has_containing(SECOND_RESULT),
+            "At 960x640 the best match opens with the other results visible",
         );
         let builtin_found = d.in_view(SPELL);
         d.observe_both("T2.1", "Roster and Next turn stay visible", |d| {
@@ -2021,7 +2020,7 @@ pub mod run_sync_conflict {
     const DISMISS_NOTICE: &str = "Dismiss this message";
     const SYNC_PARTY: &str = "Sync party";
     const STOP_SYNC: &str = "Stop party sync";
-    const UNDO_CLEARED: &str = "Undo stopped. See Log";
+    const UNDO_CLEARED: &str = "Undo for Brannoch Vale stops here";
     const CLOSE_PROMPT: &str = "has not confirmed changes";
     const DISABLED_REASON: &str = "Wait for pending sync";
 
@@ -2130,7 +2129,7 @@ pub mod run_sync_conflict {
         let amount_before = d.place_of(AMOUNT_FIELD);
         d.app_mut().encounters.simulate_read(SYNCED, 3);
         d.settle();
-        d.state("undo-cleared-by-sheet-update", Sizes::Default);
+        d.state("undo-boundary-for-one-character", Sizes::Default);
         let changed = format!("{SYNCED} HP {hp_before} → {}", hp_before - 3);
         // A notice goes under the list, and no row moves from where it was.
         let rows_after = roster_places(d);
@@ -2143,14 +2142,17 @@ pub mod run_sync_conflict {
         );
         d.observe(
             "T3.4",
-            clear_before && d.visible_text(UNDO_CLEARED),
+            clear_before
+                && d.visible_text("see Log.")
+                && d.has_containing(UNDO_CLEARED)
+                && d.has_containing(&changed),
             format!("Simulated sheet read: a message says, only after it, what changed from what to what: {changed}"),
         );
         // A new run action clears the notice. Its details remain in Log.
         d.click(NEXT_TURN);
         d.observe(
             "T3.4",
-            !d.visible_text(UNDO_CLEARED),
+            !d.visible_text("see Log.") && !d.has_containing(UNDO_CLEARED),
             "The next turn clears the old notice",
         );
         fight_tab(d, "Log");
@@ -2376,7 +2378,7 @@ pub mod library_to_encounter {
     const DRAFT_NAME: &str = "Deep Ford";
     const QUERY: &str = "aboleth";
     const ENTRY: &str = "Aboleth";
-    const COPY_NAME: &str = "Aboleth copy";
+    const COPY_NAME: &str = "Aboleth";
     const SEEDED_ROW: &str = "1. Brannoch Vale";
     const LAST_PARTY_ROW: &str = "5. Sable Harrowgate";
 
@@ -3184,7 +3186,7 @@ pub mod run_roster_conflict {
         let cut = rows_cut(d);
         d.observe(
             "T1.3",
-            cut.is_empty() && d.visible_text("Undo stopped. See Log"),
+            cut.is_empty() && d.visible_text("see Log."),
             format!(
                 "At 960x640 with a long message, it takes one line and every row stays: {cut:?}"
             ),
@@ -3484,7 +3486,7 @@ pub mod signed_in {
 pub mod nav_table {
     use super::*;
     const EVERYTHING: &str = "Everything";
-    const SECTION: &str = "Creatures   ";
+    const SECTION: &str = "Creatures";
     const ENTRY_ROW: &str = "Aboleth · ";
     const ENTRY: &str = "Aboleth";
     const LOOKUP_QUERY: &str = "fireball";
@@ -3535,8 +3537,9 @@ pub mod nav_table {
         go_library(d);
         d.open_combo_at(LIBRARY_PACKAGE_DROPDOWN);
         d.click(EVERYTHING);
-        d.click_containing(SECTION);
-        d.click_starting(ENTRY_ROW);
+        d.click("Section");
+        d.click(&format!("Library section: {SECTION}"));
+        d.expect(ENTRY_ROW);
         d.scroll_at(pos2(720.0, 400.0), 2);
         let entry_scroll = d.scroll_position_of_reader();
         d.begin_task();
@@ -3794,10 +3797,10 @@ pub mod world {
         );
 
         d.click_containing("Gate Mechanics");
-        d.click("Roll forced_trip");
+        d.click("Roll 1d20");
         d.observe(
             "T14.3",
-            d.visible_text("forced_trip 1d20") || d.has_containing("forced_trip 1d20"),
+            d.visible_text("Rolled ") || d.has_containing("Rolled "),
             "A marked table rolls, and its row shows",
         );
         d.state("world-table-rolled", Sizes::Default);
@@ -3814,6 +3817,7 @@ pub mod world {
         );
         d.state("world-heading-beside-run", Sizes::All);
 
+        d.clear_text_in(SEARCH_LOOKUP);
         d.click("Generate NPC");
         d.expect("Save NPC");
         d.observe(
@@ -3835,7 +3839,7 @@ pub mod world {
         d.state("world-generated-npc-saved", Sizes::Default);
 
         look_up_again(d, NPC);
-        d.click("New NPC");
+        d.click(&format!("New NPC \"{NPC}\""));
         d.settle();
         d.expect("Add to run");
         d.state("world-new-npc", Sizes::Default);
@@ -4075,8 +4079,7 @@ pub mod session_notes {
         d.click("Open this session");
         d.observe(
             "T11.4",
-            d.editor_text()
-                .is_some_and(|text| text.contains("My words during the conflict.")),
+            d.has_containing("My words during the conflict."),
             "Opening the session again keeps the words that could not be saved",
         );
         d.click("Overwrite with my draft");
@@ -4618,7 +4621,7 @@ pub mod session_recording {
         d.state("run-silent", Sizes::Default);
         d.click_containing("Undo: 7 damage");
         close_run(d);
-        d.click_containing("Session · Silent");
+        d.click_containing("Recording silence 0:");
         d.expect("Silent for over a minute");
         d.expect("Check the input in Settings");
         d.state("recording-silent", Sizes::Default);
@@ -4626,7 +4629,7 @@ pub mod session_recording {
             .sessions
             .simulate_recorder_health(Health::Stalled);
         d.settle();
-        d.expect("Not saving audio after");
+        d.expect("not saving audio after");
         d.state("recording-stalled", Sizes::Default);
         d.observe(
             "T11.5",
@@ -4644,7 +4647,7 @@ pub mod session_recording {
         go_library(d);
         d.observe(
             "T11.5",
-            d.has_containing("Session · Not saving") && d.has_containing("Not saving audio"),
+            d.has_containing("Not saving audio"),
             "A stall shows in the rail on other pages",
         );
         d.state("recording-stalled-elsewhere", Sizes::Default);
@@ -4654,7 +4657,7 @@ pub mod session_recording {
         d.settle();
         d.observe(
             "T11.5",
-            d.has_containing("Rec 00:00:00") && d.has_containing("Recording"),
+            d.has_containing("Recording 0:00") && d.has_containing("Recording"),
             "Recording, with its time, stays in the rail on other pages",
         );
         d.state("recording-on-another-page", Sizes::Default);
@@ -4668,7 +4671,7 @@ pub mod session_recording {
             d.page_title().as_deref() == Some("Library"),
             "Keep working leaves the DM on the page they were on",
         );
-        d.click_containing("Session · ");
+        d.click_containing("Recording 0:");
         d.expect("Stop recording");
         d.click("Stop recording");
         d.expect("saved: 2026-01-01 19:00");
@@ -4781,10 +4784,10 @@ pub mod session_recording {
         d.state("processing-failed-elsewhere", Sizes::Default);
         d.click(NAV_SESSIONS);
         d.expect("your limit is reached");
-        d.state("processing-failed", Sizes::Default);
+        d.state("processing-failed", Sizes::All);
 
-        // Trying again answers the failure, so no old word stays beside a new result.
-        d.click_containing("Process:");
+        // Retry from the banner, so no old failure stays beside a new result.
+        d.click("Process again");
         d.expect("is processed");
         d.observe(
             "T11.6",
@@ -4818,11 +4821,9 @@ pub mod session_recording {
         d.state("marked-transcript", Sizes::All);
         d.click("Earlier part");
         d.expect("Part 1 of 2");
-        d.click("Back to recordings");
         d.click("What the check changed");
         d.expect("Restored");
         d.state("second-pass-review", Sizes::Default);
-        d.click("Back to recordings");
         d.click("Summary");
         d.state("recording-summary", Sizes::Default);
         d.click("Back to recordings");
@@ -4862,6 +4863,8 @@ pub mod session_recording {
         d.state("process-again-confirm", Sizes::Default);
         d.click("Not now");
 
+        d.click_containing("More actions for 2026-01-01");
+        d.state("recording-row-menu", Sizes::All);
         d.click_containing("Delete recording:");
         d.expect("Keep the recording");
         d.state("recording-delete", Sizes::Default);
@@ -4902,7 +4905,7 @@ pub mod session_recording {
         d.click("Recording and processing");
         d.expect("A new input applies to the next recording");
         d.state("input-during-recording", Sizes::Default);
-        d.click_containing("Session · ");
+        d.click_containing("Recording 0:");
         d.click("Stop recording");
 
         // A note renamed in Obsidian keeps the DM's words, and no two rows share one session.
@@ -6107,7 +6110,8 @@ pub mod session_plan {
 
         // A save on Encounters reaches the Library, so its next save is not a false conflict.
         go_library(d);
-        d.click_containing("Encounters   ");
+        d.click("Section");
+        d.click("Library section: Encounters");
         d.click_containing("Ford of Ash");
         d.click(EDIT_MARKDOWN);
         d.type_into_editor("More tactics.\n");

@@ -123,7 +123,7 @@ length of a scroll surface's edge. A nested horizontal bar can float up to the
 reader's visible bottom edge. It stays hidden while its table is below view.
 
 Reader tables keep each column at least as wide as its longest word. A table
-that cannot fit scrolls sideways and says how to do that. Ordinary wheel
+that cannot fit scrolls sideways and says how to do that. The first column stays at the reader’s left edge, with a hairline beside it. The header stays at the reader’s top edge until the table leaves view. Ordinary wheel
 scrolling still moves down the note. The ergonomics check permits side clipping
 only where a real horizontal scroll bar can reveal the text; it still rejects
 clipping in ordinary readers and text cut to an ellipsis.
@@ -186,7 +186,7 @@ control still has an accessible name and a tooltip.
 
 `Discard` is one press and one step of undo, not a dialog: `Draft discarded` with `Undo
 discard` stays until the next edit. It stands apart from `Save`, and it shows only when
-there is something to discard. A file that changed on disk stops saving and asks: the run
+there is something to discard. A session note changed on disk shows the draft and disk text side by side in the Write view’s styled source face. Text wraps at word boundaries. A selected surface and a line mark identify differing lines. The choices stay above the comparison, which uses the whole session body while the plan is hidden. A file that changed on disk stops saving and asks: the run
 offers `Replace the file with this run` and `Save as a new run`, and a Library note offers `Overwrite with my
 draft`, `Show disk version` and `Reload and lose my draft`. These messages cannot be dismissed.
 
@@ -358,3 +358,17 @@ icons are glyphs or painter shapes. `design::icons` names only the glyphs in use
   the rendering noise. Its own tests prove
   that a thin unnamed control in scroll content, and an unnamed control in a popup, do not
   count as egui's chrome.
+
+## Recording and content recovery
+
+The rail has one recording status link at its foot. It includes the saved audio time and opens the recording. It uses the same words as the session header. A stalled recording uses the bottom banner instead of a second header warning or stop control.
+
+Each recording keeps its failure or stop reason beside its status, including the last processing step. Dismissing a banner does not remove that row state. Starting processing clears the old cancellation message. The result viewer uses one segmented control for Summary, Clean transcript, What the check changed, and Raw transcript. Every generated view uses the same Small draft notice. If the check did not run, the row says `No check ran`.
+
+Lookup shows up to five one-line results with the open result selected. A result shows its name, then muted type and level. Campaign-owned entries add Campaign; a source shows only when it differs from the campaign’s main source. Only the muted part is shortened with an ellipsis. The hover and accessible name keep the full row. Result lists never scroll sideways. A click on a result, or scrolling into its reader, closes the list. `Show all` offers the remaining results. Creation actions follow the results and include the proposed name. They appear only without an exact match; Generate NPC appears only for an empty search.
+
+A copy starts with the original name selected. Its destination and dependency preview update with the fields. Create copy saves it in one step. Edit the copy selects the result and opens its Markdown editor. An open encounter draft keeps Add to its encounter as the primary completion action. A Library disk conflict uses the full reader width for its single row of choices.
+
+An incoming sheet change removes only undo steps for that character. Remaining snapshots keep the current sheet values. An atomic step that also affects another participant ends older affected steps if retaining them would restore stale values; the Log names each removed step. A DM choice in a conflict is a named undo step.
+
+Campaign repair opens at the reader measure, with the invalid-note reason above it. Needed by your entries is a campaign-wide list outside the package tabs; its rows open Lookup. A rolled World table selects the matching row, marks it with a dice icon, and states the result below in UI sans.

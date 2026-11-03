@@ -110,6 +110,15 @@ pub(crate) fn subtitle(entry: &Entry) -> String {
     }
 }
 
+/// The campaign's main source needs no suffix. Other packages and campaign-owned
+/// entries supply their display word, using the same rule in Library and Lookup.
+pub(crate) fn list_subtitle(line: &str, source: Option<&str>) -> String {
+    match source {
+        Some(source) => format!("{line} · {source}"),
+        None => line.to_owned(),
+    }
+}
+
 /// The one fact a DM scans for: CR, spell level, or item rarity. Nothing is invented.
 fn list_fact(entry: &Entry) -> Option<String> {
     use serde_yaml_ng::Value;

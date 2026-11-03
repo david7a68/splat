@@ -32,12 +32,6 @@ struct Snapshot {
 /// An invalid note: its path, its text on disk, and its draft.
 type Repair = (String, String, String);
 type Loaded = (Vec<Repair>, Result<Snapshot, String>);
-#[derive(Clone, Copy, Default, PartialEq)]
-enum Listing {
-    #[default]
-    Entries,
-    Required,
-}
 struct Checked {
     applied: Option<Result<usize, String>>,
     proposals: Result<Vec<Proposal>, String>,
@@ -66,7 +60,8 @@ pub struct CampaignContent {
     search: String,
     entry_matches: Option<(Uuid, String, Vec<Uuid>)>,
     /// The DM's choice of list. Until they choose, a package opens on the list it needs.
-    listing: Option<Listing>,
+    pub run_open: bool,
+    pub open_lookup: Option<Uuid>,
     error: Option<String>,
     message: Option<String>,
     disabled_selections: std::collections::BTreeMap<Uuid, Selection>,
@@ -417,14 +412,29 @@ impl CampaignContent {
     fn repair_section(&mut self, ui: &mut egui::Ui, campaigns: &Campaigns, active: &Campaign) {
         let mut repaired = false;
         for (path, baseline, draft) in &mut self.repairs {
-            design::section(
+            let problem = Entry::parse(path, draft).err();
+            design::message(
                 ui,
-                format!("{} Repair invalid note: {path}", icons::ERROR),
-                |ui| {
+                Tone::Error,
+                &format!(
+                    "{path}: {}. Fix it to save package choices.",
+                    problem
+                        .as_deref()
+                        .unwrap_or("The repair has not been saved")
+                        .trim_end_matches('.')
+                ),
+            );
+            let id = egui::Id::new(("repair_open", path.as_str()));
+            let mut open = ui.data(|data| data.get_temp::<bool>(id)).unwrap_or(true);
+            if Action::quiet("Repair").show(ui).clicked() {
+                open = !open;
+            }
+            ui.data_mut(|data| data.insert_temp(id, open));
+            if open {
+                ui.scope(|ui| {
+                    ui.set_max_width(design::READER_MEASURE);
                     // What is wrong comes first, and stays true as the DM edits.
-                    if let Err(problem) = Entry::parse(path, draft) {
-                        design::message(ui, Tone::Error, &problem);
-                    }
+
                     egui::ScrollArea::vertical()
                         .max_height(220.0)
                         .id_salt(("repair", path.as_str()))
@@ -436,41 +446,12 @@ impl CampaignContent {
                             );
                             design::named(ui, &response, "Note text");
                         });
+                    if draft == baseline {
+                        ui.label(Type::Small.rich(ui, "No changes yet").color(colors().muted));
+                    }
                     ui.horizontal(|ui| {
-                        if Action::secondary("Save repaired note")
-                            .density(Density::Read)
-                            .blocked_if(
-                                draft == baseline,
-                                "Edit the note to fix the problem above first.",
-                            )
-                            .show(ui)
-                            .clicked()
-                            || (draft != baseline
-                                && ui.input_mut(|i| {
-                                    i.consume_key(egui::Modifiers::COMMAND, egui::Key::S)
-                                }))
-                        {
-                            let result = Entry::parse(path, draft).and_then(|entry| {
-                                if entry.kind == "package"
-                                    || (entry.kind == "campaign" && entry.id != active.id)
-                                {
-                                    return Err(
-                                        "Keep campaign ownership consistent with settings.".into(),
-                                    );
-                                }
-                                write_note(&active.path, path, Some(baseline), draft)
-                            });
-                            match result {
-                                Ok(_) => {
-                                    *baseline = draft.clone();
-                                    repaired = true;
-                                }
-                                Err(e) => self.error = Some(e),
-                            }
-                        }
-                        ui.add_space(design::XL);
                         if draft != baseline
-                            && Action::destructive("Discard repair draft")
+                            && Action::quiet("Discard repair draft")
                                 .density(Density::Read)
                                 .show(ui)
                                 .clicked()
@@ -503,9 +484,40 @@ impl CampaignContent {
                                 self.discarded_repair = None;
                             }
                         }
+                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                            if Action::secondary("Save repaired note")
+                                .density(Density::Read)
+                                .blocked_if(draft == baseline, "No changes yet")
+                                .show(ui)
+                                .clicked()
+                                || (draft != baseline
+                                    && ui.input_mut(|i| {
+                                        i.consume_key(egui::Modifiers::COMMAND, egui::Key::S)
+                                    }))
+                            {
+                                let result = Entry::parse(path, draft).and_then(|entry| {
+                                    if entry.kind == "package"
+                                        || (entry.kind == "campaign" && entry.id != active.id)
+                                    {
+                                        return Err(
+                                            "Keep campaign ownership consistent with settings."
+                                                .into(),
+                                        );
+                                    }
+                                    write_note(&active.path, path, Some(baseline), draft)
+                                });
+                                match result {
+                                    Ok(_) => {
+                                        *baseline = draft.clone();
+                                        repaired = true;
+                                    }
+                                    Err(e) => self.error = Some(e),
+                                }
+                            }
+                        });
                     });
-                },
-            );
+                });
+            }
         }
         if repaired && !self.dirty() {
             self.reload(ui.ctx(), campaigns, active.clone());
@@ -532,31 +544,10 @@ impl CampaignContent {
             let save_key = dirty
                 && repair.is_none()
                 && ui.input_mut(|i| i.consume_key(egui::Modifiers::COMMAND, egui::Key::S));
-            let pressed = Action::primary("Save selections")
-                .density(Density::Read)
-                .key("Ctrl+S")
-                .blocked(repair.or((!dirty).then_some("No changes to save.")))
-                .show(ui)
-                .clicked();
-            if !dirty && repair.is_none() {
-                ui.label(Type::Small.rich(ui, "No changes").color(c.document.clean));
-            }
-            if pressed || save_key {
-                match document.save() {
-                    Ok(()) => {
-                        self.saved_selections = document.selections.clone();
-                        self.reconcile.checked_at = None;
-                        self.message = Some("Campaign selections saved.".into());
-                        self.error = None;
-                    }
-                    Err(e) => self.error = Some(e),
-                }
-            }
-            ui.add_space(design::XL);
             let changed = document.selections != self.saved_selections;
             if changed {
                 self.discarded_selections = None;
-                if Action::destructive("Discard selection changes")
+                if Action::quiet("Discard selection changes")
                     .density(Density::Read)
                     .show(ui)
                     .clicked()
@@ -578,26 +569,52 @@ impl CampaignContent {
                     document.selections = selections;
                 }
             }
-            if !self.repairs.is_empty() {
-                ui.label(
-                    Type::Small
-                        .rich(ui, "Repair invalid notes before saving.")
-                        .color(c.document.invalid),
-                );
+            if !dirty && repair.is_none() {
+                ui.label(Type::Small.rich(ui, "No changes").color(c.document.clean));
             }
-            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                reload = Action::quiet("Reload content")
-                    .icon(icons::REFRESH)
+            reload = Action::quiet("Reload content")
+                .icon(icons::REFRESH)
+                .density(Density::Read)
+                .blocked_if(
+                    document.selections != self.saved_selections
+                        || self.repairs.iter().any(|(_, b, d)| b != d),
+                    "Save or discard your changes first.",
+                )
+                .show(ui)
+                .clicked();
+            let pressed = ui
+                .with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    (if self.run_open {
+                        Action::secondary("Save selections")
+                    } else {
+                        Action::primary("Save selections")
+                    })
                     .density(Density::Read)
-                    .blocked_if(
-                        document.selections != self.saved_selections
-                            || self.repairs.iter().any(|(_, b, d)| b != d),
-                        "Save or discard your changes first.",
-                    )
+                    .key("Ctrl+S")
+                    .blocked(repair.or((!dirty).then_some("No changes to save.")))
                     .show(ui)
-                    .clicked();
-            });
+                    .clicked()
+                })
+                .inner;
+            if pressed || save_key {
+                match document.save() {
+                    Ok(()) => {
+                        self.saved_selections = document.selections.clone();
+                        self.reconcile.checked_at = None;
+                        self.message = Some("Campaign selections saved.".into());
+                        self.error = None;
+                    }
+                    Err(e) => self.error = Some(e),
+                }
+            }
         });
+        if !self.repairs.is_empty() {
+            ui.label(
+                Type::Small
+                    .rich(ui, "Repair invalid notes before saving selections.")
+                    .color(c.muted),
+            );
+        }
         let chosen = closure
             .direct
             .iter()
@@ -630,7 +647,7 @@ impl CampaignContent {
             .iter()
             .chain(closure.errors.iter())
             .collect();
-        if !errors.is_empty() {
+        if !errors.is_empty() && self.repairs.is_empty() {
             design::section(
                 ui,
                 format!(
@@ -686,6 +703,28 @@ impl CampaignContent {
             document.selections.remove(i);
         }
         design::rule(ui);
+        let dependencies_open = egui::collapsing_header::CollapsingState::load_with_default_open(
+            ui.ctx(),
+            ui.make_persistent_id("campaign_dependencies_open"),
+            self.module
+                .is_none_or(|id| id == crate::content_workspace::builtin_manifest().id),
+        )
+        .is_open();
+        let dependencies_height = if self.repairs.is_empty() {
+            160.0
+        } else {
+            design::XL * 3.0
+        };
+        let footer_height = Density::Read.control()
+            + if dependencies_open {
+                dependencies_height
+            } else {
+                0.0
+            };
+        let package_height =
+            (ui.available_height() - footer_height - design::S).max(Density::Read.control() * 2.0);
+        ui.scope(|ui| {
+            ui.set_max_height(package_height);
         design::Column::left("campaign_modules", 236.0, 180.0..=420.0)
             .frame(egui::Frame::new().inner_margin(egui::Margin {
                 left: 0,
@@ -862,92 +901,6 @@ impl CampaignContent {
                             .color(c.muted),
                     );
                 });
-                let required_label = format!("Required dependencies ({})", closure.required.len());
-                // The built-in package opens on what the chosen entries pull in, with the reasons.
-                let mut listing = self.listing.unwrap_or(
-                    if module.id == crate::content_workspace::builtin_manifest().id
-                        && !closure.required.is_empty()
-                    {
-                        Listing::Required
-                    } else {
-                        Listing::Entries
-                    },
-                );
-                let chosen = listing;
-                design::segmented(
-                    ui,
-                    &mut listing,
-                    &[
-                        (Listing::Entries, "Entries"),
-                        (Listing::Required, required_label.as_str()),
-                    ],
-                );
-                if listing != chosen {
-                    self.listing = Some(listing);
-                }
-                design::rule(ui);
-                if listing == Listing::Required {
-                    // Whose it is: this list covers the whole campaign, not the package above it.
-                    let owner = |id: &uuid::Uuid| {
-                        let e = &catalogue.entries[id];
-                        if e.private {
-                            "Campaign".to_owned()
-                        } else {
-                            catalogue.package_name(e.owner)
-                        }
-                    };
-                    // By name, with the kind: two entries can share a name, and an ID order means nothing.
-                    let mut required: Vec<_> = closure.required.iter().collect();
-                    required.sort_by_key(|(id, _)| {
-                        catalogue.entries[*id].entry.name.to_lowercase()
-                    });
-                    if required.is_empty() {
-                        ui.label(
-                            Type::Body
-                                .rich(ui, "Nothing else is needed by what is chosen.")
-                                .color(c.muted),
-                        );
-                    }
-                    // Before `show_rows`, which reads the pitch from it.
-                    ui.spacing_mut().item_spacing.y = 0.0;
-                    egui::ScrollArea::vertical()
-                        .id_salt("required_entries")
-                        .auto_shrink([false, false])
-                        .show_rows(ui, 24.0, required.len(), |ui, range| {
-                            for (id, reasons) in &required[range] {
-                                let entry = &catalogue.entries[id].entry;
-                                ui.allocate_ui_with_layout(
-                                    egui::vec2(ui.available_width(), 24.0),
-                                    egui::Layout::left_to_right(egui::Align::Center),
-                                    |ui| {
-                                ui.add(egui::Label::new(
-                                        Type::Body
-                                            .rich(
-                                                ui,
-                                                format!(
-                                                    "{} · {} · {} — required by {}",
-                                                    entry.name,
-                                                    crate::design::reader::human_label(&entry.kind),
-                                                    owner(id),
-                                                    match reasons.iter().collect::<Vec<_>>().as_slice() {
-                                                        [only] => (*only).clone(),
-                                                        [first, rest @ ..] => {
-                                                            format!("{first} and {} more", rest.len())
-                                                        }
-                                                        [] => String::new(),
-                                                    }
-                                                ),
-                                            )
-                                            .color(c.text),
-                                    )
-                                    .truncate(),
-                                );
-                                    },
-                                );
-                            }
-                        });
-                    return;
-                }
                 design::search_field(
                     ui,
                     "Find an entry in this package",
@@ -1063,6 +1016,57 @@ impl CampaignContent {
                         });
                     }
                 }
+            });
+        });
+        let required_label = format!("Needed by your entries ({})", closure.required.len());
+        egui::CollapsingHeader::new(&required_label)
+            .id_salt("campaign_dependencies_open")
+            .icon(design::section_icon)
+            .default_open(
+                self.module
+                    .is_none_or(|id| id == crate::content_workspace::builtin_manifest().id),
+            )
+            .show(ui, |ui| {
+                let mut required: Vec<_> = closure.required.iter().collect();
+                required.sort_by_key(|(id, _)| catalogue.entries[*id].entry.name.to_lowercase());
+                egui::ScrollArea::vertical()
+                    .id_salt("required_entries")
+                    .max_height(if self.repairs.is_empty() {
+                        160.0
+                    } else {
+                        design::XL * 3.0
+                    })
+                    .show_rows(
+                        ui,
+                        Density::Glance.row() + design::XS,
+                        required.len(),
+                        |ui, range| {
+                            for (id, reasons) in &required[range] {
+                                let entry = &catalogue.entries[id];
+                                let owner = if entry.private {
+                                    "this campaign".to_owned()
+                                } else {
+                                    catalogue.package_name(entry.owner)
+                                };
+                                let detail = format!(
+                                    "{} · from {owner} · needed by {}",
+                                    crate::design::reader::human_label(&entry.entry.kind),
+                                    reasons.iter().cloned().collect::<Vec<_>>().join(", ")
+                                );
+                                if design::two_line_row(
+                                    ui,
+                                    Density::Scan.row(),
+                                    false,
+                                    &entry.entry.name,
+                                    &detail,
+                                )
+                                .clicked()
+                                {
+                                    self.open_lookup = Some(**id);
+                                }
+                            }
+                        },
+                    );
             });
         if reload {
             self.reload(ui.ctx(), campaigns, active.clone());
