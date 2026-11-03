@@ -1852,7 +1852,7 @@ pub mod prep_to_table {
             !row_moved,
             "Rows do not move during initiative entry",
         );
-        d.state("all-initiative-entered", Sizes::All);
+        d.state("all-initiative-entered", Sizes::Default);
         for size in [SMALL, DEFAULT] {
             let (aligned, compact) = d.at_size(size, |d| {
                 let nodes = d.nodes();

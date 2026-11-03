@@ -3221,6 +3221,8 @@ impl Run {
                     .id_salt("run_setup_rows")
                     .auto_shrink([false, false])
                     .show(ui, |ui| {
+                        // Each measured row includes its own padding and hairline.
+                        ui.spacing_mut().item_spacing.y = 0.0;
                         // Roster order. Rows hold still while the DM types (T4.3).
                         for index in 0..self.state.participants.len() {
                             ui.push_id(index, |ui| {
@@ -3358,19 +3360,26 @@ impl Run {
             let title =
                 ui.painter()
                     .layout(name.clone(), Type::Body.font(ui), colors().text, width);
-            let detail = ui
-                .painter()
-                .layout(detail, Type::Small.font(ui), colors().muted, width);
             let first_line = Density::Scan.control().max(title.size().y);
             let tie_height = if self.setup_tie_directions(index).is_some() {
                 Density::Read.control()
             } else {
                 0.0
             };
+            // The second line can use the empty control columns on an untied row.
+            let detail_width = if tie_height > 0.0 {
+                width
+            } else {
+                ui.available_width() - 2.0 * design::S
+            };
+            let detail =
+                ui.painter()
+                    .layout(detail, Type::Small.font(ui), colors().muted, detail_width);
             let row = design::RUN_REGULAR
                 .row
-                .max(first_line + detail.size().y.max(tie_height) + 2.0 * design::XS);
-            let control_top = design::XS + (first_line - Density::Scan.control()) / 2.0;
+                .max(first_line + detail.size().y.max(tie_height) + design::XS);
+            let padding = (row - first_line - detail.size().y.max(tie_height)) / 2.0;
+            let control_top = padding + (first_line - Density::Scan.control()) / 2.0;
             if selected {
                 ui.painter().rect_filled(
                     Rect::from_min_size(ui.cursor().min, vec2(ui.available_width(), row)),
@@ -3381,7 +3390,7 @@ impl Run {
             let response = ui
                 .allocate_ui(vec2(name_width, row), |ui| {
                     design::row(ui, row, selected, &row_name, |ui, rect| {
-                        let top = rect.top() + design::XS;
+                        let top = rect.top() + padding;
                         ui.painter().galley(
                             pos2(
                                 rect.left() + design::S,
@@ -3499,7 +3508,7 @@ impl Run {
                 vec2(Density::Read.control(), row),
                 Layout::top_down(Align::LEFT),
                 |ui| {
-                    ui.add_space(design::XS + (first_line - Density::Read.control()) / 2.0);
+                    ui.add_space(padding + (first_line - Density::Read.control()) / 2.0);
                     design::row_menu(ui, &name, |ui| {
                         if Action::quiet("Correct…").show(ui).clicked() {
                             self.selected = index;
