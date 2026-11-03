@@ -43,7 +43,7 @@ const BASELINE_PATH: &str = "src/visual_tests/baseline.json";
 
 type Script = fn(&mut Driver<'_>);
 
-const SCENARIOS: [(&str, Seed, Script); 47] = [
+const SCENARIOS: [(&str, Seed, Script); 48] = [
     (
         "library-browse",
         Seed::Empty,
@@ -68,6 +68,11 @@ const SCENARIOS: [(&str, Seed, Script); 47] = [
         "campaign-content",
         Seed::Campaign,
         scenarios::campaign_content::run,
+    ),
+    (
+        "npc-in-encounter",
+        Seed::Campaign,
+        scenarios::npc_in_encounter::run,
     ),
     ("party", Seed::Campaign, scenarios::party::run),
     (

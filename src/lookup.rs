@@ -877,6 +877,19 @@ impl Lookup {
         }
     }
 
+    /// A creature opened from the encounter search keeps its result selected.
+    pub fn open_creature_result(&mut self, id: Uuid) {
+        self.open_id(id);
+        if let Some(item) = self
+            .index
+            .as_ref()
+            .and_then(|index| index.position(id).map(|at| &index.items[at]))
+        {
+            self.query = item.entry.name.clone();
+            self.results_open = true;
+        }
+    }
+
     fn navigate(&mut self, position: usize) {
         if let Some(id) = self.current_id()
             && self.current != Some(position)

@@ -426,3 +426,27 @@ The search takes keyboard focus. A saved choice changes only its key and offers 
 checks the file before writing. Broken notes stay in a Cannot be read group and open the same
 source editor as Campaign repair. Its draft stays in memory and warns before app close or a
 campaign switch. A generator card names its table sources below the attributes.
+
+## Run and encounter audit, iteration 3
+
+A shared NPC initiative roll is one roll group. It has a quiet bracket and ordering
+arrows. Only equal totals from different rolls show a tie warning. Setup names its
+Undo action. The live header keeps the next participant visible when Undo is empty.
+Sheet pages use one tab line, with later pages in More when space is short. At the
+table, the rail uses its natural width; a wider desk width stays saved.
+
+Recovery copies have unique names, including seconds and a suffix when needed.
+The run closed last and a file changed elsewhere lead their row's second line.
+History puts the outcome before the ended state and shows the outcome, end reason
+and final round above the final roster.
+
+The encounter and group searches include NPCs with a usable stat block. Add uses
+the stat block and the existing display-name override. The saved encounter format
+stays the same. Roster sides sit on the second line and change in Edit. A collapsed
+change list uses one Changed link in both editors. Group menus distinguish Make
+available to any encounter from Delete group, with Undo before saving.
+
+Changing the run folder with saved runs shows how many files stay behind. Move runs
+and save stages all files without replacing an existing file, saves the settings,
+then removes unchanged originals. Save without moving keeps the files in the old
+folder. Saving run settings is blocked while a run is open.

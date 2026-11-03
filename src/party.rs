@@ -201,7 +201,7 @@ impl Party {
         let mut refresh = false;
         let mut open_link = false;
         design::page_header(ui, "Party", Some(&context), |ui| {
-            if linked {
+            if linked && !self.reader.members.is_empty() {
                 refresh = Action::quiet("Refresh party")
                     .icon(icons::REFRESH)
                     .blocked(can_refresh)
@@ -1236,7 +1236,7 @@ pub fn sheet_page(
 /// Compare the sheet with the SRD rules. D&D Beyond stays the source of truth.
 fn character_check(ui: &mut egui::Ui, review: &Result<splat::character::check::Review, String>) {
     use splat::character::check::FindingKind;
-    design::section(ui, "Character check", |ui| match review {
+    design::quiet_section(ui, "Character check", |ui| match review {
         Ok(review) => {
             ui.add(
                 egui::Label::new(if review.matched.is_empty() {
@@ -1274,7 +1274,7 @@ fn campaign_option_status(ui: &mut egui::Ui, entry: &splat::content::Entry) {
     let Ok(sheet) = serde_yaml_ng::from_value::<Sheet>(value.clone()) else {
         return;
     };
-    design::section(ui, "Optional character rules", |ui| {
+    design::quiet_section(ui, "Optional character rules", |ui| {
         for (key, name) in [
             ("dark_bargain", "Dark Bargain"),
             ("character_threads", "Character Threads"),
@@ -1424,7 +1424,6 @@ pub(crate) fn overview(ui: &mut egui::Ui, record: &EntitySnapshot, live: Option<
             }
         }
     });
-    section_heading(ui, "Saving throws & skills");
     let across = if ui.available_width() >= design::READER_MEASURE {
         3
     } else {
@@ -1885,19 +1884,43 @@ pub(crate) fn details(ui: &mut egui::Ui, record: &EntitySnapshot, page: usize, s
         let id = ui.make_persistent_id((page, i, name));
         let mut state =
             egui::collapsing_header::CollapsingState::load_with_default_open(ui.ctx(), id, false);
-        let row = design::two_line_row(ui, ENTRY_ROW, state.is_open(), name, meta);
         let caret = if state.is_open() {
             icons::DOWN
         } else {
             icons::NEXT
         };
-        ui.painter().text(
-            egui::pos2(row.rect.right() - design::S, row.rect.center().y),
-            egui::Align2::RIGHT_CENTER,
-            caret,
-            Type::Small.font(ui),
-            colors().muted,
+        let row = design::row(
+            ui,
+            ENTRY_ROW,
+            state.is_open(),
+            &format!("{name} · {meta}"),
+            |ui, rect| {
+                ui.painter().text(
+                    egui::pos2(
+                        rect.left() + design::S,
+                        rect.top() + Type::Body.line() / 2.0,
+                    ),
+                    egui::Align2::LEFT_CENTER,
+                    caret,
+                    Type::Small.font(ui),
+                    colors().muted,
+                );
+                let left = rect.left() + design::XL;
+                let width = rect.right() - left - design::S;
+                let title = design::one_line(ui, name, Type::Body.font(ui), colors().text, width);
+                let detail =
+                    design::one_line(ui, meta, Type::Small.font(ui), colors().muted, width);
+                ui.painter()
+                    .galley(egui::pos2(left, rect.top()), title, colors().text);
+                ui.painter().galley(
+                    egui::pos2(left, rect.top() + Type::Body.line()),
+                    detail,
+                    colors().muted,
+                );
+            },
         );
+        ui.ctx()
+            .accesskit_node_builder(row.id, |node| node.set_expanded(state.is_open()));
         if row.clicked() {
             state.toggle(ui);
         }

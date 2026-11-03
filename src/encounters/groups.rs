@@ -18,7 +18,7 @@ use serde_yaml_ng::{Mapping, Value};
 use splat::content::{
     Entry,
     encounter_group::{EncounterGroup, MAX_COUNT},
-    overrides::{BY_HAND, Base, Change, MAX_NAME, Overrides, condition_names, same_condition},
+    overrides::{Base, Change, MAX_NAME, Overrides, same_condition},
 };
 use std::{fs, sync::Arc};
 use uuid::Uuid;
@@ -195,6 +195,33 @@ impl GroupDraft {
             creature: EntryRef::id(id),
             count: 1,
             overrides: Mapping::new(),
+        });
+    }
+    pub(super) fn check_delete(&self, campaign: &Campaign) -> Result<(), String> {
+        let Some(baseline) = &self.baseline else {
+            return Ok(());
+        };
+        let path = note_path(&campaign.path, &self.path)?;
+        if fs::read_to_string(&path).map_err(|e| e.to_string())? != *baseline {
+            return Err(format!(
+                "{} changed on disk. Reload before deleting it.",
+                self.name
+            ));
+        }
+        Ok(())
+    }
+    pub(super) fn delete_saved(&self, campaign: &Campaign) -> Result<(), String> {
+        self.check_delete(campaign)?;
+        if self.baseline.is_some() {
+            fs::remove_file(note_path(&campaign.path, &self.path)?).map_err(|e| e.to_string())?;
+        }
+        Ok(())
+    }
+    pub(super) fn add_named(&mut self, id: Uuid, name: String) {
+        self.setup.members.push(MemberDraft {
+            creature: EntryRef::id(id),
+            count: 1,
+            overrides: Mapping::from_iter([("name".into(), name.into())]),
         });
     }
     /// An encounter being saved with this group counts as there, though it is not on disk yet.
@@ -427,7 +454,7 @@ pub(super) fn load(
                         Err(error) => Some(format!(
                             "{what}, {}: {}",
                             entry.name,
-                            error.replace("1000000", "1,000,000").replace('-', "−")
+                            override_error(error)
                         )),
                         Ok(resolved) if resolved.max_hp.is_none() => Some(format!(
                             "{what}: {} has no maximum HP. Set it with this member’s Edit button.",
@@ -619,15 +646,11 @@ impl Encounters {
 }
 
 /// Which the search adds to: the roster, or one of this encounter's groups.
-pub(super) fn add_target(ui: &mut egui::Ui, draft: &mut Draft, snapshot: &Snapshot) {
+pub(super) fn add_target(ui: &mut egui::Ui, draft: &mut Draft, _snapshot: &Snapshot) {
     if draft.groups.is_empty() {
         return;
     }
     // Beside the search, because the group itself can be out of view or on another tab.
-    let result = draft
-        .target_group()
-        .filter(|group| !group.setup.members.is_empty())
-        .map(|group| members_heading(group, snapshot));
     let shown = draft
         .target_group()
         .map_or_else(|| ROSTER.to_owned(), |group| group.name.clone());
@@ -652,9 +675,6 @@ pub(super) fn add_target(ui: &mut egui::Ui, draft: &mut Draft, snapshot: &Snapsh
             });
         design::named(ui, &combo.response, &format!("{ADD_TO}: {shown}"));
     });
-    if let Some(result) = result {
-        ui.label(Type::Small.rich(ui, result).color(colors().muted));
-    }
 }
 
 /// The groups that belong to an encounter, each in a frame of its own, built here and saved
@@ -700,6 +720,7 @@ pub(super) fn of_encounter(
         add_to,
         focus_group,
         removed_group,
+        deleted_groups,
         ..
     } = draft;
     for (index, group) in groups.iter_mut().enumerate() {
@@ -722,8 +743,11 @@ pub(super) fn of_encounter(
                     ui.horizontal(|ui| {
                         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                             super::row_menu(ui, &group.name, |ui| {
-                                if super::menu_action(ui, "Remove", None) {
-                                    discard = Some(index);
+                                if super::menu_action(ui, "Make available to any encounter", None) {
+                                    discard = Some((index, false));
+                                }
+                                if super::menu_action(ui, "Delete group…", None) {
+                                    discard = Some((index, true));
                                 }
                             });
                             if Action::quiet("Add creatures")
@@ -763,26 +787,31 @@ pub(super) fn of_encounter(
             ui.add_space(design::S);
         });
     }
-    if let Some(index) = discard {
+    if let Some((index, delete)) = discard {
         let gone = groups[index].clone();
         if add_to.as_deref() == Some(gone.path()) {
             *add_to = None;
         }
-        if gone.baseline.is_some() {
-            groups[index].setup.encounter = None;
+        if delete {
+            deleted_groups.push(groups.remove(index));
         } else {
-            groups.remove(index);
+            groups[index].setup.encounter = None;
         }
-        *removed_group = Some((index, gone));
+        *removed_group = Some((index, gone, delete));
     }
-    if let Some((_, removed)) = removed_group.as_ref() {
-        let words = if removed.baseline.is_some() {
+    if let Some((_, removed, delete)) = removed_group.as_ref() {
+        let words = if *delete {
+            "Group deleted. Save deletes its file."
+        } else if removed.baseline.is_some() {
             "Group removed. Save makes it available for any encounter."
         } else {
             "New group removed."
         };
         if design::message_with_action(ui, Tone::Info, words, "Undo remove group") {
-            let (index, removed) = removed_group.take().expect("a removed group");
+            let (index, removed, delete) = removed_group.take().expect("a removed group");
+            if delete {
+                deleted_groups.retain(|group| group.path != removed.path);
+            }
             if let Some(group) = groups.iter_mut().find(|group| group.path == removed.path) {
                 *group = removed;
             } else {
@@ -893,56 +922,79 @@ pub(super) fn shown_detail(
         )
 }
 
+/// One presentation for validation errors in the editor and Arrivals.
+pub(super) fn override_error(error: &str) -> String {
+    let mut out = String::new();
+    let mut number = String::new();
+    for c in error.chars().chain(std::iter::once('\0')) {
+        if c.is_ascii_digit() || (c == '-' && number.is_empty()) {
+            number.push(c);
+        } else {
+            if !number.is_empty() {
+                out.push_str(&number.parse::<i64>().map_or_else(
+                    |_| number.clone(),
+                    |value| {
+                        let digits = if value == 0 {
+                            "0".to_owned()
+                        } else {
+                            design::count(value.unsigned_abs() as usize, "", "")
+                        };
+                        if value < 0 {
+                            format!("−{digits}")
+                        } else {
+                            digits
+                        }
+                    },
+                ));
+                number.clear();
+            }
+            if c != '\0' {
+                out.push(c);
+            }
+        }
+    }
+    out
+}
+
+pub(super) fn changes_link(
+    ui: &mut egui::Ui,
+    block: &Mapping,
+    entry: &Entry,
+    side: &str,
+    form_open: bool,
+) -> bool {
+    if block.is_empty() || form_open {
+        return false;
+    }
+    match Overrides::parse(block) {
+        Ok(overrides) => {
+            let rows = overrides.rows(&Base::of(entry, side));
+            let count = rows.iter().filter(|row| row.by_hand).count();
+            let word = if count == 0 {
+                "Changed".to_owned()
+            } else {
+                format!("Changed · {count} to add by hand")
+            };
+            let clicked = design::link(ui, &word).clicked();
+            if let Err(error) = overrides.resolve_for(entry, side) {
+                design::message(ui, Tone::Error, &override_error(&error));
+                // The failed change stays visible beside its fault.
+                change_rows(ui, &rows);
+            }
+            clicked
+        }
+        Err(error) => {
+            design::message(ui, Tone::Error, &override_error(&error));
+            false
+        }
+    }
+}
+
 const FORM_OPENED: &str = "override_form_opened";
 
 /// The form can open below the fold, so the next frame scrolls to it.
 pub(super) fn show_form_when_it_opens(ui: &egui::Ui) {
     ui.data_mut(|data| data.insert_temp(egui::Id::new(FORM_OPENED), true));
-}
-
-/// A slot's or member's changes, out in the open, with the values they replace.
-pub(super) fn show_changes(
-    ui: &mut egui::Ui,
-    block: &Mapping,
-    entry: &Entry,
-    side: &str,
-    starting: Option<&Mapping>,
-    form_open: bool,
-) {
-    if block.is_empty() {
-        return;
-    }
-    match Overrides::parse(block) {
-        Ok(overrides) => {
-            // First, because a number below may be one that cannot stand. An open form says it
-            // under its own heading, which is where opening it scrolls to.
-            if !form_open && let Err(error) = overrides.resolve_for(entry, side) {
-                design::message(ui, Tone::Error, &error.replace("1000000", "1,000,000"));
-            }
-            let mut base = Base::of(entry, side);
-            if let Some(conditions) = starting.and_then(|starting| starting.get("conditions")) {
-                base.conditions = condition_names(conditions);
-            }
-            design::status(
-                ui,
-                Status {
-                    icon: icons::CHANGED,
-                    word: "Changed",
-                    color: colors().participant.changed,
-                },
-            );
-            let rows = overrides.rows(&base);
-            change_rows(ui, &rows);
-            if rows.iter().any(|row| row.by_hand) {
-                ui.add(
-                    egui::Label::new(Type::Small.rich(ui, BY_HAND).color(colors().muted)).wrap(),
-                );
-            }
-        }
-        Err(error) => {
-            design::message(ui, Tone::Error, &error.replace("1000000", "1,000,000"));
-        }
-    }
 }
 
 /// A number that can stay the same, be set, or change by an amount. Each control keeps the
@@ -1063,11 +1115,7 @@ pub(super) fn overrides_form(
     ui.add_space(design::XS);
     let heading = design::group_label(
         ui,
-        if sides.is_some() {
-            "Changed for this encounter"
-        } else {
-            "Changed for this group"
-        },
+        &format!("Changes for {}", shown_name(block, entry.name.clone())),
     );
     if ui
         .data_mut(|data| data.remove_temp::<bool>(egui::Id::new(FORM_OPENED)))
@@ -1076,7 +1124,7 @@ pub(super) fn overrides_form(
         heading.scroll_to_me(Some(egui::Align::Min));
     }
     if let Err(error) = overrides.resolve_for(entry, side) {
-        design::message(ui, Tone::Error, &error.replace("1000000", "1,000,000"));
+        design::message(ui, Tone::Error, &override_error(&error));
     }
     text_row(ui, "Display name", &mut overrides.name, &entry.name);
     // Only a name just typed: opening the form must not edit what a note holds.
@@ -1132,9 +1180,16 @@ pub(super) fn overrides_form(
         Some(_) if overrides.side.is_none() => {}
         Some(sides) => {
             ui.horizontal(|ui| {
-                ui.add_sized(
-                    [LABEL_WIDTH, Density::Read.control()],
-                    egui::Label::new(Type::Small.rich(ui, "Side").color(colors().muted)),
+                let (rect, _) = ui.allocate_exact_size(
+                    egui::vec2(LABEL_WIDTH, Density::Read.control()),
+                    egui::Sense::hover(),
+                );
+                ui.painter().text(
+                    rect.left_center(),
+                    egui::Align2::LEFT_CENTER,
+                    "Side",
+                    Type::Small.font(ui),
+                    colors().muted,
                 );
                 let mut changed = overrides.side.clone().unwrap_or_else(|| side.to_owned());
                 super::side_control(ui, "Changed side", &mut changed, sides);
@@ -1146,9 +1201,16 @@ pub(super) fn overrides_form(
         }
         None => {
             ui.horizontal(|ui| {
-                ui.add_sized(
-                    [LABEL_WIDTH, Density::Read.control()],
-                    egui::Label::new(Type::Small.rich(ui, "Side").color(colors().muted)),
+                let (rect, _) = ui.allocate_exact_size(
+                    egui::vec2(LABEL_WIDTH, Density::Read.control()),
+                    egui::Sense::hover(),
+                );
+                ui.painter().text(
+                    rect.left_center(),
+                    egui::Align2::LEFT_CENTER,
+                    "Side",
+                    Type::Small.font(ui),
+                    colors().muted,
                 );
                 let mut changed = overrides.side.clone().unwrap_or_else(|| side.to_owned());
                 super::side_control(ui, "Changed side", &mut changed, &[]);
@@ -1506,39 +1568,15 @@ fn add_pane(
         peek,
         super::SearchRoster {
             already: &|_| false,
-            members: (!draft.setup.members.is_empty()).then(|| member_summary(draft, snapshot)),
         },
     );
     if let Some((id, _)) = chosen {
-        draft.add(id);
+        if let Some((stat, name)) = snapshot.npc_stat_block(id) {
+            draft.add_named(stat, name);
+        } else {
+            draft.add(id);
+        }
     }
-}
-
-pub(super) fn member_summary(draft: &GroupDraft, snapshot: &Snapshot) -> String {
-    if draft.setup.members.is_empty() {
-        return String::new();
-    }
-    draft
-        .setup
-        .members
-        .iter()
-        .map(|member| {
-            let name = snapshot
-                .catalogue
-                .resolve_ref(&member.creature)
-                .ok()
-                .and_then(|id| snapshot.catalogue.entries.get(&id))
-                .map(|entry| entry.entry.name.as_str());
-            let missing = missing_member_name(None, member.creature.link.as_deref());
-            let name = name.unwrap_or(&missing);
-            format!(
-                "{} × {}",
-                super::grouped(member.count),
-                shown_name(&member.overrides, name.to_owned())
-            )
-        })
-        .collect::<Vec<_>>()
-        .join(", ")
 }
 
 fn members_pane(
@@ -1700,17 +1738,13 @@ fn members(
                     "This campaign cannot find this creature. Check the packages it uses, or remove this member.",
                 )
                 .on_hover_text(member.creature.label());
+                if design::link(ui, "Campaign → Packages").clicked() {
+                    ui.data_mut(|data| data.insert_temp(egui::Id::new("open_campaign_packages"), true));
+                }
             }
             if let Some(entry) = entry {
-                if !member.overrides.is_empty() && !is_open {
-                    match Overrides::parse(&member.overrides).and_then(|overrides| overrides.resolve_for(entry, &side).map(|_| overrides)) {
-                        Ok(overrides) => {
-                            let count = overrides.rows(&Base::of(entry, &side)).iter().filter(|row| row.by_hand).count();
-                            let word = if count == 0 { "Changed".to_owned() } else { format!("Changed · {count} to add by hand") };
-                            if design::link(ui, &word).clicked() { show_form_when_it_opens(ui); *expanded = Some(key.clone()); }
-                        }
-                        Err(error) => { design::message(ui, Tone::Error, &error); }
-                    }
+                if changes_link(ui, &member.overrides, entry, &side, is_open) {
+                    show_form_when_it_opens(ui); *expanded = Some(key.clone());
                 }
                 if is_open {
                     overrides_form(ui, &mut member.overrides, entry, &side, None);

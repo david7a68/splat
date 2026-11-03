@@ -636,7 +636,8 @@ impl Splat {
 
     fn rail(&mut self, ctx: &egui::Context, connection: Connection) {
         let c = colors();
-        let rail = if ctx.content_rect().width() >= design::RAIL_WIDE_FROM {
+        let at_table = self.visible_page() == Some(Page::Run);
+        let rail = if !at_table && ctx.content_rect().width() >= design::RAIL_WIDE_FROM {
             design::RAIL_WIDE_WIDTH
         } else {
             design::RAIL_WIDTH
@@ -645,7 +646,11 @@ impl Splat {
         design::Column::left(
             "navigation",
             rail,
-            design::RAIL_WIDTH..=design::RAIL_DRAG_MAX_WIDTH,
+            design::RAIL_WIDTH..=if at_table {
+                rail
+            } else {
+                design::RAIL_DRAG_MAX_WIDTH
+            },
         )
         .page_keeps(design::RAIL_LEAVES_WINDOW)
         .frame(
@@ -683,19 +688,10 @@ impl Splat {
                     }
                 }
             } else {
-                let strip = self.encounters.run().map(|run| run.strip());
-                let detail = strip.as_ref().map(|strip| {
-                    if strip.running {
-                        format!("Round {}", strip.round)
-                    } else {
-                        "Setup".to_owned()
-                    }
-                });
-                if design::nav_item(
+                let detail = self.encounters.run().map(|run| run.state_words(false));
+                if design::run_nav_item(
                     ui,
-                    icons::RUN,
-                    Page::Run.name(),
-                    detail.as_deref(),
+                    detail.as_deref().unwrap_or("Setup"),
                     page == Some(Page::Run),
                 )
                 .clicked()
@@ -1087,7 +1083,17 @@ impl Splat {
                     } else {
                         ui.label(
                             Type::Heading
-                                .rich(ui, format!("Run · {}", strip.name))
+                                .rich(
+                                    ui,
+                                    format!(
+                                        "{} · {}",
+                                        self.encounters
+                                            .run()
+                                            .map(|run| run.state_words(false))
+                                            .unwrap_or_default(),
+                                        strip.name
+                                    ),
+                                )
                                 .color(c.text),
                         );
                     }
@@ -1546,14 +1552,20 @@ impl Splat {
             self.notes_give_way();
             self.lookup.open_words(&words);
         }
-        if let Some(id) = self
-            .library
-            .peek
-            .take()
-            .or_else(|| self.encounters.peek.take())
-        {
+        if let Some(id) = self.library.peek.take() {
             self.notes_give_way();
             self.lookup.open_id(id);
+        }
+        if let Some(id) = self.encounters.peek.take() {
+            self.notes_give_way();
+            self.lookup.open_creature_result(id);
+        }
+        if ctx
+            .data_mut(|data| data.remove_temp::<bool>(egui::Id::new("open_campaign_packages")))
+            .is_some()
+        {
+            self.page = Page::Campaign;
+            self.campaign_tab = CampaignTab::Packages;
         }
         if let Some(position) = self
             .encounters

@@ -42,6 +42,9 @@ pub(crate) struct Participant {
     pub armor_class: Option<i64>,
     pub initiative_bonus: Option<i64>,
     pub initiative: Option<i64>,
+    /// Participants that received one shared roll keep the same key.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub shared_roll: Option<String>,
     pub present: bool,
     pub conditions: Vec<String>,
     pub concentration: bool,
@@ -321,6 +324,7 @@ impl Participant {
             armor_class: resolved.armor_class,
             initiative_bonus: resolved.initiative_bonus,
             initiative: None,
+            shared_roll: None,
             present,
             conditions: conditions.clone(),
             concentration: false,
@@ -572,8 +576,6 @@ enum Panel {
 const GROUP_ADDED: &str = "Encounter group ";
 /// How one creature's log line starts, with no group to name.
 const ONE_ADDED: &str = "Added by hand: ";
-/// What the group panel says of an addition before it points to the Log.
-const GROUP_LINE_LIMIT: usize = 200;
 /// What a saved run may hold. A larger one does not open again.
 const MAX_PARTICIPANTS: usize = 2000;
 /// Where a run's own text ends. Saved runs hold both parts in one string.
@@ -926,13 +928,18 @@ impl Run {
         match grouping {
             Grouping::Identical | Grouping::Explicit => {
                 let (die, bonus, total) = roll(&mut state.random, &added[0])?;
-                added.iter_mut().for_each(|p| p.initiative = Some(total));
+                let key = added[0].key.clone();
+                added.iter_mut().for_each(|p| {
+                    p.initiative = Some(total);
+                    p.shared_roll = Some(key.clone());
+                });
                 words.push(format!("Shared roll {die} {bonus:+} = {total}"));
             }
             Grouping::Individual => {
                 for p in added.iter_mut() {
                     let (die, bonus, total) = roll(&mut state.random, p)?;
                     p.initiative = Some(total);
+                    p.shared_roll = None;
                     words.push(format!("{}: {die} {bonus:+} = {total}", p.name));
                 }
             }
@@ -959,6 +966,7 @@ impl Run {
                         sides.insert(p.side.clone(), total);
                     }
                     p.initiative = sides.get(&p.side).copied();
+                    p.shared_roll = Some(format!("side:{}", p.side));
                 }
             }
         }
@@ -1129,7 +1137,9 @@ impl Run {
                         .map(|i| next.participants[*i].name.clone())
                         .collect();
                     results.push(format!("{}: {die} {bonus:+} = {total}", names.join(", ")));
+                    let roll_key = next.participants[members[0]].key.clone();
                     for i in members {
+                        next.participants[*i].shared_roll = Some(roll_key.clone());
                         next.participants[*i].initiative = Some(total);
                     }
                 }
@@ -1370,6 +1380,7 @@ impl Run {
                     return Err("Enter an initiative total.".into());
                 }
                 p.initiative = total;
+                p.shared_roll = None;
                 let change = format!("Initiative set to {}.", display(total));
                 if state.phase == Phase::Running {
                     let label = format!("{}: {change}", p.name);
@@ -1394,6 +1405,7 @@ impl Run {
                     .ok_or("Set an initiative bonus or enter a total.")?;
                 let (die, total) = roll_initiative(&mut state.random, bonus, p.initiative_mode)?;
                 p.initiative = Some(total);
+                p.shared_roll = None;
                 format!("Initiative: {die} + {bonus} = {total}.")
             }
             Command::Presence(_, present) => {
@@ -2583,12 +2595,28 @@ impl Run {
             .parent()
             .ok_or("Invalid run location")?
             .join(format!("{id}.json"));
+        let time = calendar_time(crate::hermetic::now());
+        let base_name = self.name.split(" · saved ").next().unwrap_or(&self.name);
+        let stem = format!(
+            "{base_name} · saved {}:{:02}",
+            &time[11..],
+            crate::hermetic::now() % 60
+        );
+        let names: BTreeSet<_> = fs::read_dir(storage.path.parent().ok_or("Invalid run location")?)
+            .map_err(|e| e.to_string())?
+            .filter_map(Result::ok)
+            .filter_map(|file| read_saved(&file.path(), storage.campaign).ok())
+            .map(|saved| saved.name)
+            .collect();
+        let mut new_name = stem.clone();
+        let mut suffix = 2;
+        while names.contains(&new_name) {
+            new_name = format!("{stem} ({suffix})");
+            suffix += 1;
+        }
         let old_path = std::mem::replace(&mut storage.path, path);
         let old_baseline = storage.baseline.take();
         let old_id = std::mem::replace(&mut self.id, id);
-        let time = calendar_time(crate::hermetic::now());
-        let base_name = self.name.split(" · saved ").next().unwrap_or(&self.name);
-        let new_name = format!("{base_name} · saved {}", &time[11..]);
         let old_recovery = self.recovery.clone();
         self.recovery.copied_from = Some(old_id);
         let old_name = std::mem::replace(&mut self.name, new_name);
@@ -2826,11 +2854,34 @@ impl Run {
                 .then_with(|| a.label.cmp(&b.label))
                 .then_with(|| a.path.cmp(&b.path))
         });
+        if let Some(run) = runs
+            .iter_mut()
+            .find(|run| run.standing == Standing::Unfinished)
+            && run
+                .id
+                .and_then(|id| close_order.get(&id))
+                .is_some_and(|order| *order > 0)
+        {
+            run.label.insert_str(0, "Closed last · ");
+        }
+        let all_recent = runs
+            .iter()
+            .filter(|run| run.standing == Standing::Unfinished)
+            .all(|run| run.label.contains(" · Saved just now"));
+        if all_recent {
+            for run in &mut runs {
+                if run.standing == Standing::Unfinished {
+                    run.label = run.label.replace(" · Saved just now", "");
+                }
+            }
+        }
         Ok(runs)
     }
     /// This run as a row on the Encounters page, as it is now and not as its file has it.
     pub fn live_info(&self) -> Option<SavedRunInfo> {
-        Some(self.info(self.path()?.to_path_buf(), None, false))
+        let path = self.path()?.to_path_buf();
+        let saved_at = crate::hermetic::file_time(&path);
+        Some(self.info(path, saved_at, false))
     }
     fn info(&self, path: PathBuf, saved_at: Option<u64>, paused: bool) -> SavedRunInfo {
         let saved = saved_at.map_or_else(String::new, |at| {
@@ -2845,17 +2896,18 @@ impl Run {
             Standing::Unfinished
         };
         let mut label = self.state_words(paused);
-        if let Phase::Ended { outcome } = &self.state.phase
-            && !outcome.trim().is_empty()
+        if let Phase::Ended { outcome } = &self.state.phase {
+            if !outcome.trim().is_empty() {
+                label = format!("{outcome} · {label}");
+            }
+        } else if paused
+            && let Some(last) = self.history_labels.last().or_else(|| self.state.log.last())
         {
-            label.push_str(&format!(" · {outcome}"));
+            let round_prefix = format!("Round {}: ", self.state.round);
+            let last = last.strip_prefix(&round_prefix).unwrap_or(last);
+            label.push_str(&format!(" · {last}"));
         }
         label.push_str(&saved);
-        if let Some(last) = self.history_labels.last() {
-            label.push_str(&format!(" · Last: {last}"));
-        } else if let Some(last) = self.state.log.last() {
-            label.push_str(&format!(" · Last: {last}"));
-        }
         SavedRunInfo {
             path,
             id: Some(self.id),
@@ -2990,6 +3042,9 @@ pub struct Carry {
 pub struct FightSummary {
     /// Combat ended, so these are the final values. A run can also be closed mid-fight.
     pub ended: bool,
+    pub outcome: String,
+    pub end_reason: String,
+    pub round: u64,
     pub rows: Vec<FightRow>,
     pub log: Vec<String>,
 }
@@ -3034,6 +3089,12 @@ pub fn fight_summary(path: &Path, campaign: Uuid) -> Result<FightSummary, String
     let state = read_saved(path, campaign)?.state;
     Ok(FightSummary {
         ended: matches!(state.phase, Phase::Ended { .. }),
+        outcome: match &state.phase {
+            Phase::Ended { outcome } => outcome.clone(),
+            _ => String::new(),
+        },
+        end_reason: "Ended manually".to_owned(),
+        round: state.round,
         rows: state
             .order
             .iter()
@@ -3566,7 +3627,8 @@ mod tests {
         let copies = Run::list(dir.path(), campaign).unwrap();
         assert_eq!(copies[0].id, Some(latest));
         assert!(copies[0].encounter.contains(" · saved "));
-        assert!(copies[0].label.contains("Last:"));
+        assert!(copies[0].label.starts_with("Closed last · "));
+        assert!(!copies[0].label.contains("Last:"));
         let old = copies
             .iter()
             .find(|copy| copy.id == Some(original_id))
@@ -3945,7 +4007,7 @@ mod tests {
         run.save().unwrap();
         let saved = Run::list(dir.path(), campaign).unwrap();
         assert_eq!(saved[0].standing, Standing::Ended);
-        assert!(saved[0].label.starts_with("Ended · Round 1 · Party won"));
+        assert!(saved[0].label.starts_with("Party won · Ended · Round 1"));
         assert_eq!(run.live_info().unwrap().standing, Standing::Ended);
     }
 
@@ -4715,6 +4777,55 @@ mod tests {
             PartySync::Stop(ref stop) if stop == &vec![0]
         ));
     }
+    #[test]
+    fn shared_rolls_are_quiet_but_an_independent_equal_total_needs_a_ruling() {
+        let mut run = run();
+        run.state.participants[0].npc = false;
+        run.apply(Command::Initiative(0, Some(19))).unwrap();
+        run.state.random = Random::controlled([10]);
+        run.apply(Command::RollNpcs(Grouping::Identical)).unwrap();
+        assert_eq!(run.tied_count(), 0);
+        assert_eq!(
+            run.state.participants[1].shared_roll,
+            run.state.participants[2].shared_roll
+        );
+        let dir = tempfile::tempdir().unwrap();
+        let campaign = Uuid::new_v4();
+        run.configure_storage(campaign, dir.path(), Initiative::default())
+            .unwrap();
+        let mut reopened = Run::open(run.path().unwrap(), campaign).unwrap();
+        assert_eq!(reopened.tied_count(), 0);
+        reopened.apply(Command::Initiative(0, Some(12))).unwrap();
+        assert_eq!(reopened.tied_count(), 3);
+        reopened.apply(Command::Initiative(1, Some(12))).unwrap();
+        assert!(reopened.state.participants[1].shared_roll.is_none());
+        reopened.undo();
+        assert!(reopened.state.participants[1].shared_roll.is_some());
+    }
+
+    #[test]
+    fn an_open_run_reports_when_its_file_was_saved() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut run = run();
+        run.configure_storage(Uuid::new_v4(), dir.path(), Initiative::default())
+            .unwrap();
+        let info = run.live_info().unwrap();
+        assert!(
+            info.saved_at.is_some(),
+            "the open row must have a save time"
+        );
+        assert!(info.label.contains("Saved just now"));
+    }
+
+    #[test]
+    fn recovery_copies_have_different_names_even_in_the_same_second() {
+        let (_dir, mut run, _, _, _) = run_with_changed_file();
+        run.save_as_new_run().unwrap();
+        let first = run.name.clone();
+        run.save_as_new_run().unwrap();
+        assert_ne!(first, run.name);
+    }
+
     #[test]
     fn npc_rolls_follow_campaign_grouping_and_never_change_player_initiative() {
         let mut run = run();

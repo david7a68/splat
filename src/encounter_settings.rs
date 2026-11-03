@@ -162,6 +162,83 @@ impl Options {
             campaign.path.join(path)
         })
     }
+    /// Existing run files that a folder change would hide, including unreadable saves.
+    pub fn runs_left_in(&self, old: &Self, campaign: &Campaign) -> Result<Vec<PathBuf>, String> {
+        let from = old.directory(campaign)?;
+        let to = self.directory(campaign)?;
+        if from == to || !from.try_exists().map_err(|e| e.to_string())? {
+            return Ok(Vec::new());
+        }
+        if to.exists() && fs::canonicalize(&from).ok() == fs::canonicalize(&to).ok() {
+            return Ok(Vec::new());
+        }
+        fs::read_dir(from)
+            .map_err(|e| e.to_string())?
+            .map(|file| {
+                let file = file.map_err(|e| e.to_string())?;
+                Ok((file.file_type().map_err(|e| e.to_string())?.is_file()
+                    && file
+                        .path()
+                        .extension()
+                        .is_some_and(|extension| extension == "json"))
+                .then(|| file.path()))
+            })
+            .collect::<Result<Vec<_>, String>>()
+            .map(|files| files.into_iter().flatten().collect())
+    }
+
+    /// Stage every save without replacing a file. Change settings only after all copies exist.
+    pub fn move_runs_and_save(
+        &self,
+        old: &Self,
+        campaign: &Campaign,
+        baseline: &str,
+    ) -> Result<Option<String>, String> {
+        let files = self.runs_left_in(old, campaign)?;
+        let target = self.directory(campaign)?;
+        fs::create_dir_all(&target).map_err(|e| format!("Could not create run folder: {e}"))?;
+        let mut copied = Vec::new();
+        let result = (|| {
+            for source in &files {
+                let destination = target.join(source.file_name().ok_or("Invalid run file name")?);
+                let bytes = fs::read(source).map_err(|e| e.to_string())?;
+                let mut staged =
+                    tempfile::NamedTempFile::new_in(&target).map_err(|e| e.to_string())?;
+                use std::io::Write;
+                staged
+                    .write_all(&bytes)
+                    .and_then(|_| staged.as_file().sync_all())
+                    .map_err(|e| e.to_string())?;
+                staged.persist_noclobber(&destination).map_err(|e| {
+                    format!("Could not move runs. No existing file was replaced: {e}")
+                })?;
+                copied.push((source.clone(), destination, bytes));
+            }
+            self.save(campaign, baseline)
+        })();
+        if let Err(error) = result {
+            for (_, destination, _) in &copied {
+                let _ = fs::remove_file(destination);
+            }
+            return Err(error);
+        }
+        let mut warnings = Vec::new();
+        for (source, _, bytes) in copied {
+            if fs::read(&source).ok().as_deref() == Some(bytes.as_slice()) {
+                if let Err(e) = fs::remove_file(&source) {
+                    warnings.push(format!("Could not remove {}: {e}", source.display()));
+                }
+            } else {
+                warnings.push(format!(
+                    "{} changed during the move and stays in the old folder.",
+                    source.display()
+                ));
+            }
+        }
+        Ok((!warnings.is_empty())
+            .then(|| format!("Settings saved and runs copied. {}", warnings.join(" "))))
+    }
+
     pub fn save(&self, campaign: &Campaign, baseline: &str) -> Result<(), String> {
         self.directory(campaign)?;
         let document = CampaignDocument::load(campaign)?;
@@ -240,6 +317,80 @@ impl Options {
 #[cfg(test)]
 mod tests {
     use super::*;
+    fn campaign(root: &Path) -> Campaign {
+        Campaign {
+            id: Uuid::new_v4(),
+            name: "Test".into(),
+            path: root.into(),
+            dndbeyond_campaign_id: None,
+            dndbeyond_campaign_name: None,
+        }
+    }
+
+    #[test]
+    fn folder_move_keeps_every_run_and_does_not_replace_a_destination() {
+        let dir = tempfile::tempdir().unwrap();
+        let campaign = campaign(dir.path());
+        let old = Options::default();
+        let next = Options {
+            folder: "Moved".into(),
+            ..old.clone()
+        };
+        let source = old.directory(&campaign).unwrap();
+        fs::create_dir_all(&source).unwrap();
+        fs::write(source.join("run.json"), b"saved run").unwrap();
+        fs::write(source.join("broken.json"), b"unreadable save").unwrap();
+        let document = CampaignDocument::load(&campaign).unwrap();
+        assert_eq!(next.runs_left_in(&old, &campaign).unwrap().len(), 2);
+        let destination = next.directory(&campaign).unwrap();
+        fs::create_dir_all(&destination).unwrap();
+        fs::write(destination.join("run.json"), b"other run").unwrap();
+        assert!(
+            next.move_runs_and_save(&old, &campaign, &document.text)
+                .is_err()
+        );
+        assert_eq!(
+            fs::read(destination.join("run.json")).unwrap(),
+            b"other run"
+        );
+        assert_eq!(fs::read(source.join("run.json")).unwrap(), b"saved run");
+        assert!(!destination.join("broken.json").exists());
+        fs::remove_file(destination.join("run.json")).unwrap();
+        next.move_runs_and_save(&old, &campaign, &document.text)
+            .unwrap();
+        assert_eq!(
+            fs::read(destination.join("run.json")).unwrap(),
+            b"saved run"
+        );
+        assert_eq!(
+            fs::read(destination.join("broken.json")).unwrap(),
+            b"unreadable save"
+        );
+        assert!(!source.join("run.json").exists());
+        let catalogue = Catalogue::load(&[], Some(&campaign)).unwrap();
+        assert_eq!(Options::load(&campaign, &catalogue).unwrap(), next);
+    }
+
+    #[test]
+    fn a_settings_conflict_leaves_the_old_runs_and_removes_staged_copies() {
+        let dir = tempfile::tempdir().unwrap();
+        let campaign = campaign(dir.path());
+        let old = Options::default();
+        let next = Options {
+            folder: "Moved".into(),
+            ..old.clone()
+        };
+        let source = old.directory(&campaign).unwrap();
+        fs::create_dir_all(&source).unwrap();
+        fs::write(source.join("run.json"), b"saved run").unwrap();
+        assert!(
+            next.move_runs_and_save(&old, &campaign, "stale manifest")
+                .is_err()
+        );
+        assert_eq!(fs::read(source.join("run.json")).unwrap(), b"saved run");
+        assert!(!next.directory(&campaign).unwrap().join("run.json").exists());
+    }
+
     #[test]
     fn settings_roundtrip_and_external_manifest_edits_are_preserved() {
         let dir = tempfile::tempdir().unwrap();

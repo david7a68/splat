@@ -127,6 +127,9 @@ pub fn resume_run(d: &mut Driver<'_>, name: &str) {
 
 /// Close the run. It takes a second, inline step, far from Next turn.
 pub fn close_run(d: &mut Driver<'_>) {
+    if !d.has(CLOSE_RUN) && d.has("Close menu") {
+        d.click("Close menu");
+    }
     d.click(CLOSE_RUN);
     d.click(CLOSE_NOW);
 }
