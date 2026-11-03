@@ -527,6 +527,9 @@ pub(crate) struct Run {
     pub hide_panel: bool,
     /// The recording needs a look, shown where the run's notices go, so nothing moves.
     pub recording_notice: Option<&'static str>,
+    pub copy_label: Option<String>,
+    /// The account's one status function supplies the offline colour too.
+    pub account_status: Option<crate::design::Status<'static>>,
     /// Lookup is open. Letters are then the next word of a search, never a command.
     pub lookup_open: bool,
     /// Opened from a save, so there is no undo history to go back through.
@@ -803,6 +806,8 @@ impl Run {
             notice_summary: None,
             live_initiative: None,
             recording_notice: None,
+            copy_label: None,
+            account_status: None,
             undo_stopped: false,
             setup_inputs: BTreeMap::new(),
             last_initiative: None,
@@ -897,6 +902,48 @@ impl Run {
             .order
             .sort_by_key(|i| std::cmp::Reverse(state.participants[*i].initiative));
     }
+    /// A shared roll is one block, including its first member.
+    fn roll_block_first(state: &State, index: usize) -> usize {
+        let p = &state.participants[index];
+        state
+            .order
+            .iter()
+            .copied()
+            .find(|i| {
+                let other = &state.participants[*i];
+                *i == index
+                    || (p.shared_roll.is_some()
+                        && other.shared_roll == p.shared_roll
+                        && other.initiative == p.initiative)
+            })
+            .unwrap_or(index)
+    }
+
+    fn roll_block_name(state: &State, p: &Participant) -> String {
+        if p.shared_roll.is_some()
+            && state
+                .participants
+                .iter()
+                .filter(|other| {
+                    other.shared_roll == p.shared_roll && other.initiative == p.initiative
+                })
+                .count()
+                > 1
+        {
+            if let Some(origin) = &p.added_from {
+                return origin.group.clone();
+            }
+            if p.shared_roll
+                .as_deref()
+                .is_some_and(|key| key.starts_with("side:"))
+            {
+                return crate::design::reader::human_label(&p.side);
+            }
+            return p.definition.name.clone();
+        }
+        p.name.clone()
+    }
+
     /// A place for someone whose initiative was set during combat. The current turn stays
     /// current, and no one else moves relative to each other.
     fn take_place_in_order(state: &mut State, index: usize) {
@@ -922,7 +969,11 @@ impl Run {
         grouping: Grouping,
     ) -> Result<String, String> {
         if let Some(total) = total {
-            added.iter_mut().for_each(|p| p.initiative = Some(total));
+            let shared = added[0].key.clone();
+            added.iter_mut().for_each(|p| {
+                p.initiative = Some(total);
+                p.shared_roll = Some(shared.clone());
+            });
             return Ok(format!("Initiative {total}, entered by the DM"));
         }
         fn roll(random: &mut Random, p: &Participant) -> Result<(i64, i64, i64), String> {
@@ -1018,7 +1069,10 @@ impl Run {
                 .find(|p| p.present && p.initiative == Some(total))
                 .map(|p| (p, total))
         }) {
-            initiative.push_str(&format!(". Tied with {} at {total} · placed after", p.name));
+            initiative.push_str(&format!(
+                ". Tied with {} at {total} · placed after",
+                Self::roll_block_name(state, p)
+            ));
         }
         let names: Vec<_> = added.iter().map(|p| p.name.clone()).collect();
         let first = state.participants.len();
@@ -1226,7 +1280,15 @@ impl Run {
                 {
                     return Err("Choose a present participant with the same initiative.".into());
                 }
+                let before = Self::roll_block_first(&next, before);
+                let target = Self::roll_block_name(&next, &next.participants[before]);
                 let current = (next.phase == Phase::Running).then(|| next.order[next.cursor]);
+                let waits = next.phase == Phase::Running
+                    && next
+                        .order
+                        .iter()
+                        .position(|i| *i == before)
+                        .is_some_and(|at| at <= next.cursor);
                 let instance = next
                     .participants
                     .get(first)
@@ -1261,9 +1323,9 @@ impl Run {
                         .unwrap_or(next.cursor);
                 }
                 format!(
-                    "Arrival moved before {} at {}.",
-                    next.participants[before].name,
-                    display(next.participants[before].initiative)
+                    "Arrival moved before {target} at {}{}.",
+                    display(next.participants[before].initiative),
+                    if waits { " · acts next round" } else { "" }
                 )
             }
             Command::Move(from, to) => {
@@ -1346,9 +1408,6 @@ impl Run {
         if began {
             self.panel = Panel::Reference;
         }
-        let undo_label = next_tie_label(&self.state.log).map_or(undo_label.clone(), |tie| {
-            format!("{undo_label} · Tied with {tie}")
-        });
         self.history_labels.push(undo_label);
         self.last_initiative = initiative_edit;
         if follow_turn && let Some(current) = self.current() {
@@ -2445,7 +2504,7 @@ impl Run {
                     first
                 } else {
                     format!(
-                        "{first} +{} more",
+                        "{first} and {} more",
                         crate::design::count(more, "", "").trim()
                     )
                 }
@@ -2859,6 +2918,8 @@ impl Run {
             notice_summary: None,
             live_initiative: None,
             recording_notice: None,
+            copy_label: None,
+            account_status: None,
             undo_stopped: false,
             setup_inputs: BTreeMap::new(),
             last_initiative: None,
@@ -3404,12 +3465,6 @@ pub(crate) fn write_ended_run(
 
 fn display(value: Option<i64>) -> String {
     value.map_or_else(|| "?".into(), |n| n.to_string())
-}
-fn next_tie_label(log: &[String]) -> Option<&str> {
-    log.last()
-        .filter(|line| line.starts_with(GROUP_ADDED) || line.starts_with(ONE_ADDED))?
-        .split_once("Tied with ")
-        .map(|(_, tie)| tie.trim_end_matches('.'))
 }
 
 #[cfg(test)]
@@ -5541,7 +5596,7 @@ mod tests {
         run.apply(Command::AddGroup(guard_group("Tied", 2), Some(15)))
             .unwrap();
         assert!(run.state.log.last().unwrap().contains("Tied with"));
-        assert!(run.undo_label().contains("placed after"));
+        assert!(!run.undo_label().contains("placed after"));
         let after = run.state.order.clone();
         let current = run.current();
         run.apply(Command::MoveArrivalBefore(3, 1)).unwrap();
@@ -5549,6 +5604,42 @@ mod tests {
         assert_eq!(run.current(), current);
         run.undo();
         assert_eq!(run.state.order, after);
+        assert_eq!(run.current(), current);
+    }
+
+    #[test]
+    fn moving_an_arrival_before_a_shared_roll_keeps_both_blocks_and_waits() {
+        let mut run = run();
+        begin(&mut run);
+        run.apply(Command::AddGroup(guard_group("First wave", 2), Some(15)))
+            .unwrap();
+        run.apply(Command::AddGroup(guard_group("Second wave", 2), Some(15)))
+            .unwrap();
+        assert!(
+            run.state
+                .log
+                .last()
+                .unwrap()
+                .contains("Tied with First wave")
+        );
+        // The last tied member used to split First wave when targeted.
+        while run.current() != Some(3) {
+            run.apply(Command::Next).unwrap();
+        }
+        let current = run.current();
+        let order = run.state.order.clone();
+        run.apply(Command::MoveArrivalBefore(5, 4)).unwrap();
+        assert_eq!(run.state.order, vec![0, 1, 5, 6, 3, 4, 2]);
+        assert_eq!(run.current(), current);
+        assert!(
+            run.state
+                .log
+                .last()
+                .unwrap()
+                .contains("before First wave at 15 · acts next round")
+        );
+        run.undo();
+        assert_eq!(run.state.order, order);
         assert_eq!(run.current(), current);
     }
 

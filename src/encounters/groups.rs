@@ -540,30 +540,35 @@ fn list_row(
         },
     );
     if let Some(problem) = &group.problem {
-        for fault in problem.lines() {
-            ui.horizontal_wrapped(|ui| {
-                ui.add(
-                    egui::Label::new(
-                        Type::Small
-                            .rich(
-                                ui,
-                                format!(
-                                    "{} {}",
-                                    icons::WARN,
-                                    fault.trim_end_matches(" Campaign → Packages.")
-                                ),
-                            )
-                            .color(colors().result.warning),
-                    )
-                    .wrap(),
-                );
-                if fault.contains("Campaign → Packages") && packages_link(ui) {
-                    ui.data_mut(|data| {
-                        data.insert_temp(egui::Id::new("open_campaign_packages"), true)
-                    });
-                }
-            });
-        }
+        ui.add_space(-design::S);
+        ui.scope(|ui| {
+            ui.spacing_mut().item_spacing.y = design::XS;
+            for fault in problem.lines() {
+                ui.horizontal_wrapped(|ui| {
+                    ui.add_space(design::S);
+                    ui.add(
+                        egui::Label::new(
+                            Type::Small
+                                .rich(
+                                    ui,
+                                    format!(
+                                        "{} {}",
+                                        icons::WARN,
+                                        fault.trim_end_matches(" Campaign → Packages.")
+                                    ),
+                                )
+                                .color(colors().result.warning),
+                        )
+                        .wrap(),
+                    );
+                    if fault.contains("Campaign → Packages") && packages_link(ui) {
+                        ui.data_mut(|data| {
+                            data.insert_temp(egui::Id::new("open_campaign_packages"), true)
+                        });
+                    }
+                });
+            }
+        });
     }
 }
 
@@ -1320,31 +1325,45 @@ pub(super) fn overrides_form(
 /// The same official names and local Other effect as the run.
 fn conditions_row(ui: &mut egui::Ui, conditions: &mut Vec<String>) {
     design::group_label(ui, "Starting conditions");
-    ui.horizontal_wrapped(|ui| {
-        for (_, name) in crate::combat_sync::CONDITIONS {
-            let found = conditions.iter().position(|c| same_condition(c, name));
-            if crate::encounter_run::view::toggle(
-                ui,
-                name,
-                if found.is_some() {
-                    icons::OK
-                } else {
-                    icons::ADD
-                },
-                found.is_some(),
-                name,
-                Density::Read,
-            )
-            .clicked()
-            {
-                if let Some(at) = found {
-                    conditions.remove(at);
-                } else {
-                    conditions.push(name.to_owned());
+    let columns = if ui.available_width() >= design::CONDITION_THREE_COLUMNS_FROM {
+        3
+    } else {
+        2
+    };
+    egui::Grid::new("starting_conditions")
+        .num_columns(columns)
+        .min_col_width(
+            (ui.available_width() / columns as f32 - design::XS).max(design::CONDITION_COLUMN_MIN),
+        )
+        .spacing([design::XS, design::XS])
+        .show(ui, |ui| {
+            for (position, (_, name)) in crate::combat_sync::CONDITIONS.iter().enumerate() {
+                let found = conditions.iter().position(|c| same_condition(c, name));
+                if crate::encounter_run::view::toggle(
+                    ui,
+                    name,
+                    if found.is_some() {
+                        icons::OK
+                    } else {
+                        icons::ADD
+                    },
+                    found.is_some(),
+                    name,
+                    Density::Read,
+                )
+                .clicked()
+                {
+                    if let Some(at) = found {
+                        conditions.remove(at);
+                    } else {
+                        conditions.push((*name).to_owned());
+                    }
+                }
+                if position % columns == columns - 1 {
+                    ui.end_row();
                 }
             }
-        }
-    });
+        });
     let official = |c: &str| {
         crate::combat_sync::CONDITIONS
             .iter()
@@ -1877,7 +1896,7 @@ fn packages_link(ui: &mut egui::Ui) -> bool {
     design::status_link(
         ui,
         Status {
-            icon: icons::LIBRARY,
+            icon: icons::CAMPAIGN,
             word: "Campaign → Packages",
             color: colors().accent,
         },

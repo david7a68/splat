@@ -346,6 +346,17 @@ impl<'a> Driver<'a> {
         )
     }
 
+    pub fn painted_left(&self, words: &str) -> Option<f32> {
+        let mut left = None;
+        self.each_painted_text(|text, clip| {
+            let bounds = text.visual_bounding_rect();
+            if text.galley.job.text.contains(words) && clip.intersects(bounds) {
+                left = Some(text.pos.x);
+            }
+        });
+        left
+    }
+
     /// The size of the painted text in this rect that holds these words.
     pub fn painted_size(&self, rect: egui::Rect, words: &str) -> Option<f32> {
         let mut found = None;

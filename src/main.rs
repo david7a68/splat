@@ -494,6 +494,7 @@ impl Splat {
             return;
         }
         let only_sync = items.len() == 1 && !self.encounters.pending_sync_names().is_empty();
+        let conflict = self.encounters.run().and_then(|run| run.strip().conflict);
         let only_run_unsaved = items.len() == 1 && self.encounters.run_not_saved().is_some();
         let sync_loss = self
             .encounters
@@ -508,9 +509,13 @@ impl Splat {
                 } else {
                     "Processing has not finished"
                 },
-                "Keep running",
+                if self.sessions.recording() {
+                    "Keep recording"
+                } else {
+                    "Keep processing"
+                },
                 "Stop and close",
-                "Nothing already saved is lost either way.",
+                "",
             )
         } else if only_run_unsaved {
             (
@@ -521,7 +526,9 @@ impl Splat {
             )
         } else if only_sync {
             (
-                if self.settings.signed_out() {
+                if conflict.is_some() {
+                    "Sync conflict"
+                } else if self.settings.signed_out() {
                     "Changes not sent to D&D Beyond"
                 } else {
                     "Sync has not finished"
@@ -532,7 +539,9 @@ impl Splat {
                 } else {
                     "Close now"
                 },
-                if self.settings.signed_out() {
+                if conflict.is_some() {
+                    "Choose which HP to keep, or close and choose next time."
+                } else if self.settings.signed_out() {
                     "Connect to send these changes. Closing keeps the saved run."
                 } else {
                     "Keep running to finish sync. Closing keeps the saved run."
@@ -556,6 +565,8 @@ impl Splat {
                         .map(|label| format!("{label} is processing"))
                 })
                 .unwrap_or_else(|| title.to_owned())
+        } else if only_sync && let Some(name) = &conflict {
+            format!("{name} has a sync conflict")
         } else {
             title.to_owned()
         };
@@ -564,13 +575,29 @@ impl Splat {
         let mut discard = false;
         let mut save_new = false;
         design::dialog(ctx, "unsaved_on_close", &title, |ui| {
-            for (item, _) in &items {
-                ui.add(egui::Label::new(item.as_str()).wrap());
+            if !only_sync || conflict.is_none() {
+                for (item, _) in &items {
+                    ui.add(egui::Label::new(item.as_str()).wrap());
+                }
             }
-            ui.label(Type::Small.rich(ui, advice).color(colors().muted));
+            if !advice.is_empty() {
+                ui.label(Type::Small.rich(ui, advice).color(colors().muted));
+            }
             ui.add_space(design::S);
             let loses = items.len() != background && (!only_sync || sync_loss);
             ui.horizontal(|ui| {
+                if only_sync
+                    && conflict.is_some()
+                    && Action::quiet("Review conflict").show(ui).clicked()
+                {
+                    if let Some(run) = self.encounters.run_mut() {
+                        run.review_conflict();
+                    }
+                    self.lookup.open = false;
+                    self.sessions.notes_open = false;
+                    self.page = Page::Run;
+                    self.confirm_close = false;
+                }
                 if only_sync
                     && self.settings.signed_out()
                     && Action::quiet("Connect to sync").show(ui).clicked()
@@ -686,11 +713,17 @@ impl Splat {
                 }
             } else {
                 let detail = self.encounters.run().map(|run| run.state_words(false));
+                let copy = self.encounters.run_copy_label();
                 if design::run_nav_item(
                     ui,
                     detail.as_deref().unwrap_or("Setup"),
                     page == Some(Page::Run),
                 )
+                .on_hover_text(format!(
+                    "{}{}",
+                    detail.as_deref().unwrap_or("Setup"),
+                    copy.map_or(String::new(), |copy| format!(" · {copy}"))
+                ))
                 .clicked()
                 {
                     self.page = Page::Run;
@@ -733,7 +766,7 @@ impl Splat {
                         + 2.0
                 })
                 .sum::<f32>()
-                + if self.sessions.recording() {
+                + if self.sessions.rail_recording_status().is_some() {
                     Density::Read.control()
                 } else {
                     0.0
@@ -746,7 +779,9 @@ impl Splat {
                 + design::S;
             ui.add_space((ui.available_height() - bottom).max(0.0));
             if let (Some((icon, state, color)), Some(word)) = (
-                self.sessions.recording_status(),
+                self.sessions
+                    .rail_recording_status()
+                    .map(|status| (status.icon, status.word, status.color)),
                 self.sessions.recording_detail(),
             ) {
                 let response = design::status_link(
@@ -964,42 +999,11 @@ impl Splat {
                 });
             }
         }
-        for word in self.sessions.alert_words() {
-            statuses.push(Status {
-                icon: icons::ERROR,
-                word,
-                color: c.result.error,
-            });
-        }
         if self.timeline.unreadable.is_some() {
             statuses.push(Status {
                 icon: icons::ERROR,
                 word: "Timeline not readable",
                 color: c.document.invalid,
-            });
-        }
-        if self.sessions.just_saved() {
-            statuses.push(Status {
-                icon: icons::OK,
-                word: "Recording saved",
-                color: c.document.saved,
-            });
-        }
-        if self.sessions.processing() {
-            statuses.push(Status {
-                icon: icons::AUDIO,
-                word: "Processing audio",
-                color: c.connection.busy,
-            });
-        } else if self.sessions.job_warned() {
-            let mut status = sessions::page::processed_warning();
-            status.word = "Check result";
-            statuses.push(status);
-        } else if self.sessions.job_done() {
-            statuses.push(Status {
-                icon: icons::SUCCESS,
-                word: "Processing done",
-                color: c.result.success,
             });
         }
         // A run files itself under this session, and the run's own page has no room to say so.
@@ -1485,7 +1489,10 @@ impl Splat {
                     return;
                 }
                 let party = &self.party;
+                let copy = self.encounters.run_copy_label();
                 if let Some(run) = self.encounters.run_mut() {
+                    run.copy_label = copy;
+                    run.account_status = Some(self.settings.connection_status());
                     run.recording_notice = self.sessions.run_notice();
                     let panel = self.lookup.open || self.sessions.notes_open;
                     // Beside a panel, a letter is the next word typed, never a command. A click

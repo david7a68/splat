@@ -482,7 +482,6 @@ impl Run {
 
     fn undo_action<'a>(&self, label: &'a str) -> Action<'a> {
         let action = Action::secondary(label)
-            .wrap()
             .icon(icons::UNDO)
             .density(Density::Read);
         let action = if matches!(self.state.phase, Phase::Running) && !self.lookup_open {
@@ -830,176 +829,148 @@ impl Run {
             },
         );
         ui.add_space(6.0);
-        // Undo has this line's first claim, so it can always name the action in full.
+        // Line two keeps the notice at the left and a fixed Undo slot at the right.
         let undo_label = self.undo_label();
         let mut undo = false;
-        // What sync needs from the DM. These stay until the cause is gone. A stopped sync
-        // comes first, because nothing else can be resolved without a connection.
-        let kept = match strip.unsent.as_slice() {
-            [] => None,
-            [name] => Some(format!("{name}: kept in Splat, not sent")),
-            names => Some(format!(
-                "{} kept in Splat, not sent",
-                design::count(names.len(), "change", "changes")
-            )),
-        };
-        let sync_alert = if strip.sync_stopped {
-            Some(match &kept {
-                None => SyncAlert::new(
-                    icons::OFFLINE,
-                    "Signed out of D&D Beyond",
-                    "Signed out",
-                    c.muted,
-                ),
-                Some(_) => SyncAlert::new(
-                    icons::OFFLINE,
-                    &format!(
-                        "Signed out of D&D Beyond. {}: not sent",
-                        strip.unsent.join(", ")
-                    ),
-                    "Signed out",
-                    c.result.error,
-                ),
-            })
-        } else if self.sync_needs_sign_in() {
-            Some(SyncAlert::new(
-                icons::SYNC_OFF,
-                "Not connected",
-                "Not connected",
-                c.muted,
-            ))
-        } else if let Some(name) = &strip.conflict {
+        let mut review_conflict = false;
+        let needs_connection = strip.sync_stopped || self.sync_needs_sign_in();
+        let offline_color = self
+            .account_status
+            .map_or(c.connection.offline, |status| status.color);
+        let sync_alert = if let Some(name) = &strip.conflict {
             Some(SyncAlert::new(
                 icons::WARN,
                 &format!("Sync conflict: {name}"),
                 &format!("Conflict: {name}"),
                 c.sync.conflict,
             ))
-        } else if let Some(kept) = &kept {
-            Some(SyncAlert::new(icons::WARN, kept, kept, c.result.warning))
+        } else if strip.sync_stopped {
+            Some(SyncAlert::new(
+                icons::OFFLINE,
+                "Signed out of D&D Beyond",
+                "Signed out",
+                offline_color,
+            ))
+        } else if self.sync_needs_sign_in() {
+            Some(SyncAlert::new(
+                icons::SYNC_OFF,
+                "Not connected",
+                "Not connected",
+                offline_color,
+            ))
+        } else if !strip.unsent.is_empty() {
+            Some(SyncAlert::new(
+                icons::WARN,
+                "Changes kept in Splat, not sent",
+                "Not sent",
+                c.result.warning,
+            ))
         } else {
             strip.sync_error.as_ref().map(|name| {
                 SyncAlert::new(
                     icons::ERROR,
                     &format!("Sync error: {name}"),
-                    &format!("Error: {name}"),
+                    "Sync error",
                     c.result.error,
                 )
             })
         };
-        let alert_width = sync_alert.as_ref().map_or(0.0, |alert| {
-            design::number_width(ui, &alert.short, &Type::Small.font(ui))
-                + if strip.sync_stopped || self.sync_needs_sign_in() {
-                    design::number_width(ui, "Connect to sync", &Type::Body.font(ui)) + design::L
-                } else {
-                    0.0
-                }
-        });
-        let stack_alert = sync_alert.is_some()
-            && (self.undo_action(&undo_label).natural_width(ui) + alert_width + design::L
-                > ui.available_width()
-                || nobody_present);
-        let mut review_conflict = false;
         ui.allocate_ui_with_layout(
-            vec2(ui.available_width(), 28.0),
+            vec2(ui.available_width(), Density::Read.control()),
             Layout::right_to_left(Align::Center),
             |ui| {
-                ui.set_min_height(28.0);
-                undo = self
-                    .undo_action(&undo_label)
-                    .hint(if self.lookup_open {
-                        "Undo the last step"
-                    } else {
-                        "Undo the last step (U)"
-                    })
-                    .show(ui)
-                    .clicked();
+                let slot = (ui.available_width() / 2.0).min(design::READER_MEASURE / 2.0);
+                let overhead = self.undo_action("").natural_width(ui);
+                let shown = design::words_that_fit(
+                    ui,
+                    &undo_label,
+                    &Type::Strong.font(ui),
+                    slot - overhead,
+                );
+                ui.allocate_ui_with_layout(
+                    vec2(slot, Density::Read.control()),
+                    Layout::right_to_left(Align::Center),
+                    |ui| {
+                        undo = self
+                            .undo_action(&shown)
+                            .name(&undo_label)
+                            .hint(&undo_label)
+                            .show(ui)
+                            .clicked();
+                    },
+                );
                 ui.with_layout(Layout::left_to_right(Align::Center), |ui| {
-                    if stack_alert {
-                        // The alert owns its next line; do not squeeze another notice beside Undo.
-                    } else if let Some(SyncAlert { text, short, color }) = &sync_alert {
-                        // Notes hide the panel with the conflict's controls, so one word leads there.
-                        let review = self.hide_panel && strip.conflict.is_some();
-                        let link = if review {
-                            design::number_width(ui, "Review", &Type::Body.font(ui)) + design::S
-                        } else if strip.sync_stopped || self.sync_needs_sign_in() {
-                            design::number_width(ui, "Connect to sync", &Type::Body.font(ui))
-                                + design::S
-                        } else {
-                            0.0
-                        };
-                        // Next to a long Undo it gives up size, then the word Sync, never the name.
-                        let room = ui.available_width() - link;
-                        let (role, text) =
-                            if design::number_width(ui, text, &Type::Strong.font(ui)) < room {
-                                (Type::Strong, text)
-                            } else if design::number_width(ui, text, &Type::Small.font(ui)) < room {
-                                (Type::Small, text)
-                            } else {
-                                (Type::Small, short)
-                            };
-                        ui.label(role.rich(ui, text.as_str()).color(*color));
-                        review_conflict = review && design::link(ui, "Review").clicked();
-                        if (strip.sync_stopped || self.sync_needs_sign_in())
-                            && design::link(ui, "Connect to sync").clicked()
-                        {
-                            self.wants_sign_in = true;
+                    ui.spacing_mut().item_spacing.x = design::XS;
+                    let font = Type::Small.font(ui);
+                    if let Some(notice) = self.recording_notice.filter(|_| strip.conflict.is_none())
+                    {
+                        design::status(
+                            ui,
+                            Status {
+                                icon: icons::WARN,
+                                word: "Recording silence",
+                                color: c.result.warning,
+                            },
+                        )
+                        .on_hover_text(notice);
+                        if sync_alert.is_some() {
+                            ui.label(Type::Small.rich(ui, "·").color(c.muted));
                         }
-                    } else if let Some(notice) = self.recording_notice {
-                        // Beside a long Undo, the state stays and its advice goes.
-                        let fits = design::number_width(ui, notice, &Type::Small.font(ui))
-                            < ui.available_width();
-                        let words = if fits { notice } else { "Recording silence" };
+                    }
+                    if nobody_present && self.recording_notice.is_none() && strip.conflict.is_none()
+                    {
                         ui.label(
                             Type::Small
-                                .rich(ui, format!("{} {words}", icons::WARN))
+                                .rich(ui, "No participants are present")
                                 .color(c.result.warning),
-                        );
-                    } else if nobody_present {
-                        ui.add(
-                            egui::Label::new(
-                                Type::Small.rich(ui, NOBODY_PRESENT).color(c.result.warning),
-                            )
-                            .wrap(),
-                        );
-                    } else if let Some(next) = &strip.next
-                        && ui.available_width() >= design::L * 4.0
-                    {
-                        let text = format!("Next: {next}");
-                        let role = if design::number_width(ui, &text, &Type::Body.font(ui))
-                            < ui.available_width()
-                        {
-                            Type::Body
+                        )
+                        .on_hover_text(NOBODY_PRESENT);
+                    } else if let Some(alert) = &sync_alert {
+                        let link = if strip.conflict.is_some() && self.hide_panel {
+                            "Review"
+                        } else if needs_connection {
+                            "Connect to sync"
                         } else {
-                            Type::Small
+                            ""
                         };
-                        // The row marked NEXT has the whole of a name too long for this line.
-                        let text =
-                            design::words_that_fit(ui, &text, &role.font(ui), ui.available_width());
-                        ui.label(role.rich(ui, text).color(c.turn.next));
+                        let full = &alert.text;
+                        let link_width = design::number_width(ui, link, &font) + design::S;
+                        let full_fits = design::number_width(ui, full, &font) + link_width
+                            <= ui.available_width();
+                        let words = if full_fits { full } else { &alert.short };
+                        ui.add(
+                            egui::Label::new(Type::Small.rich(ui, words).color(alert.color))
+                                .truncate(),
+                        )
+                        .on_hover_text(full);
+                        let fits_link = design::number_width(ui, link, &font) + design::XS
+                            <= ui.available_width();
+                        if !link.is_empty() && fits_link && design::small_link(ui, link).clicked() {
+                            if link == "Review" {
+                                review_conflict = true;
+                            } else {
+                                self.wants_sign_in = true;
+                            }
+                        }
+                    } else if self.recording_notice.is_none() {
+                        let text = if nobody_present {
+                            NOBODY_PRESENT.to_owned()
+                        } else {
+                            strip
+                                .next
+                                .as_ref()
+                                .map_or(String::new(), |next| format!("Next: {next}"))
+                        };
+                        let shown = design::words_that_fit(ui, &text, &font, ui.available_width());
+                        ui.label(Type::Small.rich(ui, shown).color(if nobody_present {
+                            c.result.warning
+                        } else {
+                            c.turn.next
+                        }));
                     }
                 });
             },
         );
-        if stack_alert && nobody_present {
-            ui.add(
-                egui::Label::new(Type::Small.rich(ui, NOBODY_PRESENT).color(c.result.warning))
-                    .wrap(),
-            );
-        }
-        if stack_alert && let Some(alert) = &sync_alert {
-            ui.horizontal_wrapped(|ui| {
-                ui.label(Type::Small.rich(ui, &alert.short).color(alert.color));
-                if (strip.sync_stopped || self.sync_needs_sign_in())
-                    && design::link(ui, "Connect to sync").clicked()
-                {
-                    self.wants_sign_in = true;
-                }
-                if self.hide_panel && strip.conflict.is_some() {
-                    review_conflict |= design::link(ui, "Review").clicked();
-                }
-            });
-        }
         ui.add_space(2.0);
         design::rule(ui);
         if review_conflict {
@@ -1757,10 +1728,10 @@ impl Run {
             .auto_shrink([false, false])
             .show(ui, |ui| {
                 ui.spacing_mut().item_spacing = vec2(design::XS, design::XS);
-                let columns = if ui.available_width() >= 400.0 { 3 } else { 2 };
+                let columns = if ui.available_width() >= design::CONDITION_THREE_COLUMNS_FROM { 3 } else { 2 };
                 egui::Grid::new("official_conditions")
                     .num_columns(columns)
-                    .min_col_width((ui.available_width() / columns as f32 - design::XS).max(90.0))
+                    .min_col_width((ui.available_width() / columns as f32 - design::XS).max(design::CONDITION_COLUMN_MIN))
                     .spacing([design::XS, design::XS])
                     .show(ui, |ui| {
                         for (position, (_, name)) in
@@ -1935,6 +1906,16 @@ impl Run {
             ui.spacing_mut().item_spacing.x = 0.0;
             let mut closing = false;
             let mut ending = false;
+            let close_width = ["Close run", "End encounter…", "Keys", "Saved", "Sync party"]
+                .iter()
+                .map(|word| design::number_width(ui, word, &Type::Strong.font(ui)) + design::L)
+                .sum::<f32>()
+                + design::L
+                + self.copy_label.as_ref().map_or(0.0, |copy| {
+                    design::number_width(ui, copy, &Type::Small.font(ui)) + design::L
+                });
+            let menu_needed = ui.available_width() < close_width;
+            let end_menu = menu_needed && self.copy_label.is_some();
             let mut controls = |ui: &mut egui::Ui| {
                 let blocked = self.close_block();
                 closing = Action::quiet(if blocked.is_some() {
@@ -1947,32 +1928,34 @@ impl Run {
                 .blocked(blocked)
                 .show(ui)
                 .clicked();
-                ending = Action::quiet("End encounter…")
-                    .density(Density::Read)
-                    .hint("Set an outcome. You can undo this.")
-                    .show(ui)
-                    .clicked();
+                if !end_menu {
+                    ending = Action::quiet("End encounter…")
+                        .density(Density::Read)
+                        .hint("Set an outcome. You can undo this.")
+                        .show(ui)
+                        .clicked();
+                }
             };
-            let close_width = ["Close run", "End encounter…", "Keys", "Saved", "Sync party"]
-                .iter()
-                .map(|word| design::number_width(ui, word, &Type::Strong.font(ui)) + design::L)
-                .sum::<f32>()
-                + design::L;
-            let menu_needed = ui.available_width() < close_width;
-            if menu_needed {
+            if menu_needed && !end_menu {
                 let menu = ui.menu_button(format!("Close {}", icons::DOWN), |ui| controls(ui));
                 design::named(ui, &menu.response, "Close menu");
             } else {
                 controls(ui);
+            }
+            if end_menu {
+                design::row_menu(ui, &self.name, |ui| {
+                    if Action::quiet("End encounter…").show(ui).clicked() {
+                        ending = true;
+                        ui.close();
+                    }
+                });
             }
             self.closing |= closing;
             self.ending |= ending;
             self.focus_outcome |= ending;
             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                 self.save_status(ui);
-                let keys = if compact && self.sync_needs_sign_in() {
-                    Action::quiet("").icon(icons::KEYS)
-                } else if compact {
+                let keys = if compact {
                     Action::quiet("Keys")
                 } else {
                     Action::quiet("Keys").icon(icons::KEYS)
@@ -2014,6 +1997,14 @@ impl Run {
             }
         };
         let path = self.path().map(|path| path.display().to_string());
+        let word = self
+            .copy_label
+            .as_ref()
+            .map(|copy| format!("{} · {copy}", status.word));
+        let status = Status {
+            word: word.as_deref().unwrap_or(status.word),
+            ..status
+        };
         let response = design::status(ui, status);
         if let Some(path) = path {
             response.on_hover_text(path);
@@ -2260,15 +2251,13 @@ impl Run {
             };
             let conflict = sync.state() == SyncState::Conflict;
             ui.push_id(index, |ui| {
-                let word = sync_status(sync.state()).word;
                 if conflict {
                     sync.conflicts_for(ui, &name);
                 } else {
-                    ui.label(
-                        Type::Strong
-                            .rich(ui, format!("{name} · {word}"))
-                            .color(colors().text),
-                    );
+                    ui.horizontal(|ui| {
+                        ui.label(Type::Strong.rich(ui, &name).color(colors().text));
+                        design::status(ui, sync_status(sync.state()));
+                    });
                 }
                 if Action::quiet(&format!("Stop sync for {name}"))
                     .density(Density::Read)
@@ -2472,19 +2461,10 @@ impl Run {
                     );
                 }
                 self.add_creature_form(ui);
-                if let Some(line) = self
-                    .state
-                    .log
-                    .last()
-                    .filter(|line| line.starts_with(super::ONE_ADDED))
-                {
-                    design::message(ui, Tone::Success, line);
-                }
                 if let Some(previous) = self.history.last().filter(|_| {
-                    self.state
-                        .log
-                        .last()
-                        .is_some_and(|line| line.starts_with(super::GROUP_ADDED))
+                    self.state.log.last().is_some_and(|line| {
+                        line.starts_with(super::GROUP_ADDED) || line.starts_with(super::ONE_ADDED)
+                    })
                 }) {
                     let start = previous.participants.len();
                     let tied = self
@@ -2494,6 +2474,7 @@ impl Run {
                         .enumerate()
                         .skip(start)
                         .find_map(|(first, arrival)| {
+                            let total = arrival.initiative?;
                             self.state
                                 .order
                                 .iter()
@@ -2502,17 +2483,47 @@ impl Run {
                                 .find(|i| {
                                     *i < start
                                         && self.state.participants[*i].present
-                                        && self.state.participants[*i].initiative
-                                            == arrival.initiative
+                                        && self.state.participants[*i].initiative == Some(total)
                                 })
-                                .map(|before| (first, before))
+                                .map(|before| (first, Self::roll_block_first(&self.state, before)))
                         });
+                    let line = self.state.log.last().cloned().unwrap_or_default();
                     if let Some((first, before)) = tied {
-                        let line = self.state.log.last().cloned().unwrap_or_default();
-                        if design::message_with_action(ui, Tone::Info, &line, "Move before") {
+                        let name =
+                            Self::roll_block_name(&self.state, &self.state.participants[before]);
+                        let waits = self.state.phase == Phase::Running
+                            && self
+                                .state
+                                .order
+                                .iter()
+                                .position(|i| *i == before)
+                                .is_some_and(|at| at <= self.state.cursor);
+                        let line = format!(
+                            "{line}{}",
+                            if waits {
+                                " · acts next round if moved before"
+                            } else {
+                                ""
+                            }
+                        );
+                        if design::message_with_action(
+                            ui,
+                            Tone::Info,
+                            &line,
+                            &format!("Move before {name}"),
+                        ) {
                             self.run_command(Command::MoveArrivalBefore(first, before));
                         }
+                    } else {
+                        design::message(ui, Tone::Success, &line);
                     }
+                } else if let Some(line) = self
+                    .state
+                    .log
+                    .last()
+                    .filter(|line| line.starts_with("Arrival moved before"))
+                {
+                    design::message(ui, Tone::Success, line);
                 }
                 design::rule(ui);
                 add = self.group_list(ui);
@@ -2943,17 +2954,22 @@ impl Run {
                     .rich(ui, "Made up in this fight. It has no stat block.")
                     .color(colors().muted),
             );
-            view::run_vitals(
-                ui,
-                definition,
-                &view::RunValues {
-                    armor_class: p.armor_class,
-                    hp: p.hp,
-                    initiative: p.initiative,
-                    by_hand: Vec::new(),
-                    speed: None,
-                },
-            );
+            ui.horizontal(|ui| {
+                for (label, value) in [
+                    ("HP", format!("{} / {}", display(p.hp), display(p.max_hp))),
+                    ("AC", display(p.armor_class)),
+                    ("INITIATIVE", display(p.initiative)),
+                ] {
+                    if label == "AC" && p.armor_class.is_none() {
+                        continue;
+                    }
+                    ui.vertical(|ui| {
+                        ui.label(Type::Label.rich(ui, label).color(colors().muted));
+                        ui.label(Type::Prose.rich(ui, value).color(colors().text));
+                    });
+                    ui.add_space(design::L);
+                }
+            });
             return;
         }
         // A linked character shows the same sheet as the Party page, with its age.
@@ -3431,7 +3447,7 @@ impl Run {
                         .color(colors().muted),
                 )
                 .wrap()
-                .halign(Align::LEFT),
+                .halign(Align::RIGHT),
             );
         }
         ui.allocate_ui_with_layout(
@@ -3607,12 +3623,6 @@ impl Run {
         if let Some((_, word, _)) = hp_word(&p) {
             numbers.push_str(&format!(" · {word}"));
         }
-        // A changed row has its change to say, and no room left for these.
-        if p.changes.is_none() {
-            for condition in &p.conditions {
-                numbers.push_str(&format!(" · {condition}"));
-            }
-        }
         let selected = self.panel == Panel::Record && self.selected == index;
         let (name, npc, mode, bonus, initiative, present) = (
             p.name.clone(),
@@ -3669,6 +3679,24 @@ impl Run {
             } else {
                 ui.available_width() - 2.0 * design::S
             };
+            let mut detail = detail;
+            for (at, condition) in p.conditions.iter().enumerate() {
+                let next = format!("{detail} · {condition}");
+                let remaining = p.conditions.len() - at - 1;
+                let reserve = if remaining > 0 {
+                    format!(" · +{remaining}")
+                } else {
+                    String::new()
+                };
+                if at > 0
+                    && design::number_width(ui, &format!("{next}{reserve}"), &Type::Small.font(ui))
+                        > detail_width
+                {
+                    detail.push_str(&format!(" · +{}", p.conditions.len() - at));
+                    break;
+                }
+                detail = next;
+            }
             let detail = ui.painter().layout(
                 detail
                     .split(" · ")
@@ -4334,7 +4362,19 @@ fn dock_name(ui: &egui::Ui, name: &str, font: &egui::FontId, width: f32) -> Stri
     }
     let last = name.split_whitespace().last().unwrap_or(name);
     if !last.chars().all(|c| c.is_ascii_digit()) && last.chars().count() != 1 {
-        return fitted;
+        let mut words: Vec<_> = fitted.split_whitespace().collect();
+        while words
+            .last()
+            .is_some_and(|word| ["of", "the", "de", "von"].contains(word))
+        {
+            words.pop();
+        }
+        while words.len() > 1
+            && design::number_width(ui, &format!("{}…", words.join(" ")), font) > width
+        {
+            words.pop();
+        }
+        return format!("{}…", words.join(" "));
     }
     let prefix_room = width - design::number_width(ui, &format!("… {last}"), font);
     let prefix = design::words_that_fit(ui, name, font, prefix_room);
@@ -4588,14 +4628,8 @@ impl RowLayout {
             );
             start..job.text.chars().count()
         };
-        if inline_state {
-            if let Some((icon, word, color)) = hp_word(p) {
-                add(&format!("{icon} {word}"), color);
-            }
-            if let Some(sync) = sync {
-                let status = sync_status(sync);
-                add(&format!("{} {}", status.icon, status.word), status.color);
-            }
+        if inline_state && let Some((icon, word, color)) = hp_word(p) {
+            add(&format!("{icon} {word}"), color);
         }
         if !p.present {
             add(&format!("{} Absent", icons::ABSENT), c.muted);
@@ -4666,6 +4700,18 @@ impl RowLayout {
             if fit == RowFit::Summary && bonuses.len() > 1 {
                 condition_spans.push(("Run changes".into(), add("more", c.participant.changed)));
             }
+        }
+        if inline_state && let Some(sync) = sync {
+            let status = sync_status(sync);
+            job.append(
+                &format!("{} {}", status.icon, status.word),
+                design::S,
+                egui::TextFormat {
+                    font_id: font.clone(),
+                    color: status.color,
+                    ..Default::default()
+                },
+            );
         }
         let second_line = (!job.is_empty()).then(|| ui.fonts_mut(|fonts| fonts.layout_job(job)));
         let name = ui.fonts_mut(|fonts| {
@@ -5106,6 +5152,11 @@ mod tests {
         let mut harness = egui_kittest::Harness::builder().build(|ctx| {
             egui::CentralPanel::default().show(ctx, |ui| {
                 let font = Type::Small.font(ui);
+                let long = "Seraphina Thornwood-Ashgrave of the Ninth Bell";
+                let room = design::number_width(ui, "Seraphina Thornwood-Ashgrave of", &font);
+                let fitted = dock_name(ui, long, &font, room);
+                assert_eq!(fitted, "Seraphina Thornwood-Ashgrave…");
+                assert!(design::number_width(ui, &fitted, &font) <= room);
                 for name in ["Cinder Wolf 12", "Cinder Wolf 2", "Goblin Warrior B"] {
                     let fitted = dock_name(ui, name, &font, 70.0);
                     assert!(

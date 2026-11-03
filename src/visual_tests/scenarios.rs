@@ -1484,6 +1484,11 @@ pub mod run_lookup {
 
         look_up(d, SPELL_QUERY);
         d.expect(SPELL);
+        d.observe(
+            "Keys",
+            d.visible_text("Keys"),
+            "Keys keeps its word beside Lookup at 960x640",
+        );
         d.state("reading-spell-beside-run", Sizes::All);
         d.goal_within("T2.1", "read a spell from a run", 3);
         // The top match opens with the other results still visible.
@@ -1744,8 +1749,14 @@ pub mod run_absent_player {
         );
         d.click(&format!("No initiative for {PLAYER}"));
         d.state("initiative-field-in-row", Sizes::All);
+        let top = d.row_node(TURN_ORDER_FIRST).map(|row| row.rect.top());
         d.type_text("20");
         d.press(Key::Enter);
+        d.observe(
+            "F3",
+            top == d.row_node(TURN_ORDER_FIRST).map(|row| row.rect.top()),
+            "A long initiative Undo does not move the roster down",
+        );
         d.state("initiative-set-in-combat", Sizes::Default);
         let order: Vec<String> = roster_places(d).into_iter().map(|row| row.0).collect();
         d.observe(
@@ -2185,7 +2196,7 @@ pub mod run_sync_conflict {
     const SYNC_PARTY: &str = "Sync party";
     const STOP_SYNC: &str = "Stop party sync";
     const UNDO_CLEARED: &str = "Undo for Brannoch Vale stops here";
-    const CLOSE_PROMPT: &str = "has not confirmed changes";
+    const CLOSE_PROMPT: &str = "has a sync conflict";
     const DISABLED_REASON: &str = "Wait for pending sync";
 
     pub fn run(d: &mut Driver<'_>) {
@@ -2224,11 +2235,17 @@ pub mod run_sync_conflict {
         d.request_close();
         d.observe(
             "T3.5",
-            d.has_containing(&format!("{CLOSE_PROMPT} to {SYNCED}")),
+            d.has_containing(&format!("{SYNCED} {CLOSE_PROMPT}")) && d.has("Review conflict"),
             "Closing the app with pending sync warns, and the warning names the character",
         );
         d.state("close-with-pending-sync", Sizes::Default);
-        d.press(Key::Escape);
+        d.click("Review conflict");
+        d.observe(
+            "R2",
+            participant_is_selected(d, SYNCED) && !d.has("Keep running"),
+            "Review conflict closes the app-close dialog and selects the character",
+        );
+        d.state("review-conflict-from-app-close", Sizes::Default);
 
         // From another page: on the strip, and Next turn still works.
         go_library(d);
@@ -2489,9 +2506,10 @@ pub mod party_from_run {
         d.state("sheet-with-no-spells", Sizes::Default);
         d.begin_task();
         d.click(SHEET_PAGE);
+        d.expect("Current HP");
         d.state("record-tab", Sizes::Default);
         d.click(SHEET_TAB);
-        d.expect(RUN_HEADING);
+        d.expect(SHEET_ONLY_TEXT);
         d.state("back-in-the-run", Sizes::Default);
         d.goal("read a page and return to the run");
 
@@ -2690,6 +2708,23 @@ pub mod gallery {
         d.state("focus-ring", Sizes::Default);
         d.click(MESSAGES);
         d.state("messages", Sizes::AllAndHiDpi);
+        let edges = (
+            d.painted_left("Undo long rest"),
+            d.painted_left("The party has full HP after this long rest."),
+        );
+        d.observe(
+            "U6",
+            edges
+                .0
+                .zip(edges.1)
+                .is_some_and(|(action, message)| (action - message).abs() < 1.0),
+            format!("A quiet action aligns with its message text: {edges:?}"),
+        );
+        d.observe(
+            "U6",
+            !d.visible_passage("Second use of widget ID"),
+            "A line-start action registers its click target once",
+        );
         d.goal("see every part of the design system");
         d.click("Markdown");
         d.state("markdown", Sizes::AllAndHiDpi);
@@ -3100,6 +3135,9 @@ pub mod run_edge_states {
             !d.has(CLOSE_ERROR) && d.has(KEEP_RUN) && d.has(SAVE_AS_NEW),
             "The message stays, with both ways out",
         );
+        if !d.has(CLOSE_RUN) && d.has("Close menu") {
+            d.click("Close menu");
+        }
         d.click(CLOSE_RUN);
         d.observe(
             "Changed on disk",
@@ -3147,6 +3185,9 @@ pub mod run_edge_states {
         d.click_row(TARGET);
         d.type_text("1");
         d.press(Key::Enter);
+        if !d.has(CLOSE_RUN) && d.has("Close menu") {
+            d.click("Close menu");
+        }
         d.click(CLOSE_RUN);
         d.state("save-new-run-before-close", Sizes::All);
         d.click("Save as a new run and close");
@@ -3429,7 +3470,12 @@ pub mod run_roster_conflict {
                 "At 960x640 with a long message, it takes one line and every row stays: {cut:?}"
             ),
         );
-        d.click("Read all conditions");
+        if d.has("Read all conditions") {
+            d.click("Read all conditions");
+        } else {
+            d.click_row(LOADED_ROW);
+            d.click(CONDITIONS);
+        }
         d.observe(
             "Condition summary",
             d.has("Kestrel Dunmoor") && d.has("Restrained"),
@@ -4370,7 +4416,11 @@ pub mod session_notes {
             !d.has("Show disk version") && d.in_view_containing("Written in Obsidian."),
             "The comparison opens at its first difference without another action",
         );
-        d.click("Next difference");
+        d.observe(
+            "S4",
+            !d.has("Next difference"),
+            "One differing line has no Next difference action",
+        );
         d.observe(
             "T11.4",
             d.has_containing("Written in Obsidian."),
@@ -4505,6 +4555,11 @@ pub mod session_notes {
             "iter-2-S10",
             !d.visible_passage("Recap of last time") && d.visible_passage("What happened"),
             "The Notes panel opens at What happened with repeated note headings scrolled out",
+        );
+        d.observe(
+            "Keys",
+            d.visible_text("Keys"),
+            "Keys keeps its word beside Notes at 960x640",
         );
         d.state("run-with-notes", Sizes::All);
         let wide_screen = d.at_size((1536.0, 864.0), |d| d.in_view(NEXT_TURN) && !d.has("Prep"));
@@ -4965,7 +5020,15 @@ pub mod session_recording {
             d.has_containing("Undo: 7 damage") && d.has_containing("Recording silence"),
             "A silent input shows on the run, beside a long Undo",
         );
-        d.state("run-silent", Sizes::Default);
+        d.state("run-silent", Sizes::All);
+        let silence = d.at_size(SMALL, |d| {
+            d.visible_text("Recording silence") && d.visible_text("Not connected")
+        });
+        d.observe(
+            "R1",
+            silence,
+            "Silence and the short connection word fit the run notice at 960x640",
+        );
         d.click_containing("Undo: 7 damage");
         close_run(d);
         d.click("Recording silence");
@@ -5010,9 +5073,9 @@ pub mod session_recording {
         d.state("recording-on-another-page", Sizes::Default);
         // A close does not end it by surprise.
         d.request_close();
-        d.expect("Keep running");
+        d.expect("Keep recording");
         d.state("recording-close-prompt", Sizes::Default);
-        d.click("Keep running");
+        d.click("Keep recording");
         d.observe(
             "T11.5",
             d.page_title().as_deref() == Some("Library"),
@@ -5023,7 +5086,6 @@ pub mod session_recording {
         d.click("Stop recording");
         d.expect("saved: 2026-01-01 19:00");
 
-        d.click("Recordings");
         d.expect(RECORDING);
         d.observe(
             "T11.5",
@@ -5111,7 +5173,7 @@ pub mod session_recording {
         d.request_close();
         d.expect("Continue processing goes on from there");
         d.state("processing-close-prompt", Sizes::Default);
-        d.click("Keep running");
+        d.click("Keep processing");
         d.app_mut()
             .sessions
             .simulate_job_end(Err(CANCELLED.to_owned()));
@@ -5148,8 +5210,8 @@ pub mod session_recording {
         d.expect("your limit is reached");
         d.state("processing-failed", Sizes::All);
 
-        // Retry from the banner, so no old failure stays beside a new result.
-        d.click("Continue processing");
+        // The open recording row owns the retry and clears the old failure.
+        d.click_containing("Continue processing:");
         d.expect("is processed");
         d.observe(
             "T11.6",
@@ -5250,6 +5312,7 @@ pub mod session_recording {
         );
         d.state("recording-warned", Sizes::Default);
 
+        d.click_containing("More actions for 2026-01-01");
         d.click_containing("Process again:");
         d.expect("Replace the results");
         d.state("process-again-confirm", Sizes::Default);
@@ -5282,9 +5345,9 @@ pub mod session_recording {
         d.expect("no such device");
         d.state("recording-stopped", Sizes::Default);
         d.observe(
-            "T11.5",
+            "R3",
             d.has("Record again"),
-            "A recording that stopped by itself also offers one press to record again",
+            "The stopped row owns its state and offers Record again",
         );
         d.click("Record again");
         d.expect("Stop recording");
@@ -5563,7 +5626,7 @@ pub mod encounter_groups {
         d.click(&add_group(GROUP_RIVALS));
         d.expect("placed after");
         let before = current_participant(d);
-        d.click("Move before");
+        d.click_containing("Move before Rival Team");
         d.observe(
             "F4",
             current_participant(d) == before && d.has_containing("Undo: move arrival before"),
@@ -6005,12 +6068,30 @@ pub mod run_add_creature {
         d.state("arrivals-made-up-ready", Sizes::Default);
         d.click("Add Ghost of the Mill to the initiative list");
         d.expect("Added by hand: Ghost of the Mill");
+        d.expect("Move before Ember Cultist");
         d.state("arrivals-made-up-added", Sizes::All);
         d.goal("add a creature made up at the table to a running fight");
         d.click_row("Ghost of the Mill");
         d.click("Stat block");
         d.expect("Made up in this fight. It has no stat block.");
+        d.observe(
+            "F1",
+            d.visible_text("22 / 22") && d.visible_text("9") && !d.visible_text("printed +0"),
+            "A made-up card shows typed HP and an unsigned initiative total",
+        );
         d.state("made-up-creature-sheet", Sizes::Default);
+        d.begin_task();
+        d.click_row("Ghost of the Mill");
+        d.type_text("5");
+        d.press(Key::Enter);
+        d.observe(
+            "F1",
+            d.visible_text("17 / 22"),
+            "Damage keeps the made-up creature's maximum HP",
+        );
+        d.state("made-up-creature-after-damage", Sizes::Default);
+        d.click_containing("Undo: 5 damage");
+        d.begin_task();
         fight_tab(d, "Arrivals");
         d.expect(FIELD);
         d.observe(
