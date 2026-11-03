@@ -29,6 +29,23 @@ Rust 1.95.0 and the Rust overlay follow the other local projects.
 The Linux shell includes the libraries needed for Wayland, X11, and OpenGL.
 It selects Nix Mesa for EGL so the app also starts on non-NixOS hosts.
 
+For parallel design work, run `devenv shell -- audit-warm` once in the seed worktree
+before copying its `target/` with `cp -a --reflink=always`. This builds the test
+binaries and warms the exact Clippy command used by `check`. A test-only seed does
+not contain all the metadata Clippy needs. Keep a separate `target/` in each
+worktree; a shared directory causes Cargo lock waits. Keep build output on disk,
+not in `/tmp` (a RAM filesystem on the audit machine).
+
+After a set of edits, run `check` first for fast compiler and lint feedback, then
+`cargo test --locked`. `cargo check --locked --tests` is also useful while editing,
+but does not replace either gate. Before merging, run both gates and a full
+`visual-test` run, and review all captures. `--only` is for local feedback.
+
+Splat's test profile keeps file and line information for backtraces, but omits
+local-variable debug information. Normal app builds keep full debug information.
+To debug a test with locals, use
+`cargo test --locked --config 'profile.test.package.splat.debug=2'`.
+
 ## Visual tests
 
 `cargo test --locked` runs every usage scenario on the real app, headlessly and with no
@@ -43,10 +60,12 @@ devenv shell -- visual-test work --only run-lookup,party
 ```
 
 This also writes to `artifacts/screenshots/iter-0/`: a PNG for each state at 960x640,
-1200x800 and 1920x1080, `contact-sheet.png`, `ergonomics.json`, `ergonomics.md`,
+1200x800 and 1920x1080, `ergonomics.json`, `ergonomics.md`,
 `manifest.txt`, and one `video/<scenario>.mp4` per scenario. Rendering uses Mesa's
-software Vulkan driver, so captures repeat between runs. Video and the contact sheet need
-the host's `ffmpeg` and `montage`.
+software Vulkan driver, so captures repeat between runs. Video needs the host's
+`ffmpeg`. The optional contact sheet needs `montage` and can use several GB of RAM.
+Use `devenv shell -- visual-contact-sheet iter-0` to make one from existing captures,
+or set `SPLAT_VISUAL_CONTACT_SHEET=1` to make it with a full `visual-test` run.
 
 - `SPLAT_VISUAL_ENFORCE=strict` fails on any violation. `report` never fails on a check.
 - `SPLAT_VISUAL_UPDATE_BASELINE=1` rewrites the baseline after a full run.
