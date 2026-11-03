@@ -5133,7 +5133,7 @@ impl RowLayout {
             unwrapped.wrap.max_width = f32::INFINITY;
             let needed = ui.fonts_mut(|fonts| fonts.layout_job(unwrapped)).size().x;
             let extra = (needed - old_width + design::HAIRLINE_WIDTH)
-                .min((hp_right - temp_right - bar_inset - design::XL).max(0.0));
+                .min((hp_right - temp_right - bar_inset - design::XL - design::XS).max(0.0));
             bar_inset += extra;
             job.wrap.max_width += extra;
             second_line = Some(ui.fonts_mut(|fonts| fonts.layout_job(job)));
@@ -5702,6 +5702,8 @@ mod tests {
         .unwrap();
         participant.conditions.push("Blessed".into());
         participant.concentration = true;
+        // This is a live row; initiative was entered before combat began.
+        participant.initiative = Some(14);
         let ctx = egui::Context::default();
         crate::design::theme::install(&ctx);
         let _ = ctx.run(egui::RawInput::default(), |ctx| {
