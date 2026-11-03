@@ -137,63 +137,74 @@ pub(super) fn list_row(
     actions: impl FnOnce(&mut egui::Ui),
 ) {
     ui.push_id(id, |ui| {
-        ui.horizontal(|ui| {
-            ui.set_min_height(Density::Scan.row() + design::S);
-            ui.vertical(|ui| {
-                ui.spacing_mut().item_spacing.y = 0.0;
-                ui.set_width((ui.available_width() - design::S * 40.0).max(design::S * 12.0));
-                ui.add(
-                    egui::Label::new(Type::Strong.rich(ui, name).color(colors().text)).truncate(),
-                )
-                .on_hover_text(name);
-                let visible_detail = design::words_that_fit(
-                    ui,
-                    detail,
-                    &Type::Small.font(ui),
-                    ui.available_width() - design::L,
-                );
-                let warning = visible_detail
-                    .split(" · ")
-                    .position(|part| matches!(part, "Changed elsewhere" | "Offered in no fight"));
-                let mut job = egui::text::LayoutJob::default();
-                for (index, part) in visible_detail.split(" · ").enumerate() {
-                    if index > 0 {
-                        job.append(
-                            " · ",
-                            0.0,
-                            egui::TextFormat {
-                                font_id: Type::Small.font(ui),
-                                color: colors().muted,
-                                ..Default::default()
-                            },
+        ui.allocate_ui_with_layout(
+            egui::vec2(ui.available_width(), Density::Scan.row() + design::S),
+            egui::Layout::right_to_left(egui::Align::Center),
+            |ui| {
+                ui.set_min_height(Density::Scan.row() + design::S);
+                ui.scope(actions);
+                ui.add_space(design::L);
+                let room = ui.available_width().max(0.0);
+                ui.allocate_ui_with_layout(
+                    egui::vec2(room, Type::Strong.line() + Type::Small.line()),
+                    egui::Layout::top_down(egui::Align::Min),
+                    |ui| {
+                        ui.spacing_mut().item_spacing.y = 0.0;
+                        ui.set_width(room);
+                        ui.add(
+                            egui::Label::new(Type::Strong.rich(ui, name).color(colors().text))
+                                .truncate(),
+                        )
+                        .on_hover_text(name);
+                        let visible_detail = design::words_that_fit(
+                            ui,
+                            detail,
+                            &Type::Small.font(ui),
+                            ui.available_width() - if status { design::L } else { 0.0 },
                         );
-                    }
-                    let words = if warning == Some(index) {
-                        format!("{} {part}", icons::WARN)
-                    } else if index == 0 && status {
-                        format!("{} {part}", icons::RUN)
-                    } else {
-                        part.to_owned()
-                    };
-                    job.append(
-                        &words,
-                        0.0,
-                        egui::TextFormat {
-                            font_id: Type::Small.font(ui),
-                            color: if warning == Some(index) {
-                                colors().result.warning
+                        let warning = visible_detail.split(" · ").position(|part| {
+                            matches!(part, "Changed elsewhere" | "Offered in no fight")
+                        });
+                        let mut job = egui::text::LayoutJob::default();
+                        for (index, part) in visible_detail.split(" · ").enumerate() {
+                            if index > 0 {
+                                job.append(
+                                    " · ",
+                                    0.0,
+                                    egui::TextFormat {
+                                        font_id: Type::Small.font(ui),
+                                        color: colors().muted,
+                                        ..Default::default()
+                                    },
+                                );
+                            }
+                            let words = if warning == Some(index) {
+                                format!("{} {part}", icons::WARN)
+                            } else if index == 0 && status {
+                                format!("{} {part}", icons::RUN)
                             } else {
-                                colors().muted
-                            },
-                            ..Default::default()
-                        },
-                    );
-                }
-                let response = ui.add(egui::Label::new(job).extend()).on_hover_text(detail);
-                design::named(ui, &response, &format!("{name} · {detail}"));
-            });
-            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), actions);
-        });
+                                part.to_owned()
+                            };
+                            job.append(
+                                &words,
+                                0.0,
+                                egui::TextFormat {
+                                    font_id: Type::Small.font(ui),
+                                    color: if warning == Some(index) {
+                                        colors().result.warning
+                                    } else {
+                                        colors().muted
+                                    },
+                                    ..Default::default()
+                                },
+                            );
+                        }
+                        let response = ui.add(egui::Label::new(job).extend()).on_hover_text(detail);
+                        design::named(ui, &response, &format!("{name} · {detail}"));
+                    },
+                );
+            },
+        );
     });
 }
 

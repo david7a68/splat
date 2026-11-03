@@ -132,7 +132,8 @@ warns about saved runs and offers **Move runs and save** or **Save without movin
 Close the open run before saving run settings.
 
 The run panel groups participant tabs and fight tabs. `Correct` changes a participant's
-values. `Arrivals` adds a creature or a prepared group; a blank initiative total rolls it.
+values. A blocked Undo shows **Nothing to undo**, or **Nothing to undo since reopening**.
+`Arrivals` adds a creature or a prepared group; a blank initiative total rolls it.
 `Ctrl+G` opens Arrivals in one step when it is in the `Fight` menu.
 Unsaved runs offer **Save as a new run and close** in the close dialog.
 Automatic combat resolution and simulation integration remain later work.

@@ -1191,7 +1191,9 @@ pub(super) fn overrides_form(
         .data_mut(|data| data.remove_temp::<bool>(egui::Id::new(FORM_OPENED)))
         .is_some()
     {
-        heading.scroll_to_me(Some(egui::Align::Min));
+        let mut rect = heading.rect;
+        rect.min.y -= design::S;
+        ui.scroll_to_rect(rect, Some(egui::Align::Min));
     }
     if let Err(error) = overrides.resolve_for(entry, side) {
         design::message(ui, Tone::Error, &override_error(&error));

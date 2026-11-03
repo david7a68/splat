@@ -317,6 +317,19 @@ struct MovedRun {
     words: String,
 }
 
+fn processing_destination(settings: &ProcessingSettings) -> String {
+    let config = &settings.config;
+    let llm = if config.provider == processing::Provider::CodexCli {
+        format!("Codex ({})", config.llm_model.trim())
+    } else {
+        processing::host(&config.llm_url)
+    };
+    format!(
+        "Process sends the audio and the session and campaign names to {} for a transcript. Then the transcript, this session's name, notes and events go to {llm} twice: once to clean them, and once to check that work against the raw words.",
+        processing::host(&config.speech_url)
+    )
+}
+
 pub fn processed_warning() -> Status<'static> {
     Status {
         icon: icons::WARN,
@@ -1702,7 +1715,7 @@ impl Sessions {
         }
         if self.job_warned() {
             return Some(Status {
-                word: "Check result",
+                word: "Processed",
                 ..processed_warning()
             });
         }
@@ -2048,7 +2061,16 @@ impl Sessions {
             }
             return;
         }
-        if self.confirm_record {
+        if self.confirm_record
+            || (self.tab == Tab::Recordings
+                && self.reading.is_none()
+                && self.recordings.iter().any(|recording| {
+                    recording
+                        .status
+                        .as_deref()
+                        .is_some_and(|words| words.starts_with("Stopped by itself:"))
+                }))
+        {
             return;
         }
         let reason = self.record_blocked(settings);
@@ -4120,7 +4142,7 @@ impl Sessions {
                 matches!(live.recorder.health(), Health::Stalled | Health::Stopped(_))
             });
         if stalled && let Some(live) = &self.live {
-            ui.add(egui::Label::new(Type::Small.rich(ui, format!("{}: not saving audio after {}. What was saved is kept. Record again starts a new file.", live.label, spoken_length(live.recorder.seconds()))).color(c.muted)).wrap());
+            ui.add(egui::Label::new(Type::Small.rich(ui, format!("Not saving audio after {}. What was saved is kept. Record again starts a new file.", spoken_length(live.recorder.seconds()))).color(c.muted)).wrap());
         }
         if let Some(words) = stored.as_ref().filter(|_| !live && !processing) {
             ui.horizontal_wrapped(|ui| {
@@ -4280,6 +4302,17 @@ impl Sessions {
             }
         });
         if self.confirm_again.as_deref() == Some(recording.path.as_path()) {
+            ui.scope(|ui| {
+                ui.set_max_width(ui.available_width().min(design::READER_MEASURE));
+                ui.add(
+                    egui::Label::new(
+                        Type::Small
+                            .rich(ui, processing_destination(settings))
+                            .color(c.muted),
+                    )
+                    .wrap(),
+                );
+            });
             design::message(
                 ui,
                 Tone::Info,
@@ -4737,29 +4770,32 @@ impl Sessions {
             self.reading_view(ui, book);
             return;
         }
-        if self.live.is_none() && settings.problem().is_none() {
-            let config = &settings.config;
-            let llm = if config.provider == processing::Provider::CodexCli {
-                format!("Codex ({})", config.llm_model.trim())
-            } else {
-                processing::host(&config.llm_url)
-            };
+        let offers_process = self.recordings.iter().any(|recording| {
+            !recording.summary
+                && self
+                    .live
+                    .as_ref()
+                    .is_none_or(|live| live.recorder.path() != recording.path)
+                && self
+                    .job
+                    .as_ref()
+                    .is_none_or(|(job, _)| job.recording != recording.path)
+        });
+        if offers_process
+            && self.live.is_none()
+            && self.job.is_none()
+            && settings.problem().is_none()
+        {
             ui.scope(|ui| {
-            ui.set_max_width(ui.available_width().min(design::READER_MEASURE));
-            ui.add(
-                egui::Label::new(
-                    Type::Small
-                        .rich(
-                            ui,
-                            format!(
-                                "Process sends the audio and the session and campaign names to {} for a transcript. Then the transcript, this session's name, notes and events go to {llm} twice: once to clean them, and once to check that work against the raw words.",
-                                processing::host(&config.speech_url),
-                            ),
-                        )
-                        .color(colors().muted),
-                )
-                .wrap(),
-            );
+                ui.set_max_width(ui.available_width().min(design::READER_MEASURE));
+                ui.add(
+                    egui::Label::new(
+                        Type::Small
+                            .rich(ui, processing_destination(settings))
+                            .color(colors().muted),
+                    )
+                    .wrap(),
+                );
             });
         }
         let recordings = self.recordings.clone();

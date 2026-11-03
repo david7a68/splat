@@ -52,7 +52,7 @@ pub enum Account {
     RefreshFailing,
 }
 
-const SESSION_ENDED: &str = "Check your connection, then select Connect.";
+const SESSION_ENDED: &str = "Your sign-in ended. Select Connect to sign in again.";
 
 /// 5, 10, 20, 40, then 60 seconds. Renewal starts a minute before the token ends at most,
 /// so a short drop gets several tries.
@@ -398,7 +398,11 @@ impl Settings {
             _ => {}
         }
         if let Some(error) = &self.error {
-            design::message(ui, Tone::Error, error);
+            if error == SESSION_ENDED {
+                small(ui, error);
+            } else {
+                design::message(ui, Tone::Error, error);
+            }
         }
         if let Some(warning) = &self.warning {
             if account == Account::KeyringWarning {

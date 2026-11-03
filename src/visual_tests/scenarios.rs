@@ -1028,7 +1028,14 @@ pub mod encounter_run {
         d.state("saved-runs", Sizes::Default);
         resume_run(d, RUN);
         d.expect(CURRENT_TURN);
-        d.state("initiative-list", Sizes::AllAndHiDpi);
+        d.app_mut()
+            .encounters
+            .run_mut()
+            .unwrap()
+            .simulate_fresh_live_history();
+        d.settle();
+        d.expect("Nothing to undo");
+        d.state("live-with-no-history", Sizes::AllAndHiDpi);
         d.check_tab_order("encounter run");
         d.goal("resume a run in progress");
         d.review("T1.8", "the initiative list");
@@ -2580,19 +2587,26 @@ pub mod party_from_run {
         }
         d.state("zero-absent-many-conditions", Sizes::Default);
         d.review("T1.8", "0 HP and absent are distinct without colour");
-        // Each word on its own row, in full, at the minimum window. The tab that also has
-        // these words is closed first, so it cannot answer for the row.
+        // A crowded row keeps its first conditions and a count. The count opens all of them.
         d.click(SHEET_TAB);
-        let row = d.row_words(ABSENT_ROW);
+        let row = d.row_words(ABSENT_ROW).replace('\u{a0}', " ");
+        let full = d.row_node(ABSENT_ROW).unwrap().name;
         let unread: Vec<&str> = MANY_CONDITIONS
             .into_iter()
-            .filter(|condition| !row.contains(condition))
+            .filter(|condition| !full.contains(condition))
             .collect();
         let zero = d.row_words(MEMBER);
         d.observe(
             "T1.8",
-            unread.is_empty() && row.contains("Absent") && zero.contains("0 HP"),
+            unread.is_empty() && row.contains("Absent") && row.contains("Blinded")
+                && row.contains("Charmed") && row.contains("3 more") && zero.contains("0 HP"),
             format!("At 960x640, {ABSENT_ROW} paints: {row}. {MEMBER} paints: {zero}. Missing: {unread:?}"),
+        );
+        d.click("Read all conditions");
+        d.observe(
+            "T1.8",
+            MANY_CONDITIONS.iter().all(|condition| d.has(condition)),
+            "The row's count opens the full list of conditions",
         );
         d.click_row(MEMBER);
         d.state("zero-hp-selected", Sizes::Default);
@@ -3153,12 +3167,12 @@ pub mod run_edge_states {
         d.state("long-effect-text", Sizes::All);
         d.observe(
             "Long effects",
-            d.visible_text("Wreathed in the cinders more"),
-            "The row keeps the first four words and more",
+            d.visible_text("Poisoned") && d.has("Read all conditions"),
+            "The crowded row keeps one condition and a count for the long effect",
         );
         d.goal("record a long effect");
         d.click("Sheet");
-        d.click(&format!("More about {LONG_EFFECT}"));
+        d.click("Read all conditions");
         d.observe(
             "Long effects",
             d.visible_text(LONG_EFFECT),
@@ -5177,7 +5191,7 @@ pub mod session_recording {
             .sessions
             .simulate_recorder_health(Health::Stalled);
         d.settle();
-        d.expect("not saving audio after");
+        d.expect("Not saving audio after");
         d.state("recording-stalled", Sizes::Default);
         d.observe(
             "T11.5",
@@ -5186,7 +5200,7 @@ pub mod session_recording {
         );
         d.observe(
             "T11.5",
-            d.has_containing("not saving audio after")
+            d.has_containing("Not saving audio after")
                 && d.has_containing("What was saved is kept"),
             "The stalled row owns its reason and its recovery action",
         );
@@ -5438,9 +5452,8 @@ pub mod session_recording {
         d.settle();
         d.observe(
             "T11.6",
-            d.has_containing("Processed, with a warning")
-                && d.rail_words().contains("Check result"),
-            "A result with a warning does not read as done on other pages",
+            d.has_containing("Processed, with a warning") && d.rail_words().contains("Processed"),
+            "A processed result keeps its warning in the rail and on other pages",
         );
         d.state("processing-warned-elsewhere", Sizes::Default);
         d.click(NAV_SESSIONS);
@@ -6139,7 +6152,7 @@ pub mod run_overrides {
                 && d.has_containing("Attack bonus: As printed → +1 on each attack")
                 && d.has_containing("add by hand")
                 && d.has_containing("Speed: 30 ft → 40 ft")
-                && d.visible_text("Speed 30 ft. → 40 ft · add by hand")
+                && d.visible_text("Speed 30 ft → 40 ft · add by hand")
                 && d.has_containing("Changed"),
             "The card shows the base and changed values, and says what to add by hand",
         );
