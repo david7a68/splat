@@ -1650,6 +1650,18 @@ pub fn draft_comparison(ui: &mut Ui, draft: &str, disk: &str, id: impl std::hash
     if let Some(line) = target {
         ui.data_mut(|data| data.insert_temp(state, line));
     }
+    if let Some(heading) = left
+        .iter()
+        .take(target.or(current).unwrap_or(first) + 1)
+        .rev()
+        .find(|line| line.trim_start().starts_with('#'))
+    {
+        ui.label(
+            Type::Small
+                .rich(ui, format!("In {}", heading.trim_start_matches('#').trim()))
+                .color(colors().muted),
+        );
+    }
     ui.columns(2, |columns| {
         group_label(&mut columns[0], "Your draft");
         group_label(&mut columns[1], "In the file now");
@@ -1697,6 +1709,7 @@ pub fn draft_comparison(ui: &mut Ui, draft: &str, disk: &str, id: impl std::hash
                         })
                         .show(&mut columns[at], |ui| {
                             ui.set_min_width(ui.available_width());
+                            ui.set_min_height(heights[line] - ui.spacing().item_spacing.y);
                             ui.horizontal_top(|ui| {
                                 let (mark, _) = ui.allocate_exact_size(
                                     egui::vec2(XS, Type::Body.line()),
@@ -1738,11 +1751,22 @@ mod tests {
 
     #[test]
     fn first_draft_difference_is_visible_on_the_first_frame() {
-        for prefix in [0, 3, 50] {
+        for (prefix, wrapped) in [(0, false), (3, false), (50, false), (50, true)] {
             let context = egui::Context::default();
             super::super::theme::install(&context);
             let context_lines = (0..prefix)
-                .map(|n| format!("Unchanged line {n}\n"))
+                .map(|n| {
+                    if wrapped && n % 3 == 0 {
+                        format!(
+                            "Unchanged line {n}: {}\n",
+                            "A longer unchanged paragraph. ".repeat(3)
+                        )
+                    } else if wrapped && n % 3 == 1 {
+                        "\n".into()
+                    } else {
+                        format!("Unchanged line {n}\n")
+                    }
+                })
                 .collect::<String>();
             let draft = format!("{context_lines}My changed draft line");
             let disk = format!("{context_lines}Changed elsewhere.\nExtra disk line");
@@ -1785,7 +1809,7 @@ mod tests {
                     output.shapes.iter().any(|shape| visible(
                         &shape.shape,
                         shape.clip_rect,
-                        &format!("Unchanged line {}", prefix - 2)
+                        draft.lines().nth(prefix - 2).unwrap()
                     )),
                     "two context lines stay in view"
                 );

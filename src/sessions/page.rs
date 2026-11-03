@@ -259,7 +259,6 @@ pub struct Sessions {
     /// A step of the run came between. The next word typed starts a line of its own.
     break_before_words: bool,
     note_editor_id: Option<egui::Id>,
-    conflict_at: Option<(PathBuf, usize)>,
     move_run_here: Option<(Uuid, String)>,
     /// When a recording last stopped, so the rail can say it was kept.
     saved_at: Option<Instant>,
@@ -2321,114 +2320,10 @@ impl Sessions {
                 draft.show_disk();
             }
             if let Some(disk) = &draft.on_disk {
-                let left: Vec<_> = draft.body.lines().collect();
-                let right: Vec<_> = disk.lines().collect();
-                let differences: Vec<_> = (0..left.len().max(right.len()))
-                    .filter(|&line| left.get(line) != right.get(line))
-                    .collect();
-                let first = differences.first().copied().unwrap_or(0);
-                let initial = self
-                    .conflict_at
-                    .as_ref()
-                    .is_none_or(|(path, _)| *path != draft.path);
-                let mut target = initial.then_some(first);
-                if initial {
-                    self.conflict_at = Some((draft.path.clone(), first));
-                }
-                ui.horizontal(|ui| {
-                    let words = if differences.is_empty() {
-                        "No lines differ".to_owned()
-                    } else {
-                        design::count(differences.len(), "line differs", "lines differ")
-                    };
-                    ui.label(Type::Small.rich(ui, words).color(colors().muted));
-                    if !differences.is_empty()
-                        && Action::quiet("Next difference").show(ui).clicked()
-                    {
-                        let current = self.conflict_at.as_ref().map_or(first, |(_, line)| *line);
-                        let next = differences
-                            .iter()
-                            .copied()
-                            .find(|&line| line > current)
-                            .unwrap_or(first);
-                        self.conflict_at = Some((draft.path.clone(), next));
-                        target = Some(next);
-                    }
-                });
-                let current = self.conflict_at.as_ref().map_or(first, |(_, line)| *line);
-                if let Some(heading) = left
-                    .iter()
-                    .take(current + 1)
-                    .rev()
-                    .find(|line| line.trim_start().starts_with('#'))
-                {
-                    ui.label(
-                        Type::Small
-                            .rich(ui, format!("In {}", heading.trim_start_matches('#').trim()))
-                            .color(colors().muted),
-                    );
-                }
-                ui.columns(2, |columns| {
-                    design::group_label(&mut columns[0], "Your draft");
-                    design::group_label(&mut columns[1], "In the file now");
-                });
-                let comparison_height = ui.available_height();
-                egui::ScrollArea::vertical()
-                    .id_salt(("conflict_versions", &draft.path))
-                    .auto_shrink([false, false])
-                    .show(ui, |ui| {
-                        for line in 0..left.len().max(right.len()) {
-                            let differs = left.get(line) != right.get(line);
-                            let top = ui.cursor().top();
-                            ui.columns(2, |columns| {
-                                for (at, lines) in [&left, &right].into_iter().enumerate() {
-                                    let fill = if differs {
-                                        colors().selected
-                                    } else {
-                                        colors().page
-                                    };
-                                    egui::Frame::new().fill(fill).show(&mut columns[at], |ui| {
-                                        ui.set_min_width(ui.available_width());
-                                        ui.horizontal_top(|ui| {
-                                            let (mark, _) = ui.allocate_exact_size(
-                                                egui::vec2(design::XS, Type::Body.line()),
-                                                egui::Sense::hover(),
-                                            );
-                                            if differs {
-                                                ui.painter().vline(
-                                                    mark.center().x,
-                                                    mark.y_range(),
-                                                    egui::Stroke::new(
-                                                        design::HAIRLINE_WIDTH,
-                                                        colors().accent,
-                                                    ),
-                                                );
-                                            }
-                                            ui.add(
-                                                egui::Label::new(Type::Body.rich(
-                                                    ui,
-                                                    lines.get(line).copied().unwrap_or(" "),
-                                                ))
-                                                .wrap(),
-                                            );
-                                        });
-                                    });
-                                }
-                            });
-                            if target.map(|line| line.saturating_sub(2)) == Some(line) {
-                                let rect = egui::Rect::from_min_size(
-                                    egui::pos2(ui.min_rect().left(), top),
-                                    egui::vec2(ui.available_width(), Type::Body.line()),
-                                );
-                                ui.scroll_to_rect(rect, Some(egui::Align::TOP));
-                            }
-                        }
-                        ui.add_space((comparison_height - Type::Body.line()).max(0.0));
-                    });
+                design::draft_comparison(ui, &draft.body, disk, (&draft.path, disk));
                 return;
             }
         }
-        self.conflict_at = None;
         let focus = std::mem::take(&mut self.focus_notes);
         // A stray click leaves the keyboard on nothing, and the DM's eyes can be on the table.
         // With no field to go to, what they type still belongs in the note.

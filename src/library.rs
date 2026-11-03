@@ -1979,7 +1979,9 @@ impl Library {
                         Type::Small
                             .rich(
                                 ui,
-                                if campaigns.modules().is_empty() {
+                                if self.package_path.is_some() {
+                                    "Will create the package in the chosen folder."
+                                } else if campaigns.modules().is_empty() {
                                     "Will create the package in Splat's package folder."
                                 } else {
                                     "Will create the package beside the last registered package."

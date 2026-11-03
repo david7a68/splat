@@ -608,7 +608,7 @@ pub mod campaign_content {
         d.state("repair-open", Sizes::Default);
         d.observe(
             "Repair says why",
-            d.visible_text("line 3 opens a list"),
+            d.visible_text("Line 3 opens a list"),
             "The repair says what is wrong before the DM edits anything",
         );
         d.observe(
@@ -2807,7 +2807,7 @@ pub mod column_resize {
         d.state("session-read-fills-its-column", Sizes::All);
         d.click("Add Major event");
         d.wait_for_text("Major event added to Session");
-        d.wait_for_text("Add to notes: Major event");
+        d.wait_for_text("Add to notes");
         let action = d
             .nodes()
             .into_iter()

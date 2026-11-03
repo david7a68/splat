@@ -140,6 +140,7 @@ pub(crate) struct RunValues {
 }
 
 /// Draw an entry's content. Returns the index of a link the DM followed.
+#[cfg(test)]
 pub(crate) fn show(
     ui: &mut egui::Ui,
     name: &str,

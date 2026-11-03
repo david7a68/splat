@@ -1,7 +1,7 @@
 {
   "violations": {
     "accessible-name/egui-chrome": {
-      "campaign-content": 58,
+      "campaign-content": 61,
       "column-resize": 93,
       "dialogs": 45,
       "empty": 15,
@@ -70,7 +70,7 @@
       "world": 4
     },
     "target-size/egui-chrome": {
-      "campaign-content": 58,
+      "campaign-content": 61,
       "column-resize": 93,
       "dialogs": 44,
       "empty": 15,

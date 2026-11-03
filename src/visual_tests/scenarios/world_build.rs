@@ -359,6 +359,26 @@ pub fn package_rename(d: &mut Driver<'_>) {
     d.click("Read the watch spell");
     d.wait_for_text("Watch Ashfall");
     d.state("linked-entry-renamed-on-disk", Sizes::All);
+
+    let moved = d.root.join("modules/watch-package");
+    fs::rename(&package, &moved).unwrap();
+    go_campaign(d);
+    d.click("Reload from disk");
+    d.expect("Find the folder…");
+    d.state("package-folder-moved-on-disk", Sizes::All);
+    // The native folder picker is closed in test builds. Supply its result here.
+    let module = crate::library::local_module(&moved).unwrap();
+    d.app_mut().campaigns.restore_module(module).unwrap();
+    d.click("Reload from disk");
+    go_library(d);
+    d.click("Packages");
+    d.click("Reload from disk");
+    d.type_into(SEARCH_LIBRARY, "Ash Exposure");
+    d.click_starting("Ash Exposure · ");
+    d.wait_for_text("Read the watch spell");
+    d.click("Read the watch spell");
+    d.wait_for_text("Watch Ashfall");
+    d.state("package-folder-restored-with-links", Sizes::All);
 }
 
 pub fn package_about(d: &mut Driver<'_>) {
