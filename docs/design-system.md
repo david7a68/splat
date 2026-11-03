@@ -159,7 +159,7 @@ tooltips, and separators. Text cursors do not blink, because motion draws the ey
 | HP | `hp_bar`, `hp_readout`, `hp_state` | Fixed slots. Temp HP is separate |
 | Empty state | `empty_state` | What this is, and the one next step |
 | Message | `message`, `Tone` | Inline. Never modal |
-| Side panel | `side_panel_width`, `panel_header` | One width rule for Lookup, Notes and the run. Above 820 px, the run's panel has two columns |
+| Side panel | `side_panel_width`, `panel_header` | One width rule for Lookup, Notes and the run. The run separates participant tabs from fight tabs |
 | Column | `Column::left / right / panel` | Every side column: the rail, a page's list, a panel. A drag handle on its inner edge. Natural width until dragged, then the DM's width, here and after a restart. A drag always leaves the page its room, and the run's roster keeps `RUN_LIST_KEEPS`. What sits beside a column reaches its edge, so no blank band opens between them. Text keeps its measure inside that room |
 | Link | `link` | A real `Link` role, at least 24 px high |
 | Number | `number`, `number_width` | Right-aligned digits |
@@ -206,7 +206,8 @@ everyone else behind one word. In a page narrower than 720 px, the plan and the 
 The roster is the screen. Every row has fixed columns: initiative, side mark, name, AC,
 temporary HP, HP with its bar, then a state column for `Bloodied`, `0 HP` and the sync
 word. Conditions take a second line that wraps before the HP column and grows the row, so
-no condition is cut. When a window has no room for the state column, as at 960x640 beside
+long local effects show four words and `more`, which opens their full text in `Conditions`.
+Official conditions stay worded. When a window has no room for the state column, as at 960x640 beside
 the panel, those words open the second line instead, so that a name is never cut.
 
 - **Current row:** the `current_row` fill, a 2 px stroke, a 6 px bar, and the word `TURN`
@@ -231,18 +232,27 @@ the panel, those words open the second line instead, so that a name is never cut
   run cannot apply, such as `Attack +1` or `Speed 40 ft`, because the DM needs it at the table. A setup
   row has the word `Changed` only. Its card lists each
   change at the top of the stat block's tab, so no tab moves, as `Maximum HP: 33 → 43 (+10)`. What
-  the run cannot apply comes first, in larger type, and says `add by hand`. A line then says that the
-  stat block below is as printed. The list scrolls with the stat block, and each participant keeps
-  its own place in it. A side of its own also has its word on a live row. In setup, a row gives
-  the side when it has room, and Record gives it always.
+  the run cannot apply comes first, in larger type, and says `add by hand`. The stat block uses the
+  run's AC, maximum HP and initiative bonus, with the printed value below each changed value.
+  The list scrolls with the stat block, and each participant keeps its own place in it.
+  A side of its own also has its word on a live row. Setup and live rows use the same side,
+  HP, temporary HP and AC parts. `Correct` holds the correction fields.
 - **Encounter editor:** each of the encounter's groups has a frame below the roster, with its name,
   side, members and notes. The frame that takes the search's results has an accent outline, and
   `Add to` above the search names it. The Encounters page keeps these groups in one closed section.
-- **Arrivals:** a tab beside the stat block adds one creature, found or made up, in two fixed rows of
-  fields. Below it, the tab lists the encounter's own groups, then those in tonight's plan, then the
+- **Panel:** one tab row has participant tabs (`Stat block` or `Sheet`, `Conditions`, `Correct`)
+  at the left, then an `L` gap and fight tabs (`Log`, `Prep`, `Arrivals`) at the right.
+  Fight tabs use `This fight` as the title. When space is short, they share a `Fight ▾` menu.
+  The row never wraps.
+- **Arrivals:** a tab beside the stat block adds one creature, found or made up. Only search
+  shows until a name is typed. The form then has two fixed rows of fields. Below it, the tab
+  lists the encounter's own groups, then those in tonight's plan, then the
   others for any encounter, with members, count and total XP. A group's name is a handle to drag onto the list, and the list takes an accent
-  outline while one is held. Each group also has a field for a total, blank to roll, and an `Add`
-  button that the keyboard reaches. No step asks for confirmation, because Undo names the addition.
+  outline while one is held. Each group has two lines: name handle, side, count and XP; then
+  members, a `Total` field (blank rolls initiative), and `Add`. Member summaries wrap at the
+  minimum width. Each fault has its own member line and an `Edit group` link. Added groups
+  keep `Add` and say which round they joined. No step asks for confirmation, because Undo
+  names the addition.
 
 ## Sessions and the timeline
 

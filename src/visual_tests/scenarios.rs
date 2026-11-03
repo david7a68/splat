@@ -1584,7 +1584,7 @@ pub mod run_absent_player {
             past_middle.as_deref() == Some(field(LAST).as_str()),
             format!("Enter goes past an absent player in the middle: {past_middle:?}"),
         );
-        d.click(&format!("Mark present: {MIDDLE}"));
+        d.click(&format!("Absent: {MIDDLE}"));
         for (name, total) in OTHERS {
             if d.field_text(&field(name)).as_deref() != Some(total) {
                 d.type_into(&field(name), total);
@@ -1617,7 +1617,7 @@ pub mod run_absent_player {
         d.click(NEXT_TURN);
         let turn = current_participant(d);
         d.click_row(PLAYER);
-        d.click("Mark present");
+        d.click("Absent");
         d.state("back-with-no-initiative", Sizes::All);
         let last = roster_places(d).last().map(|row| row.0.clone());
         d.observe(
@@ -1629,9 +1629,10 @@ pub mod run_absent_player {
                 "Back with none: the row says so, they are last ({last:?}), and the turn stays"
             ),
         );
-        d.click("Record");
-        d.type_into(&format!("Initiative for {PLAYER}"), "20");
-        d.click("Set initiative");
+        d.click(&format!("No initiative for {PLAYER}"));
+        d.state("initiative-field-in-row", Sizes::All);
+        d.type_text("20");
+        d.press(Key::Enter);
         d.state("initiative-set-in-combat", Sizes::Default);
         let order: Vec<String> = roster_places(d).into_iter().map(|row| row.0).collect();
         d.observe(
@@ -1680,7 +1681,7 @@ pub mod prep_to_table {
         };
         let before = inits(d);
         d.click(&format!("Absent: {player}"));
-        let marked = d.has(&format!("Mark present: {player}"));
+        let marked = d.has(&format!("Absent: {player}"));
         let after = inits(d);
         d.state("absent-at-start", Sizes::All);
         d.observe(
@@ -1693,7 +1694,7 @@ pub mod prep_to_table {
             !before.is_empty() && before == after && d.visible_text("Absent ·"),
             format!("Marking a player absent moves no field, and the row says so: {before:?} then {after:?}"),
         );
-        d.click(&format!("Mark present: {player}"));
+        d.click(&format!("Absent: {player}"));
         d.observe(
             "Absent player",
             marked && d.has(&format!("Absent: {player}")),
@@ -1976,7 +1977,7 @@ pub mod run_sync_conflict {
     use super::*;
     const AMOUNT_FIELD: &str = "Amount";
     const CLOSE_RUN: &str = "Close run";
-    const CLOSE_WHY: &str = "Sync first";
+    const CLOSE_WHY: &str = "Close after sync";
     const SYNCED: &str = "Brannoch Vale";
     const USE_REMOTE: &str = "Use D&D Beyond values";
     const CONFLICT_TEXT: &str = "changed";
@@ -1991,7 +1992,7 @@ pub mod run_sync_conflict {
     const DISMISS_NOTICE: &str = "Dismiss this message";
     const SYNC_PARTY: &str = "Sync party";
     const STOP_SYNC: &str = "Stop party sync";
-    const UNDO_CLEARED: &str = "Undo history was cleared";
+    const UNDO_CLEARED: &str = "Undo stopped. See Log";
     const CLOSE_PROMPT: &str = "has not confirmed changes";
     const DISABLED_REASON: &str = "Wait for pending sync";
 
@@ -2113,22 +2114,21 @@ pub mod run_sync_conflict {
         );
         d.observe(
             "T3.4",
-            clear_before
-                && d.visible_text(&format!("From D&D Beyond: {changed}. {UNDO_CLEARED}")),
+            clear_before && d.visible_text(UNDO_CLEARED),
             format!("Simulated sheet read: a message says, only after it, what changed from what to what: {changed}"),
         );
-        // It stays through what the DM does next, and the DM dismisses it.
+        // A new run action clears the notice. Its details remain in Log.
         d.click(NEXT_TURN);
         d.observe(
             "T3.4",
-            d.visible_text(UNDO_CLEARED) && d.has(DISMISS_NOTICE),
-            "The message stays after the next turn, until the DM dismisses it",
+            !d.visible_text(UNDO_CLEARED),
+            "The next turn clears the old notice",
         );
-        d.click(DISMISS_NOTICE);
+        fight_tab(d, "Log");
         d.observe(
             "T3.4",
-            !d.visible_text(UNDO_CLEARED),
-            "Dismissing removes it",
+            d.visible_text(&changed),
+            "The Log keeps the full sheet change",
         );
         d.click(STOP_SYNC);
         d.begin_task();
@@ -2235,7 +2235,7 @@ pub mod party_from_run {
     use super::*;
     const MEMBER: &str = "Kestrel Dunmoor";
     const SHEET_TITLE: &str = "Kestrel Dunmoor";
-    const SHEET_PAGE: &str = "Record";
+    const SHEET_PAGE: &str = "Correct";
     const SHEET_SUBPAGE: &str = "Spells";
     const CASTER: &str = "Iselle Marrowind";
     const SHEET_ONLY_TEXT: &str = "Ability scores";
@@ -2286,6 +2286,12 @@ pub mod party_from_run {
             "The spells page beside the run lists a caster's spells",
         );
         d.click_row(MEMBER);
+        d.observe(
+            "Spells beside run",
+            !d.has(SHEET_SUBPAGE) && d.visible_text("Ability scores"),
+            "A character with no spells opens Overview and has no Spells tab",
+        );
+        d.state("sheet-with-no-spells", Sizes::Default);
         d.begin_task();
         d.click(SHEET_PAGE);
         d.state("record-tab", Sizes::Default);
@@ -2420,8 +2426,9 @@ pub mod run_folder_defect {
                     close_run(d);
                 }
                 go_encounters(d);
-                if d.has(DISCARD) && !d.is_disabled(DISCARD) {
-                    d.click(DISCARD);
+                let discard = if d.has("Discard") { "Discard" } else { DISCARD };
+                if d.has(discard) && !d.is_disabled(discard) {
+                    d.click(discard);
                 }
                 if d.has(BACK_TO_LIST) && !d.is_disabled(BACK_TO_LIST) {
                     d.click(BACK_TO_LIST);
@@ -2754,7 +2761,7 @@ pub mod run_edge_states {
     const ADD_EFFECT: &str = "Add";
     const ABSENT: &str = "Absent";
     const CLOSE_ERROR: &str = "Dismiss this message";
-    const MARK_PRESENT: &str = "Mark present";
+    const MARK_PRESENT: &str = "Absent";
     const KEEP_RUN: &str = "Replace the file with this run";
     const SAVE_AS_NEW: &str = "Save as a new run";
     const ALL: [&str; 8] = [
@@ -2777,10 +2784,19 @@ pub mod run_edge_states {
         d.state("long-effect-text", Sizes::All);
         d.observe(
             "Long effects",
-            d.visible_text(LONG_EFFECT),
-            "A long effect wraps on its row and is read in full at 960x640",
+            d.visible_text("Wreathed in the cinders more"),
+            "The row keeps the first four words and more",
         );
         d.goal("record a long effect");
+        d.click("Sheet");
+        d.click(&format!("More about {LONG_EFFECT}"));
+        d.observe(
+            "Long effects",
+            d.visible_text(LONG_EFFECT),
+            "More opens Conditions with the full effect",
+        );
+        d.state("full-effect-in-conditions", Sizes::Default);
+        d.begin_task();
 
         for name in ALL {
             d.click_row(name);
@@ -2824,7 +2840,7 @@ pub mod run_edge_states {
         d.observe(
             "Changed on disk",
             !d.has_containing("stays saved")
-                && d.has("Close anyway")
+                && d.has("Close and lose changes")
                 && d.visible_text("loses unsaved changes"),
             "Close says what it will lose, in place of \"The run stays saved\"",
         );
@@ -2861,6 +2877,22 @@ pub mod run_edge_states {
                 && d.visible_text("Saved"),
             "Save as a new run keeps the changed file as it was, and saves this one beside it",
         );
+        // The close dialog can keep both files and finish closing in one step.
+        let before = std::fs::read_to_string(&new_path).expect("read the new run");
+        std::fs::write(&new_path, before.clone() + "\n").expect("change the new run on disk");
+        d.click_row(TARGET);
+        d.type_text("1");
+        d.press(Key::Enter);
+        d.click(CLOSE_RUN);
+        d.state("save-new-run-before-close", Sizes::All);
+        d.click("Save as a new run and close");
+        let closed = !d.app_mut().encounters.has_run();
+        d.observe(
+            "Changed on disk",
+            closed && std::fs::read_to_string(&new_path).is_ok_and(|text| text == before + "\n"),
+            "Save as a new run and close keeps the other file and closes the run",
+        );
+        d.state("saved-new-run-and-closed", Sizes::Default);
         d.unreached(
             "HP unknown on a live row",
             "the setup view, because a live run requires known HP (Run::open and Begin refuse otherwise)",
@@ -3021,7 +3053,6 @@ pub mod run_sync_states {
 pub mod run_roster_conflict {
     use super::*;
     const CLOSE_RUN: &str = "Close run";
-    const CLOSE_ANYWAY: &str = "Close anyway";
     use crate::combat_sync::SyncState;
     const SYNCED: &str = "Brannoch Vale";
     const USE_REMOTE: &str = "Use D&D Beyond values";
@@ -3091,11 +3122,18 @@ pub mod run_roster_conflict {
         d.click_row(ONE_MORE_LINE);
         d.click(CONDITIONS);
         d.click(ONE_MORE_CONDITION);
+        d.observe(
+            "Run notices",
+            !d.visible_text("Undo stopped. See Log"),
+            "A new action clears the old sync notice",
+        );
+        d.app_mut().encounters.simulate_sheet_update(LONG_MESSAGE);
+        d.settle();
         d.state("message-on-one-line", Sizes::Default);
         let cut = rows_cut(d);
         d.observe(
             "T1.3",
-            cut.is_empty() && d.visible_text("Undo history was cleared. Hover here"),
+            cut.is_empty() && d.visible_text("Undo stopped. See Log"),
             format!(
                 "At 960x640 with a long message, it takes one line and every row stays: {cut:?}"
             ),
@@ -3121,7 +3159,7 @@ pub mod run_roster_conflict {
         d.click(USE_REMOTE);
         // Other rows still hold simulated changes, so closing says so first.
         d.click(CLOSE_RUN);
-        d.click(CLOSE_ANYWAY);
+        d.click("Close now");
         d.begin_task();
         resume_run(d, RUN_20);
         d.check_tab_order("run, roster of 20");
@@ -3315,8 +3353,8 @@ pub mod signed_in {
         d.observe(
             "T10.3",
             row.contains(NOT_SENT)
-                && d.row_words(NOTHING_TO_SEND).contains(STOPPED_ROW)
-                && d.visible_text(&format!("{MEMBER}: kept in Splat, not sent"))
+                && !d.row_words(NOTHING_TO_SEND).contains(STOPPED_ROW)
+                && d.visible_text("Signed out")
                 && rail.contains(RAIL_OFFLINE)
                 && rail.contains(RAIL_STOPPED),
             format!(
@@ -3324,6 +3362,14 @@ pub mod signed_in {
             ),
         );
         d.state("session-ended-during-run", Sizes::All);
+        d.click("Sign in again");
+        d.observe(
+            "Sign in recovery",
+            d.focused_name().as_deref() == Some("Paste session cookie"),
+            "Sign in again opens Settings with the cookie field focused",
+        );
+        d.state("sign-in-from-run", Sizes::Default);
+        d.click(BACK_TO_RUN);
         d.click(CLOSE_RUN);
         d.observe(
             "T10.3",
@@ -3611,8 +3657,12 @@ pub mod nav_table {
         silent.extend(d.disabled_without_reason());
         // The run's tabs, then a fresh run's setup and a finished run's end.
         d.click(BACK_TO_RUN);
-        for tab in ["Conditions", "Record", "Log", "Prep"] {
-            d.click(tab);
+        for tab in ["Conditions", "Correct", "Log", "Prep"] {
+            if ["Log", "Prep"].contains(&tab) {
+                fight_tab(d, tab);
+            } else {
+                d.click(tab);
+            }
             silent.extend(d.disabled_without_reason());
         }
         d.click("End encounter…");
@@ -3726,6 +3776,18 @@ pub mod world {
             "A new NPC joins the fight, and the run stays on screen",
         );
         d.state("world-npc-in-run", Sizes::Default);
+        d.observe(
+            "NPC arrival",
+            d.has_containing("In the run · initiative 11") && !d.has("Add to run"),
+            "The NPC's panel links to their row after they join",
+        );
+        d.click("In the run · initiative 11");
+        d.observe(
+            "NPC arrival",
+            participant_is_selected(d, NPC),
+            "The status selects the NPC's row",
+        );
+        d.state("npc-selected-from-status", Sizes::Default);
     }
 }
 
@@ -4339,8 +4401,8 @@ pub mod session_notes {
         d.app_mut().encounters.simulate_session_end();
         d.settle();
         d.click("Close run");
-        if d.has("Close anyway") {
-            d.click("Close anyway");
+        if d.has("Close and lose changes") {
+            d.click("Close and lose changes");
         } else {
             d.click("Close now");
         }
@@ -4780,7 +4842,7 @@ pub mod encounter_groups {
     const SAVE_GROUP: &str = "Save group";
     const SAVED_NOTE: &str = "Group saved.";
     const FIND: &str = FIND_CREATURE;
-    const CHANGES: &str = "Overrides for Ember Cultist";
+    const CHANGES: &str = "Changes for Ember Cultist";
     const FIRST_GOBLIN: &str = "Goblin Warrior 1";
     const RIVAL_NAME: &str = "Rival Captain";
     const TOTAL_FOR_RIVALS: &str = "Initiative total for Rival Team";
@@ -4796,8 +4858,7 @@ pub mod encounter_groups {
         d.state("group-editor", Sizes::All);
         d.observe(
             "T13.3",
-            d.has_containing("Maximum HP: 33 → 43 (+10)")
-                && d.has_containing("Overrides, here only"),
+            d.has_containing("Maximum HP: 33 → 43 (+10)") && d.has_containing("Changed"),
             "The group editor shows each change with its base value, marked as changed",
         );
         d.click(CHANGES);
@@ -4818,11 +4879,11 @@ pub mod encounter_groups {
         });
         d.observe(
             "T13.3",
-            found && invalid && !d.has("Overrides for Unavailable creature"),
+            found && invalid && !d.has("Changes for Unavailable creature"),
             "The editor says why a creature is unavailable, and that a change cannot stand",
         );
         d.state("group-unavailable-creature", Sizes::Default);
-        d.click("Overrides for Cinder Wolf");
+        d.click("Changes for Cinder Wolf");
         let in_view = d.at_size(SMALL, |d| d.in_view_containing("would become -28"));
         d.observe(
             "T13.3",
@@ -4850,20 +4911,23 @@ pub mod encounter_groups {
 
         // At the table: the panel, with members and XP.
         resume_run(d, RUN);
-        d.click(GROUPS_TAB);
+        fight_tab(d, GROUPS_TAB);
         d.expect(&add_group(GROUP_GOBLINS));
         d.state("group-panel", Sizes::AllAndHiDpi);
         d.check_tab_order("run, group panel");
         d.observe(
             "T13.1",
-            d.has_containing("3 × Goblin Warrior") && d.visible_text("3 creatures · Total XP 150"),
+            d.has_containing("3 × Goblin Warrior") && d.visible_text("3 members · XP 150"),
             "The panel lists each group's members and total XP",
         );
         d.observe(
             "T13.1",
-            d.has_containing("XP not known for Captain Varra")
-                && d.has_containing("Unavailable creature: check"),
-            "XP that is not known says so, and a group that cannot be added says why",
+            d.visible_text("XP not known")
+                && d.has_containing(
+                    "Member 1, an unknown creature: not in this campaign's packages",
+                )
+                && d.visible_text("1 × unknown creature"),
+            "A broken member has a readable name in both its summary and its fault",
         );
         d.observe(
             "T13.1",
@@ -4872,15 +4936,19 @@ pub mod encounter_groups {
         );
         d.observe(
             "T13.1",
-            d.visible_text("3 creatures · Total XP 250 or more")
-                && d.has_containing("Unavailable creature")
-                && d.has_containing("Unavailable creature: check")
-                && d.has_containing("Member 2 (Cinder Wolf):"),
+            d.visible_text("3 members · XP 250 + unknown")
+                && d.has_containing("not in this campaign's packages")
+                && d.has_containing("Member 2, Cinder Wolf:"),
             "A group counts a creature it cannot find, and gives every reason it cannot be added",
         );
         d.begin_task();
         d.click(&add_group(GROUP_GOBLINS));
         d.expect(FIRST_GOBLIN);
+        d.observe(
+            "Arrival status",
+            d.has_containing("Added in round 2"),
+            "A group keeps Add and marks the round it joined",
+        );
         d.state("group-added-by-rolling", Sizes::All);
         d.goal_within("T13.2", "add a group to the running fight, rolling once", 1);
 
@@ -4917,7 +4985,7 @@ pub mod encounter_groups {
         d.click("Stat block");
         d.expect("Arrived with Rival Team");
         d.state("card-of-an-added-member", Sizes::Default);
-        d.click(GROUPS_TAB);
+        fight_tab(d, GROUPS_TAB);
 
         // The same group again, by dragging it onto the initiative list.
         let rows_before = roster_places(d).len();
@@ -4959,12 +5027,21 @@ pub mod encounter_groups {
         // Setup has the same panel.
         close_run(d);
         run_saved_encounter(d, "Shrine of Cinders");
-        d.click(GROUPS_TAB);
+        fight_tab(d, GROUPS_TAB);
         d.state("group-panel-in-setup", Sizes::Default);
         d.click(&add_group(GROUP_GOBLINS));
         d.expect(FIRST_GOBLIN);
         d.state("group-added-in-setup", Sizes::Default);
         d.goal("add a group during setup");
+        d.click("Edit group");
+        d.expect("Group name: Lost Patrol");
+        let run_open = d.app_mut().encounters.has_run();
+        d.observe(
+            "Group repair",
+            run_open,
+            "Edit group opens the broken group and keeps the run open",
+        );
+        d.state("broken-group-open-for-repair", Sizes::Default);
     }
 }
 
@@ -5146,7 +5223,7 @@ pub mod encounter_owned_groups {
 
         // At the table: its own first, then those for any encounter.
         run_saved_encounter(d, SHRINE);
-        d.click(GROUPS_TAB);
+        fight_tab(d, GROUPS_TAB);
         d.expect(&add_group(GROUP_SHRINE));
         d.state("group-panel-for-one-encounter", Sizes::All);
         d.check_tab_order("run, groups for one encounter");
@@ -5177,7 +5254,7 @@ pub mod encounter_owned_groups {
         }
         d.click("Begin combat");
         d.expect(NEXT_TURN);
-        d.click(GROUPS_TAB);
+        fight_tab(d, GROUPS_TAB);
         d.expect(&add_group(NEW_NAME));
         d.state("own-groups-in-combat", Sizes::Default);
         d.type_into(&format!("Initiative total for {NEW_NAME}"), "14");
@@ -5206,7 +5283,7 @@ pub mod encounter_owned_groups {
 
         // A save from before this cannot say which encounter it is, so it hides nothing.
         resume_run(d, RUN);
-        d.click(GROUPS_TAB);
+        fight_tab(d, GROUPS_TAB);
         d.expect(&add_group(GROUP_GOBLINS));
         d.state("group-panel-of-an-older-save", Sizes::Default);
         d.observe(
@@ -5243,8 +5320,13 @@ pub mod run_overrides {
                 && d.has_containing("Attack bonus: As printed → +1 on each attack")
                 && d.has_containing("add\u{a0}by\u{a0}hand")
                 && d.has_containing("Speed: 30 ft → 40 ft")
-                && d.has_containing("Changed for this encounter"),
+                && d.has_containing("Changed"),
             "The card shows the base and changed values, and says what to add by hand",
+        );
+        d.observe(
+            "Changed stat values",
+            d.visible_text("printed 12") && d.visible_text("printed 33"),
+            "AC and HP show the run's values with their printed values below",
         );
         d.goal("read a changed creature's card in a run");
         close_run(d);
@@ -5271,7 +5353,7 @@ pub mod run_overrides {
         d.state("setup-with-a-changed-row", Sizes::Default);
         d.observe(
             "T13.3",
-            d.has_containing("Changed · HP 43/43 · AC 15"),
+            d.has_containing("Changed · ◆ Enemies · HP 43/43 · AC 15"),
             "A new run starts with the slot's changes, and its setup row says so",
         );
         d.goal("start a run with a changed creature");
@@ -5284,7 +5366,7 @@ pub mod run_no_groups {
 
     pub fn run(d: &mut Driver<'_>) {
         resume_run(d, RUN);
-        d.click("Arrivals");
+        fight_tab(d, "Arrivals");
         d.expect("No encounter groups yet");
         d.state("no-groups", Sizes::Default);
         d.goal("see that a campaign has no groups");
@@ -5298,7 +5380,7 @@ pub mod run_add_creature {
 
     pub fn run(d: &mut Driver<'_>) {
         resume_run(d, RUN);
-        d.click("Arrivals");
+        fight_tab(d, "Arrivals");
         d.expect(FIELD);
         d.state("arrivals-empty", Sizes::All);
         d.check_tab_order("run, arrivals panel");
@@ -5323,7 +5405,7 @@ pub mod run_add_creature {
         d.click("Stat block");
         d.expect("Added by hand");
         d.state("made-up-creature-sheet", Sizes::Default);
-        d.click("Arrivals");
+        fight_tab(d, "Arrivals");
         d.expect(FIELD);
         d.observe(
             "T13.7",
@@ -5411,7 +5493,7 @@ pub mod session_plan_groups {
 
         d.click(NAV_ENCOUNTERS);
         resume_run(d, RUN);
-        d.click("Arrivals");
+        fight_tab(d, "Arrivals");
         d.expect("IN TONIGHT'S PLAN");
         d.state("arrivals-tonight-first", Sizes::All);
         d.observe(
@@ -5544,7 +5626,7 @@ pub mod session_plan {
             d.visible_text("Wolves hold the far bank") && !d.visible_text("roster:"),
             "Setup shows what to read to the table, and no YAML",
         );
-        d.click("Prep");
+        fight_tab(d, "Prep");
         d.state("prep-tab", Sizes::Default);
         d.observe(
             "T12.7",
@@ -5633,7 +5715,7 @@ pub mod session_plan {
         // T14.2: a number typed wrong can be put right, and the turn stays.
         let turn = current_participant(d);
         d.click_row("Ember Cultist");
-        d.click("Record");
+        d.click("Correct");
         d.state("correct-initiative", Sizes::Default);
         d.type_into("Initiative for Ember Cultist", "30");
         d.click("Set initiative");
