@@ -272,7 +272,7 @@ pub(super) fn in_progress_list(
         let template = history::template_of(run, templates);
         let mut detail = if open {
             run.saved_at.map_or_else(
-                || "Saved just now".to_owned(),
+                || "Save time unknown".to_owned(),
                 |at| {
                     format!(
                         "Saved {}",

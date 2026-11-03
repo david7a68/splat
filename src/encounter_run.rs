@@ -2879,7 +2879,9 @@ impl Run {
     }
     /// This run as a row on the Encounters page, as it is now and not as its file has it.
     pub fn live_info(&self) -> Option<SavedRunInfo> {
-        Some(self.info(self.path()?.to_path_buf(), None, false))
+        let path = self.path()?.to_path_buf();
+        let saved_at = crate::hermetic::file_time(&path);
+        Some(self.info(path, saved_at, false))
     }
     fn info(&self, path: PathBuf, saved_at: Option<u64>, paused: bool) -> SavedRunInfo {
         let saved = saved_at.map_or_else(String::new, |at| {
@@ -4799,6 +4801,20 @@ mod tests {
         assert!(reopened.state.participants[1].shared_roll.is_none());
         reopened.undo();
         assert!(reopened.state.participants[1].shared_roll.is_some());
+    }
+
+    #[test]
+    fn an_open_run_reports_when_its_file_was_saved() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut run = run();
+        run.configure_storage(Uuid::new_v4(), dir.path(), Initiative::default())
+            .unwrap();
+        let info = run.live_info().unwrap();
+        assert!(
+            info.saved_at.is_some(),
+            "the open row must have a save time"
+        );
+        assert!(info.label.contains("Saved just now"));
     }
 
     #[test]
