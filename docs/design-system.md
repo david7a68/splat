@@ -246,6 +246,8 @@ Here and Mentioned in stay above them, at the reader measure.
 
 Beside the note, the plan takes 40% of the page width, between 330 and 480 px.
 Fight summaries keep each part together and join a separator to the next part.
+Played and running fights use the empty action space for their second line, up to
+the menu. `Ended · Round 1` stays together.
 Group summaries shorten to one line with the full text on hover. A recording count
 sits inside its tab, in muted text and in the tab's accessible name. Notes saved
 centres on the title's action row. A new template has an L gap above its heading
@@ -254,7 +256,7 @@ and an M gap below it; the list's help stays out of the form.
 The Session page is a list the DM works down, beside the note. A row is an icon, a link and a second line, with one action on
 the right. A row opens in place, and its fields use the same form parts as the Timeline page. The first fight to come has
 the primary button when no run is open, and the others the secondary. A saved unfinished run offers Resume, with Start a new run and Delete the saved run in its menu. The open run has a status link; the strip owns the primary. The word for a fight is **Start
-fight**, on this page and on Encounters. All plan rows reserve the same right-aligned action slot and a separate row-menu slot. Each planned fight has Remove from tonight in its menu. It removes one plan link, keeps other words and has Undo remove below that row. Add buttons stay at the foot of the plan, and a message opens above them, so
+fight**, on this page and on Encounters. Plan rows with actions reserve the same right-aligned action slot and a separate row-menu slot. Each planned fight has Remove from tonight in its menu. It removes one plan link, keeps other words and has Undo remove below that row. Add buttons stay at the foot of the plan, and a message opens above them, so
 that they do not move under the pointer. An empty plan uses `empty_state` above the strip. A played fight shows its result and last round once, on its second line. Its final party HP uses first names in a grid of two or three cells per line, then quiet Log, Whole run and Timeline links. Hover gives full names and conditions. Remove stays in its row menu, aligned with the name. A long rest and its full-HP ruling share one message and one Undo; Not at full waits inside the opened row. In a page narrower than 720 px, the plan and the note have a tab each.
 
 ## The encounter ledger and editor
@@ -317,8 +319,13 @@ New templates say `Starts with the title line only.` below the name field.
 The roster is the screen. Every row has fixed columns: initiative, side mark, name, AC,
 temporary HP, HP with its bar, then a state column for `Bloodied`, `0 HP` and the sync
 word. Conditions take one second line before the HP column. Measure them without change bonuses;
-shorten bonuses first, then use a count only for conditions that do not fit. Keep the first condition.
-Long local effects show four words and `more`.
+shorten bonuses first, remeasure, then drop the bonus before `more` if needed.
+Measure the sync word before folding conditions into a count. Keep the first condition,
+and keep multiword sync states together.
+At the narrowest width, mandatory state words can use the empty left part of the
+HP bar's slot. The bar stays under HP and keeps at least XL of length.
+Long local effects show four words and `more`. Undo names the effect with those four
+words and an ellipsis; hover and accessibility keep its full text.
 The count opens their full text in `Conditions`. When a window has no room for the state column, as at 960x640 beside
 the panel, those words open the second line instead, so that a name is never cut.
 
@@ -381,13 +388,18 @@ Arrivals uses group headings and one muted line for an empty group section. New 
 Recovery copies use a UTC save-time suffix and preserve the other file. The run closed last owns primary Resume. Saved rows show the last change, mark the preserved file Changed elsewhere, and keep an empty Edit slot when no encounter exists. Run state words come from one function: Setup, Setup · Paused, Round 2, Round 2 · Paused, Ended · Round 2.
 
 A disconnected run keeps Connect to sync on its header only. The footer's blocked Sync party uses the same cause as hover text. End encounter… shortens to End…; Keys keeps its word beside Lookup, Notes and a wide run panel.
+An ended run puts its short conflict and pending-change count directly below the
+blocked Close after sync button.
 
 The app-close dialog uses Keep running for a run, Keep recording for audio, and Keep processing for a job. Recording and processing titles name the unfinished session. A sync conflict names the character and offers Review conflict. Stop and close is secondary when saved work is kept; an action is red only when it loses work.
 
 ## Sessions and the timeline
 
-Timeline keeps the save state, Copy link and menu on the title line when all parts
-fit. Otherwise, the actions take a second line above the scrolling form. Account
+Timeline measures the title line with `Copy link` and `Saving blocked`, so copy and
+save states do not move the form. Otherwise, the actions take a second line above
+the scrolling form. Its list stops at LIST_MEASURE; detail sits directly beside it,
+with spare space at the right. A Day's header uses only its named calendar icon
+before the title. Account
 help and trust text keep READER_MEASURE in both column and stacked Settings layouts.
 The gallery shows clean, dirty and discarded save rows and the hanging Add strip.
 
@@ -414,7 +426,8 @@ Technical details stays closed and uses plain words for rules not read yet or no
 A live microphone has the only colour here. `Record` takes a second, inline step that says to tell the table.
 While it records, the rail keeps the word and the time in view on every page. The time counts audio in the file, so it
 stops when saving stops. Processing help keeps READER_MEASURE, while recording rows fill their column. A processed warning uses the same full state, Processed, with a warning, on the row and in the rail's hover text and accessible name; the rail's short word is Processed. Continue processing resumes work kept after a stop or a failure. A recording that stops by itself has Open the session in its banner. On the timeline is a success status link wherever it opens the added event. The rail and the session's page show the same state: `Recording`, `Recording silence`, or `Not saving
-audio`. In the rail, silence is shortened to `Silence 0:00`, with the full state in its hover text and accessible name. A stall takes a banner at the bottom of every page, with `Record again`, because at the table the DM looks at the roster and
+audio`. In the rail, silence says `Recording silence` without a time. Hover and accessibility
+say `Recording silence · 2:14:05 recorded`. A stall takes a banner at the bottom of every page, with `Record again`, because at the table the DM looks at the roster and
 not at the rail. It is at the bottom so that it never moves `Next turn`. A recording or a job that fails takes the same banner, and
 the rail, until the DM dismisses it or tries again. Silence takes no banner, because a table goes quiet often. After a minute it shows in the rail,
 on the session's page, and on the run's own notice line.
@@ -459,9 +472,13 @@ icons are glyphs or painter shapes. `design::icons` names only the glyphs in use
 
 ## Recording and content recovery
 
-The rail has one recording status link at its foot. It includes the saved audio time and opens the recording. The session list keeps Failed, Stopped or Cancelled until retry or dismissal. A missing-input banner puts Choose an input first and keeps Record again quiet. A stalled recording puts its reason and Record again on the visible recording row; other pages keep the bottom banner.
+The rail has one recording status link at its foot. It includes the saved audio time
+while hearing sound and opens the recording. The session list keeps Failed, Stopped
+or Cancelled until retry or dismissal. A missing input puts Choose an input first in
+both the banner and the recording row. A stalled recording puts its reason and Record
+again on the visible recording row; other pages keep the bottom banner.
 
-Each recording keeps its failure or stop reason beside its status, including the last processing step. Dismissing a banner does not remove that row state. While a recording is live or processing, its stored stop or cancellation reason stays hidden. A cancellation says which part stopped and offers Continue processing. Failed and Stopped use the error icon and colour; Cancelled uses warning. A stopped recording keeps its Settings link to the recording input. Silence uses the warning colour on every page. The result viewer uses one segmented control for Summary, Clean transcript, What the check changed, and Raw transcript. Every generated view uses the same Small draft notice. If the check did not run, the row says `No check ran` beside Raw transcript. The row menu stays beside the title, and L space separates its actions from the events heading. The result viewer has its back link and muted date on the first line, with Add to notes at the right on Summary. Its view choices start at the left on a second line. The segmented control never wraps; if the full set does not fit, one dropdown shows the current view name. Tabs and page headers omit zero counts. Templates names its own page and uses Campaign as the owner word.
+Each recording keeps its failure or stop reason beside its status, including the last processing step. Dismissing a banner does not remove that row state. While a recording is live or processing, its stored stop or cancellation reason stays hidden. A cancellation says which part stopped and offers Continue processing. Failed and Stopped use the error icon and colour; Cancelled uses warning. A recording stopped by a missing input offers Choose an input before Record again and Process. Silence uses the warning colour on every page. The result viewer uses one segmented control for Summary, Clean transcript, What the check changed, and Raw transcript. Every generated view uses the same Small draft notice. If the check did not run, the row says `No check ran` beside Raw transcript. The row menu stays beside the title, and L space separates its actions from the events heading. The result viewer has its back link and muted date on the first line, with Add to notes at the right on Summary. Its view choices start at the left on a second line. The segmented control never wraps; if the full set does not fit, one dropdown shows the current view name. Tabs and page headers omit zero counts. Templates names its own page and uses Campaign as the owner word.
 
 Lookup shows up to five one-line results with the open result selected. A result shows its name, then muted type and level. Campaign-owned entries add Campaign; a source shows only when it differs from the campaign’s main source. Only the muted part is shortened with an ellipsis. The hover and accessible name keep the full row. Result lists never scroll sideways. A click on a result, or scrolling into its reader, closes the list. `Show all` offers the remaining results. Creation actions follow the results and include the proposed name. They appear only without an exact match; Generate NPC appears only for an empty search.
 
@@ -635,4 +652,5 @@ Connect keeps its error state. A warned result says Processed in the rail, with 
 warning on hover and in its accessible name. A stalled row omits its session name.
 
 Processing destinations show beside Process and Continue processing, and in the
-Process again confirmation. A saved key field invites a replacement key.
+Process again confirmation. Continue processing names the raw transcript and session
+context when transcription is complete, and says that the audio is not sent again. A saved key field invites a replacement key.
