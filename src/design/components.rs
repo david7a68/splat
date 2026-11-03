@@ -1629,7 +1629,11 @@ pub fn draft_comparison(ui: &mut Ui, draft: &str, disk: &str, id: impl std::hash
     let state = ui.make_persistent_id(("draft_difference", id));
     let first = differences.first().copied().unwrap_or(0);
     let current = ui.data(|data| data.get_temp::<usize>(state));
-    let mut target = current.is_none().then_some(first);
+    let size = ui.available_size();
+    let previous_size = ui.data(|data| data.get_temp::<egui::Vec2>(state.with("size")));
+    ui.data_mut(|data| data.insert_temp(state.with("size"), size));
+    let mut target =
+        (current.is_none() || previous_size != Some(size)).then_some(current.unwrap_or(first));
     ui.horizontal(|ui| {
         let words = if differences.is_empty() {
             "No lines differ".into()
@@ -1697,7 +1701,7 @@ pub fn draft_comparison(ui: &mut Ui, draft: &str, disk: &str, id: impl std::hash
         scroll = scroll.vertical_scroll_offset(heights.iter().take(line.saturating_sub(2)).sum());
     }
     scroll.auto_shrink([false, false]).show(ui, |ui| {
-        for line in 0..left.len().max(right.len()) {
+        for (line, &row_height) in heights.iter().enumerate() {
             let differs = left.get(line) != right.get(line);
             ui.columns(2, |columns| {
                 for (at, lines) in [&left, &right].into_iter().enumerate() {
@@ -1709,7 +1713,7 @@ pub fn draft_comparison(ui: &mut Ui, draft: &str, disk: &str, id: impl std::hash
                         })
                         .show(&mut columns[at], |ui| {
                             ui.set_min_width(ui.available_width());
-                            ui.set_min_height(heights[line] - ui.spacing().item_spacing.y);
+                            ui.set_min_height(row_height - ui.spacing().item_spacing.y);
                             ui.horizontal_top(|ui| {
                                 let (mark, _) = ui.allocate_exact_size(
                                     egui::vec2(XS, Type::Body.line()),
@@ -1770,59 +1774,61 @@ mod tests {
                 .collect::<String>();
             let draft = format!("{context_lines}My changed draft line");
             let disk = format!("{context_lines}Changed elsewhere.\nExtra disk line");
-            let output = context.run(
-                egui::RawInput {
-                    screen_rect: Some(egui::Rect::from_min_size(
-                        egui::Pos2::ZERO,
-                        vec2(600.0, 300.0),
-                    )),
-                    ..Default::default()
-                },
-                |context| {
-                    egui::CentralPanel::default().show(context, |ui| {
-                        draft_comparison(ui, &draft, &disk, "new conflict")
-                    });
-                },
-            );
-            fn visible(shape: &egui::Shape, clip: egui::Rect, text: &str) -> bool {
-                match shape {
-                    egui::Shape::Text(shape) => {
-                        shape.galley.text() == text
-                            && clip.contains_rect(shape.visual_bounding_rect())
+            for width in [600.0, 900.0] {
+                let output = context.run(
+                    egui::RawInput {
+                        screen_rect: Some(egui::Rect::from_min_size(
+                            egui::Pos2::ZERO,
+                            vec2(width, 300.0),
+                        )),
+                        ..Default::default()
+                    },
+                    |context| {
+                        egui::CentralPanel::default().show(context, |ui| {
+                            draft_comparison(ui, &draft, &disk, "new conflict")
+                        });
+                    },
+                );
+                fn visible(shape: &egui::Shape, clip: egui::Rect, text: &str) -> bool {
+                    match shape {
+                        egui::Shape::Text(shape) => {
+                            shape.galley.text() == text
+                                && clip.contains_rect(shape.visual_bounding_rect())
+                        }
+                        egui::Shape::Vec(shapes) => {
+                            shapes.iter().any(|shape| visible(shape, clip, text))
+                        }
+                        _ => false,
                     }
-                    egui::Shape::Vec(shapes) => {
-                        shapes.iter().any(|shape| visible(shape, clip, text))
-                    }
-                    _ => false,
                 }
-            }
-            assert!(
-                output.shapes.iter().any(|shape| visible(
-                    &shape.shape,
-                    shape.clip_rect,
-                    "My changed draft line"
-                )),
-                "prefix {prefix}: first draft difference is out of view"
-            );
-            if prefix >= 2 {
                 assert!(
                     output.shapes.iter().any(|shape| visible(
                         &shape.shape,
                         shape.clip_rect,
-                        draft.lines().nth(prefix - 2).unwrap()
+                        "My changed draft line"
                     )),
-                    "two context lines stay in view"
+                    "prefix {prefix}: first draft difference is out of view"
                 );
-            }
-            if prefix == 0 {
-                assert!(
-                    output.shapes.iter().any(|shape| visible(
-                        &shape.shape,
-                        shape.clip_rect,
-                        "No line"
-                    )),
-                    "missing lines need words"
-                );
+                if prefix >= 2 {
+                    assert!(
+                        output.shapes.iter().any(|shape| visible(
+                            &shape.shape,
+                            shape.clip_rect,
+                            draft.lines().nth(prefix - 2).unwrap()
+                        )),
+                        "two context lines stay in view"
+                    );
+                }
+                if prefix == 0 {
+                    assert!(
+                        output.shapes.iter().any(|shape| visible(
+                            &shape.shape,
+                            shape.clip_rect,
+                            "No line"
+                        )),
+                        "missing lines need words"
+                    );
+                }
             }
         }
     }

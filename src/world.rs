@@ -1039,6 +1039,7 @@ impl Reader {
                         egui::vec2(design::XXL * 3.0, design::Density::Read.control()),
                         egui::Layout::left_to_right(egui::Align::Center),
                         |ui| {
+                            ui.set_min_width(design::XXL * 3.0);
                             ui.label(
                                 Type::Small
                                     .rich(ui, format!("{label}: "))
