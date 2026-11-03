@@ -1761,7 +1761,7 @@ impl Library {
                             ui.with_layout(
                                 egui::Layout::right_to_left(egui::Align::Center),
                                 |ui| {
-                                    let menu = ui.menu_button("⋯", |ui| {
+                                    design::row_menu(ui, &module.name, |ui| {
                                         if Action::destructive("Unregister…")
                                             .density(Density::Read)
                                             .name(&format!("Unregister {}", module.name))
@@ -1773,11 +1773,6 @@ impl Library {
                                             ui.close();
                                         }
                                     });
-                                    design::named(
-                                        ui,
-                                        &menu.response,
-                                        &format!("More actions for {}", module.name),
-                                    );
                                 },
                             );
                         });

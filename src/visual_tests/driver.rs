@@ -410,6 +410,18 @@ impl<'a> Driver<'a> {
         }
     }
 
+    pub fn wait_for_text(&mut self, text: &str) {
+        let started = Instant::now();
+        while !self.visible_text(text) {
+            assert!(
+                started.elapsed() < ASYNC_TIMEOUT,
+                "{}: waiting for painted {text:?}",
+                self.scenario
+            );
+            self.harness.step();
+        }
+    }
+
     /// The top-level page the app is showing now.
     pub fn current_page(&self) -> String {
         self.harness
@@ -1374,6 +1386,13 @@ impl<'a> Driver<'a> {
 
     /// Capture and check the app in its current state.
     pub fn state(&mut self, name: &str, sizes: Sizes) {
+        self.state_prepared(name, sizes, |_| {});
+    }
+
+    /// Restore transient UI after each resize, then verify the named state before capture.
+    /// Repeating setup for another capture size is not another action in the DM's task.
+    pub fn state_prepared(&mut self, name: &str, sizes: Sizes, mut prepare: impl FnMut(&mut Self)) {
+        let task_interactions = self.interactions;
         self.states += 1;
         let label = format!("{:02}-{name}", self.states);
         let plan: &[((f32, f32), f32)] = match sizes {
@@ -1384,6 +1403,8 @@ impl<'a> Driver<'a> {
         };
         for &(size, density) in plan {
             self.resize(size, density);
+            prepare(self);
+            self.settle();
             // Logical layout at twice the density matches the 1x capture. The minimum
             // window is the harder test, so a state checked once is checked there.
             let one_size = matches!(sizes, Sizes::Default | Sizes::DefaultAndHiDpi);
@@ -1404,6 +1425,9 @@ impl<'a> Driver<'a> {
             self.capture(&label, size, density);
         }
         self.resize(self.base, 1.0);
+        prepare(self);
+        self.settle();
+        self.interactions = task_interactions;
         self.hold();
     }
 
@@ -1439,6 +1463,13 @@ impl<'a> Driver<'a> {
             &controls,
             &horizontal_regions,
             viewport,
+            self.scenario,
+            state,
+            &window,
+        ));
+        self.outcome.violations.extend(ergonomics::missing_glyphs(
+            &self.harness.ctx,
+            &self.harness.output().shapes,
             self.scenario,
             state,
             &window,

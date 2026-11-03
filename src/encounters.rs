@@ -1125,6 +1125,15 @@ impl Encounters {
             .iter()
             .find(|run| run.standing == crate::encounter_run::Standing::Unfinished)
     }
+    pub fn paused_run_count(&self) -> usize {
+        self.snapshot.as_ref().map_or(0, |snapshot| {
+            snapshot
+                .runs
+                .iter()
+                .filter(|run| run.standing == crate::encounter_run::Standing::Unfinished)
+                .count()
+        })
+    }
     /// A new encounter from a session's plan. It joins the plan, and back leads there.
     /// Whether a fight is open that has not ended.
     pub fn run_takes_arrivals(&self) -> bool {
