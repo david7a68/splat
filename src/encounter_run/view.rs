@@ -3612,7 +3612,7 @@ impl Run {
             design::message(ui, Tone::Warning, &words);
         }
         let saved_hp = self.carried.as_ref().is_some_and(|carried| carried.saved)
-            && self.history_labels.last().map(String::as_str) == Some("Use the saved HP");
+            && self.history_labels.last().map(String::as_str) == Some("full HP after long rest");
         if saved_hp {
             if design::message_with_action(
                 ui,

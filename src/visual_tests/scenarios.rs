@@ -6764,6 +6764,7 @@ pub mod session_plan {
         d.state("long-rest-restores", Sizes::Default);
         d.click(&format!("Resume: {SECOND}"));
         d.expect("Party HP is full after the long rest.");
+        d.expect("Undo: full HP after long rest");
         d.expect("Use the saved HP");
         d.observe(
             "iter-7-S1",

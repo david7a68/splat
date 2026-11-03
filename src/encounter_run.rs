@@ -891,7 +891,7 @@ impl Run {
             }
         }
         self.history.push(before);
-        self.history_labels.push("Use the saved HP".into());
+        self.history_labels.push("full HP after long rest".into());
         self.state
             .log
             .push("Party HP is full after the long rest.".into());
@@ -908,7 +908,7 @@ impl Run {
     fn back_to_sheets(&self) -> Option<(String, Command)> {
         let carried = self.carried.as_ref()?;
         if carried.saved
-            && self.history_labels.last().map(String::as_str) != Some("Use the saved HP")
+            && self.history_labels.last().map(String::as_str) != Some("full HP after long rest")
         {
             return None;
         }
@@ -5252,6 +5252,7 @@ mod tests {
         );
         assert_eq!(resumed.state.participants[0].temporary_hp, 0);
         assert_eq!(resumed.history.len(), 1);
+        assert_eq!(resumed.undo_label(), "Undo: full HP after long rest");
         assert_eq!(
             resumed.state.log.last().unwrap(),
             "Party HP is full after the long rest."
