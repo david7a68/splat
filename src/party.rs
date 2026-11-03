@@ -414,8 +414,13 @@ impl Party {
         let conflicts = self.reader.conflicts.clone();
         for (id, path) in &conflicts {
             let name = self.reader.member_name(id).to_owned();
+            let next = if connected {
+                "Replacing keeps your version as a copy."
+            } else {
+                "Connect to replace it with the D&D Beyond sheet."
+            };
             let words = format!(
-                "{name}'s sheet file has your own edits, so Splat stopped updating it.\nReplacing keeps your version as a copy."
+                "{name}'s sheet file has your own edits, so Splat stopped updating it.\n{next}"
             );
             let waiting = self.reader.force_waiting();
             let action = if waiting {
@@ -425,9 +430,14 @@ impl Party {
             } else {
                 "Connect D&D Beyond"
             };
-            storage_notice(ui, Tone::Warning, &words, &["Show file", action], |ui| {
+            let actions = if connected {
+                vec!["Show file", action]
+            } else {
+                vec!["Show file"]
+            };
+            storage_notice(ui, Tone::Warning, &words, &actions, |ui| {
                 show_file(ui, path);
-                if waiting {
+                if waiting && connected {
                     ui.label(Type::Small.rich(ui, action).color(colors().muted));
                 } else if connected {
                     if Action::quiet(action)
@@ -441,8 +451,6 @@ impl Party {
                             self.reader.force_read_character(id);
                         }
                     }
-                } else if design::link(ui, action).clicked() {
-                    self.wants_settings = true;
                 }
             });
         }
@@ -1326,7 +1334,7 @@ fn array(v: &Value) -> &[Value] {
     v.as_array().map(Vec::as_slice).unwrap_or(&[])
 }
 fn section_heading(ui: &mut egui::Ui, title: &str) {
-    ui.add_space(design::S);
+    ui.add_space(design::L);
     design::group_heading(ui, title, 0);
 }
 fn subsection_heading(ui: &mut egui::Ui, title: &str) {
@@ -1408,7 +1416,12 @@ pub(crate) fn overview(ui: &mut egui::Ui, record: &EntitySnapshot, live: Option<
         for ability in ABILITIES {
             metric(
                 ui,
-                &format!("{} {}", ability[..3].to_uppercase(), val(record, ability)),
+                &format!(
+                    "{}{} {}",
+                    ability[..1].to_uppercase(),
+                    &ability[1..3],
+                    val(record, ability)
+                ),
                 signed(record, &format!("{ability}_modifier")),
             );
         }
@@ -1893,18 +1906,20 @@ pub(crate) fn details(ui: &mut egui::Ui, record: &EntitySnapshot, page: usize, s
         let row = design::row(
             ui,
             if meta.is_empty() {
-                Density::Scan.row()
+                Density::Read.row()
             } else {
                 ENTRY_ROW
             },
             state.is_open(),
             &format!("{name} · {meta}"),
             |ui, rect| {
+                let top = if meta.is_empty() {
+                    rect.center().y - Type::Body.line() / 2.0
+                } else {
+                    rect.top()
+                };
                 ui.painter().text(
-                    egui::pos2(
-                        rect.left() + design::S,
-                        rect.top() + Type::Body.line() / 2.0,
-                    ),
+                    egui::pos2(rect.left() + design::S, top + Type::Body.line() / 2.0),
                     egui::Align2::LEFT_CENTER,
                     caret,
                     Type::Small.font(ui),
@@ -1916,7 +1931,7 @@ pub(crate) fn details(ui: &mut egui::Ui, record: &EntitySnapshot, page: usize, s
                 let detail =
                     design::one_line(ui, meta, Type::Small.font(ui), colors().muted, width);
                 ui.painter()
-                    .galley(egui::pos2(left, rect.top()), title, colors().text);
+                    .galley(egui::pos2(left, top), title, colors().text);
                 ui.painter().galley(
                     egui::pos2(left, rect.top() + Type::Body.line()),
                     detail,

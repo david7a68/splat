@@ -73,6 +73,8 @@ pub struct Driver<'a> {
     failed_expectations: RefCell<Vec<String>>,
     diagnose: bool,
     timing: CaptureTiming,
+    repeated_captures: super::repeated_captures::RepeatedCaptures,
+    expect_same: Option<&'static str>,
 }
 
 #[derive(Default)]
@@ -215,6 +217,8 @@ impl<'a> Driver<'a> {
             failed_expectations: RefCell::default(),
             diagnose: std::env::var_os("SPLAT_VISUAL_DIAGNOSE").is_some(),
             timing: CaptureTiming::default(),
+            repeated_captures: Default::default(),
+            expect_same: None,
             outcome: Outcome {
                 violations: Vec::new(),
                 passes: Vec::new(),
@@ -1497,10 +1501,17 @@ impl<'a> Driver<'a> {
         self.state_prepared(name, sizes, |_| {});
     }
 
+    /// The next capture step intentionally restores the previous view.
+    pub fn expect_same(&mut self, reason: &'static str) {
+        assert!(!reason.trim().is_empty(), "expect_same needs a reason");
+        self.expect_same = Some(reason);
+    }
+
     /// Restore transient UI after each resize, then verify the named state before capture.
     /// Repeating setup for another capture size is not another action in the DM's task.
     pub fn state_prepared(&mut self, name: &str, sizes: Sizes, mut prepare: impl FnMut(&mut Self)) {
         let task_interactions = self.interactions;
+        let expect_same = self.expect_same.take();
         self.states += 1;
         let label = format!("{:02}-{name}", self.states);
         let plan: &[((f32, f32), f32)] = match sizes {
@@ -1530,7 +1541,7 @@ impl<'a> Driver<'a> {
                         .filter(|violation| !violation.check.ends_with(ergonomics::CHROME_SUFFIX)),
                 );
             }
-            self.capture(&label, size, density);
+            self.capture(&label, size, density, expect_same);
         }
         self.resize(self.base, 1.0);
         prepare(self);
@@ -1595,7 +1606,7 @@ impl<'a> Driver<'a> {
         ));
     }
 
-    fn capture(&mut self, state: &str, size: (f32, f32), density: f32) {
+    fn capture(&mut self, state: &str, size: (f32, f32), density: f32, expect_same: Option<&str>) {
         let Some(directory) = &self.output else {
             return;
         };
@@ -1613,6 +1624,23 @@ impl<'a> Driver<'a> {
             .render()
             .unwrap_or_else(|error| panic!("{}: render failed: {error}", self.scenario));
         self.timing.render += started.elapsed();
+        let window = format!("{}x{}@{density}", size.0, size.1);
+        if let Some(reason) = expect_same {
+            self.outcome.passes.push(ergonomics::Pass {
+                check: "expect_same".into(),
+                scenario: self.scenario.into(),
+                state: state.into(),
+                detail: format!("{window}: {reason}"),
+            });
+        }
+        if let Some(failure) =
+            self.repeated_captures
+                .check(self.states, &window, state, image.as_raw(), expect_same)
+        {
+            self.failed_expectations
+                .borrow_mut()
+                .push(format!("{}: {failure}", self.scenario));
+        }
         let started = Instant::now();
         image
             .save(&path)
@@ -1630,7 +1658,8 @@ impl<'a> Driver<'a> {
         });
         self.harness.hover_at(rect.center());
         self.harness.run_steps(2);
-        self.capture(&label, self.base, 1.0);
+        let expect_same = self.expect_same.take();
+        self.capture(&label, self.base, 1.0, expect_same);
         self.harness.remove_cursor();
         self.settle();
     }

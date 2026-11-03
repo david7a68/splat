@@ -189,7 +189,7 @@ pub struct Sessions {
     folder: Option<PathBuf>,
     folder_error: Option<String>,
     folder_text: String,
-    folder_saved: bool,
+    folder_notice: Option<String>,
     view: View,
     tab: Tab,
     /// The list of sessions stands beside this one, and it already gives the date.
@@ -266,6 +266,7 @@ pub struct Sessions {
     break_before_words: bool,
     note_editor_id: Option<egui::Id>,
     move_run_here: Option<(Uuid, String)>,
+    moved_run: Option<MovedRun>,
     /// When a recording last stopped, so the rail can say it was kept.
     saved_at: Option<Instant>,
     note_had_focus: bool,
@@ -306,6 +307,14 @@ pub struct Sessions {
     pub wants_saved_run: Option<PathBuf>,
     /// A name in a note's link to read in Lookup.
     pub wants_lookup: Option<String>,
+}
+
+struct MovedRun {
+    before: timeline::Event,
+    open_run: Option<(String, Uuid)>,
+    body: String,
+    events: Vec<timeline::Event>,
+    words: String,
 }
 
 pub fn processed_warning() -> Status<'static> {
@@ -692,9 +701,8 @@ fn compact_plan_for_reading(body: &str, fights: &[PlanFight], beside: bool) -> S
         return body.to_owned();
     }
     let words = format!(
-        "{}, in the plan{}",
-        design::count(lines.len(), "fight", "fights"),
-        if beside { " at left" } else { "" }
+        "{}, in the plan",
+        design::count(lines.len(), "fight", "fights")
     );
     let heading = body
         .split_inclusive('\n')
@@ -707,8 +715,19 @@ fn compact_plan_for_reading(body: &str, fights: &[PlanFight], beside: bool) -> S
         .map_or(0, |(at, _)| at);
     let start = heading + body[heading..].find(&plan).expect("the plan section");
     let mut reading = body.to_owned();
-    reading.replace_range(start..start + plan.len(), &words);
+    if beside {
+        reading.replace_range(heading..start + plan.len(), "");
+    } else {
+        reading.replace_range(start..start + plan.len(), &words);
+    }
     reading
+}
+
+fn has_written_text(body: &str) -> bool {
+    body.lines().any(|line| {
+        let line = line.trim();
+        !line.is_empty() && !line.starts_with('#') && !matches!(line, "-" | "*" | "---")
+    })
 }
 
 /// The fields of one event, in place in a session's plan. Returns whether any changed.
@@ -1260,7 +1279,7 @@ impl Sessions {
         self.job_done = false;
         self.job_warned = false;
         self.deleted_template = None;
-        self.folder_saved = false;
+        self.folder_notice = None;
         self.notice_session = None;
         self.select(self.current().or(self.notes.first().map(|note| note.id)));
     }
@@ -2409,6 +2428,7 @@ impl Sessions {
 
     /// The warning about an old session has gone, and the open run's event has not moved.
     fn say_where_the_run_stays(&mut self, new: Uuid) {
+        self.moved_run = None;
         let Some((name, session)) = self.open_run.clone().filter(|(_, session)| *session != new)
         else {
             return;
@@ -2419,6 +2439,76 @@ impl Sessions {
         self.notice = Some((Tone::Info, format!("{name} stays in {}.", note.label())));
         self.notice_session = Some(new);
         self.move_run_here = self.notice.as_ref().map(|(_, words)| (new, words.clone()));
+    }
+
+    fn move_run_to_session(&mut self, book: &mut Book, run: Uuid, session: Uuid) {
+        let Some(event) = book.events.iter_mut().find(|event| event.run == Some(run)) else {
+            return;
+        };
+        let before = event.clone();
+        event.session = Some(session);
+        event.continued_in = None;
+        book.touch();
+        let open_run = self.open_run.clone();
+        let name = open_run.as_ref().map_or("Fight", |(name, _)| name.as_str());
+        let number = self
+            .notes
+            .iter()
+            .find(|note| note.id == session)
+            .map_or(1, |note| note.number);
+        let words = format!("{name} moved to Session {number}.");
+        self.notice = Some((Tone::Success, words.clone()));
+        self.notice_session = Some(session);
+        self.moved_run = Some(MovedRun {
+            before,
+            open_run,
+            body: self
+                .draft
+                .as_ref()
+                .map_or_else(String::new, |draft| draft.body.clone()),
+            events: book.events.clone(),
+            words,
+        });
+        self.open_run = self.open_run.take().map(|(name, _)| (name, session));
+        self.move_run_here = None;
+    }
+
+    fn expire_move(&mut self, book: &Book) {
+        if self.moved_run.as_ref().is_some_and(|moved| {
+            self.notice
+                .as_ref()
+                .is_none_or(|(_, words)| *words != moved.words)
+        }) {
+            self.moved_run = None;
+        }
+        if self.moved_run.as_ref().is_some_and(|moved| {
+            moved.events != book.events
+                || self
+                    .draft
+                    .as_ref()
+                    .is_none_or(|draft| draft.body != moved.body)
+        }) {
+            self.moved_run = None;
+            self.notice = None;
+            self.notice_session = None;
+        }
+    }
+
+    fn undo_move(&mut self, book: &mut Book) {
+        self.expire_move(book);
+        if let Some(moved) = self.moved_run.take() {
+            if let Some(event) = book
+                .events
+                .iter_mut()
+                .find(|event| event.id == moved.before.id)
+            {
+                *event = moved.before;
+                book.touch();
+            }
+            self.open_run = moved.open_run;
+            self.notice = None;
+            self.notice_session = None;
+        }
     }
 
     fn submit_form(&mut self, form: &Form) -> Result<Uuid, String> {
@@ -2857,7 +2947,7 @@ impl Sessions {
             |note| without_own_heading(&draft.body, note),
         );
         let compact = compact_plan_for_reading(&body, plan.fights, beside);
-        let summary = (compact != body)
+        let summary = (!beside && compact != body)
             .then(|| section_text(&compact, "Plan for tonight"))
             .flatten();
         let text = words_to_read(&compact, book);
@@ -2866,7 +2956,19 @@ impl Sessions {
             .auto_shrink([false, false])
             .show(ui, |ui| {
                 note_width(ui, |ui| {
-                    if let Some(summary) = &summary
+                    if !has_written_text(&compact) {
+                        ui.horizontal(|ui| {
+                            ui.label(
+                                Type::Small
+                                    .rich(ui, "Nothing written yet.")
+                                    .color(colors().muted),
+                            );
+                            if design::link(ui, "Write").clicked() {
+                                self.write_in_note();
+                                self.focus_notes = true;
+                            }
+                        });
+                    } else if let Some(summary) = &summary
                         && let Some((before, after)) = text.split_once(summary)
                     {
                         markdown_view::show_reader(ui, before);
@@ -4745,6 +4847,7 @@ impl Sessions {
         if let Some(draft) = &mut self.draft {
             Self::draft_problem(ui, draft);
         }
+        self.expire_move(book);
         let shown = self.notice_session.is_none() || self.notice_session == self.selected;
         if shown && self.job_done {
             self.job_done = false;
@@ -4760,19 +4863,13 @@ impl Sessions {
                 .map(|(session, _)| *session)
             {
                 if design::message_with_action(ui, tone, &words, "Move it here") {
-                    if let Some(event) = book
-                        .events
-                        .iter_mut()
-                        .find(|event| event.run.is_some() && event.run == plan.open_run)
-                    {
-                        event.session = Some(session);
-                        event.continued_in = None;
-                        book.touch();
+                    if let Some(run) = plan.open_run {
+                        self.move_run_to_session(book, run, session);
                     }
-                    self.open_run = self.open_run.take().map(|(name, _)| (name, session));
-                    self.move_run_here = None;
-                    self.notice = None;
-                    self.notice_session = None;
+                }
+            } else if self.moved_run.is_some() {
+                if design::message_with_action(ui, tone, &words, "Undo move") {
+                    self.undo_move(book);
                 }
             } else {
                 ui.horizontal_top(|ui| {
@@ -5347,7 +5444,7 @@ impl Sessions {
         )
         .changed();
         if edited {
-            self.folder_saved = false;
+            self.folder_notice = None;
         }
         if let Some(folder) = &self.folder {
             ui.add(
@@ -5382,6 +5479,7 @@ impl Sessions {
                 .ok()
                 .and_then(|files| files.as_ref())
                 .is_some_and(|files| !files.is_empty());
+        let mut move_counts = String::new();
         if has_files {
             let files = files.as_ref().unwrap().as_ref().unwrap();
             let notes = self.notes.len();
@@ -5397,7 +5495,7 @@ impl Sessions {
                 .iter()
                 .filter(|path| path.extension().is_some_and(|ext| ext == "wav"))
                 .count();
-            let counts = [
+            let mut counts = vec![
                 design::count(notes, "note", "notes"),
                 design::count(book.events.len(), "event", "events"),
                 design::count(templates, "template", "templates"),
@@ -5405,13 +5503,19 @@ impl Sessions {
             ]
             .into_iter()
             .filter(|count| !count.is_empty())
-            .collect::<Vec<_>>()
-            .join(", ");
+            .collect::<Vec<_>>();
+            let last = counts.pop().unwrap_or_default();
+            let counts = if counts.is_empty() {
+                last
+            } else {
+                format!("{} and {last}", counts.join(", "))
+            };
             let counts = if counts.is_empty() {
                 "Timeline.md".to_owned()
             } else {
                 counts
             };
+            move_counts = counts.clone();
             design::message(
                 ui,
                 Tone::Warning,
@@ -5475,7 +5579,8 @@ impl Sessions {
                 Ok(folder) => {
                     self.folder = Some(folder);
                     self.folder_error = None;
-                    self.folder_saved = true;
+                    self.folder_notice =
+                        move_files.then(|| format!("Moved {move_counts} to {}.", self.folder_text));
                     self.manifest_changed = Some(campaign.path.clone());
                     self.draft = None;
                     self.template_draft = None;
@@ -5485,12 +5590,12 @@ impl Sessions {
                 }
                 Err(error) => {
                     self.folder_error = Some(error);
-                    self.folder_saved = false;
+                    self.folder_notice = None;
                 }
             }
         }
-        if self.folder_saved {
-            ui.label(Type::Small.rich(ui, "Saved").color(c.document.saved));
+        if let Some(words) = &self.folder_notice {
+            design::message(ui, Tone::Success, words);
         }
     }
 
@@ -5790,10 +5895,17 @@ mod tests {
         }];
         let source = "## Plan for tonight\n\n- [[Bridge Ambush]]\n- [[Bridge Ambush]]\n\n## What happened\n\nWe crossed the bridge.\n";
         let compact = compact_plan_for_reading(source, &fights, true);
-        assert!(compact.contains("2 fights, in the plan at left"));
+        assert!(!compact.contains("Plan for tonight"));
         assert!(!compact.contains("[[Bridge Ambush]]"));
         assert!(compact.contains("We crossed the bridge."));
         assert_eq!(source.matches("[[Bridge Ambush]]").count(), 2);
+        let tab = compact_plan_for_reading(source, &fights, false);
+        assert!(tab.contains("2 fights, in the plan"));
+        assert!(!tab.contains("at left"));
+        let empty = source.replace("We crossed the bridge.", "");
+        assert!(!has_written_text(&compact_plan_for_reading(
+            &empty, &fights, true
+        )));
         let repeated = format!(
             "## Recap of last time\n\n- [[Bridge Ambush]]\n- [[Bridge Ambush]]\n\n{source}"
         );
@@ -5802,6 +5914,40 @@ mod tests {
         assert!(compact.starts_with("## Recap of last time\n\n- [[Bridge Ambush]]"));
         let mixed = source.replace("- [[Bridge Ambush]]\n\n##", "- Ask the ferryman.\n\n##");
         assert_eq!(compact_plan_for_reading(&mixed, &fights, true), mixed);
+    }
+
+    #[test]
+    fn move_run_undo_restores_the_event_and_expires_after_an_edit() {
+        let folder = tempfile::tempdir().unwrap();
+        let path = folder.path().join("note.md");
+        fs::write(&path, "## What happened\n").unwrap();
+        let old = Uuid::from_u128(1);
+        let new = Uuid::from_u128(2);
+        let run = Uuid::from_u128(3);
+        let mut sessions = Sessions {
+            draft: Some(Draft::open(&path).unwrap()),
+            open_run: Some(("Bridge Ambush".into(), old)),
+            ..Default::default()
+        };
+        let mut book = Book::default();
+        book.add(Kind::Encounter, Some(old));
+        book.events[0].run = Some(run);
+        book.events[0].continued_in = Some(new);
+        let before = book.events.clone();
+        sessions.move_run_to_session(&mut book, run, new);
+        assert_eq!(book.events[0].session, Some(new));
+        assert_eq!(book.events[0].continued_in, None);
+        sessions.undo_move(&mut book);
+        assert_eq!(book.events, before);
+        assert_eq!(sessions.open_run.as_ref().unwrap().1, old);
+        sessions.move_run_to_session(&mut book, run, new);
+        sessions.draft.as_mut().unwrap().body.push_str("A note.");
+        sessions.expire_move(&book);
+        assert!(sessions.moved_run.is_none() && sessions.notice.is_none());
+        sessions.move_run_to_session(&mut book, run, old);
+        book.add(Kind::Travel, Some(new));
+        sessions.expire_move(&book);
+        assert!(sessions.moved_run.is_none() && sessions.notice.is_none());
     }
 
     #[test]

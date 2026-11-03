@@ -23,6 +23,7 @@ mod dm_audit;
 mod driver;
 pub(crate) mod ergonomics;
 mod fixture;
+mod repeated_captures;
 mod scenarios;
 mod steps;
 mod video;
