@@ -187,7 +187,8 @@ pub fn long_rest_added_message(saved_fights: impl Iterator<Item = String>) -> St
 }
 
 /// What stops the timeline from saving. The DM must choose, so this cannot be dismissed.
-pub fn problems(ui: &mut egui::Ui, book: &mut Book) {
+/// Returns true when the comparison needs the rest of the pane.
+pub fn problems(ui: &mut egui::Ui, book: &mut Book) -> bool {
     if let Some(count) = book.dropped()
         && design::undo_message(
             ui,
@@ -224,17 +225,41 @@ pub fn problems(ui: &mut egui::Ui, book: &mut Book) {
             Tone::Warning,
             "Timeline.md changed on disk. Your draft is safe until you choose.",
         );
-        ui.horizontal(|ui| {
+        ui.horizontal_wrapped(|ui| {
             if Action::secondary("Overwrite with my timeline")
                 .show(ui)
                 .clicked()
             {
                 book.overwrite();
             }
-            if Action::quiet("Reload and lose my edits").show(ui).clicked() {
+            ui.add_space(design::L);
+            if Action::destructive("Reload and lose my timeline")
+                .show(ui)
+                .clicked()
+            {
                 book.reload_keeping_undo();
             }
         });
+        if book.conflict {
+            match book.conflict_comparison() {
+                Ok((draft, disk)) => {
+                    let face = egui::TextStyle::Monospace.resolve(ui.style());
+                    let height = ui.fonts_mut(|fonts| fonts.row_height(&face));
+                    design::draft_comparison_styled(
+                        ui,
+                        &draft,
+                        &disk,
+                        ("timeline_conflict", &book.path, &disk),
+                        face,
+                        height,
+                    );
+                }
+                Err(error) => {
+                    design::message(ui, Tone::Error, &error);
+                }
+            }
+            return true;
+        }
     } else if let Some(error) = book.error.clone() {
         design::message(ui, Tone::Error, &error);
         if Action::secondary("Try to save again").show(ui).clicked() {
@@ -242,6 +267,7 @@ pub fn problems(ui: &mut egui::Ui, book: &mut Book) {
             book.save();
         }
     }
+    false
 }
 
 /// The one step of undo after a removal. Returns whether it is showing.
@@ -1118,7 +1144,9 @@ impl TimelinePage {
             }),
             |_| {},
         );
-        problems(ui, book);
+        if problems(ui, book) {
+            return;
+        }
         if ui.input_mut(|i| i.consume_key(egui::Modifiers::COMMAND, egui::Key::S)) {
             book.save();
         }

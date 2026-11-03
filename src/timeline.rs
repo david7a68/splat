@@ -737,25 +737,48 @@ impl Book {
         self.dropped = None;
     }
 
-    fn write(&mut self) -> Result<(), String> {
-        let path = self.path.as_ref().ok_or("No campaign is open.")?;
-        let generated = render(&self.events, &self.session_links)?;
+    fn text_for(&self, events: &[Event], source: Option<&str>) -> Result<String, String> {
+        let generated = render(events, &self.session_links)?;
         let body = crate::sessions::body_of(&generated);
-        let text = if let Some(bytes) = &self.baseline {
-            let source = std::str::from_utf8(bytes).map_err(|e| e.to_string())?;
+        if let Some(source) = source {
             let patched = crate::content_workspace::patch_fields(
                 source,
                 &[(
                     "timeline",
-                    Some(serde_yaml_ng::to_value(&self.events).map_err(|e| e.to_string())?),
+                    Some(serde_yaml_ng::to_value(events).map_err(|e| e.to_string())?),
                 )],
             )?;
             let (front, _) =
                 crate::sessions::split_note(&patched).ok_or("Missing timeline properties.")?;
-            format!("{front}{body}")
+            Ok(format!("{front}{body}"))
         } else {
-            generated.clone()
-        };
+            Ok(generated)
+        }
+    }
+
+    pub fn conflict_comparison(&self) -> Result<(String, String), String> {
+        let path = self.path.as_ref().ok_or("No campaign is open.")?;
+        let disk = fs::read_to_string(path).map_err(|e| format!("{}: {e}", path.display()))?;
+        let disk_events = parse(&disk)?;
+        let mut events = self.events.clone();
+        for event in &mut events {
+            if let Some(disk) = disk_events.iter().find(|disk| disk.id == event.id) {
+                event.extra.extend(disk.extra.clone());
+            }
+        }
+        Ok((self.text_for(&events, Some(&disk))?, disk))
+    }
+
+    fn write(&mut self) -> Result<(), String> {
+        let path = self.path.as_ref().ok_or("No campaign is open.")?;
+        let source = self
+            .baseline
+            .as_deref()
+            .map(std::str::from_utf8)
+            .transpose()
+            .map_err(|e| e.to_string())?;
+        let text = self.text_for(&self.events, source)?;
+        let body = crate::sessions::body_of(&text).to_owned();
         let parent = path.parent().ok_or("Invalid timeline location.")?;
         if !parent.is_dir() {
             return Err(format!(
@@ -779,7 +802,7 @@ impl Book {
         .map_err(|e| e.to_string())?;
         crate::sessions::sync_folder(parent)?;
         self.baseline = Some(text.into_bytes());
-        self.written_body = Some(body.to_owned());
+        self.written_body = Some(body);
         self.body_changed = false;
         self.saved_events.clone_from(&self.events);
         self.dirty = false;
@@ -1289,7 +1312,17 @@ mod tests {
         book.touch();
         book.save();
         assert!(book.conflict);
-        assert_eq!(fs::read_to_string(path).unwrap(), text);
+        assert_eq!(fs::read_to_string(&path).unwrap(), text);
+        let text = text
+            .replacen("timeline_version:", "tags: [DM]\ntimeline_version:", 1)
+            .replacen("  kind:", "  weather: rain\n  kind:", 1);
+        fs::write(&path, &text).unwrap();
+        let (draft, disk) = book.conflict_comparison().unwrap();
+        assert_eq!(disk, text);
+        assert!(!draft.contains("DM's paragraph."));
+        assert!(draft.contains("tags: [DM]") && draft.contains("weather: rain"));
+        book.overwrite();
+        assert_eq!(fs::read_to_string(path).unwrap(), draft);
     }
 
     #[test]

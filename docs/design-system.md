@@ -402,7 +402,8 @@ Storage recovery uses the existing warning, comparison and save controls. A copi
 both files and offers **New identity** with Undo. A moved draft offers its new path and **Let it go**.
 Missing session and run folders show **Choose folder**. Recording results remain visible with
 **Audio removed** after the WAV is deleted. An outside edit to the Timeline body opens its existing
-disk-conflict choices. Unknown Timeline properties and event fields survive saves.
+disk-conflict comparison at the first difference. Overwrite comes before Reload and lose my timeline,
+which uses the destructive action style. Unknown Timeline properties and event fields survive saves.
 
 Timeline measures the title line with `Copy link` and `Saving blocked`, so copy and
 save states do not move the form. Otherwise, the actions take a second line above

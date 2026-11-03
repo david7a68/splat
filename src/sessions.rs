@@ -60,15 +60,19 @@ fn resolve(campaign: &Campaign, name: &str) -> Result<PathBuf, String> {
     })
 }
 
+pub(crate) fn missing_folder(folder: &Path) -> String {
+    format!(
+        "Session folder not found: {}. It may have been moved or renamed.",
+        folder.display()
+    )
+}
+
 pub fn folder(campaign: &Campaign) -> Result<PathBuf, String> {
     let path = resolve(campaign, &folder_setting(campaign)?)?;
     let document = CampaignDocument::load(campaign)?;
     let entry = Entry::parse(&document.path, &document.text)?;
     if entry.fields.contains_key(FOLDER_FIELD) && !path.is_dir() {
-        return Err(format!(
-            "Session folder is gone: {}. Choose folder in Sessions.",
-            path.display()
-        ));
+        return Err(missing_folder(&path));
     }
     Ok(path)
 }
@@ -1531,7 +1535,7 @@ mod tests {
         fs::create_dir_all(&path).unwrap();
         fs::rename(&path, dir.path().join("Moved meetings")).unwrap();
         let error = folder(&campaign).unwrap_err();
-        assert!(error.contains("Session folder is gone"));
+        assert!(error.contains("Session folder not found"));
         assert!(!path.exists());
     }
 

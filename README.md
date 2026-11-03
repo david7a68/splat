@@ -263,7 +263,8 @@ late responses cannot apply an old name to a new link.
 
 Timeline saves keep unknown properties and event fields. Comments outside the event list stay;
 comments inside the rewritten list are not guaranteed. If the body changed outside Splat, saving
-opens the disk-conflict choices before it can replace those words. A repaired Timeline file is read
+opens the draft beside the current file at the first difference, with disk-conflict choices,
+before it can replace those words. A repaired Timeline file is read
 again, and the open fight's latest result is applied.
 
 Session storage remembers each known note path in `.splat-session-paths.json`. A copied session

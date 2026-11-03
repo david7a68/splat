@@ -1435,10 +1435,7 @@ impl Sessions {
             return;
         };
         if !folder.is_dir() {
-            self.folder_error = Some(format!(
-                "Session folder is gone: {}. Choose folder.",
-                folder.display()
-            ));
+            self.folder_error = Some(super::missing_folder(folder));
             return;
         }
         self.folder_error = None;
@@ -3529,7 +3526,9 @@ impl Sessions {
         {
             self.removed_group = None;
         }
-        problems(ui, book);
+        if problems(ui, book) {
+            return;
+        }
         if plan.group_open && self.not_being_played().is_none() {
             let label = self
                 .notes
@@ -6089,12 +6088,13 @@ impl Sessions {
         book: &mut Book,
         plan: &Plan<'_>,
     ) {
+        let folder_missing = self.folder.as_ref().is_none_or(|folder| !folder.is_dir());
         let (page_title, count, singular, plural) = if self.view == View::Templates {
             ("Templates", self.templates.len(), "template", "templates")
         } else {
             ("Session", self.notes.len(), "session", "sessions")
         };
-        let context = if count == 0 {
+        let context = if count == 0 || folder_missing {
             String::new()
         } else {
             design::count(count, singular, plural)
@@ -6109,6 +6109,10 @@ impl Sessions {
             if self.view == View::Notes && !in_form && !empty {
                 new_session = Action::secondary("New session")
                     .icon(icons::ADD)
+                    .blocked_if(
+                        folder_missing,
+                        "Choose the session folder before making a session.",
+                    )
                     .blocked_if(locked, "Other sessions wait until you choose what to keep.")
                     .show(ui)
                     .clicked();
@@ -6140,17 +6144,29 @@ impl Sessions {
         if new_session {
             self.open_form();
         }
-        if self.folder.is_none() || self.folder.as_ref().is_some_and(|folder| !folder.is_dir()) {
-            design::message(
-                ui,
-                Tone::Error,
-                self.folder_error
-                    .as_deref()
-                    .unwrap_or("The session folder is not available."),
-            );
-            if design::link(ui, "Choose folder").clicked() {
-                self.wants_campaign_link = true;
-            }
+        if folder_missing {
+            let action = Action::quiet("Choose folder…").density(Density::Read);
+            let width =
+                ui.available_width() - action.natural_width(ui) - ui.spacing().item_spacing.x;
+            ui.horizontal_top(|ui| {
+                ui.allocate_ui_with_layout(
+                    egui::vec2(width, 0.0),
+                    egui::Layout::top_down(egui::Align::Min),
+                    |ui| {
+                        ui.add_space((Density::Read.control() - Type::Body.line()) / 2.0);
+                        design::message(
+                            ui,
+                            Tone::Error,
+                            self.folder_error
+                                .as_deref()
+                                .unwrap_or("The session folder is not available."),
+                        );
+                    },
+                );
+                if action.show(ui).clicked() {
+                    self.wants_campaign_link = true;
+                }
+            });
             return;
         }
         match self.view {

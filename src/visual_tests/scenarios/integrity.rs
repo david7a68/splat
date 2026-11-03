@@ -88,6 +88,10 @@ fn timeline_body(d: &mut Driver<'_>, folder: &std::path::Path) {
     d.app_mut()
         .timeline
         .add(crate::timeline::Kind::Travel, None);
+    d.app_mut().timeline.events[0].notes = (1..=48)
+        .map(|day| format!("Day {day}: The party followed the river."))
+        .collect::<Vec<_>>()
+        .join("\n");
     d.app_mut().timeline.save();
     let path = folder.join("Timeline.md");
     let text = format!("{}\nDM's paragraph.\n", fs::read_to_string(&path).unwrap());
@@ -97,6 +101,19 @@ fn timeline_body(d: &mut Driver<'_>, folder: &std::path::Path) {
     d.app_mut().timeline.save();
     d.settle();
     d.expect("Overwrite with my timeline");
+    d.expect("Reload and lose my timeline");
+    d.observe_both(
+        "D1 comparison",
+        "The disk body is visible at the first difference beside the draft",
+        |d| {
+            d.visible_text("YOUR DRAFT")
+                && d.visible_text("IN THE FILE NOW")
+                && d.visible_text("DM's paragraph.")
+                && d.painted_left("Overwrite with my timeline")
+                    .zip(d.painted_left("Reload and lose my timeline"))
+                    .is_some_and(|(overwrite, reload)| overwrite < reload)
+        },
+    );
     d.observe(
         "D1",
         fs::read_to_string(&path).unwrap() == text,
@@ -126,7 +143,24 @@ fn missing_folders(
     fs::rename(folder, campaign.path.join("Moved sessions")).unwrap();
     d.app_mut().sessions.refresh();
     d.settle();
-    d.expect("Session folder is gone");
+    d.expect("Session folder not found");
     d.expect("Choose folder");
+    d.observe_both(
+        "D10 recovery",
+        "A missing folder has no session count or repeated action",
+        |d| {
+            let nodes = d.nodes();
+            let message = nodes
+                .iter()
+                .find(|node| node.name.starts_with("Session folder not found:"));
+            let action = nodes.iter().find(|node| node.name == "Choose folder…");
+            !d.has_containing("1 session")
+                && d.visible_text("It may have been moved or renamed.")
+                && !d.has_containing("Choose folder.")
+                && message.zip(action).is_some_and(|(message, action)| {
+                    message.rect.y_range().contains(action.rect.center().y)
+                })
+        },
+    );
     d.state("session-folder-gone", Sizes::All);
 }
