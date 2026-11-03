@@ -52,11 +52,21 @@ pub fn broken(d: &mut Driver<'_>) {
         "The broken note opens the shared repair editor and its file actions",
     );
     d.state("broken-note-repair", Sizes::All);
+    let external = "---\nsplat_schema: 1\nsplat_id: [\n---\n\nOutside edit kept.\n";
+    fs::write(&path, external).unwrap();
+    d.settle();
+    assert_eq!(d.editor_text().as_deref(), Some(external));
+    d.state("clean-repair-follows-disk", Sizes::All);
     let fixed = format!(
         "---\nsplat_schema: 1\nsplat_id: {}\nsplat_kind: world\nsplat_name: Repaired watchkeeper\nsplat_world: {{type: npc}}\n---\n\nThe watchkeeper is back.\n",
         splat::character::stable_id("repaired-watchkeeper")
     );
     d.replace_text_in("Note text", &fixed);
+    fs::write(&path, format!("{external}\nAnother outside edit.\n")).unwrap();
+    d.settle();
+    d.expect("This note changed on disk. Choose which text to keep.");
+    d.state("dirty-repair-compares-disk", Sizes::All);
+    d.click("Keep my draft");
     d.observe_both(
         "iter-18-A-world-lock",
         "A World repair states the campaign switch lock",
@@ -147,7 +157,7 @@ pub fn places(d: &mut Driver<'_>) {
         d.interaction_count() - before <= 3,
         "Give an NPC a stat block in three interactions",
     );
-    d.expect("Stat block changed.");
+    d.expect("Stat block: not set → Guard.");
     assert!(
         fs::read_to_string(root(d).join("NPCs/Rook Ambry.md"))
             .unwrap()
@@ -157,7 +167,7 @@ pub fn places(d: &mut Driver<'_>) {
         "Adding the stat block changes only its short link and the confirmation message.",
     );
     d.state("npc-stat-block-changed", Sizes::All);
-    d.click("Undo World change");
+    d.click_containing("Undo stat block change for");
     d.observe(
         "W3",
         !fs::read_to_string(root(d).join("NPCs/Rook Ambry.md"))
@@ -169,9 +179,9 @@ pub fn places(d: &mut Driver<'_>) {
     d.click("New location…");
     d.type_into("Location name", "Watch House");
     d.click("Create location here");
-    d.expect("Place changed.");
+    d.expect("In:");
     d.state("npc-new-place", Sizes::All);
-    d.click("Undo World change");
+    d.click_containing("Undo place change for");
     d.click("Ashfall Keep");
     d.observe(
         "World places",
@@ -208,9 +218,9 @@ pub fn places(d: &mut Driver<'_>) {
             .fields["splat_world"]["in"]
     );
     d.wait_for_text("Obsidian added the watch schedule.");
-    d.expect("Place changed.");
+    d.expect("In:");
     d.state("place-change-keeps-disk-edit", Sizes::All);
-    d.click("Undo World change");
+    d.click_containing("Undo place change for");
     assert_eq!(fs::read_to_string(&path).unwrap(), external);
 }
 
@@ -398,7 +408,7 @@ pub fn package_rename(d: &mut Driver<'_>) {
     let (entries, _) = splat::content::read_directory(&package).unwrap();
     let target = entries.iter().find(|e| e.name == "Ashfall").unwrap();
     let path = package.join("Rules/Ash Exposure.md");
-    let original = fs::read_to_string(&path).unwrap();
+    let original = fs::read_to_string(&path).unwrap() + "\nSee [[Cinder Wolf]].\n";
     let reading = serde_yaml_ng::to_value(serde_json::json!({"title": "Ash Exposure", "summary": "The watch knows this spell.", "related": { target.id.to_string(): "Read the watch spell" }})).unwrap();
     fs::write(
         &path,
@@ -410,6 +420,8 @@ pub fn package_rename(d: &mut Driver<'_>) {
     d.open_combo_at(LIBRARY_PACKAGE_DROPDOWN);
     d.click(MODULE);
     d.click_starting("Ash Exposure · ");
+    d.scroll_until(READER, "Read the watch spell", 12);
+    d.scroll_at(READER, 1);
     d.wait_for_text("Read the watch spell");
     d.state("before-linked-entry-rename", Sizes::All);
     let old_path = package.join(&target.path);
@@ -422,6 +434,8 @@ pub fn package_rename(d: &mut Driver<'_>) {
     fs::remove_file(old_path).unwrap();
     d.click("Packages");
     d.click("Reload from disk");
+    d.scroll_until(READER, "Read the watch spell", 12);
+    d.scroll_at(READER, 1);
     d.wait_for_text("Read the watch spell");
     d.click("Read the watch spell");
     d.wait_for_text("Watch Ashfall");
@@ -438,21 +452,65 @@ pub fn package_rename(d: &mut Driver<'_>) {
     );
     d.click("Use Watch Ashfall");
 
+    search_library(d, "Cinder Wolf");
+    d.click_starting("Cinder Wolf · ");
+    d.click(EDIT_MARKDOWN);
+    let draft = d.editor_text().unwrap();
+    let renamed =
+        crate::content_workspace::patch_fields(&draft, &[("splat_name", Some("Ash Wolf".into()))])
+            .unwrap()
+            .replace("# Cinder Wolf", "# Ash Wolf");
+    d.replace_text_in("Markdown editor", &renamed);
+    d.click("Save");
+    d.wait_for_text("Update 1 link");
+    search_library(d, "Ash Exposure");
+    d.click_starting("Ash Exposure · ");
+    d.state("renamed-creature-offers-link-update", Sizes::All);
+    d.click("Update 1 link");
+    d.wait_for_text("Undo link update");
+    assert!(fs::read_to_string(&path).unwrap().contains("[[Ash Wolf]]"));
+    d.state("renamed-creature-links-updated", Sizes::All);
+    d.click("Undo link update");
+    assert!(
+        fs::read_to_string(&path)
+            .unwrap()
+            .contains("[[Cinder Wolf]]")
+    );
+    d.state("renamed-creature-link-update-undone", Sizes::All);
+
     let moved = d.root.join("modules/watch-package");
     fs::rename(&package, &moved).unwrap();
     go_campaign(d);
     d.click("Reload from disk");
     d.expect("Find the folder…");
     d.state("package-folder-moved-on-disk", Sizes::All);
-    // The native folder picker is closed in test builds. Supply its result here.
-    let module = crate::library::local_module(&moved).unwrap();
-    d.app_mut().campaigns.restore_module(module).unwrap();
-    d.click("Reload from disk");
+    let wrong = d.root.join("modules/wrong-package");
+    fs::create_dir(&wrong).unwrap();
+    fs::write(
+        wrong.join("Package.md"),
+        crate::library::note_text("Wrong package", "package", Some("wrong")),
+    )
+    .unwrap();
+    crate::hermetic::closed::next_folder(wrong);
+    d.click("Find the folder…");
+    d.expect("Choose the folder for this package.");
+    d.state("package-wrong-folder-picked", Sizes::All);
+    crate::hermetic::closed::next_folder(moved.clone());
+    d.click("Find the folder…");
+    d.wait_for_text("Undo folder recovery");
+    d.expect("Ashen Marches found in modules/watch-package/.");
+    d.state("package-correct-folder-picked", Sizes::All);
+    d.click("Undo folder recovery");
+    d.wait_for_text("Use this folder");
+    d.click("Use this folder");
+    d.wait_for_text("Undo folder recovery");
     go_library(d);
     d.click("Packages");
     d.click("Reload from disk");
-    d.type_into(SEARCH_LIBRARY, "Ash Exposure");
+    search_library(d, "Ash Exposure");
     d.click_starting("Ash Exposure · ");
+    d.scroll_until(READER, "Read the watch spell", 12);
+    d.scroll_at(READER, 1);
     d.wait_for_text("Read the watch spell");
     d.click("Read the watch spell");
     d.wait_for_text("Watch Ashfall");
@@ -554,6 +612,8 @@ pub fn package_manifest_broken(d: &mut Driver<'_>) {
     d.click("Open in Library");
     d.expect("Markdown editor");
     d.expect("line 4 opens a list");
+    d.expect("Replace with a basic Package.md");
+    d.expect("Keeps the id, name and namespace. Drops the rest.");
     d.state("manifest-opened-for-repair", Sizes::All);
     go_encounters(d);
     open_saved_encounter(d, "Bridge Ambush");
@@ -1027,12 +1087,17 @@ pub fn world_note_moved(d: &mut Driver<'_>) {
     reload(d);
     d.click(NAV_WORLD);
     d.click_containing("Rook Ambry · ");
-    d.click("Watch House");
+    d.click_containing("Watch House · 2 matches");
     d.expect("This link matches more than one note. Choose one.");
     d.state("duplicate-place-chooser-in-world", Sizes::All);
+    d.click("Always use Locations/Watch House.md");
+    d.expect("Undo place change for Rook Ambry");
+    d.state("place-choice-kept-with-undo", Sizes::All);
+    d.click("Undo place change for Rook Ambry");
+    d.click_containing("Watch House · 2 matches");
     d.click("Locations/Watch House.md");
     look_up(d, "Rook Ambry");
-    d.click("Watch House");
+    d.click_containing("Watch House · 2 matches");
     d.expect("This link matches more than one note. Choose one.");
     d.state("duplicate-place-chooser-in-lookup", Sizes::All);
     d.click("Locations/Watch House.md");
@@ -1067,7 +1132,7 @@ pub fn world_note_moved(d: &mut Driver<'_>) {
     d.click("Change In");
     d.type_text("North Gate");
     d.click("North Gate");
-    d.expect("Place changed.");
+    d.expect("In: Watch House → North Gate.");
     assert!(
         fs::read_to_string(&moved_npc)
             .unwrap()
@@ -1211,10 +1276,21 @@ pub fn world_note_renamed(d: &mut Driver<'_>) {
     d.click(NAV_WORLD);
     d.click_starting("Rook Ambry ·");
     d.expect("NPCs/Mara Vell.md");
+    d.expect("The file is Mara Vell.md, but the name is Rook Ambry.");
     d.state("renamed-npc-keeps-old-name-in-world", Sizes::All);
     look_up(d, "Rook Ambry");
     d.expect("Rook Ambry");
     d.state("renamed-npc-keeps-old-name-in-lookup", Sizes::All);
+    d.press(Key::Escape);
+    d.click("Use Mara Vell");
+    d.wait_for_text("Undo name change");
+    d.state("renamed-npc-name-updated", Sizes::All);
+    look_up(d, "Mara Vell");
+    d.expect("Mara Vell");
+    d.state("renamed-npc-new-name-in-lookup", Sizes::All);
+    d.press(Key::Escape);
+    d.click("Undo name change");
+    d.wait_for_text("Use Mara Vell");
 }
 
 pub fn package_folder_copied(d: &mut Driver<'_>) {
@@ -1242,15 +1318,35 @@ pub fn package_folder_copied(d: &mut Driver<'_>) {
     assert_eq!(d.app_mut().campaigns.modules().len(), 1);
     d.state("copied-package-names-duplicate-identity", Sizes::All);
     d.click("Register as a new package");
+    d.clear_text_in("New package name");
+    d.expect("Type a name first.");
+    assert!(d.is_disabled("Register package"));
+    d.state("copied-package-needs-a-name", Sizes::All);
     d.replace_text_in("New package name", "Ashen Reaches");
     d.state("copied-package-new-name", Sizes::All);
-    d.click("Register as a new package");
+    d.click("Register Ashen Reaches");
     d.wait_for_text("Undo package registration");
     search_library(d, "Cinder Wolf");
     d.expect("Ashen Marches");
     d.expect("Ashen Reaches");
     assert_eq!(d.app_mut().campaigns.modules().len(), 2);
     d.state("copied-package-registered-alongside-original", Sizes::All);
+    go_campaign(d);
+    d.expect("Ashen Reaches");
+    d.state("campaign-after-copy-registration", Sizes::All);
+    go_library(d);
+    d.click("Use the copy's entries");
+    d.wait_for_text("Undo source change");
+    go_encounters(d);
+    if d.has("Back to encounters") {
+        d.click("Back to encounters");
+    }
+    open_saved_encounter(d, RUN);
+    d.type_into(FIND_CREATURE, "Cinder Wolf");
+    d.expect("Ashen Reaches");
+    d.state("encounter-uses-copy-with-kept-changes", Sizes::All);
+    go_library(d);
+    d.click("Undo source change");
     d.click("Undo package registration");
     d.wait_for_text("Ashen Marches");
     assert_eq!(d.app_mut().campaigns.modules().len(), 1);
@@ -1258,7 +1354,11 @@ pub fn package_folder_copied(d: &mut Driver<'_>) {
     d.state("copied-package-registration-undone", Sizes::All);
     let hand_edit = crate::content_workspace::patch_fields(
         std::str::from_utf8(&before).unwrap(),
-        &[("splat_id", Some(Uuid::new_v4().to_string().into()))],
+        &[
+            ("splat_id", Some(Uuid::new_v4().to_string().into())),
+            ("splat_namespace", Some("manual_copy".into())),
+            ("splat_key", Some("manual_copy:library".into())),
+        ],
     )
     .unwrap();
     fs::write(copied.join("Module.md"), hand_edit).unwrap();
@@ -1267,7 +1367,49 @@ pub fn package_folder_copied(d: &mut Driver<'_>) {
     d.settle();
     d.wait_for_text("Duplicate identity");
     d.state("manifest-only-hand-repair-keeps-both-files", Sizes::All);
+    search_library(d, "Cinder Wolf");
+    d.click_containing("· ashen-marches/");
+    d.expect("New identity for Cinder Wolf.md in ashen-marches-copy/");
+    d.expect_same("The duplicate identity view already selects this file and names both folders.");
+    d.state("same-filenames-name-the-folder", Sizes::All);
+    let (copied_entries, _) = splat::content::read_directory(&copied).unwrap();
+    let count = copied_entries
+        .iter()
+        .filter(|entry| entry.kind != "package")
+        .count();
+    d.click(&format!(
+        "New identity for all {count} files in ashen-marches-copy/"
+    ));
+    d.wait_for_text("Undo folder identities");
+    d.state("copied-folder-identities-repaired-together", Sizes::All);
+    d.click("Undo folder identities");
+    d.wait_for_text("New identity for Cinder Wolf.md in ashen-marches-copy/");
+    d.expect_same(
+        "Undo restores the same duplicate identities and folder-specific repair actions.",
+    );
+    d.state("copied-folder-identities-undone", Sizes::All);
+    d.click(&format!(
+        "New identity for all {count} files in ashen-marches-copy/"
+    ));
+    let wolf = copied_entries
+        .iter()
+        .find(|entry| entry.name == "Cinder Wolf")
+        .unwrap();
+    fs::copy(
+        d.root.join("modules/ashen-marches").join(&wolf.path),
+        copied.join(&wolf.path),
+    )
+    .unwrap();
+    d.click("Packages");
+    d.click("Reload from disk");
+    search_library(d, "Cinder Wolf");
+    d.click_containing("· ashen-marches/");
+    d.expect("New identity for Cinder Wolf.md in ashen-marches-copy/");
+    d.state("one-entry-copied-between-registered-packages", Sizes::All);
     go_encounters(d);
+    if d.has("Back to encounters") {
+        d.click("Back to encounters");
+    }
     open_saved_encounter(d, RUN);
     d.expect("Cinder Wolf");
     d.expect("Ember Cultist");

@@ -756,7 +756,10 @@ mod tests {
     fn prose_vitals_warn_and_use_updates_the_fight_source() {
         let text = format!(
             "{}\n**Hit Points** 45\n\n**Armor Class** 17\n",
-            crate::library::note_text("Guard", "creature", None)
+            crate::library::note_text("Guard", "creature", None).replace(
+                "splat_stats:\n",
+                "splat_stats:\n  max_hp: {value: 1}\n  armor_class: {value: 10}\n"
+            )
         );
         let entry = Entry::parse("Guard.md", &text).unwrap();
         let checks = vital_checks(&entry);

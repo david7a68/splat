@@ -319,13 +319,20 @@ impl Options {
 mod tests {
     use super::*;
     fn campaign(root: &Path) -> Campaign {
-        Campaign {
+        let campaign = Campaign {
             id: Uuid::new_v4(),
             name: "Test".into(),
             path: root.into(),
             dndbeyond_campaign_id: None,
             dndbeyond_campaign_name: None,
+        };
+        if campaign.path.is_dir() && !campaign.path.join("Campaign.md").exists() {
+            crate::content_workspace::CampaignDocument::new(&campaign)
+                .unwrap()
+                .save()
+                .unwrap();
         }
+        campaign
     }
 
     #[test]
@@ -402,6 +409,7 @@ mod tests {
             dndbeyond_campaign_id: None,
             dndbeyond_campaign_name: None,
         };
+        CampaignDocument::new(&campaign).unwrap().save().unwrap();
         let document = CampaignDocument::load(&campaign).unwrap();
         let options = Options {
             folder: "Sessions/Combat".into(),

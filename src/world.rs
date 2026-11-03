@@ -315,6 +315,35 @@ pub(crate) fn redirect_links(text: &str, old: &Entry, new_id: Uuid) -> String {
     })
 }
 
+/// Rename note links outside code. Keep headings, aliases, and unrelated words.
+pub(crate) fn rename_note_links(text: &str, old: &str, new: &str) -> (String, usize) {
+    let mut count = 0;
+    let (front, body) = crate::sessions::split_note(text).unwrap_or(("", text));
+    let after = outside_code(body, |part, output| {
+        let mut copied = 0;
+        for (range, embed, target, words) in each_link(part) {
+            output.push_str(&part[copied..range.start]);
+            let (name, heading) = target
+                .split_once('#')
+                .map_or((target.as_str(), String::new()), |(name, heading)| {
+                    (name, format!("#{heading}"))
+                });
+            if !embed && name.eq_ignore_ascii_case(old) {
+                output.push_str(&format!(
+                    "[[{new}{heading}{}]]",
+                    words.map_or(String::new(), |words| format!("|{words}"))
+                ));
+                count += 1;
+            } else {
+                output.push_str(&part[range.clone()]);
+            }
+            copied = range.end;
+        }
+        output.push_str(&part[copied..]);
+    });
+    (format!("{front}{after}"), count)
+}
+
 /// Obsidian's links, written as links the Markdown reader understands.
 pub fn with_links(body: &str, images: &HashMap<String, PathBuf>) -> String {
     outside_code(body, |part, output| {
@@ -816,10 +845,13 @@ pub struct Reader {
     picker: Option<Picker>,
     undo: Option<Change>,
     identity_undo: Option<(Uuid, Change)>,
+    name_undo: Option<Change>,
     error: Option<String>,
     /// A link that matches several files, waiting for the DM to choose.
     many: Vec<usize>,
     many_heading: Option<String>,
+    place_choices_open: bool,
+    place_choices_document: Option<Uuid>,
     heading_document: Option<Uuid>,
     heading: Option<String>,
     /// What only the app can do, for it to take after this reader draws.
@@ -937,6 +969,10 @@ impl Reader {
         campaign: Option<&Campaign>,
     ) -> Option<Go> {
         let mut go = None;
+        if self.place_choices_document != Some(item.entry.id) {
+            self.place_choices_open = false;
+            self.place_choices_document = Some(item.entry.id);
+        }
         ui.ctx()
             .data_mut(|data| data.insert_temp(egui::Id::new("reader_document"), item.entry.id));
         let title = item
@@ -951,10 +987,90 @@ impl Reader {
             &format!("{} · {}", item.subtitle, item.owner),
             Some(&item.entry),
         );
+        let undo_name = format!(
+            "Undo {} change for {}",
+            if self
+                .undo
+                .as_ref()
+                .is_some_and(|change| change.word.starts_with("In:"))
+            {
+                "place"
+            } else {
+                "stat block"
+            },
+            item.entry.name
+        );
+        ui.data_mut(|data| data.insert_temp(egui::Id::new("world_undo_name"), undo_name));
         if let Some(error) = &self.error {
             design::message(ui, Tone::Error, error);
         }
+        if !self.compact
+            && (item.is_world_note() || item.entry.kind == "world")
+            && item.is_private()
+            && let Some(campaign) = campaign
+        {
+            file_actions(ui, campaign, &item.entry.path);
+        }
         if let Some(campaign) = campaign {
+            if item.entry.kind == "world" && !index.duplicate_world.contains_key(&item.entry.path) {
+                let stem = Path::new(&item.entry.path)
+                    .file_stem()
+                    .unwrap_or_default()
+                    .to_string_lossy();
+                if stem != item.entry.name {
+                    let message = format!(
+                        "The file is {stem}.md, but the name is {}.",
+                        item.entry.name
+                    );
+                    if design::message_with_action(
+                        ui,
+                        Tone::Warning,
+                        &message,
+                        &format!("Use {stem}"),
+                    ) {
+                        let result = (|| {
+                            let before =
+                                fs::read_to_string(note_path(&campaign.path, &item.entry.path)?)
+                                    .map_err(|error| error.to_string())?;
+                            let after = crate::content_workspace::patch_fields(
+                                &before,
+                                &[("splat_name", Some(stem.to_string().into()))],
+                            )?;
+                            let after = crate::content_workspace::rename_first_heading(
+                                after,
+                                &item.entry.name,
+                                &stem,
+                            );
+                            write_note(&campaign.path, &item.entry.path, Some(&before), &after)?;
+                            Ok::<_, String>(Change {
+                                path: item.entry.path.clone(),
+                                before,
+                                after,
+                                word: format!("Name changed to {stem}."),
+                            })
+                        })();
+                        match result {
+                            Ok(change) => {
+                                self.name_undo = Some(change);
+                                return Some(Go::Reload(item.entry.id));
+                            }
+                            Err(error) => self.error = Some(error),
+                        }
+                    }
+                }
+                if let Some(change) = &self.name_undo
+                    && change.path == item.entry.path
+                    && design::message_with_action(ui, Tone::Info, &change.word, "Undo name change")
+                {
+                    match change.undo(campaign) {
+                        Ok(()) => {
+                            self.name_undo = None;
+                            return Some(Go::Reload(item.entry.id));
+                        }
+                        Err(error) => self.error = Some(error),
+                    }
+                }
+            }
             if self
                 .identity_undo
                 .as_ref()
@@ -1009,7 +1125,6 @@ impl Reader {
                             Err(error) => self.error = Some(error),
                         }
                     }
-                    ui.label(Type::Small.rich(ui, path).color(colors().muted));
                     if at > 0 {
                         ui.label(
                             Type::Small
@@ -1019,13 +1134,6 @@ impl Reader {
                     }
                 }
             }
-        }
-        if !self.compact
-            && (item.is_world_note() || item.entry.kind == "world")
-            && item.is_private()
-            && let Some(campaign) = campaign
-        {
-            file_actions(ui, campaign, &item.entry.path);
         }
         for warning in index.errors.iter().filter(|error| {
             error.starts_with(&format!("{}:", item.entry.path))
@@ -1041,6 +1149,27 @@ impl Reader {
                     self.entry_controls(ui, item, index, campaign)
                 })
                 .inner;
+        }
+        if item.entry.kind == "world" && index.duplicate_world.contains_key(&item.entry.path) {
+            for (key, label) in [
+                ("creature", "Stat block"),
+                ("in", "In"),
+                ("status", "Status"),
+            ] {
+                if let Some(value) = world_field(&item.entry, key) {
+                    let name = serde_yaml_ng::from_value::<EntryRef>(value.clone())
+                        .ok()
+                        .and_then(|reference| reference.reference().ok())
+                        .and_then(|reference| index.position_of(&reference))
+                        .map(|at| index.items[at].entry.name.clone())
+                        .unwrap_or_else(|| link_name(value, label));
+                    ui.label(
+                        Type::Small
+                            .rich(ui, format!("{label}: {name}"))
+                            .color(colors().muted),
+                    );
+                }
+            }
         }
         if item.is_note() {
             let followed = style::measure(ui, |ui| {
@@ -1141,7 +1270,31 @@ impl Reader {
         }
     }
 
-    fn change(&mut self, campaign: &Campaign, item: &Item, key: &str, value: Value) -> Option<Go> {
+    fn change(
+        &mut self,
+        campaign: &Campaign,
+        item: &Item,
+        index: &ContentIndex,
+        key: &str,
+        value: Value,
+    ) -> Option<Go> {
+        let label = if key == "in" { "In" } else { "Stat block" };
+        let name = |value: &Value| {
+            serde_yaml_ng::from_value::<EntryRef>(value.clone())
+                .ok()
+                .and_then(|reference| reference.reference().ok())
+                .and_then(|reference| index.position_of(&reference))
+                .map(|at| index.items[at].entry.name.clone())
+                .unwrap_or_else(|| {
+                    if value.is_null() {
+                        "not set".into()
+                    } else {
+                        link_name(value, label)
+                    }
+                })
+        };
+        let before_name = world_field(&item.entry, key).map_or_else(|| "not set".into(), name);
+        let after_name = name(&value);
         let result = (|| {
             let before = fs::read_to_string(note_path(&campaign.path, &item.entry.path)?)
                 .map_err(|e| e.to_string())?;
@@ -1151,18 +1304,14 @@ impl Reader {
                 path: item.entry.path.clone(),
                 before,
                 after,
-                word: if key == "in" {
-                    "Place changed."
-                } else {
-                    "Stat block changed."
-                }
-                .into(),
+                word: format!("{label}: {before_name} → {after_name}."),
             })
         })();
         match result {
             Ok(change) => {
                 self.undo = Some(change);
                 self.picker = None;
+                self.place_choices_open = false;
                 Some(Go::Reload(item.entry.id))
             }
             Err(error) => {
@@ -1274,7 +1423,10 @@ impl Reader {
             },
         );
         Action::quiet("Undo")
-            .name("Undo World change")
+            .name(
+                &ui.data(|data| data.get_temp::<String>(egui::Id::new("world_undo_name")))
+                    .unwrap_or_else(|| "Undo World change".into()),
+            )
             .show(ui)
             .clicked()
     }
@@ -1315,12 +1467,9 @@ impl Reader {
                 .as_ref()
                 .filter(|change| {
                     change.path == item.entry.path
-                        && change.word
-                            == if key == "in" {
-                                "Place changed."
-                            } else {
-                                "Stat block changed."
-                            }
+                        && change
+                            .word
+                            .starts_with(if key == "in" { "In:" } else { "Stat block:" })
                         && Self::notice_fits(ui, value_width, &change.word)
                 })
                 .map(|change| change.word.clone());
@@ -1339,8 +1488,17 @@ impl Reader {
                             let name = world_field(&item.entry, key)
                                 .map(|value| link_name(value, label))
                                 .unwrap_or_default();
-                            if design::wrapped_link(ui, &name).clicked() {
-                                go = Some(Go::Many(choices));
+                            if design::wrapped_link(
+                                ui,
+                                &format!(
+                                    "{} {name} · {} matches",
+                                    design::icons::WARN,
+                                    choices.len()
+                                ),
+                            )
+                            .clicked()
+                            {
+                                self.place_choices_open = !self.place_choices_open;
                             }
                         } else if let Some(value) = world_field(&item.entry, key) {
                             let words = format!(
@@ -1387,6 +1545,33 @@ impl Reader {
                     go = self.undo_change(campaign, item.entry.id);
                 }
             });
+            if key == "in" && self.place_choices_open {
+                ui.label(
+                    Type::Small
+                        .rich(ui, "This link matches more than one note. Choose one.")
+                        .color(colors().muted),
+                );
+                for at in index.place_choices(item.entry.id) {
+                    let path = &index.items[at].entry.path;
+                    if design::link(ui, path).clicked() {
+                        go = Some(Go::Item(at, None));
+                    }
+                    if Action::quiet("Always use this one")
+                        .name(&format!("Always use {path}"))
+                        .show(ui)
+                        .clicked()
+                    {
+                        let path = path.strip_suffix(".md").unwrap_or(path);
+                        return self.change(
+                            campaign,
+                            item,
+                            index,
+                            "in",
+                            format!("[[{path}]]").into(),
+                        );
+                    }
+                }
+            }
         }
         let Some(picker) = &mut self.picker else {
             return go;
@@ -1460,7 +1645,7 @@ impl Reader {
             cancel = Action::quiet("Cancel").show(ui).clicked();
         });
         if let Some(value) = chosen {
-            return self.change(campaign, item, key, value);
+            return self.change(campaign, item, index, key, value);
         }
         if cancel || ui.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Escape)) {
             self.picker = None;
@@ -1522,10 +1707,48 @@ impl Reader {
                     let name = world_field(&item.entry, "in")
                         .map(|value| link_name(value, "Place"))
                         .unwrap_or_default();
-                    if design::link(ui, &name).clicked() {
-                        go = Some(Go::Many(choices));
+                    if design::wrapped_link(
+                        ui,
+                        &format!("{} {name} · {} matches", design::icons::WARN, choices.len()),
+                    )
+                    .clicked()
+                    {
+                        self.place_choices_open = !self.place_choices_open;
                     }
                 });
+                if self.place_choices_open {
+                    ui.label(
+                        Type::Small
+                            .rich(ui, "This link matches more than one note. Choose one.")
+                            .color(colors().muted),
+                    );
+                    for at in choices {
+                        let path = &index.items[at].entry.path;
+                        if design::link(ui, path).clicked() {
+                            go = Some(Go::Item(at, None));
+                        }
+                        if Action::quiet("Always use this one")
+                            .name(&format!("Always use {path}"))
+                            .show(ui)
+                            .clicked()
+                        {
+                            let path = path.strip_suffix(".md").unwrap_or(path);
+                            return self.change(
+                                campaign,
+                                item,
+                                index,
+                                "in",
+                                format!("[[{path}]]").into(),
+                            );
+                        }
+                    }
+                }
+            }
+            if let Some(change) = &self.undo
+                && change.path == item.entry.path
+                && Self::change_notice(ui, &change.word)
+            {
+                return self.undo_change(campaign, item.entry.id);
             }
             if index.place_of(item.entry.id).is_none()
                 && index.place_choices(item.entry.id).is_empty()
@@ -1838,6 +2061,18 @@ mod tests {
         let path = dir.join(path);
         fs::create_dir_all(path.parent().unwrap()).unwrap();
         fs::write(path, text).unwrap();
+    }
+
+    #[test]
+    fn renaming_links_keeps_aliases_headings_code_and_other_targets() {
+        let text = "[[Cinder Wolf]] [[Cinder Wolf#Bite|fang]] [[Other/Cinder Wolf]] `[[Cinder Wolf]]`\n```md\n[[Cinder Wolf]]\n```\n";
+        let (after, count) = rename_note_links(text, "Cinder Wolf", "Ash Wolf");
+        assert_eq!(count, 2);
+        assert_eq!(
+            after,
+            text.replacen("[[Cinder Wolf]]", "[[Ash Wolf]]", 1)
+                .replace("[[Cinder Wolf#Bite|fang]]", "[[Ash Wolf#Bite|fang]]")
+        );
     }
 
     #[test]

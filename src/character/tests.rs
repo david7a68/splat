@@ -99,6 +99,32 @@ fn missing_totals_or_wrong_membership_are_errors() {
 }
 
 #[test]
+fn publishing_a_moved_character_updates_its_identity_and_keeps_notes() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut record = sample();
+    let old = record.save_campaign_copy(dir.path()).unwrap();
+    let moved = dir.path().join("Moved character.md");
+    std::fs::rename(&old, &moved).unwrap();
+    let text = std::fs::read_to_string(&moved).unwrap() + "\nMy campaign notes.\n";
+    std::fs::write(&moved, text).unwrap();
+    record.initial.temporary_hp = 9;
+    assert_eq!(record.save_campaign_copy(dir.path()).unwrap(), moved);
+    assert!(!old.exists());
+    let text = std::fs::read_to_string(moved).unwrap();
+    assert!(text.contains("temporary HP: 9"));
+    assert!(text.ends_with("My campaign notes.\n"));
+    let (entries, errors) = crate::content::read_directory(dir.path()).unwrap();
+    assert!(errors.is_empty());
+    assert_eq!(
+        entries
+            .iter()
+            .filter(|entry| entry.id == record.definition.splat_id)
+            .count(),
+        1
+    );
+}
+
+#[test]
 fn campaign_copy_is_complete_parseable_and_keeps_personal_notes() {
     let dir = tempfile::tempdir().unwrap();
     let mut record = sample();

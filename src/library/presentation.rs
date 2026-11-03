@@ -17,6 +17,7 @@ pub(crate) enum Section {
     World,
     Other,
     Unreadable,
+    PackageDetails,
 }
 
 impl Section {
@@ -31,7 +32,7 @@ impl Section {
         ("Preparation", &[Self::Encounters]),
         ("Campaign", &[Self::World]),
         ("Package", &[Self::Other]),
-        ("Cannot be read", &[Self::Unreadable]),
+        ("Cannot be read", &[Self::Unreadable, Self::PackageDetails]),
     ];
 
     pub fn label(self) -> &'static str {
@@ -47,6 +48,7 @@ impl Section {
             Self::World => "World",
             Self::Other => "Other entries",
             Self::Unreadable => "Cannot be read",
+            Self::PackageDetails => "Package details",
         }
     }
 
@@ -66,6 +68,7 @@ impl Section {
             "rule" | "rule_group" | "effect" | "table" => Self::Rules,
             "encounter" | "encounter_group" | "sequence" | "strategy" | "seed" => Self::Encounters,
             "world" => Self::World,
+            "package" => Self::PackageDetails,
             _ => Self::Other,
         }
     }

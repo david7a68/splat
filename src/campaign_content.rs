@@ -65,12 +65,15 @@ pub struct CampaignContent {
     pub run_open: bool,
     pub open_lookup: Option<Uuid>,
     pub found_package: Option<Module>,
+    pub forget_package: Option<Uuid>,
+    recovered: Option<(Module, Option<Module>)>,
     error: Option<String>,
     message: Option<String>,
     disabled_selections: std::collections::BTreeMap<Uuid, Selection>,
     refresh_pending: bool,
     removed_package: Option<RemovedPackage>,
     manifest_write: Option<crate::content_workspace::ManifestWrite>,
+    campaign_write: Option<crate::content_workspace::ManifestWrite>,
     repairs: Vec<Repair>,
     /// What `Discard` last dropped, for one step of undo.
     discarded_selections: Option<Vec<PackageSelection>>,
@@ -157,6 +160,43 @@ fn find_package_folder(reference: &EntryRef, folder: &std::path::Path) -> Result
         );
     }
     Ok(module)
+}
+
+fn relocated_package(module: &Module, registered: &[Module]) -> Option<Module> {
+    let parents: BTreeSet<_> = std::iter::once(module)
+        .chain(registered)
+        .filter_map(|module| module.path.parent())
+        .collect();
+    let mut found = std::collections::BTreeMap::new();
+    for parent in parents {
+        for folder in fs::read_dir(parent).ok().into_iter().flatten().flatten() {
+            if folder.file_name().to_string_lossy().starts_with('.') {
+                continue;
+            }
+            if let Ok(candidate) = crate::library::local_module(&folder.path())
+                && candidate.id == module.id
+                && candidate.path != module.path
+            {
+                found.insert(candidate.path.clone(), candidate);
+            }
+        }
+    }
+    (found.len() == 1).then(|| found.into_values().next().unwrap())
+}
+
+fn folder_words(path: &std::path::Path) -> String {
+    path.parent()
+        .and_then(|parent| parent.file_name())
+        .map_or_else(
+            || path.display().to_string(),
+            |parent| {
+                format!(
+                    "{}/{}",
+                    parent.to_string_lossy(),
+                    path.file_name().unwrap_or_default().to_string_lossy()
+                )
+            },
+        )
 }
 
 impl CampaignContent {
@@ -320,6 +360,7 @@ impl CampaignContent {
             self.discarded_selections = None;
             self.discarded_repair = None;
             self.removed_package = None;
+            self.campaign_write = None;
         }
     }
     fn reload(&mut self, ctx: &egui::Context, campaigns: &Campaigns, campaign: Campaign) {
@@ -401,6 +442,7 @@ impl CampaignContent {
                     self.repairs = repairs;
                     match result {
                         Ok(snapshot) => {
+                            campaigns.remember_campaign_document(&snapshot.document);
                             self.saved_selections = snapshot.document.selections.clone();
                             if self.module.is_none() {
                                 self.dependencies = true;
@@ -423,9 +465,49 @@ impl CampaignContent {
         self.repair_section(ui, campaigns, &active);
         if let Some(error) = &self.error {
             design::message(ui, Tone::Error, error);
+            if error.contains("Campaign.md is missing")
+                && Action::secondary("Write Campaign.md again")
+                    .show(ui)
+                    .clicked()
+            {
+                match campaigns.write_campaign_again(&active) {
+                    Ok(write) => {
+                        self.campaign_write = Some(write);
+                        self.refresh_pending = true;
+                    }
+                    Err(error) => self.error = Some(error),
+                }
+            }
+        }
+        if let Some(write) = &self.campaign_write
+            && design::message_with_action(
+                ui,
+                Tone::Success,
+                "Campaign.md was written again.",
+                "Undo write Campaign.md",
+            )
+        {
+            match write.undo() {
+                Ok(_) => {
+                    self.campaign_write = None;
+                    self.refresh_pending = true;
+                }
+                Err(error) => self.error = Some(error),
+            }
         }
         if let Some(message) = &self.message {
             design::message(ui, Tone::Success, message);
+        }
+        if let Some((module, previous)) = self.recovered.clone() {
+            let message = format!("{} found in {}/.", module.name, folder_words(&module.path));
+            if design::message_with_action(ui, Tone::Success, &message, "Undo folder recovery") {
+                if let Some(previous) = previous {
+                    self.found_package = Some(previous);
+                } else {
+                    self.forget_package = Some(module.id);
+                }
+                self.recovered = None;
+            }
         }
         if !active.path.exists() {
             design::message(
@@ -826,7 +908,21 @@ impl CampaignContent {
                             }
                         ),
                     );
-                    if Action::quiet("Write Package.md again")
+                    let path = &catalogue.entries[&module.id].entry.path;
+                    let exists = module.path.join(path).exists();
+                    let label = if exists {
+                        format!("Replace with a basic {path}")
+                    } else {
+                        format!("Write {path} again")
+                    };
+                    if exists {
+                        ui.label(
+                            Type::Small
+                                .rich(ui, "Keeps the id, name and namespace. Drops the rest.")
+                                .color(colors().muted),
+                        );
+                    }
+                    if Action::quiet(&label)
                         .blocked(manifest_locked)
                         .show(ui)
                         .clicked()
@@ -839,13 +935,13 @@ impl CampaignContent {
                             Err(error) => self.error = Some(error),
                         }
                     }
-                    if module.path.join("Package.md").exists()
+                    if module.path.join(path).exists()
                         && Action::quiet("Open in Library").show(ui).clicked()
                     {
                         ui.ctx().data_mut(|data| {
                             data.insert_temp(
                                 egui::Id::new("open_library_repair"),
-                                module.path.join("Package.md"),
+                                module.path.join(path),
                             )
                         });
                     }
@@ -938,6 +1034,15 @@ impl CampaignContent {
         let errors: Vec<_> = catalogue
             .errors
             .iter()
+            .filter(|error| {
+                !catalogue.manifest_problems.iter().any(|(id, problem)| {
+                    error.contains(problem)
+                        || catalogue
+                            .entries
+                            .get(id)
+                            .is_some_and(|entry| error.contains(&entry.entry.path))
+                })
+            })
             .chain(closure.errors.iter())
             .collect();
         let missing_package = document.selections.iter().any(|selection| {
@@ -1023,9 +1128,26 @@ impl CampaignContent {
             .collect();
         let mut remove = None;
         for (i, selection) in unavailable {
+            let registered = campaigns
+                .modules()
+                .iter()
+                .find(|module| selection.package.id == Some(module.id))
+                .cloned();
+            let known = registered.clone().or_else(|| {
+                selection
+                    .package
+                    .id
+                    .and_then(|id| campaigns.unregistered_module(id).cloned())
+            });
+            let unregistered = registered.is_none() && known.is_some();
             ui.push_id(i, |ui| {
                 ui.horizontal_wrapped(|ui| {
-                    design::message(ui, Tone::Warning, &selection.unavailable_message());
+                    let message = if unregistered {
+                        format!("{} is not registered.", selection.display_name())
+                    } else {
+                        selection.unavailable_message()
+                    };
+                    design::message(ui, Tone::Warning, &message);
                     let users = selection.campaign_users(catalogue);
                     for (at, (id, name)) in users.iter().enumerate() {
                         if at > 0 {
@@ -1039,6 +1161,39 @@ impl CampaignContent {
                         ui.label(Type::Small.rich(ui, "use its creatures.").color(c.muted));
                     }
                 });
+                if let Some(known) = &known {
+                    ui.label(
+                        Type::Small
+                            .rich(ui, format!("It was in {}/.", folder_words(&known.path)))
+                            .color(c.muted),
+                    );
+                    if unregistered
+                        && Action::secondary("Register it again")
+                            .blocked(manifest_locked)
+                            .show(ui)
+                            .clicked()
+                    {
+                        match find_package_folder(&selection.package, &known.path) {
+                            Ok(module) => {
+                                self.recovered = Some((module.clone(), registered.clone()));
+                                self.found_package = Some(module);
+                            }
+                            Err(error) => self.error = Some(error),
+                        }
+                    }
+                    if !known.path.is_dir()
+                        && let Some(module) = relocated_package(known, campaigns.modules())
+                    {
+                        let message =
+                            format!("{} is now in {}/.", module.name, folder_words(&module.path));
+                        if design::message_with_action(ui, Tone::Info, &message, "Use this folder")
+                            && manifest_locked.is_none()
+                        {
+                            self.recovered = Some((module.clone(), registered.clone()));
+                            self.found_package = Some(module);
+                        }
+                    }
+                }
                 ui.horizontal_wrapped(|ui| {
                     if Action::secondary("Find the folder…")
                         .blocked_if(
@@ -1052,10 +1207,15 @@ impl CampaignContent {
                         .density(Density::Read)
                         .show(ui)
                         .clicked()
-                        && let Some(folder) = crate::hermetic::pick_folder()
+                        && let Some(folder) = crate::hermetic::pick_folder_from(
+                            known.as_ref().and_then(|module| module.path.parent()),
+                        )
                     {
                         match find_package_folder(&selection.package, &folder) {
-                            Ok(module) => self.found_package = Some(module),
+                            Ok(module) => {
+                                self.recovered = Some((module.clone(), registered.clone()));
+                                self.found_package = Some(module);
+                            }
                             Err(error) => self.error = Some(error),
                         }
                     }
@@ -1524,14 +1684,45 @@ impl CampaignContent {
 mod tests {
     use super::*;
 
+    #[test]
+    fn folder_recovery_requires_exactly_one_matching_identity() {
+        let temp = tempfile::tempdir().unwrap();
+        let old = temp.path().join("original");
+        fs::create_dir(&old).unwrap();
+        let text = crate::library::note_text("Test", "package", Some("test"));
+        fs::write(old.join("Package.md"), &text).unwrap();
+        let module = crate::library::local_module(&old).unwrap();
+        assert!(relocated_package(&module, &[]).is_none());
+        let moved = temp.path().join("moved");
+        fs::rename(&old, &moved).unwrap();
+        assert_eq!(relocated_package(&module, &[]).unwrap().path, moved);
+        let copy = temp.path().join("copy");
+        fs::create_dir(&copy).unwrap();
+        fs::write(copy.join("Package.md"), text).unwrap();
+        assert!(relocated_package(&module, &[]).is_none());
+        crate::hermetic::closed::next_folder(moved.clone());
+        assert_eq!(
+            crate::hermetic::pick_folder_from(Some(temp.path())),
+            Some(moved)
+        );
+        assert!(crate::hermetic::pick_folder().is_none());
+    }
+
     fn campaign(root: &std::path::Path) -> Campaign {
-        Campaign {
+        let campaign = Campaign {
             id: uuid::Uuid::new_v4(),
             name: "Test campaign".into(),
             path: root.into(),
             dndbeyond_campaign_id: None,
             dndbeyond_campaign_name: None,
+        };
+        if campaign.path.is_dir() && !campaign.path.join("Campaign.md").exists() {
+            crate::content_workspace::CampaignDocument::new(&campaign)
+                .unwrap()
+                .save()
+                .unwrap();
         }
+        campaign
     }
 
     fn finished(content: &mut CampaignContent, checked: Checked) {

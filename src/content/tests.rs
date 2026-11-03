@@ -49,6 +49,42 @@ fn table(marker: &str, rows: &str) -> String {
 }
 
 #[test]
+fn damaged_frontmatter_with_splat_like_keys_is_reported() {
+    let temp = tempfile::tempdir().unwrap();
+    for (path, text) in [
+        ("No fence.md", "splat_id: lost\nsplat_name: Wolf\n---\nBody"),
+        (
+            "No prefix.md",
+            "---\nschema: 1\nid: lost\nkind: creature\nname: Wolf\n---\nBody",
+        ),
+    ] {
+        std::fs::write(temp.path().join(path), text).unwrap();
+    }
+    let (entries, errors) = read_directory(temp.path()).unwrap();
+    assert!(entries.is_empty());
+    assert_eq!(errors.len(), 2);
+    assert!(errors.iter().any(|error| error.path == "No fence.md"));
+    assert!(errors.iter().any(|error| error.path == "No prefix.md"));
+}
+
+#[test]
+fn directory_keeps_readable_entries_skips_hidden_files_and_names_unreadable_notes() {
+    let temp = tempfile::tempdir().unwrap();
+    let wolf = note("wolf", "creature", "splat_creature: {}", "Wolf");
+    std::fs::write(temp.path().join("Wolf.md"), &wolf).unwrap();
+    for hidden in [".trash", ".stversions"] {
+        std::fs::create_dir(temp.path().join(hidden)).unwrap();
+        std::fs::write(temp.path().join(hidden).join("Wolf.md"), &wolf).unwrap();
+    }
+    std::fs::write(temp.path().join("Latin.md"), [0xff, 0xfe]).unwrap();
+    let (entries, errors) = read_directory(temp.path()).unwrap();
+    assert_eq!(entries.len(), 1);
+    assert_eq!(errors.len(), 1);
+    assert_eq!(errors[0].path, "Latin.md");
+    assert!(errors[0].message.contains("UTF-8"));
+}
+
+#[test]
 fn reads_all_seventeen_design_notes_together() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("docs/design/examples");
     let (entries, errors) = read_directory(&root).unwrap();

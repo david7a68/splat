@@ -237,6 +237,16 @@ fn stat(entry: &Entry, name: &str) -> Option<i64> {
     stat.get("value").and_then(Value::as_i64)
 }
 impl Participant {
+    pub(super) fn named_stat_block(&self) -> bool {
+        self.npc_identity()
+            || self.changes.as_ref().is_some_and(|changes| {
+                changes
+                    .overrides
+                    .name
+                    .as_ref()
+                    .is_some_and(|name| name != &self.definition.name)
+            })
+    }
     pub(super) fn npc_identity(&self) -> bool {
         self.definition.fields.contains_key("splat_run_npc_name")
     }
