@@ -829,21 +829,18 @@ impl CampaignContent {
         if !errors.is_empty() && self.repairs.is_empty() {
             design::section(
                 ui,
-                format!(
-                    "{}",
-                    if affected.is_empty() {
-                        design::count(
-                            errors.len(),
-                            "content issue to repair",
-                            "content issues to repair",
-                        )
-                    } else {
-                        format!(
-                            "{} need a creature that is gone",
-                            design::count(affected.len(), "encounter", "encounters")
-                        )
-                    }
-                ),
+                if affected.is_empty() {
+                    design::count(
+                        errors.len(),
+                        "content issue to repair",
+                        "content issues to repair",
+                    )
+                } else {
+                    format!(
+                        "{} need a creature that is gone",
+                        design::count(affected.len(), "encounter", "encounters")
+                    )
+                },
                 |ui| {
                     egui::ScrollArea::vertical()
                         .max_height(120.0)

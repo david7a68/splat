@@ -1620,14 +1620,19 @@ impl Library {
         let selected = select.or(self.selected);
         let subtitles = loaded.subtitles();
         // A wide window's list gets room too, so that long names keep their second line.
-        let list_width = (ui.available_width() * 0.38).clamp(190.0, 420.0);
+        let min_list_width =
+            (design::number_width(ui, "Can use", &Type::Body.font(ui)) + design::XXL + design::L)
+                * 2.0
+                + design::S * 2.0
+                + ui.spacing().item_spacing.x;
+        let list_width = (ui.available_width() * 0.38).clamp(min_list_width, 420.0);
         let mut peek = None;
         // Beside Lookup at the minimum window, a draft needs the room more than the list.
         let hide_list =
             self.disk_change.is_some() || (ui.available_width() < 480.0 && (dirty || self.source));
         self.list_hidden = hide_list;
         if !hide_list {
-            design::Column::left("library_entries", list_width, 190.0..=560.0)
+            design::Column::left("library_entries", list_width, min_list_width..=560.0)
             .frame(egui::Frame::new().inner_margin(egui::Margin {
                 left: design::S as i8,
                 right: design::S as i8,
@@ -1815,19 +1820,29 @@ impl Library {
         // This control moves between columns as the reader narrows. Keep an open
         // menu attached to it when the window changes size.
         ui.scope_builder(egui::UiBuilder::new().id("library_scope_host"), |ui| {
+            let width =
+                ui.available_width()
+                    .min(if compact { ui.available_width() } else { 166.0 });
+            let selected = match scope {
+                Scope::Uses => "Can use".to_owned(),
+                Scope::Builtin => "D&D 2024".to_owned(),
+                Scope::Campaign => "Own entries".to_owned(),
+                _ => label(scope),
+            };
+            let mut fitted = design::words_that_fit(
+                ui,
+                &selected,
+                &Type::Body.font(ui),
+                width - design::XXL - design::L,
+            );
+            if fitted != selected {
+                fitted.push('…');
+            }
             let combo = egui::ComboBox::from_id_salt("library_scope")
                 .icon(design::combo_icon)
-                .width(
-                    ui.available_width()
-                        .min(if compact { ui.available_width() } else { 166.0 }),
-                )
+                .width(width)
                 .truncate()
-                .selected_text(match scope {
-                    Scope::Uses => "Can use".to_owned(),
-                    Scope::Builtin => "D&D 2024".to_owned(),
-                    Scope::Campaign => "Own entries".to_owned(),
-                    _ => label(scope),
-                })
+                .selected_text(fitted)
                 .show_ui(ui, |ui| {
                     ui.set_min_width(260.0);
                     if active.is_some() {
@@ -1848,7 +1863,11 @@ impl Library {
                     }
                 });
             combo.response.clone().on_hover_text(label(scope));
-            design::named(ui, &combo.response, "What the Library shows");
+            design::named(
+                ui,
+                &combo.response,
+                &format!("What the Library shows: {}", label(scope)),
+            );
         });
         *current = scope;
         if scope != before {
@@ -2807,7 +2826,7 @@ impl Library {
                         color: d.clean,
                     },
                 );
-                crate::world::entry_file_actions(ui, root, &note.path, obsidian);
+                crate::world::entry_file_parts(ui, root, &note.path, obsidian);
             });
         } else {
             design::status(

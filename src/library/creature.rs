@@ -332,45 +332,52 @@ pub(super) fn vitals(ui: &mut egui::Ui, entry: &Entry, values: Option<&super::vi
             printed
         };
         for (label, text) in rows {
-            ui.vertical(|ui| {
-                ui.spacing_mut().item_spacing.y = 0.0;
-                ui.label(Type::Label.rich(ui, label).color(c.muted));
-                let live = values.map(|values| match label {
-                    "ARMOR CLASS" => values.armor_class,
-                    "HIT POINTS" => values.hp,
-                    _ => values.initiative,
-                });
-                let printed = match label {
-                    "ARMOR CLASS" => stat(entry, "armor_class"),
-                    "HIT POINTS" => stat(entry, "max_hp"),
-                    _ => stat(entry, "initiative"),
-                };
-                let shown = live.map_or_else(
-                    || text.clone(),
-                    |n| {
-                        n.map_or_else(
-                            || "Unknown".to_owned(),
-                            |n| {
-                                if label == "INITIATIVE" {
-                                    design::signed(n)
-                                } else {
-                                    n.to_string()
-                                }
-                            },
-                        )
-                    },
-                );
-                ui.label(Type::Prose.rich(ui, shown).color(c.text));
-                if let Some(live) = live
-                    && live != printed
-                {
-                    ui.label(
-                        Type::Small
-                            .rich(ui, format!("printed {text}"))
-                            .color(c.muted),
+            let width = design::number_width(ui, label, &Type::Label.font(ui))
+                .max(design::number_width(ui, &text, &Type::Prose.font(ui)))
+                + design::S;
+            ui.allocate_ui_with_layout(
+                egui::vec2(width, 0.0),
+                egui::Layout::top_down(egui::Align::Min),
+                |ui| {
+                    ui.spacing_mut().item_spacing.y = 0.0;
+                    ui.label(Type::Label.rich(ui, label).color(c.muted));
+                    let live = values.map(|values| match label {
+                        "ARMOR CLASS" => values.armor_class,
+                        "HIT POINTS" => values.hp,
+                        _ => values.initiative,
+                    });
+                    let printed = match label {
+                        "ARMOR CLASS" => stat(entry, "armor_class"),
+                        "HIT POINTS" => stat(entry, "max_hp"),
+                        _ => stat(entry, "initiative"),
+                    };
+                    let shown = live.map_or_else(
+                        || text.clone(),
+                        |n| {
+                            n.map_or_else(
+                                || "Unknown".to_owned(),
+                                |n| {
+                                    if label == "INITIATIVE" {
+                                        design::signed(n)
+                                    } else {
+                                        n.to_string()
+                                    }
+                                },
+                            )
+                        },
                     );
-                }
-            });
+                    ui.label(Type::Prose.rich(ui, shown).color(c.text));
+                    if let Some(live) = live
+                        && live != printed
+                    {
+                        ui.label(
+                            Type::Small
+                                .rich(ui, format!("printed {text}"))
+                                .color(c.muted),
+                        );
+                    }
+                },
+            );
         }
     });
 }

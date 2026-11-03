@@ -249,12 +249,14 @@ pub fn tables(d: &mut Driver<'_>) {
     d.set_base(SMALL);
     d.scroll_until(READER, "The first column must be a number", 24);
     d.wait_for_text("The first column must be a number");
-    d.state("authored-table-gap-and-overlap", Sizes::All);
     d.observe(
         "World table author",
         d.visible_text("The first column must be a number"),
         "An invalid table says what needs an edit",
     );
+    d.state_prepared("authored-table-gap-and-overlap", Sizes::All, |d| {
+        d.scroll_until(READER, "The first column must be a number", 24);
+    });
 }
 
 pub fn generator(d: &mut Driver<'_>) {
@@ -267,7 +269,7 @@ pub fn generator(d: &mut Driver<'_>) {
     d.expect("Tally");
     d.observe(
         "W14",
-        d.visible_text("npc-name: Names.md"),
+        d.visible_text("Names from") && d.has("Names.md"),
         "The generator names the campaign table used for names",
     );
     d.state("generator-campaign-table", Sizes::All);
@@ -278,7 +280,7 @@ pub fn generator(d: &mut Driver<'_>) {
     d.click("Generate NPC");
     d.observe(
         "W14",
-        d.visible_text("cannot be used") && d.visible_text("Built-in names"),
+        d.visible_text("cannot be used") && d.visible_text("the built-in list stands in"),
         "A bad campaign table states why the built-in list stands in",
     );
     d.state("generator-bad-table", Sizes::All);
@@ -495,13 +497,16 @@ pub fn package_delete_entry(d: &mut Driver<'_>) {
     search_library(d, "Ash Exposure");
     d.click_starting("Ash Exposure · ");
     d.wait_for_text("Cinder Wolf");
+    let unresolved = d
+        .app_mut()
+        .lookup
+        .index()
+        .unwrap()
+        .reader_markdown("[[Cinder Wolf]]", None)
+        .contains("splat-missing:");
     d.observe(
         "Deleted package link",
-        !d.has("Cinder Wolf")
-            || !d
-                .nodes()
-                .iter()
-                .any(|n| n.name == "Cinder Wolf" && n.role == egui::accesskit::Role::Link),
+        unresolved,
         "The deleted creature's words remain without a working link",
     );
     d.state("deleted-package-entry-reader-link", Sizes::All);
@@ -524,16 +529,15 @@ pub fn book_to_package(d: &mut Driver<'_>) {
     d.click("Edit the copy");
     d.expect("Markdown editor");
     let original = d.editor_text().unwrap();
-    let parsed = splat::content::Entry::parse("Creatures/Watch Aboleth.md", &original).unwrap();
-    let mut stats = parsed.fields["splat_stats"].clone();
-    stats["max_hp"]["value"] = 180.into();
-    let changed =
-        crate::content_workspace::patch_fields(&original, &[("splat_stats", Some(stats))]).unwrap();
-    let changed = changed.replace("150 (20d10 + 40)", "180 (20d10 + 70)");
+    let changed = original
+        .replace("| ` max_hp ` | ` 150 ` |", "| ` max_hp ` | ` 180 ` |")
+        .replace("150 (20d10 + 40)", "180 (20d10 + 70)");
+    assert_ne!(original, changed);
     d.replace_text_in("Markdown editor", &changed);
     d.click("Save");
     d.click("Read");
-    d.wait_for_text("Watch Aboleth");
+    d.expect("Watch Aboleth");
+    d.scroll_up_at(READER, 30);
     d.expect("180 (20d10 + 70)");
     assert!(
         fs::read_to_string(

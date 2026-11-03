@@ -310,11 +310,9 @@ fn show_with_density(ui: &mut egui::Ui, markdown: &str, dense: bool) {
                     && let Some(start) = strong_link.take()
                 {
                     let words = job.text[start..].trim();
-                    if !words.is_empty()
-                        && !words.ends_with(['.', ':'])
-                        && !(job.text[..start].trim().is_empty()
-                            && source[range.end..].trim_start().starts_with('|'))
-                    {
+                    let table_caption = job.text[..start].trim().is_empty()
+                        && source[range.end..].trim_start().starts_with('|');
+                    if !(words.is_empty() || words.ends_with(['.', ':']) || table_caption) {
                         for section in &mut job.sections {
                             if section.byte_range.start >= start {
                                 section.format.color = colors().accent;

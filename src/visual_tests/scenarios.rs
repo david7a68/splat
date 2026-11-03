@@ -416,7 +416,7 @@ pub mod library_navigation {
             "The editor keeps its draft beside the list",
         );
         d.click("Back");
-        d.wait_for_text("Close Lookup");
+        d.expect("Close Lookup");
         d.observe(
             "Draft Back",
             d.editor_text()

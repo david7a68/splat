@@ -473,6 +473,8 @@ Lookup keeps Back and its close icon on the title line. Clear appears beside sea
 
 Library puts owner status on the file line so Back does not move the title. During a draft, Back opens the earlier entry in Lookup. Related entries follow the reader body. A standalone bold caption above a table is plain text; other reader links have an underline.
 
+Keep Can use whole at the minimum list width. A shortened package name keeps its full value in hover text and its accessible name. In a narrow creature reader, each vital's label and value wrap together as one field. File links share the same wrapping row as the owner status.
+
 On window focus, check campaign notes and registered package folders. Reload changed catalogues and show the disk comparison if a draft's file changed. Package About reports used and total entries, offers Use every entry with Undo, and omits the entry breadcrumb and Engine support. Removing an unavailable package offers Undo and keeps links to affected encounters.
 
 Creation and copy fields share one right edge. New package has a Folder field with Browse beside it and a full destination path below it. Creature templates use inline stat values, AC 10 and HP 1, and select max_hp on opening. A renamed copy changes its first H1 only when it matches the source name.
