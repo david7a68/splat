@@ -2476,12 +2476,16 @@ impl Sessions {
                     .map_or_else(|| "Notes".to_owned(), Note::label);
                 let date = self.selected.and_then(|id| self.notes.iter().find(|note| note.id == id)).map_or("", |note| note.date.as_str());
                 let mut close = false;
-                ui.horizontal_top(|ui| {
-                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Min), |ui| {
-                        close = design::icon_button(ui, icons::CLOSE, "Close notes").clicked();
-                        ui.with_layout(egui::Layout::left_to_right(egui::Align::Min), |ui| note_title(ui, &title, date));
+                if self.selected.is_none() {
+                    close = design::panel_header(ui, &title, "Close notes");
+                } else {
+                    ui.horizontal_top(|ui| {
+                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Min), |ui| {
+                            close = design::icon_button(ui, icons::CLOSE, "Close notes").clicked();
+                            ui.with_layout(egui::Layout::left_to_right(egui::Align::Min), |ui| note_title(ui, &title, date));
+                        });
                     });
-                });
+                }
                 if let Some(draft) = &self.draft { Self::note_status(ui, draft); }
                 design::rule(ui);
                 if close { self.notes_open = false; return; }
