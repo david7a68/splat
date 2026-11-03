@@ -280,9 +280,12 @@ the panel, those words open the second line instead, so that a name is never cut
   the scale's height. When rows cannot fit, name-only rows shrink to 25 px before anything
   scrolls.
 - **Header:** the round and the current turn in bold sans, larger than any row's name, and
-  `Next turn`. Its second line belongs to `Undo`, which always names the action, then to a
-  sync conflict, a notice, or the next name, in that order. A notice too long for the line,
-  or one behind a conflict, takes its own line below.
+  `Next turn`. The header always has two lines. Line two keeps the notice at the left
+  and a fixed Undo slot at the right. A cut Undo label ends with an ellipsis and drops a
+  trailing joining word, such as to, of, on, from or and. Undo fits whole words; hover and
+  its accessible name keep the full action. A sync conflict comes first, then recording silence, then other
+  sync notices, then the next name. Silence and the short sync state stay together when
+  space is short. Connect to sync gives up its link before either state gives up its word.
 - **Dock:** a fixed place above the footer. `Amount`, `Damage`, `Heal`, `Temp HP`, then the
   selected name, `Conditions`, `Conc` and `Absent`. Enter applies damage.
 - **Overflow:** when rows still cannot fit, a clipped list ends above a separate page-filled band with a hairline. The band says how many are above
@@ -322,9 +325,9 @@ Arrivals uses group headings and one muted line for an empty group section. New 
 
 Recovery copies use a UTC save-time suffix and preserve the other file. The run closed last owns primary Resume. Saved rows show the last change, mark the preserved file Changed elsewhere, and keep an empty Edit slot when no encounter exists. Run state words come from one function: Setup, Setup · Paused, Round 2, Round 2 · Paused, Ended · Round 2.
 
-A disconnected run keeps Connect to sync on its header only. The footer's blocked Sync party uses the same cause as hover text. End encounter… shortens to End… and Keys uses its named icon to keep the roster height.
+A disconnected run keeps Connect to sync on its header only. The footer's blocked Sync party uses the same cause as hover text. End encounter… shortens to End…; Keys keeps its word beside Lookup, Notes and a wide run panel.
 
-The app-close dialog uses Keep running as its safe default. Recording and processing titles name the unfinished session. Stop and close is secondary when saved work is kept; an action is red only when it loses work.
+The app-close dialog uses Keep running for a run, Keep recording for audio, and Keep processing for a job. Recording and processing titles name the unfinished session. A sync conflict names the character and offers Review conflict. Stop and close is secondary when saved work is kept; an action is red only when it loses work.
 
 ## Sessions and the timeline
 
@@ -496,6 +499,32 @@ hand. Editors, run cards and fault details share the same preview. Done closes a
 change form and returns to its member row. An empty group blocks Save group with
 Add a creature first. A tied arrival states who it tied with and offers Move before
 as one step with Undo. Member summaries wrap between members, never inside a name.
+
+## Run and recording audit, iteration 5
+
+A creature made up during a run shows current and maximum HP and the typed initiative
+as a total. It has no printed values. Every setup row keeps its first condition; a count
+stands for further conditions when space is short. Compact live rows put sync last,
+after an S gap, separate from conditions. The dock ends a cut name with an ellipsis and
+drops a trailing joining word, while keeping a copy's final number or letter.
+
+Every tied arrival offers Move before with the target's name. A shared roll is one block;
+the arrival moves before its first member. The message says acts next round when that
+place has passed. Tie details stay in Arrivals and the log, outside the Undo label.
+An open run with other unfinished copies names its copy beside Saved and in the rail hover.
+Attack and damage changes sit directly below the affected action, with an XS gap above
+and an L gap below. Encounter and group change forms use the run's condition grid.
+
+Recording and processing keep one linked rail slot above account status. A recording row
+owns its failure or stopped message while it is open; other pages keep the banner.
+A live row puts Stop recording before the blocked Process action. A stopped row keeps
+Record again beside Process, so recovery stays one press. A processed row puts
+Process again… in its menu above Delete…, with the same inline confirmation.
+Keep the recording is secondary. The consent step hides the header Record action.
+
+A quiet Action that starts a line uses line_start to align its text with the line above;
+its target extends into the gutter. A message action below its message uses the same rule.
+A draft comparison offers Next difference only when at least two lines differ.
 
 ## Session and preparation audit, iteration 5
 

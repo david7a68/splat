@@ -991,7 +991,16 @@ impl Sessions {
                     spoken_length(live.recorder.seconds())
                 )
             });
-        if stalled.is_none() && self.alerts.is_empty() {
+        let row_here = |session| {
+            self.on_page
+                && self.selected == Some(session)
+                && self.tab == Tab::Recordings
+                && self.view == View::Notes
+                && self.form.is_none()
+                && (self.list_beside || !self.list_only)
+                && self.reading.is_none()
+        };
+        if stalled.is_none() && self.alerts.iter().all(|alert| row_here(alert.session)) {
             return;
         }
         let mut retry = None;
@@ -1031,7 +1040,12 @@ impl Sessions {
                     });
                 }
                 let mut dismiss = None;
-                for (index, alert) in self.alerts.iter().enumerate() {
+                for (index, alert) in self
+                    .alerts
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, alert)| !row_here(alert.session))
+                {
                     design::message(ui, Tone::Error, &alert.words);
                     ui.horizontal_wrapped(|ui| {
                         if let Some(path) = &alert.retry
@@ -1442,7 +1456,14 @@ impl Sessions {
     }
 
     pub fn open_live_recording(&mut self) {
-        if let Some(session) = self.live.as_ref().map(|live| live.session) {
+        if let Some(session) = self
+            .live
+            .as_ref()
+            .map(|live| live.session)
+            .or_else(|| self.job.as_ref().map(|(_, session)| *session))
+            .or_else(|| self.alerts.last().map(|alert| alert.session))
+            .or(self.notice_session)
+        {
             self.open(session);
             self.tab = Tab::Recordings;
         }
@@ -1623,9 +1644,52 @@ impl Sessions {
         self.live.is_some()
     }
 
+    pub fn rail_recording_status(&self) -> Option<Status<'static>> {
+        let c = colors();
+        if let Some((icon, word, color)) = self.recording_status() {
+            return Some(Status { icon, word, color });
+        }
+        if self.processing() {
+            return Some(Status {
+                icon: icons::AUDIO,
+                word: "Processing audio",
+                color: c.connection.busy,
+            });
+        }
+        if let Some(word) = self.alert_words().last() {
+            return Some(Status {
+                icon: icons::ERROR,
+                word,
+                color: c.result.error,
+            });
+        }
+        if self.job_warned() {
+            return Some(Status {
+                word: "Check result",
+                ..processed_warning()
+            });
+        }
+        if self.job_done() {
+            return Some(Status {
+                icon: icons::SUCCESS,
+                word: "Processing done",
+                color: c.result.success,
+            });
+        }
+        self.just_saved().then_some(Status {
+            icon: icons::OK,
+            word: "Recording saved",
+            color: c.document.saved,
+        })
+    }
+
     /// The same timed recording words on the rail and the session page.
     pub fn recording_detail(&self) -> Option<String> {
-        let live = self.live.as_ref()?;
+        let Some(live) = self.live.as_ref() else {
+            return self
+                .rail_recording_status()
+                .map(|status| status.word.to_owned());
+        };
         let (_, word, _) = self.recording_status()?;
         Some(if word == "Not saving audio" {
             word.to_owned()
@@ -1938,6 +2002,9 @@ impl Sessions {
             {
                 self.finish_recording();
             }
+            return;
+        }
+        if self.confirm_record {
             return;
         }
         let reason = self.record_blocked(settings);
@@ -3797,9 +3864,26 @@ impl Sessions {
             .seconds
             .map_or_else(|| "Unknown length".to_owned(), spoken_length);
         let mut delete = false;
+        let mut again = false;
         ui.horizontal(|ui| {
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 design::row_menu(ui, &recording.title, |ui| {
+                    if recording.summary
+                        && Action::quiet("Process again…")
+                            .name(&format!("Process again: {}", recording.name))
+                            .blocked(if live {
+                                Some("Stop recording first.")
+                            } else if self.job.is_some() {
+                                Some("Wait for processing to finish.")
+                            } else {
+                                None
+                            })
+                            .show(ui)
+                            .clicked()
+                    {
+                        again = true;
+                        ui.close();
+                    }
                     let busy = live
                         || self
                             .job
@@ -3924,8 +4008,30 @@ impl Sessions {
             });
         }
         let mut process = false;
-        let mut again = false;
+        let mut stop = false;
+        let mut record_again = false;
         ui.horizontal_wrapped(|ui| {
+            if !live
+                && !job_here
+                && stored
+                    .as_ref()
+                    .is_some_and(|words| words.starts_with("Stopped by itself:"))
+            {
+                record_again = Action::secondary("Record again")
+                    .density(Density::Read)
+                    .blocked_if(
+                        self.live.is_some() || self.job.is_some(),
+                        "Stop recording or wait for processing to finish.",
+                    )
+                    .show(ui)
+                    .clicked();
+            }
+            if live {
+                stop = Action::secondary("Stop recording")
+                    .density(Density::Read)
+                    .show(ui)
+                    .clicked();
+            }
             if job_here {
                 let words = self
                     .job
@@ -3964,7 +4070,7 @@ impl Sessions {
             } else {
                 settings.problem()
             };
-            if !job_here {
+            if !job_here && !recording.summary {
                 let label = if recording.summary {
                     "Process again"
                 } else if recording.transcript
@@ -4004,7 +4110,6 @@ impl Sessions {
                     }
                 }
                 process = pressed && !recording.summary;
-                again = pressed && recording.summary;
                 ui.add_space(design::L);
             }
         });
@@ -4023,6 +4128,15 @@ impl Sessions {
                     .show(ui)
                     .clicked();
             });
+        }
+        if stop {
+            self.finish_recording();
+        }
+        if record_again
+            && let Some(session) = self.selected
+            && let Err(error) = self.start_recording(settings, session)
+        {
+            self.notice = Some((Tone::Error, error));
         }
         if again {
             self.confirm_again = Some(recording.path.clone());
@@ -4536,7 +4650,7 @@ impl Sessions {
             );
             ui.add_space(design::S);
             ui.horizontal(|ui| {
-                keep |= Action::primary("Keep the recording").show(ui).clicked();
+                keep |= Action::secondary("Keep the recording").show(ui).clicked();
                 ui.add_space(design::L);
                 delete = Action::destructive("Delete recording").show(ui).clicked();
             });

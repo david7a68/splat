@@ -1156,6 +1156,27 @@ impl Encounters {
     pub fn run(&self) -> Option<&crate::encounter_run::Run> {
         self.run.as_ref()
     }
+    /// Identify the open copy when several unfinished runs share an encounter.
+    pub fn run_copy_label(&self) -> Option<String> {
+        let run = self.run.as_ref()?.live_info()?;
+        let snapshot = self.snapshot.as_ref()?;
+        let others = snapshot.runs.iter().any(|other| {
+            other.id != run.id
+                && other.standing == crate::encounter_run::Standing::Unfinished
+                && (if run.source.is_some() {
+                    other.source == run.source
+                } else {
+                    other.encounter.split(" · saved ").next()
+                        == run.encounter.split(" · saved ").next()
+                })
+        });
+        others.then(|| {
+            run.encounter
+                .split_once(" · ")
+                .map_or(run.encounter.as_str(), |(_, copy)| copy)
+                .to_owned()
+        })
+    }
     pub fn settings_unsaved(&self) -> bool {
         self.snapshot
             .as_ref()

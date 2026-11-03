@@ -25,22 +25,27 @@ pub fn one_line(
     ui.fonts_mut(|fonts| fonts.layout_job(job))
 }
 
-/// As many whole words of `text` as fit. For a place that repeats a name shown whole nearby:
-/// no letter is cut, and the first word always stays.
+/// Whole words of `text` that fit. A cut ends with an ellipsis, never a joining word.
+/// The first word stays unless it is itself a joining word.
 pub fn words_that_fit(ui: &Ui, text: &str, font: &FontId, width: f32) -> String {
-    let mut fitted = String::new();
-    for word in text.split_whitespace() {
-        let longer = if fitted.is_empty() {
-            word.to_owned()
-        } else {
-            format!("{fitted} {word}")
-        };
-        if !fitted.is_empty() && number_width(ui, &longer, font) > width {
-            break;
-        }
-        fitted = longer;
+    let mut words: Vec<_> = text.split_whitespace().collect();
+    let full = words.join(" ");
+    if number_width(ui, &full, font) <= width || words.is_empty() {
+        return full;
     }
-    fitted
+    while let Some(word) = words.last() {
+        let joining = ["to", "of", "on", "from", "and", "the", "de", "von"]
+            .iter()
+            .any(|joining| word.eq_ignore_ascii_case(joining));
+        if !joining {
+            let fitted = format!("{}…", words.join(" "));
+            if words.len() == 1 || number_width(ui, &fitted, font) <= width {
+                return fitted;
+            }
+        }
+        words.pop();
+    }
+    "…".to_owned()
 }
 
 /// Temporary HP, with its mark, in every place that shows it.
@@ -437,7 +442,6 @@ pub struct Action<'a> {
     selected: bool,
     key: Option<&'a str>,
     plain: bool,
-    wrap: bool,
     line_start: bool,
 }
 
@@ -454,7 +458,6 @@ impl<'a> Action<'a> {
             selected: false,
             key: None,
             plain: false,
-            wrap: false,
             line_start: false,
         }
     }
@@ -467,12 +470,6 @@ impl<'a> Action<'a> {
     /// In body weight, for an action repeated on every row of a list.
     pub fn plain(mut self) -> Self {
         self.plain = true;
-        self
-    }
-
-    /// Keep a long action's words visible on the next line.
-    pub fn wrap(mut self) -> Self {
-        self.wrap = true;
         self
     }
 
@@ -580,20 +577,17 @@ impl<'a> Action<'a> {
         let font = self.font().font(ui);
         let padding = self.padding();
         let icon_width = self.icon.map_or(0.0, |_| Type::Body.size() + XS + 2.0);
-        let room =
-            ui.available_width() - 2.0 * padding - icon_width - self.key.map_or(0.0, |_| 30.0);
+        let key_room = self
+            .key
+            .map_or(0.0, |key| number_width(ui, key, &Type::Small.font(ui)) + S);
+        let room = ui.available_width() - 2.0 * padding - icon_width - key_room;
         let foreground = match self.kind {
             Kind::Primary if !ui.is_enabled() => c.muted,
             Kind::Primary => c.on_accent,
             Kind::Secondary | Kind::Quiet => c.text,
             Kind::Destructive => c.destructive,
         };
-        let galley = if self.wrap {
-            ui.painter()
-                .layout(self.label.to_owned(), font, foreground, room.max(1.0))
-        } else {
-            one_line(ui, self.label, font, foreground, room)
-        };
+        let galley = one_line(ui, self.label, font, foreground, room);
         let key = self.key.map(|key| {
             one_line(
                 ui,
@@ -605,15 +599,8 @@ impl<'a> Action<'a> {
         });
         let key_width = key.as_ref().map_or(0.0, |key| key.size().x + S);
         let width = (galley.size().x + 2.0 * padding + icon_width + key_width).max(self.height);
-        let size = vec2(
-            width,
-            if self.wrap {
-                self.height.max(galley.size().y + S)
-            } else {
-                self.height
-            },
-        );
         let (rect, response) = if self.kind == Kind::Quiet && self.line_start {
+            let size = vec2(width, self.height);
             let (id, allocated) = ui.allocate_space(size);
             let rect = ui
                 .layout()
@@ -621,7 +608,7 @@ impl<'a> Action<'a> {
                 .translate(vec2(-padding, 0.0));
             (rect, ui.interact(rect, id, Sense::click()))
         } else {
-            ui.allocate_exact_size(size, Sense::click())
+            ui.allocate_exact_size(vec2(width, self.height), Sense::click())
         };
         let name = self.name.unwrap_or(self.label);
         response.widget_info(|| WidgetInfo::labeled(WidgetType::Button, ui.is_enabled(), name));
@@ -1799,6 +1786,37 @@ pub fn draft_comparison(ui: &mut Ui, draft: &str, disk: &str, id: impl std::hash
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn cut_words_end_with_an_ellipsis_and_no_joining_word() {
+        let context = egui::Context::default();
+        super::super::theme::install(&context);
+        let _ = context.run(Default::default(), |context| {
+            egui::CentralPanel::default().show(context, |ui| {
+                let font = Type::Strong.font(ui);
+                let text = "Undo: 5 damage to Ghost of the Mill";
+                for (room, expected) in [
+                    ("Undo: 5 damage to Ghost of", "Undo: 5 damage to Ghost…"),
+                    ("Undo: 5 damage to", "Undo: 5 damage…"),
+                ] {
+                    let width = number_width(ui, room, &font);
+                    let fitted = words_that_fit(ui, text, &font, width);
+                    assert_eq!(fitted, expected);
+                    assert!(number_width(ui, &fitted, &font) <= width);
+                }
+                for joining in ["to", "of", "on", "from", "and", "the", "de", "von"] {
+                    let text = format!("Undo: 5 damage {joining} Ghost of the Mill");
+                    // The joining word and ellipsis fit, so the word rule must remove it.
+                    let width = number_width(ui, &format!("Undo: 5 damage {joining}…"), &font);
+                    assert_eq!(words_that_fit(ui, &text, &font, width), "Undo: 5 damage…");
+                }
+                assert_eq!(
+                    words_that_fit(ui, text, &font, number_width(ui, text, &font)),
+                    text
+                );
+            });
+        });
+    }
 
     #[test]
     fn first_draft_difference_is_visible_on_the_first_frame() {

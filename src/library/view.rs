@@ -339,8 +339,3 @@ fn reference(
         }
     });
 }
-
-/// The same value trio for a creature made up during a run.
-pub(crate) fn run_vitals(ui: &mut egui::Ui, entry: &Entry, values: &RunValues) {
-    super::creature::vitals(ui, entry, Some(values));
-}
