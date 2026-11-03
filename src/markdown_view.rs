@@ -227,6 +227,11 @@ fn show_with_density(ui: &mut egui::Ui, markdown: &str, dense: bool) {
                     let mut header = Vec::new();
                     let mut bounds = egui::Rect::NOTHING;
                     let mut show_table = |ui: &mut egui::Ui| {
+                        // The scroll area's visual margin must not leave fragments of
+                        // moving text beside the fixed first column.
+                        let mut content_clip = ui.clip_rect();
+                        content_clip.min.x = content_clip.left().max(left);
+                        ui.set_clip_rect(content_clip);
                         ui.set_width(table_width);
                         for (i, row) in rows.iter().enumerate() {
                             let top = ui.cursor().top();
