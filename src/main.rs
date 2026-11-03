@@ -518,14 +518,22 @@ impl Splat {
             )
         } else if only_sync {
             (
-                "Sync has not finished",
+                if self.settings.signed_out() {
+                    "Changes not sent to D&D Beyond"
+                } else {
+                    "Sync has not finished"
+                },
                 "Keep running",
                 if sync_loss {
                     "Close and lose changes"
                 } else {
                     "Close now"
                 },
-                "Keep running to finish sync. Closing keeps the saved run.",
+                if self.settings.signed_out() {
+                    "Connect to send these changes. Closing keeps the saved run."
+                } else {
+                    "Keep running to finish sync. Closing keeps the saved run."
+                },
             )
         } else {
             (
@@ -579,6 +587,15 @@ impl Splat {
                     keep |= response.clicked();
                 });
             });
+            if only_sync
+                && self.settings.signed_out()
+                && Action::quiet("Connect to sync").show(ui).clicked()
+            {
+                self.page = Page::Settings;
+                self.settings_tab = SettingsTab::default();
+                self.settings.focus_sign_in();
+                self.confirm_close = false;
+            }
             if loses {
                 ui.add_space(design::L);
                 discard = Action::destructive(discard_label).show(ui).clicked();
@@ -724,24 +741,32 @@ impl Splat {
                 + lost as f32 * (Density::Read.control() + 2.0)
                 + design::S;
             ui.add_space((ui.available_height() - bottom).max(0.0));
-            if let (Some((icon, _, color)), Some(word)) = (
+            if let (Some((icon, state, color)), Some(word)) = (
                 self.sessions.recording_status(),
                 self.sessions.recording_detail(),
-            ) && design::status_link(
-                ui,
-                Status {
-                    icon,
-                    word: &word,
-                    color,
-                },
-            )
-            .clicked()
-            {
-                self.sessions.open_live_recording();
-                self.page = Page::Sessions;
+            ) {
+                let response = design::status_link(
+                    ui,
+                    Status {
+                        icon,
+                        word: &word,
+                        color,
+                    },
+                );
+                if state == "Recording silence" {
+                    design::named(ui, &response, "Recording silence");
+                }
+                if response.on_hover_text(state).clicked() {
+                    self.sessions.open_live_recording();
+                    self.page = Page::Sessions;
+                }
             }
             for state in statuses {
-                design::wrapped_status(ui, state);
+                design::wrapped_status(ui, state).on_hover_text(if state.word == "Signed out" {
+                    "Signed out of D&D Beyond"
+                } else {
+                    state.word
+                });
             }
             // Words that could not be saved lead to where the DM can choose.
             for (lost, word, target) in [
@@ -888,42 +913,12 @@ impl Splat {
     /// What is unsure, always where the DM looks (principle 6).
     fn statuses(&self, connection: Connection) -> Vec<Status<'static>> {
         let c = colors();
-        let mut statuses = vec![match connection {
-            Connection::Connecting => Status {
-                icon: icons::BUSY,
-                word: "Connecting",
-                color: c.connection.busy,
-            },
-            Connection::Connected => Status {
-                icon: icons::ONLINE,
-                word: "Connected",
-                color: c.connection.connected,
-            },
-            Connection::Failing => Status {
-                icon: icons::WARN,
-                word: "Sign-in failing",
-                color: c.result.warning,
-            },
-            Connection::Offline => Status {
-                icon: if self.settings.connection_failed() {
-                    icons::ERROR
-                } else {
-                    icons::OFFLINE
-                },
-                word: if self.settings.connection_failed() {
-                    "Connection failed"
-                } else if self.settings.signed_out() {
-                    "Signed out of D&D Beyond"
-                } else {
-                    "Not connected"
-                },
-                color: if self.settings.connection_failed() {
-                    c.result.error
-                } else {
-                    c.connection.offline
-                },
-            },
-        }];
+        let _ = connection;
+        let mut account = self.settings.connection_status();
+        if self.settings.signed_out() {
+            account.word = "Signed out";
+        }
+        let mut statuses = vec![account];
         for (dirty, word) in [
             (self.library.dirty(), "Library draft"),
             (
@@ -1329,6 +1324,12 @@ impl Splat {
                         .index()
                         .map(|index| index.places())
                         .unwrap_or_default();
+                    egui::TopBottomPanel::bottom("event_link_updates")
+                        .show_separator_line(false)
+                        .frame(egui::Frame::new())
+                        .show_inside(ui, |ui| {
+                            self.sessions.event_link_message(ui, &self.timeline)
+                        });
                     self.timeline_page.show(
                         ui,
                         &mut self.timeline,
@@ -1640,6 +1641,14 @@ impl Splat {
                 self.run_origin = self.page;
             }
             self.page = Page::Run;
+        }
+        if ctx
+            .data_mut(|data| data.remove_temp::<bool>(egui::Id::new("open_account_settings")))
+            .unwrap_or(false)
+        {
+            self.page = Page::Settings;
+            self.settings_tab = SettingsTab::default();
+            self.settings.focus_sign_in();
         }
         if let Some(run) = self.encounters.run_mut() {
             if std::mem::take(&mut run.wants_sign_in) {

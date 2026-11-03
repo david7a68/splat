@@ -2035,7 +2035,12 @@ impl Encounters {
             return;
         };
         let words = deleted.message();
-        if design::message_with_action(ui, Tone::Info, &words, "Undo delete") {
+        if design::message_with_action(
+            ui,
+            Tone::Info,
+            &words,
+            crate::encounter_run::DeletedRun::UNDO_LABEL,
+        ) {
             match deleted.restore() {
                 Ok(()) => {
                     self.deleted_run = None;
@@ -2269,8 +2274,8 @@ impl Encounters {
                     &page,
                     &snapshot.templates,
                     live.as_ref(),
-                    start_blocked,
-                    loading,
+                    (start_blocked, loading),
+                    story,
                     &mut action,
                 );
                 ready_list(ui, &page, live.as_ref(), start_blocked, &mut action);

@@ -509,6 +509,7 @@ pub(crate) struct Run {
     /// What sync changed. The next run action or sync event clears it.
     notice: Option<String>,
     notice_changes: usize,
+    notice_summary: Option<String>,
     live_initiative: Option<usize>,
     /// A value reached the run with no step of its own, so Undo stops there.
     undo_stopped: bool,
@@ -791,6 +792,7 @@ impl Run {
             scroll_to_selected: false,
             notice: None,
             notice_changes: 0,
+            notice_summary: None,
             live_initiative: None,
             recording_notice: None,
             undo_stopped: false,
@@ -2335,6 +2337,34 @@ impl Run {
         }
         let what = what.join(" ");
         self.notice_changes = from_sheet.len() + from_panel.len();
+        self.notice_summary = from_sheet
+            .first()
+            .or_else(|| from_panel.first())
+            .map(|first| {
+                let more = self.notice_changes.saturating_sub(1);
+                let first = self
+                    .state
+                    .participants
+                    .iter()
+                    .find_map(|participant| {
+                        first.strip_prefix(&participant.name).map(|rest| {
+                            format!(
+                                "{}'s sheet changed:{}",
+                                participant.name,
+                                rest.trim_start_matches(':')
+                            )
+                        })
+                    })
+                    .unwrap_or_else(|| first.clone());
+                if more == 0 {
+                    first
+                } else {
+                    format!(
+                        "{first} +{} more",
+                        crate::design::count(more, "", "").trim()
+                    )
+                }
+            });
         self.state.log.push(what.clone());
         for previous in &mut self.history {
             previous.log.push(what.clone());
@@ -2741,6 +2771,7 @@ impl Run {
             scroll_to_selected: true,
             notice: None,
             notice_changes: 0,
+            notice_summary: None,
             live_initiative: None,
             recording_notice: None,
             undo_stopped: false,
@@ -2947,6 +2978,7 @@ pub struct DeletedRun {
 }
 
 impl DeletedRun {
+    pub const UNDO_LABEL: &str = "Undo delete run";
     /// One deletion warning on every page, including the way to keep unsent changes.
     pub fn message(&self) -> String {
         let name = &self.encounter;

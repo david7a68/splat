@@ -598,15 +598,27 @@ impl Run {
                         self.state.order.len(),
                     );
                     self.live_header(ui, scale);
-                    self.error_line(ui);
+                    let stat_error = self
+                        .error
+                        .as_ref()
+                        .filter(|error| error.contains("stat block could not be read"))
+                        .cloned();
+                    if stat_error.is_none() {
+                        self.error_line(ui);
+                    }
                     let room = ui.available_height() - DOCK_HEIGHT - self.footer_height();
+                    let error_room = if stat_error.is_some() && !self.has_disk_conflict() {
+                        Type::Small.line() + Density::Read.control()
+                    } else {
+                        0.0
+                    };
+                    let room = room - error_room;
                     // A message goes in the room under the list, so it moves no row while
                     // the DM's eye is on them. The next action clears it. A long one wraps.
-                    let notice = self.notice.as_ref().map(|_| {
-                        format!(
-                            "{}; see Log.",
-                            design::count(self.notice_changes, "sheet change", "sheet changes")
-                        )
+                    let notice = self.notice.as_ref().map(|detail| {
+                        self.notice_summary
+                            .clone()
+                            .unwrap_or_else(|| detail.clone())
                     });
                     let width = ui.available_width();
                     let notice_height = notice.as_ref().map_or(0.0, |notice| {
@@ -649,10 +661,17 @@ impl Run {
                             Layout::left_to_right(Align::TOP),
                             |ui| {
                                 ui.set_min_height(notice_height);
-                                let dismiss =
-                                    design::icon_button(ui, icons::CLOSE, "Dismiss this message")
-                                        .clicked();
-                                let shown = notice.as_str();
+                                let words = design::words_that_fit(
+                                    ui,
+                                    &notice,
+                                    &Type::Small.font(ui),
+                                    ui.available_width() - design::XL * 3.0,
+                                );
+                                let shown = if compact {
+                                    words.as_str()
+                                } else {
+                                    notice.as_str()
+                                };
                                 let response = ui.add(
                                     egui::Label::new(
                                         Type::Small.rich(ui, shown).color(colors().result.warning),
@@ -662,12 +681,41 @@ impl Run {
                                 let detail = self.notice.as_deref().unwrap_or(shown);
                                 design::named(ui, &response, detail);
                                 response.on_hover_text(detail);
+                                let log = design::link(ui, " Log ");
+                                design::named(ui, &log, "Log");
+                                if log.clicked() {
+                                    self.panel = Panel::Log;
+                                    self.close_lookup = true;
+                                }
+                                let dismiss =
+                                    design::icon_button(ui, icons::CLOSE, "Dismiss this message")
+                                        .clicked();
                                 if dismiss {
                                     self.notice = None;
                                     self.return_focus = self.lookup_open;
                                 }
                             },
                         );
+                    }
+                    if let Some(error) = stat_error.as_ref().filter(|_| error_room > 0.0) {
+                        let first = error
+                            .split_once(" Its row")
+                            .map_or(error.as_str(), |(first, _)| first);
+                        ui.label(Type::Small.rich(ui, first).color(colors().result.error));
+                        ui.horizontal(|ui| {
+                            ui.label(
+                                Type::Small
+                                    .rich(ui, "Its row still works. Repair it in")
+                                    .color(colors().result.error),
+                            );
+                            if design::link(ui, "Campaign → Packages").clicked() {
+                                self.wants_packages = true;
+                            }
+                            if design::icon_button(ui, icons::CLOSE, "Dismiss this error").clicked()
+                            {
+                                self.error = None;
+                            }
+                        });
                     }
                     self.dock(ui);
                     closed = self.live_footer(ui);
@@ -1835,12 +1883,13 @@ impl Run {
                     .show(ui)
                     .clicked();
             };
+            let connect_in_footer = self.sync_needs_sign_in() && !self.strip().sync_stopped;
             let close_width = [
                 "Close run",
                 "End encounter…",
                 "Keys",
                 "Saved",
-                if self.sync_needs_sign_in() {
+                if connect_in_footer {
                     "Connect to sync"
                 } else {
                     "Sync party"
@@ -1884,7 +1933,7 @@ impl Run {
                     };
                     self.close_lookup = true;
                 }
-                if self.sync_needs_sign_in() {
+                if connect_in_footer {
                     ui.with_layout(Layout::left_to_right(Align::Center), |ui| {
                         if design::status_link(
                             ui,
@@ -1946,6 +1995,8 @@ impl Run {
         let mut save_new = false;
         let title = if cannot_save {
             "This run could not be saved"
+        } else if self.sync_needs_sign_in() && !stranded.is_empty() {
+            "Changes not sent to D&D Beyond"
         } else if !stranded.is_empty() || block.is_some() {
             "Sync has not finished"
         } else {
@@ -1994,6 +2045,13 @@ impl Run {
                     keep |= response.clicked();
                 });
             });
+            if self.sync_needs_sign_in()
+                && !stranded.is_empty()
+                && Action::quiet("Connect to sync").show(ui).clicked()
+            {
+                self.wants_sign_in = true;
+                keep = true;
+            }
             if cannot_save || !lost.is_empty() {
                 ui.add_space(design::L);
                 close |= Action::destructive("Close and lose changes")

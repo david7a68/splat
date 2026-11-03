@@ -35,13 +35,13 @@
       "run-resume": 7,
       "run-roster-conflict": 20,
       "run-sync-conflict": 28,
-      "run-sync-states": 19,
-      "session-notes": 137,
+      "run-sync-states": 20,
+      "session-notes": 143,
       "session-plan": 119,
       "session-plan-groups": 43,
       "session-recording": 116,
       "settings": 27,
-      "signed-in": 39,
+      "signed-in": 38,
       "world": 42
     },
     "no-overlap/egui-chrome": {
@@ -93,13 +93,13 @@
       "run-resume": 7,
       "run-roster-conflict": 20,
       "run-sync-conflict": 28,
-      "run-sync-states": 19,
-      "session-notes": 137,
+      "run-sync-states": 20,
+      "session-notes": 143,
       "session-plan": 116,
       "session-plan-groups": 43,
       "session-recording": 112,
       "settings": 26,
-      "signed-in": 39,
+      "signed-in": 38,
       "world": 41
     }
   },

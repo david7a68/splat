@@ -55,8 +55,6 @@ const PLAN_KINDS: [Kind; 5] = [
     Kind::Travel,
     Kind::Event,
 ];
-/// About 80 characters of source. A template keeps its shape in a wide window.
-const EDITOR_WIDTH: f32 = 680.0;
 const CHECK_DISK_EVERY: Duration = Duration::from_secs(1);
 const SCAN_EVERY: Duration = Duration::from_secs(5);
 
@@ -201,6 +199,11 @@ pub struct Sessions {
     open_planned: Option<String>,
     show_fight_log: bool,
     deleted_run: Option<crate::encounter_run::DeletedRun>,
+    row_notice: Option<(Option<Uuid>, usize)>,
+    updated_links: Option<Vec<(Draft, String)>>,
+    plan_notice_state: Option<(String, Vec<timeline::Event>)>,
+    removed_event_in_plan: bool,
+    removed_group: Option<(Option<Uuid>, String, String)>,
     /// The fight behind the open event, read once.
     fight: Option<(Uuid, Result<FightSummary, String>)>,
     /// What the session before the selected one left, read once for each selection.
@@ -528,16 +531,63 @@ fn page_column(ui: &mut egui::Ui, width: f32, height: f32, add: impl FnOnce(&mut
 
 /// A note's words as a reader sees them: links as words, and no empty headings.
 fn words_to_read(body: &str, book: &Book) -> String {
-    let mut linked = String::new();
+    let _ = book;
+    without_empty_sections(&crate::world::with_links(body, &Default::default()))
+}
+
+fn updated_event_links(body: &str, book: &Book) -> (String, usize) {
+    let days = timeline::day_numbers(&book.events);
+    let mut out = String::new();
     let mut copied = 0;
-    timeline::each_reference(body, |start, end, id, _| {
-        linked.push_str(&body[copied..start]);
-        let words = timeline::for_reading(&body[start..end], &book.events);
-        linked.push_str(&format!("[[Timeline#^{id}|{words}]]"));
+    let mut count = 0;
+    timeline::each_reference(body, |start, end, id, label| {
+        out.push_str(&body[copied..start]);
+        if let Some((at, event)) = book
+            .events
+            .iter()
+            .enumerate()
+            .find(|(_, event)| event.id == id)
+            && let Some(label) = label
+            && book
+                .renamed_links
+                .get(id)
+                .is_some_and(|old| old.iter().any(|old| old == label))
+            && label != timeline::reference_label(event, days[at])
+        {
+            out.push_str(&timeline::reference(event, days[at]));
+            count += 1;
+        } else {
+            out.push_str(&body[start..end]);
+        }
         copied = end;
     });
-    linked.push_str(&body[copied..]);
-    without_empty_sections(&crate::world::with_links(&linked, &Default::default()))
+    out.push_str(&body[copied..]);
+    (out, count)
+}
+
+/// A recap uses prose, never a line made only of links.
+fn recap_preview(body: &str) -> Option<String> {
+    for heading in ["Recap of last time", "What happened"] {
+        if let Some(section) = section_text(body, heading) {
+            let lines: Vec<_> = section
+                .lines()
+                .filter(|line| {
+                    let mut prose = line.trim().trim_start_matches(['-', '*', ' ']).to_owned();
+                    while let Some(start) = prose.find("[[") {
+                        let Some(end) = prose[start..].find("]]") else {
+                            break;
+                        };
+                        prose.replace_range(start..start + end + 2, "");
+                    }
+                    !prose.trim().is_empty()
+                })
+                .collect();
+            if !lines.is_empty() {
+                return Some(plain_links(&lines.join("\n")));
+            }
+        }
+    }
+    None
 }
 
 /// Keep a note's plan links in its file, but avoid listing the same fights twice in Read.
@@ -915,9 +965,9 @@ impl Sessions {
                     ui.horizontal_wrapped(|ui| {
                         if let Some(path) = &alert.retry
                             && (if run_open {
-                                Action::secondary("Process again")
+                                Action::secondary("Continue processing")
                             } else {
-                                Action::primary("Process again")
+                                Action::primary("Continue processing")
                             })
                             .blocked_if(
                                 self.job.is_some() || self.live.is_some(),
@@ -1094,6 +1144,12 @@ impl Sessions {
         self.reading = None;
         self.form = None;
         self.notice = None;
+        self.deleted_run = None;
+        self.row_notice = None;
+        self.removed_group = None;
+        self.plan_notice_state = None;
+        self.removed_event_in_plan = false;
+        self.updated_links = None;
         self.campaign = active.cloned();
         self.folder_error = None;
         match active {
@@ -1322,6 +1378,119 @@ impl Sessions {
         }
     }
 
+    /// Only this explicit action changes a note after an event rename.
+    pub fn event_link_message(&mut self, ui: &mut egui::Ui, book: &Book) {
+        if book.renamed_links.is_empty() && self.updated_links.is_none() {
+            return;
+        }
+        let mut changes = Vec::new();
+        let mut count = 0;
+        for note in &self.notes {
+            let draft =
+                if let Some(draft) = self.draft.as_ref().filter(|draft| draft.path == note.path) {
+                    draft.clone()
+                } else if let Ok(draft) = Draft::open(&note.path) {
+                    draft
+                } else {
+                    continue;
+                };
+            let (body, found) = updated_event_links(&draft.body, book);
+            if found > 0 {
+                count += found;
+                changes.push((draft, body));
+            }
+        }
+        if count > 0
+            && design::message_with_action(
+                ui,
+                Tone::Info,
+                "Notes still use an event's old name.",
+                &format!("Update {} in notes", design::count(count, "link", "links")),
+            )
+        {
+            self.update_event_link_notes(changes);
+        }
+        if self.updated_links.is_some()
+            && design::message_with_action(
+                ui,
+                Tone::Info,
+                "Links updated in notes.",
+                "Undo update links",
+            )
+        {
+            self.undo_event_link_notes();
+        }
+        if let Some(problem) = &self.rename_problem {
+            design::message(ui, Tone::Warning, problem);
+        }
+    }
+
+    fn update_event_link_notes(&mut self, changes: Vec<(Draft, String)>) {
+        let mut undo = Vec::new();
+        for (before, body) in changes {
+            let mut next = before.clone();
+            if next.needs_attention() {
+                self.rename_problem =
+                    Some("Save or resolve the changed note before updating its links.".into());
+                continue;
+            }
+            next.body = body;
+            next.edited();
+            next.save();
+            if next.unsaved() {
+                self.rename_problem = Some(format!(
+                    "Links in {} were not saved. Resolve the note's save problem and try again.",
+                    next.path.display()
+                ));
+            } else {
+                undo.push((before, next.body.clone()));
+            }
+            if self
+                .draft
+                .as_ref()
+                .is_some_and(|draft| draft.path == next.path)
+            {
+                self.draft = Some(next);
+            }
+        }
+        self.updated_links = (!undo.is_empty()).then_some(undo);
+        self.last_time = None;
+    }
+
+    fn undo_event_link_notes(&mut self) {
+        let mut remaining = Vec::new();
+        for (before, after) in self.updated_links.take().unwrap_or_default() {
+            let current = self
+                .draft
+                .as_ref()
+                .filter(|draft| draft.path == before.path)
+                .cloned()
+                .or_else(|| Draft::open(&before.path).ok());
+            if let Some(mut current) =
+                current.filter(|draft| draft.body == after && !draft.needs_attention())
+            {
+                current.body = before.body.clone();
+                current.edited();
+                current.save();
+                if current.unsaved() {
+                    remaining.push((before.clone(), after));
+                }
+                if self
+                    .draft
+                    .as_ref()
+                    .is_some_and(|draft| draft.path == current.path)
+                {
+                    self.draft = Some(current);
+                }
+            } else {
+                self.rename_problem = Some("A note changed after its links were updated. Keep or resolve that edit before Undo.".into());
+                remaining.push((before, after));
+            }
+        }
+        self.updated_links = (!remaining.is_empty()).then_some(remaining);
+        self.last_time = None;
+    }
+
     pub fn recording(&self) -> bool {
         self.live.is_some()
     }
@@ -1333,7 +1502,15 @@ impl Sessions {
         Some(if word == "Not saving audio" {
             word.to_owned()
         } else {
-            format!("{word} {}", clock(live.recorder.seconds()))
+            format!(
+                "{} {}",
+                if word == "Recording silence" {
+                    "Silence"
+                } else {
+                    word
+                },
+                clock(live.recorder.seconds())
+            )
         })
     }
 
@@ -1598,10 +1775,7 @@ impl Sessions {
         if let Some(live) = &self.live {
             Some(format!("Stop the recording of {} first.", live.label))
         } else if self.draft.as_ref().is_some_and(Draft::needs_attention) {
-            Some(
-                "Choose what to do with this note before recording or starting a session."
-                    .to_owned(),
-            )
+            Some("Recording and other sessions wait until you save.".to_owned())
         } else if settings.probing() {
             Some("Looking for a recorder.".to_owned())
         } else if settings.tool().is_none() {
@@ -1822,7 +1996,7 @@ impl Sessions {
         let (icon, word, color) = match &draft.state {
             DraftState::Clean => (icons::OK, "Notes saved", c.document.clean),
             DraftState::Saved => (icons::OK, "Notes saved", c.document.saved),
-            DraftState::Unsaved => (icons::DRAFT, "Notes unsaved", c.document.unsaved),
+            DraftState::Unsaved => (icons::BUSY, "Saving…", c.muted),
             DraftState::Conflict => (icons::WARN, "Changed on disk", c.document.external),
             DraftState::Missing => (icons::WARN, "File gone", c.document.external),
             DraftState::Failed(_) => (icons::ERROR, "Notes not saved", c.document.invalid),
@@ -1877,7 +2051,7 @@ impl Sessions {
                 design::message(
                     ui,
                     Tone::Warning,
-                    "This file is gone from the folder. It may have been moved or renamed. Your words are still here. Its recordings and events stay with the old session, and do not move to a new file. Other sessions open after you save.",
+                    "This file is gone from the folder. It may have been moved or renamed. Your words are still here. Its recordings and events stay with the old session, and do not move to a new file. Recording and other sessions wait until you save.",
                 );
                 if Action::secondary("Save my words as a new file")
                     .show(ui)
@@ -2016,13 +2190,7 @@ impl Sessions {
         let Some(note) = self.notes.iter().find(|note| note.id == session) else {
             return;
         };
-        self.notice = Some((
-            Tone::Info,
-            format!(
-                "{name} stays in {}. To move it, change its Session on the Timeline.",
-                note.label()
-            ),
-        ));
+        self.notice = Some((Tone::Info, format!("{name} stays in {}.", note.label())));
         self.notice_session = Some(new);
         self.move_run_here = self.notice.as_ref().map(|(_, words)| (new, words.clone()));
     }
@@ -2102,7 +2270,7 @@ impl Sessions {
                                 .map_or("Recording", |(_, word, _)| word);
                             state.to_owned()
                         } else if job == Some(note.id) {
-                            format!("{} · Processing", note.date)
+                            "Processing".to_owned()
                         } else if result == Some(note.id) {
                             let word = if self.job_warned {
                                 "Processed: check it"
@@ -2187,6 +2355,19 @@ impl Sessions {
                         target = Some(next);
                     }
                 });
+                let current = self.conflict_at.as_ref().map_or(first, |(_, line)| *line);
+                if let Some(heading) = left
+                    .iter()
+                    .take(current + 1)
+                    .rev()
+                    .find(|line| line.trim_start().starts_with('#'))
+                {
+                    ui.label(
+                        Type::Small
+                            .rich(ui, format!("In {}", heading.trim_start_matches('#').trim()))
+                            .color(colors().muted),
+                    );
+                }
                 ui.columns(2, |columns| {
                     design::group_label(&mut columns[0], "Your draft");
                     design::group_label(&mut columns[1], "In the file now");
@@ -2234,7 +2415,7 @@ impl Sessions {
                                     });
                                 }
                             });
-                            if target == Some(line) {
+                            if target.map(|line| line.saturating_sub(2)) == Some(line) {
                                 let rect = egui::Rect::from_min_size(
                                     egui::pos2(ui.min_rect().left(), top),
                                     egui::vec2(ui.available_width(), Type::Body.line()),
@@ -2708,7 +2889,7 @@ impl Sessions {
     }
 
     /// What the session before this one left: where the DM picks up the thread.
-    fn last_time_block(&mut self, ui: &mut egui::Ui, book: &Book) {
+    fn last_time_block(&mut self, ui: &mut egui::Ui, _book: &Book) {
         let Some(selected) = self.selected else {
             return;
         };
@@ -2720,12 +2901,11 @@ impl Sessions {
                 .and_then(|at| self.notes.get(at + 1));
             let found = previous.map(|note| {
                 let text = fs::read_to_string(&note.path).unwrap_or_default();
-                let body = plain_links(&timeline::for_reading(body_of(&text), &book.events));
+                let body = body_of(&text);
                 LastTime {
                     id: note.id,
                     label: note.label(),
-                    what_happened: section_text(&body, "What happened")
-                        .or_else(|| section_text(&body, "Open threads")),
+                    what_happened: recap_preview(body),
                 }
             });
             self.last_time = Some((selected, found));
@@ -2737,7 +2917,7 @@ impl Sessions {
             .what_happened
             .as_deref()
             .and_then(|words| words.lines().find(|line| !line.trim().is_empty()))
-            .unwrap_or("Nothing written yet.");
+            .unwrap_or("");
         let full = format!(
             "Last time: {} — {}",
             last.label,
@@ -2751,7 +2931,11 @@ impl Sessions {
             open = design::link(ui, &last.label).on_hover_text(&full).clicked();
             let words = design::words_that_fit(
                 ui,
-                &format!("— {preview}"),
+                &if preview.is_empty() {
+                    String::new()
+                } else {
+                    format!("— {preview}")
+                },
                 &Type::Small.font(ui),
                 ui.available_width(),
             );
@@ -2773,24 +2957,35 @@ impl Sessions {
             return;
         }
         let c = colors();
-        let undo_id = ui.id().with(("removed_plan_group", session));
-        if let Some((before, after)) = ui.data(|data| data.get_temp::<(String, String)>(undo_id)) {
-            if let Some(draft) = &mut self.draft
-                && draft.body == after
-            {
-                if design::message_with_action(
-                    ui,
-                    Tone::Info,
-                    "Group removed from this plan.",
-                    "Undo remove from plan",
-                ) {
-                    draft.body = before;
-                    draft.edited();
-                    ui.data_mut(|data| data.remove::<(String, String)>(undo_id));
-                }
-            } else {
-                ui.data_mut(|data| data.remove::<(String, String)>(undo_id));
+        if let Some((body, events)) = &self.plan_notice_state
+            && (self.draft.as_ref().is_none_or(|draft| draft.body != *body)
+                || book.events != *events)
+        {
+            self.deleted_run = None;
+            self.row_notice = None;
+            self.removed_group = None;
+            self.removed_event_in_plan = false;
+            self.plan_notice_state = None;
+        }
+        if self.removed_group.as_ref().is_some_and(|(id, _, after)| {
+            *id == session && self.draft.as_ref().is_none_or(|draft| draft.body != *after)
+        }) {
+            self.removed_group = None;
+        }
+        if let Some((id, before, _)) = &self.removed_group
+            && *id == session
+            && design::message_with_action(
+                ui,
+                Tone::Info,
+                "Group removed from this plan.",
+                "Undo remove from plan",
+            )
+        {
+            if let Some(draft) = &mut self.draft {
+                draft.body = before.clone();
+                draft.edited();
             }
+            self.removed_group = None;
         }
         problems(ui, book);
         if plan.group_open {
@@ -2906,6 +3101,9 @@ impl Sessions {
         let mut delete_run = None;
         let mut toggle = None;
         let mut changed = false;
+        let removed_row = book.removed_row().filter(|_| self.removed_event_in_plan);
+        let mut undo_row_remove = false;
+        let event_count = book.events.len();
         let open_event = self.open_event.clone();
         egui::CentralPanel::default().frame(egui::Frame::new()).show_inside(ui, |ui| {
             egui::ScrollArea::vertical().id_salt(("session_plan", session))
@@ -2915,6 +3113,10 @@ impl Sessions {
                 let mut any = false;
                 let mut primary_available = plan.open_run.is_none() && !self.confirm_record;
                 for (at, event) in book.events.iter_mut().enumerate() {
+                    if let Some((removed_at, label)) = &removed_row && *removed_at == at {
+                        ui.add_space(design::S);
+                        undo_row_remove |= design::message_with_action(ui, Tone::Info, &format!("Removed “{label}”."), "Undo remove");
+                    }
                     if !event.is_in(session) { continue; }
                     any = true;
                     let day = days.get(at).copied().unwrap_or(0);
@@ -2965,7 +3167,7 @@ impl Sessions {
                                     }
                                 });
                                 let action = if std::mem::take(&mut primary_available) { Action::primary("Resume") } else { Action::secondary("Resume") };
-                                if action.name(&format!("Resume: {label}")).blocked(plan.blocked).density(Density::Read).show(ui).clicked() {
+                                if action.icon(icons::RUN).name(&format!("Resume: {label}")).blocked(plan.blocked).density(Density::Read).show(ui).clicked() {
                                     self.wants_saved_run = Some(saved.path.clone());
                                 }
                             } else {
@@ -3004,10 +3206,18 @@ impl Sessions {
                             }
                             });
                         }
+                        if self.row_notice == Some((session, at)) && self.deleted_run.is_some() {
+                            ui.add_space(design::S);
+                            self.deleted_run_message(ui);
+                        }
                         plan_rule(ui);
                     });
                     // The opened row and the next row stay in reach.
                     if is_open && std::mem::take(&mut self.reveal_event) { row.response.scroll_to_me(Some(egui::Align::TOP)); }
+                }
+                if let Some((at, label)) = &removed_row && *at >= event_count {
+                    ui.add_space(design::S);
+                    undo_row_remove |= design::message_with_action(ui, Tone::Info, &format!("Removed “{label}”."), "Undo remove");
                 }
                 for (position, fight) in planned.iter().enumerate() {
                     any = true;
@@ -3038,7 +3248,7 @@ impl Sessions {
                                     }
                                 });
                                 let action = if std::mem::take(&mut primary_available) { Action::primary("Resume") } else { Action::secondary("Resume") };
-                                if action.name(&format!("Resume: {}", fight.name)).density(Density::Read).blocked(plan.blocked).show(ui).clicked() {
+                                if action.icon(icons::RUN).name(&format!("Resume: {}", fight.name)).density(Density::Read).blocked(plan.blocked).show(ui).clicked() {
                                     self.wants_saved_run = Some(saved.path.clone());
                                 }
                             } else {
@@ -3051,6 +3261,10 @@ impl Sessions {
                                 }
                             }
                         });
+                        if self.row_notice == Some((session, event_count + position)) && self.deleted_run.is_some() {
+                            ui.add_space(design::S);
+                            self.deleted_run_message(ui);
+                        }
                         if self.open_planned.as_ref() == Some(&fight.path) {
                             plan_details(ui, |ui| {
                                 if design::link(ui, "Read encounter").clicked() { self.wants_lookup = Some(fight.name.clone()); }
@@ -3105,12 +3319,8 @@ impl Sessions {
             let before = draft.body.clone();
             unlink_group(&mut draft.body, &name);
             draft.edited();
-            ui.data_mut(|data| {
-                data.insert_temp(
-                    ui.id().with(("removed_plan_group", session)),
-                    (before, draft.body.clone()),
-                )
-            });
+            self.removed_group = Some((session, before, draft.body.clone()));
+            self.plan_notice_state = Some((draft.body.clone(), book.events.clone()));
         }
         if changed {
             book.touch();
@@ -3118,6 +3328,25 @@ impl Sessions {
         if let Some(saved) = delete_run {
             match crate::encounter_run::DeletedRun::delete(&saved) {
                 Ok(deleted) => {
+                    self.row_notice = book
+                        .events
+                        .iter()
+                        .position(|event| event.run == saved.id)
+                        .or_else(|| {
+                            planned
+                                .iter()
+                                .position(|fight| {
+                                    fight.saved.as_ref().is_some_and(|run| run.id == saved.id)
+                                })
+                                .map(|at| event_count + at)
+                        })
+                        .map(|at| (session, at));
+                    self.plan_notice_state = Some((
+                        self.draft
+                            .as_ref()
+                            .map_or_else(String::new, |draft| draft.body.clone()),
+                        book.events.clone(),
+                    ));
                     self.deleted_run = Some(deleted);
                     self.wants_runs_refresh = true;
                 }
@@ -3132,7 +3361,19 @@ impl Sessions {
         }
         if let Some(id) = remove {
             book.remove(&id);
+            self.removed_event_in_plan = true;
+            self.plan_notice_state = Some((
+                self.draft
+                    .as_ref()
+                    .map_or_else(String::new, |draft| draft.body.clone()),
+                book.events.clone(),
+            ));
             self.open_event = None;
+        }
+        if undo_row_remove {
+            book.undo_remove();
+            self.removed_event_in_plan = false;
+            self.plan_notice_state = None;
         }
         if let (Some(link), Some(draft), Some(session)) = (insert, &mut self.draft, session) {
             insert_in_note(&mut draft.body, &link);
@@ -3143,11 +3384,15 @@ impl Sessions {
         }
     }
 
-    /// What can be undone in the plan: the event just added or just removed.
-    fn plan_messages(&mut self, ui: &mut egui::Ui, book: &mut Book, session: Option<Uuid>) {
+    fn deleted_run_message(&mut self, ui: &mut egui::Ui) {
         if let Some(deleted) = &self.deleted_run {
             let words = deleted.message();
-            if design::message_with_action(ui, Tone::Info, &words, "Undo delete run") {
+            if design::message_with_action(
+                ui,
+                Tone::Info,
+                &words,
+                crate::encounter_run::DeletedRun::UNDO_LABEL,
+            ) {
                 match deleted.restore() {
                     Ok(()) => {
                         self.deleted_run = None;
@@ -3156,6 +3401,13 @@ impl Sessions {
                     Err(error) => self.rename_problem = Some(error),
                 }
             }
+        }
+    }
+
+    /// What can be undone in the plan: the event just added or just removed.
+    fn plan_messages(&mut self, ui: &mut egui::Ui, book: &mut Book, session: Option<Uuid>) {
+        if self.row_notice.is_none() {
+            self.deleted_run_message(ui);
         }
         let days = timeline::day_numbers(&book.events);
         // It goes at the DM's next edit, or soon, so that it cannot undo the wrong thing.
@@ -3196,7 +3448,7 @@ impl Sessions {
                 book.remove(&id);
                 self.added = None;
             }
-        } else {
+        } else if !self.removed_event_in_plan {
             undo_removed(ui, book);
         }
     }
@@ -3464,30 +3716,26 @@ impl Sessions {
         } else if recording.transcript {
             (icons::DRAFT, "Partly processed", c.muted)
         } else {
-            (icons::RECORD, "Not processed", c.muted)
+            (icons::DOCUMENT, "Not processed", c.muted)
         };
-        design::status(ui, Status { icon, word, color }).on_hover_text(word);
+        if !processing {
+            design::status(ui, Status { icon, word, color }).on_hover_text(word);
+        }
         if let Some(words) = stored.as_ref().filter(|_| !live && !processing) {
             ui.horizontal_wrapped(|ui| {
+                ui.spacing_mut().item_spacing.x = 0.0;
                 ui.add(
                     egui::Label::new(Type::Small.rich(ui, recording_detail(words)).color(c.muted))
                         .wrap(),
                 );
-                if words.starts_with("Stopped by itself:") && design::link(ui, "Settings").clicked()
+                if words.starts_with("Stopped by itself:")
+                    && ui
+                        .add(egui::Link::new(Type::Small.rich(ui, " Settings")))
+                        .clicked()
                 {
                     self.wants_recording_input = true;
                 }
             });
-        }
-        if live {
-            ui.label(
-                Type::Small
-                    .rich(
-                        ui,
-                        "Stop recording before processing or changing campaigns.",
-                    )
-                    .color(c.muted),
-            );
         }
         if let Some(warning) = recording.warning.as_ref().filter(|_| !live && !processing) {
             design::message(ui, Tone::Warning, warning);
@@ -3532,7 +3780,11 @@ impl Sessions {
                     .unwrap_or_default();
                 {
                     design::spinner(ui);
-                    ui.label(Type::Small.rich(ui, words).color(c.muted));
+                    ui.label(
+                        Type::Small
+                            .rich(ui, format!("Processing · {words}"))
+                            .color(c.muted),
+                    );
                     let cancelling = self.job.as_ref().is_some_and(|(job, _)| job.cancelling());
                     if cancelling {
                         ui.label(
@@ -3576,6 +3828,9 @@ impl Sessions {
                     .blocked(reason.as_deref())
                     .show(ui)
                     .clicked();
+                if live {
+                    design::blocked_reason(ui, Some("Stop recording first."));
+                }
                 if let Some(reason) = reason.as_ref().filter(|_| !live && self.job.is_none()) {
                     let speech = processing::host(&settings.config.speech_url);
                     let named = if reason.starts_with("Save an API key for this speech service") {
@@ -3606,16 +3861,13 @@ impl Sessions {
                 "This asks the LLM again, and replaces the summary, the clean transcript and what the check changed. The raw transcript stays. Events you added stay on the timeline, and a reworded suggestion can offer Add again.",
             );
             ui.horizontal(|ui| {
-                process = (if self.run_open {
-                    Action::secondary("Replace the results")
-                } else {
-                    Action::primary("Replace the results")
-                })
-                .show(ui)
-                .clicked();
-                if Action::quiet("Not now").show(ui).clicked() {
+                if Action::secondary("Not now").show(ui).clicked() {
                     self.confirm_again = None;
                 }
+                ui.add_space(design::L);
+                process = Action::destructive("Replace the results")
+                    .show(ui)
+                    .clicked();
             });
         }
         if again {
@@ -3892,37 +4144,6 @@ impl Sessions {
                     .color(c.muted),
             );
         }
-        if let Some((marker, key)) = &reading.marker {
-            ui.horizontal_wrapped(|ui| {
-                ui.label(Type::Body.rich(ui, marker.kind.icon()).color(c.muted));
-                ui.label(
-                    Type::Body
-                        .rich(ui, marker.reading_words().replace('*', ""))
-                        .color(c.text),
-                );
-                if book.event_of_marker(key).is_some() {
-                    design::status(
-                        ui,
-                        Status {
-                            icon: icons::OK,
-                            word: "On the timeline",
-                            color: c.document.saved,
-                        },
-                    );
-                } else if Action::secondary("Add")
-                    .name("Add this event to the timeline")
-                    .density(Density::Read)
-                    .blocked_if(
-                        book.unreadable.is_some(),
-                        "The timeline file must be repaired first.",
-                    )
-                    .show(ui)
-                    .clicked()
-                {
-                    book.add_marker(marker, key, session);
-                }
-            });
-        }
         let count = reading.parts.len();
         if count > 1 {
             ui.horizontal(|ui| {
@@ -3980,12 +4201,49 @@ impl Sessions {
                         "",
                     );
                     let body = body.as_str();
-                    let at = reading.mark.as_deref().and_then(|mark| body.find(mark));
+                    let at = reading
+                        .marker
+                        .as_ref()
+                        .map(|(marker, _)| marker.reading_words())
+                        .as_deref()
+                        .or(reading.mark.as_deref())
+                        .and_then(|mark| body.find(mark));
                     match at {
                         Some(at) => {
                             markdown_view::show_reader(ui, &body[..at]);
-                            ui.scroll_to_cursor(Some(egui::Align::TOP));
-                            markdown_view::show_reader(ui, &body[at..]);
+                            if reading.mark.is_some() {
+                                ui.scroll_to_cursor(Some(egui::Align::TOP));
+                            }
+                            if let Some((marker, key)) = &reading.marker {
+                                let line_end =
+                                    body[at..].find('\n').map_or(body.len(), |end| at + end);
+                                ui.horizontal_wrapped(|ui| {
+                                    markdown_view::show_reader(ui, &body[at..line_end]);
+                                    if book.event_of_marker(key).is_some() {
+                                        design::status(
+                                            ui,
+                                            Status {
+                                                icon: icons::OK,
+                                                word: "On the timeline",
+                                                color: c.document.saved,
+                                            },
+                                        );
+                                    } else if Action::secondary("Add")
+                                        .name("Add this event to the timeline")
+                                        .blocked_if(
+                                            book.unreadable.is_some(),
+                                            "The timeline file must be repaired first.",
+                                        )
+                                        .show(ui)
+                                        .clicked()
+                                    {
+                                        book.add_marker(marker, key, session);
+                                    }
+                                });
+                                markdown_view::show_reader(ui, &body[line_end..]);
+                            } else {
+                                markdown_view::show_reader(ui, &body[at..]);
+                            }
                         }
                         None => markdown_view::show_reader(ui, body),
                     }
@@ -4207,6 +4465,7 @@ impl Sessions {
         if let Some(draft) = &mut self.draft {
             Self::draft_problem(ui, draft);
         }
+        self.event_link_message(ui, book);
         let shown = self.notice_session.is_none() || self.notice_session == self.selected;
         if shown && self.job_done {
             self.job_done = false;
@@ -4334,7 +4593,7 @@ impl Sessions {
                         .color(c.muted),
                 );
             }
-            if shown != Tab::Recordings {
+            if shown == Tab::Note || (shown == Tab::Plan && beside) {
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     let (word, icon) = if self.reading_note {
                         ("Write", icons::EDIT)
@@ -4370,7 +4629,6 @@ impl Sessions {
             Tab::Plan => self.plan_pane(ui, book, plan),
             Tab::Note => self.note_pane(ui, book, plan, beside),
             Tab::Recordings => {
-                ui.set_max_width(ui.available_width().min(EDITOR_WIDTH + design::XL));
                 self.recordings_tab(ui, settings, book);
             }
         }
@@ -4499,11 +4757,10 @@ impl Sessions {
             self.select_template(&first);
         }
         let mut choose = None;
-        let mut start_new = false;
         // Beside Lookup at a small window, two columns would crush the editor.
         let narrow = ui.available_width() < TWO_COLUMNS_FROM;
         if narrow && self.templates_list_only {
-            self.template_list(ui, &mut choose, &mut start_new);
+            self.template_list(ui, &mut choose);
         } else if narrow {
             if Action::quiet("All templates")
                 .icon(icons::BACK)
@@ -4519,12 +4776,7 @@ impl Sessions {
                     right: design::S as i8,
                     ..Default::default()
                 }))
-                .show_inside(ui, |ui| self.template_list(ui, &mut choose, &mut start_new));
-        }
-        if start_new {
-            self.templates_list_only = false;
-            self.new_template = Some(String::new());
-            self.template_error = None;
+                .show_inside(ui, |ui| self.template_list(ui, &mut choose));
         }
         if let Some(name) = choose {
             self.templates_list_only = false;
@@ -4581,18 +4833,11 @@ impl Sessions {
             });
     }
 
-    fn template_list(
-        &mut self,
-        ui: &mut egui::Ui,
-        choose: &mut Option<String>,
-        start_new: &mut bool,
-    ) {
-        *start_new = Action::secondary("New template")
-            .icon(icons::ADD)
-            .density(Density::Read)
-            .show(ui)
-            .clicked();
-        ui.add_space(design::XS);
+    fn template_list(&mut self, ui: &mut egui::Ui, choose: &mut Option<String>) {
+        if design::link(ui, "← Sessions").clicked() {
+            self.view = View::Notes;
+        }
+        ui.add_space(design::S);
         egui::ScrollArea::vertical()
             .id_salt("template_list")
             .auto_shrink([false, false])
@@ -4606,7 +4851,8 @@ impl Sessions {
                     if design::two_line_row(
                         ui,
                         Density::Glance.control() + design::S,
-                        self.template.as_deref() == Some(template.name.as_str()),
+                        self.new_template.is_none()
+                            && self.template.as_deref() == Some(template.name.as_str()),
                         &template.name,
                         kind,
                     )
@@ -4665,7 +4911,6 @@ impl Sessions {
         else {
             return;
         };
-        ui.set_max_width(ui.available_width().min(EDITOR_WIDTH + 2.0 * design::S));
         let mut customize = false;
         let mut delete = false;
         ui.horizontal(|ui| {
@@ -4754,20 +4999,32 @@ impl Sessions {
             .auto_shrink([false, false])
             .show(ui, |ui| {
                 if let Some(draft) = &mut self.template_draft {
-                    let response = ui.add(
-                        egui::TextEdit::multiline(&mut draft.body)
-                            .font(egui::TextStyle::Monospace)
-                            .margin(egui::vec2(design::S, design::S))
-                            .desired_width(ui.available_width().min(EDITOR_WIDTH))
-                            .min_size(egui::vec2(0.0, ui.available_height())),
-                    );
+                    let mut layouter = crate::markdown_source::layouter;
+                    let output = egui::TextEdit::multiline(&mut draft.body)
+                        .font(design::reader::prose_type(ui).font(ui))
+                        .layouter(&mut layouter)
+                        .margin(egui::vec2(design::S, design::S))
+                        .desired_width(ui.available_width())
+                        .min_size(egui::vec2(0.0, ui.available_height()))
+                        .show(ui);
+                    crate::markdown_source::paint_section_rules(ui, &output);
+                    let response = output.response;
                     design::named(ui, &response, "Template text");
                     if response.changed() {
                         draft.edited();
                         self.deleted_template = None;
                     }
                 } else {
-                    ui.label(Type::Mono.rich(ui, &template.body).color(c.muted));
+                    let mut body = template.body.clone();
+                    let mut layouter = crate::markdown_source::layouter;
+                    let output = egui::TextEdit::multiline(&mut body)
+                        .font(design::reader::prose_type(ui).font(ui))
+                        .layouter(&mut layouter)
+                        .desired_width(ui.available_width())
+                        .interactive(false)
+                        .show(ui);
+                    design::named(ui, &output.response, "Built-in template text");
+                    crate::markdown_source::paint_section_rules(ui, &output);
                 }
             });
     }
@@ -4886,9 +5143,19 @@ impl Sessions {
             if self.view == View::Notes && !in_form && !empty {
                 new_session = Action::secondary("New session")
                     .icon(icons::ADD)
-                    .blocked_if(locked, "Choose what to do with this note first.")
+                    .blocked_if(locked, "Recording and other sessions wait until you save.")
                     .show(ui)
                     .clicked();
+            }
+            if self.view == View::Templates
+                && Action::secondary("New template")
+                    .icon(icons::ADD)
+                    .show(ui)
+                    .clicked()
+            {
+                self.templates_list_only = false;
+                self.new_template = Some(String::new());
+                self.template_error = None;
             }
             if self.live.is_some() && (self.view != View::Notes || in_form || list_alone || empty) {
                 stop = Action::quiet("Stop recording")
@@ -4905,9 +5172,6 @@ impl Sessions {
         }
         if new_session {
             self.open_form();
-        }
-        if self.view == View::Templates && design::link(ui, "← Sessions").clicked() {
-            self.view = View::Notes;
         }
         if self.folder.is_none() {
             design::message(
@@ -4984,6 +5248,101 @@ mod tests {
     use super::*;
 
     #[test]
+    fn event_link_updates_save_and_undo_as_one_batch_without_overwriting_external_edits() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut book = Book::default();
+        let id = book.add(Kind::LongRest, None);
+        let body = format!(
+            "## What happened\n\n[[Timeline#^{id}|Long rest]] and [[Timeline#^{id}|our rest]].\n"
+        );
+        let notes: Vec<_> = (1..=2)
+            .map(|number| {
+                create_note(
+                    dir.path(),
+                    &NewNote {
+                        number,
+                        title: "",
+                        date: "2026-01-01",
+                        campaign: "Test",
+                        template: &body,
+                    },
+                )
+                .unwrap()
+            })
+            .collect();
+        let original: Vec<_> = notes
+            .iter()
+            .map(|note| fs::read(&note.path).unwrap())
+            .collect();
+        book.events[0].title = "Rest at the mill".into();
+        book.touch();
+        // Merely renaming never writes a note.
+        for (note, before) in notes.iter().zip(&original) {
+            assert_eq!(fs::read(&note.path).unwrap(), *before);
+        }
+        let changes = notes
+            .iter()
+            .map(|note| {
+                let draft = Draft::open(&note.path).unwrap();
+                let (updated, count) = updated_event_links(&draft.body, &book);
+                assert_eq!(count, 1);
+                (draft, updated)
+            })
+            .collect();
+        let mut sessions = Sessions::default();
+        sessions.update_event_link_notes(changes);
+        assert_eq!(sessions.updated_links.as_ref().unwrap().len(), 2);
+        for note in &notes {
+            let saved = fs::read_to_string(&note.path).unwrap();
+            assert!(saved.contains("|Rest at the mill]]") && saved.contains("|our rest]]"));
+        }
+        sessions.undo_event_link_notes();
+        assert!(sessions.updated_links.is_none());
+        for (note, before) in notes.iter().zip(&original) {
+            assert_eq!(fs::read(&note.path).unwrap(), *before);
+        }
+        // An external edit after the preview cannot be overwritten by accepting it.
+        let draft = Draft::open(&notes[0].path).unwrap();
+        let updated = updated_event_links(&draft.body, &book).0;
+        let outside = format!(
+            "{}External edit.\n",
+            fs::read_to_string(&notes[0].path).unwrap()
+        );
+        fs::write(&notes[0].path, &outside).unwrap();
+        sessions.update_event_link_notes(vec![(draft, updated)]);
+        assert_eq!(fs::read_to_string(&notes[0].path).unwrap(), outside);
+        assert!(sessions.updated_links.is_none());
+    }
+
+    #[test]
+    fn event_link_update_changes_old_titles_and_keeps_custom_aliases() {
+        let mut book = Book::default();
+        let id = book.add(Kind::LongRest, None);
+        book.events[0].title = "Rest at the mill".into();
+        book.renamed_links
+            .insert(id.clone(), vec!["Long rest".into()]);
+        let original = format!(
+            "## What happened\n\n[[Timeline#^{id}|Long rest]] and [[Timeline#^{id}|Long rest]].\n[[Timeline#^{id}|our rest]]\n"
+        );
+        let (updated, count) = updated_event_links(&original, &book);
+        assert_eq!(count, 2);
+        assert_eq!(updated.matches("|Rest at the mill]]").count(), 2);
+        assert!(updated.contains("|our rest]]"));
+        assert_eq!(updated_event_links(&updated, &book).1, 0);
+    }
+
+    #[test]
+    fn recap_uses_prose_and_skips_link_only_lines() {
+        let body = "## Recap of last time\n\n## What happened\n\n- [[Timeline#^t-rest|Long rest]]\n\nWe reached the mill.\n";
+        assert_eq!(recap_preview(body).as_deref(), Some("We reached the mill."));
+        assert_eq!(recap_preview("## What happened\n- [[Bridge]]\n"), None);
+        assert_eq!(
+            recap_preview("## Recap of last time\nWe won.\n\n## What happened\nWe ran.").as_deref(),
+            Some("We won.")
+        );
+    }
+
+    #[test]
     fn read_plan_summary_keeps_mixed_notes_and_repeated_fights_in_the_file() {
         let fights = [PlanFight {
             saved: None,
@@ -5015,7 +5374,7 @@ mod tests {
         let source = format!("A [[Bridge Ambush]] before [[Timeline#^{id}|Old name]].");
         let rendered = words_to_read(&source, &book);
         assert!(rendered.contains("[Bridge Ambush](<splat-note:Bridge Ambush>)"));
-        assert!(rendered.contains(&format!("[Rest at the mill](<splat-note:Timeline#^{id}>)")));
+        assert!(rendered.contains(&format!("[Old name](<splat-note:Timeline#^{id}>)")));
         assert!(source.contains("|Old name]]"));
     }
 }

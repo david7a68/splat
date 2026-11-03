@@ -1009,16 +1009,8 @@ impl CombatSync {
                             }
                         ),
                     );
-                    let use_word = if name.is_some() {
-                        "Use D&D Beyond"
-                    } else {
-                        &use_label
-                    };
-                    let keep_word = if name.is_some() {
-                        "Keep Splat"
-                    } else {
-                        &keep_label
-                    };
+                    let use_word = &use_label;
+                    let keep_word = &keep_label;
                     if Action::secondary(use_word)
                         .hint(&use_label)
                         .name("Use D&D Beyond values")
@@ -1079,7 +1071,7 @@ impl CombatSync {
             ui.colored_label(crate::design::colors().result.error, e);
         }
         ui.horizontal(|ui| {
-            if crate::design::Action::secondary("Refresh / verify")
+            if crate::design::Action::secondary("Check now")
                 .density(crate::design::Density::Read)
                 .blocked_if(self.busy(), "Wait for the current sheet read.")
                 .show(ui)
@@ -1096,7 +1088,14 @@ impl CombatSync {
         });
         self.conflicts(ui);
         let Some(remote) = &self.remote else {
-            ui.label("Waiting for the first sheet read. If it does not come, check the connection in Settings.");
+            ui.label(
+                "Waiting for the first sheet read. If it does not come, check the connection.",
+            );
+            if crate::design::link(ui, "Settings").clicked() {
+                ui.ctx().data_mut(|data| {
+                    data.insert_temp(egui::Id::new("open_account_settings"), true)
+                });
+            }
             return;
         };
         if !remote.can_edit {

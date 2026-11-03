@@ -1173,7 +1173,7 @@ pub mod settings {
     const OFFLINE_ERROR: &str = "Could not reach D&D Beyond";
     const CAMPAIGNS_SECTION: &str = "CAMPAIGNS";
     const EDIT_DETAILS: &str = "Edit details";
-    const EDIT_FORM: &str = "Edit campaign details";
+    const EDIT_FORM: &str = "DETAILS";
     const CANCEL: &str = "Cancel";
 
     pub fn run(d: &mut Driver<'_>) {
@@ -2252,7 +2252,7 @@ pub mod run_sync_conflict {
         d.observe(
             "T3.4",
             clear_before
-                && d.visible_text("see Log.")
+                && d.has("Log")
                 && d.has_containing(UNDO_CLEARED)
                 && d.has_containing(&changed),
             format!("Simulated sheet read: a message says, only after it, what changed from what to what: {changed}"),
@@ -2261,7 +2261,7 @@ pub mod run_sync_conflict {
         d.click(NEXT_TURN);
         d.observe(
             "T3.4",
-            !d.visible_text("see Log.") && !d.has_containing(UNDO_CLEARED),
+            !d.has("Log") && !d.has_containing(UNDO_CLEARED),
             "The next turn clears the old notice",
         );
         fight_tab(d, "Log");
@@ -3349,7 +3349,7 @@ pub mod run_roster_conflict {
         let cut = rows_cut(d);
         d.observe(
             "T1.3",
-            cut.is_empty() && d.visible_text("see Log."),
+            cut.is_empty() && d.has("Log"),
             format!(
                 "At 960x640 with a long message, it takes one line and every row stays: {cut:?}"
             ),
@@ -3366,9 +3366,9 @@ pub mod run_roster_conflict {
         d.click(ONE_MORE_CONDITION);
         d.click_row(LOADED_ROW);
         let errored = LOADED_CONDITIONS.len() + 1;
-        d.app_mut()
-            .encounters
-            .simulate_run_error("The reference for Ember Cultist could not be read.");
+        d.app_mut().encounters.simulate_run_error(
+            "Ember Cultist's stat block could not be read. Its row still works. Repair it in",
+        );
         d.settle();
         d.state("loaded-roster-of-12", Sizes::Default);
         let cut = rows_cut(d);
@@ -3461,7 +3461,7 @@ pub mod signed_in {
     const EDIT_DETAILS: &str = "Edit details";
     const CONFLICT: &str = "Conflict";
     const RAIL_FAILING: &str = "Sign-in failing";
-    const RAIL_OFFLINE: &str = "Signed out of D&D Beyond";
+    const RAIL_OFFLINE: &str = "Signed out";
     const STOPPED_ROW: &str = "Sync stopped";
     const NOT_SENT: &str = "Not sent";
     const NOTHING_TO_SEND: &str = "Iselle Marrowind";
@@ -4221,7 +4221,15 @@ pub mod session_notes {
             d.has_containing(&format!("Session 1: {TITLE}")),
             "An event lists the session notes that link to it",
         );
-        // The Reader follows the event's name now, not the name when it was linked.
+        // Renaming keeps notes unchanged until the DM accepts the update.
+        d.expect("Update 1 link in notes");
+        d.state("event-link-update-offered", Sizes::Default);
+        d.click("Update 1 link in notes");
+        d.expect("Undo update links");
+        d.state("event-links-updated", Sizes::Default);
+        d.click("Undo update links");
+        d.expect("Update 1 link in notes");
+        d.click("Update 1 link in notes");
         d.click_starting("Rest at the mill ·");
         d.click("Open this session");
         read_note(d);
@@ -4860,7 +4868,7 @@ pub mod session_recording {
         d.state("run-silent", Sizes::Default);
         d.click_containing("Undo: 7 damage");
         close_run(d);
-        d.click_containing("Recording silence 0:");
+        d.click("Recording silence");
         d.expect("Silent for over a minute");
         d.expect("Check the input in Settings");
         d.state("recording-silent", Sizes::Default);
@@ -4967,7 +4975,7 @@ pub mod session_recording {
             d.has_containing("for another service"),
             "A saved key does not follow the DM to a different service",
         );
-        d.expect("Remove OpenAI key");
+        d.expect("Remove speech key (OpenAI)");
         d.state("key-for-another-service", Sizes::Default);
         d.click("LLM service");
         d.click("Codex CLI, GPT-6.1 Sol");
@@ -5040,7 +5048,7 @@ pub mod session_recording {
         d.state("processing-failed", Sizes::All);
 
         // Retry from the banner, so no old failure stays beside a new result.
-        d.click("Process again");
+        d.click("Continue processing");
         d.expect("is processed");
         d.observe(
             "T11.6",
@@ -5070,7 +5078,13 @@ pub mod session_recording {
         // Each text reads in the whole pane, a part at a time, and a marker opens its place.
         d.click("00:10:00");
         d.expect("Part 2 of 2");
-        d.expect("Long rest: Rest at the mill");
+        d.expect("On the timeline");
+        d.observe(
+            "Transcript marker",
+            d.visible_text("Long rest: Rest at the mill")
+                && d.in_view_containing("On the timeline"),
+            "The marker heading and its timeline state are visible together in the transcript",
+        );
         d.state("marked-transcript", Sizes::All);
         d.click("Earlier part");
         d.expect("Part 1 of 2");
@@ -5483,14 +5497,14 @@ pub mod encounter_history {
         d.state("history-open", Sizes::All);
         d.check_tab_order("encounters, history open");
         delete_saved_run(d, RUN);
-        d.expect("Undo delete");
+        d.expect("Undo delete run");
         d.observe(
             "T4.6",
             !d.has_containing(&format!("{RUN} · Round")),
             "Deleted run leaves the list with Undo",
         );
         d.state("run-deleted", Sizes::Default);
-        d.click("Undo delete");
+        d.click("Undo delete run");
         d.expect(&format!("{RUN} · Round"));
         let before = d.app_mut().timeline.events.len();
         d.click_starting(OPEN_OLD);
@@ -5954,6 +5968,11 @@ pub mod session_plan_groups {
         d.expect("Undo remove from plan");
         d.state("group-removed-from-plan", Sizes::Default);
         d.observe(
+            "P1",
+            d.in_view("Undo remove from plan") && d.visible_text("Group removed from this plan."),
+            "Remove group keeps its message and Undo in view after capture resize",
+        );
+        d.observe(
             "P17",
             !d.has(&format!("Edit group {GROUP_RIVALS}")),
             "The row menu removes a group from this plan",
@@ -6054,7 +6073,11 @@ pub mod session_plan {
     pub fn run(d: &mut Driver<'_>) {
         d.click(NAV_SESSIONS);
         new_session(d, "The Road");
-        d.type_into_editor("Hobb the miller says the toll collectors have not been paid.\n");
+        let body = d.editor_text().expect("new session has a note");
+        d.replace_editor_text(&body.replace(
+            "## What happened",
+            "## What happened\n\nHobb the miller says the toll collectors have not been paid.",
+        ));
         d.press_ctrl(Key::S);
         d.click("New session");
         d.type_into("Session title", "The Crossing");
@@ -6390,9 +6413,9 @@ pub mod session_plan {
         let delete = format!("{SECOND} · Setup · Paused");
         let before = d.has_containing(&delete);
         delete_saved_run(d, SECOND);
-        d.expect("Undo delete");
+        d.expect("Undo delete run");
         d.state("run-removed", Sizes::Default);
-        d.click("Undo delete");
+        d.click("Undo delete run");
         d.observe(
             "T14.1",
             before && d.has_containing(&delete),

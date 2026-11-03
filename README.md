@@ -634,3 +634,7 @@ Campaign repair shows invalid notes in place. The campaign-wide Needed by your e
 Library keeps its search when you change scope, and hides empty categories. Draft guidance stays in its save row. New World notes show their Obsidian file and a Show file link. Lookup keeps Back and Open in Library on its title line.
 
 Campaign puts Needed by your entries below the packages in the left column. Select it to search dependencies and open one in Lookup. Invalid YAML marks its error line and says what to fix. Package and run settings keep their save state in the save row.
+
+Session Read view keeps each link's written words. When a Timeline event is renamed, **Update links in notes** offers to replace only aliases that still use the old title, with **Undo update links** for the batch. Custom aliases stay as written. Plan row actions keep Undo beside their row. Templates use the same styled Markdown editor as notes. During autosave, notes show **Saving…**.
+
+Settings imports a D&D Beyond campaign directly below its row and suggests a new folder beside the existing campaigns. Saved API keys name their slot, such as **Remove speech key (OpenAI)**. Failed recording jobs use **Continue processing**; **Process again** replaces existing results after a separate confirmation.
