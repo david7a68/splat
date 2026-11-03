@@ -463,7 +463,7 @@ fn failure(service: &str, response: Response) -> Failure {
         401 | 403 => format!("{service} did not accept the API key. Check it in Settings."),
         404 => format!("{service} does not know this address or model. Check them in Settings."),
         408 | 409 | 429 => format!(
-            "{service} is busy, or your limit is reached. Wait, then process it again. It goes on from where it stopped."
+            "{service} is busy, or your limit is reached. Wait, then select Continue processing. It goes on from where it stopped."
         ),
         500.. => format!(
             "{service} has a problem on its side. Process it again later. It goes on from where it stopped."

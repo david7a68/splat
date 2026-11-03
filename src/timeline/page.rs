@@ -9,7 +9,7 @@ const ROW: f32 = 44.0;
 const SPINE: f32 = 16.0;
 const TEXT_AT: f32 = 34.0;
 const TWO_COLUMNS_FROM: f32 = 640.0;
-const FILTERS_ON_ONE_ROW_FROM: f32 = 720.0;
+const FILTERS_ON_ONE_ROW_FROM: f32 = design::LIST_MEASURE;
 const UNDO_ADD_FOR: Duration = Duration::from_secs(30);
 const COPIED_FOR: Duration = Duration::from_secs(2);
 
@@ -48,6 +48,7 @@ pub struct SessionLink {
 
 #[derive(Default)]
 pub struct TimelinePage {
+    removed_mentions: usize,
     filter: Filter,
     search: String,
     session: Option<Uuid>,
@@ -253,7 +254,7 @@ impl TimelinePage {
                     (Filter::Encounters, "Fights"),
                     (Filter::Rests, "Rests"),
                     (Filter::Travel, "Travel"),
-                    (Filter::Events, "Major"),
+                    (Filter::Events, "Major events"),
                 ],
             );
         };
@@ -407,7 +408,21 @@ impl TimelinePage {
     }
 
     fn list_messages(&mut self, ui: &mut egui::Ui, book: &mut Book) {
-        undo_removed(ui, book);
+        if let Some(label) = book.removed() {
+            let mentions = self.removed_mentions;
+            let words = if mentions == 0 {
+                format!("Removed “{label}”.")
+            } else {
+                format!(
+                    "Removed “{label}”. {} still {} to it.",
+                    design::count(mentions, "note", "notes"),
+                    if mentions == 1 { "links" } else { "link" }
+                )
+            };
+            if design::message_with_action(ui, Tone::Info, &words, "Undo remove") {
+                book.undo_remove();
+            }
+        }
         // It goes when the DM moves on, or soon, so that it cannot undo the wrong event.
         self.just_added = self
             .just_added
@@ -480,7 +495,13 @@ impl TimelinePage {
         });
     }
 
-    fn detail(&mut self, ui: &mut egui::Ui, book: &mut Book, sessions: &[SessionLink]) {
+    fn detail(
+        &mut self,
+        ui: &mut egui::Ui,
+        book: &mut Book,
+        sessions: &[SessionLink],
+        notes: &mut crate::sessions::page::Sessions,
+    ) {
         let c = colors();
         let Some(id) = self
             .selected
@@ -561,23 +582,22 @@ impl TimelinePage {
             ui.label(Type::Heading.rich(ui, shown).color(c.text))
                 .on_hover_text(title);
         });
-        ui.horizontal(|ui| {
-            let (icon, word, color) = if blocked.is_some() {
-                (
-                    icons::WARN,
-                    if unsaved { "Unsaved" } else { "Saving blocked" },
-                    c.document.external,
-                )
-            } else if unsaved {
-                (icons::BUSY, "Saving…", c.document.unsaved)
-            } else {
-                (icons::OK, "Saved", c.document.clean)
-            };
-            design::status(ui, design::Status { icon, word, color });
-            if let Some(reason) = blocked {
-                ui.label(Type::Small.rich(ui, reason).color(c.muted));
-            }
-            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+        ui.allocate_ui_with_layout(
+            egui::vec2(ui.available_width(), Density::Read.control()),
+            egui::Layout::right_to_left(egui::Align::Center),
+            |ui| {
+                let (icon, word, color) = if blocked.is_some() {
+                    (
+                        icons::WARN,
+                        if unsaved { "Unsaved" } else { "Saving blocked" },
+                        c.document.external,
+                    )
+                } else if unsaved {
+                    (icons::BUSY, "Saving…", c.muted)
+                } else {
+                    (icons::OK, "Saved", c.document.clean)
+                };
+
                 let more = design::icon_button(
                     ui,
                     icons::EXPAND,
@@ -614,8 +634,12 @@ impl TimelinePage {
                     ui.ctx().copy_text(link.clone());
                     self.copied = Some((id.clone(), Instant::now()));
                 }
-            });
-        });
+                design::status(ui, design::Status { icon, word, color });
+            },
+        );
+        if let Some(reason) = blocked {
+            ui.label(Type::Small.rich(ui, reason).color(c.muted));
+        }
         design::rule(ui);
         let mut area = egui::ScrollArea::vertical()
             .id_salt(("timeline_detail", &id))
@@ -634,6 +658,8 @@ impl TimelinePage {
             if std::mem::take(&mut self.focus_title) {
                 title.request_focus();
             }
+            notes.event_link_offer(ui, book, &id);
+            let event = &mut book.events[index];
             ui.add_space(design::M);
             design::field(ui, "Kind", None, None, |ui| {
                 let inner = egui::ComboBox::from_id_salt("timeline_event_kind")
@@ -807,6 +833,11 @@ impl TimelinePage {
             self.scroll_to = book.events.iter().position(|event| event.id == id);
         }
         if removed {
+            self.just_added = None;
+            self.removed_mentions = sessions
+                .iter()
+                .filter(|session| session.mentions.contains(&id))
+                .count();
             book.remove(&id);
             self.selected = None;
         }
@@ -817,9 +848,9 @@ impl TimelinePage {
         ui: &mut egui::Ui,
         book: &mut Book,
         campaign_id: Uuid,
-        _campaign: &str,
         sessions: &[SessionLink],
         current: Option<Uuid>,
+        notes: &mut crate::sessions::page::Sessions,
     ) {
         let page_width = ui.available_width();
         // Only a real change: the first show can already have an event to reveal.
@@ -841,7 +872,29 @@ impl TimelinePage {
             } else {
                 format!(
                     "{} · Now: {}",
-                    design::count(book.events.len(), "event", "events"),
+                    if self.filter != Filter::All
+                        || !self.search.trim().is_empty()
+                        || self.session.is_some()
+                    {
+                        let days = day_numbers(&book.events);
+                        let shown = book
+                            .events
+                            .iter()
+                            .zip(days)
+                            .filter(|(event, day)| self.matches(event, *day))
+                            .count();
+                        format!(
+                            "{} of {}",
+                            if shown == 0 {
+                                "0".into()
+                            } else {
+                                design::count(shown, "", "")
+                            },
+                            design::count(book.events.len(), "event", "events")
+                        )
+                    } else {
+                        design::count(book.events.len(), "event", "events")
+                    },
                     clock_now(&book.events).map_or_else(|| "not set".to_owned(), clock_words)
                 )
             }),
@@ -925,13 +978,16 @@ impl TimelinePage {
                 {
                     self.selected = None;
                 }
-                self.detail(ui, book, sessions);
+                self.detail(ui, book, sessions, notes);
             } else {
+                notes.expire_event_link_undo(true, book);
+                notes.event_link_undo(ui);
                 self.list(ui, book, sessions);
             }
             return;
         }
         if !event_open {
+            notes.event_link_undo(ui);
             self.list(ui, book, sessions);
             return;
         }
@@ -941,14 +997,18 @@ impl TimelinePage {
                 left: design::S as i8,
                 ..Default::default()
             }))
-            .show_inside(ui, |ui| self.detail(ui, book, sessions));
+            .show_inside(ui, |ui| self.detail(ui, book, sessions, notes));
         egui::CentralPanel::default()
             // The panel's drag handle lies on this edge, so the rows stop short of it.
             .frame(egui::Frame::new().inner_margin(egui::Margin {
                 right: design::S as i8,
                 ..Default::default()
             }))
-            .show_inside(ui, |ui| self.list(ui, book, sessions));
+            .show_inside(ui, |ui| {
+                notes.expire_event_link_undo(true, book);
+                notes.event_link_undo(ui);
+                self.list(ui, book, sessions)
+            });
     }
 }
 

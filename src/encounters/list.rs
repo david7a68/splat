@@ -297,16 +297,38 @@ pub(super) fn in_progress_list(
                 .and_then(|event| event.session)
                 .and_then(|id| story.sessions.iter().find(|session| session.id == id));
             let context = session
-                .map(|session| session.label.clone())
+                .map(|session| {
+                    run.saved_at.map_or_else(
+                        || session.label.clone(),
+                        |at| {
+                            format!(
+                                "{} · {}",
+                                session.label,
+                                crate::encounter_run::calendar_time(at)
+                            )
+                        },
+                    )
+                })
                 .unwrap_or_else(|| {
-                    let created = std::fs::metadata(&run.path)
-                        .ok()
-                        .and_then(|metadata| metadata.created().ok())
-                        .and_then(|time| time.duration_since(std::time::UNIX_EPOCH).ok())
-                        .map(|time| time.as_secs())
-                        .or(run.saved_at);
+                    let created = run.saved_at;
+                    let same_day = created.is_some_and(|at| {
+                        page.in_progress.iter().any(|other| {
+                            other.path != run.path
+                                && other.encounter == run.encounter
+                                && other.saved_at.is_some_and(|other| {
+                                    crate::encounter_run::calendar_date(other)
+                                        == crate::encounter_run::calendar_date(at)
+                                })
+                        })
+                    });
                     created
-                        .map(crate::encounter_run::calendar_date)
+                        .map(|at| {
+                            if same_day {
+                                crate::encounter_run::calendar_time(run.saved_at.unwrap_or(at))
+                            } else {
+                                crate::encounter_run::calendar_date(at)
+                            }
+                        })
                         .unwrap_or_else(|| "Date unknown".into())
                 });
             detail.push_str(&format!(" · {context}"));
