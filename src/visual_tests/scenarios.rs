@@ -1645,7 +1645,7 @@ pub mod run_long_names {
         d.observe(
             "Long names",
             turn.as_deref() == Some(LONG_NAME)
-                && words.contains(&format!("{FIRST_NAME}’s turn"))
+                && words.contains(&format!("{FIRST_NAME}…’s turn"))
                 && size > row_size
                 && row_size.is_some(),
             format!(
