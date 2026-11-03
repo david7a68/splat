@@ -1655,63 +1655,153 @@ pub fn draft_comparison(ui: &mut Ui, draft: &str, disk: &str, id: impl std::hash
         group_label(&mut columns[1], "In the file now");
     });
     let height = ui.available_height();
-    egui::ScrollArea::vertical()
-        .id_salt(state)
-        .auto_shrink([false, false])
-        .show(ui, |ui| {
-            for line in 0..left.len().max(right.len()) {
-                let differs = left.get(line) != right.get(line);
-                let top = ui.cursor().top();
-                ui.columns(2, |columns| {
-                    for (at, lines) in [&left, &right].into_iter().enumerate() {
-                        egui::Frame::new()
-                            .fill(if differs {
-                                colors().selected
-                            } else {
-                                colors().page
-                            })
-                            .show(&mut columns[at], |ui| {
-                                ui.set_min_width(ui.available_width());
-                                ui.horizontal_top(|ui| {
-                                    let (mark, _) = ui.allocate_exact_size(
-                                        egui::vec2(XS, Type::Body.line()),
-                                        egui::Sense::hover(),
+    // Set the offset before painting. A scroll request inside the body takes effect
+    // on a later frame and can inherit the old reader's position on opening.
+    let column_width = (ui.available_width() - ui.spacing().item_spacing.x) / 2.0;
+    let text_width = column_width - XS - ui.spacing().item_spacing.x;
+    let heights: Vec<f32> = (0..left.len().max(right.len()))
+        .map(|line| {
+            [&left, &right]
+                .into_iter()
+                .map(|lines| {
+                    ui.fonts_mut(|fonts| {
+                        fonts.layout(
+                            lines.get(line).copied().unwrap_or("No line").to_owned(),
+                            Type::Body.font(ui),
+                            colors().text,
+                            text_width,
+                        )
+                    })
+                    .size()
+                    .y
+                    .max(Type::Body.line())
+                })
+                .fold(0.0, f32::max)
+                + ui.spacing().item_spacing.y
+        })
+        .collect();
+    let mut scroll = egui::ScrollArea::vertical().id_salt(state);
+    if let Some(line) = target {
+        scroll = scroll.vertical_scroll_offset(heights.iter().take(line.saturating_sub(2)).sum());
+    }
+    scroll.auto_shrink([false, false]).show(ui, |ui| {
+        for line in 0..left.len().max(right.len()) {
+            let differs = left.get(line) != right.get(line);
+            ui.columns(2, |columns| {
+                for (at, lines) in [&left, &right].into_iter().enumerate() {
+                    egui::Frame::new()
+                        .fill(if differs {
+                            colors().selected
+                        } else {
+                            colors().page
+                        })
+                        .show(&mut columns[at], |ui| {
+                            ui.set_min_width(ui.available_width());
+                            ui.horizontal_top(|ui| {
+                                let (mark, _) = ui.allocate_exact_size(
+                                    egui::vec2(XS, Type::Body.line()),
+                                    egui::Sense::hover(),
+                                );
+                                if differs {
+                                    ui.painter().vline(
+                                        mark.center().x,
+                                        mark.y_range(),
+                                        egui::Stroke::new(HAIRLINE_WIDTH, colors().accent),
                                     );
-                                    if differs {
-                                        ui.painter().vline(
-                                            mark.center().x,
-                                            mark.y_range(),
-                                            egui::Stroke::new(HAIRLINE_WIDTH, colors().accent),
-                                        );
-                                    }
-                                    ui.add(
-                                        egui::Label::new(
-                                            Type::Body
-                                                .rich(ui, lines.get(line).copied().unwrap_or(" ")),
-                                        )
-                                        .wrap(),
-                                    );
-                                });
+                                }
+                                ui.add(
+                                    egui::Label::new(
+                                        Type::Body
+                                            .rich(ui, lines.get(line).copied().unwrap_or("No line"))
+                                            .color(if lines.get(line).is_some() {
+                                                colors().text
+                                            } else {
+                                                colors().muted
+                                            }),
+                                    )
+                                    .wrap(),
+                                );
                             });
-                    }
-                });
-                if target == Some(line) {
-                    ui.scroll_to_rect(
-                        egui::Rect::from_min_size(
-                            egui::pos2(ui.min_rect().left(), top),
-                            egui::vec2(ui.available_width(), Type::Body.line()),
-                        ),
-                        Some(egui::Align::TOP),
-                    );
+                        });
                 }
-            }
-            ui.add_space((height - Type::Body.line()).max(0.0));
-        });
+            });
+        }
+        if heights.iter().sum::<f32>() > height {
+            ui.add_space((height - Type::Body.line() * 3.0).max(0.0));
+        }
+    });
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn first_draft_difference_is_visible_on_the_first_frame() {
+        for prefix in [0, 3, 50] {
+            let context = egui::Context::default();
+            super::super::theme::install(&context);
+            let context_lines = (0..prefix)
+                .map(|n| format!("Unchanged line {n}\n"))
+                .collect::<String>();
+            let draft = format!("{context_lines}My changed draft line");
+            let disk = format!("{context_lines}Changed elsewhere.\nExtra disk line");
+            let output = context.run(
+                egui::RawInput {
+                    screen_rect: Some(egui::Rect::from_min_size(
+                        egui::Pos2::ZERO,
+                        vec2(600.0, 300.0),
+                    )),
+                    ..Default::default()
+                },
+                |context| {
+                    egui::CentralPanel::default().show(context, |ui| {
+                        draft_comparison(ui, &draft, &disk, "new conflict")
+                    });
+                },
+            );
+            fn visible(shape: &egui::Shape, clip: egui::Rect, text: &str) -> bool {
+                match shape {
+                    egui::Shape::Text(shape) => {
+                        shape.galley.text() == text
+                            && clip.contains_rect(shape.visual_bounding_rect())
+                    }
+                    egui::Shape::Vec(shapes) => {
+                        shapes.iter().any(|shape| visible(shape, clip, text))
+                    }
+                    _ => false,
+                }
+            }
+            assert!(
+                output.shapes.iter().any(|shape| visible(
+                    &shape.shape,
+                    shape.clip_rect,
+                    "My changed draft line"
+                )),
+                "prefix {prefix}: first draft difference is out of view"
+            );
+            if prefix >= 2 {
+                assert!(
+                    output.shapes.iter().any(|shape| visible(
+                        &shape.shape,
+                        shape.clip_rect,
+                        &format!("Unchanged line {}", prefix - 2)
+                    )),
+                    "two context lines stay in view"
+                );
+            }
+            if prefix == 0 {
+                assert!(
+                    output.shapes.iter().any(|shape| visible(
+                        &shape.shape,
+                        shape.clip_rect,
+                        "No line"
+                    )),
+                    "missing lines need words"
+                );
+            }
+        }
+    }
 
     #[test]
     fn counts_use_separators_and_hide_zero() {

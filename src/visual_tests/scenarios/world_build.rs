@@ -60,6 +60,8 @@ pub fn broken(d: &mut Driver<'_>) {
         !d.has("1 note cannot be read") && fs::read_to_string(&path).unwrap() == fixed,
         "Saving repairs the note and removes the warning",
     );
+    d.wait_for_text("Note repaired.");
+    d.expect("The watchkeeper is back.");
     d.state("broken-note-repaired", Sizes::Default);
 
     fs::write(&path, "---\nsplat_schema: 1\nsplat_id: [\n---\n").unwrap();
@@ -112,7 +114,7 @@ pub fn places(d: &mut Driver<'_>) {
     .unwrap();
     reload(d);
     d.click(NAV_WORLD);
-    d.click_containing("Rook Ambry · NPC");
+    d.click_containing("Rook Ambry · ");
     d.observe(
         "W3",
         d.has("Ashfall Keep") && d.has("Change Stat block") && d.has("Change In"),
@@ -152,10 +154,10 @@ pub fn places(d: &mut Driver<'_>) {
         "Here and Mentioned in show the people and notes at a place",
     );
     d.state("place-here-and-mentions", Sizes::All);
-    d.click_containing("Loop One · Location");
+    d.click_containing("Loop One · ");
     d.observe(
         "World places",
-        d.visible_text("its place is inside itself"),
+        d.visible_text("Loop One is in Loop Two"),
         "A place loop remains visible and says why",
     );
     d.state("place-loop", Sizes::All);
@@ -237,7 +239,8 @@ pub fn tables(d: &mut Driver<'_>) {
         "A valid range accepts a typed roll and shows the matched row",
     );
     d.state("authored-table-typed-roll", Sizes::All);
-    d.scroll_at(READER, 5);
+    d.scroll_until(READER, "Gap", 12);
+    d.wait_for_text("Gap");
     d.state("authored-table-gap-and-overlap", Sizes::All);
     d.observe(
         "World table author",
@@ -271,4 +274,104 @@ pub fn generator(d: &mut Driver<'_>) {
         "A bad campaign table states why the built-in list stands in",
     );
     d.state("generator-bad-table", Sizes::All);
+    d.click("Open Names.md");
+    d.wait_for_text("Names");
+    d.observe(
+        "W9",
+        d.has("Close Lookup") && !d.has("New NPC \"Names.md\""),
+        "The warning opens its source note in Lookup",
+    );
+}
+
+/// The NPC keeps both reference links beside a live fight.
+pub fn npc_in_lookup(d: &mut Driver<'_>) {
+    let modules = d.app_mut().campaigns.modules().to_vec();
+    let campaign = d.app_mut().campaigns.active_campaign();
+    let catalogue = crate::content_workspace::Catalogue::load(&modules, campaign.as_ref()).unwrap();
+    let guard = catalogue
+        .entries
+        .values()
+        .find(|i| i.entry.name == "Guard")
+        .unwrap()
+        .entry
+        .id;
+    let place = entry(d, "Locations/Watch House.md", "Watch House", "location", "");
+    entry(
+        d,
+        "NPCs/Rook Ambry.md",
+        "Rook Ambry",
+        "npc",
+        &format!("  creature: {{id: {guard}}}\n  in: {{id: {place}}}\n"),
+    );
+    reload(d);
+    resume_run_from_cold_start(d);
+    look_up(d, "Rook Ambry");
+    d.wait_for_text("Fights as");
+    d.expect("Watch House");
+    d.observe(
+        "W2",
+        d.in_view(NEXT_TURN) && d.has("Guard") && !d.has("Change Stat block"),
+        "The compact NPC reader shows its stat block and place beside the run",
+    );
+    d.state("npc-with-stat-block-and-place", Sizes::All);
+    d.begin_task();
+    d.click("Guard");
+    d.wait_for_text("ARMOR CLASS");
+    d.audit_goal_within("W2", "read an NPC stat block beside the run", 1);
+    d.state("npc-stat-block-link", Sizes::All);
+    d.click("Back");
+    d.click("Watch House");
+    d.wait_for_text("Rook Ambry (NPC)");
+    d.state("npc-place-link", Sizes::All);
+}
+
+/// A rename on disk keeps an identity-based package link working.
+pub fn package_rename(d: &mut Driver<'_>) {
+    let package = d.root.join("modules/ashen-marches");
+    let (entries, _) = splat::content::read_directory(&package).unwrap();
+    let target = entries.iter().find(|e| e.name == "Ashfall").unwrap();
+    let path = package.join("Rules/Ash Exposure.md");
+    let original = fs::read_to_string(&path).unwrap();
+    let reading = serde_yaml_ng::to_value(serde_json::json!({"title": "Ash Exposure", "summary": "The watch knows this spell.", "related": { target.id.to_string(): "Read the watch spell" }})).unwrap();
+    fs::write(
+        &path,
+        crate::content_workspace::patch_fields(&original, &[("splat_reading", Some(reading))])
+            .unwrap(),
+    )
+    .unwrap();
+    go_library(d);
+    d.open_combo_at(LIBRARY_PACKAGE_DROPDOWN);
+    d.click(MODULE);
+    d.click_starting("Ash Exposure · ");
+    d.wait_for_text("Read the watch spell");
+    d.state("before-linked-entry-rename", Sizes::All);
+    let old_path = package.join(&target.path);
+    let renamed = crate::content_workspace::patch_fields(
+        &fs::read_to_string(&old_path).unwrap(),
+        &[("splat_name", Some("Watch Ashfall".into()))],
+    )
+    .unwrap();
+    fs::write(package.join("Spells/Watch Ashfall.md"), renamed).unwrap();
+    fs::remove_file(old_path).unwrap();
+    d.click("Packages");
+    d.click("Reload from disk");
+    d.wait_for_text("Read the watch spell");
+    d.click("Read the watch spell");
+    d.wait_for_text("Watch Ashfall");
+    d.state("linked-entry-renamed-on-disk", Sizes::All);
+}
+
+pub fn package_about(d: &mut Driver<'_>) {
+    go_library(d);
+    d.open_combo_at(LIBRARY_PACKAGE_DROPDOWN);
+    d.click(MODULE);
+    d.click("About Ashen Marches");
+    d.wait_for_text("Ashen Marches");
+    d.state("package-about", Sizes::All);
+    d.click(EDIT_MARKDOWN);
+    d.type_into_editor("A package for the watch at Emberfall.\n");
+    d.click("Save");
+    d.click("Read");
+    d.wait_for_text("A package for the watch at Emberfall.");
+    d.state("package-about-edited", Sizes::All);
 }

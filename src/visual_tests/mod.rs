@@ -43,7 +43,7 @@ const BASELINE_PATH: &str = "src/visual_tests/baseline.json";
 
 type Script = fn(&mut Driver<'_>);
 
-const SCENARIOS: [(&str, Seed, Script); 51] = [
+const SCENARIOS: [(&str, Seed, Script); 54] = [
     (
         "package-to-table",
         Seed::Campaign,
@@ -185,6 +185,21 @@ const SCENARIOS: [(&str, Seed, Script); 51] = [
         "world-broken-note",
         Seed::World,
         scenarios::world_build::broken,
+    ),
+    (
+        "npc-in-lookup",
+        Seed::Campaign,
+        scenarios::world_build::npc_in_lookup,
+    ),
+    (
+        "package-rename",
+        Seed::Campaign,
+        scenarios::world_build::package_rename,
+    ),
+    (
+        "package-about",
+        Seed::Campaign,
+        scenarios::world_build::package_about,
     ),
     ("world-places", Seed::World, scenarios::world_build::places),
     (

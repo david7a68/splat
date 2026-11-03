@@ -194,7 +194,7 @@ control still has an accessible name and a tooltip.
 discard` stays until the next edit. It stands apart from `Save`, and it shows only when
 there is something to discard. A session note changed on disk shows the draft and disk text side by side in the Write view’s styled source face. Text wraps at word boundaries. A selected surface and a line mark identify differing lines. The choices stay above the comparison, which uses the whole session body while the plan is hidden. A file that changed on disk stops saving and asks: the run
 offers `Replace the file with this run` and `Save as a new run`, and a Library note offers `Overwrite with my
-draft` and the separate red `Reload and lose my draft`. Library uses the same side-by-side comparison, with `N lines differ` and `Next difference`. Neither choice has an accent fill. One message says: “This note changed on disk. Your draft is safe until you choose.” These messages cannot be dismissed.
+draft` and the separate red `Reload and lose my draft`. Library uses the same side-by-side comparison, with `N lines differ` and `Next difference`. Both comparisons open with the first difference and two lines of context in view. A missing line says `No line`. Neither choice has an accent fill. One message says: “This note changed on disk. Your draft is safe until you choose.” These messages cannot be dismissed.
 
 ## The Reader
 
@@ -209,8 +209,8 @@ Imported rules text is reflowed for reading, and the stored note is never change
 `design::reader::run_in_title` finds a named paragraph (`Acid Breath (Recharge 5–6).`), and
 only that turns bold. A title-case line above prose is a heading. Three or more rows of
 numbers, or of a name and a number, become a table. `presentation::reading_tests` runs these
-rules over every built-in note, so a fault cannot come back unseen. A window wide enough
-moves the rarely wanted sections (source, engine support, technical details) to a margin.
+rules over every built-in note, so a fault cannot come back unseen. Collapsed source, engine support and technical details follow the body in its scroll area.
+Here and Mentioned in stay above them, at the reader measure.
 
 ## The session's plan
 
@@ -408,7 +408,7 @@ An incoming sheet change removes only undo steps for that character. Remaining s
 
 Campaign repair opens at the reader measure, with the invalid-note reason above it. Needed by your entries is an item below the packages in the left column. Its right pane has one search and one list; rows open Lookup. Short package lists shrink to their rows. Invalid YAML marks the line to fix and uses plain words. A rolled World table selects the matching row, marks it with a dice icon, and states the result below in UI sans.
 
-Library keeps search and the selected result when its scope changes. Empty categories and their headings stay hidden. Scope buttons use short words. Library shows Back only when its reader replaces the list. Alt+Left returns through its reading history in either layout. An empty reader says No entry open or No note open, then “Choose one from the list, or make a new one.” Empty campaign entries have one New entry action.
+Library keeps search and the selected result when its scope changes. Empty categories and their headings stay hidden. Scope buttons use short words. Library shows quiet Back with its Alt+Left hint whenever it has reading history, in every layout. Reader links use accent text and an underline. Links in Library open in place; links in other readers open in Lookup. An empty reader says No entry open or No note open, then “Choose one from the list, or make a new one.” Empty campaign entries have one New entry action.
 
 Inline creation forms use a Label title, fields, then a named Create action, its Small blocked reason, an L gap, and quiet Cancel. A Library draft states its cause once in the existing save row; controls that share the cause use its hover text. Typing never inserts a line above the editor. Campaign save state also belongs only in its save row. Lookup Back and Open in Library share the title line. Plain World notes use one-line rows. A typed table roll has the well fill, a centred placeholder, and the dice as its column heading. Fixed table headers cover passing rows with page fill and a hairline.
 
@@ -458,3 +458,13 @@ Every reader resolves `[[Name]]`, `[[Name#Heading]]` and `[[Name|text]]` against
 A package manifest opens from About followed by its name. It is not an entry row. Creation forms show their destination path. Creating a package opens its first entry form. Folder suggestions include existing folders, and saving can create a new subfolder. Reader pictures are 64 px thumbnails beside the title and meta line. Run-in titles use bold text. Sheet tabs use Small as a second level.
 
 An unavailable package keeps its last known display name in the campaign selection. Older selections without a name say A package that is no longer on this computer. The message counts affected campaign entries when the selected references are known, with Remove from this campaign and Find the folder… beside it. The folder picker checks the package identity before restoring its registration. Only Technical details shows its ID.
+
+Package and campaign readers keep their owner status in both Read and Edit Markdown.
+Their file line offers Show file; entries in a vault also offer Edit in Obsidian.
+Folder is one editable field with a suggestion menu, followed by its help line.
+New packages default to the parent of the last registered package.
+A completed copy says where it went and keeps its path in hover text.
+Share both copies a campaign dependency with its entry and reconnects the new references.
+The warning action copies and reconnects one dependency. Undo restores the reference and removes the unchanged copy.
+A compact NPC reader shows Fights as and In on one read-only line; both names open in Lookup.
+Lookup keeps Back and its close icon on the title line, with Clear beside search.

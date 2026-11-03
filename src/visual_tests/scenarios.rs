@@ -113,10 +113,10 @@ pub mod library_browse {
         d.click_containing(LINKED_ROW);
         d.click(LINK);
         d.state("followed-link", Sizes::Default);
-        let wide_toolbar = !d.has("Back");
+        let wide_toolbar = d.has("Back") && d.visible_text("Alt+Left");
         let away = !d.in_view(LINKED_TITLE);
         let before = d.interaction_count();
-        d.press_alt(Key::ArrowLeft);
+        d.click("Back");
         let cost = d.interaction_count() - before;
         d.observe(
             "T6.2",
@@ -125,7 +125,7 @@ pub mod library_browse {
                 && cost == 1
                 && d.in_view(LINKED_TITLE)
                 && d.has_containing(SEARCH_RESULTS),
-            "Alt+Left returns to the prior entry and its search in 1; the wide toolbar omits Back",
+            "Back returns to the prior entry and its search in one click, with Alt+Left shown",
         );
         d.state("back-after-link", Sizes::Default);
         d.begin_task();
@@ -377,24 +377,40 @@ pub mod library_navigation {
         d.click(MODULE);
         d.click_starting("Ash Exposure · ");
         d.state("homebrew-reference", Sizes::All);
+        d.click("Copy Captain Varra to Ashen Marches");
+        d.wait_for_text("Dependency copied and linked.");
+        d.observe(
+            "W1",
+            !d.visible_text("Captain Varra is in this campaign only."),
+            "Copying the dependency also reconnects the package entry",
+        );
+        d.state("dependency-copy-reconnected", Sizes::All);
+        d.click("Undo dependency copy");
+        d.wait_for_text("Captain Varra is in this campaign only.");
         d.click("Wiki Captain Varra");
         d.expect("The last commander of the Emberfall watch.");
-        d.state("wiki-link-beside-library", Sizes::All);
-        d.press(Key::Escape);
+        d.observe(
+            "C4",
+            !d.has("Close Lookup"),
+            "A wiki link opens in the Library reader",
+        );
+        d.state("wiki-link-in-library", Sizes::All);
+        d.click("Back");
         d.click("Read Captain Varra");
         d.expect("The last commander of the Emberfall watch.");
         d.state("reference-outside-package", Sizes::All);
         d.observe(
             "Library toolbar",
-            !d.has("Back"),
-            "The visible list supplies navigation; the reader has no redundant Back action",
+            d.has("Back") && d.visible_text("Alt+Left"),
+            "The reader offers Back and its keyboard hint in every layout",
         );
         d.click(EDIT_MARKDOWN);
         d.type_into_editor("Varra now carries a silver sword. ");
         d.state("draft-with-history", Sizes::All);
         d.observe(
             "Draft safety",
-            !d.has("Back")
+            d.has("Back")
+                && d.is_disabled("Back")
                 && d.editor_text()
                     .is_some_and(|text| text.contains("silver sword")),
             "The editor keeps its draft beside the list",
@@ -745,6 +761,13 @@ pub mod party {
             d.page_title().as_deref() == Some("Settings")
                 && d.focused_name().as_deref() == Some("Paste session cookie"),
             "Connect to refresh opens Settings with the cookie field focused",
+        );
+        d.click("Paste session cookie");
+        d.wait_for_text("Paste session cookie");
+        d.observe(
+            "Coverage",
+            d.focused_name().as_deref() == Some("Paste session cookie"),
+            "The cookie field is focused before capture",
         );
         d.state("connect-to-refresh", Sizes::Default);
     }
@@ -1306,15 +1329,19 @@ pub mod dialogs {
         d.click("Destination");
         d.state("copy-destination-menu", Sizes::Default);
         d.click(&format!("Campaign · {CAMPAIGN}"));
-        d.expect("Will create");
-        d.state("copy-review", Sizes::All);
+        d.state_prepared("copy-review", Sizes::All, |d| {
+            if d.field_text("Copy name").as_deref() != Some("Watch Aboleth") {
+                d.replace_text_in("Copy name", "Watch Aboleth");
+            }
+            d.wait_for_text("Watch Aboleth.md");
+        });
         d.observe(
             "Copy review actions",
             d.in_view("Create copy") && d.in_view("Cancel") && !d.has("Review copy"),
             "The review ends in one row of actions",
         );
         d.click(CREATE_COPY);
-        d.expect("Saved: ");
+        d.expect("Copied to ");
         d.state("copy-complete", Sizes::Default);
         d.click("Edit the copy");
         d.expect("Markdown editor");
@@ -2479,7 +2506,7 @@ pub mod party_from_run {
         d.click_row(MEMBER);
         d.state("zero-hp-selected", Sizes::Default);
         d.click("Correct");
-        d.expect("Death save successes");
+        d.expect("Death saves");
         d.click("Add a death save success");
         d.observe(
             "Death saves",
@@ -2779,6 +2806,8 @@ pub mod column_resize {
         );
         d.state("session-read-fills-its-column", Sizes::All);
         d.click("Add Major event");
+        d.wait_for_text("Major event added to Session");
+        d.wait_for_text("Add to notes: Major event");
         let action = d
             .nodes()
             .into_iter()
@@ -4016,7 +4045,7 @@ pub mod world {
         d.state("world-heading-beside-run", Sizes::All);
 
         d.clear_text_in(SEARCH_LOOKUP);
-        d.click("Close entry");
+        d.click("Clear");
         d.click("Generate NPC");
         d.expect("Save NPC");
         d.observe(
@@ -4116,11 +4145,13 @@ pub mod session_notes {
 
         // A rest, on the session's own page, with no step away from it.
         show_plan(d);
+        d.wait_for_text("Nothing planned yet.");
         d.state("session-events-empty", Sizes::Default);
         d.begin_task();
         d.click(ADD_LONG_REST);
         d.goal_within("T11.2", "put a long rest on the timeline", 2);
         d.expect("Long rest added. Everyone starts the next fight at full.");
+        d.wait_for_text("Long rest added. Everyone starts the next fight at full.");
         d.state("session-event-added", Sizes::Default);
         d.click(ADD_SHORT_REST);
         d.observe(
@@ -4607,7 +4638,7 @@ pub mod session_notes {
         d.click("Death saves");
         d.observe(
             "T11.8",
-            !d.has("Close notes") && d.has("Death save successes"),
+            !d.has("Close notes") && d.has("Death saves"),
             "Death saves show, in place of the notes, when both have no room",
         );
         d.click_containing("Undo: 99 damage");
@@ -6086,6 +6117,7 @@ pub mod session_plan {
         d.type_into("Session title", "The Crossing");
         d.click("Create session");
         d.expect("Session 2: The Crossing");
+        d.wait_for_text("Hobb the miller says");
         d.state("new-session-with-last-time", Sizes::All);
         d.observe(
             "T12.6",
@@ -6097,6 +6129,7 @@ pub mod session_plan {
 
         // T12.1: from the plan to the fight, and back to the plan.
         show_plan(d);
+        d.wait_for_text("Nothing planned yet.");
         d.state("plan-empty", Sizes::Default);
         for name in [FIRST, SECOND] {
             d.click("Add a fight");
@@ -6587,33 +6620,40 @@ pub mod share_to_package {
         d.click(COPY_TO);
         d.click("Destination");
         d.click(&format!("Package · {MODULE}"));
-        d.expect("requires private campaign entry");
+        d.wait_for_text("Watch Orders needs Captain Varra, which is in this campaign only.");
         d.state("private-dependency-blocks-sharing", Sizes::All);
-        d.observe(
-            "W18b",
-            !d.has(CREATE_COPY),
-            "Sharing cannot leave a package dependent on a private campaign entry",
-        );
-        d.click("Cancel");
-        d.clear_text_in(SEARCH_LIBRARY);
-        d.type_into(SEARCH_LIBRARY, "Captain Varra");
-        d.click_starting("Captain Varra · ");
-        d.click(COPY_TO);
-        d.click("Destination");
-        d.click(&format!("Package · {MODULE}"));
-        d.type_into("Subfolder", "Watch/Captains");
-        d.expect("Use in this campaign");
+        d.wait_for_text("Also copies");
+        d.type_into("Folder", "Watch/Captains");
+        d.wait_for_text("Watch/Captains/Watch Orders.md");
         d.state("share-to-new-folder", Sizes::All);
-        d.click(CREATE_COPY);
-        d.expect("Saved:");
+        d.click("Share both");
+        d.wait_for_text("Copied to Ashen Marches as Watch Orders.");
+        let package = d.root.join("modules/ashen-marches");
+        let (entries, errors) = splat::content::read_directory(&package).unwrap();
+        assert!(errors.is_empty());
+        let orders = entries.iter().find(|e| e.name == "Watch Orders").unwrap();
+        let captain = entries.iter().find(|e| e.name == "Captain Varra").unwrap();
         d.observe(
-            "W11",
-            d.root
-                .join("modules/ashen-marches/Watch/Captains/Captain Varra.md")
-                .is_file(),
-            "Creating the copy also creates its subfolder",
+            "W1",
+            splat::content::required_references(orders).unwrap()
+                == vec![splat::content::Reference::Id(captain.id)]
+                && captain.id != varra.id,
+            "Share both copies the dependency and reconnects the new entry",
         );
-        d.state("shared-copy-created", Sizes::Default);
+        d.state("shared-copy-created", Sizes::All);
+        d.click("Close");
+        d.open_combo_at(LIBRARY_PACKAGE_DROPDOWN);
+        d.click(MODULE);
+        d.clear_text_in(SEARCH_LIBRARY);
+        d.type_into(SEARCH_LIBRARY, "Watch Orders");
+        d.click_starting("Watch Orders · ");
+        d.wait_for_text("Watch Orders");
+        d.observe(
+            "W1",
+            !d.visible_text("is in this campaign only"),
+            "The shared entry has no campaign dependency warning",
+        );
+        d.state("shared-entry-ready", Sizes::All);
     }
 }
 

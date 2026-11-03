@@ -26,6 +26,7 @@ pub struct CopyDialog {
     pub edit_copy: Option<splat::content::Entry>,
     focus_name: bool,
     not_used: bool,
+    completed_path: Option<PathBuf>,
     /// The DM chose to add the copy to the open draft.
     pub add_to_draft: Option<Uuid>,
 }
@@ -68,6 +69,7 @@ impl CopyDialog {
             edit_copy: None,
             focus_name: true,
             not_used: false,
+            completed_path: None,
             add_to_draft: None,
         }
     }
@@ -102,7 +104,12 @@ impl CopyDialog {
                 );
             }
             if let Some(message) = &self.completed {
-                design::message(ui, Tone::Success, message);
+                let response = ui
+                    .scope(|ui| design::message(ui, Tone::Success, message))
+                    .response;
+                if let Some(path) = &self.completed_path {
+                    response.on_hover_text(path.display().to_string());
+                }
                 ui.horizontal(|ui| {
                     if let (Some(id), Some(draft)) = (self.copied_creature, &self.draft) {
                         let label = format!("Add to {draft}");
@@ -138,7 +145,15 @@ impl CopyDialog {
                 });
             }
             if let Some(error) = &self.error {
-                design::message(ui, Tone::Error, error);
+                design::message(
+                    ui,
+                    if error.contains("which is in this campaign only") {
+                        Tone::Warning
+                    } else {
+                        Tone::Error
+                    },
+                    error,
+                );
             }
             let destinations: Vec<(bool, Uuid, String, PathBuf, Option<Campaign>)> = campaigns
                 .modules()
@@ -194,13 +209,7 @@ impl CopyDialog {
                 .iter()
                 .find(|(c, id, ..)| Some((*c, *id)) == self.destination)
             {
-                crate::library::folder_field(
-                    ui,
-                    "Subfolder",
-                    &mut self.folder,
-                    &destination.3,
-                    None,
-                );
+                crate::library::folder_field(ui, "Folder", &mut self.folder, &destination.3, None);
                 if !destination.0 && campaigns.active_campaign().is_some() {
                     crate::library::use_checkbox(
                         ui,
@@ -243,7 +252,25 @@ impl CopyDialog {
                         self.plan = Some(plan);
                         self.error = None;
                     }
-                    Err(e) => self.error = Some(e),
+                    Err(error) => {
+                        if error.contains("which is in this campaign only") {
+                            match CopyPlan::prepare_sharing(
+                                &self.source,
+                                &destination.3,
+                                &self.name,
+                                &self.folder,
+                                self.catalogue.as_ref().unwrap(),
+                            ) {
+                                Ok(plan) => {
+                                    self.plan = Some(plan);
+                                    self.error = Some(error);
+                                }
+                                Err(error) => self.error = Some(error),
+                            }
+                        } else {
+                            self.error = Some(error);
+                        }
+                    }
                 }
             }
             if self.plan.is_none() {
@@ -264,15 +291,15 @@ impl CopyDialog {
                     ))
                     .wrap(),
                 );
+                for dependency in &plan.shared {
+                    ui.label(format!("Also copies {}", dependency.relative));
+                }
                 if plan.dependencies.is_empty() {
                     ui.label("No required dependencies");
                 } else {
                     design::section(
                         ui,
-                        format!(
-                            "Dependencies kept as references: {}",
-                            plan.dependencies.len()
-                        ),
+                        format!("Required entries: {}", plan.dependencies.len()),
                         |ui| {
                             for d in &plan.dependencies {
                                 ui.label(d);
@@ -289,7 +316,13 @@ impl CopyDialog {
                 }
                 let mut create = false;
                 ui.horizontal(|ui| {
-                    create = Action::primary("Create copy").show(ui).clicked();
+                    create = Action::primary(if plan.shared.is_empty() {
+                        "Create copy"
+                    } else {
+                        "Share both"
+                    })
+                    .show(ui)
+                    .clicked();
                     if Action::quiet("Cancel").show(ui).clicked() {
                         close = true;
                     }
@@ -341,7 +374,18 @@ impl CopyDialog {
                                     .map(|entry| entry.id);
                             self.copied_entry =
                                 splat::content::Entry::parse(&plan.relative, &plan.text).ok();
-                            self.completed = Some(format!("Saved: {}", plan.relative));
+                            let destination_name = destinations
+                                .iter()
+                                .find(|(c, id, ..)| Some((*c, *id)) == self.destination)
+                                .map(|d| {
+                                    d.2.split_once(" · ").map_or(d.2.as_str(), |(_, name)| name)
+                                })
+                                .unwrap_or("the destination");
+                            self.completed = Some(format!(
+                                "Copied to {destination_name} as {}.",
+                                self.name.trim()
+                            ));
+                            self.completed_path = Some(plan.root.join(&plan.relative));
                             self.refresh = Some(plan.root.clone());
                             self.error = None;
                         }

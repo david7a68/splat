@@ -162,7 +162,7 @@ impl Tables {
                         tables.sources.push(format!("{key}: {path}"));
                     }
                     Err(error) => tables.problems.push(format!(
-                        "{key} in {path} cannot be used, so the built-in list stands in. {error}"
+                        "{path}: {key} cannot be used, so the built-in list stands in. {error}"
                     )),
                 }
             }
@@ -271,7 +271,7 @@ mod tests {
         let note = "<!-- splat:rolls key=npc-name dice=1d6 -->\n\n| d6 | Name |\n|---|---|\n| 1 | Tally |\n";
         let tables = Tables::read([("Names.md", note)]);
         assert_eq!(tables.problems.len(), 1);
-        assert!(tables.problems[0].contains("npc-name in Names.md"));
+        assert!(tables.problems[0].contains("Names.md: npc-name"));
         let npc = generate(&tables, &mut Random::seeded(3)).unwrap();
         assert!(NAMES.contains(&npc.name.as_str()));
     }

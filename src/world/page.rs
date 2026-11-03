@@ -1,5 +1,5 @@
 //! The World page: what is true in this world. One list of notes and entries, and the Reader.
-use super::{Nav, Reader, world_type};
+use super::{Nav, Reader};
 use crate::{
     design::{self, Type, colors, icons},
     lookup::{ContentIndex, WorldGroups},
@@ -31,6 +31,7 @@ pub struct WorldPage {
     generator_problems: Vec<String>,
     generator_sources: Vec<String>,
     error: Option<String>,
+    repaired: Option<Uuid>,
 }
 
 impl WorldPage {
@@ -244,6 +245,8 @@ impl WorldPage {
             .show_inside(ui, |ui| {
                 if let Some(repair) = &mut self.repair {
                     if repair.show(ui, campaign) {
+                        self.selected = repair.entry_id();
+                        self.repaired = self.selected;
                         self.repair = None;
                         self.reload = true;
                     }
@@ -272,6 +275,16 @@ impl WorldPage {
                     .id_salt(("world_reader", item.entry.id))
                     .auto_shrink([false, false])
                     .show(ui, |ui| {
+                        if self.repaired == Some(item.entry.id) {
+                            design::status(
+                                ui,
+                                design::Status {
+                                    icon: icons::OK,
+                                    word: "Note repaired.",
+                                    color: colors().document.saved,
+                                },
+                            );
+                        }
                         let read = self.reader.read(ui, item, index, Some(campaign));
                         nav = nav.take().or(read);
                     });
@@ -417,7 +430,7 @@ impl WorldPage {
                 let entry = &index.items[position].entry;
                 let detail = if entry.kind == "world" {
                     match super::status(entry) {
-                        "" => super::type_label(world_type(entry)),
+                        "" => String::new(),
                         status => status.to_owned(),
                     }
                 } else {

@@ -2787,21 +2787,14 @@ impl Run {
             ui.set_min_height(Density::Read.control());
             ui.spacing_mut().item_spacing.x = design::XS;
             ui.label(Type::Small.rich(ui, "Death saves").color(c.text));
-            let (mut good, mut bad) = (successes, failures);
-            for (count, icon, name) in [
-                (&mut good, icons::OK, "Death save successes"),
-                (&mut bad, icons::CLOSE, "Death save failures"),
-            ] {
-                let response = ui.add(
-                    egui::DragValue::new(count)
-                        .range(0..=3)
-                        .suffix(format!(" {icon}")),
-                );
-                design::named(ui, &response, name);
-            }
-            if good != successes || bad != failures {
-                command = Some(Command::DeathSaves(index, good, bad));
-            }
+            ui.label(
+                Type::Small
+                    .rich(
+                        ui,
+                        format!("{successes} {} · {failures} {}", icons::OK, icons::CLOSE),
+                    )
+                    .color(c.text),
+            );
             if Action::quiet("+ Success")
                 .name("Add a death save success")
                 .density(Density::Read)
@@ -3053,11 +3046,12 @@ impl Run {
                     let text = self.setup_inputs.entry(index).or_default();
                     let total = text.trim().parse::<i64>().ok();
                     ui.horizontal(|ui| {
+                        ui.add_sized(vec2(design::L * 6.0, Density::Read.control()), egui::Label::new(Type::Body.rich(ui, "Initiative")).halign(Align::LEFT));
                         let response = design::number_field(
                             ui,
                             &field,
                             text,
-                            "Init",
+                            "Total",
                             72.0,
                             Density::Read.control(),
                         );
@@ -4337,7 +4331,7 @@ impl RowLayout {
         let mut add = |text: &str, color: egui::Color32| {
             if !first {
                 job.append(
-                    " · ",
+                    "\u{a0}· ",
                     0.0,
                     egui::TextFormat {
                         font_id: font.clone(),
@@ -4839,7 +4833,7 @@ fn optional_number(
     ui.horizontal(|ui| {
         ui.add_sized(
             vec2(design::L * 6.0, Density::Read.control()),
-            egui::Label::new(Type::Body.rich(ui, label).color(colors().text)),
+            egui::Label::new(Type::Body.rich(ui, label).color(colors().text)).halign(Align::LEFT),
         );
         if let Some(n) = value {
             let response = ui.add(egui::DragValue::new(n).range(range));
