@@ -100,7 +100,7 @@ or set `SPLAT_VISUAL_CONTACT_SHEET=1` to make it with a full `visual-test` run.
 
 Library has **New entry** in its header. Its form opens in the reader column and closes after creation. World has **New ▾** for a plain note, a note with a type, an NPC, a location, or a generated NPC. List headings use capitals and a count. Page headers show state or nonzero counts beside the title, with a rule and an `L` gap below. Counts use thousands separators.
 
-The `gallery` scenario captures every design token and component, including page headers, blocked reasons, full rows with menus, paused runs and message actions. The `missing-glyph` check rejects painted characters missing from the app fonts. The
+The `gallery` scenario captures every design token and component, including page headers, blocked reasons, full rows with menus, save rows, discard recovery, the Add strip, paused runs and message actions. Each scroll capture adds a section to the evidence. The `missing-glyph` check rejects painted characters missing from the app fonts. The
 `clipped` check also catches text partly covered by a later opaque pane. `src/design/lint.rs` fails on raw
 colours, text sizes and raw icon text outside `src/design/`, and `src/design/tokens.rs` tests WCAG contrast.
 
@@ -207,6 +207,10 @@ Failed requests retain the cache. Replacing or removing a link clears its name;
 late responses cannot apply an old name to a new link.
 
 ## Sessions and the timeline
+
+On a wide page, the plan takes 40% of the available width, between 330 and 480 px.
+The recording count is part of the Recordings tab. Timeline puts its save state,
+Copy link and menu on the title line when they fit, and below it when they do not.
 
 **Session** is the page for tonight. Beside the note, a plan lists what has happened in this session, then the fights
 still to come. **Fight** adds a saved encounter to the plan, or starts a new one, as a line such as `- [[Bridge Ambush]]`

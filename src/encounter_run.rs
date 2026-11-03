@@ -3261,9 +3261,7 @@ pub struct Carry {
 pub struct FightSummary {
     /// Combat ended, so these are the final values. A run can also be closed mid-fight.
     pub ended: bool,
-    pub outcome: String,
     pub end_reason: String,
-    pub round: u64,
     pub rows: Vec<FightRow>,
     pub log: Vec<String>,
 }
@@ -3308,12 +3306,7 @@ pub fn fight_summary(path: &Path, campaign: Uuid) -> Result<FightSummary, String
     let state = read_saved(path, campaign)?.state;
     Ok(FightSummary {
         ended: matches!(state.phase, Phase::Ended { .. }),
-        outcome: match &state.phase {
-            Phase::Ended { outcome } => outcome.clone(),
-            _ => String::new(),
-        },
         end_reason: "Ended manually".to_owned(),
-        round: state.round,
         rows: state
             .order
             .iter()
