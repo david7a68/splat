@@ -1344,15 +1344,50 @@ fn section_heading(ui: &mut egui::Ui, title: &str) {
 }
 const TILE_WIDTH: f32 = 112.0;
 
+fn tile_columns(room: f32, gap: f32) -> usize {
+    [6, 3]
+        .into_iter()
+        .find(|n| *n as f32 * (TILE_WIDTH + gap) <= room)
+        .unwrap_or(2)
+}
+
+fn sheet_column_widths(room: f32, gap: f32) -> Vec<f32> {
+    let spans: &[usize] = match tile_columns(room, gap) {
+        6 => &[2, 2, 2],
+        3 => &[2, 1],
+        _ => &[1, 1],
+    };
+    spans
+        .iter()
+        .map(|span| *span as f32 * (TILE_WIDTH + gap) - gap)
+        .collect()
+}
+
+fn sheet_columns(ui: &mut egui::Ui, count: usize, mut row: impl FnMut(&mut egui::Ui, usize)) {
+    let widths = sheet_column_widths(ui.available_width(), ui.spacing().item_spacing.x);
+    let rows = count.div_ceil(widths.len());
+    ui.horizontal_top(|ui| {
+        for (column, width) in widths.into_iter().enumerate() {
+            ui.allocate_ui_with_layout(
+                egui::vec2(width, 0.0),
+                egui::Layout::top_down(egui::Align::Min),
+                |ui| {
+                    ui.set_width(width);
+                    for at in column * rows..((column + 1) * rows).min(count) {
+                        row(ui, at);
+                    }
+                },
+            );
+        }
+    });
+}
+
 /// A row of stat tiles that breaks evenly: six across, or three, or two. A lone tile on a
 /// second line reads as a different kind of value.
 fn tiles(ui: &mut egui::Ui, add: impl FnOnce(&mut egui::Ui)) {
     let each = TILE_WIDTH + ui.spacing().item_spacing.x;
     let room = ui.available_width();
-    let across = [6.0, 3.0]
-        .into_iter()
-        .find(|n| n * each <= room)
-        .unwrap_or(2.0);
+    let across = tile_columns(room, ui.spacing().item_spacing.x) as f32;
     ui.allocate_ui_with_layout(
         egui::vec2(across * each, 0.0),
         egui::Layout::left_to_right(egui::Align::TOP).with_main_wrap(true),
@@ -1375,10 +1410,16 @@ fn val(record: &EntitySnapshot, key: &str) -> String {
         .unwrap_or("—".into())
 }
 fn signed(record: &EntitySnapshot, key: &str) -> String {
-    record
-        .stat(key)
-        .map(|n| format!("{n:+}"))
-        .unwrap_or("—".into())
+    record.stat(key).map(design::signed).unwrap_or("—".into())
+}
+fn skill_order(record: &EntitySnapshot) -> Vec<usize> {
+    let mut order: Vec<_> = (0..record.character.skills.len()).collect();
+    order.sort_by(|&a, &b| {
+        record.character.skills[a]
+            .name
+            .cmp(&record.character.skills[b].name)
+    });
+    order
 }
 pub(crate) fn overview(ui: &mut egui::Ui, record: &EntitySnapshot, live: Option<&LiveValues>) {
     let narrow = ui.available_width() < 560.0;
@@ -1447,52 +1488,46 @@ pub(crate) fn overview(ui: &mut egui::Ui, record: &EntitySnapshot, live: Option<
             }
         }
     });
-    let across = if ui.available_width() >= design::READER_MEASURE {
-        3
-    } else {
-        2
-    };
     section_heading(ui, "Saving throws");
-    ui.columns(across, |cols| {
-        for (at, ability) in ABILITIES.iter().enumerate() {
-            cols[at % across].horizontal(|ui| {
-                ui.label(
-                    Type::Numeral
-                        .rich(ui, signed(record, &format!("{ability}_save")))
-                        .color(colors().text),
-                );
-                let mut name = ability.to_string();
-                name[..1].make_ascii_uppercase();
-                ui.label(name);
-            });
-        }
+    sheet_columns(ui, ABILITIES.len(), |ui, at| {
+        let ability = ABILITIES[at];
+        ui.horizontal(|ui| {
+            ui.label(
+                Type::Numeral
+                    .rich(ui, signed(record, &format!("{ability}_save")))
+                    .color(colors().text),
+            );
+            let mut name = ability.to_string();
+            name[..1].make_ascii_uppercase();
+            ui.label(name);
+        });
     });
     section_heading(ui, "Skills");
-    ui.columns(across, |cols| {
-        for (at, skill) in record.character.skills.iter().enumerate() {
-            cols[at % across].horizontal(|ui| {
-                ui.label(
-                    Type::Numeral
-                        .rich(ui, signed(record, &skill.stat))
-                        .color(colors().text),
-                );
-                let flags = format!(
-                    "{}{}{}",
-                    if skill.expertise {
-                        " (E)"
-                    } else if skill.proficient {
-                        " (P)"
-                    } else if skill.half_proficient {
-                        " (½)"
-                    } else {
-                        ""
-                    },
-                    if skill.advantage { " Adv" } else { "" },
-                    if skill.disadvantage { " Dis" } else { "" }
-                );
-                ui.add(egui::Label::new(format!("{}{flags}", skill.name)).wrap());
-            });
-        }
+    let skills = skill_order(record);
+    sheet_columns(ui, skills.len(), |ui, at| {
+        let skill = &record.character.skills[skills[at]];
+        ui.horizontal(|ui| {
+            ui.label(
+                Type::Numeral
+                    .rich(ui, signed(record, &skill.stat))
+                    .color(colors().text),
+            );
+            let flags = format!(
+                "{}{}{}",
+                if skill.expertise {
+                    " (E)"
+                } else if skill.proficient {
+                    " (P)"
+                } else if skill.half_proficient {
+                    " (½)"
+                } else {
+                    ""
+                },
+                if skill.advantage { " Adv" } else { "" },
+                if skill.disadvantage { " Dis" } else { "" }
+            );
+            ui.add(egui::Label::new(format!("{}{flags}", skill.name)).wrap());
+        });
     });
     ui.add(
         egui::Label::new(
@@ -1973,6 +2008,50 @@ pub(crate) fn details(ui: &mut egui::Ui, record: &EntitySnapshot, page: usize, s
 mod sheet_now_tests {
     use super::{EntitySnapshot, SheetNow, SlotsLeft, party_line};
     use serde_json::json;
+    #[test]
+    fn negative_sheet_modifier_uses_true_minus() {
+        let mut record = wizard(0);
+        record
+            .definition
+            .splat_stats
+            .get_mut("charisma_modifier")
+            .unwrap()
+            .value = -1;
+        assert_eq!(super::signed(&record, "charisma_modifier"), "−1");
+    }
+
+    #[test]
+    fn overview_skills_are_alphabetical_before_filling_columns() {
+        let record = wizard(0);
+        let order = super::skill_order(&record);
+        let names: Vec<_> = order
+            .iter()
+            .map(|&at| record.character.skills[at].name.as_str())
+            .collect();
+        assert_eq!(&names[..3], ["Acrobatics", "Animal Handling", "Arcana"]);
+        assert_eq!(names.last(), Some(&"Survival"));
+        assert!(names.windows(2).all(|pair| pair[0] < pair[1]));
+    }
+
+    #[test]
+    fn sheet_columns_start_on_tile_edges_at_every_width() {
+        for (room, spans) in [
+            (280.0, vec![1, 1]),
+            (420.0, vec![2, 1]),
+            (800.0, vec![2, 2, 2]),
+        ] {
+            let gap = crate::design::S;
+            let widths = super::sheet_column_widths(room, gap);
+            assert_eq!(widths.len(), spans.len());
+            let mut left = 0.0;
+            let mut tiles = 0;
+            for (width, span) in widths.into_iter().zip(spans) {
+                assert_eq!(left, tiles as f32 * (super::TILE_WIDTH + gap));
+                left += width + gap;
+                tiles += span;
+            }
+        }
+    }
     fn wizard(fetched: u64) -> EntitySnapshot {
         let abilities: Vec<_> = ["str", "dex", "con", "int", "wis", "cha"]
             .iter()

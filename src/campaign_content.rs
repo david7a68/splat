@@ -553,7 +553,6 @@ impl CampaignContent {
                     ui.label(Type::Mono.rich(ui, path.as_str()));
                 });
                 ui.scope(|ui| {
-                    ui.set_max_width(design::READER_MEASURE);
                     // What is wrong comes first, and stays true as the DM edits.
 
                     crate::world::repair::editor(ui, path, draft, error_line);
@@ -634,6 +633,16 @@ impl CampaignContent {
                     });
                 });
             }
+        }
+        if self.repairs.iter().any(|(path, _, _)| {
+            ui.data(|data| {
+                data.get_temp::<bool>(egui::Id::new(("repair_open", path.as_str())))
+                    .unwrap_or(false)
+            })
+        }) {
+            ui.add_space(design::L);
+            ui.separator();
+            ui.add_space(design::L);
         }
         if repaired && !self.dirty() {
             self.reload(ui.ctx(), campaigns, active.clone());
@@ -785,8 +794,29 @@ impl CampaignContent {
         {
             let undo = design::message_with_action(
                 ui,
-                Tone::Success,
-                &format!("{} removed from this campaign.", removed.name),
+                if removed.users.is_empty() {
+                    Tone::Success
+                } else {
+                    Tone::Warning
+                },
+                &if removed.users.is_empty() {
+                    format!("{} removed from this campaign.", removed.name)
+                } else {
+                    format!(
+                        "{} now {} creatures Splat cannot find.",
+                        removed
+                            .users
+                            .iter()
+                            .map(|(_, name)| name.as_str())
+                            .collect::<Vec<_>>()
+                            .join(" and "),
+                        if removed.users.len() == 1 {
+                            "has"
+                        } else {
+                            "have"
+                        }
+                    )
+                },
                 "Undo package removal",
             );
             ui.horizontal_wrapped(|ui| {
@@ -797,13 +827,6 @@ impl CampaignContent {
                     if design::link(ui, name).clicked() {
                         self.open_lookup = Some(*id);
                     }
-                }
-                if !removed.users.is_empty() {
-                    ui.label(
-                        Type::Small
-                            .rich(ui, "still use its creatures.")
-                            .color(c.muted),
-                    );
                 }
             });
             if undo {
@@ -1231,13 +1254,18 @@ impl CampaignContent {
                 ui.horizontal_wrapped(|ui| {
                     ui.set_min_height(Density::Read.control());
                     design::group_heading(ui, &module.name, entry_ids.len());
-                    if all {
-                        ui.label(
-                            Type::Small
-                                .rich(ui, "Whole package, with future additions")
-                                .color(c.muted),
-                        );
-                    }
+                    ui.label(
+                        Type::Small
+                            .rich(
+                                ui,
+                                if all {
+                                    "Whole package, with future additions"
+                                } else {
+                                    "Chosen entries only"
+                                },
+                            )
+                            .color(c.muted),
+                    );
                     if !all
                         && Action::secondary(
                             if entry_ids.iter().all(|id| {
@@ -1272,9 +1300,6 @@ impl CampaignContent {
                         && let Some(i) = selection_index
                     {
                         document.selections.remove(i);
-                    }
-                    if !all {
-                        ui.label(Type::Small.rich(ui, "Chosen entries only").color(c.muted));
                     }
                 });
                 design::search_field(

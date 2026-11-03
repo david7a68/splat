@@ -262,6 +262,31 @@ pub struct UnreadableNote {
     pub path: PathBuf,
     pub word: String,
 }
+
+/// A file that differs from its shared key's filename is the copy. Otherwise
+/// prefer the newer file. Atomic saves can replace a file's birth time.
+pub(crate) fn duplicate_repair_path(paths: impl IntoIterator<Item = PathBuf>) -> Option<PathBuf> {
+    paths.into_iter().max_by_key(|path| {
+        let copied = fs::read_to_string(path)
+            .ok()
+            .and_then(|text| Entry::parse("note.md", &text).ok())
+            .and_then(|entry| entry.key)
+            .is_some_and(|key| {
+                let key = key.rsplit(['/', ':']).next().unwrap_or(&key);
+                let stem = path.file_stem().unwrap_or_default().to_string_lossy();
+                let slug: String = stem
+                    .to_lowercase()
+                    .chars()
+                    .map(|c| if c.is_alphanumeric() { c } else { '_' })
+                    .collect();
+                slug != key
+            });
+        let created = fs::metadata(path)
+            .ok()
+            .and_then(|meta| meta.created().or_else(|_| meta.modified()).ok());
+        (copied, created, path.as_os_str().len())
+    })
+}
 /// Names, by namespace, of the packages in folders beside the registered ones. A reference
 /// holds only a namespace, so this is what lets a missing package appear under its own name.
 fn neighbouring_packages(modules: &[Module]) -> BTreeMap<String, String> {
@@ -297,6 +322,12 @@ impl Catalogue {
     ) -> Result<(), String> {
         let path = note_path(root, &entry.path)?;
         if self.entries.contains_key(&entry.id) || self.duplicate_ids.contains(&entry.id) {
+            let first = self
+                .files
+                .get(&entry.id)
+                .map(|(path, _)| path)
+                .or_else(|| self.unreadable.get(&entry.id).map(|note| &note.path));
+            let path = duplicate_repair_path(first.cloned().into_iter().chain([path])).unwrap();
             self.duplicate_ids.insert(entry.id);
             self.entries.remove(&entry.id);
             self.files.remove(&entry.id);

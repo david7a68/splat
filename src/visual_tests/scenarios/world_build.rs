@@ -459,6 +459,14 @@ pub fn package_rename(d: &mut Driver<'_>) {
     d.focus_window(false);
     d.focus_window(true);
     d.wait_for_text("Save my draft to Moved/Ash Exposure.md");
+    d.observe_both("W8", "The old folder follows Show file on its line", |d| {
+        d.place_of("Show file")
+            .zip(d.place_of("moved from Rules/"))
+            .is_some_and(|(file, from)| {
+                from.left() >= file.right()
+                    && (file.center().y - from.center().y).abs() < crate::design::XS
+            })
+    });
     d.state("draft-file-moved-on-disk", Sizes::All);
     d.click("Save my draft to Moved/Ash Exposure.md");
     d.wait_for_text("Saved");
@@ -758,9 +766,9 @@ pub fn package_delete_entry(d: &mut Driver<'_>) {
     d.wait_for_text("No entry open");
     d.expect("Ash Exposure let go. Ember Cultist now needs a missing entry.");
     assert!(!d.has_containing("Ash Exposure · "));
-    d.expect("Undo discard");
+    d.expect("Undo let go");
     d.state("deleted-draft-let-go", Sizes::All);
-    d.click("Undo discard");
+    d.click("Undo let go");
     d.expect("Let it go");
     d.expect("A draft to let go.");
     d.state("deleted-draft-restored", Sizes::All);
@@ -780,14 +788,18 @@ pub fn package_duplicate_id(d: &mut Driver<'_>) {
     let original = package.join("Creatures/Cinder Wolf.md");
     let copy = package.join("Creatures/Cinder Wolf copy.md");
     let before = fs::read_to_string(&original).unwrap();
-    let copy_text = before.replace("splat_name: Cinder Wolf", "splat_name: Cinder Wolf copy");
+    let original_id = crate::content_workspace::note_id(&before);
+    let copy_text = before
+        .replace("splat_name: Cinder Wolf", "splat_name: Cinder Wolf copy")
+        .replace("max_hp: {value: 22}", "max_hp: {value: 44}")
+        .replace("HP 22 (", "HP 44 (");
     fs::write(&copy, &copy_text).unwrap();
     go_library(d);
     search_library(d, "Cinder Wolf");
     d.wait_for_text("Duplicate identity");
     d.state("duplicate-package-library-list", Sizes::All);
     d.click_starting("Cinder Wolf · ");
-    d.expect("Give the copy a new identity");
+    d.expect("New identity for Cinder Wolf copy.md");
     d.click(EDIT_MARKDOWN);
     d.state("duplicate-original-editor", Sizes::All);
     d.type_into_editor("Saved only to the original.\n");
@@ -804,14 +816,20 @@ pub fn package_duplicate_id(d: &mut Driver<'_>) {
     d.expect("Give the copy a new identity in Library.");
     d.state("duplicate-package-in-roster", Sizes::All);
     d.click("Open in Library");
-    d.expect("Give the copy a new identity");
+    d.expect("New identity for Cinder Wolf copy.md");
+    assert_eq!(
+        d.app_mut().library.selected_name(),
+        Some("Cinder Wolf copy")
+    );
     d.click("Read");
-    search_library(d, "Cinder Wolf copy");
-    d.click_starting("Cinder Wolf copy · ");
     d.state("duplicate-copy-reader", Sizes::All);
-    d.click("Give the copy a new identity");
+    d.expect("Creature · CR 1");
+    d.click("New identity for Cinder Wolf copy.md");
     d.wait_for_text("Undo new identity");
-    let original_id = crate::content_workspace::note_id(&fs::read_to_string(&original).unwrap());
+    assert_eq!(
+        crate::content_workspace::note_id(&fs::read_to_string(&original).unwrap()),
+        original_id
+    );
     let copy_id = crate::content_workspace::note_id(&fs::read_to_string(&copy).unwrap());
     assert_ne!(original_id, copy_id);
     d.state("duplicate-copy-new-identity", Sizes::All);
@@ -823,6 +841,22 @@ pub fn package_duplicate_id(d: &mut Driver<'_>) {
     );
     d.expect_same("Undo restores both identity warnings and the original copy reader.");
     d.state("duplicate-identity-restored", Sizes::All);
+    d.click("New identity for Cinder Wolf copy.md");
+    d.wait_for_text("Undo new identity");
+    d.click("Use in this campaign");
+    d.wait_for_text("Ashen Marches · Used here");
+    go_encounters(d);
+    d.expect("Bridge Ambush");
+    d.observe_both(
+        "W10",
+        "The repaired roster keeps the original wolf stats",
+        |d| d.nodes().iter().any(|node| node.name == "HP\u{a0}22"),
+    );
+    d.state("repaired-encounter-keeps-original-wolves", Sizes::All);
+    d.type_into(FIND_CREATURE, "Cinder Wolf");
+    d.expect("Cinder Wolf copy");
+    d.expect("HP 44");
+    d.state("repaired-creatures-are-separate-results", Sizes::All);
 }
 
 /// Copy a book creature into a shared package, then change its HP.
@@ -876,6 +910,87 @@ pub fn book_to_package(d: &mut Driver<'_>) {
         .contains("# Watch Aboleth")
     );
     d.state("book-creature-changed-in-package", Sizes::All);
+}
+
+pub fn world_note_moved(d: &mut Driver<'_>) {
+    let folder = root(d);
+    fs::create_dir_all(folder.join("Locations")).unwrap();
+    fs::create_dir_all(folder.join("Other")).unwrap();
+    fs::write(
+        folder.join("Locations/Watch House.md"),
+        "# Watch House\n\nThe original watch house.\n",
+    )
+    .unwrap();
+    fs::copy(
+        folder.join("Locations/Watch House.md"),
+        folder.join("Other/Watch House.md"),
+    )
+    .unwrap();
+    let npc = entry(
+        d,
+        "NPCs/Rook Ambry.md",
+        "Rook Ambry",
+        "npc",
+        "  in: '[[Watch House]]'\n",
+    );
+    entry(d, "Locations/North Gate.md", "North Gate", "location", "");
+    reload(d);
+    d.click(NAV_WORLD);
+    d.click_containing("Rook Ambry · ");
+    d.click("Watch House");
+    d.expect("This link matches more than one note. Choose one.");
+    d.state("duplicate-place-chooser-in-world", Sizes::All);
+    d.click("Locations/Watch House.md");
+    look_up(d, "Rook Ambry");
+    d.click("Watch House");
+    d.expect("This link matches more than one note. Choose one.");
+    d.state("duplicate-place-chooser-in-lookup", Sizes::All);
+    d.click("Locations/Watch House.md");
+    d.press(Key::Escape);
+    fs::remove_file(folder.join("Other/Watch House.md")).unwrap();
+    fs::create_dir_all(folder.join("Locations/Moved")).unwrap();
+    fs::rename(
+        folder.join("Locations/Watch House.md"),
+        folder.join("Locations/Moved/Watch House.md"),
+    )
+    .unwrap();
+    fs::rename(
+        folder.join("NPCs/Rook Ambry.md"),
+        folder.join("Locations/Moved/Rook Ambry.md"),
+    )
+    .unwrap();
+    d.focus_window(false);
+    d.focus_window(true);
+    d.click_containing("Rook Ambry · ");
+    d.expect("Watch House");
+    d.state("moved-note-keeps-place-in-world", Sizes::All);
+    look_up(d, "Rook Ambry");
+    d.expect("Watch House");
+    d.state("moved-note-keeps-place-in-lookup", Sizes::All);
+    d.press(Key::Escape);
+    let moved_npc = folder.join("Locations/Moved/Rook Ambry.md");
+    let before_change = fs::read_to_string(&moved_npc).unwrap();
+    let external = format!(
+        "{before_change}\n## Patrol after the move\n\nRook keeps the east gate key in the watch room. The relief patrol leaves at midnight and checks the bridge before it returns to the north gate.\n\nKeep this note from Obsidian when the place changes.\n"
+    );
+    fs::write(&moved_npc, &external).unwrap();
+    d.click("Change In");
+    d.type_text("North Gate");
+    d.click("North Gate");
+    d.expect("Place changed.");
+    assert!(
+        fs::read_to_string(&moved_npc)
+            .unwrap()
+            .contains("Keep this note from Obsidian")
+    );
+    assert_eq!(
+        crate::content_workspace::note_id(
+            &fs::read_to_string(folder.join("Locations/Moved/Rook Ambry.md")).unwrap()
+        ),
+        Some(npc)
+    );
+    assert!(!folder.join("NPCs/Rook Ambry.md").exists());
+    d.state("change-writes-moved-npc", Sizes::All);
 }
 
 pub fn world_note_deleted(d: &mut Driver<'_>) {

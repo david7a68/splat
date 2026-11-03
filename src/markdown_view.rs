@@ -144,6 +144,15 @@ fn show_with_density(ui: &mut egui::Ui, markdown: &str, dense: bool) {
                     continue;
                 }
                 if dest_url.starts_with("splat-missing:") {
+                    job.append(
+                        &format!("{} ", design::icons::WARN),
+                        0.0,
+                        egui::TextFormat {
+                            font_id: prose.font(ui),
+                            color: colors().result.warning,
+                            ..Default::default()
+                        },
+                    );
                     link = Some((job.text.len(), LinkTarget::Missing));
                     continue;
                 }
@@ -1043,12 +1052,17 @@ mod tests {
             .shapes
             .iter()
             .find_map(|shape| match &shape.shape {
-                egui::Shape::Text(text) if text.galley.job.text == "Missing place" => Some(text),
+                egui::Shape::Text(text)
+                    if text.galley.job.text == format!("{} Missing place", design::icons::WARN) =>
+                {
+                    Some(text)
+                }
                 _ => None,
             })
             .unwrap();
         let row = &text.galley.rows[0];
-        let baseline = text.pos.y + row.pos.y + row.glyphs[0].pos.y;
+        let word = row.glyphs.iter().find(|glyph| glyph.chr == 'M').unwrap();
+        let baseline = text.pos.y + row.pos.y + word.pos.y;
         assert_eq!(dots[0].y, baseline + design::HAIRLINE_WIDTH * 2.0);
     }
 

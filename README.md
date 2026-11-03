@@ -122,10 +122,16 @@ Library keeps a deleted file's draft until you choose **Save my draft again** or
 **Let it go**, with Undo. A moved file's draft saves to its new path. Creature
 copies use the same front-matter stats as a new creature and keep the book's prose.
 Each stat takes one line, in book order. Library warns on both files when their
-identities match. Save changes only the open file. Open the copy and choose
-**Give the copy a new identity** to separate it, with Undo. Encounters wait for
-that repair. A roster edit updates any failed start check at once.
+identities match. Save changes only the open file. Each repair action names its
+file and lists any encounters that will change source. A renamed copy comes first,
+or else the newest file does;
+**Open in Library** from the roster opens that file. The repair has Undo.
+Encounters wait for that repair. A roster edit updates any failed start check at once.
 An empty fight **Prep** tab offers **Edit encounter** while the encounter exists.
+
+Moving a typed World note keeps its stored identity. Plain notes use temporary
+path identities; their name links still work after a folder move. Duplicate names
+open a chooser, including an NPC's **In** link in World and Lookup.
 
 With no campaigns, the switcher says **No campaign** and offers **Add campaign…**.
 New entry and Copy entry use **Destination** and show a short path, with the full path

@@ -411,7 +411,7 @@ impl Loaded {
                     .as_ref()
                     .is_some_and(|entry| self.duplicate_ids().contains(&entry.id))
                 {
-                    format!("Duplicate identity · {}", note.path)
+                    format!("{} Duplicate identity · {line}", icons::WARN)
                 } else {
                     line
                 };
@@ -1159,6 +1159,30 @@ fn natural_key(name: &str) -> Vec<(String, u64)> {
 }
 
 const EDITOR_MAX_WIDTH: f32 = 720.0;
+
+fn form_heading(ui: &mut egui::Ui, title: &str) {
+    ui.add_space(design::L);
+    ui.label(
+        Type::Label
+            .rich(ui, title.to_uppercase())
+            .color(colors().text),
+    );
+}
+
+fn undo_message(ui: &mut egui::Ui, text: &str, action: &str) -> bool {
+    ui.horizontal_wrapped(|ui| {
+        design::message(ui, Tone::Info, text);
+        Action::quiet(action).icon(icons::UNDO).show(ui).clicked()
+    })
+    .inner
+}
+
+fn obsidian_for(root: &Path, owner: &Owner) -> bool {
+    matches!(owner, Owner::Campaign(_))
+        || root
+            .ancestors()
+            .any(|parent| parent.join(".obsidian").is_dir())
+}
 const NOTE_CHANGED: &str = "This entry changed on disk.";
 /// What is on disk now, in place of what the draft started from.
 struct DiskChange {
@@ -1595,6 +1619,8 @@ impl Library {
             self.scope = Scope::All;
             self.search.clear();
             self.section = Section::Unreadable;
+            self.unreadable_kind =
+                Some(self.loaded.as_ref().unwrap().notes[index].unreadable_kind());
             self.open_entry(index);
             self.source = true;
             self.focus_repair = true;
@@ -1820,14 +1846,17 @@ impl Library {
         let searching = !self.search.trim().is_empty();
         let empty_scope = scope == Scope::Campaign && count_of(Section::All, &counts) == 0;
         if empty_scope {
-            Self::scope_menu(
-                ui,
-                compact,
-                campaigns,
-                &mut self.scope,
-                &mut self.section,
-                &mut self.search,
-            );
+            ui.scope(|ui| {
+                ui.set_max_width(166.0);
+                Self::scope_menu(
+                    ui,
+                    compact,
+                    campaigns,
+                    &mut self.scope,
+                    &mut self.section,
+                    &mut self.search,
+                );
+            });
             if self.new_form {
                 self.new_entry(ui, dirty, campaigns);
             } else {
@@ -2050,6 +2079,11 @@ impl Library {
         }
         let selected = select.or(self.selected);
         let subtitles = loaded.subtitles();
+        let link_index = ui.ctx().data(|data| {
+            data.get_temp::<std::sync::Arc<crate::lookup::ContentIndex>>(egui::Id::new(
+                "reader_link_index",
+            ))
+        });
         // A wide window's list gets room too, so that long names keep their second line.
         let min_list_width =
             (design::number_width(ui, "Can use", &Type::Strong.font(ui)) + design::XXL + design::L)
@@ -2170,12 +2204,16 @@ impl Library {
                                 (Owner::Package(module), Scope::Package(id)) if module.id == id => line.strip_suffix(&format!(" · {}", module.name)).unwrap_or(line),
                                 _ => line,
                             };
+                            let broken = note.entry.as_ref().zip(link_index.as_ref()).filter(|_| note.owner != Owner::Builtin).map_or(0, |(entry, index)| index.broken_link_count(&entry.body, entry.id));
+                            let subtitle = if broken > 0 {
+                                format!("{} {} · {subtitle}", icons::WARN, design::count(broken, "broken link", "broken links"))
+                            } else { subtitle.to_owned() };
                             let response = ui
                                 .push_id(i, |ui| {
                                     entry_row(
                                         ui,
                                         note.name(),
-                                        subtitle,
+                                        &subtitle,
                                         selected == Some(i),
                                     )
                                 })
@@ -2437,8 +2475,9 @@ impl Library {
             .auto_shrink([false, false])
             .show(ui, |ui| {
                 ui.set_max_width(ui.available_width().min(design::FORM_WIDTH));
+                ui.add_space(design::L);
                 ui.horizontal(|ui| {
-                    design::group_label(ui, "Manage packages");
+                    ui.label(Type::Label.rich(ui, "MANAGE PACKAGES").color(colors().text));
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         if Action::quiet("Close")
                             .name("Close the package form")
@@ -2449,7 +2488,7 @@ impl Library {
                         }
                     });
                 });
-                design::group_label(ui, "Add a package folder");
+                form_heading(ui, "Add a package folder");
                 ui.horizontal(|ui| {
                     design::text_input(
                         ui,
@@ -2504,8 +2543,7 @@ impl Library {
                     ui.add_space(design::L);
                 });
 
-                ui.add_space(design::L);
-                design::group_label(ui, "New package");
+                form_heading(ui, "New package");
                 let response = design::text_field(ui, "Name", &mut self.name, None, None);
                 if std::mem::take(&mut self.focus_package_name) {
                     response.request_focus();
@@ -2658,8 +2696,7 @@ impl Library {
                         self.package_folder_changed = false;
                     }
                 });
-                ui.add_space(design::M);
-                design::group_label(ui, "Registered packages");
+                form_heading(ui, "Registered packages");
                 design::rule(ui);
                 if campaigns.modules().is_empty() {
                     ui.label(Type::Body.rich(ui, "None yet.").color(c.muted));
@@ -2744,7 +2781,7 @@ impl Library {
             .unwrap_or(default_place);
         ui.vertical(|ui| {
             ui.set_max_width(ui.available_width().min(design::READER_MEASURE));
-            design::group_label(ui, "New entry");
+            form_heading(ui, "New entry");
             ui.label(
                 Type::Small
                     .rich(ui, "Creates the entry, then opens it in the editor.")
@@ -3107,12 +3144,7 @@ impl Library {
         });
         if self.discarded_note.is_some()
             && !self.dirty()
-            && design::message_with_action(
-                ui,
-                Tone::Info,
-                gone_notice.as_deref().unwrap(),
-                "Undo discard",
-            )
+            && undo_message(ui, gone_notice.as_deref().unwrap(), "Undo let go")
             && let Some((_, _, draft)) = self.discarded.take()
             && let Some(note) = self.discarded_note.take()
             && let Some(loaded) = self.loaded.as_mut()
@@ -3167,7 +3199,17 @@ impl Library {
             .map_or(note.name(), |reading| reading.title.as_str());
         let reading_subtitle = reader_subtitle(
             &note.owner,
-            subtitle,
+            &note
+                .entry
+                .as_ref()
+                .filter(|entry| {
+                    self.loaded
+                        .as_ref()
+                        .unwrap()
+                        .duplicate_ids()
+                        .contains(&entry.id)
+                })
+                .map_or_else(|| subtitle.to_owned(), presentation::subtitle),
             reading
                 .as_ref()
                 .and_then(|_| presentation::class_level(parsed.as_ref().ok()?)),
@@ -3178,15 +3220,27 @@ impl Library {
         }
         let editable = note.owner.editable();
         let conflict = self.disk_change.is_some();
-        let duplicate_paths: Vec<_> = self
-            .loaded
-            .as_ref()
-            .unwrap()
-            .duplicates(i)
-            .iter()
-            .map(|&other| self.loaded.as_ref().unwrap().notes[other].path.clone())
-            .collect();
-        let mut new_identity = false;
+        let mut duplicate_indices = self.loaded.as_ref().unwrap().duplicates(i);
+        if !duplicate_indices.is_empty() {
+            duplicate_indices.push(i);
+            let notes = &self.loaded.as_ref().unwrap().notes;
+            let first = crate::content_workspace::duplicate_repair_path(
+                duplicate_indices.iter().filter_map(|&at| {
+                    notes[at]
+                        .owner
+                        .root()
+                        .map(|root| root.join(&notes[at].path))
+                }),
+            );
+            duplicate_indices.sort_by_key(|&at| {
+                notes[at]
+                    .owner
+                    .root()
+                    .map(|root| root.join(&notes[at].path))
+                    != first
+            });
+        }
+        let mut new_identity = None;
         let mut undo_identity = false;
         let editor_width = if conflict {
             ui.available_width()
@@ -3401,17 +3455,6 @@ impl Library {
                         .clicked();
                 }
             }
-            if let Owner::Package(module) = &note.owner
-                && !about
-                && !self.loaded.as_ref().unwrap().in_scope(note, Scope::Uses)
-                && let Some(entry) = &note.entry
-                && Action::quiet("Use in this campaign")
-                    .blocked(draft_reason)
-                    .show(ui)
-                    .clicked()
-            {
-                self.use_entry = Some((module.id, entry.id));
-            }
         });
         if copy_clicked {
             self.copy = Some(crate::content_workspace::CopySource {
@@ -3441,10 +3484,44 @@ impl Library {
                 .as_ref()
                 .and_then(|change| change.moved_to.as_deref());
             let shown_path = moved_path.unwrap_or(&note.path);
-            let obsidian = matches!(note.owner, Owner::Campaign(_))
-                || root
-                    .ancestors()
-                    .any(|parent| parent.join(".obsidian").is_dir());
+            let moved_from = moved_path.map(|_| {
+                format!(
+                    "moved from {}/",
+                    Path::new(&note.path)
+                        .parent()
+                        .unwrap_or(Path::new(""))
+                        .display()
+                )
+            });
+            let file_line = |ui: &mut egui::Ui| {
+                if let Some(from) = &moved_from {
+                    let width = (ui.available_width()
+                        - design::number_width(ui, from, &Type::Small.font(ui))
+                        - design::S)
+                        .max(design::XXL);
+                    ui.allocate_ui_with_layout(
+                        egui::vec2(width, Density::Read.control()),
+                        egui::Layout::left_to_right(egui::Align::Center),
+                        |ui| {
+                            crate::world::entry_file_parts(
+                                ui,
+                                root,
+                                shown_path,
+                                obsidian_for(root, &note.owner),
+                            );
+                        },
+                    );
+                    ui.label(Type::Small.rich(ui, from).color(colors().muted));
+                } else {
+                    crate::world::entry_file_parts(
+                        ui,
+                        root,
+                        shown_path,
+                        obsidian_for(root, &note.owner),
+                    );
+                }
+            };
+            let obsidian = obsidian_for(root, &note.owner);
             let owner_word = match &note.owner {
                 Owner::Package(_) => package_word.as_str(),
                 _ => "Campaign · Editable",
@@ -3483,7 +3560,7 @@ impl Library {
                     use_every = Some(module.clone());
                 }
                 if !file_below {
-                    crate::world::entry_file_parts(ui, root, shown_path, obsidian);
+                    file_line(ui);
                 }
             };
             if file_below {
@@ -3492,15 +3569,7 @@ impl Library {
                 ui.horizontal(owner_line);
             }
             if file_below {
-                ui.horizontal(|ui| crate::world::entry_file_parts(ui, root, shown_path, obsidian));
-            }
-            if moved_path.is_some() {
-                let from = Path::new(&note.path).parent().unwrap_or(Path::new(""));
-                ui.label(
-                    Type::Small
-                        .rich(ui, format!("moved from {}/", from.display()))
-                        .color(colors().muted),
-                );
+                ui.horizontal(file_line);
             }
         } else {
             design::status(
@@ -3512,19 +3581,65 @@ impl Library {
                 },
             );
         }
-        if !duplicate_paths.is_empty() {
+        if let Owner::Package(module) = &note.owner
+            && !about
+            && !self.loaded.as_ref().unwrap().in_scope(note, Scope::Uses)
+            && let Some(entry) = &note.entry
+            && Action::quiet("Use in this campaign")
+                .blocked(draft_reason)
+                .show(ui)
+                .clicked()
+        {
+            self.use_entry = Some((module.id, entry.id));
+        }
+        if !duplicate_indices.is_empty() {
             design::message(
                 ui,
                 Tone::Warning,
-                &format!(
-                    "Duplicate identity with {}. Treat this file as the copy to give it a new identity.",
-                    duplicate_paths.join(", ")
-                ),
+                "These files share an identity. Choose which file gets a new one.",
             );
-            new_identity = Action::quiet("Give the copy a new identity")
-                .blocked(draft_reason)
-                .show(ui)
-                .clicked();
+            let loaded = self.loaded.as_ref().unwrap();
+            let users: Vec<_> = loaded
+                .notes
+                .iter()
+                .filter_map(|other| {
+                    let entry = other.entry.as_ref()?;
+                    (entry.kind == "encounter"
+                        && content::required_references(entry).is_ok_and(|refs| {
+                            refs.contains(&content::Reference::Id(note.entry.as_ref().unwrap().id))
+                        }))
+                    .then(|| entry.name.clone())
+                })
+                .collect();
+            for (position, &at) in duplicate_indices.iter().enumerate() {
+                let target = &loaded.notes[at];
+                let filename = Path::new(&target.path)
+                    .file_name()
+                    .unwrap_or_default()
+                    .to_string_lossy();
+                if Action::quiet(&format!("New identity for {filename}"))
+                    .blocked(draft_reason)
+                    .show(ui)
+                    .clicked()
+                {
+                    new_identity = Some(at);
+                }
+                if position > 0 && !users.is_empty() {
+                    let remaining = &loaded.notes[duplicate_indices[0]].path;
+                    let remaining = Path::new(remaining)
+                        .file_name()
+                        .unwrap_or_default()
+                        .to_string_lossy();
+                    ui.label(
+                        Type::Small
+                            .rich(
+                                ui,
+                                format!("{} will then use {remaining}.", name_list(&users)),
+                            )
+                            .color(colors().result.warning),
+                    );
+                }
+            }
         }
         if self.identity_undo.is_some() {
             undo_identity = Action::quiet("Undo new identity")
@@ -3587,7 +3702,8 @@ impl Library {
                 let ui = &mut slot_ui;
                 if discard_is_for(self.discarded.as_ref(), note) && self.draft == note.text {
                     ui.label(Type::Small.rich(ui, "Draft discarded."));
-                    if Action::secondary("Undo discard")
+                    if Action::quiet("Undo discard")
+                        .icon(icons::UNDO)
                         .density(Density::Read)
                         .show(ui)
                         .clicked()
@@ -3608,7 +3724,7 @@ impl Library {
         }
         if !save_row
             && discard_is_for(self.discarded.as_ref(), note)
-            && design::draft_discarded(ui)
+            && undo_message(ui, "Draft discarded.", "Undo discard")
             && let Some((_, _, text)) = self.discarded.take()
         {
             self.draft = text;
@@ -3751,7 +3867,7 @@ impl Library {
                     } else {
                         design::group_heading(ui, "Your draft", 0);
                         let mut draft = self.draft.as_str();
-                        let response = ui.add(egui::TextEdit::multiline(&mut draft).font(egui::TextStyle::Monospace).desired_width(editor_width).interactive(false));
+                        let response = ui.add(egui::TextEdit::multiline(&mut draft).font(egui::TextStyle::Monospace).margin(egui::vec2(design::S, design::S)).desired_width(editor_width - 2.0 * design::S).interactive(false));
                         design::named(ui, &response, "Your draft");
                     }
                     return;
@@ -3762,7 +3878,7 @@ impl Library {
                             .id_salt(("library_markdown", note.owner.id(), &note.path))
                             .font(egui::TextStyle::Monospace)
                             .margin(egui::vec2(design::S, design::S))
-                            .desired_width(editor_width)
+                            .desired_width(editor_width - 2.0 * design::S)
                             .min_size(egui::vec2(0.0, ui.available_height()))
                             .interactive(editable),
                     );
@@ -3999,7 +4115,8 @@ impl Library {
         if save {
             self.save_selected(file_gone);
         }
-        let identity_result = if new_identity {
+        let identity_result = if let Some(at) = new_identity {
+            self.open_entry(at);
             self.give_new_identity()
         } else if undo_identity {
             self.undo_new_identity()
@@ -4189,6 +4306,30 @@ mod tests {
         assert_eq!(
             fs::read_to_string(module.path.join("Wolf.md")).unwrap(),
             original
+        );
+    }
+
+    #[test]
+    fn duplicate_repair_keeps_key_named_original_after_atomic_save() {
+        let temp = tempfile::tempdir().unwrap();
+        let original = temp.path().join("Wolf.md");
+        let copy = temp.path().join("Wolf copy.md");
+        let text = note_text("Wolf", "creature", None).replace(
+            "splat_kind: creature",
+            "splat_key: test:creatures/wolf\nsplat_kind: creature",
+        );
+        fs::write(&original, &text).unwrap();
+        fs::write(&copy, &text).unwrap();
+        write_note(
+            temp.path(),
+            "Wolf.md",
+            Some(&text),
+            &format!("{text}\nEdit original.\n"),
+        )
+        .unwrap();
+        assert_eq!(
+            crate::content_workspace::duplicate_repair_path([original, copy.clone()]),
+            Some(copy)
         );
     }
 

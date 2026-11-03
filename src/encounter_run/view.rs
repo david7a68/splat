@@ -4766,7 +4766,7 @@ fn arrival_summary(ui: &egui::Ui, status: &str, members: &str, width: f32) -> St
     if status.is_empty() {
         return members.to_owned();
     }
-    let summary = format!("{status} · {members}");
+    let summary = format!("{status}\u{a0}·\u{a0}{members}");
     if design::number_width(ui, &summary, &Type::Small.font(ui)) <= width {
         summary
     } else {
