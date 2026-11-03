@@ -155,7 +155,8 @@ pub fn table_rows(dice: &str, rows: &[Vec<String>]) -> Result<Vec<RollRow>, Stri
     }
     if next != high + 1 {
         return Err(format!(
-            "{dice} can roll up to {high}, and the rows stop before that."
+            "the table stops at {}, but {dice} rolls up to {high}.",
+            next - 1
         ));
     }
     Ok(parsed)

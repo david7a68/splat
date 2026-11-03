@@ -1395,6 +1395,12 @@ pub fn spinner(ui: &mut Ui) {
     ui.spinner();
 }
 
+/// The state comes before Discard on every save row.
+pub fn save_row_state(ui: &mut Ui, state: Status<'_>, dirty: bool, blocked: Option<&str>) -> bool {
+    status(ui, state);
+    dirty && Action::quiet("Discard").blocked(blocked).show(ui).clicked()
+}
+
 /// `Draft discarded.` beside its undo. Returns true when the undo is pressed.
 pub fn draft_discarded(ui: &mut Ui) -> bool {
     let mut pressed = false;

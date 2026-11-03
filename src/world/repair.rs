@@ -132,7 +132,7 @@ impl Repair {
                         self.draft = self.baseline.clone();
                     }
                     if let Some(discarded) = &self.discarded
-                        && design::Action::quiet("Undo discard").show(ui).clicked()
+                        && design::draft_discarded(ui)
                     {
                         self.draft = discarded.clone();
                         self.discarded = None;

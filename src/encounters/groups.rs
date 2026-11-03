@@ -352,19 +352,7 @@ impl GroupDraft {
 
 /// What an entry's text says it is worth. Nothing is invented when it says nothing.
 fn creature_xp(entry: &Entry) -> Option<u64> {
-    entry
-        .fields
-        .get("splat_creature")
-        .and_then(|creature| creature.get("cr_text"))
-        .and_then(Value::as_str)
-        .and_then(xp_in_text)
-        .or_else(|| {
-            entry
-                .body
-                .lines()
-                .find(|line| line.trim_start().starts_with("CR "))
-                .and_then(xp_in_text)
-        })
+    crate::library::presentation::challenge_text(entry).and_then(xp_in_text)
 }
 
 /// Both forms the sources use: `XP 450`, and `450 XP`.
@@ -2680,11 +2668,6 @@ mod tests {
             creature_xp(&entry("{cr_text: '2 (450 XP; PB +2)'}", "")),
             Some(450),
             "the form four built-in creatures use"
-        );
-        assert_eq!(
-            creature_xp(&entry("{cr_text: '2'}", "CR 2 (XP 450; PB +2)")),
-            Some(450),
-            "a field that has none does not hide the body's"
         );
         assert_eq!(
             creature_xp(&entry("{cr_text: '0 (XP 0; PB +2)'}", "")),

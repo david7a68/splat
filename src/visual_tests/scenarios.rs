@@ -399,10 +399,28 @@ pub mod library_navigation {
         d.click("Read Captain Varra");
         d.wait_for_text("The last commander of the Emberfall watch.");
         d.state("reference-outside-package", Sizes::All);
+        let toolbar = d
+            .nodes()
+            .into_iter()
+            .filter(|node| {
+                [
+                    "Back",
+                    "Read",
+                    "Edit Markdown",
+                    "Copy to…",
+                    "Make NPC note",
+                    "More",
+                ]
+                .contains(&node.name.as_str())
+            })
+            .collect::<Vec<_>>();
         d.observe(
             "Library toolbar",
-            d.has("Back") && d.visible_text("Alt+Left"),
-            "The reader offers Back and its keyboard hint in every layout",
+            d.has("Back")
+                && toolbar.iter().all(|node| {
+                    (node.rect.center().y - toolbar[0].rect.center().y).abs() <= crate::design::XS
+                }),
+            "The toolbar keeps Back and every visible action on one line",
         );
         d.click(EDIT_MARKDOWN);
         d.type_into_editor("Varra now carries a silver sword. ");
@@ -1350,7 +1368,7 @@ pub mod dialogs {
         d.click("Destination");
         d.state("copy-destination-menu", Sizes::Default);
         d.click(&format!("Campaign · {CAMPAIGN}"));
-        d.state_prepared("copy-review", Sizes::All, |d| {
+        d.state_prepared("copy-renamed", Sizes::All, |d| {
             if d.field_text("Copy name").as_deref() != Some("Watch Aboleth") {
                 d.replace_text_in("Copy name", "Watch Aboleth");
             }
@@ -1596,6 +1614,9 @@ pub mod run_lookup {
             cost <= 1,
             format!("It took {cost}, against a target of 1"),
         );
+        d.press_alt(Key::ArrowLeft);
+        d.expect("Captain Varra");
+        d.state("lookup-back-by-key", Sizes::All);
         d.press(Key::Escape);
 
         // A draft elsewhere does not block Lookup, and Lookup does not touch the draft.
@@ -6922,10 +6943,33 @@ pub mod package_to_table {
         );
         d.state("new-package-at-the-table", Sizes::All);
         go_library(d);
+        let text = d.editor_text().expect("new creature editor");
+        let edited = text
+            .replace("max_hp: {value: 1}", "max_hp: {value: 22}")
+            .replace("armor_class: {value: 10}", "armor_class: {value: 15}")
+            .replace("strength:\n    value: 10", "strength:\n    value: 18")
+            .replace("dexterity:\n    value: 10", "dexterity:\n    value: 14");
+        assert_ne!(text, edited);
+        d.replace_editor_text(&edited);
+        d.click("Save");
         d.click("Read");
         d.expect("ARMOR CLASS");
         d.expect("HIT POINTS");
+        assert!(
+            d.visible_text("STR"),
+            "the creature's ability table is painted"
+        );
         d.state("new-creature-read", Sizes::All);
+        go_encounters(d);
+        d.replace_text_in("Encounter name", "Copper Coast patrol");
+        d.click("Start fight");
+        d.click_starting("Copper Drake · ");
+        d.click("Stat block");
+        assert!(
+            d.visible_text("STR"),
+            "the creature's ability table is painted"
+        );
+        d.state("authored-creature-beside-run", Sizes::All);
     }
 }
 
@@ -7050,7 +7094,6 @@ pub mod remove_package_in_use {
                 .any(|selection| selection.package.id == Some(package)),
             "Removing the unavailable package saves the other campaign choices",
         );
-        d.state("missing-package-removed", Sizes::Default);
         go_encounters(d);
         resume_run_from_cold_start(d);
         d.wait_for_text(NEXT_TURN);

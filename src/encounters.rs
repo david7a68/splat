@@ -572,6 +572,7 @@ struct Creature {
     /// The package it came from. A party copy says so in `detail` instead.
     source: Option<String>,
     party: bool,
+    origin: crate::lookup::Origin,
     /// A character whose sheet is on D&D Beyond. A sheet cannot be two participants.
     linked: bool,
     /// The D&D Beyond character a party copy is of.
@@ -692,20 +693,8 @@ fn creature_detail(entry: &Entry, party: bool, changed: Option<&Resolved>) -> St
             .get("value")?
             .as_i64()
     };
-    let cr = entry
-        .fields
-        .get("splat_creature")
-        .and_then(|creature| creature.get("cr_text"))
-        .and_then(Value::as_str)
-        .and_then(|text| text.split_whitespace().next())
-        // A creature with no field has it on the line the stat block shows.
-        .or_else(|| {
-            entry
-                .body
-                .lines()
-                .find_map(|line| line.trim().strip_prefix("CR "))
-                .and_then(|text| text.split_whitespace().next())
-        });
+    let cr = crate::library::presentation::challenge_text(entry)
+        .and_then(|text| text.split_whitespace().next());
     let mut parts = Vec::new();
     if party {
         parts.push("Party copy".to_owned());
@@ -1014,6 +1003,7 @@ impl Snapshot {
                     name: e.entry.name.clone(),
                     lower: e.entry.name.to_lowercase(),
                     detail: creature_detail(&e.entry, party, None),
+                    origin: crate::lookup::entry_origin(Some(&e.entry), e.private),
                     source: match (party, e.private) {
                         (true, _) => None,
                         (false, true) => Some("Campaign".to_owned()),
@@ -1060,6 +1050,7 @@ impl Snapshot {
                     name: npc.name.clone(),
                     lower: npc.name.to_lowercase(),
                     detail: format!("NPC · as {} · {}", stat.name, stat.detail),
+                    origin: crate::lookup::entry_origin(Some(npc), entry.private),
                     source: None,
                     party: false,
                     linked: false,
@@ -2659,12 +2650,6 @@ impl Encounters {
                             + design::L
                     } else {
                         0.0
-                    }
-                    - if dirty {
-                        0.0
-                    } else {
-                        design::number_width(ui, "No changes to save.", &Type::Small.font(ui))
-                            + design::L
                     })
                 .max(Density::Scan.control())
             };
@@ -2743,18 +2728,11 @@ impl Encounters {
                     .blocked_if(!dirty, "No changes to save.")
                     .show(ui)
                     .clicked();
-                    blocked_reason(ui, (!dirty).then_some("No changes to save."));
                 },
             );
         });
         ui.horizontal(|ui| {
             ui.set_min_height(Density::Read.control());
-            if dirty {
-                discard = Action::quiet("Discard")
-                    .blocked(creature_dirty.then_some(BLOCKED_BY_CREATURE))
-                    .show(ui)
-                    .clicked();
-            }
             let (icon, word, color) = if dirty {
                 (icons::DRAFT, "Unsaved", colors().document.unsaved)
             } else if saved_note.is_some() {
@@ -2762,9 +2740,12 @@ impl Encounters {
             } else {
                 (icons::OK, "No changes", colors().muted)
             };
-            if dirty || saved_note.is_some() {
-                design::status(ui, Status { icon, word, color });
-            }
+            discard = design::save_row_state(
+                ui,
+                Status { icon, word, color },
+                dirty,
+                creature_dirty.then_some(BLOCKED_BY_CREATURE),
+            );
             if dirty {
                 blocked_reason(ui, Some(draft_switch_reason()));
             }
@@ -3109,8 +3090,10 @@ impl Encounters {
         // list's order inside each rank.
         if !query.is_empty() {
             matches.sort_by_key(|c| {
-                let name = c.name.to_lowercase();
-                u8::from(name != query) + u8::from(!name.starts_with(&query))
+                (
+                    crate::lookup::name_rank(&c.name.to_lowercase(), &query).unwrap_or(4),
+                    c.origin,
+                )
             });
         }
         // Enter adds the best match, with focus kept for the next name.
@@ -3634,7 +3617,7 @@ impl Encounters {
                 }
                 if !changed
                     && self.discarded_options.is_some()
-                    && Action::secondary("Undo discard").show(ui).clicked()
+                    && design::draft_discarded(ui)
                     && let Some(options) = self.discarded_options.take()
                 {
                     snapshot.options = options;

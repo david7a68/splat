@@ -119,11 +119,52 @@ pub(crate) fn list_subtitle(line: &str, source: Option<&str>) -> String {
     }
 }
 
+/// Offer a precise first-H1 repair, preserving every other byte.
+pub(crate) fn heading_fix(text: &str, entry: &Entry) -> Option<(String, String)> {
+    let range = Parser::new(&entry.body)
+        .into_offset_iter()
+        .find_map(|(event, range)| {
+            matches!(
+                event,
+                Event::Start(Tag::Heading {
+                    level: HeadingLevel::H1,
+                    ..
+                })
+            )
+            .then_some(range)
+        })?;
+    let line = entry.body[range.clone()].lines().next()?;
+    let old = line.strip_prefix("# ")?.trim();
+    if old == entry.name {
+        return None;
+    }
+    let body_at = text.rfind(&entry.body)?;
+    let mut after = text.to_owned();
+    let start = body_at + range.start + 2;
+    after.replace_range(start..body_at + range.start + line.len(), &entry.name);
+    Some((old.to_owned(), after))
+}
+
 /// The one fact a DM scans for: CR, spell level, or item rarity. Nothing is invented.
+pub(crate) fn challenge_text(entry: &Entry) -> Option<&str> {
+    entry
+        .fields
+        .get("splat_creature")
+        .and_then(|creature| creature.get("cr_text"))
+        .and_then(serde_yaml_ng::Value::as_str)
+        .filter(|text| !text.trim().is_empty())
+        .or_else(|| {
+            entry
+                .body
+                .lines()
+                .find_map(|line| line.trim().strip_prefix("CR "))
+        })
+}
+
 fn list_fact(entry: &Entry) -> Option<String> {
     use serde_yaml_ng::Value;
-    if let Some(creature) = entry.fields.get("splat_creature") {
-        let cr = creature.get("cr_text").and_then(Value::as_str)?;
+    if category(entry) == "creature" {
+        let cr = challenge_text(entry)?;
         let cr = cr.split_whitespace().next()?;
         return Some(format!("CR {cr}"));
     }

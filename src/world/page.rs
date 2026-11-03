@@ -100,6 +100,14 @@ impl WorldPage {
         let count = index.map_or(0, |index| {
             index.world_groups("").values().map(Vec::len).sum::<usize>() + broken
         });
+        let broken_links = index.map_or(0, |index| {
+            index
+                .world_groups("")
+                .values()
+                .flatten()
+                .filter(|(at, _)| !super::broken_links(&index.items[*at], index).is_empty())
+                .count()
+        });
         let mut create = None;
         design::page_header(
             ui,
@@ -115,6 +123,19 @@ impl WorldPage {
                         .then_some("Wait for the notes to load before creating a note."),
                     new_menu,
                 );
+                if broken_links > 0 {
+                    design::status(
+                        ui,
+                        design::Status {
+                            icon: icons::WARN,
+                            word: &format!(
+                                "{} with broken links",
+                                design::count(broken_links, "note", "notes")
+                            ),
+                            color: colors().result.warning,
+                        },
+                    );
+                }
                 if broken > 0 {
                     design::status(
                         ui,
@@ -441,7 +462,18 @@ impl WorldPage {
             let spacing = std::mem::replace(&mut ui.spacing_mut().item_spacing.y, 0.0);
             for &(position, depth) in rows {
                 let entry = &index.items[position].entry;
-                let detail = if entry.kind == "world" {
+                let problems = super::broken_links(&index.items[position], index);
+                let detail = if !problems.is_empty() {
+                    format!(
+                        "{} {}",
+                        icons::WARN,
+                        if problems.len() > 1 {
+                            "2 broken links"
+                        } else {
+                            problems[0]
+                        }
+                    )
+                } else if entry.kind == "world" {
                     match super::status(entry) {
                         "" => String::new(),
                         status => status.to_owned(),

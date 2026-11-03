@@ -133,7 +133,7 @@ Tab steps over it too. It has no keyboard control. A column keeps a usable width
 
 ## Widgets
 
-Library and Lookup rank equal names the same way: campaign entries, book and package
+Library, Lookup and encounter search rank equal names the same way: campaign entries, book and package
 entries, then character sheet copies. File paths shorten before their file actions wrap;
 the full path stays on hover. All save rows call their discard action `Discard`. A clean
 Library editor shows `No changes` in the left status slot.
@@ -210,6 +210,17 @@ offers `Replace the file with this run` and `Save as a new run`, and a Library n
 draft` and the separate red `Reload and lose my draft`. Library uses the same side-by-side comparison, with `N lines differ` and `Next difference` only for two or more differing lines. Both comparisons open with the first difference and two lines of context in view. A missing line says `No line`. Neither choice has an accent fill. One message says: “This note changed on disk. Your draft is safe until you choose.” Library calls the item an entry in this message. These messages cannot be dismissed.
 
 ## The Reader
+
+Library's toolbar stays on one line. Drop the Back key hint first; then move Copy and
+Make NPC note into a quiet More menu. Lookup keeps the Back key hint. Both readers use
+Alt+Left, with Lookup taking the key when focus is there. The owner line supplies the
+package name in Library. The kind line does not repeat it.
+
+New creatures store identity and CR in `splat_creature`, and speed and ability scores in
+`splat_stats`. The CR field takes precedence over a legacy body line on every surface.
+The reader uses one L gap after the kind line and one M gap after a spell's fact table.
+World relationship rows use a 32 px pitch, with aligned values and Change actions.
+Broken links have a warning icon, a list-row warning and a count in the World header.
 
 `design::reader` holds the typographic parts. `library::view::show` draws one entry and is
 the only entry reader: Library, Lookup, the run's side panel, and campaign entries all
@@ -426,7 +437,7 @@ An incoming sheet change removes only undo steps for that character. Remaining s
 
 Campaign repair opens at the reader measure, with the invalid-note reason above it. Needed by your entries is an item below the packages in the left column. Its right pane has one search and one list; rows open Lookup. Short package lists shrink to their rows. Invalid YAML marks the line to fix and uses plain words. A rolled World table selects the matching row, marks it with a dice icon, and states the result below in UI sans.
 
-Library keeps search and the selected result when its scope changes. Empty categories and their headings stay hidden. Scope buttons use short words. Library shows quiet Back with its Alt+Left hint whenever it has reading history, in every layout. Reader links use accent text and an underline. Links in Library open in place; links in other readers open in Lookup. An empty reader says No entry open or No note open, then “Choose one from the list, or make a new one.” Empty campaign entries have one New entry action.
+Library keeps search and the selected result when its scope changes. Empty categories and their headings stay hidden. Scope buttons use short words. Library shows quiet Back whenever it has reading history, with its Alt+Left hint when room permits. Reader links use accent text and an underline. Links in Library open in place; links in other readers open in Lookup. An empty reader says No entry open or No note open, then “Choose one from the list, or make a new one.” Empty campaign entries have one New entry action.
 
 Inline creation forms use a Label title, fields, then a named Create action, its Small blocked reason, an L gap, and quiet Cancel. A Library draft states its cause once in the existing save row; controls that share the cause use its hover text. Typing never inserts a line above the editor. Campaign save state also belongs only in its save row. Lookup Back and Open in Library share the title line. Plain World notes use one-line rows. A typed table roll has the well fill, a centred placeholder, and the dice as its column heading. Fixed table headers cover passing rows with page fill and a hairline.
 
