@@ -432,16 +432,15 @@ numbered names and separate HP, conditions, and notes.
 
 Setup, live play and the ended view are separate. In setup, type initiative totals or
 roll each participant using its supplied bonus. Rows hold still while you type, and
-**Turn order** beside them shows the result, with arrows to resolve ties. Fill in
-unknown HP values under **Record**, then choose **Begin combat**. **Next turn** advances through present participants and counts
+each tied total has **Tie** and two fixed arrow slots below it. The setup header warns about ties even while the panel is open. Fill in
+unknown HP values through the row menu's **Correct…** action, then choose **Begin combat**. **Next turn** advances through present participants and counts
 rounds. Absent participants keep their state and initiative when they return.
 Participants at zero HP stay in turn order until you mark them absent.
 
 Click a row, type an amount, and press Enter to apply final damage. **Heal** and
 **Temp HP** are beside it. Ctrl+click adds more rows for one amount, as one step of undo, and the mark on each of those rows
 gives it half, rounded down, for a save. **Conditions** lists the official conditions, one click
-each, and a condition's word on a row opens its rule in Lookup. The side panel holds the stat block or sheet, **Record** (HP corrections, death
-saves, notes, sync), **Log**, encounter **Notes**, and **Arrivals**. A spell named in a stat block opens
+each, and a condition's word on a row opens its rule in Lookup. The side panel holds the stat block or sheet, **Conditions**, **Correct** (HP and initiative corrections, notes, sync), **Log**, **Prep**, and **Arrivals**. At zero HP, editable death-save counts and **+ Success** and **+ Failure** sit below the tabs. The tabs keep their place. A spell named in a stat block opens
 in Lookup. Damage uses temporary HP first; healing stops at maximum HP. You resolve
 attacks, damage modifiers, condition effects, Concentration checks, death and recovery,
 phases, and completion conditions. The dice field beside the amount accepts expressions
@@ -474,7 +473,7 @@ current. It joins the saved run and the log, and **Undo** takes back the whole g
 steps stand in the way.
 
 The row and card of a creature with changes say `Changed`, and the card lists each base and changed
-value. The run applies name, maximum HP, AC, initiative bonus, side and conditions. Attacks and speed
+value. AC, maximum HP and initiative changes appear once, in the stat block's value trio with the printed value below. An NPC's row says which stat block it uses, such as `as Bandit Captain`; its name alone does not count as a stat change. The run applies name, maximum HP, AC, initiative bonus, side and conditions. Attacks and speed
 are stat block text, so their changes stay on the card and on the row during combat, for you to add. These changes are saved with the run, so editing the file later does not
 change it.
 
@@ -497,8 +496,8 @@ write to templates or character copies.
 inside the campaign, and accepts another relative folder or an absolute path.
 Saved JSON files contain the run state, combat log, initiative rule, random state,
 and frozen creature definitions. Saves use atomic replacement and detect external
-edits. If the file changed, saving stops until you choose **Keep this run** or **Save as a new
-run**. Other failed saves keep the current run in memory and show an error. Undo history
+edits. If the file changed, saving stops until you choose **Replace the file with this run** or **Save as a new
+run**. Recovery copies use their save time in the name, such as `Bridge Ambush · saved 21:14` (UTC). **Resume** is primary on the run closed last. Each saved row shows its last change, and a file preserved after a disk conflict says **Changed elsewhere**. Other failed saves keep the current run in memory and show an error. Undo history
 is kept for the current session only. Changing the folder does not move old runs.
 
 The same settings select how the campaign rolls NPC initiative: in groups of

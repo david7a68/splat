@@ -773,7 +773,16 @@ impl Snapshot {
                     Some(Arc::new(crate::encounter_run::RunCreature {
                         entry: Arc::new(catalogue.entries.get(&creature.id)?.entry.clone()),
                         lower: creature.lower.clone(),
-                        detail: creature.detail.clone(),
+                        detail: crate::library::presentation::list_subtitle(
+                            &creature.detail,
+                            catalogue.entries.get(&creature.id).and_then(|entry| {
+                                (entry.private
+                                    || entry.owner
+                                        != crate::content_workspace::builtin_manifest().id)
+                                    .then_some(creature.source.as_deref())
+                                    .flatten()
+                            }),
+                        ),
                     }))
                 })
                 .collect(),

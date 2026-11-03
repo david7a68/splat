@@ -141,15 +141,23 @@ fn list_row(
                     egui::Label::new(Type::Strong.rich(ui, name).color(colors().text)).truncate(),
                 )
                 .on_hover_text(name);
-                let label = if status {
+                let label = if detail.contains("Changed elsewhere") {
+                    format!("{} {detail}", icons::WARN)
+                } else if status {
                     format!("{} {detail}", icons::RUN)
                 } else {
                     detail.to_owned()
                 };
                 let response = ui
                     .add(
-                        egui::Label::new(Type::Small.rich(ui, label).color(colors().muted))
-                            .truncate(),
+                        egui::Label::new(Type::Small.rich(ui, label).color(
+                            if detail.contains("Changed elsewhere") {
+                                colors().result.warning
+                            } else {
+                                colors().muted
+                            },
+                        ))
+                        .wrap(),
                     )
                     .on_hover_text(detail);
                 design::named(ui, &response, &format!("{name} · {detail}"));
@@ -163,7 +171,7 @@ fn round(run: &SavedRunInfo) -> &str {
     run.label
         .split(" · ")
         .find(|part| part.starts_with("Round "))
-        .unwrap_or("Round 0")
+        .unwrap_or("Setup")
 }
 
 fn row_menu_for_run(
@@ -212,24 +220,25 @@ pub(super) fn in_progress_list(
     for (index, run) in page.in_progress.iter().enumerate() {
         let open = live.is_some_and(|live| live.id == run.id);
         let template = history::template_of(run, templates);
-        let detail = format!(
-            "In progress · {}{}",
-            round(run),
-            run.saved_at.map_or_else(String::new, |at| format!(
-                " · Saved {}",
-                crate::party::fetch_age(crate::hermetic::now().saturating_sub(at))
-            ))
-        );
+        let detail = run.label.clone();
         list_row(ui, &run.path, &run.encounter, &detail, true, |ui| {
             row_menu_for_run(ui, run, template, open, blocked, loading, action);
-            if let Some(template) = template
-                && Action::quiet("Edit")
-                    .density(Density::Read)
-                    .show(ui)
-                    .clicked()
-            {
-                *action = Some(ListAction::Edit(template.path.clone()));
-            }
+            let edit_width = design::number_width(ui, "Edit", &Type::Strong.font(ui)) + design::L;
+            ui.allocate_ui_with_layout(
+                egui::vec2(edit_width, Density::Read.control()),
+                egui::Layout::right_to_left(egui::Align::Center),
+                |ui| {
+                    ui.set_min_width(edit_width);
+                    if let Some(template) = template
+                        && Action::quiet("Edit")
+                            .density(Density::Read)
+                            .show(ui)
+                            .clicked()
+                    {
+                        *action = Some(ListAction::Edit(template.path.clone()));
+                    }
+                },
+            );
             if open {
                 let word = format!("Running · {}", round(run));
                 if design::status_link(

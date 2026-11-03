@@ -266,14 +266,13 @@ the panel, those words open the second line instead, so that a name is never cut
   or one behind a conflict, takes its own line below.
 - **Dock:** a fixed place above the footer. `Amount`, `Damage`, `Heal`, `Temp HP`, then the
   selected name, `Conditions`, `Conc` and `Absent`. Enter applies damage.
-- **Overflow:** when rows still cannot fit, a line under the list says how many are above
+- **Overflow:** when rows still cannot fit, a clipped list ends above a separate page-filled band with a hairline. The band says how many are above
   and below, with any `Conflict`, `0 HP` and `Bloodied` among them. A row cut by the edge
   counts as out of view. Each turn scrolls to show the current row and the next.
 - **Strip:** on other pages, a line with the turn, any conflict, secondary `Back to run` and primary `Next turn`.
 - **Changed:** a creature with overrides has `Changed` on its second line, then anything the
   run cannot apply, such as `Attack +1` or `Speed 40 ft`, because the DM needs it at the table. A setup
-  row has the word `Changed` only. Its card lists each
-  change at the top of the stat block's tab, so no tab moves, as `Maximum HP: 33 → 43 (+10)`. What
+  row has the word `Changed` only. The second line starts under the name at every scale. If the list still does not fit after name-only rows shrink, keep the first table bonus and a `more` link to the full changes. A long condition list keeps its first two conditions and a count link to Conditions. Its card lists changes at the top of the stat block's tab, except AC, maximum HP and initiative bonus, which the value trio already shows. What
   the run cannot apply comes first, in larger type, and says `add by hand`. The stat block uses the
   run's AC, maximum HP and initiative bonus, with the printed value below each changed value.
   The list scrolls with the stat block, and each participant keeps its own place in it.
@@ -295,6 +294,18 @@ the panel, those words open the second line instead, so that a name is never cut
   minimum width. Each fault has its own member line and an `Edit group` link. Added groups
   keep `Add` and say which round they joined. No step asks for confirmation, because Undo
   names the addition.
+
+Setup keeps fixed initiative, Roll, Absent and menu columns. Empty Roll slots keep player totals aligned. Tie arrows have two fixed slots below each total, and the header always reports ties. Undo stays at the top right in setup and live play. The blocked Begin combat reason sits directly below that button. Setup's row menu opens Correct for that participant.
+
+Death-save counts and actions occupy one line below the panel tabs at zero HP. Clicking a count edits it; Correct has no duplicate fields. Correct initiative and DM notes show a short reason beside a blocked commit action.
+
+Arrivals uses group headings and one muted line for an empty group section. New group opens Encounters. A broken group's initiative field and Add action are both blocked, and Campaign → Packages opens repair. A setup arrival says Added before combat. Add names include the count when more than one creature will join.
+
+Recovery copies use a UTC save-time suffix and preserve the other file. The run closed last owns primary Resume. Saved rows show the last change, mark the preserved file Changed elsewhere, and keep an empty Edit slot when no encounter exists. Run state words come from one function: Setup, Setup · Paused, Round 2, Round 2 · Paused, Ended · Round 2.
+
+At the minimum width, a disconnected run keeps Sync party and Connect to sync together on the footer. End encounter… shortens to End… and Keys uses its named icon to keep the roster height.
+
+The app-close dialog uses Keep running as its safe default. Recording and processing titles name the unfinished session. Stop and close is secondary when saved work is kept; an action is red only when it loses work.
 
 ## Sessions and the timeline
 

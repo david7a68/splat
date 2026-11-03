@@ -30,7 +30,7 @@ const SHEET_PAGES: [(usize, &str); 5] = [
     (0, "Overview"),
     (1, "Actions"),
     (2, "Spells"),
-    (3, "Gear"),
+    (3, "Equipment"),
     (4, "Features"),
 ];
 /// Two lines of controls in a frame.
@@ -715,7 +715,7 @@ impl Run {
                 ui.with_layout(Layout::left_to_right(Align::Center), |ui| {
                     let response = ui.label(
                         Type::Round
-                            .rich(ui, format!("Round {}", self.state.round))
+                            .rich(ui, self.state_words(false))
                             .font(Type::Round.sized(ui, turn_size))
                             .color(c.text),
                     );
@@ -836,7 +836,7 @@ impl Run {
                         let link = if review {
                             design::number_width(ui, "Review", &Type::Body.font(ui)) + design::S
                         } else if strip.sync_stopped {
-                            design::number_width(ui, "Sign in again", &Type::Body.font(ui))
+                            design::number_width(ui, "Connect to sync", &Type::Body.font(ui))
                                 + design::S
                         } else {
                             0.0
@@ -853,7 +853,7 @@ impl Run {
                             };
                         ui.label(role.rich(ui, text.as_str()).color(*color));
                         review_conflict = review && design::link(ui, "Review").clicked();
-                        if strip.sync_stopped && design::link(ui, "Sign in again").clicked() {
+                        if strip.sync_stopped && design::link(ui, "Connect to sync").clicked() {
                             self.wants_sign_in = true;
                         }
                     } else if self.history.is_empty() {
@@ -942,7 +942,7 @@ impl Run {
     /// The height of this list at its most compressed, in this room.
     fn tightest_roster(&self, ui: &egui::Ui, width: f32, room: f32) -> f32 {
         let scale = RunScale::fit(room, width, self.state.order.len());
-        self.roster_layouts(ui, width, scale, RowFit::Compressed)
+        self.roster_layouts(ui, width, scale, RowFit::Summary)
             .iter()
             .map(|layout| layout.height(scale))
             .sum()
@@ -967,18 +967,27 @@ impl Run {
             let spare = (room + lent - MESSAGE_ROOM).min(room) - natural - 2.0;
             let share = spare.max(0.0) / count.max(1) as f32;
             scale.row += share.min(scale.row * 0.4);
+            layouts = self.roster_layouts(ui, width, scale, RowFit::Natural);
         } else {
             layouts = self.roster_layouts(ui, width, scale, RowFit::Compressed);
             // What is left goes back to the rows, shortest first, so the pitch evens out.
             let heights: Vec<f32> = layouts.iter().map(|l| l.height(scale)).collect();
-            let even = even_height(&heights, room - 2.0, scale.row);
+            let cap = heights.iter().copied().fold(scale.row, f32::max);
+            let even = even_height(&heights, room - 2.0, cap);
             layouts.iter_mut().for_each(|l| l.even = even);
+        }
+        if total(&layouts, scale) > room {
+            layouts = self.roster_layouts(ui, width, scale, RowFit::Summary);
+            let heights: Vec<_> = layouts.iter().map(|layout| layout.height(scale)).collect();
+            let cap = heights.iter().copied().fold(scale.row, f32::max);
+            let even = even_height(&heights, room - design::HAIRLINE_WIDTH, cap);
+            layouts.iter_mut().for_each(|layout| layout.even = even);
         }
         // A list longer than its room keeps a line under it, to say what is out of view.
         let overflow = total(&layouts, scale) > room;
         if overflow {
             // Too tall even at its tightest. It scrolls, at that tight pitch.
-            layouts = self.roster_layouts(ui, width - SCROLL_BAR, scale, RowFit::Compressed);
+            layouts = self.roster_layouts(ui, width - SCROLL_BAR, scale, RowFit::Summary);
         }
         let list_height = if overflow { room - OVERFLOW_LINE } else { room };
         let mut clicked = None;
@@ -997,6 +1006,11 @@ impl Run {
             .auto_shrink([false, false])
             .max_height(list_height)
             .show(ui, |ui| {
+                let clip = ui.clip_rect().intersect(Rect::from_min_size(
+                    ui.cursor().min,
+                    vec2(width, list_height),
+                ));
+                ui.set_clip_rect(clip);
                 ui.spacing_mut().item_spacing.y = 0.0;
                 let origin = ui.cursor().min.y;
                 let mut selected_rect = None;
@@ -1061,7 +1075,13 @@ impl Run {
                         let word = Rect::from_min_max(start.min, pos2(end.left(), start.bottom()))
                             .translate(origin);
                         let target = Rect::from_center_size(
-                            word.center(),
+                            pos2(
+                                word.center().x,
+                                word.center().y.clamp(
+                                    rect.top() + Density::Read.control() / 2.0,
+                                    rect.bottom() - Density::Read.control() / 2.0,
+                                ),
+                            ),
                             vec2(word.width(), Density::Read.control()),
                         );
                         let link = ui
@@ -1197,8 +1217,10 @@ impl Run {
             Some((index, false)) => self.select(index),
             None => {}
         }
-        if rule == Some(usize::MAX) {
+        if rule == Some(usize::MAX) || rule == Some(usize::MAX - 2) {
             self.panel = Panel::Conditions;
+        } else if rule == Some(usize::MAX - 1) {
+            self.panel = Panel::Reference;
         } else if rule.is_some() {
             self.lookup_request = rule;
         }
@@ -1269,10 +1291,22 @@ impl Run {
             .flatten()
             .collect::<Vec<_>>()
             .join(" · ");
-        ui.add_space(6.0);
-        ui.add_sized(
-            [ui.available_width(), OVERFLOW_LINE - 6.0],
-            egui::Label::new(Type::Small.rich(ui, text).color(colors().muted)),
+        let (rect, _) = ui.allocate_exact_size(
+            vec2(ui.available_width(), OVERFLOW_LINE),
+            egui::Sense::hover(),
+        );
+        ui.painter().rect_filled(rect, 0.0, colors().page);
+        ui.painter().hline(
+            rect.x_range(),
+            rect.top(),
+            Stroke::new(design::HAIRLINE_WIDTH, colors().hairline),
+        );
+        ui.painter().text(
+            rect.left_center(),
+            Align2::LEFT_CENTER,
+            text,
+            Type::Small.font(ui),
+            colors().muted,
         );
     }
 
@@ -1716,11 +1750,6 @@ impl Run {
 
     fn footer_height(&self) -> f32 {
         FOOTER_HEIGHT
-            + if self.sync_needs_sign_in() {
-                Type::Small.line()
-            } else {
-                0.0
-            }
     }
 
     /// Sync and the closing controls. These are kept far from Next turn.
@@ -1782,22 +1811,28 @@ impl Run {
             {
                 self.closing = true;
             }
-            if Action::quiet("End encounter…")
-                .density(Density::Read)
-                .hint("Set an outcome. You can undo this.")
-                .show(ui)
-                .clicked()
+            if Action::quiet(if compact && self.sync_needs_sign_in() {
+                "End…"
+            } else {
+                "End encounter…"
+            })
+            .name("End encounter…")
+            .density(Density::Read)
+            .hint("Set an outcome. You can undo this.")
+            .show(ui)
+            .clicked()
             {
                 self.ending = true;
                 self.focus_outcome = true;
             }
             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                 self.save_status(ui);
-                let keys = Action::quiet("Keys");
-                let keys = if compact {
-                    keys
+                let keys = if compact && self.sync_needs_sign_in() {
+                    Action::quiet("").icon(icons::KEYS)
+                } else if compact {
+                    Action::quiet("Keys")
                 } else {
-                    keys.icon(icons::KEYS)
+                    Action::quiet("Keys").icon(icons::KEYS)
                 };
                 if keys
                     .density(Density::Read)
@@ -1814,16 +1849,27 @@ impl Run {
                     };
                     self.close_lookup = true;
                 }
-                self.sync_party_button(ui);
+                if self.sync_needs_sign_in() {
+                    ui.with_layout(Layout::left_to_right(Align::Center), |ui| {
+                        self.sync_party_button(ui);
+                        if design::status_link(
+                            ui,
+                            Status {
+                                icon: icons::SYNC_OFF,
+                                word: "Connect to sync",
+                                color: colors().muted,
+                            },
+                        )
+                        .clicked()
+                        {
+                            self.wants_sign_in = true;
+                        }
+                    });
+                } else {
+                    self.sync_party_button(ui);
+                }
             });
         });
-        if self.sync_needs_sign_in() {
-            ui.label(
-                Type::Small
-                    .rich(ui, "Sign in to sync")
-                    .color(colors().muted),
-            );
-        }
         closed
     }
 
@@ -1958,6 +2004,7 @@ impl Run {
             self.error = Some(reason.to_owned());
             return false;
         }
+        self.mark_closed();
         match self.save() {
             Ok(()) => {
                 self.closing = false;
@@ -2063,7 +2110,7 @@ impl Run {
                             .color(colors().text),
                     );
                 }
-                if Action::quiet("Stop sync")
+                if Action::quiet(&format!("Stop sync for {name}"))
                     .density(Density::Read)
                     .name(&format!("Stop sync for {name}"))
                     .hint("Sync stops, and changes not yet confirmed are not sent")
@@ -2090,9 +2137,22 @@ impl Run {
         } else {
             &p.name
         };
-        ui.add(egui::Label::new(Type::Title.rich(ui, title).color(colors().text)).wrap());
+        if matches!(self.panel, Panel::Log | Panel::Encounter | Panel::Groups) {
+            ui.horizontal_wrapped(|ui| {
+                ui.label(Type::Title.rich(ui, title).color(colors().text));
+                ui.add(
+                    egui::Label::new(Type::Small.rich(ui, &p.name).color(colors().muted)).wrap(),
+                );
+            });
+        } else {
+            ui.add(egui::Label::new(Type::Title.rich(ui, title).color(colors().text)).wrap());
+        }
+
         let participant_tab = !matches!(self.panel, Panel::Log | Panel::Encounter | Panel::Groups);
-        if participant_tab && hp == Some(0) {
+        let reference = if is_sheet { "Sheet" } else { "Stat block" };
+        self.panel_tabs(ui, Some(reference), true);
+        design::rule(ui);
+        if hp == Some(0) {
             self.death_saves(ui, index, successes, failures);
         }
         if let Some(sync) = self
@@ -2102,9 +2162,6 @@ impl Run {
         {
             sync.conflicts(ui);
         }
-        let reference = if is_sheet { "Sheet" } else { "Stat block" };
-        self.panel_tabs(ui, Some(reference), true);
-        design::rule(ui);
         self.panel_body(ui, index, self.panel);
     }
 
@@ -2117,7 +2174,9 @@ impl Run {
         if conditions {
             participant.push((Panel::Conditions, "Conditions"));
         }
-        participant.push((Panel::Record, "Correct"));
+        if reference.is_some() {
+            participant.push((Panel::Record, "Correct"));
+        }
         let fight = [
             (Panel::Log, "Log"),
             (Panel::Encounter, "Prep"),
@@ -2131,7 +2190,9 @@ impl Run {
                 })
                 .sum::<f32>()
         };
-        let fits = width(&participant) + width(&fight) + design::L <= ui.available_width();
+        let participant_width = width(&participant);
+        let fight_width = width(&fight);
+        let fits = participant_width + fight_width + design::L <= ui.available_width();
         ui.horizontal(|ui| {
             ui.spacing_mut().item_spacing.x = 0.0;
             design::segmented(ui, &mut self.panel, &participant);
@@ -2211,14 +2272,20 @@ impl Run {
             .auto_shrink([false, false])
             .show(ui, |ui| {
                 ui.spacing_mut().item_spacing.y = design::XS;
-                ui.add(
-                    egui::Label::new(
-                        Type::Small
-                            .rich(ui, "Drag a group name to the list, or use Add.")
-                            .color(colors().muted),
-                    )
-                    .wrap(),
-                );
+                if self
+                    .groups
+                    .as_ref()
+                    .is_some_and(|groups| !groups.is_empty())
+                {
+                    ui.add(
+                        egui::Label::new(
+                            Type::Small
+                                .rich(ui, "Drag a group name to the list, or use Add.")
+                                .color(colors().muted),
+                        )
+                        .wrap(),
+                    );
+                }
                 self.just_added(ui);
                 self.add_creature_form(ui);
                 design::rule(ui);
@@ -2258,7 +2325,11 @@ impl Run {
     /// Returns the group the DM chooses to add. Those in tonight's plan come first.
     fn group_list(&mut self, ui: &mut egui::Ui) -> Option<Uuid> {
         let c = colors();
-        ui.label(Type::Heading.rich(ui, "Encounter groups").color(c.text));
+        design::group_heading(
+            ui,
+            "Encounter groups",
+            self.groups.as_ref().map_or(0, |groups| groups.len()),
+        );
         let Some(groups) = self.groups.clone() else {
             ui.add(
                 egui::Label::new(
@@ -2274,13 +2345,16 @@ impl Run {
             return None;
         };
         if groups.is_empty() {
-            design::empty_state(
-                ui,
-                icons::GROUP,
-                "No encounter groups yet",
-                "Assemble one in a session's plan, or on Encounters with New group.",
-                |_| {},
-            );
+            ui.horizontal_wrapped(|ui| {
+                ui.label(
+                    Type::Small
+                        .rich(ui, "No groups yet. Make one on Encounters with")
+                        .color(c.muted),
+                );
+                if design::link(ui, "New group").clicked() {
+                    self.wants_new_group = true;
+                }
+            });
             return None;
         }
         design::rule(ui);
@@ -2302,7 +2376,7 @@ impl Run {
             ("For one encounter", offered.other.as_slice()),
         ] {
             if labelled && !list.is_empty() {
-                design::group_label(ui, heading);
+                design::group_heading(ui, heading, list.len());
             }
             for group in list {
                 ui.push_id(group.id, |ui| {
@@ -2418,7 +2492,11 @@ impl Run {
             .map(|from| from.round)
             .max();
         let summary = if let Some(round) = added {
-            format!("Added in round {round} · {members}")
+            if round == 0 {
+                format!("Added before combat · {members}")
+            } else {
+                format!("Added in round {round} · {members}")
+            }
         } else if let Some(name) = group
             .encounter_name
             .as_ref()
@@ -2446,15 +2524,17 @@ impl Run {
             ui.label(Type::Small.rich(ui, "Total").color(c.muted));
             let text = self.group_totals.entry(group.id).or_default();
             // By id, because two groups can have one name.
-            let response = design::number_field_with_id(
-                ui,
-                design::focus_id(&field).with(group.id),
-                &field,
-                text,
-                "Roll",
-                72.0,
-                Density::Read.control(),
-            );
+            let response = design::locked(ui, group.problem.as_deref(), |ui| {
+                design::number_field_with_id(
+                    ui,
+                    design::focus_id(&field).with(group.id),
+                    &field,
+                    text,
+                    "Roll",
+                    72.0,
+                    Density::Read.control(),
+                )
+            });
             response.clone().on_hover_text("Blank rolls initiative");
             ui.ctx().accesskit_node_builder(response.id, |node| {
                 node.set_description("Blank rolls initiative")
@@ -2482,11 +2562,23 @@ impl Run {
                 ui.add(
                     egui::Label::new(
                         Type::Small
-                            .rich(ui, format!("{} {fault}", icons::WARN))
+                            .rich(
+                                ui,
+                                format!(
+                                    "{} {}",
+                                    icons::WARN,
+                                    fault.trim_end_matches(" Campaign → Packages.")
+                                ),
+                            )
                             .color(c.result.warning),
                     )
                     .wrap(),
                 );
+            }
+            if problem.contains("Campaign → Packages")
+                && design::link(ui, "Campaign → Packages").clicked()
+            {
+                self.wants_packages = true;
             }
             if design::status_link(
                 ui,
@@ -2586,14 +2678,24 @@ impl Run {
         let c = colors();
         let mut command = None;
         ui.horizontal(|ui| {
-            ui.label(Type::Heading.rich(ui, "Death saves").color(c.text));
-            ui.label(
-                Type::Body
-                    .rich(ui, format!("{successes} successes · {failures} failures"))
-                    .color(c.muted),
-            );
-        });
-        ui.horizontal(|ui| {
+            ui.set_min_height(Density::Read.control());
+            ui.spacing_mut().item_spacing.x = design::XS;
+            ui.label(Type::Small.rich(ui, "Death saves").color(c.text));
+            let (mut good, mut bad) = (successes, failures);
+            for (count, icon, name) in [
+                (&mut good, icons::OK, "Death save successes"),
+                (&mut bad, icons::CLOSE, "Death save failures"),
+            ] {
+                let response = ui.add(
+                    egui::DragValue::new(count)
+                        .range(0..=3)
+                        .suffix(format!(" {icon}")),
+                );
+                design::named(ui, &response, name);
+            }
+            if good != successes || bad != failures {
+                command = Some(Command::DeathSaves(index, good, bad));
+            }
             if Action::quiet("+ Success")
                 .name("Add a death save success")
                 .density(Density::Read)
@@ -2826,7 +2928,7 @@ impl Run {
                             colors().muted,
                         )
                     };
-                    ui.add(egui::Label::new(Type::Small.rich(ui, words).color(color)).wrap());
+                    design::group_heading(ui, "Correct initiative", 0);
                     let field = format!("Initiative for {}", p.name);
                     let text = self.setup_inputs.entry(index).or_default();
                     let total = text.trim().parse::<i64>().ok();
@@ -2843,9 +2945,10 @@ impl Run {
                             && ui.input(|i| i.key_pressed(Key::Enter));
                         let pressed = Action::secondary("Set initiative")
                             .density(Density::Read)
-                            .blocked_if(total.is_none(), "Type a total first.")
+                            .blocked_if(total.is_none(), "Type a number first.")
                             .show(ui)
                             .clicked();
+                        design::blocked_reason(ui, total.is_none().then_some("Type a number first."));
                         if (pressed || enter)
                             && let Some(total) = total
                         {
@@ -2854,20 +2957,8 @@ impl Run {
                             self.return_focus = self.lookup_open;
                         }
                     });
+                    ui.add(egui::Label::new(Type::Small.rich(ui, words).color(color)).wrap());
                 }
-                design::group_label(ui, "Death saves (manual)");
-                ui.horizontal(|ui| {
-                    let (mut successes, mut failures) = (p.successes, p.failures);
-                    ui.label("Successes");
-                    let a = ui.add(egui::DragValue::new(&mut successes).range(0..=3));
-                    design::named(ui, &a, "Death save successes");
-                    ui.label("Failures");
-                    let b = ui.add(egui::DragValue::new(&mut failures).range(0..=3));
-                    design::named(ui, &b, "Death save failures");
-                    if successes != p.successes || failures != p.failures {
-                        command = Some(Command::DeathSaves(index, successes, failures));
-                    }
-                });
                 ui.add(
                     egui::Label::new(
                         Type::Small
@@ -2885,8 +2976,8 @@ impl Run {
                         ui,
                         "DM note",
                         &mut self.note,
-                        "Resources, targets, rulings…",
-                        (ui.available_width() - 90.0).max(120.0),
+                        "Note",
+                        (ui.available_width() - design::S * 30.0).max(design::S * 8.0),
                     );
                     if Action::secondary("Add note")
                         .name("Add note")
@@ -2897,6 +2988,7 @@ impl Run {
                     {
                         command = Some(Command::Note(index, self.note.clone()));
                     }
+                    design::blocked_reason(ui, self.note.trim().is_empty().then_some("Type a note first."));
                 });
                 if !p.notes.is_empty() {
                     ui.add(
@@ -2975,11 +3067,7 @@ impl Run {
             .filter(|p| !matches!((p.hp, p.max_hp), (Some(hp), Some(max)) if max > 0 && hp >= 0 && hp <= max))
             .count();
         let blocked = if missing_hp > 0 {
-            Some(if self.hide_panel {
-                format!("{missing_hp} need valid HP.")
-            } else {
-                format!("{missing_hp} need valid HP. Open Correct to set it.")
-            })
+            Some(format!("{missing_hp} need valid HP."))
         } else if missing_initiative > 0 {
             Some(format!("{missing_initiative} need initiative."))
         } else {
@@ -2990,65 +3078,112 @@ impl Run {
         let default_hint = format!("Campaign default: {}", default_roll.label());
         let roll_choices = self.roll_choices();
         ui.allocate_ui_with_layout(
-            vec2(ui.available_width(), 44.0),
-            Layout::right_to_left(Align::Center),
+            vec2(
+                ui.available_width(),
+                Density::Glance.control() + Density::Read.control() + design::XS,
+            ),
+            Layout::right_to_left(Align::TOP),
             |ui| {
-                ui.set_min_height(44.0);
-                if Action::primary("Begin combat")
-                    .density(Density::Glance)
-                    .blocked(blocked.as_deref())
-                    .show(ui)
-                    .clicked()
-                {
-                    command = Some(Command::Begin);
-                }
-                let roll = design::split_action(
-                    ui,
-                    Action::secondary("Roll NPCs")
-                        .name("Roll NPC initiative")
-                        .icon(icons::DICE)
-                        .density(Density::Glance)
-                        .hint(&default_hint),
-                    "Roll NPC initiative another way",
+                ui.set_min_height(Density::Glance.control() + Density::Read.control() + design::XS);
+                ui.allocate_ui_with_layout(
+                    vec2(
+                        design::S * 18.0,
+                        Density::Glance.control() + Density::Read.control() + design::XS,
+                    ),
+                    Layout::top_down(Align::RIGHT),
                     |ui| {
-                        ui.label(Type::Small.rich(ui, "This roll only").color(colors().muted));
-                        for mode in &roll_choices {
-                            let item = ui.selectable_label(*mode == default_roll, mode.label());
-                            if item.clicked() {
-                                command = Some(Command::RollNpcs(*mode));
-                            }
+                        if Action::primary("Begin combat")
+                            .density(Density::Glance)
+                            .blocked(blocked.as_deref())
+                            .show(ui)
+                            .clicked()
+                        {
+                            command = Some(Command::Begin);
+                        }
+                        if let Some(reason) = &blocked {
+                            ui.label(Type::Small.rich(ui, reason).color(colors().muted));
                         }
                     },
                 );
-                if roll.clicked() {
-                    command = Some(Command::RollNpcs(default_roll));
-                }
+                ui.allocate_ui_with_layout(
+                    vec2(
+                        design::S * 20.0,
+                        Density::Glance.control() + Density::Read.control() + design::XS,
+                    ),
+                    Layout::top_down(Align::RIGHT),
+                    |ui| {
+                        let roll = ui
+                            .horizontal(|ui| {
+                                design::split_action(
+                                    ui,
+                                    Action::secondary("Roll NPCs")
+                                        .name("Roll NPC initiative")
+                                        .icon(icons::DICE)
+                                        .density(Density::Glance)
+                                        .hint(&default_hint),
+                                    "Roll NPC initiative another way",
+                                    |ui| {
+                                        ui.label(
+                                            Type::Small
+                                                .rich(ui, "This roll only")
+                                                .color(colors().muted),
+                                        );
+                                        for mode in &roll_choices {
+                                            let item = ui.selectable_label(
+                                                *mode == default_roll,
+                                                mode.label(),
+                                            );
+                                            if item.clicked() {
+                                                command = Some(Command::RollNpcs(*mode));
+                                            }
+                                        }
+                                    },
+                                )
+                            })
+                            .inner;
+                        if roll.clicked() {
+                            command = Some(Command::RollNpcs(default_roll));
+                        }
+                        let label = self.undo_label();
+                        if self
+                            .undo_action("Undo")
+                            .name(&label)
+                            .hint(&label)
+                            .show(ui)
+                            .clicked()
+                        {
+                            self.undo();
+                            self.return_focus = self.lookup_open;
+                        }
+                    },
+                );
                 ui.with_layout(Layout::top_down(Align::LEFT), |ui| {
                     ui.spacing_mut().item_spacing.y = 0.0;
-                    self.run_title(ui, "Setup");
+                    self.run_title(ui, &self.state_words(false));
+                    let tied = self.tied_count();
+                    if blocked.is_none() || tied > 0 {
+                        let text = if tied > 0 {
+                            format!(
+                                "{} {}{tied} tied",
+                                icons::WARN,
+                                if blocked.is_none() {
+                                    "Everyone is ready · "
+                                } else {
+                                    ""
+                                }
+                            )
+                        } else {
+                            "Everyone is ready.".to_owned()
+                        };
+                        ui.label(Type::Small.rich(ui, text).color(if tied > 0 {
+                            colors().result.warning
+                        } else {
+                            colors().result.success
+                        }));
+                    }
                 });
             },
         );
-        // Always one line, so the rows below never move during entry (T4.3).
-        ui.horizontal(|ui| {
-            let tied = self.tied_with_panel_hidden();
-            ui.label(match &blocked {
-                Some(blocked) => Type::Small
-                    .rich(ui, format!("{} {blocked}", icons::WARN))
-                    .color(colors().document.unsaved),
-                None if tied > 0 => Type::Small
-                    .rich(ui, format!("Everyone is ready. {tied} tied."))
-                    .color(colors().document.unsaved),
-                None => Type::Small
-                    .rich(ui, "Everyone is ready.")
-                    .color(colors().result.success),
-            });
-            // Notes hide corrections and tie order, so one link leads there.
-            if self.hide_panel && design::link(ui, "Open Correct").clicked() {
-                self.panel = Panel::Record;
-                self.close_lookup = true;
-            }
-        });
         design::rule(ui);
         self.error_line(ui);
         if let Some(words) = self.carry_missing() {
@@ -3118,12 +3253,6 @@ impl Run {
                 {
                     self.closing = true;
                 }
-                let label = self.undo_label();
-                if self.undo_action(&label).show(ui).clicked() {
-                    self.undo();
-                    self.return_focus = self.lookup_open;
-                }
-                self.undo_reason(ui);
                 ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                     self.save_status(ui)
                 });
@@ -3154,12 +3283,12 @@ impl Run {
     /// used controls wait behind a row expander.
     fn setup_row(&mut self, ui: &mut egui::Ui, index: usize) -> Option<Command> {
         let mut command = None;
-        let p = &self.state.participants[index];
+        let p = self.state.participants[index].clone();
         // What the DM weighs before a fight: who is hurt, and what is still on them.
         let side_icon = match p.side.as_str() {
-            "party" => "■",
-            "enemies" => "◆",
-            _ => "•",
+            "party" => icons::PARTY,
+            "enemies" => icons::ENCOUNTERS,
+            _ => icons::GROUP,
         };
         let mut numbers = format!(
             "{side_icon} {} · HP {}/{}",
@@ -3177,7 +3306,7 @@ impl Run {
         }
         // A changed creature's AC may be part of what changed.
         numbers.push_str(&format!(" · AC {}", display(p.armor_class)));
-        if let Some((_, word, _)) = hp_word(p) {
+        if let Some((_, word, _)) = hp_word(&p) {
             numbers.push_str(&format!(" · {word}"));
         }
         // A changed row has its change to say, and no room left for these.
@@ -3188,7 +3317,7 @@ impl Run {
         }
         let selected = self.panel == Panel::Record && self.selected == index;
         let (name, npc, mode, bonus, initiative, present) = (
-            &p.name,
+            p.name.clone(),
             p.npc,
             p.initiative_mode,
             p.initiative_bonus,
@@ -3196,15 +3325,23 @@ impl Run {
             p.present,
         );
         let expanded = self.setup_expanded == Some(index);
-        let row = Density::Scan.row() + design::XS;
+        let row = Density::Scan.control() + design::XL + design::XS;
         let mut enter = false;
         ui.horizontal(|ui| {
             ui.spacing_mut().item_spacing.x = design::XS;
             // Keep the worded toggle in every width; party rows give up their per-row Roll.
             let presence_slot = design::L * 6.0;
+            let roll_slot = design::S * 7.0;
             let actions =
-                72.0 + if npc { 76.0 } else { 0.0 } + 28.0 + presence_slot + 4.0 * design::XS;
-            let name_width = (ui.available_width() - actions).max(110.0);
+                72.0 + roll_slot + Density::Read.control() + presence_slot + 4.0 * design::XS;
+            let name_width = (ui.available_width() - actions).max(design::XL);
+            if selected {
+                ui.painter().rect_filled(
+                    Rect::from_min_size(ui.cursor().min, vec2(ui.available_width(), row)),
+                    0.0,
+                    colors().selected,
+                );
+            }
             let side = "";
             let plain = format!("{absent}{side}{numbers}");
             // Changed values keep their mark beside the setup numbers.
@@ -3262,63 +3399,99 @@ impl Run {
                 self.for_note = Some(typed);
                 self.return_focus = true;
             }
-            let text = self
-                .setup_inputs
-                .entry(index)
-                .or_insert_with(|| initiative.map_or_else(String::new, |n| n.to_string()));
-            let response =
-                design::number_field(ui, &field_name, text, "Init", 72.0, Density::Scan.control());
-            let parsed = text.parse::<i64>().ok();
-            if response.changed() {
-                if parsed != initiative {
-                    command = Some(Command::Initiative(index, parsed));
+            ui.allocate_ui_with_layout(vec2(72.0, row), Layout::top_down(Align::LEFT), |ui| {
+                ui.set_width(72.0);
+                let text = self
+                    .setup_inputs
+                    .entry(index)
+                    .or_insert_with(|| initiative.map_or_else(String::new, |n| n.to_string()));
+                let response = design::number_field(
+                    ui,
+                    &field_name,
+                    text,
+                    "Init",
+                    72.0,
+                    Density::Scan.control(),
+                );
+                let parsed = text.parse::<i64>().ok();
+                if response.changed() {
+                    if parsed != initiative {
+                        command = Some(Command::Initiative(index, parsed));
+                    }
+                } else if !response.has_focus() && parsed != initiative {
+                    *text = initiative.map_or_else(String::new, |n| n.to_string());
                 }
-            } else if !response.has_focus() && parsed != initiative {
-                // A roll or undo changed it. The field follows.
-                *text = initiative.map_or_else(String::new, |n| n.to_string());
-            }
-            enter = response.lost_focus() && ui.input(|i| i.key_pressed(Key::Enter));
-            if self.focus_field == Some(index) {
-                self.focus_field = None;
-                response.request_focus();
-            }
-            if npc
-                && Action::quiet("Roll")
-                    .plain()
-                    .icon(icons::DICE)
-                    .density(Density::Scan)
-                    .name(&format!("Roll for {name}"))
-                    .blocked_if(bonus.is_none(), "Set an initiative bonus, or type a total.")
-                    .show(ui)
-                    .clicked()
-            {
-                command = Some(Command::RollInitiative(index));
-            }
+                enter = response.lost_focus() && ui.input(|i| i.key_pressed(Key::Enter));
+                if self.focus_field == Some(index) {
+                    self.focus_field = None;
+                    response.request_focus();
+                }
+                if let Some(picked) = self.setup_tie_controls(ui, index) {
+                    command = Some(picked);
+                }
+            });
+            ui.allocate_ui_with_layout(
+                vec2(roll_slot, Density::Scan.control()),
+                Layout::top_down(Align::LEFT),
+                |ui| {
+                    ui.set_width(roll_slot);
+                    if npc
+                        && Action::quiet("Roll")
+                            .plain()
+                            .density(Density::Scan)
+                            .name(&format!("Roll for {name}"))
+                            .blocked_if(
+                                bonus.is_none(),
+                                "Set an initiative bonus, or type a total.",
+                            )
+                            .show(ui)
+                            .clicked()
+                    {
+                        command = Some(Command::RollInitiative(index));
+                    }
+                },
+            );
             let (word, hint) = presence_action(present);
             let accessible = format!("{word}: {name}");
-            let pressed = toggle(
-                ui,
-                word,
-                icons::ABSENT,
-                !present,
-                &accessible,
-                Density::Scan,
-            )
-            .on_hover_text(hint)
-            .clicked();
+            let pressed = ui
+                .allocate_ui_with_layout(
+                    vec2(presence_slot, Density::Scan.control()),
+                    Layout::top_down(Align::LEFT),
+                    |ui| {
+                        ui.set_width(presence_slot);
+                        let button = egui::Button::new(
+                            Type::Body.rich(ui, format!("{} {word}", icons::ABSENT)),
+                        )
+                        .selected(!present)
+                        .fill(if present {
+                            colors().page
+                        } else {
+                            colors().selected
+                        })
+                        .frame(!present)
+                        .min_size(vec2(presence_slot, Density::Scan.control()));
+                        let response = ui.add(button).on_hover_text(hint);
+                        design::named(ui, &response, &accessible);
+                        response.clicked()
+                    },
+                )
+                .inner;
             if pressed {
                 command = Some(Command::Presence(index, !present));
             }
-            if design::icon_button(
-                ui,
-                icons::EXPAND,
-                &format!("More options for {name}: NPC and roll mode"),
-            )
-            .clicked()
-            {
-                self.setup_expanded = if expanded { None } else { Some(index) };
-                self.return_focus = self.lookup_open;
-            }
+            design::row_menu(ui, &name, |ui| {
+                if Action::quiet("Correct…").show(ui).clicked() {
+                    self.selected = index;
+                    self.panel = Panel::Record;
+                    self.close_lookup = true;
+                    ui.close();
+                }
+                if Action::quiet("NPC and roll mode").show(ui).clicked() {
+                    self.setup_expanded = if expanded { None } else { Some(index) };
+                    self.return_focus = self.lookup_open;
+                    ui.close();
+                }
+            });
         });
         if enter {
             // The next row without a total, after this one, then from the top.
@@ -3384,7 +3557,6 @@ impl Run {
                         .color(colors().muted),
                 );
                 changes_block(ui, p, false);
-                design::quiet_section(ui, "Resolve ties", |ui| self.turn_order_preview(ui));
                 self.record_tab(ui, self.selected);
             }
             Panel::Log => self.log_tab(ui),
@@ -3394,8 +3566,8 @@ impl Run {
     }
 
     /// How many the DM must order, when Notes hide the panel that says so.
-    fn tied_with_panel_hidden(&self) -> usize {
-        if !self.hide_panel || self.initiative.roster_ties {
+    fn tied_count(&self) -> usize {
+        if self.initiative.roster_ties {
             return 0;
         }
         let initiative = |at: usize| {
@@ -3413,155 +3585,41 @@ impl Run {
             .count()
     }
 
-    fn turn_order_preview(&mut self, ui: &mut egui::Ui) {
-        let c = colors();
+    /// Two fixed arrow slots under Init keep totals and targets aligned on every row.
+    fn setup_tie_controls(&self, ui: &mut egui::Ui, index: usize) -> Option<Command> {
+        let position = self.state.order.iter().position(|i| *i == index)?;
+        let p = &self.state.participants[index];
+        let tied = |other: Option<&usize>| {
+            !self.initiative.roster_ties
+                && p.initiative.is_some()
+                && other.is_some_and(|i| self.state.participants[*i].initiative == p.initiative)
+        };
+        let up = position > 0 && tied(self.state.order.get(position - 1));
+        let down = tied(self.state.order.get(position + 1));
         let mut command = None;
-        ui.add(
-            egui::Label::new(
-                Type::Small
-                    .rich(
-                        ui,
-                        format!(
-                            "Default NPC roll: {} · {}",
-                            self.initiative.grouping.label(),
-                            if self.initiative.roster_ties {
-                                "Roster order breaks ties"
-                            } else {
-                                "You resolve ties"
-                            }
-                        ),
-                    )
-                    .color(c.muted),
-            )
-            .wrap(),
-        );
-        if matches!(
-            self.initiative.grouping,
-            Grouping::BySide | Grouping::Explicit
-        ) {
-            ui.add(
-                egui::Label::new(
-                    Type::Small
-                        .rich(
-                            ui,
-                            "Each group uses the first NPC in roster order for its bonus and roll mode.",
-                        )
-                        .color(c.muted),
-                )
-                .wrap(),
-            );
-        }
-        if !self.initiative.roster_ties
-            && self.state.order.windows(2).any(|pair| {
-                let a = self.state.participants[pair[0]].initiative;
-                a.is_some() && a == self.state.participants[pair[1]].initiative
-            })
-        {
-            ui.label(Type::Small.rich(ui, "Tie: choose the order").color(c.muted));
-        }
-        egui::ScrollArea::vertical()
-            .id_salt("run_order_preview")
-            .max_height(design::READER_MEASURE / 3.0)
-            .auto_shrink([false, true])
-            .show(ui, |ui| {
-                ui.spacing_mut().item_spacing.y = 0.0;
-                let order = &self.state.order;
-                for (position, index) in order.iter().enumerate() {
-                    let p = &self.state.participants[*index];
-                    let tied = |other: Option<&usize>| {
-                        p.initiative.is_some()
-                            && other.is_some_and(|o| {
-                                self.state.participants[*o].initiative == p.initiative
-                            })
-                    };
-                    let up = position > 0 && tied(order.get(position - 1));
-                    let down = tied(order.get(position + 1));
-                    if !up && !down {
-                        continue;
+        ui.horizontal(|ui| {
+            ui.spacing_mut().item_spacing.x = 0.0;
+            for (allowed, icon, destination, relation) in [
+                (up, icons::MOVE_UP, position.saturating_sub(1), "before"),
+                (down, icons::MOVE_DOWN, position + 1, "after"),
+            ] {
+                if allowed {
+                    let name = format!(
+                        "Move {} {relation} {}",
+                        p.name, self.state.participants[self.state.order[destination]].name
+                    );
+                    if design::icon_button(ui, icon, &name).clicked() {
+                        command = Some(Command::Move(position, destination));
                     }
-                    ui.push_id(index, |ui| {
-                        ui.horizontal(|ui| {
-                            ui.set_min_height(Density::Read.control());
-                            let (rect, _) = ui.allocate_exact_size(
-                                vec2(26.0, Density::Read.control()),
-                                egui::Sense::hover(),
-                            );
-                            design::number(
-                                ui.painter(),
-                                rect.right(),
-                                rect.center().y,
-                                &p.initiative.map_or_else(|| "—".into(), |n| n.to_string()),
-                                &Type::Numeral.font(ui),
-                                if p.initiative.is_some() {
-                                    c.text
-                                } else {
-                                    c.faint
-                                },
-                            );
-                            if !p.present {
-                                design::status(
-                                    ui,
-                                    Status {
-                                        icon: icons::ABSENT,
-                                        word: "Absent",
-                                        color: c.participant.absent,
-                                    },
-                                );
-                            }
-                            ui.add(
-                                egui::Label::new(Type::Body.rich(ui, &p.name).color(c.text))
-                                    .truncate(),
-                            );
-                            if !self.initiative.roster_ties && (up || down) {
-                                ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                                    // Two fixed places, so that a second click on an arrow
-                                    // cannot land on the other one and take back the first.
-                                    let slot = egui::Vec2::splat(Density::Read.control());
-                                    if down {
-                                        if design::icon_button(
-                                            ui,
-                                            icons::MOVE_DOWN,
-                                            &format!(
-                                                "Move {} after {}",
-                                                p.name,
-                                                self.state.participants[order[position + 1]].name
-                                            ),
-                                        )
-                                        .clicked()
-                                        {
-                                            command = Some(Command::Move(position, position + 1));
-                                        }
-                                    } else {
-                                        ui.allocate_space(slot);
-                                    }
-                                    if up {
-                                        if design::icon_button(
-                                            ui,
-                                            icons::MOVE_UP,
-                                            &format!(
-                                                "Move {} before {}",
-                                                p.name,
-                                                self.state.participants[order[position - 1]].name
-                                            ),
-                                        )
-                                        .clicked()
-                                        {
-                                            command = Some(Command::Move(position, position - 1));
-                                        }
-                                    } else {
-                                        ui.allocate_space(slot);
-                                    }
-                                    ui.label(Type::Small.rich(ui, "Tie").color(c.document.unsaved));
-                                });
-                            }
-                        });
-                    });
-                    design::rule(ui);
+                } else {
+                    ui.allocate_space(vec2(design::XL, design::XL));
                 }
-            });
-        if let Some(command) = command {
-            self.run_command(command);
-        }
+            }
+            if up || down {
+                ui.label(Type::Small.rich(ui, "Tie").color(colors().result.warning));
+            }
+        });
+        command
     }
 
     // ---- Ended ------------------------------------------------------------------
@@ -3617,10 +3675,10 @@ impl Run {
                 self.save_status(ui);
                 ui.with_layout(Layout::top_down(Align::LEFT), |ui| {
                     ui.spacing_mut().item_spacing.y = 0.0;
-                    self.run_title(ui, &format!("Ended: {outcome}"));
+                    self.run_title(ui, &self.state_words(false));
                     ui.label(
                         Type::Small
-                            .rich(ui, format!("Ended manually in round {}", self.state.round))
+                            .rich(ui, format!("Outcome: {outcome}"))
                             .color(c.muted),
                     );
                 });
@@ -3762,7 +3820,14 @@ fn changes_block(ui: &mut egui::Ui, p: &Participant, above_stat_block: bool) {
             .wrap(),
         );
     }
-    let Some(changes) = &p.changes else {
+    if p.npc_identity() {
+        ui.label(
+            Type::Small
+                .rich(ui, format!("as {}", p.definition.name))
+                .color(c.muted),
+        );
+    }
+    let Some(changes) = p.changes.as_ref().filter(|_| p.stat_changes()) else {
         return;
     };
     design::status(
@@ -3780,7 +3845,15 @@ fn changes_block(ui: &mut egui::Ui, p: &Participant, above_stat_block: bool) {
             color: c.participant.changed,
         },
     );
-    let rows = changes.overrides.rows(&changes.base);
+    let rows: Vec<_> = changes
+        .overrides
+        .rows(&changes.base)
+        .into_iter()
+        .filter(|row| {
+            !above_stat_block || !matches!(row.label, "Maximum HP" | "AC" | "Initiative bonus")
+        })
+        .filter(|row| !p.npc_identity() || row.label != "Name")
+        .collect();
     change_rows(ui, &rows);
     let note = (!above_stat_block && rows.iter().any(|row| row.by_hand)).then_some(BY_HAND);
     if let Some(note) = note {
@@ -3889,7 +3962,10 @@ fn row_name(p: &Participant, turn: TurnMark, sync: Option<SyncState>) -> String 
         parts.push("Concentrating".into());
     }
     parts.extend(p.conditions.iter().cloned());
-    if let Some(changes) = &p.changes {
+    if p.npc_identity() {
+        parts.push(format!("as {}", p.definition.name));
+    }
+    if let Some(changes) = p.changes.as_ref().filter(|_| p.stat_changes()) {
         parts.push("Changed".into());
         parts.extend(changes.overrides.table_bonuses(&changes.base));
     }
@@ -3910,6 +3986,8 @@ enum RowFit {
     Natural,
     /// The list needs the height, so a row gives up its padding too.
     Compressed,
+    /// After name-only rows shrink, keep the first table bonus and a link to the rest.
+    Summary,
 }
 
 /// The height that makes these rows, none shorter than it is now, fill `room`, up to `cap`.
@@ -3987,7 +4065,7 @@ impl RowLayout {
         // Fixed columns from the left of the numbers. A name stays near its HP.
         // The smallest scale has one set of columns, compressed or not, so that a list that
         // starts to compress does not move its names sideways.
-        let narrow = fit == RowFit::Compressed || scale.row <= design::RUN_COMPACT.row;
+        let narrow = fit != RowFit::Natural || scale.row <= design::RUN_COMPACT.row;
         // The current-row bar, the gap after it, and room for the word `TURN` at this size. In
         // narrow columns the word can sit on the number's line, so that a row's height never
         // depends on whose turn it is.
@@ -4019,12 +4097,8 @@ impl RowLayout {
 
         let mut job = egui::text::LayoutJob::default();
         // The line wraps before the HP column, so that it never runs over the HP bar.
-        // In a compressed list it starts under the picture, as the row has no height to spare.
-        let second_left = if narrow {
-            name_left - picture - PICTURE_GAP
-        } else {
-            name_left
-        };
+        // Every scale keeps it aligned with the name.
+        let second_left = name_left;
         job.wrap.max_width = (temp_right + bar_inset - second_left).max(1.0);
         // With HP in what a DM looks for: as strong as the state words, and stronger than AC.
         // The compact scale keeps body weight, so a wrapped line costs no row its place.
@@ -4076,9 +4150,14 @@ impl RowLayout {
                 c.participant.concentrating,
             );
         }
-        let condition_spans = p
+        let mut condition_spans: Vec<_> = p
             .conditions
             .iter()
+            .take(if fit == RowFit::Summary && p.conditions.len() > 3 {
+                2
+            } else {
+                p.conditions.len()
+            })
             .map(|condition| {
                 let shown = if condition.split_whitespace().count() > 4 {
                     format!(
@@ -4096,18 +4175,38 @@ impl RowLayout {
             })
             .collect();
         // A side of its own needs its word: a name and a number can look like another side's.
+        if fit == RowFit::Summary && p.conditions.len() > 3 {
+            condition_spans.push((
+                "Run conditions".into(),
+                add(
+                    &format!("{} more", p.conditions.len() - 2),
+                    c.participant.condition,
+                ),
+            ));
+        }
         if !["party", "enemies"].contains(&p.side.as_str()) {
             add(&style::human_label(&p.side), c.side.other);
         }
         // A change is never hidden. What the run cannot apply is on the row, for the roll.
         // A number stays with its word when the line wraps.
-        if let Some(changes) = &p.changes {
+        if p.npc_identity() {
+            add(&format!("as {}", p.definition.name), c.muted);
+        }
+        if let Some(changes) = p.changes.as_ref().filter(|_| p.stat_changes()) {
             add(
                 &format!("{}\u{a0}Changed", icons::CHANGED),
                 c.participant.changed,
             );
-            for bonus in changes.overrides.table_bonuses(&changes.base) {
+            let bonuses = changes.overrides.table_bonuses(&changes.base);
+            for bonus in bonuses.iter().take(if fit == RowFit::Summary {
+                1
+            } else {
+                bonuses.len()
+            }) {
                 add(&bonus.replace(' ', "\u{a0}"), c.participant.changed);
+            }
+            if fit == RowFit::Summary && bonuses.len() > 1 {
+                condition_spans.push(("Run changes".into(), add("more", c.participant.changed)));
             }
         }
         let second_line = (!job.is_empty()).then(|| ui.fonts_mut(|fonts| fonts.layout_job(job)));
@@ -4119,7 +4218,7 @@ impl RowLayout {
                 name_width,
             )
         });
-        let tight = fit == RowFit::Compressed
+        let tight = fit != RowFit::Natural
             && second_line.is_none()
             && sync.is_none()
             && name.rows.len() == 1;
@@ -4155,7 +4254,7 @@ impl RowLayout {
     fn name_line(&self, scale: RunScale) -> f32 {
         scale.name
             + match self.fit {
-                RowFit::Compressed => 2.0,
+                RowFit::Compressed | RowFit::Summary => 2.0,
                 RowFit::Natural => 4.0,
             }
     }
@@ -4172,7 +4271,7 @@ impl RowLayout {
             .as_ref()
             .map_or(second_height, |line| line.size().y);
         let name_line = self.name_line(scale);
-        if self.fit == RowFit::Compressed {
+        if self.fit != RowFit::Natural {
             return (name_line + self.name_extra() + second + design::HAIRLINE_WIDTH)
                 .max(self.even);
         }
@@ -4192,11 +4291,17 @@ impl RowLayout {
     fn line_y(&self, scale: RunScale, height: f32) -> f32 {
         let name_line = self.name_line(scale);
         let second_height = scale.condition + 2.0;
+        if self.fit != RowFit::Natural
+            && let Some(second) = &self.second_line
+        {
+            let content = name_line + self.name_extra() + second.size().y;
+            return ((height - content) / 2.0).max(design::HAIRLINE_WIDTH / 2.0) + name_line / 2.0;
+        }
         // A row with one line centres it until there is room for two. Then every row
         // shares one place, with or without a second line, so adding one moves no number.
         let basis = match self.fit {
             RowFit::Natural => scale.row,
-            RowFit::Compressed => self
+            RowFit::Compressed | RowFit::Summary => self
                 .even
                 .max(height.min(1.0 + name_line + second_height + 1.0)),
         };
@@ -4225,7 +4330,9 @@ fn condition_links(
     let mut opened = None;
     for (position, (condition, span)) in layout.condition_spans.iter().enumerate() {
         let entry = content.and_then(|content| content.condition_rule(condition));
-        let custom = condition.split_whitespace().count() > 4;
+        let changes = condition == "Run changes";
+        let conditions = condition == "Run conditions";
+        let custom = changes || conditions || condition.split_whitespace().count() > 4;
         // Wrapped official conditions remain readable; their rules still open in Lookup.
         if !custom && galley.rows.len() > 1 {
             continue;
@@ -4253,7 +4360,11 @@ fn condition_links(
             .interact(target, id, egui::Sense::click())
             .on_hover_text(format!("Read the rule for {condition}"))
             .on_hover_cursor(egui::CursorIcon::PointingHand);
-        let name = if custom {
+        let name = if conditions {
+            "Read all conditions".to_owned()
+        } else if changes {
+            "Read all changes".to_owned()
+        } else if custom {
             format!("More about {condition}")
         } else {
             format!("Rule: {condition}")
@@ -4277,7 +4388,13 @@ fn condition_links(
             design::focus_ring(ui, target);
         }
         if response.clicked() {
-            opened = Some(entry.unwrap_or(usize::MAX));
+            opened = Some(if conditions {
+                usize::MAX - 2
+            } else if changes {
+                usize::MAX - 1
+            } else {
+                entry.unwrap_or(usize::MAX)
+            });
         }
     }
     opened
@@ -4343,7 +4460,7 @@ fn paint_row(
                 initiative_right,
                 line_y + name_line / 2.0 + second_height / 2.0,
             ),
-            RowFit::Compressed => pos2(initiative_left - design::XS, line_y),
+            RowFit::Compressed | RowFit::Summary => pos2(initiative_left - design::XS, line_y),
         };
         painter.text(
             place,
@@ -4518,4 +4635,58 @@ fn optional_number(
             }
         }
     });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_yaml_ng::Mapping;
+    use splat::content::{Entry, overrides::Overrides};
+
+    #[test]
+    fn wrapped_row_details_stay_above_the_rule_at_every_scale() {
+        let entry = Entry::parse("captain.md", &format!("---\nsplat_schema: 1\nsplat_id: {}\nsplat_kind: creature\nsplat_name: Rival Captain\nsplat_creature: {{type: humanoid}}\nsplat_stats:\n  max_hp: {{value: 33}}\n  armor_class: {{value: 12}}\n---\n", Uuid::new_v4())).unwrap();
+        let overrides = Overrides::parse(
+            &serde_yaml_ng::from_str(
+                "{attack_bonus: {add: 1}, damage_bonus: {add: 1}, speed: {set: 40}}",
+            )
+            .unwrap(),
+        )
+        .unwrap();
+        let mut participant = Participant::with_overrides(
+            "captain".into(),
+            "rivals".into(),
+            entry,
+            &Mapping::new(),
+            &overrides,
+            true,
+        )
+        .unwrap();
+        participant.conditions.push("Blessed".into());
+        let ctx = egui::Context::default();
+        crate::design::theme::install(&ctx);
+        let _ = ctx.run(egui::RawInput::default(), |ctx| {
+            egui::CentralPanel::default().show(ctx, |ui| {
+                for scale in [design::RUN_COMPACT, design::RUN_REGULAR, design::RUN_LARGE] {
+                    for fit in [RowFit::Natural, RowFit::Compressed, RowFit::Summary] {
+                        for width in [400.0, 560.0, 760.0] {
+                            let layout =
+                                RowLayout::new(ui, width, &participant, None, scale, fit, 0.0);
+                            let rect = Rect::from_min_size(
+                                egui::Pos2::ZERO,
+                                vec2(width, layout.height(scale)),
+                            );
+                            let detail = layout.second_line.as_ref().unwrap();
+                            assert!(
+                                layout.second_y(scale, rect) + detail.size().y < rect.bottom(),
+                                "detail crosses row rule at width {width} and scale {}",
+                                scale.row
+                            );
+                            assert_eq!(layout.second_left, layout.name_left);
+                        }
+                    }
+                }
+            });
+        });
+    }
 }

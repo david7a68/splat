@@ -1009,7 +1009,18 @@ impl CombatSync {
                             }
                         ),
                     );
-                    if Action::secondary(&use_label)
+                    let use_word = if name.is_some() {
+                        "Use D&D Beyond"
+                    } else {
+                        &use_label
+                    };
+                    let keep_word = if name.is_some() {
+                        "Keep Splat"
+                    } else {
+                        &keep_label
+                    };
+                    if Action::secondary(use_word)
+                        .hint(&use_label)
                         .name("Use D&D Beyond values")
                         .density(Density::Read)
                         .blocked(busy)
@@ -1023,7 +1034,8 @@ impl CombatSync {
                             .remote
                             .as_ref()
                             .is_some_and(|r| r.can_edit && r.groups.contains_key(&key));
-                    if Action::secondary(&keep_label)
+                    if Action::secondary(keep_word)
+                        .hint(&keep_label)
                         .name("Keep Splat values and retry")
                         .density(Density::Read)
                         .blocked(busy.or(

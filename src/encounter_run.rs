@@ -153,11 +153,14 @@ impl RunGroup {
                     .overrides
                     .resolve(&base)
                     .map_or(base.name, |resolved| resolved.name);
-                format!("{} × {name}", member.count)
+                format!("{} × {name}", grouped_number(member.count))
             })
             .collect();
         for (position, count, name) in &self.unavailable_members {
-            members.insert((*position).min(members.len()), format!("{count} × {name}"));
+            members.insert(
+                (*position).min(members.len()),
+                format!("{} × {name}", grouped_number(count)),
+            );
         }
         members.join(", ")
     }
@@ -213,6 +216,18 @@ fn stat(entry: &Entry, name: &str) -> Option<i64> {
     stat.get("value").and_then(Value::as_i64)
 }
 impl Participant {
+    pub(super) fn npc_identity(&self) -> bool {
+        self.definition.fields.contains_key("splat_run_npc_name")
+    }
+    pub(super) fn stat_changes(&self) -> bool {
+        self.changes.as_ref().is_some_and(|changes| {
+            let mut overrides = changes.overrides.clone();
+            if self.npc_identity() {
+                overrides.name = None;
+            }
+            !overrides.is_empty()
+        })
+    }
     #[cfg(test)]
     pub fn new(
         key: String,
@@ -438,6 +453,7 @@ pub(crate) struct Run {
     source: Option<Uuid>,
     initiative: Initiative,
     storage: Option<Storage>,
+    recovery: Recovery,
     /// Each character's cached portrait, by D&D Beyond ID.
     portraits: BTreeMap<String, Option<PathBuf>>,
     portraits_read: Option<Instant>,
@@ -510,6 +526,8 @@ pub(crate) struct Run {
     /// The panel needs its space back, so Lookup should close.
     pub close_lookup: bool,
     pub wants_sign_in: bool,
+    pub wants_packages: bool,
+    pub wants_new_group: bool,
     pub wants_group_editor: Option<String>,
     /// A button took the keyboard from the panel beside the run, so it goes back.
     pub return_focus: bool,
@@ -720,6 +738,7 @@ impl Run {
             source: None,
             initiative: Initiative::default(),
             storage: None,
+            recovery: Recovery::default(),
             portraits: BTreeMap::new(),
             portraits_read: None,
             dirty: true,
@@ -776,6 +795,8 @@ impl Run {
             lookup_request: None,
             close_lookup: false,
             wants_sign_in: false,
+            wants_packages: false,
+            wants_new_group: false,
             wants_group_editor: None,
             return_focus: false,
             notes_open: false,
@@ -2330,9 +2351,19 @@ impl Run {
         self.note_sync_changes(lines, &[]);
     }
 }
+#[derive(Clone, Default, Serialize, Deserialize)]
+struct Recovery {
+    #[serde(default)]
+    closed_order: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    copied_from: Option<Uuid>,
+}
+
 #[derive(Serialize, Deserialize)]
 struct SavedRun {
     version: u32,
+    #[serde(default)]
+    recovery: Recovery,
     campaign: Uuid,
     id: Uuid,
     name: String,
@@ -2385,6 +2416,35 @@ impl Run {
             None => crate::art::entry_art(ctx, &p.definition),
         }
     }
+    /// Shared run-state words for setup, live play and saved rows.
+    pub fn state_words(&self, paused: bool) -> String {
+        state_words(
+            self.state.round,
+            paused,
+            matches!(self.state.phase, Phase::Ended { .. }),
+        )
+    }
+
+    fn mark_closed(&mut self) {
+        let Some(storage) = &self.storage else {
+            return;
+        };
+        let latest = storage
+            .path
+            .parent()
+            .and_then(|parent| fs::read_dir(parent).ok())
+            .into_iter()
+            .flatten()
+            .filter_map(Result::ok)
+            .filter(|file| file.path().extension().is_some_and(|ext| ext == "json"))
+            .filter_map(|file| read_saved(&file.path(), storage.campaign).ok())
+            .map(|saved| saved.recovery.closed_order)
+            .max()
+            .unwrap_or(0);
+        self.recovery.closed_order = latest.saturating_add(1);
+        self.dirty = true;
+    }
+
     pub fn needs_save(&self) -> bool {
         self.dirty
     }
@@ -2416,6 +2476,7 @@ impl Run {
         }
         let saved = SavedRun {
             version: 1,
+            recovery: self.recovery.clone(),
             campaign: storage.campaign,
             id: self.id,
             name: self.name.clone(),
@@ -2489,7 +2550,11 @@ impl Run {
         let old_path = std::mem::replace(&mut storage.path, path);
         let old_baseline = storage.baseline.take();
         let old_id = std::mem::replace(&mut self.id, id);
-        let new_name = format!("{} (copy)", self.name);
+        let time = calendar_time(crate::hermetic::now());
+        let base_name = self.name.split(" · saved ").next().unwrap_or(&self.name);
+        let new_name = format!("{base_name} · saved {}", &time[11..]);
+        let old_recovery = self.recovery.clone();
+        self.recovery.copied_from = Some(old_id);
         let old_name = std::mem::replace(&mut self.name, new_name);
         self.dirty = true;
         match self.save() {
@@ -2504,6 +2569,7 @@ impl Run {
                 storage.baseline = old_baseline;
                 self.id = old_id;
                 self.name = old_name;
+                self.recovery = old_recovery;
                 self.error = Some(error.clone());
                 Err(error)
             }
@@ -2597,6 +2663,7 @@ impl Run {
             id: saved.id,
             name: saved.name,
             source: saved.source,
+            recovery: saved.recovery,
             initiative: saved.initiative,
             selected: match saved.state.phase {
                 Phase::Running => saved.state.order[saved.state.cursor],
@@ -2652,6 +2719,8 @@ impl Run {
             lookup_request: None,
             close_lookup: false,
             wants_sign_in: false,
+            wants_packages: false,
+            wants_new_group: false,
             wants_group_editor: None,
             return_focus: false,
             notes_open: false,
@@ -2676,12 +2745,20 @@ impl Run {
             return Ok(Vec::new());
         }
         let mut runs = Vec::new();
+        let mut close_order = BTreeMap::new();
+        let mut changed_elsewhere = BTreeSet::new();
         for file in fs::read_dir(directory).map_err(|e| e.to_string())? {
             let path = file.map_err(|e| e.to_string())?.path();
             if path.extension().is_some_and(|e| e == "json") {
                 let modified = crate::hermetic::file_time(&path);
                 match Self::open(&path, campaign) {
-                    Ok(run) => runs.push(run.info(path, modified)),
+                    Ok(run) => {
+                        close_order.insert(run.id, run.recovery.closed_order);
+                        if let Some(original) = run.recovery.copied_from {
+                            changed_elsewhere.insert(original);
+                        }
+                        runs.push(run.info(path, modified, true));
+                    }
                     Err(_) => {
                         let name = path.file_name().unwrap_or_default().to_string_lossy();
                         runs.push(SavedRunInfo {
@@ -2698,10 +2775,16 @@ impl Run {
                 }
             }
         }
-        // Newest first. The names decide a tie, so that a list always comes out the same.
+        for run in &mut runs {
+            if run.id.is_some_and(|id| changed_elsewhere.contains(&id)) {
+                run.label.insert_str(0, "Changed elsewhere · ");
+            }
+        }
+        // The run closed last owns Resume, including recovery copies.
         runs.sort_by(|a, b| {
-            b.saved_at
-                .cmp(&a.saved_at)
+            b.id.and_then(|id| close_order.get(&id))
+                .cmp(&a.id.and_then(|id| close_order.get(&id)))
+                .then_with(|| b.saved_at.cmp(&a.saved_at))
                 .then_with(|| a.encounter.cmp(&b.encounter))
                 .then_with(|| a.label.cmp(&b.label))
                 .then_with(|| a.path.cmp(&b.path))
@@ -2710,40 +2793,32 @@ impl Run {
     }
     /// This run as a row on the Encounters page, as it is now and not as its file has it.
     pub fn live_info(&self) -> Option<SavedRunInfo> {
-        Some(self.info(self.path()?.to_path_buf(), None))
+        Some(self.info(self.path()?.to_path_buf(), None, false))
     }
-    fn info(&self, path: PathBuf, saved_at: Option<u64>) -> SavedRunInfo {
-        let round = self.state.round;
+    fn info(&self, path: PathBuf, saved_at: Option<u64>, paused: bool) -> SavedRunInfo {
         let saved = saved_at.map_or_else(String::new, |at| {
             format!(
                 " · Saved {}",
                 crate::party::fetch_age(crate::hermetic::now().saturating_sub(at))
             )
         });
-        let (standing, label) = match &self.state.phase {
-            Phase::Ended { outcome } => {
-                let outcome = Some(outcome.trim())
-                    .filter(|outcome| !outcome.is_empty())
-                    .unwrap_or("Ended");
-                (Standing::Ended, format!("{outcome} · Round {round}{saved}"))
-            }
-            phase => {
-                let status = if *phase == Phase::Setup {
-                    "Preparing"
-                } else {
-                    "In progress"
-                };
-                // The turn it stopped on, so a DM can tell two saves apart at a glance.
-                let turn = self
-                    .current()
-                    .map(|i| format!(" · {}’s turn", self.state.participants[i].name))
-                    .unwrap_or_default();
-                (
-                    Standing::Unfinished,
-                    format!("Round {round} · {status}{turn}{saved}"),
-                )
-            }
+        let standing = if matches!(self.state.phase, Phase::Ended { .. }) {
+            Standing::Ended
+        } else {
+            Standing::Unfinished
         };
+        let mut label = self.state_words(paused);
+        if let Phase::Ended { outcome } = &self.state.phase
+            && !outcome.trim().is_empty()
+        {
+            label.push_str(&format!(" · {outcome}"));
+        }
+        label.push_str(&saved);
+        if let Some(last) = self.history_labels.last() {
+            label.push_str(&format!(" · Last: {last}"));
+        } else if let Some(last) = self.state.log.last() {
+            label.push_str(&format!(" · Last: {last}"));
+        }
         SavedRunInfo {
             path,
             id: Some(self.id),
@@ -2924,6 +2999,24 @@ pub fn fight_summary(path: &Path, campaign: Uuid) -> Result<FightSummary, String
             .collect(),
         log: state.log.iter().rev().cloned().collect(),
     })
+}
+
+/// One vocabulary for every place a run's state is shown. Round zero means setup.
+pub fn state_words(round: u64, paused: bool, ended: bool) -> String {
+    if ended {
+        format!("Ended · Round {}", round.max(1))
+    } else {
+        let state = if round == 0 {
+            "Setup".to_owned()
+        } else {
+            format!("Round {round}")
+        };
+        if paused {
+            format!("{state} · Paused")
+        } else {
+            state
+        }
+    }
 }
 
 /// A UTC date and time, so two runs saved on one day can be told apart.
@@ -3403,8 +3496,56 @@ mod tests {
         let copy = Run::open(&new_path, campaign).unwrap();
         assert_eq!(copy.state.participants[0].hp, hp);
         assert_ne!(copy.id, Run::open(&path, campaign).unwrap().id);
-        assert_eq!(copy.name, "Ambush (copy)");
+        assert!(copy.name.starts_with("Ambush · saved "));
     }
+    #[test]
+    fn recovery_copies_resume_the_last_closed_run_and_preserve_external_bytes() {
+        let dir = tempfile::tempdir().unwrap();
+        let campaign = Uuid::new_v4();
+        let mut run = started_run_in(dir.path(), campaign);
+        let original_id = run.id;
+        let original = run.path().unwrap().to_path_buf();
+        let bytes = fs::read(&original).unwrap();
+        fs::write(&original, [bytes.as_slice(), b"\n"].concat()).unwrap();
+        run.apply(Command::Damage(0, 1)).unwrap();
+        assert!(run.save().is_err());
+        run.save_as_new_run().unwrap();
+        assert!(run.close_run());
+        let latest = run.id;
+        let copies = Run::list(dir.path(), campaign).unwrap();
+        assert_eq!(copies[0].id, Some(latest));
+        assert!(copies[0].encounter.contains(" · saved "));
+        assert!(copies[0].label.contains("Last:"));
+        let old = copies
+            .iter()
+            .find(|copy| copy.id == Some(original_id))
+            .unwrap();
+        assert!(old.label.contains("Changed elsewhere"));
+        assert_eq!(
+            fs::read(&original).unwrap(),
+            [bytes.as_slice(), b"\n"].concat()
+        );
+        let mut old = Run::open(&original, campaign).unwrap();
+        assert!(old.close_run());
+        assert_eq!(
+            Run::list(dir.path(), campaign).unwrap()[0].id,
+            Some(original_id)
+        );
+    }
+
+    #[test]
+    fn shared_run_state_words_never_show_round_zero() {
+        for (round, paused, ended, expected) in [
+            (0, false, false, "Setup"),
+            (0, true, false, "Setup · Paused"),
+            (2, false, false, "Round 2"),
+            (2, true, false, "Round 2 · Paused"),
+            (2, false, true, "Ended · Round 2"),
+        ] {
+            assert_eq!(state_words(round, paused, ended), expected);
+        }
+    }
+
     #[test]
     fn close_is_refused_in_every_phase_while_sync_has_not_finished() {
         for phase in [
@@ -3747,13 +3888,13 @@ mod tests {
         assert_eq!(saved[0].source, Some(encounter));
         assert_eq!(saved[0].standing, Standing::Unfinished);
         assert_eq!(saved[0].id, Some(run.id));
-        assert!(saved[0].label.contains("In progress"));
+        assert!(saved[0].label.contains("Round 1 · Paused"));
 
         run.apply(Command::End("Party won".into())).unwrap();
         run.save().unwrap();
         let saved = Run::list(dir.path(), campaign).unwrap();
         assert_eq!(saved[0].standing, Standing::Ended);
-        assert!(saved[0].label.starts_with("Party won · Round "));
+        assert!(saved[0].label.starts_with("Ended · Round 1 · Party won"));
         assert_eq!(run.live_info().unwrap().standing, Standing::Ended);
     }
 
@@ -4947,6 +5088,12 @@ mod tests {
         assert_eq!(added.initiative, Some(11));
         assert_eq!(run.state.participants.len(), before + 1);
         assert!(run.side_names().contains(&"enemies".to_owned()));
+        let npc = run.state.participants.last().unwrap();
+        let words = view::row_words_for_test(npc);
+        assert!(
+            words.contains("as Guard") && !words.contains("Changed"),
+            "{words}"
+        );
         run.undo();
         assert_eq!(run.state.participants.len(), before);
     }

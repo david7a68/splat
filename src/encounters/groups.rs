@@ -368,6 +368,18 @@ pub(super) fn shown_name(block: &Mapping, name: String) -> String {
         .map_or(name, |changed| changed.trim().to_owned())
 }
 
+fn missing_member_name(changed: Option<&str>, link: Option<&str>) -> String {
+    let link = link.map(crate::sessions::plain_links).filter(|name| {
+        Uuid::parse_str(name.trim()).is_err() && !splat::content::resource_key(name.trim())
+    });
+    changed
+        .or(link.as_deref())
+        .map(str::trim)
+        .filter(|name| !name.is_empty())
+        .unwrap_or("Unknown creature")
+        .to_owned()
+}
+
 /// The campaign's groups, each with its members resolved and any reason it cannot be added.
 pub(super) fn load(
     catalogue: &Catalogue,
@@ -392,21 +404,14 @@ pub(super) fn load(
                     .ok()
                     .and_then(|id| Some((id, creatures.iter().find(|c| c.id == id)?)))
                 else {
-                    let link_name = e.entry.fields.get("splat_encounter_group")
+                    let link = e.entry.fields.get("splat_encounter_group")
                         .and_then(|group| group.get("members"))
                         .and_then(|members| members.get(index))
                         .and_then(|member| member.get("creature"))
                         .and_then(|creature| creature.get("link"))
-                        .and_then(Value::as_str)
-                        .map(crate::sessions::plain_links)
-                        .filter(|name| Uuid::parse_str(name.trim()).is_err()
-                            && !splat::content::resource_key(name.trim()));
-                    let name = member.overrides.name.as_deref()
-                        .or(link_name.as_deref())
-                        .map(str::trim)
-                        .filter(|name| !name.is_empty())
-                        .unwrap_or("unknown creature");
-                    let fault_name = if name == "unknown creature" { "an unknown creature" } else { name };
+                        .and_then(Value::as_str);
+                    let name = missing_member_name(member.overrides.name.as_deref(), link);
+                    let fault_name = &name;
                     problems.push(format!(
                         "{what}, {fault_name}: not in this campaign's packages. Campaign → Packages."
                     ));
@@ -890,7 +895,7 @@ pub(super) fn show_changes(
             // First, because a number below may be one that cannot stand. An open form says it
             // under its own heading, which is where opening it scrolls to.
             if !form_open && let Err(error) = overrides.resolve_for(entry, side) {
-                design::message(ui, Tone::Error, &error);
+                design::message(ui, Tone::Error, &error.replace("1000000", "1,000,000"));
             }
             let mut base = Base::of(entry, side);
             if let Some(conditions) = starting.and_then(|starting| starting.get("conditions")) {
@@ -913,7 +918,7 @@ pub(super) fn show_changes(
             }
         }
         Err(error) => {
-            design::message(ui, Tone::Error, &error);
+            design::message(ui, Tone::Error, &error.replace("1000000", "1,000,000"));
         }
     }
 }
@@ -1049,7 +1054,7 @@ pub(super) fn overrides_form(
         heading.scroll_to_me(Some(egui::Align::Min));
     }
     if let Err(error) = overrides.resolve_for(entry, side) {
-        design::message(ui, Tone::Error, &error);
+        design::message(ui, Tone::Error, &error.replace("1000000", "1,000,000"));
     }
     text_row(ui, "Display name", &mut overrides.name, &entry.name);
     // Only a name just typed: opening the form must not edit what a note holds.
@@ -1105,10 +1110,9 @@ pub(super) fn overrides_form(
         Some(_) if overrides.side.is_none() => {}
         Some(sides) => {
             ui.horizontal(|ui| {
-                ui.label(
-                    Type::Small
-                        .rich(ui, "Side, over the row’s")
-                        .color(colors().muted),
+                ui.add_sized(
+                    [LABEL_WIDTH, Density::Read.control()],
+                    egui::Label::new(Type::Small.rich(ui, "Side").color(colors().muted)),
                 );
                 let mut changed = overrides.side.clone().unwrap_or_else(|| side.to_owned());
                 super::side_control(ui, "Changed side", &mut changed, sides);
@@ -1120,7 +1124,10 @@ pub(super) fn overrides_form(
         }
         None => {
             ui.horizontal(|ui| {
-                ui.label(Type::Small.rich(ui, "Side").color(colors().muted));
+                ui.add_sized(
+                    [LABEL_WIDTH, Density::Read.control()],
+                    egui::Label::new(Type::Small.rich(ui, "Side").color(colors().muted)),
+                );
                 let mut changed = overrides.side.clone().unwrap_or_else(|| side.to_owned());
                 super::side_control(ui, "Changed side", &mut changed, &[]);
                 if changed != overrides.side.as_deref().unwrap_or(side) {
@@ -1206,7 +1213,7 @@ fn conditions_row(ui: &mut egui::Ui, conditions: &mut Vec<String>) {
             design::FORM_WIDTH.min(ui.available_width() - design::L * 8.0),
         );
         let enter = field.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
-        if (Action::secondary("Add effect")
+        if (Action::secondary("Add")
             .density(Density::Read)
             .show(ui)
             .clicked()
@@ -1471,7 +1478,7 @@ fn add_pane(
         peek,
         super::SearchRoster {
             already: &|_| false,
-            members: Some(member_summary(draft, snapshot)),
+            members: (!draft.setup.members.is_empty()).then(|| member_summary(draft, snapshot)),
         },
     );
     if let Some((id, _)) = chosen {
@@ -1493,10 +1500,12 @@ pub(super) fn member_summary(draft: &GroupDraft, snapshot: &Snapshot) -> String 
                 .resolve_ref(&member.creature)
                 .ok()
                 .and_then(|id| snapshot.catalogue.entries.get(&id))
-                .map_or("Unavailable creature", |entry| entry.entry.name.as_str());
+                .map(|entry| entry.entry.name.as_str());
+            let missing = missing_member_name(None, member.creature.link.as_deref());
+            let name = name.unwrap_or(&missing);
             format!(
                 "{} × {}",
-                member.count,
+                crate::encounter_run::grouped_number(member.count),
                 shown_name(&member.overrides, name.to_owned())
             )
         })
@@ -1540,24 +1549,27 @@ fn group_fields(
     }
     belongs_to(ui, draft, snapshot, open);
     ui.add_space(design::S);
-    // In a frame, the group's name is the heading.
-    let (heading, color) = if open.is_some() {
-        (Type::Small, colors().muted)
-    } else {
-        (Type::Heading, colors().text)
-    };
-    ui.label(
-        heading
-            .rich(ui, members_heading(draft, snapshot))
-            .color(color),
-    );
+    let count = draft
+        .setup
+        .members
+        .iter()
+        .map(|member| member.count)
+        .sum::<u64>();
+    design::group_heading(ui, "Members", count as usize);
     if draft.setup.members.is_empty() {
-        design::empty_state(
-            ui,
-            icons::ENCOUNTERS,
-            "No members yet",
-            "Choose creatures in Add creatures.",
-            |_| {},
+        ui.label(
+            Type::Small
+                .rich(
+                    ui,
+                    "No members yet. Add creatures from the list on the right.",
+                )
+                .color(colors().muted),
+        );
+    } else {
+        ui.label(
+            Type::Small
+                .rich(ui, members_heading(draft, snapshot))
+                .color(colors().muted),
         );
     }
     members(ui, draft, snapshot, expanded);
@@ -1589,9 +1601,10 @@ fn members_heading(draft: &GroupDraft, snapshot: &Snapshot) -> String {
         }
     }
     format!(
-        "Members: {} · Total XP {xp}{}",
+        "{} · XP {}{}",
         design::count(count as usize, "creature", "creatures"),
-        if unknown { " or more" } else { "" }
+        crate::encounter_run::grouped_number(xp),
+        if unknown { " + unknown" } else { "" }
     )
 }
 
@@ -1614,7 +1627,7 @@ fn members(
                 .and_then(|id| snapshot.catalogue.entries.get(&id))
                 .map(|e| &e.entry);
             let name = entry.map_or_else(
-                || "Unavailable creature".to_owned(),
+                || missing_member_name(None, member.creature.link.as_deref()),
                 |entry| entry.name.clone(),
             );
             let button = format!("Changes for {name}");
@@ -1638,7 +1651,9 @@ fn members(
             }
             ui.horizontal(|ui| {
                 ui.label(Type::Small.rich(ui, "Count").color(colors().muted));
-                let count = ui.add(egui::DragValue::new(&mut member.count).range(1..=MAX_COUNT));
+                let count = ui.add(egui::DragValue::new(&mut member.count).range(1..=MAX_COUNT)
+                    .custom_formatter(|value, _| crate::encounter_run::grouped_number(value as u64))
+                    .custom_parser(|text| text.replace(',', "").parse().ok()));
                 design::named(ui, &count, &format!("How many of {name}"));
                 if entry.is_some() && Action::quiet("Edit").density(Density::Read).name(&button).selected(is_open).show(ui).clicked() {
                     *expanded = if is_open { None } else { show_form_when_it_opens(ui); Some(key.clone()) };
@@ -2079,11 +2094,8 @@ mod tests {
         let snapshot = Snapshot::load(&campaign, &[]).unwrap();
         let problem = snapshot.groups[0].problem.clone().unwrap();
         assert!(!problem.contains(&id.to_string()), "{problem}");
-        assert!(
-            problem.contains("Member 1, an unknown creature"),
-            "{problem}"
-        );
-        assert_eq!(snapshot.groups[0].member_summary(), "1 × unknown creature");
+        assert!(problem.contains("Member 1, Unknown creature"), "{problem}");
+        assert_eq!(snapshot.groups[0].member_summary(), "1 × Unknown creature");
         assert!(
             problem.contains("not in this campaign's packages"),
             "{problem}"
@@ -2094,11 +2106,11 @@ mod tests {
     #[test]
     fn missing_group_members_keep_display_names_without_exposing_keys() {
         for (extra, name) in [
-            ("", "unknown creature"),
-            (", link: '[[missing:goblin_boss]]'", "unknown creature"),
+            ("", "Unknown creature"),
+            (", link: '[[missing:goblin_boss]]'", "Unknown creature"),
             (
                 ", link: '[[00000000-0000-4000-8000-000000000001]]'",
-                "unknown creature",
+                "Unknown creature",
             ),
             (
                 ", link: '[[Creatures/Goblin Boss|Goblin Boss]]'",
