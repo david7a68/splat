@@ -447,6 +447,30 @@ pub fn package_rename(d: &mut Driver<'_>) {
     d.wait_for_text("Watch Ashfall");
     d.expect_same("Restoring the moved package preserves the same linked reader content.");
     d.state("package-folder-restored-with-links", Sizes::All);
+    let package = moved;
+    search_library(d, "Ash Exposure");
+    d.click_starting("Ash Exposure · ");
+    d.click(EDIT_MARKDOWN);
+    d.type_into_editor("My moved draft.\n");
+    let old = package.join("Rules/Ash Exposure.md");
+    let moved = package.join("Moved/Ash Exposure.md");
+    fs::create_dir_all(moved.parent().unwrap()).unwrap();
+    fs::rename(&old, &moved).unwrap();
+    d.focus_window(false);
+    d.focus_window(true);
+    d.wait_for_text("Save my draft to Moved/Ash Exposure.md");
+    d.state("draft-file-moved-on-disk", Sizes::All);
+    d.click("Save my draft to Moved/Ash Exposure.md");
+    d.wait_for_text("Saved");
+    assert!(!old.exists());
+    let saved = fs::read_to_string(&moved).unwrap();
+    assert!(saved.contains("My moved draft."));
+    let id = crate::content_workspace::note_id(&saved).unwrap();
+    let (entries, errors) = splat::content::read_directory(&package).unwrap();
+    assert!(errors.is_empty());
+    assert_eq!(entries.iter().filter(|entry| entry.id == id).count(), 1);
+    reveal_editor_passage(d, "My moved draft.");
+    d.state("draft-saved-at-moved-path", Sizes::All);
 }
 
 pub fn package_about(d: &mut Driver<'_>) {
@@ -535,7 +559,7 @@ pub fn package_file_changed(d: &mut Driver<'_>) {
     fs::write(&path, &broken).unwrap();
     d.focus_window(false);
     d.focus_window(true);
-    d.wait_for_text("Invalid note");
+    d.wait_for_text("Cannot be read");
     d.state("package-yaml-broken-on-disk", Sizes::All);
     d.click(EDIT_MARKDOWN);
     d.expect("Save");
@@ -557,8 +581,19 @@ pub fn package_file_changed(d: &mut Driver<'_>) {
     d.focus_window(true);
     go_encounters(d);
     open_saved_encounter(d, "Bridge Ambush");
-    d.expect("Not found. Its package entry was deleted.");
+    d.expect("Cinder Wolf.md cannot be read (line 4)");
+    assert!(!d.has("Replacement creature"));
     d.state("invalid-package-in-encounter", Sizes::All);
+    d.click("More actions for Bridge Ambush");
+    d.click("Start another fight");
+    d.expect("Cinder Wolf");
+    assert!(!d.app_mut().encounters.has_run());
+    d.state("invalid-package-blocks-new-fight", Sizes::All);
+    d.click("Open in Library");
+    d.expect("Markdown editor");
+    d.expect("line 4 opens a list");
+    d.state("invalid-package-opened-for-repair", Sizes::All);
+    go_encounters(d);
     d.click("Back to encounters");
     resume_run_from_cold_start(d);
     d.click_row("Cinder Wolf 1");
@@ -616,6 +651,10 @@ pub fn package_delete_entry(d: &mut Driver<'_>) {
         "Deleted entries keep their last known name and hide reference keys",
     );
     d.state("deleted-package-entry-in-encounter", Sizes::All);
+    d.click("More actions for Bridge Ambush");
+    d.click("Start another fight");
+    assert!(!d.app_mut().encounters.has_run());
+    d.state("deleted-package-blocks-new-fight", Sizes::All);
     go_library(d);
     search_library(d, "Ash Exposure");
     d.click_starting("Ash Exposure · ");
@@ -631,6 +670,9 @@ pub fn package_delete_entry(d: &mut Driver<'_>) {
         "Deleted package link",
         unresolved,
         "The deleted creature's words remain without a working link",
+    );
+    d.expect_same(
+        "The note keeps its words and layout; only the deleted creature link becomes unavailable.",
     );
     d.state("deleted-package-entry-reader-link", Sizes::All);
     go_encounters(d);
@@ -670,7 +712,8 @@ pub fn package_delete_entry(d: &mut Driver<'_>) {
         "This entry's file has gone from disk. Your draft is safe here until you choose.",
     );
     d.state("draft-file-deleted-on-disk", Sizes::All);
-    d.click("Overwrite with my draft");
+    d.expect("YOUR DRAFT");
+    d.click("Save my draft again");
     d.wait_for_text("Saved");
     reveal_editor_passage(d, "The draft survives a deleted file.");
     assert!(
@@ -681,6 +724,29 @@ pub fn package_delete_entry(d: &mut Driver<'_>) {
     d.state("deleted-draft-file-saved", Sizes::All);
     d.click("Read");
     d.expect("The draft survives a deleted file.");
+    d.click(EDIT_MARKDOWN);
+    d.type_into_editor("A draft to let go.\n");
+    fs::remove_file(&rules).unwrap();
+    d.focus_window(false);
+    d.focus_window(true);
+    d.wait_for_text("Let it go");
+    d.click("Let it go");
+    d.wait_for_text("No entry open");
+    assert!(!d.has_containing("Ash Exposure · "));
+    d.expect("Undo discard");
+    d.state("deleted-draft-let-go", Sizes::All);
+    d.click("Undo discard");
+    d.expect("Let it go");
+    d.expect("A draft to let go.");
+    d.state("deleted-draft-restored", Sizes::All);
+    d.click("Let it go");
+    d.wait_for_text("No entry open");
+    d.focus_window(false);
+    d.focus_window(true);
+    d.expect("No entry open");
+    assert!(!d.has_containing("Ash Exposure · "));
+    d.expect_same("The deleted entry stays absent after focus returns.");
+    d.state("deleted-draft-after-focus", Sizes::All);
 }
 
 /// Copy a book creature into a shared package, then change its HP.
@@ -708,7 +774,7 @@ pub fn book_to_package(d: &mut Driver<'_>) {
     d.state("book-creature-stat-check", Sizes::All);
     d.click("Use 180");
     d.expect("Undo stat change");
-    reveal_editor_passage(d, "| ` max_hp ` | ` 180 ` |");
+    reveal_editor_passage(d, "max_hp:");
     d.state("book-creature-stats-updated", Sizes::All);
     d.click("Undo stat change");
     d.expect("Use 180");

@@ -1081,7 +1081,7 @@ impl Reader {
     }
 
     fn relationship_width(ui: &egui::Ui) -> f32 {
-        let width = design::XXL * 4.0 + design::L;
+        let width = design::XXL * 7.0 + design::L;
         width.min(
             (ui.available_width()
                 - (design::XXL * 3.0 + design::S)
@@ -1104,21 +1104,32 @@ impl Reader {
         let change = Action::quiet("Change")
             .density(design::Density::Scan)
             .name(&name);
+        let stacked = ui.available_width() < design::XXL * 12.0;
+        let width = if stacked {
+            ui.available_width() - change.natural_width(ui) - design::S
+        } else {
+            width
+        };
+        if stacked {
+            ui.label(Type::Small.rich(ui, label).color(colors().muted));
+        }
         let mut undo = false;
         let clicked = ui
             .horizontal(|ui| {
                 ui.with_layout(egui::Layout::left_to_right(egui::Align::TOP), |ui| {
-                    ui.allocate_ui_with_layout(
-                        egui::vec2(
-                            design::XXL * 3.0 + design::S,
-                            design::Density::Scan.control(),
-                        ),
-                        egui::Layout::left_to_right(egui::Align::Center),
-                        |ui| {
-                            ui.set_min_width(design::XXL * 3.0 + design::S);
-                            ui.label(Type::Small.rich(ui, label).color(colors().muted));
-                        },
-                    );
+                    if !stacked {
+                        ui.allocate_ui_with_layout(
+                            egui::vec2(
+                                design::XXL * 3.0 + design::S,
+                                design::Density::Scan.control(),
+                            ),
+                            egui::Layout::left_to_right(egui::Align::Center),
+                            |ui| {
+                                ui.set_min_width(design::XXL * 3.0 + design::S);
+                                ui.label(Type::Small.rich(ui, label).color(colors().muted));
+                            },
+                        );
+                    }
                     ui.allocate_ui_with_layout(
                         egui::vec2(width, design::Density::Scan.control()),
                         egui::Layout::left_to_right(egui::Align::Center).with_main_wrap(true),
@@ -1130,7 +1141,13 @@ impl Reader {
                     );
                     let clicked = change.show(ui).clicked();
                     if let Some(word) = notice {
-                        undo = Self::change_notice(ui, word);
+                        ui.allocate_ui_with_layout(
+                            egui::vec2(ui.available_width(), Density::Scan.control()),
+                            egui::Layout::left_to_right(egui::Align::Center),
+                            |ui| {
+                                undo = Self::change_notice(ui, word);
+                            },
+                        );
                     }
                     clicked
                 })
@@ -1226,18 +1243,33 @@ impl Reader {
                                 go = Some(Go::Item(at, None));
                             }
                         } else if let Some(value) = world_field(&item.entry, key) {
-                            ui.label(
-                                Type::Small
-                                    .rich(
-                                        ui,
-                                        format!(
-                                            "{} {} · Not found",
-                                            design::icons::WARN,
-                                            link_name(value, label)
-                                        ),
-                                    )
-                                    .color(colors().result.warning),
+                            let words = format!(
+                                "{} {} · Not found",
+                                design::icons::WARN,
+                                link_name(value, label)
                             );
+                            let fits = design::number_width(ui, &words, &Type::Small.font(ui))
+                                <= ui.available_width();
+                            if fits {
+                                ui.label(
+                                    Type::Small.rich(ui, &words).color(colors().result.warning),
+                                );
+                            } else {
+                                ui.vertical(|ui| {
+                                    let (name, state) = words.split_once(" · ").unwrap();
+                                    ui.add(
+                                        egui::Label::new(
+                                            Type::Small
+                                                .rich(ui, name)
+                                                .color(colors().result.warning),
+                                        )
+                                        .wrap(),
+                                    );
+                                    ui.label(
+                                        Type::Small.rich(ui, state).color(colors().result.warning),
+                                    );
+                                });
+                            }
                         } else {
                             ui.label(Type::Small.rich(ui, "not set").color(colors().muted));
                         }

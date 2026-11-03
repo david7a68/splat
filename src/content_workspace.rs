@@ -15,6 +15,21 @@ use std::{
 };
 use uuid::Uuid;
 
+/// Recover an identity even when another front-matter line cannot be parsed.
+pub(crate) fn note_id(text: &str) -> Option<Uuid> {
+    let mut lines = text.trim_start_matches('\u{feff}').lines();
+    if lines.next()?.trim() != "---" {
+        return None;
+    }
+    lines
+        .take_while(|line| line.trim() != "---")
+        .find_map(|line| {
+            let value = line.strip_prefix("splat_id:")?;
+            let value: String = serde_yaml_ng::from_str(value).ok()?;
+            Uuid::parse_str(&value).ok().filter(|id| !id.is_nil())
+        })
+}
+
 /// Add new work to the active campaign without replacing its other choices.
 /// `None` selects the whole package, including future entries.
 pub fn use_in_campaign(
@@ -235,9 +250,16 @@ pub struct Catalogue {
     pub entries: BTreeMap<Uuid, IndexedEntry>,
     keys: BTreeMap<String, Uuid>,
     pub errors: Vec<String>,
+    pub unreadable: BTreeMap<Uuid, UnreadableNote>,
     files: BTreeMap<Uuid, (PathBuf, String)>,
     namespaces: BTreeSet<String>,
     neighbours: BTreeMap<String, String>,
+}
+
+#[derive(Clone)]
+pub struct UnreadableNote {
+    pub path: PathBuf,
+    pub word: String,
 }
 /// Names, by namespace, of the packages in folders beside the registered ones. A reference
 /// holds only a namespace, so this is what lets a missing package appear under its own name.
@@ -265,6 +287,29 @@ fn needed_by(names: &BTreeSet<String>) -> String {
     }
 }
 impl Catalogue {
+    fn remember_unreadable(&mut self, root: &Path, errors: &[content::Diagnostic]) {
+        for error in errors {
+            let Ok(path) = note_path(root, &error.path) else {
+                continue;
+            };
+            let Ok(text) = fs::read_to_string(&path) else {
+                continue;
+            };
+            let Some(id) = note_id(&text) else {
+                continue;
+            };
+            let (_, line) = crate::campaign_content::repair_problem(&error.path, &text);
+            let name = path.file_name().unwrap_or_default().to_string_lossy();
+            let line = line.map_or(String::new(), |line| format!(" (line {line})"));
+            self.unreadable.insert(
+                id,
+                UnreadableNote {
+                    word: format!("{name} cannot be read{line}"),
+                    path,
+                },
+            );
+        }
+    }
     fn insert(&mut self, entry: Entry, owner: Uuid, private: bool) -> Result<(), String> {
         if self.entries.contains_key(&entry.id) {
             return Err(format!("Duplicate identity: {}", entry.name));
@@ -356,6 +401,7 @@ impl Catalogue {
                     continue;
                 }
             };
+            result.remember_unreadable(&module.path, &errors);
             result.errors.extend(
                 errors
                     .into_iter()
@@ -402,6 +448,7 @@ impl Catalogue {
         }
         if let Some(campaign) = campaign {
             let (entries, errors) = content::read_directory(&campaign.path)?;
+            result.remember_unreadable(&campaign.path, &errors);
             result.errors.extend(
                 errors
                     .into_iter()
@@ -960,6 +1007,55 @@ pub struct CopyPlan {
     pub dependencies: Vec<String>,
     pub shared: Vec<CopyPlan>,
 }
+
+/// Copies use the same creature fields as a new note. Keep every prose block.
+fn creature_copy_fields(text: &str, entry: &Entry) -> Result<String, String> {
+    use pulldown_cmark::{Event, Options, Parser, Tag, TagEnd};
+    if entry.kind != "creature" {
+        return Ok(text.to_owned());
+    }
+    let mut heading = None;
+    let mut pending = None;
+    let mut ranges = Vec::new();
+    for (event, range) in Parser::new_ext(text, Options::ENABLE_TABLES).into_offset_iter() {
+        match event {
+            Event::Start(Tag::Heading { .. }) => heading = Some(range.clone()),
+            Event::Html(ref html)
+                if html.starts_with("<!-- splat:")
+                    && ["splat_creature", "splat_stats"]
+                        .iter()
+                        .any(|key| html.contains(&format!("path={key} -->"))) =>
+            {
+                let start = heading
+                    .as_ref()
+                    .filter(|heading| text[heading.end..range.start].trim().is_empty())
+                    .map_or(range.start, |heading| heading.start);
+                pending = Some(start);
+            }
+            Event::End(TagEnd::Table) => {
+                if let Some(start) = pending.take() {
+                    ranges.push(start..range.end);
+                }
+            }
+            _ => {}
+        }
+    }
+    let mut output = text.to_owned();
+    for range in ranges.into_iter().rev() {
+        output.replace_range(range, "");
+    }
+    let changes: Vec<_> = ["splat_creature", "splat_stats"]
+        .into_iter()
+        .filter_map(|key| {
+            entry
+                .fields
+                .get(key)
+                .map(|value| (key, Some(value.clone())))
+        })
+        .collect();
+    patch_fields(&output, &changes)
+}
+
 impl CopyPlan {
     pub fn prepare(
         source: &CopySource,
@@ -1130,7 +1226,8 @@ impl CopyPlan {
         let new_id = Uuid::new_v4();
         // A were-creature's curse makes more of this creature, and the copy's makes more of the
         // copy. Prose that only names the original keeps its words.
-        let source_text = own_references_to(&source.text, &source.entry, new_id);
+        let normalized = creature_copy_fields(&source.text, &source.entry)?;
+        let source_text = own_references_to(&normalized, &source.entry, new_id);
         let mut text = patch_fields(
             &source_text,
             &[
@@ -1255,6 +1352,69 @@ impl CopyPlan {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn unreadable_package_note_keeps_its_id_path_and_file_line() {
+        let temp = tempfile::tempdir().unwrap();
+        let module = Module {
+            id: Uuid::new_v4(),
+            name: "Test".into(),
+            path: temp.path().into(),
+        };
+        fs::write(module.path.join("Package.md"), format!("---\nsplat_schema: 1\nsplat_id: {}\nsplat_kind: package\nsplat_name: Test\nsplat_namespace: test\n---\n", module.id)).unwrap();
+        let id = Uuid::new_v4();
+        let text =
+            format!("---\nsplat_schema: 1\nsplat_id: '{id}' # keep identity\nsplat_kind: [\n---\n");
+        fs::write(module.path.join("Wolf.md"), &text).unwrap();
+        let catalogue = Catalogue::load(std::slice::from_ref(&module), None).unwrap();
+        let note = &catalogue.unreadable[&id];
+        assert_eq!(note.path, module.path.join("Wolf.md"));
+        assert_eq!(note.word, "Wolf.md cannot be read (line 4)");
+        assert!(!catalogue.entries.contains_key(&id));
+        assert_eq!(note_id(&format!("No front matter\nsplat_id: {id}")), None);
+        assert_eq!(
+            note_id(&format!("---\nsplat_id: [\n---\nsplat_id: {id}")),
+            None
+        );
+    }
+
+    #[test]
+    fn copied_aboleth_keeps_book_stats_as_front_matter() {
+        let catalogue = Catalogue::load(&[], None).unwrap();
+        let entry = catalogue
+            .entries
+            .values()
+            .find(|e| e.entry.name == "Aboleth" && e.entry.kind == "creature")
+            .unwrap()
+            .entry
+            .clone();
+        let source = CopySource {
+            text: catalogue.text_of(entry.id).unwrap(),
+            entry,
+            root: None,
+            campaign: None,
+        };
+        let temp = tempfile::tempdir().unwrap();
+        let plan =
+            CopyPlan::prepare(&source, temp.path(), None, "Watch Aboleth", "", &catalogue).unwrap();
+        let copied = Entry::parse(&plan.relative, &plan.text).unwrap();
+        for key in ["splat_creature", "splat_stats"] {
+            assert_eq!(copied.fields.get(key), source.entry.fields.get(key));
+            assert!(
+                plan.text
+                    .split("\n---")
+                    .next()
+                    .unwrap()
+                    .contains(&format!("{key}:"))
+            );
+            assert!(!copied.body.contains(&format!("path={key}")));
+        }
+        assert!(
+            copied
+                .body
+                .contains("The aboleth can breathe air and water.")
+        );
+    }
     fn entry(name: &str, kind: &str) -> Entry {
         Entry::parse(&format!("{name}.md"), &note_text(name, kind, None)).unwrap()
     }

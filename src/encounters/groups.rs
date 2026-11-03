@@ -29,7 +29,7 @@ const SIDE_FIELD: &str = "Default side";
 const BELONGS_TO: &str = "Belongs to";
 const ROSTER: &str = "Roster";
 const ANY_ENCOUNTER: &str = "Any encounter";
-const MISSING_ENCOUNTER: &str = "An encounter this campaign no longer has";
+const MISSING_ENCOUNTER: &str = "Deleted encounter";
 const NOTES_FIELD: &str = "Group notes";
 const LABEL_WIDTH: f32 = 120.0;
 /// The name of a roster slot's button, for the form it opens.
