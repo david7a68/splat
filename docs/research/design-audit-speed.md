@@ -902,3 +902,175 @@ Raw memory samples, cgroup paths, commands, logs and focused-pair timings are in
 ignored `artifacts/screenshots/audit-speed-5-slots/`. All captures and the saved
 measurement executable remain on disk in the worktree; only the original small
 synthetic fixture trees use `/tmp`. No design-audit artifacts are committed.
+
+## Sixth scan: share parsed fields instead of retaining YAML clones
+
+2026-11-03. Merged `origin/main` first; baseline commit
+`d91ce7038a22cd7965f881a455a8c6e36dabdf2c`. Same 31.26 GiB host. This main
+revision has 58 scenarios and 1,201 PNGs. The warm `target/` was copied before
+building; `CARGO_TARGET_DIR` was not set. Builds, saved executables, captures and
+profiling output stayed in the worktree, not `/tmp`.
+
+### Memory holders and rejected trials
+
+Each full measurement used a separate `systemd-run --user --scope
+-p MemoryAccounting=yes` scope, without a memory limit. The monitor read
+`memory.peak`, `memory.swap.peak` and each scope process's `smaps_rollup`, with
+250 ms sleeps between samples (reading mappings adds time). Compilation is
+excluded from the standalone suite measurements. Captures are on and video is
+explicitly off. Only one of our suites ran at a time except the stated pair.
+
+The baseline passed in 68.743 s, with 26.555 GiB cgroup RAM peak, 0.283 GiB swap
+peak and 25.936 GiB sampled resident PSS peak. PSS was 16.652 GiB after 104
+captures, 20.627 GiB after 431 and 25.936 GiB after 926. Thus the growth is real
+process memory, not fixture storage or just cgroup file cache.
+
+A diagnostic `malloc_info` probe sampled glibc's arenas during another full run.
+Its snapshot near maximum RSS contained 128 arenas, 25.929 GiB of system storage,
+19.810 GiB free inside those arenas and 6.119 GiB in allocated chunks/overhead.
+After the suite, 22.390 of 22.472 GiB was free: only 0.082 GiB remained allocated.
+The largest individual arena held 545.2 MiB, of which 544.1 MiB was free. Arena
+statistics and PSS are different views; do not add their figures. The probe's
+extra thread prevented `unshare` setup, so this diagnostic used the existing
+shared-world fallback. It passed all 58 scenarios and all 1,201 captures; its
+reports match the isolated baseline.
+
+Neither heaptrack nor valgrind was available in the devenv shell. A temporary
+preload probe recorded allocation stacks: all allocations at least 64 KiB and
+every 1,024th smaller allocation, weighted by 1,024. These are diagnostic
+estimates, not an exact heap census. Sixteen-frame stacks and executable symbols
+identify the dominant live holders:
+
+| Allocation stack | Estimated per-stack live high-water mark |
+| --- | ---: |
+| Nested YAML mapping clone: indexmap entry storage | 4,589.8 MiB |
+| YAML mapping clone through a sequence | 1,031.5 MiB |
+| Nested YAML mapping clone: reserve-exact variant | 725.4 MiB |
+| YAML sequence clone | 569.2 MiB |
+| YAML mapping clone: hash table storage | 529.0 MiB |
+
+These stack peaks occur at different times and must not be summed. Shallower
+clones trace to `Entry::clone`, `Catalogue::load`, `encounters::Snapshot::load`
+and `lookup::ContentIndex::load`. The same built-in nested mappings are copied
+into many independent catalogues/views. Their allocation churn also fills the
+free glibc arenas. Captures already stream to disk, repeated-capture checks keep
+hashes, and reports keep small summaries; those are not the dominant holders.
+
+Two alternatives were measured and removed:
+
+- Restricting glibc to eight arenas on the saved main executable was still
+  incomplete after 82.039 s, with only a small part of the capture plan finished.
+  It had reached 15.638 GiB cgroup RAM; the trial was stopped. A short rebuild
+  overlapped this diagnostic trial, so it is not used for speed comparisons.
+  It did not meet the memory or feedback-time goal.
+- Calling `malloc_trim(0)` every 250 ms, without changing any scenario scheduling,
+  passed the full suite in 69.774 s. RAM peak remained 15.746 GiB and PSS peak
+  13.452 GiB. Reclaiming free pages alone misses the live clone cost and fails
+  the requested headroom and timing goals. No trimming worker or allocator
+  setting remains in the implementation.
+
+### Retained change
+
+`Entry.fields` now holds `Fields`, a small `Arc<Mapping>` wrapper. Cloning an
+entry shares its parsed mapping. A mutable borrow uses `Arc::make_mut`, so an
+edit obtains a private mapping before changing even a nested value. There is
+no global interning, mutable shared state or new cache lifetime. The last owner
+releases the mapping normally. Serde remains transparent: existing JSON/YAML
+field shapes and ordering are unchanged. The regression test edits a nested
+field and removes a key from a clone, checks two unchanged peers, and checks
+serialization and an independently editable deserialized entry.
+
+The scenario list, scripts, driver, renderer, checks, all capture sizes, report
+contents, video default and scenario concurrency are unchanged.
+
+| Full standalone suite, no video | Main | Shared fields |
+| --- | ---: | ---: |
+| Wall seconds | 68.743 | 51.886 |
+| Cgroup RAM peak | 26.555 GiB | 6.252 GiB |
+| Cgroup swap peak | 0.283 GiB | 0 GiB |
+| Sampled resident PSS peak | 25.936 GiB | 5.709 GiB |
+| Scenarios / PNGs | 58 / 1,201 | 58 / 1,201 |
+
+This pair reduces RAM peak by 76.5% and wall time by 24.5%. The commands execute
+saved/warm linked tests through devenv; the monitor's wall clock starts after
+shell entry and includes its completion polling. Diagnostic profiler timings
+are not used as speed evidence.
+
+The fresh 6.252 GiB full-suite measurement supports **two default visual slots**:
+two such peaks total 12.504 GiB, leaving 18.76 GiB of the measured host for builds,
+app processes and cache. The positive `SPLAT_VISUAL_SLOTS` override, persistent
+lock files, legacy slot-zero lock and namespace behavior remain unchanged.
+Use the same slot setting and updated implementation in all worktrees; keep one
+slot while mixing old high-memory full suites with new ones.
+
+### Fidelity and full gate
+
+The first shared-field run has the same 1,201 filenames as main. Of those PNGs,
+1,111 are byte-identical, 72 differ only within the unchanged tolerance of two,
+and 18 differ above it. Every one of those 18 files also differs in a main/main
+comparison. The affected scenarios are the already variable `book-to-package`,
+`dialogs`, `session-notes` and `session-recording`; no tolerance, masking, timeout,
+allowance or capture was changed. Main/main repeat comparisons had 30 and 55
+above-tolerance files. Full ergonomics JSON/Markdown and chrome observations
+match main byte for byte. The comparison also verifies every manifest hash.
+
+`SPLAT_VISUAL_VIDEO=0 devenv shell -- audit-gate speed-6` passed on the final
+implementation: formatting, warnings-denied Clippy, 188 library plus 540 binary
+tests, the same 12 ignored opt-in tests, other binary/documentation targets,
+58 scenarios and 1,201 captures. The new mutation/serialization test passed.
+The complete command took 111.369 s, including shell entry, checks and all tests;
+the isolated visual child took 82.26 s. This gate encountered a host load average
+of 53.93 on 16 cores and is not an isolated-machine timing or a substitute for
+the standalone before/after pair. Its scope peaked at 5.983 GiB RAM and 0.757 GiB
+swap (a conservative sum-of-peaks bound of 6.740 GiB); sampled PSS peaked at
+5.443 GiB, or 6.089 GiB including SwapPss.
+
+Two full saved/warm executables then ran together, launched through devenv from
+the worktree root into separate runner folders. Each used its own worktree lock
+and namespace, with the original visible fixture paths. Neither set a slot
+override: slot 2/2 admitted one in 44.44 microseconds and slot 1/2 admitted the
+other in 35.60 microseconds. Both passed all 58 scenarios and saved all 1,201
+captures each. Combined cgroup RAM peaked at **11.866 GiB**, swap at 0.364 GiB,
+and sampled PSS at 10.930 GiB. Even adding the separate RAM/swap peaks gives
+12.230 GiB, leaving about 19.03 GiB on this host. This directly confirms the
+new default's memory headroom. Total pair wall time was 107.952 s, with individual
+completion times 106.885/107.387 s; host load averages of 31.29–45.69 were
+observed during this trial. This is a concurrent admission/memory check, not
+an isolated throughput benchmark.
+
+The final gate's image comparison against main has 1,147 byte-identical captures,
+30 within tolerance and 24 above tolerance. Every above-tolerance file also
+varies between main runs, including a third unchanged-main profiled repeat.
+The unchanged `visual-compare speed-6-main speed-6` comparator agrees exactly:
+1,201 pairs, 30 within tolerance and 24 differences, expected exit status 101.
+The extra `library-to-encounter` variation is 578 pixels per affected file:
+two equal-name/equal-initiative rows exchange their source labels. It also
+occurs on unchanged main. It is unrelated to the shared field representation.
+Final gate and both simultaneous runs have byte-identical full ergonomics
+JSON/Markdown and chrome observations. Every capture name and manifest hash
+was verified for every full run.
+
+The simultaneous runs contain further transient notice variants. An unchanged
+main control selected only `session-notes,session-recording`, retaining all their
+scripts/checks and all 183 captures, under `CPUQuota=25%` and `MemoryMax=3G`.
+It used the two-slot override only for this bounded focused control, passed in
+134.66 s and reproduced every remaining variant. The nine additionally affected
+files in the pair match that control within the existing pixel tolerance.
+Inspection locates the changes in the existing two-second “Copied” button and
+eight-second “Recording saved” notice, including the rail shift after expiry.
+Their clocks and lifetimes are unchanged. No allowance or mask was added.
+
+| Main versus retained run | Byte-identical PNGs | Within tolerance | Above tolerance |
+| --- | ---: | ---: | ---: |
+| Standalone shared fields | 1,111 | 72 | 18 |
+| Final `speed-6` gate | 1,147 | 30 | 24 |
+| Simultaneous A | 1,107 | 43 | 51 |
+| Simultaneous B | 1,128 | 16 | 57 |
+
+Every above-tolerance file in this table also varies in an unchanged-main
+comparison/control. Raw scopes, logs, allocation probes, symbolized stack
+summaries, pixel counts and per-file comparisons are under ignored
+`artifacts/screenshots/audit-speed-6/`; captures use sibling `speed-6-*` labels.
+Saved executables and profiler libraries are under `target/`. No instrumentation
+remains in source, and no `artifacts/design-audit/` files are committed.
+`git diff --check` passed.

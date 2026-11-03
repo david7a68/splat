@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 use serde_yaml_ng::{Mapping, Value};
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
+use std::sync::Arc;
 use uuid::Uuid;
 
 /// A note's line that makes the table below it rollable. It holds no entry data.
@@ -41,10 +42,36 @@ pub struct Entry {
     pub key: Option<String>,
     pub name: String,
     pub kind: String,
-    pub fields: Mapping,
+    pub fields: Fields,
     pub body: String,
     pub inventory: Vec<InventoryRow>,
     pub inventory_containers: Vec<String>,
+}
+
+/// Parsed fields are read repeatedly by independent catalogues and app views.
+/// Share their nested YAML values until a caller edits its own entry.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct Fields(Arc<Mapping>);
+
+impl From<Mapping> for Fields {
+    fn from(fields: Mapping) -> Self {
+        Self(Arc::new(fields))
+    }
+}
+
+impl std::ops::Deref for Fields {
+    type Target = Mapping;
+
+    fn deref(&self) -> &Mapping {
+        &self.0
+    }
+}
+
+impl std::ops::DerefMut for Fields {
+    fn deref_mut(&mut self) -> &mut Mapping {
+        Arc::make_mut(&mut self.0)
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -193,7 +220,7 @@ impl Entry {
             key,
             name,
             kind,
-            fields,
+            fields: fields.into(),
             body,
             inventory,
             inventory_containers,
