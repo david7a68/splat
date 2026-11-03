@@ -11,11 +11,13 @@ shift 2
 exec "$@"
 "#;
 
+pub(super) fn is_child() -> bool {
+    env::var_os(CHILD).is_some()
+}
+
 /// Return true if a child ran the suite. Unsupported hosts keep the original lock.
 pub(super) fn run() -> bool {
-    if env::var_os(CHILD).is_some()
-        || env::var("SPLAT_VISUAL_ISOLATE").is_ok_and(|value| value == "0")
-    {
+    if is_child() || env::var("SPLAT_VISUAL_ISOLATE").is_ok_and(|value| value == "0") {
         return false;
     }
     let prepare = || -> std::io::Result<_> {

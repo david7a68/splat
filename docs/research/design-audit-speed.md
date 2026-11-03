@@ -804,3 +804,101 @@ Raw logs, second-resolution timestamps,
 benchmark harnesses and file-by-file comparisons live under ignored
 `artifacts/screenshots/audit-speed-5/`; captures use sibling `speed-5-*` labels.
 No `artifacts/design-audit/` files are committed.
+
+### PR 62 review: measure memory and restore a machine-wide admission limit
+
+Merged `origin/main` at `1c5472e28dea5c1529cdcfce1bfedcca2261cbae` before this
+revision. The measured merged source has 57 scenarios and 1,176 captures. This
+revision supersedes the unrestricted namespace admission described above.
+
+#### Memory measurements
+
+Each run used a separate `systemd-run --user --scope -p MemoryAccounting=yes`
+scope, through `devenv shell --` from the worktree root. No memory limit was set.
+The linked merged-source executable was built and saved before adding slots;
+compilation is excluded. PNG capture was on, video off. The scope contains the
+suite's parent, namespace child and a small Python monitor. The monitor reads
+`memory.peak`, `memory.swap.peak`, process-tree `/proc/<pid>/smaps_rollup` PSS and
+SwapPss, and file sizes/allocated blocks under the private fixture folder. It
+pauses 250 ms between samples; PSS and fixture peaks are sampled, while the
+cgroup peaks are kernel counters. Only exited short-lived processes vanished
+during `/proc` reads; there were no permission failures. The old shared-world
+lock was held externally during these pre-slot measurements to avoid overlapping
+another main-branch full suite. Only one measured suite ran at a time.
+
+| Measurement | Full suite | `--only party,settings` |
+| --- | ---: | ---: |
+| Wall time, `date +%s` | 70 s | 16 s |
+| Cgroup RAM peak, `memory.peak` | 24.275 GiB | 1.592 GiB |
+| Cgroup swap peak, `memory.swap.peak` | 2.085 GiB | 0 GiB |
+| Sampled cgroup RAM + swap peak | 25.650 GiB | 1.590 GiB |
+| Sampled process-tree resident PSS peak | 23.788 GiB | 1.621 GiB |
+| Sampled process-tree PSS + SwapPss peak | 25.159 GiB | 1.621 GiB |
+| Fixture file bytes, sampled peak | 33.367 MiB | 1.057 MiB |
+| Fixture allocated blocks in `/tmp`, sampled peak | 44.289 MiB | 1.449 MiB |
+| Captures | 1,176 | 60 |
+
+Both runs passed all selected checks. Cgroup accounting includes charged tmpfs
+and file-cache pages; PSS describes mappings, including proportional shares of
+pages charged to other cgroups. These are different accounting views and their
+peaks need not coincide. Do not add PSS to the cgroup figures or add the fixtures
+a second time to cgroup memory. RAM-peak plus swap-peak is a conservative
+26.360 GiB upper bound for this full run, leaving about 4.9 GiB on the measured
+31.26 GiB host for other work. Two such full suites cannot fit with headroom.
+
+**Default: `SPLAT_VISUAL_SLOTS=1`.** This retains the old maximum of one active
+full visual suite. Focused runs use the same limit: a slot must be safe for any
+suite that enters it. `SPLAT_VISUAL_SLOTS` accepts a positive integer override;
+all worktrees should use the same value. Raising it to 2 on this host is not
+safe when full gates can run. The two-slot override test below used only the
+measured-small focused runs, with no full suite running.
+
+#### Admission and tests
+
+Before namespace setup, a process scans all configured slot lock files in the
+original temporary directory. It takes any free slot with `File::try_lock`,
+or waits 100 ms and scans again. Its permit stays held through the suite and
+report generation. The namespace child inherits the admission decision and
+must not acquire locks inside its private temporary directory.
+
+Slot zero reuses `$TMPDIR/splat-visual-world.lock` (normally `/tmp/`); higher
+slots use `splat-visual-slot-1.lock`, `splat-visual-slot-2.lock`, and so on.
+Thus an older main-branch worktree holding the original lock also occupies
+slot zero, including during rollout of this change. Slot files are never
+unlinked on release. Non-isolated/fallback runs take ownership of the already
+held slot-zero world lock rather than trying to lock it twice. They retain the
+old serial shared-world behavior. Different admitted namespace runs still
+have independent worlds at the same visible paths.
+
+`SPLAT_VISUAL_TIMINGS=1` now prints `Timing visual slot wait = ... (slot i/N)`
+before the existing worktree/world/setup timings. Scenario scripts, scheduling,
+checks, capture sizes, renderer, baseline and allowances are unchanged.
+
+| Two focused runs started together from different folders | Default one slot | Two-slot override |
+| --- | ---: | ---: |
+| Total wall seconds | 29 s | 16 s |
+| Individual wall seconds | 29 s / 15 s | 16 s / 16 s |
+| Slot wait | 14.615 s / 0.000257 s | 0.000052 s / 0.000085 s |
+| Slots used | 1 then 1 | 1 and 2 |
+
+All four focused runs passed and wrote every one of their 60 captures. Their
+namespace backing folders were distinct. A separate `SPLAT_VISUAL_ISOLATE=0`
+focused capture run passed in 14.93 s inside the suite, confirming that the
+legacy-lock transfer does not deadlock. Unit tests cover invalid/zero counts,
+exhaustion, choosing a free higher slot, release/reuse, the legacy-lock handoff
+and a waiting caller proceeding after release. Formatting and Clippy passed.
+
+The single final gate passed: `env -u SPLAT_VISUAL_SLOTS SPLAT_VISUAL_VIDEO=0
+SPLAT_VISUAL_TIMINGS=1 devenv shell -- audit-gate speed-5-slots`, 91 s wall.
+Formatting, warnings-denied Clippy, all 719 tests (187 library + 532 binary),
+the same 12 ignored opt-in tests, other binary/documentation targets, all 57
+scenarios and all 1,176 captures passed. Slot admission reported 8.19 µs for
+slot 1/1. The visual suite took 74.58 s. The full ergonomics JSON/Markdown and
+chrome observation are byte-identical to the merged-source pre-slot run; capture
+names match and every final manifest hash was verified. All six focused capture
+sets (pre-slot, both one-slot runs, both two-slot runs, and fallback) are
+byte-identical across their 60 PNGs. `git diff --check` passed.
+Raw memory samples, cgroup paths, commands, logs and focused-pair timings are in
+ignored `artifacts/screenshots/audit-speed-5-slots/`. All captures and the saved
+measurement executable remain on disk in the worktree; only the original small
+synthetic fixture trees use `/tmp`. No design-audit artifacts are committed.
