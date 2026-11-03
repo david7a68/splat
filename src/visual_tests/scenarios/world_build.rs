@@ -1177,12 +1177,38 @@ pub fn world_note_duplicated(d: &mut Driver<'_>) {
         Some(id)
     );
     assert_eq!(fs::read_to_string(&original).unwrap(), before);
+    d.expect("Rook Ambry copy");
     d.state("world-copy-repaired", Sizes::All);
     d.click("Undo new identity");
     d.wait_for_text("New identity for Rook Ambry copy.md");
     assert_eq!(fs::read_to_string(&copy).unwrap(), before);
     d.expect_same("Undo restores the same copied files and identity warning.");
     d.state("world-copy-repair-undone", Sizes::All);
+    d.click("New identity for Rook Ambry copy.md");
+    d.wait_for_text("Undo new identity");
+    let same_name = before.replace("splat_name: Rook Ambry", "splat_name: Rook Ambry copy");
+    fs::write(&original, same_name).unwrap();
+    reload(d);
+    d.expect("Rook Ambry.md");
+    d.expect("Rook Ambry copy.md");
+    d.state("same-name-npcs-show-file-names", Sizes::All);
+}
+
+pub fn world_note_renamed(d: &mut Driver<'_>) {
+    entry(d, "NPCs/Rook Ambry.md", "Rook Ambry", "npc", "");
+    fs::rename(
+        root(d).join("NPCs/Rook Ambry.md"),
+        root(d).join("NPCs/Mara Vell.md"),
+    )
+    .unwrap();
+    reload(d);
+    d.click(NAV_WORLD);
+    d.click_starting("Rook Ambry ·");
+    d.expect("NPCs/Mara Vell.md");
+    d.state("renamed-npc-keeps-old-name-in-world", Sizes::All);
+    look_up(d, "Rook Ambry");
+    d.expect("Rook Ambry");
+    d.state("renamed-npc-keeps-old-name-in-lookup", Sizes::All);
 }
 
 pub fn package_folder_copied(d: &mut Driver<'_>) {
@@ -1200,13 +1226,47 @@ pub fn package_folder_copied(d: &mut Driver<'_>) {
     }
     let copied = d.root.join("modules/ashen-marches-copy");
     copy_folder(&d.root.join("modules/ashen-marches"), &copied);
-    let module = crate::library::local_module(&copied).unwrap();
+    let before = fs::read(copied.join("Module.md")).unwrap();
     go_library(d);
     d.click("Packages");
     d.click("Manage packages…");
     d.type_into("Package folder", &copied.to_string_lossy());
     d.click("Add folder");
-    d.expect(&format!("This folder has the same package identity as Ashen Marches ({}). Choose a package with a different identity.", module.id));
+    d.expect("This folder is a copy of Ashen Marches.");
     assert_eq!(d.app_mut().campaigns.modules().len(), 1);
     d.state("copied-package-names-duplicate-identity", Sizes::All);
+    d.click("Register as a new package");
+    d.replace_text_in("New package name", "Ashen Reaches");
+    d.state("copied-package-new-name", Sizes::All);
+    d.click("Register as a new package");
+    d.wait_for_text("Undo package registration");
+    search_library(d, "Cinder Wolf");
+    d.expect("Ashen Marches");
+    d.expect("Ashen Reaches");
+    assert_eq!(d.app_mut().campaigns.modules().len(), 2);
+    d.state("copied-package-registered-alongside-original", Sizes::All);
+    d.click("Undo package registration");
+    d.wait_for_text("Ashen Marches");
+    assert_eq!(d.app_mut().campaigns.modules().len(), 1);
+    assert_eq!(fs::read(copied.join("Module.md")).unwrap(), before);
+    d.state("copied-package-registration-undone", Sizes::All);
+    let hand_edit = crate::content_workspace::patch_fields(
+        std::str::from_utf8(&before).unwrap(),
+        &[("splat_id", Some(Uuid::new_v4().to_string().into()))],
+    )
+    .unwrap();
+    fs::write(copied.join("Module.md"), hand_edit).unwrap();
+    let module = crate::library::local_module(&copied).unwrap();
+    d.app_mut().campaigns.register_module(module).unwrap();
+    d.settle();
+    d.wait_for_text("Duplicate identity");
+    d.state("manifest-only-hand-repair-keeps-both-files", Sizes::All);
+    go_encounters(d);
+    open_saved_encounter(d, RUN);
+    d.expect("Cinder Wolf");
+    d.expect("Ember Cultist");
+    d.state(
+        "manifest-only-hand-repair-keeps-original-roster",
+        Sizes::All,
+    );
 }

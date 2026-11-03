@@ -519,9 +519,25 @@ impl WorldPage {
                         }
                     )
                 } else if entry.kind == "world" {
-                    match super::status(entry) {
-                        "" => String::new(),
-                        status => status.to_owned(),
+                    if index.items.iter().any(|other| {
+                        other.entry.id != entry.id
+                            && other.entry.kind == "world"
+                            && other.entry.name == entry.name
+                    }) {
+                        let file = std::path::Path::new(&entry.path)
+                            .file_name()
+                            .unwrap_or_default()
+                            .to_string_lossy()
+                            .into_owned();
+                        match super::status(entry) {
+                            "" => file,
+                            status => format!("{file} · {status}"),
+                        }
+                    } else {
+                        match super::status(entry) {
+                            "" => String::new(),
+                            status => status.to_owned(),
+                        }
                     }
                 } else {
                     String::new()
