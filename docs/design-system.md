@@ -420,6 +420,13 @@ Recording retries say Continue processing. Process again is reserved for replaci
 
 Settings and the rail use one account status function. The rail shortens Signed out of D&D Beyond to Signed out with the full words on hover. Settings shows the recovery step once. Campaign import opens directly under the chosen row with a new sibling folder filled in. Editing details hides the row's Edit details action and uses a plain Details heading. The removal dialog is centred. Reload from disk names the local reload action.
 
+World readers show the relative file path with Edit in Obsidian and Show file on every note.
+NPCs show Stat block and In below that line; locations show In. Each has a quiet Change picker.
+The search takes keyboard focus. A saved choice changes only its key and offers Undo. An undo
+checks the file before writing. Broken notes stay in a Cannot be read group and open the same
+source editor as Campaign repair. Its draft stays in memory and warns before app close or a
+campaign switch. A generator card names its table sources below the attributes.
+
 ## Run and encounter audit, iteration 3
 
 A shared NPC initiative roll is one roll group. It has a quiet bracket and ordering

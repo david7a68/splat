@@ -73,7 +73,7 @@ pub struct CampaignContent {
     discarded_repair: Option<(String, String)>,
 }
 /// Return a useful YAML repair message and the physical line to mark.
-fn repair_problem(path: &str, text: &str) -> (Option<String>, Option<usize>) {
+pub(crate) fn repair_problem(path: &str, text: &str) -> (Option<String>, Option<usize>) {
     let Some(problem) = Entry::parse(path, text).err() else {
         return (None, None);
     };
@@ -505,7 +505,7 @@ impl CampaignContent {
                 ui,
                 Tone::Error,
                 &format!(
-                    "{path}: {}. Fix it to save package choices.",
+                    "{path} cannot be read. Fix it here or in World. {}.",
                     problem
                         .as_deref()
                         .unwrap_or("The repair has not been saved")
@@ -523,33 +523,7 @@ impl CampaignContent {
                     ui.set_max_width(design::READER_MEASURE);
                     // What is wrong comes first, and stays true as the DM edits.
 
-                    egui::ScrollArea::vertical()
-                        .max_height(220.0)
-                        .id_salt(("repair", path.as_str()))
-                        .show(ui, |ui| {
-                            let output = egui::TextEdit::multiline(draft)
-                                .font(egui::TextStyle::Monospace)
-                                .desired_width(f32::INFINITY)
-                                .show(ui);
-                            design::named(ui, &output.response, "Note text");
-                            if let Some(line) = error_line {
-                                let position = draft
-                                    .lines()
-                                    .take(line.saturating_sub(1))
-                                    .map(|line| line.chars().count() + 1)
-                                    .sum();
-                                let row = output
-                                    .galley
-                                    .pos_from_cursor(egui::text::CCursor::new(position));
-                                let y = output.galley_pos.y + row.top();
-                                let painter = ui.painter().with_clip_rect(output.text_clip_rect);
-                                painter.vline(
-                                    output.response.rect.left() + design::XS,
-                                    y..=y + row.height(),
-                                    egui::Stroke::new(design::FOCUS_WIDTH, colors().result.error),
-                                );
-                            }
-                        });
+                    crate::world::repair::editor(ui, path, draft, error_line);
                     if draft == baseline {
                         ui.label(Type::Small.rich(ui, "No changes yet").color(colors().muted));
                     }

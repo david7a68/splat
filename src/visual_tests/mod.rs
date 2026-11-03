@@ -43,7 +43,7 @@ const BASELINE_PATH: &str = "src/visual_tests/baseline.json";
 
 type Script = fn(&mut Driver<'_>);
 
-const SCENARIOS: [(&str, Seed, Script); 43] = [
+const SCENARIOS: [(&str, Seed, Script); 48] = [
     (
         "library-browse",
         Seed::Empty,
@@ -166,6 +166,27 @@ const SCENARIOS: [(&str, Seed, Script); 43] = [
         scenarios::session_notes::run,
     ),
     ("world", Seed::World, scenarios::world::run),
+    (
+        "world-broken-note",
+        Seed::World,
+        scenarios::world_build::broken,
+    ),
+    ("world-places", Seed::World, scenarios::world_build::places),
+    (
+        "world-edit-round-trip",
+        Seed::World,
+        scenarios::world_build::round_trip,
+    ),
+    (
+        "roll-table-author",
+        Seed::World,
+        scenarios::world_build::tables,
+    ),
+    (
+        "generator-tables",
+        Seed::World,
+        scenarios::world_build::generator,
+    ),
     (
         "session-recording",
         Seed::Campaign,

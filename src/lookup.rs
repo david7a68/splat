@@ -105,6 +105,7 @@ pub struct ContentIndex {
     /// What the campaign's files looked like just before this was read.
     files_seen: Option<u64>,
     pub errors: Vec<String>,
+    pub broken_world: Vec<(String, String)>,
 }
 
 /// Among equal matches: the DM's own entry, then the book, then a sheet's copy.
@@ -305,10 +306,23 @@ impl ContentIndex {
                 if item.entry.path.contains('/') {
                     index.files.entry(path).or_default().push(position);
                 }
+                for alias in world::aliases(&item.entry) {
+                    let positions = index.files.entry(alias.to_lowercase()).or_default();
+                    if !positions.contains(&position) {
+                        positions.push(position);
+                    }
+                }
             }
             if item.is_world_note() || item.entry.kind == "world" {
                 index.world.push(position);
             }
+        }
+        if let Some(campaign) = campaign {
+            index.broken_world = splat::content::read_directory(&campaign.path)?
+                .1
+                .into_iter()
+                .map(|error| (error.path, error.message))
+                .collect();
         }
         index.items = items;
         index.mentions = index.find_mentions();
@@ -371,8 +385,25 @@ impl ContentIndex {
     }
 
     fn parent(&self, position: usize) -> Option<usize> {
-        let reference = world::place(&self.items[position].entry)?;
-        self.position_of(&reference)
+        let entry = &self.items[position].entry;
+        if let Some(reference) = world::place(entry) {
+            return self.position_of(&reference);
+        }
+        let link = entry.fields.get("splat_world")?.get("in")?.as_str()?;
+        let target = link
+            .strip_prefix("[[")?
+            .strip_suffix("]]")?
+            .split('|')
+            .next()?
+            .trim();
+        match self.follow(target, &self.items[position]) {
+            Go::Item(at, _) => Some(at),
+            _ => None,
+        }
+    }
+
+    pub fn place_of(&self, id: Uuid) -> Option<usize> {
+        self.parent(self.position(id)?)
     }
 
     fn place_loops(&self) -> Vec<String> {
@@ -651,6 +682,8 @@ pub struct Lookup {
     generated: Option<crate::npc_generator::Generated>,
     /// Campaign tables the generator could not use.
     generator_problems: Vec<String>,
+    generator_sources: Vec<String>,
+    pub open_world_repair: Option<String>,
     /// A check of the campaign's files, away from the frame.
     checking: Option<mpsc::Receiver<u64>>,
     was_focused: bool,
@@ -988,19 +1021,23 @@ impl Lookup {
             });
             return;
         };
-        if !index.errors.is_empty() {
-            ui.label(
-                Type::Small
-                    .rich(
-                        ui,
-                        format!(
-                            "{} notes could not be read, so they are not here.",
-                            index.errors.len()
-                        ),
-                    )
-                    .color(colors().document.invalid),
-            )
-            .on_hover_text(index.errors.join("\n"));
+        if !index.broken_world.is_empty() {
+            ui.horizontal_wrapped(|ui| {
+                ui.label(
+                    Type::Small
+                        .rich(
+                            ui,
+                            format!(
+                                "{} cannot be read",
+                                design::count(index.broken_world.len(), "note", "notes")
+                            ),
+                        )
+                        .color(colors().document.invalid),
+                );
+                if design::link(ui, "Show").clicked() {
+                    self.open_world_repair = Some(index.broken_world[0].0.clone());
+                }
+            });
         }
         let query = self.query.trim().to_lowercase();
         if self.matches.as_ref().is_none_or(|(q, _)| *q != query) {
@@ -1234,8 +1271,13 @@ impl Lookup {
             });
             let mut reroll = generate;
             if let Some(npc) = &self.generated {
-                let (saved, again, discard) =
-                    generated_card(ui, npc, &self.generator_problems, self.run_open);
+                let (saved, again, discard) = generated_card(
+                    ui,
+                    npc,
+                    &self.generator_problems,
+                    &self.generator_sources,
+                    self.run_open,
+                );
                 reroll = again;
                 if saved {
                     made = Some(world::create_generated(&campaign, npc));
@@ -1254,6 +1296,7 @@ impl Lookup {
                     }
                     Err(error) => self.create_error = Some(error),
                 }
+                self.generator_sources = tables.sources;
                 self.generator_problems = tables.problems;
             }
             match made {
@@ -1365,6 +1408,7 @@ pub(crate) fn generated_card(
     ui: &mut egui::Ui,
     npc: &crate::npc_generator::Generated,
     problems: &[String],
+    sources: &[String],
     run_open: bool,
 ) -> (bool, bool, bool) {
     design::group_label(ui, "Generated NPC");
@@ -1379,6 +1423,15 @@ pub(crate) fn generated_card(
             .wrap(),
         );
     }
+    let attribution = if sources.is_empty() {
+        "Built-in names. Mark a table npc-name in any note to use your own.".to_owned()
+    } else {
+        format!(
+            "Campaign tables: {}. Built-in lists fill the other parts.",
+            sources.join("; ")
+        )
+    };
+    ui.label(Type::Small.rich(ui, attribution).color(colors().muted));
     for problem in problems {
         design::message(ui, Tone::Warning, problem);
     }

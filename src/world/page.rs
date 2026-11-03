@@ -23,23 +23,81 @@ pub struct WorldPage {
     pub run_open: bool,
     new_kind: Option<&'static str>,
     new_name: String,
+    note_type: String,
+    repair: Option<super::repair::Repair>,
+    kept_repairs: Vec<super::repair::Repair>,
+    campaign: Option<Uuid>,
     generated: Option<crate::npc_generator::Generated>,
     generator_problems: Vec<String>,
+    generator_sources: Vec<String>,
     error: Option<String>,
 }
 
 impl WorldPage {
+    pub fn dirty(&self) -> bool {
+        self.repair
+            .as_ref()
+            .is_some_and(super::repair::Repair::dirty)
+            || self.kept_repairs.iter().any(super::repair::Repair::dirty)
+    }
+
+    fn keep_repair(&mut self) {
+        if let Some(repair) = self.repair.take() {
+            self.kept_repairs.push(repair);
+        }
+    }
+
+    fn set_campaign(&mut self, id: Uuid) {
+        if self.campaign != Some(id) {
+            self.campaign = Some(id);
+            self.selected = None;
+            self.repair = None;
+            self.kept_repairs.clear();
+            self.reader = Reader::default();
+        }
+    }
+
+    pub fn reveal(&mut self, campaign: Uuid, id: Uuid) {
+        self.set_campaign(campaign);
+        self.selected = Some(id);
+        self.keep_repair();
+        self.new_kind = None;
+        self.generated = None;
+        self.error = None;
+    }
+
+    pub fn open_repair(&mut self, campaign: &Campaign, path: &str) {
+        self.set_campaign(campaign.id);
+        self.keep_repair();
+        let loaded = if let Some(at) = self.kept_repairs.iter().position(|r| r.path == path) {
+            Ok(self.kept_repairs.remove(at))
+        } else {
+            super::repair::Repair::open(campaign, path)
+        };
+        match loaded {
+            Ok(repair) => {
+                self.repair = Some(repair);
+                self.error = None;
+                self.new_kind = None;
+                self.generated = None;
+            }
+            Err(error) => self.error = Some(error),
+        }
+    }
+
     pub fn show(
         &mut self,
         ui: &mut egui::Ui,
         index: Option<&Arc<ContentIndex>>,
         campaign: &Campaign,
     ) {
+        self.set_campaign(campaign.id);
         ui.ctx().data_mut(|data| {
             data.insert_temp(egui::Id::new("reader_surface"), egui::Id::new("world"))
         });
+        let broken = index.map_or(0, |index| index.broken_world.len());
         let count = index.map_or(0, |index| {
-            index.world_groups("").values().map(Vec::len).sum()
+            index.world_groups("").values().map(Vec::len).sum::<usize>() + broken
         });
         let mut create = None;
         design::page_header(
@@ -56,6 +114,19 @@ impl WorldPage {
                         .then_some("Wait for the notes to load before creating a note."),
                     new_menu,
                 );
+                if broken > 0 {
+                    design::status(
+                        ui,
+                        design::Status {
+                            icon: icons::WARN,
+                            word: &format!(
+                                "{} cannot be read",
+                                design::count(broken, "note", "notes")
+                            ),
+                            color: colors().result.warning,
+                        },
+                    );
+                }
             },
         );
         if let Some(kind) = create.take() {
@@ -73,7 +144,8 @@ impl WorldPage {
             return;
         };
         let groups = index.world_groups(&self.search.trim().to_lowercase());
-        if groups.is_empty()
+        if broken == 0
+            && groups.is_empty()
             && self.search.trim().is_empty()
             && self.new_kind.is_none()
             && self.generated.is_none()
@@ -104,14 +176,14 @@ impl WorldPage {
                     ui,
                     "Search the world",
                     &mut self.search,
-                    "Search notes and entries",
+                    "Find a note",
                     width,
                 );
                 egui::ScrollArea::vertical()
                     .id_salt("world_list")
                     .auto_shrink([false, false])
                     .show(ui, |ui| {
-                        if groups.is_empty() {
+                        if groups.is_empty() && index.broken_world.is_empty() {
                             ui.label(
                                 Type::Body
                                     .rich(ui, "Nothing here matches.")
@@ -119,6 +191,48 @@ impl WorldPage {
                             );
                         }
                         self.list(ui, index, &groups);
+                        let broken: Vec<_> = index
+                            .broken_world
+                            .iter()
+                            .filter(|(path, _)| {
+                                path.to_lowercase().contains(&self.search.to_lowercase())
+                            })
+                            .collect();
+                        if !broken.is_empty() {
+                            design::group_heading(ui, "Cannot be read", broken.len());
+                            for (path, problem) in broken {
+                                let response = design::two_line_row(
+                                    ui,
+                                    ROW,
+                                    self.repair.as_ref().is_some_and(|r| r.path == *path),
+                                    path,
+                                    "Cannot be read",
+                                )
+                                .on_hover_text(problem);
+                                if response.clicked() {
+                                    self.open_repair(campaign, path);
+                                }
+                            }
+                        }
+                        let drafts: Vec<_> = self
+                            .kept_repairs
+                            .iter()
+                            .filter(|r| {
+                                r.dirty()
+                                    && !index.broken_world.iter().any(|(path, _)| path == &r.path)
+                            })
+                            .map(|r| r.path.clone())
+                            .collect();
+                        if !drafts.is_empty() {
+                            design::group_heading(ui, "Repair drafts", drafts.len());
+                            for path in drafts {
+                                if design::two_line_row(ui, ROW, false, &path, "Unsaved repair")
+                                    .clicked()
+                                {
+                                    self.open_repair(campaign, &path);
+                                }
+                            }
+                        }
                     });
             });
         let mut nav = None;
@@ -128,6 +242,13 @@ impl WorldPage {
                 ..Default::default()
             }))
             .show_inside(ui, |ui| {
+                if let Some(repair) = &mut self.repair {
+                    if repair.show(ui, campaign) {
+                        self.repair = None;
+                        self.reload = true;
+                    }
+                    return;
+                }
                 if self.new_kind.is_some() || self.generated.is_some() || self.error.is_some() {
                     self.creation_form(ui, index, campaign);
                     return;
@@ -171,6 +292,7 @@ impl WorldPage {
 
     fn begin_new(&mut self, kind: &'static str, index: Option<&ContentIndex>) {
         self.error = None;
+        self.keep_repair();
         self.new_kind = (kind != "generate").then_some(kind);
         self.generated = None;
         if kind == "generate"
@@ -181,6 +303,7 @@ impl WorldPage {
                 Ok(npc) => self.generated = Some(npc),
                 Err(error) => self.error = Some(error),
             }
+            self.generator_sources = tables.sources;
             self.generator_problems = tables.problems;
         }
     }
@@ -190,28 +313,50 @@ impl WorldPage {
         if let Some(kind) = self.new_kind {
             design::group_label(
                 ui,
-                if kind == "npc" {
-                    "New NPC"
-                } else {
-                    "New location"
+                match kind {
+                    "npc" => "New NPC",
+                    "location" => "New location",
+                    _ => "New note",
                 },
             );
             design::text_field(ui, "Name", &mut self.new_name, None, None);
+            if kind == "note" {
+                design::text_field(
+                    ui,
+                    "Type (optional)",
+                    &mut self.note_type,
+                    Some("Leave empty for a plain note. For example: faction or quest."),
+                    None,
+                );
+            }
             ui.horizontal(|ui| {
                 let reason = self
                     .new_name
                     .trim()
                     .is_empty()
                     .then_some("Type a name first.");
-                if design::Action::primary(if kind == "npc" {
-                    "Create NPC"
+                if (if self.run_open {
+                    design::Action::secondary(match kind {
+                        "npc" => "Create NPC",
+                        "location" => "Create location",
+                        _ => "Create note",
+                    })
                 } else {
-                    "Create location"
+                    design::Action::primary(match kind {
+                        "npc" => "Create NPC",
+                        "location" => "Create location",
+                        _ => "Create note",
+                    })
                 })
                 .blocked(reason)
                 .show(ui)
                 .clicked()
                 {
+                    let kind = if kind == "note" {
+                        self.note_type.trim()
+                    } else {
+                        kind
+                    };
                     made = Some(super::create_entry(campaign, &self.new_name, kind));
                 }
                 design::blocked_reason(ui, reason);
@@ -222,8 +367,13 @@ impl WorldPage {
             });
         }
         if let Some(npc) = &self.generated {
-            let (saved, again, discard) =
-                crate::lookup::generated_card(ui, npc, &self.generator_problems, self.run_open);
+            let (saved, again, discard) = crate::lookup::generated_card(
+                ui,
+                npc,
+                &self.generator_problems,
+                &self.generator_sources,
+                self.run_open,
+            );
             if saved {
                 made = Some(super::create_generated(campaign, npc));
             }
@@ -240,6 +390,7 @@ impl WorldPage {
                 self.new_kind = None;
                 self.generated = None;
                 self.new_name.clear();
+                self.note_type.clear();
                 self.error = None;
                 self.reload = true;
             }
@@ -304,6 +455,7 @@ impl WorldPage {
                     };
                     if response.clicked() {
                         self.selected = Some(entry.id);
+                        self.keep_repair();
                     }
                 });
             }
@@ -322,6 +474,7 @@ fn new_menu(ui: &mut egui::Ui) -> Option<&'static str> {
         .show(ui);
     egui::Popup::menu(&response).show(|ui| {
         for (word, kind) in [
+            ("Note…", "note"),
             ("NPC", "npc"),
             ("Location", "location"),
             ("Generate NPC", "generate"),
