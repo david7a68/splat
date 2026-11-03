@@ -75,6 +75,7 @@ pub struct Driver<'a> {
     pub outcome: Outcome,
     failed_expectations: RefCell<Vec<String>>,
     diagnose: bool,
+    targeted: bool,
     timing: CaptureTiming,
     repeated_captures: super::repeated_captures::RepeatedCaptures,
     expect_same: Option<&'static str>,
@@ -219,6 +220,7 @@ impl<'a> Driver<'a> {
             page_trail: Vec::new(),
             failed_expectations: RefCell::default(),
             diagnose: std::env::var_os("SPLAT_VISUAL_DIAGNOSE").is_some(),
+            targeted: std::env::var_os("SPLAT_VISUAL_SCENARIOS").is_some(),
             timing: CaptureTiming::default(),
             repeated_captures: Default::default(),
             expect_same: None,
@@ -623,6 +625,7 @@ impl<'a> Driver<'a> {
 
     /// Fail the scenario unless this text is on screen. Scripts call this so a
     /// screenshot can never silently show the wrong state.
+    /// Targeted runs collect every reached mismatch before failing the suite.
     pub fn expect(&self, name: &str) {
         if self.has_containing(name) {
             return;
@@ -632,7 +635,7 @@ impl<'a> Driver<'a> {
             self.scenario,
             self.describe()
         );
-        if self.diagnose {
+        if self.diagnose || self.targeted {
             eprintln!("{message}");
             self.failed_expectations.borrow_mut().push(message);
         } else {
@@ -1836,7 +1839,7 @@ fn software_renderer() -> egui_kittest::wgpu::WgpuTestRenderer {
 }
 
 #[test]
-fn diagnostic_text_failures_remain_failures_and_normal_mode_still_panics() {
+fn diagnostic_and_targeted_text_failures_remain_failures_and_full_mode_still_panics() {
     let root = tempfile::tempdir().unwrap();
     let world = super::fixture::World::build(
         root.path(),
@@ -1851,6 +1854,11 @@ fn diagnostic_text_failures_remain_failures_and_normal_mode_still_panics() {
     driver.expect("missing diagnostic phrase two");
     assert_eq!(driver.failed_expectations.borrow().len(), 2);
     driver.diagnose = false;
+    driver.targeted = true;
+    driver.expect("missing targeted phrase one");
+    driver.expect("missing targeted phrase two");
+    assert_eq!(driver.failed_expectations.borrow().len(), 4);
+    driver.targeted = false;
     assert!(
         std::panic::catch_unwind(std::panic::AssertUnwindSafe(
             || driver.expect("missing normal phrase")
@@ -1858,9 +1866,11 @@ fn diagnostic_text_failures_remain_failures_and_normal_mode_still_panics() {
         .is_err()
     );
     let outcome = driver.finish();
-    assert_eq!(outcome.failed_expectations.len(), 2);
+    assert_eq!(outcome.failed_expectations.len(), 4);
     assert!(outcome.failed_expectations[0].contains("phrase one"));
     assert!(outcome.failed_expectations[1].contains("phrase two"));
+    assert!(outcome.failed_expectations[2].contains("targeted phrase one"));
+    assert!(outcome.failed_expectations[3].contains("targeted phrase two"));
 }
 
 #[test]
