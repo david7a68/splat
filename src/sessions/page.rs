@@ -209,7 +209,7 @@ pub struct Sessions {
     removed_fight: Option<(Option<Uuid>, usize, String, String, String)>,
     plan_notice_state: Option<(String, Vec<timeline::Event>)>,
     removed_event_in_plan: bool,
-    removed_group: Option<(Option<Uuid>, String, String)>,
+    removed_group: Option<(Option<Uuid>, usize, String, String, f32)>,
     /// The fight behind the open event, read once.
     fight: Option<(Uuid, Result<FightSummary, String>)>,
     /// What the session before the selected one left, read once for each selection.
@@ -402,31 +402,35 @@ fn plan_row(
     widths: &[f32],
     icon: &str,
     mut words: impl FnMut(&mut egui::Ui),
+    mut summary: impl FnMut(&mut egui::Ui),
     mut action: impl FnMut(&mut egui::Ui),
 ) {
     ui.horizontal_top(|ui| {
         ui.spacing_mut().item_spacing.x = design::S;
-        for (cell, width) in widths.iter().enumerate() {
+        ui.label(Type::Body.rich(ui, icon).color(colors().muted));
+        ui.vertical(|ui| {
+            let left = ui.cursor().min;
+            let action_rect = egui::Rect::from_min_size(
+                egui::pos2(ui.max_rect().right() - widths[1], left.y),
+                egui::vec2(widths[1], Density::Read.control()),
+            );
+            let mut action_ui = ui.new_child(
+                egui::UiBuilder::new()
+                    .max_rect(action_rect)
+                    .layout(egui::Layout::right_to_left(egui::Align::Center)),
+            );
+            action(&mut action_ui);
+            let title_width = (action_rect.left() - left.x - design::S).max(design::XL);
             ui.allocate_ui_with_layout(
-                egui::vec2(*width, 0.0),
+                egui::vec2(title_width, Density::Read.control()),
                 egui::Layout::top_down(egui::Align::Min),
                 |ui| {
-                    ui.set_width(*width);
-                    if cell == 0 {
-                        ui.horizontal_top(|ui| {
-                            ui.label(Type::Body.rich(ui, icon).color(colors().muted));
-                            ui.vertical(&mut words);
-                        });
-                    } else {
-                        ui.allocate_ui_with_layout(
-                            egui::vec2(ui.available_width(), Density::Read.control()),
-                            egui::Layout::right_to_left(egui::Align::Center),
-                            &mut action,
-                        );
-                    }
+                    ui.set_width(title_width);
+                    words(ui);
                 },
             );
-        }
+            summary(ui);
+        });
     });
 }
 
@@ -482,15 +486,22 @@ fn note_title(ui: &mut egui::Ui, title: &str, date: &str) {
 
 /// A played fight names its result and last round once, on the row's second line.
 fn played_fight_summary(event: &timeline::Event) -> String {
+    let state = |round: &str, paused, ended| {
+        round
+            .parse()
+            .ok()
+            .map(|round| crate::encounter_run::state_words(round, paused, ended))
+    };
     if let Some((outcome, round)) = event.result.rsplit_once(", round ") {
-        format!("{outcome} · ended in round {round}")
+        state(round, false, true).map(|words| format!("{outcome} · {words}"))
     } else if let Some(round) = event.result.strip_prefix("Ended in round ") {
-        format!("Ended in round {round}")
+        state(round, false, true)
     } else if let Some(round) = event.result.strip_prefix("Round ") {
-        format!("Paused in round {round}")
+        state(round, true, false)
     } else {
-        event.result.clone()
+        None
     }
+    .unwrap_or_else(|| event.result.clone())
 }
 
 /// The words of one of the plan's add menus.
@@ -1958,8 +1969,6 @@ impl Sessions {
     fn record_blocked(&self, settings: &ProcessingSettings) -> Option<String> {
         if let Some(live) = &self.live {
             Some(format!("Stop the recording of {} first.", live.label))
-        } else if self.draft.as_ref().is_some_and(Draft::needs_attention) {
-            Some("Recording and other sessions wait until you save.".to_owned())
         } else if settings.probing() {
             Some("Looking for a recorder.".to_owned())
         } else if settings.tool().is_none() {
@@ -2008,9 +2017,7 @@ impl Sessions {
         {
             self.confirm_record = true;
         }
-        if let Some(reason) =
-            reason.filter(|_| !self.draft.as_ref().is_some_and(Draft::needs_attention))
-        {
+        if let Some(reason) = reason {
             ui.label(Type::Small.rich(ui, reason).color(colors().muted));
             ui.add_space(design::L);
         }
@@ -2178,17 +2185,28 @@ impl Sessions {
     }
 
     /// A note's state says it is the note, beside a control about audio.
-    fn note_status(ui: &mut egui::Ui, draft: &Draft) {
+    fn note_save_status(draft: &Draft) -> Status<'static> {
         let c = colors();
         let (icon, word, color) = match &draft.state {
             DraftState::Clean => (icons::OK, "Notes saved", c.document.clean),
             DraftState::Saved => (icons::OK, "Notes saved", c.document.saved),
             DraftState::Unsaved => (icons::BUSY, "Saving…", c.muted),
             DraftState::Conflict => (icons::WARN, "Changed on disk", c.document.external),
-            DraftState::Missing => (icons::WARN, "File gone", c.document.external),
+            DraftState::Missing => (icons::ERROR, "Notes not saved", c.document.invalid),
             DraftState::Failed(_) => (icons::ERROR, "Notes not saved", c.document.invalid),
         };
-        design::status(ui, Status { icon, word, color });
+        Status { icon, word, color }
+    }
+
+    pub fn attention_status(&self) -> Option<Status<'static>> {
+        self.draft
+            .as_ref()
+            .filter(|draft| draft.needs_attention())
+            .map(Self::note_save_status)
+    }
+
+    fn note_status(ui: &mut egui::Ui, draft: &Draft) {
+        design::status(ui, Self::note_save_status(draft));
     }
 
     fn draft_status(ui: &mut egui::Ui, draft: &Draft) {
@@ -2238,7 +2256,7 @@ impl Sessions {
                 design::message(
                     ui,
                     Tone::Warning,
-                    "This file is gone from the folder. It may have been moved or renamed. Your words are still here. Its recordings and events stay with the old session, and do not move to a new file. Recording and other sessions wait until you save.",
+                    "This file is gone from the folder. It may have been moved or renamed. Your words are still here. Its recordings and events stay with the old session, and do not move to a new file. Other sessions wait until you save.",
                 );
                 if Action::secondary("Save my words as a new file")
                     .show(ui)
@@ -2294,7 +2312,16 @@ impl Sessions {
         let c = colors();
         design::group_heading(ui, heading, 0);
         ui.add_space(design::XS);
-        design::text_field(ui, "Number", &mut form.number, None, None);
+        design::field(ui, "Number", None, None, |ui| {
+            design::number_field(
+                ui,
+                "Number",
+                &mut form.number,
+                "",
+                design::L * 5.0,
+                Density::Read.control(),
+            );
+        });
         let title = design::text_field(
             ui,
             "Session title",
@@ -3049,6 +3076,30 @@ impl Sessions {
         }
     }
 
+    fn removed_group_message(
+        &self,
+        ui: &mut egui::Ui,
+        session: Option<Uuid>,
+        position: usize,
+    ) -> bool {
+        let Some((id, at, _, _, height)) = &self.removed_group else {
+            return false;
+        };
+        if *id != session || *at != position {
+            return false;
+        }
+        ui.allocate_ui(egui::vec2(ui.available_width(), *height), |ui| {
+            ui.set_min_height(*height);
+            design::message_with_action(
+                ui,
+                Tone::Info,
+                "Group removed from this plan.",
+                "Undo remove from plan",
+            )
+        })
+        .inner
+    }
+
     /// The session as a list, top to bottom: what happened, then what is still to come. It
     /// replaces a walk between Encounters, Timeline and the note.
     fn plan_pane(&mut self, ui: &mut egui::Ui, book: &mut Book, plan: &Plan<'_>) {
@@ -3070,28 +3121,17 @@ impl Sessions {
             self.removed_event_in_plan = false;
             self.plan_notice_state = None;
         }
-        if self.removed_group.as_ref().is_some_and(|(id, _, after)| {
-            *id == session && self.draft.as_ref().is_none_or(|draft| draft.body != *after)
-        }) {
-            self.removed_group = None;
-        }
-        if let Some((id, before, _)) = &self.removed_group
-            && *id == session
-            && design::message_with_action(
-                ui,
-                Tone::Info,
-                "Group removed from this plan.",
-                "Undo remove from plan",
-            )
+        if self
+            .removed_group
+            .as_ref()
+            .is_some_and(|(id, _, _, after, _)| {
+                *id == session && self.draft.as_ref().is_none_or(|draft| draft.body != *after)
+            })
         {
-            if let Some(draft) = &mut self.draft {
-                draft.body = before.clone();
-                draft.edited();
-            }
             self.removed_group = None;
         }
         problems(ui, book);
-        if plan.group_open {
+        if plan.group_open && self.not_being_played().is_none() {
             let label = self
                 .notes
                 .iter()
@@ -3207,6 +3247,7 @@ impl Sessions {
         let mut insert = None;
         let mut remove = None;
         let mut remove_group = None;
+        let mut undo_group_remove = false;
         let mut remove_fight = None;
         let mut delete_run = None;
         let mut toggle = None;
@@ -3247,6 +3288,7 @@ impl Sessions {
                     let row = ui.push_id(event.id.clone(), |ui| {
                         plan_row(ui, &widths, if is_open { icons::DOWN } else { icons::NEXT }, |ui| {
                             if plan_link(ui, &label, is_open).clicked() { toggle = Some(event.id.clone()); }
+                        }, |ui| {
                             if running {
                                 if design::status_link(ui, Status { icon: icons::RUN,
                                     word: &plan.open_state, color: c.text }).clicked() {
@@ -3338,6 +3380,7 @@ impl Sessions {
                             if plan_link(ui, &fight.name, self.open_planned.as_ref() == Some(&fight.path)).clicked() {
                                 self.open_planned = (self.open_planned.as_ref() != Some(&fight.path)).then(|| fight.path.clone());
                             }
+                        }, |ui| {
                             if running {
                                 if design::status_link(ui, Status { icon: icons::RUN,
                                     word: &plan.open_state, color: c.text }).clicked() {
@@ -3390,20 +3433,22 @@ impl Sessions {
                     });
                 }
                 self.removed_fight_message(ui, session, planned.len());
-                for group in &planned_groups {
+                for (position, group) in planned_groups.iter().enumerate() {
+                    undo_group_remove |= self.removed_group_message(ui, session, position);
                     any = true;
-                    ui.push_id(group.id, |ui| {
+                    let row = ui.push_id(group.id, |ui| {
                         let mut read_group = false;
                         plan_row(ui, &widths, icons::GROUP, |ui| {
                             if design::wrapped_link(ui, &group.name).clicked() { read_group = true; }
-                            let summary = group.summary().split(" · ").map(|part| part.replace(' ', "\u{a0}")).collect::<Vec<_>>().join("\u{a0}· ");
+                        }, |ui| {
+                            let summary = group.summary().split(" · ").map(|part| part.replace(' ', "\u{a0}")).collect::<Vec<_>>().join(" ·\u{a0}");
                             wrapped_words(ui, Type::Small, summary, c.muted);
                             if let Some(problem) = &group.problem { wrapped_words(ui, Type::Small, problem, c.result.warning); }
                         }, |ui| {
                             design::row_menu(ui, &group.name, |ui| {
                                 if Action::quiet("Remove").name(&format!("Remove group {} from the plan", group.name))
                                     .blocked(plan.group_blocked).show(ui).clicked() {
-                                    remove_group = Some(group.name.clone()); ui.close();
+                                    remove_group = Some((position, group.name.clone(), 0.0)); ui.close();
                                 }
                             });
                             if plan.arrivals_open {
@@ -3419,8 +3464,10 @@ impl Sessions {
                         if read_group { self.wants_group = Some(group.path.clone()); self.group_session = self.selected; }
                         plan_rule(ui);
                     });
+                    if let Some((at, _, height)) = &mut remove_group && *at == position { *height = row.response.rect.height(); }
                 }
-                if !any {
+                undo_group_remove |= self.removed_group_message(ui, session, planned_groups.len());
+                if !any && self.removed_group.is_none() {
                     design::empty_state(ui, icons::SESSIONS, "Nothing planned yet.",
                         "Use Add below to plan a fight, a group, or an event.", |_| {});
                 }
@@ -3451,13 +3498,20 @@ impl Sessions {
                 self.plan_notice_state = Some((after, book.events.clone()));
             }
         }
-        if let Some(name) = remove_group
+        if undo_group_remove
+            && let Some((_, _, before, _, _)) = self.removed_group.take()
+            && let Some(draft) = &mut self.draft
+        {
+            draft.body = before;
+            draft.edited();
+        }
+        if let Some((position, name, height)) = remove_group
             && let Some(draft) = &mut self.draft
         {
             let before = draft.body.clone();
             unlink_group(&mut draft.body, &name);
             draft.edited();
-            self.removed_group = Some((session, before, draft.body.clone()));
+            self.removed_group = Some((session, position, before, draft.body.clone(), height));
             self.plan_notice_state = Some((draft.body.clone(), book.events.clone()));
         }
         if changed {
@@ -4756,8 +4810,25 @@ impl Sessions {
         {
             self.play_this_one();
         }
-        if let Some(words) = self.not_being_played() {
-            let current = self.current();
+        if let Some(mut words) = self.not_being_played() {
+            let current = if plan.group_open {
+                self.group_session
+            } else {
+                self.current()
+            };
+            if plan.group_open {
+                let number = self
+                    .notes
+                    .iter()
+                    .find(|note| Some(note.id) == self.group_session)
+                    .map(|note| note.number);
+                if let Some(number) = number {
+                    words = format!(
+                        "Session {} is not the session being played. A group is being assembled in Session {number}.",
+                        note.number
+                    );
+                }
+            }
             let next = self
                 .notes
                 .iter()
@@ -5249,6 +5320,8 @@ impl Sessions {
                         .font(design::reader::prose_type(ui).font(ui))
                         .layouter(&mut layouter)
                         .desired_width(ui.available_width())
+                        .min_size(egui::vec2(0.0, ui.available_height()))
+                        .frame(false)
                         .interactive(false)
                         .show(ui);
                     design::named(ui, &output.response, "Built-in template text");
@@ -5448,7 +5521,7 @@ impl Sessions {
             if self.view == View::Notes && !in_form && !empty {
                 new_session = Action::secondary("New session")
                     .icon(icons::ADD)
-                    .blocked_if(locked, "Recording and other sessions wait until you save.")
+                    .blocked_if(locked, "Other sessions wait until you choose what to keep.")
                     .show(ui)
                     .clicked();
             }

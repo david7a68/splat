@@ -304,11 +304,7 @@ impl DndBeyond {
         blocked: Option<&str>,
     ) {
         ui.horizontal(|ui| {
-            ui.label(
-                crate::design::Type::Heading
-                    .rich(ui, "D&D Beyond")
-                    .color(crate::design::colors().text),
-            );
+            crate::design::group_heading(ui, "D&D Beyond", 0);
             if self.pending.is_some() {
                 crate::design::spinner(ui);
                 ui.weak("Refreshing…");
