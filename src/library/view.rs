@@ -140,6 +140,7 @@ pub(crate) struct RunValues {
 }
 
 /// Draw an entry's content. Returns the index of a link the DM followed.
+#[cfg(test)]
 pub(crate) fn show(
     ui: &mut egui::Ui,
     name: &str,
@@ -148,7 +149,19 @@ pub(crate) fn show(
     origin: &Origin<'_>,
     links: &dyn Links,
 ) -> Option<usize> {
-    show_inner(ui, name, entry, body, origin, links, None)
+    show_inner(ui, name, entry, body, origin, links, None, |_| None)
+}
+
+pub(crate) fn show_with_related(
+    ui: &mut egui::Ui,
+    name: &str,
+    entry: Option<&Entry>,
+    body: &str,
+    origin: &Origin<'_>,
+    links: &dyn Links,
+    related: impl FnOnce(&mut egui::Ui) -> Option<usize>,
+) -> Option<usize> {
+    show_inner(ui, name, entry, body, origin, links, None, related)
 }
 
 pub(crate) fn show_run(
@@ -166,6 +179,7 @@ pub(crate) fn show_run(
         origin,
         links,
         Some(values),
+        |_| None,
     )
 }
 
@@ -178,6 +192,7 @@ fn show_inner(
     origin: &Origin<'_>,
     links: &dyn Links,
     values: Option<&RunValues>,
+    related: impl FnOnce(&mut egui::Ui) -> Option<usize>,
 ) -> Option<usize> {
     if let Some(entry) = entry {
         ui.ctx()
@@ -188,34 +203,12 @@ fn show_inner(
     let styled = entry.filter(|entry| reading.is_none() && creature::supports(entry, &sections));
     let reading = reading.as_ref();
     let builtin = origin.builtin;
-    let room = ui.available_width();
-    // A wide window's margin holds what is rarely wanted, so the prose keeps its measure and
-    // the page has no dead space.
-    if room >= design::READER_MEASURE + design::XXL + REFERENCE_MIN {
-        let mut open_link = None;
-        ui.horizontal_top(|ui| {
-            let layout = Layout::top_down(Align::Min);
-            let measure = design::READER_MEASURE;
-            ui.allocate_ui_with_layout(vec2(measure, 0.0), layout, |ui| {
-                ui.set_max_width(measure);
-                open_link = content(
-                    ui, entry, reading, &sections, styled, builtin, links, values,
-                );
-            });
-            ui.add_space(design::XL);
-            let width = ui.available_width().min(REFERENCE_MAX);
-            ui.allocate_ui_with_layout(vec2(width, 0.0), layout, |ui| {
-                ui.set_max_width(width);
-                reference(ui, entry, &sections, styled.is_some(), origin);
-            });
-        });
-        return open_link;
-    }
     // Rules text keeps its measure in a wide side panel too.
     style::measure(ui, |ui| {
         let open_link = content(
             ui, entry, reading, &sections, styled, builtin, links, values,
         );
+        let open_link = open_link.or(related(ui));
         ui.add_space(design::L);
         design::rule(ui);
         reference(ui, entry, &sections, styled.is_some(), origin);
@@ -223,7 +216,6 @@ fn show_inner(
     })
 }
 
-const REFERENCE_MIN: f32 = 280.0;
 const REFERENCE_MAX: f32 = 360.0;
 /// The reader's measure, its gap and the margin at their widest.
 pub(crate) const WIDE_READER: f32 = design::READER_MEASURE + design::XL + REFERENCE_MAX;

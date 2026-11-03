@@ -435,6 +435,13 @@ fn show_with_density(ui: &mut egui::Ui, markdown: &str, dense: bool) {
                             prose.line()
                         }),
                         color,
+                        underline: if link.is_some()
+                            && !matches!(link, Some((_, LinkTarget::Missing)))
+                        {
+                            egui::Stroke::new(design::HAIRLINE_WIDTH, color)
+                        } else {
+                            egui::Stroke::NONE
+                        },
                         strikethrough: if struck {
                             egui::Stroke::new(1.0, color)
                         } else {

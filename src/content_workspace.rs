@@ -173,6 +173,37 @@ impl PackageSelection {
             .unwrap_or("A package that is no longer on this computer")
     }
 
+    pub fn campaign_users(&self, catalogue: &Catalogue) -> Vec<(Uuid, String)> {
+        let references: Vec<_> = match &self.selection {
+            Selection::Selected { entries } => entries
+                .iter()
+                .filter_map(|entry| entry.reference().ok())
+                .collect(),
+            Selection::All => catalogue
+                .modules
+                .iter()
+                .find(|module| Some(module.id) == self.package.id)
+                .map(|module| module.entries.iter().map(|id| Reference::Id(*id)).collect())
+                .unwrap_or_default(),
+        };
+        catalogue
+            .entries
+            .values()
+            .filter(|entry| entry.private)
+            .filter(|entry| {
+                content::required_references(&entry.entry).is_ok_and(|required| {
+                    required.iter().any(|reference| {
+                        references.contains(reference)
+                            || catalogue.resolve(reference).is_ok_and(|id| {
+                                references.iter().any(|r| catalogue.resolve(r) == Ok(id))
+                            })
+                    })
+                })
+            })
+            .map(|entry| (entry.entry.id, entry.entry.name.clone()))
+            .collect()
+    }
+
     pub fn unavailable_message(&self, catalogue: &Catalogue) -> String {
         let mut message = if self
             .name
@@ -884,6 +915,65 @@ fn own_references_to(text: &str, entry: &Entry, new_id: Uuid) -> String {
         .collect()
 }
 
+/// Reconnect structured references without changing the note's prose or other fields.
+pub fn redirect_reference(text: &str, old: &Entry, new_id: Uuid) -> Result<String, String> {
+    fn replace(value: &mut Value, old: &Entry, new_id: Uuid) {
+        match value {
+            Value::Mapping(map) => {
+                let matches = map.get("id").and_then(Value::as_str)
+                    == Some(old.id.to_string().as_str())
+                    || old
+                        .key
+                        .as_deref()
+                        .is_some_and(|key| map.get("key").and_then(Value::as_str) == Some(key));
+                if matches {
+                    map.remove("key");
+                    map.insert("id".into(), new_id.to_string().into());
+                }
+                if let Some(Value::Mapping(related)) = map.get_mut("related") {
+                    for target in [Some(old.id.to_string()), old.key.clone()]
+                        .into_iter()
+                        .flatten()
+                    {
+                        if let Some(label) = related.remove(Value::String(target)) {
+                            related.insert(new_id.to_string().into(), label);
+                        }
+                    }
+                }
+                for value in map.values_mut() {
+                    replace(value, old, new_id);
+                }
+            }
+            Value::Sequence(values) => {
+                for value in values {
+                    replace(value, old, new_id);
+                }
+            }
+            _ => {}
+        }
+    }
+    let entry = Entry::parse("reference.md", text)?;
+    let mut changes = Vec::new();
+    for (key, value) in &entry.fields {
+        if ["splat_id", "splat_origin"].contains(&key.as_str().unwrap_or_default()) {
+            continue;
+        }
+        let mut updated = value.clone();
+        replace(&mut updated, old, new_id);
+        if updated != *value {
+            changes.push((key.as_str().ok_or("Invalid field name")?, Some(updated)));
+        }
+    }
+    let updated = patch_fields(text, &changes)?;
+    let Some((front, body)) = crate::sessions::split_note(&updated) else {
+        return Ok(updated);
+    };
+    Ok(format!(
+        "{front}{}",
+        crate::world::redirect_links(body, old, new_id)
+    ))
+}
+
 #[derive(Clone)]
 pub struct CopySource {
     pub entry: Entry,
@@ -899,6 +989,7 @@ pub struct CopyPlan {
     source_text: String,
     dependency_files: Vec<(PathBuf, String)>,
     pub dependencies: Vec<String>,
+    pub shared: Vec<CopyPlan>,
 }
 impl CopyPlan {
     pub fn prepare(
@@ -908,6 +999,131 @@ impl CopyPlan {
         name: &str,
         folder: &str,
         catalogue: &Catalogue,
+    ) -> Result<Self, String> {
+        Self::prepare_inner(
+            source,
+            destination,
+            destination_campaign,
+            name,
+            folder,
+            catalogue,
+            false,
+        )
+    }
+
+    /// Review all copies before writing any of them. Cycles use the assigned new identities.
+    pub fn prepare_sharing(
+        source: &CopySource,
+        destination: &Path,
+        name: &str,
+        folder: &str,
+        catalogue: &Catalogue,
+    ) -> Result<Self, String> {
+        let mut entries = BTreeMap::from([(source.entry.id, source.entry.clone())]);
+        let mut queue = VecDeque::from([source.entry.clone()]);
+        while let Some(entry) = queue.pop_front() {
+            for reference in content::required_references(&entry)? {
+                let id = catalogue.resolve(&reference)?;
+                if let std::collections::btree_map::Entry::Vacant(slot) = entries.entry(id) {
+                    let dependency = catalogue.entries[&id].entry.clone();
+                    slot.insert(dependency.clone());
+                    queue.push_back(dependency);
+                }
+            }
+        }
+        let mut copying: BTreeSet<Uuid> = entries
+            .keys()
+            .filter(|id| catalogue.entries.get(id).is_some_and(|e| e.private))
+            .copied()
+            .collect();
+        // Copy shared intermediates too when they need a campaign dependency.
+        loop {
+            let before = copying.len();
+            for (id, entry) in &entries {
+                if content::required_references(entry)?
+                    .iter()
+                    .any(|r| catalogue.resolve(r).is_ok_and(|id| copying.contains(&id)))
+                {
+                    copying.insert(*id);
+                }
+            }
+            if before == copying.len() {
+                break;
+            }
+        }
+        copying.remove(&source.entry.id);
+        let mut plan =
+            Self::prepare_inner(source, destination, None, name, folder, catalogue, true)?;
+        for id in copying {
+            let entry = &entries[&id];
+            let (path, text) = catalogue
+                .files
+                .get(&id)
+                .ok_or("The required note has no readable file. Reload and try again.")?;
+            let root = path
+                .ancestors()
+                .find(|root| note_path(root, &entry.path).is_ok_and(|candidate| candidate == *path))
+                .ok_or("Required note folder is missing")?;
+            let dependency = CopySource {
+                entry: entry.clone(),
+                text: text.clone(),
+                root: Some(root.into()),
+                campaign: None,
+            };
+            plan.shared.push(Self::prepare_inner(
+                &dependency,
+                destination,
+                None,
+                &entry.name,
+                folder,
+                catalogue,
+                true,
+            )?);
+        }
+        let mapping: Vec<_> = std::iter::once((&source.entry, &plan))
+            .chain(plan.shared.iter().map(|p| {
+                let original = entries
+                    .values()
+                    .find(|e| {
+                        p.source_path.as_ref().is_some_and(|path| {
+                            catalogue
+                                .files
+                                .get(&e.id)
+                                .is_some_and(|(file, _)| file == path)
+                        })
+                    })
+                    .expect("reviewed source");
+                (original, p)
+            }))
+            .map(|(entry, p)| Ok((entry.clone(), Entry::parse(&p.relative, &p.text)?.id)))
+            .collect::<Result<_, String>>()?;
+        for (old, new_id) in mapping {
+            plan.text = redirect_reference(&plan.text, &old, new_id)?;
+            for dependency in &mut plan.shared {
+                dependency.text = redirect_reference(&dependency.text, &old, new_id)?;
+            }
+        }
+        let mut paths = BTreeSet::new();
+        for p in std::iter::once(&plan).chain(plan.shared.iter()) {
+            if !paths.insert(&p.relative) {
+                return Err(
+                    "Two copies need the same file name. Rename a source note before sharing."
+                        .into(),
+                );
+            }
+        }
+        Ok(plan)
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn prepare_inner(
+        source: &CopySource,
+        destination: &Path,
+        destination_campaign: Option<Uuid>,
+        name: &str,
+        folder: &str,
+        catalogue: &Catalogue,
+        sharing: bool,
     ) -> Result<Self, String> {
         if ["package", "campaign", "reference"].contains(&source.entry.kind.as_str()) {
             return Err("Copy a content entry, not an owner manifest or source archive.".into());
@@ -929,9 +1145,10 @@ impl CopyPlan {
                     continue;
                 }
                 let dependency = &catalogue.entries[&id];
-                if dependency.private && destination_campaign != Some(dependency.owner) {
+                if !sharing && dependency.private && destination_campaign != Some(dependency.owner)
+                {
                     return Err(format!(
-                        "Cannot share {}: it requires private campaign entry ‘{}’. Share or replace that dependency first.",
+                        "{} needs {}, which is in this campaign only.",
                         source.entry.name, dependency.entry.name
                     ));
                 }
@@ -986,6 +1203,7 @@ impl CopyPlan {
         Entry::parse(&relative, &text)?;
         Ok(Self {
             root: destination.into(),
+            shared: Vec::new(),
             relative,
             text,
             dependency_files: seen
@@ -1001,7 +1219,15 @@ impl CopyPlan {
             source_text: source.text.clone(),
         })
     }
-    pub fn save(&self) -> Result<Entry, String> {
+    fn validate(&self) -> Result<(), String> {
+        if note_path(&self.root, &self.relative)?.exists() {
+            return Err(
+                "A note already exists at this destination. Review the copies again.".into(),
+            );
+        }
+        for dependency in &self.shared {
+            dependency.validate()?;
+        }
         for (path, original) in &self.dependency_files {
             if fs::read_to_string(path).map_err(|e| e.to_string())? != *original {
                 return Err("A required entry changed after review. Close the dialog and review a new copy.".into());
@@ -1012,6 +1238,31 @@ impl CopyPlan {
         {
             return Err("The source changed on disk. Reload it and review a new copy.".into());
         }
+        Ok(())
+    }
+    pub fn save(&self) -> Result<Entry, String> {
+        self.validate()?;
+        let mut written = Vec::new();
+        for dependency in &self.shared {
+            match dependency.save() {
+                Ok(_) => written.push(note_path(&dependency.root, &dependency.relative)?),
+                Err(error) => {
+                    for path in written {
+                        let _ = fs::remove_file(path);
+                    }
+                    return Err(error);
+                }
+            }
+        }
+        let result = self.save_one();
+        if result.is_err() {
+            for path in written {
+                let _ = fs::remove_file(path);
+            }
+        }
+        result
+    }
+    fn save_one(&self) -> Result<Entry, String> {
         let path = note_path(&self.root, &self.relative)?;
         fs::create_dir_all(path.parent().ok_or("Missing destination folder")?)
             .map_err(|e| e.to_string())?;
@@ -1040,6 +1291,102 @@ mod tests {
             serde_yaml_ng::to_value(vec![EntryRef::id(id)]).unwrap(),
         );
     }
+    #[test]
+    fn sharing_reconnects_dependencies_and_checks_every_source_before_writing() {
+        let temp = tempfile::tempdir().unwrap();
+        let source_root = temp.path().join("campaign");
+        let destination = temp.path().join("package");
+        fs::create_dir_all(&source_root).unwrap();
+        fs::create_dir_all(&destination).unwrap();
+        let owner = Uuid::new_v4();
+        let dependency_text = note_text("Captain Varra", "creature", None);
+        let dependency = Entry::parse("Captain Varra.md", &dependency_text).unwrap();
+        let source_text = patch_fields(
+            &note_text("Watch Orders", "rule", None),
+            &[(
+                "splat_requires",
+                Some(serde_yaml_ng::to_value(vec![EntryRef::id(dependency.id)]).unwrap()),
+            )],
+        )
+        .unwrap();
+        let source_entry = Entry::parse("Watch Orders.md", &source_text).unwrap();
+        let mut catalogue = Catalogue::default();
+        for (entry, text) in [
+            (&source_entry, &source_text),
+            (&dependency, &dependency_text),
+        ] {
+            let path = source_root.join(&entry.path);
+            fs::write(&path, text).unwrap();
+            catalogue.files.insert(entry.id, (path, text.clone()));
+            catalogue.insert(entry.clone(), owner, true).unwrap();
+        }
+        let source = CopySource {
+            entry: source_entry.clone(),
+            text: source_text.clone(),
+            root: Some(source_root.clone()),
+            campaign: None,
+        };
+        assert!(
+            CopyPlan::prepare(
+                &source,
+                &destination,
+                None,
+                "Watch Orders",
+                "Watch",
+                &catalogue
+            )
+            .is_err()
+        );
+        let plan =
+            CopyPlan::prepare_sharing(&source, &destination, "Watch Orders", "Watch", &catalogue)
+                .unwrap();
+        fs::write(
+            source_root.join(&dependency.path),
+            format!("{dependency_text}\nExternal change"),
+        )
+        .unwrap();
+        assert!(plan.save().is_err());
+        assert!(!destination.join("Watch/Watch Orders.md").exists());
+        assert!(!destination.join("Watch/Captain Varra.md").exists());
+        fs::write(source_root.join(&dependency.path), &dependency_text).unwrap();
+        let copied = plan.save().unwrap();
+        let copied_dependency = Entry::parse(
+            "Watch/Captain Varra.md",
+            &fs::read_to_string(destination.join("Watch/Captain Varra.md")).unwrap(),
+        )
+        .unwrap();
+        assert_ne!(copied_dependency.id, dependency.id);
+        assert_ne!(copied.id, source_entry.id);
+        assert_eq!(
+            content::required_references(&copied).unwrap(),
+            vec![Reference::Id(copied_dependency.id)]
+        );
+        assert_eq!(
+            fs::read_to_string(source_root.join(&source_entry.path)).unwrap(),
+            source_text
+        );
+        assert_eq!(
+            fs::read_to_string(source_root.join(&dependency.path)).unwrap(),
+            dependency_text
+        );
+    }
+
+    #[test]
+    fn reconnecting_a_related_entry_preserves_prose_and_unrelated_fields() {
+        let old = entry("Captain Varra", "creature");
+        let original = format!(
+            "---\nsplat_schema: 1\nsplat_id: {}\nsplat_kind: rule\nsplat_name: Ash Exposure\nsplat_rule: {{}}\nsplat_reading:\n  title: Ash Exposure\n  summary: Keep these words.\n  related:\n    {}: Read Captain Varra\ncustom: 'keep the quotes'\n---\n\nCaptain Varra keeps her name here.\n",
+            Uuid::new_v4(),
+            old.id
+        );
+        let new_id = Uuid::new_v4();
+        let changed = redirect_reference(&original, &old, new_id).unwrap();
+        assert!(changed.contains(&new_id.to_string()));
+        assert!(!changed.contains(&old.id.to_string()));
+        assert!(changed.contains("custom: 'keep the quotes'"));
+        assert!(changed.ends_with("Captain Varra keeps her name here.\n"));
+    }
+
     #[test]
     fn selections_keep_dependency_reasons_and_optional_entries_separate() {
         let owner = Uuid::new_v4();

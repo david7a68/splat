@@ -57,13 +57,26 @@ impl Repair {
         })
     }
 
+    pub fn entry_id(&self) -> Option<uuid::Uuid> {
+        splat::content::Entry::parse(&self.path, &self.draft)
+            .ok()
+            .map(|e| e.id)
+    }
+
     pub fn dirty(&self) -> bool {
         self.draft != self.baseline
     }
 
     pub fn show(&mut self, ui: &mut egui::Ui, campaign: &Campaign) -> bool {
         let (problem, line) = crate::campaign_content::repair_problem(&self.path, &self.draft);
-        design::reader::title(ui, &self.path);
+        design::reader::title(
+            ui,
+            std::path::Path::new(&self.path)
+                .file_name()
+                .unwrap_or_default()
+                .to_string_lossy()
+                .as_ref(),
+        );
         super::file_actions(ui, campaign, &self.path);
         if let Some(problem) = &problem {
             design::message(ui, design::Tone::Error, problem);

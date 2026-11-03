@@ -437,10 +437,22 @@ impl ContentIndex {
                     .any(|at| at == start)
             })
             .map(|&start| {
-                format!(
-                    "{}: its place is inside itself.",
-                    self.items[start].entry.path
-                )
+                let mut at = start;
+                let mut parts = Vec::new();
+                for _ in 0..self.world.len() {
+                    let Some(parent) = self.parent(at) else {
+                        break;
+                    };
+                    parts.push(format!(
+                        "{} is in {}",
+                        self.items[at].entry.name, self.items[parent].entry.name
+                    ));
+                    if parent == start {
+                        break;
+                    }
+                    at = parent;
+                }
+                format!("{}. Change one of them.", parts.join(", and "))
             })
             .collect()
     }
@@ -680,18 +692,21 @@ impl ContentIndex {
                 (3, folder.to_owned())
             } else {
                 match world::world_type(entry) {
-                    "npc" => (0, "NPCs".to_owned()),
+                    "npc" => (0, world::type_group("npc")),
                     "location" => {
                         locations.push(at);
                         continue;
                     }
-                    other => (2, world::type_label(other)),
+                    other => (2, world::type_group(other)),
                 }
             };
             groups.entry(group).or_default().push((at, 0));
         }
         if !locations.is_empty() {
-            groups.insert((1, "Locations".to_owned()), self.location_tree(&locations));
+            groups.insert(
+                (1, world::type_group("location")),
+                self.location_tree(&locations),
+            );
         }
         groups
     }
@@ -1138,14 +1153,6 @@ impl Lookup {
         let mut close = false;
         ui.horizontal(|ui| {
             ui.label(Type::Heading.rich(ui, "Lookup"));
-            if self.current.is_some()
-                && self.query.trim().is_empty()
-                && Action::quiet("Close entry").show(ui).clicked()
-            {
-                self.current = None;
-                self.reader = Reader::default();
-            }
-
             if !self.history.is_empty()
                 && Action::quiet("Back").icon(icons::BACK).show(ui).clicked()
             {
@@ -1174,13 +1181,35 @@ impl Lookup {
         }
         let width = ui.available_width();
         let before = self.query.clone();
-        let response = design::search_field(
-            ui,
-            SEARCH_NAME,
-            &mut self.query,
-            "Spell, creature, rule, note, heading…",
-            width,
-        );
+        let show_clear = self.current.is_some() || !self.query.is_empty();
+        let response = ui
+            .horizontal(|ui| {
+                let response = design::search_field(
+                    ui,
+                    SEARCH_NAME,
+                    &mut self.query,
+                    if width < design::XXL * 10.0 {
+                        "Search…"
+                    } else {
+                        "Search entries and notes…"
+                    },
+                    width
+                        - if show_clear {
+                            Action::quiet("Clear").natural_width(ui) + ui.spacing().item_spacing.x
+                        } else {
+                            0.0
+                        },
+                );
+                if show_clear && Action::quiet("Clear").show(ui).clicked() {
+                    self.query.clear();
+                    self.current = None;
+                    self.reader = Reader::default();
+                    self.reading_written = None;
+                    self.generated = None;
+                }
+                response
+            })
+            .inner;
         if std::mem::take(&mut self.focus_search) {
             design::focus_and_select(ui, response.id, &self.query);
         }
@@ -1200,16 +1229,16 @@ impl Lookup {
         };
         if !index.broken_world.is_empty() {
             ui.horizontal_wrapped(|ui| {
-                ui.label(
-                    Type::Small
-                        .rich(
-                            ui,
-                            format!(
-                                "{} cannot be read",
-                                design::count(index.broken_world.len(), "note", "notes")
-                            ),
-                        )
-                        .color(colors().document.invalid),
+                design::status(
+                    ui,
+                    design::Status {
+                        icon: icons::WARN,
+                        word: &format!(
+                            "{} cannot be read",
+                            design::count(index.broken_world.len(), "note", "notes")
+                        ),
+                        color: colors().result.warning,
+                    },
                 );
                 if design::link(ui, "Show").clicked() {
                     self.open_world_repair = Some(index.broken_world[0].0.clone());
@@ -1608,7 +1637,9 @@ pub(crate) fn generated_card(
             .wrap(),
         );
     }
-    let attribution = if sources.is_empty() {
+    let attribution = if !problems.is_empty() && sources.is_empty() {
+        "Built-in names.".to_owned()
+    } else if sources.is_empty() {
         "Built-in names. Mark a table npc-name in any note to use your own.".to_owned()
     } else {
         format!(
@@ -1619,6 +1650,13 @@ pub(crate) fn generated_card(
     ui.label(Type::Small.rich(ui, attribution).color(colors().muted));
     for problem in problems {
         design::message(ui, Tone::Warning, problem);
+        if let Some((path, _)) = problem.split_once(':')
+            && design::link(ui, &format!("Open {path}")).clicked()
+        {
+            ui.ctx().data_mut(|data| {
+                data.insert_temp(egui::Id::new("markdown_clicked_note"), path.to_owned())
+            });
+        }
     }
     let (mut saved, mut again, mut discard) = (false, false, false);
     ui.horizontal_wrapped(|ui| {

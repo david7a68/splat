@@ -580,6 +580,25 @@ const RESULT_ROW: f32 = 40.0;
 /// first place holds a party copy's word, which has no challenge rating. The package follows
 /// if the row has room for it.
 fn detail_columns(ui: &mut egui::Ui, detail: &str, source: Option<&str>) {
+    if detail.contains("HP not set") {
+        ui.horizontal_wrapped(|ui| {
+            for part in detail.split(" · ") {
+                if part.contains("HP not set") {
+                    design::status(
+                        ui,
+                        design::Status {
+                            icon: design::icons::WARN,
+                            word: "HP not set",
+                            color: colors().result.warning,
+                        },
+                    );
+                } else {
+                    ui.label(Type::Small.rich(ui, part).color(colors().muted));
+                }
+            }
+        });
+        return;
+    }
     const COLUMNS: [(&str, f32); 3] = [("CR ", 66.0), ("HP ", 46.0), ("AC ", 38.0)];
     let parts: Vec<&str> = detail.split(" · ").collect();
     let other = parts
@@ -625,7 +644,7 @@ fn grouped(value: u64) -> String {
     design::count(value as usize, "", "").trim().to_owned()
 }
 
-fn creature_name_link(ui: &mut egui::Ui, name: &str) -> egui::Response {
+pub(crate) fn creature_name_link(ui: &mut egui::Ui, name: &str) -> egui::Response {
     let galley = design::one_line(
         ui,
         name,
@@ -690,6 +709,8 @@ fn creature_detail(entry: &Entry, party: bool, changed: Option<&Resolved>) -> St
     }
     if let Some(hp) = changed.map_or_else(|| stat("max_hp"), |changed| changed.max_hp) {
         parts.push(format!("HP {hp}"));
+    } else {
+        parts.push(format!("{} HP not set", design::icons::WARN));
     }
     if let Some(ac) = changed.map_or_else(|| stat("armor_class"), |changed| changed.armor_class) {
         parts.push(format!("AC {ac}"));

@@ -2453,27 +2453,6 @@ impl Sessions {
                 draft.show_disk();
             }
             if let Some(disk) = &draft.on_disk {
-                let left: Vec<_> = draft.body.lines().collect();
-                let right: Vec<_> = disk.lines().collect();
-                let first = (0..left.len().max(right.len()))
-                    .find(|&at| left.get(at) != right.get(at))
-                    .unwrap_or(0);
-                let state = ui.make_persistent_id(("draft_difference", (&draft.path, disk)));
-                let current = ui
-                    .data(|data| data.get_temp::<usize>(state))
-                    .unwrap_or(first);
-                if let Some(heading) = left
-                    .iter()
-                    .take(current + 1)
-                    .rev()
-                    .find(|line| line.trim_start().starts_with('#'))
-                {
-                    ui.label(
-                        Type::Small
-                            .rich(ui, format!("In {}", heading.trim_start_matches('#').trim()))
-                            .color(colors().muted),
-                    );
-                }
                 design::draft_comparison(ui, &draft.body, disk, (&draft.path, disk));
                 return;
             }

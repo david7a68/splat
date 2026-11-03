@@ -347,7 +347,18 @@ pub(super) fn vitals(ui: &mut egui::Ui, entry: &Entry, values: Option<&super::vi
                 };
                 let shown = live.map_or_else(
                     || text.clone(),
-                    |n| n.map_or_else(|| "Unknown".to_owned(), |n| n.to_string()),
+                    |n| {
+                        n.map_or_else(
+                            || "Unknown".to_owned(),
+                            |n| {
+                                if label == "INITIATIVE" {
+                                    design::signed(n)
+                                } else {
+                                    n.to_string()
+                                }
+                            },
+                        )
+                    },
                 );
                 ui.label(Type::Prose.rich(ui, shown).color(c.text));
                 if let Some(live) = live

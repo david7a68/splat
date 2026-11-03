@@ -286,6 +286,35 @@ pub fn links_in(body: &str) -> Vec<String> {
     links
 }
 
+/// Redirect explicit links when their named dependency is copied. Keep their display words.
+pub(crate) fn redirect_links(text: &str, old: &Entry, new_id: Uuid) -> String {
+    outside_code(text, |part, output| {
+        let mut copied = 0;
+        for (range, embed, target, words) in each_link(part) {
+            output.push_str(&part[copied..range.start]);
+            let (name, heading) = target
+                .split_once('#')
+                .map_or((target.as_str(), String::new()), |(name, heading)| {
+                    (name, format!("#{heading}"))
+                });
+            let matches = name.eq_ignore_ascii_case(&old.name)
+                || name == old.id.to_string()
+                || old.key.as_deref() == Some(name)
+                || name.trim_end_matches(".md") == old.path.trim_end_matches(".md");
+            if matches && !embed {
+                output.push_str(&format!(
+                    "[[{new_id}{heading}|{}]]",
+                    words.as_deref().unwrap_or(&target)
+                ));
+            } else {
+                output.push_str(&part[range.clone()]);
+            }
+            copied = range.end;
+        }
+        output.push_str(&part[copied..]);
+    })
+}
+
 /// Obsidian's links, written as links the Markdown reader understands.
 pub fn with_links(body: &str, images: &HashMap<String, PathBuf>) -> String {
     outside_code(body, |part, output| {
@@ -385,6 +414,29 @@ fn creature(entry: &Entry) -> Option<Reference> {
 }
 
 /// A world entry's type, as a heading and a list say it.
+pub fn type_group(kind: &str) -> String {
+    match kind {
+        "npc" => "NPCs".into(),
+        "location" => "Locations".into(),
+        other => {
+            let label = type_label(other);
+            if label.ends_with('y')
+                && !label
+                    .chars()
+                    .rev()
+                    .nth(1)
+                    .is_some_and(|c| "aeiou".contains(c))
+            {
+                format!("{}ies", label.trim_end_matches('y'))
+            } else if label.ends_with('s') {
+                format!("{label}es")
+            } else {
+                format!("{label}s")
+            }
+        }
+    }
+}
+
 pub fn type_label(kind: &str) -> String {
     match kind {
         "npc" => "NPC".to_owned(),
@@ -554,10 +606,14 @@ pub fn npc_group(npc: &Entry, stat_block: &Entry, side: &str) -> Arc<RunGroup> {
 
 /// Always offer both routes: Obsidian for editing and the system file handler.
 pub(crate) fn file_actions(ui: &mut egui::Ui, campaign: &Campaign, relative: &str) {
-    let path = campaign.path.join(relative);
+    entry_file_actions(ui, &campaign.path, relative, true);
+}
+
+pub(crate) fn entry_file_actions(ui: &mut egui::Ui, root: &Path, relative: &str, obsidian: bool) {
+    let path = root.join(relative);
     ui.horizontal_wrapped(|ui| {
         ui.label(Type::Small.rich(ui, relative).color(colors().muted));
-        if design::link(ui, "Edit in Obsidian").clicked() {
+        if obsidian && design::link(ui, "Edit in Obsidian").clicked() {
             ui.ctx()
                 .open_url(egui::OpenUrl::new_tab(obsidian_url(&path)));
         }
@@ -823,46 +879,26 @@ impl Reader {
         {
             file_actions(ui, campaign, &item.entry.path);
         }
-        if !self.compact
-            && let Some(change) = &self.undo
-            && change.path == item.entry.path
-        {
-            let mut undo = false;
-
-            ui.horizontal_wrapped(|ui| {
-                ui.label(Type::Small.rich(ui, &change.word).color(colors().muted));
-                undo = Action::quiet("Undo")
-                    .name("Undo World change")
-                    .show(ui)
-                    .clicked();
-            });
-            if undo && let Some(campaign) = campaign {
-                match change.undo(campaign) {
-                    Ok(_) => {
-                        self.undo = None;
-                        return Some(Go::Reload(item.entry.id));
-                    }
-                    Err(error) => self.error = Some(error),
-                }
-            }
-        }
-        for warning in index
-            .errors
-            .iter()
-            .filter(|error| error.starts_with(&format!("{}:", item.entry.path)))
-        {
+        for warning in index.errors.iter().filter(|error| {
+            error.starts_with(&format!("{}:", item.entry.path))
+                || error.starts_with(&format!("{} is in ", item.entry.name))
+        }) {
             design::message(ui, Tone::Warning, warning);
         }
         if item.entry.kind == "world" {
             go = self.entry_controls(ui, item, index, campaign);
         }
         if item.is_note() {
-            style::measure(ui, |ui| style::markdown(ui, &item.entry.body));
+            let followed = style::measure(ui, |ui| {
+                style::markdown(ui, &item.entry.body);
+                related(ui, item, index)
+            });
+            go = go.or(followed);
             if !self.compact && item.is_world_note() {
                 go = go.or(self.make_entry_control(ui, item, campaign));
             }
         } else {
-            let followed = view::show(
+            let followed = view::show_with_related(
                 ui,
                 &item.entry.name,
                 Some(&item.entry),
@@ -873,10 +909,19 @@ impl Reader {
                     builtin: item.is_builtin(),
                 },
                 index,
+                |ui| {
+                    related(ui, item, index).and_then(|go| {
+                        if let Go::Item(at, _) = go {
+                            Some(at)
+                        } else {
+                            None
+                        }
+                    })
+                },
             );
             go = go.or(followed.map(|position| Go::Item(position, None)));
         }
-        go = go.or(related(ui, item, index));
+
         if let Some(target) = crate::markdown_view::take_note_link(ui.ctx()) {
             let followed = index.follow(&target, item);
             if let Go::Many(positions) = &followed {
@@ -989,10 +1034,18 @@ impl Reader {
             };
             ui.push_id(key, |ui| {
                 ui.horizontal_wrapped(|ui| {
-                    ui.label(
-                        Type::Small
-                            .rich(ui, format!("{label}: "))
-                            .color(colors().muted),
+                    ui.add_space(design::S);
+                    ui.allocate_ui_with_layout(
+                        egui::vec2(design::XXL * 3.0, design::Density::Read.control()),
+                        egui::Layout::left_to_right(egui::Align::Center),
+                        |ui| {
+                            ui.set_min_width(design::XXL * 3.0);
+                            ui.label(
+                                Type::Small
+                                    .rich(ui, format!("{label}: "))
+                                    .color(colors().muted),
+                            );
+                        },
                     );
                     if let Some(at) = target {
                         if design::link(ui, &index.items[at].entry.name).clicked() {
@@ -1011,6 +1064,30 @@ impl Reader {
                             focus: true,
                             ..Default::default()
                         });
+                    }
+                    if let Some(change) = &self.undo
+                        && change.path == item.entry.path
+                        && change.word
+                            == if key == "in" {
+                                "Place changed."
+                            } else {
+                                "Stat block changed."
+                            }
+                    {
+                        ui.label(Type::Small.rich(ui, &change.word).color(colors().muted));
+                        if Action::quiet("Undo")
+                            .name("Undo World change")
+                            .show(ui)
+                            .clicked()
+                        {
+                            match change.undo(campaign) {
+                                Ok(_) => {
+                                    self.undo = None;
+                                    go = Some(Go::Reload(item.entry.id));
+                                }
+                                Err(error) => self.error = Some(error),
+                            }
+                        }
                     }
                 })
             });
@@ -1103,6 +1180,34 @@ impl Reader {
         campaign: Option<&Campaign>,
     ) -> Option<Go> {
         let campaign = campaign.filter(|_| item.is_private())?;
+        let mut go = None;
+        if self.compact {
+            ui.horizontal_wrapped(|ui| {
+                let targets = [
+                    (
+                        "Fights as",
+                        creature(&item.entry).and_then(|r| index.position_of(&r)),
+                    ),
+                    ("In", index.place_of(item.entry.id)),
+                ];
+                let mut first = true;
+                for (label, target) in targets {
+                    if let Some(at) = target {
+                        if !first {
+                            ui.label(Type::Small.rich(ui, "·").color(colors().muted));
+                        }
+                        first = false;
+                        ui.label(Type::Small.rich(ui, label).color(colors().muted));
+                        if design::link(ui, &index.items[at].entry.name).clicked() {
+                            go = Some(Go::Item(at, None));
+                        }
+                    }
+                }
+            });
+            if go.is_some() {
+                return go;
+            }
+        }
         if !self.compact
             && let Some(go) = self.relationships(ui, item, index, campaign)
         {

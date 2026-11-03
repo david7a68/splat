@@ -407,9 +407,8 @@ Use **Copy to…** on a library or campaign entry to make an independent copy in
 registered package or campaign. Review the destination, name, retained dependencies,
 and Markdown before **Create copy**. Copies get a new UUID, lose the original resource
 key, and retain source attribution and optional origin identity. Existing references
-are not rewritten. A copy into a shared package cannot depend on private campaign
-entries; share or replace those dependencies first. The app checks source, dependency,
-and destination changes before writing. Destination folders must already exist.
+are not rewritten. When an entry needs a campaign entry, **Share both** copies both into the package and reconnects the new references. The app checks source, dependency,
+and destination changes before writing. Saving can create new subfolders.
 
 Clean destinations refresh after copying, and an open encounter draft sees the copy at once. **Campaign → Campaign entries** provides a
 search, the shared reader and a Markdown editor for local entries, plus copying back to packages. Pending
@@ -664,3 +663,7 @@ Campaign puts Needed by your entries below the packages in the left column. Sele
 Session Read view keeps each link's written words. When a Timeline event is renamed, **Update links in notes** offers to replace only aliases that still use the old title, with **Undo update links** for the batch. Custom aliases stay as written. Plan row actions keep Undo beside their row. Templates use the same styled Markdown editor as notes. During autosave, notes show **Saving…**.
 
 Settings imports a D&D Beyond campaign directly below its row and suggests a new folder beside the existing campaigns. Saved API keys name their slot, such as **Remove speech key (OpenAI)**. Failed recording jobs use **Continue processing**; **Process again** replaces existing results after a separate confirmation.
+
+Library shows **Back** with **Alt+Left** whenever an earlier entry is available. Both ordinary and wiki links open in place. The draft and disk comparison opens at the first changed line, with two context lines above it; a missing line says **No line**. Lookup has **Clear** beside search. An NPC read beside a run shows linked **Fights as** and **In** values. New packages start beside the last registered package. **Folder** accepts a new folder or suggests an existing one.
+
+The visual suite includes `npc-in-lookup`, `package-rename` and `package-about`. `share-to-package` checks the new references after **Share both**, and Library navigation checks the dependency copy action and its Undo.

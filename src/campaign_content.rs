@@ -536,19 +536,28 @@ impl CampaignContent {
             design::message_with_code(
                 ui,
                 Tone::Error,
-                &format!(
-                    "{path} cannot be read. Fix it here or in World. {}.",
-                    problem.trim_end_matches('.')
-                ),
+                &format!("{path} cannot be read. Fix it here or in World. {}.", {
+                    let mut text = problem.trim_end_matches('.').to_owned();
+                    if let Some(first) = text.get_mut(..1) {
+                        first.make_ascii_uppercase();
+                    }
+                    text
+                }),
             );
             let id = egui::Id::new(("repair_open", path.as_str()));
             let mut open = ui.data(|data| data.get_temp::<bool>(id)).unwrap_or(false);
-            if Action::quiet("Repair").show(ui).clicked() {
+            if Action::quiet(if open { "Close repair" } else { "Repair" })
+                .show(ui)
+                .clicked()
+            {
                 open = !open;
             }
             ui.data_mut(|data| data.insert_temp(id, open));
             if open {
-                design::group_heading(ui, &format!("Repair {path}"), 0);
+                ui.horizontal(|ui| {
+                    design::group_heading(ui, "Repair", 0);
+                    ui.label(Type::Mono.rich(ui, path.as_str()));
+                });
                 ui.scope(|ui| {
                     ui.set_max_width(design::READER_MEASURE);
                     // What is wrong comes first, and stays true as the DM edits.
@@ -761,6 +770,19 @@ impl CampaignContent {
                                     .wrap(),
                                 );
                             }
+                            for entry in catalogue.entries.values().filter(|entry| entry.private) {
+                                if splat::content::required_references(&entry.entry).is_ok_and(
+                                    |references| {
+                                        references
+                                            .iter()
+                                            .any(|reference| catalogue.resolve(reference).is_err())
+                                    },
+                                ) && design::link(ui, &format!("Open {}", entry.entry.name))
+                                    .clicked()
+                                {
+                                    self.open_lookup = Some(entry.entry.id);
+                                }
+                            }
                         });
                 },
             );
@@ -792,6 +814,11 @@ impl CampaignContent {
         for (i, selection) in unavailable {
             ui.push_id(i, |ui| {
                 design::message(ui, Tone::Warning, &selection.unavailable_message(catalogue));
+                for (id, name) in selection.campaign_users(catalogue) {
+                    if design::link(ui, &name).clicked() {
+                        self.open_lookup = Some(id);
+                    }
+                }
                 ui.horizontal_wrapped(|ui| {
                     if Action::quiet("Remove from this campaign")
                         .density(Density::Read)
@@ -1112,7 +1139,7 @@ impl CampaignContent {
                                         ))
                                         ;
                                     design::named(ui, &response, &format!("Use {}", entry.name));
-                                    if design::link(ui, &entry.name).clicked() { self.open_lookup = Some(id); }
+                                    if crate::encounters::creature_name_link(ui, &entry.name).clicked() { self.open_lookup = Some(id); }
                                     if response.changed() {
                                         toggled = Some((id, selected));
                                     }

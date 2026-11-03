@@ -195,7 +195,7 @@ pub fn participant_is_selected(d: &Driver<'_>, name: &str) -> bool {
 pub fn copy_open_entry_to_campaign(d: &mut Driver<'_>) {
     d.click(COPY_TO);
     d.click(CREATE_COPY);
-    d.expect("Saved: ");
+    d.expect("Copied to ");
 }
 
 /// The name of a group's button in the run's panel.
