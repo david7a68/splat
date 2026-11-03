@@ -1473,7 +1473,11 @@ impl Library {
             .unwrap_or_default();
         egui::CentralPanel::default()
             .frame(egui::Frame::new().inner_margin(egui::Margin {
-                left: design::L as i8,
+                left: if self.disk_change.is_some() {
+                    0
+                } else {
+                    design::L as i8
+                },
                 right: 0,
                 top: 0,
                 bottom: 0,
@@ -2094,6 +2098,11 @@ impl Library {
         }
         let editable = note.owner.editable();
         let conflict = self.disk_change.is_some();
+        let editor_width = if conflict {
+            ui.available_width()
+        } else {
+            ui.available_width().min(EDITOR_MAX_WIDTH)
+        };
         self.just_saved &= !dirty && self.source;
         let mut save = overwrite
             || (dirty
@@ -2200,7 +2209,7 @@ impl Library {
         // Save and Discard are one row, as far apart as the pane allows.
         if save_row {
             ui.horizontal(|ui| {
-                ui.set_max_width(ui.available_width().min(EDITOR_MAX_WIDTH));
+                ui.set_max_width(editor_width);
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     let blocked = if conflict {
                         Some("Choose what to do with the changed file first.")
@@ -2238,10 +2247,7 @@ impl Library {
             // changes its words without moving the caret. Other controls use its hint.
             let reason = draft_reason.unwrap_or("");
             ui.allocate_ui_with_layout(
-                egui::vec2(
-                    ui.available_width().min(EDITOR_MAX_WIDTH),
-                    Type::Small.line() * 2.0,
-                ),
+                egui::vec2(editor_width, Type::Small.line() * 2.0),
                 egui::Layout::top_down(egui::Align::Min),
                 |ui| {
                     ui.add(
@@ -2329,7 +2335,7 @@ impl Library {
                         egui::TextEdit::multiline(&mut self.draft)
                             .font(egui::TextStyle::Monospace)
                             .margin(egui::vec2(design::S, design::S))
-                            .desired_width(ui.available_width().min(EDITOR_MAX_WIDTH))
+                            .desired_width(editor_width)
                             .min_size(egui::vec2(0.0, ui.available_height()))
                             .interactive(editable),
                     );
