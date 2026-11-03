@@ -406,17 +406,26 @@ pub(crate) fn note_text(name: &str, kind: &str, namespace: Option<&str>) -> Stri
         fields.insert(
             "splat_stats".into(),
             serde_yaml_ng::from_str::<serde_yaml_ng::Value>(
-                "max_hp: {value: null}\narmor_class: {value: null}\ninitiative: {value: null}\n",
+                "max_hp: {value: 1}\narmor_class: {value: 10}\ninitiative: {value: 0}\n",
             )
             .expect("creature fields"),
         );
     }
+    let mut yaml = serde_yaml_ng::to_string(&fields).expect("string fields");
+    if kind == "creature" {
+        for (key, value) in [("max_hp", 1), ("armor_class", 10), ("initiative", 0)] {
+            yaml = yaml.replace(
+                &format!("  {key}:\n    value: {value}"),
+                &format!("  {key}: {{value: {value}}}"),
+            );
+        }
+    }
     format!(
         "---\n{}---\n\n# {}\n\n{}",
-        serde_yaml_ng::to_string(&fields).expect("string fields"),
+        yaml,
         name,
         if kind == "creature" {
-            "Medium Humanoid, Neutral\n\nSpeed 30 ft.\n\nStr 10 (+0) Dex 10 (+0) Con 10 (+0) Int 10 (+0) Wis 10 (+0) Cha 10 (+0)\n\nCR 1 (XP 200; PB +2)\n\n## Traits\n\n**Trait.** Describe the trait.\n\n## Actions\n\n**Attack.** Describe the attack.\n\n"
+            "Medium Humanoid, Neutral\n\n**Armor Class** 10\n\n**Hit Points** 1\n\nSpeed 30 ft.\n\nStr 10 (+0) Dex 10 (+0) Con 10 (+0) Int 10 (+0) Wis 10 (+0) Cha 10 (+0)\n\nCR 1 (XP 200; PB +2)\n\n## Traits\n\n**Trait.** Describe the trait.\n\n## Actions\n\n**Attack.** Describe the attack.\n\n"
         } else if kind == "spell" {
             "Level 1 Evocation\n\n**Casting Time:** Action\n\n**Range:** 60 feet\n\n**Components:** V, S\n\n**Duration:** Instantaneous\n\nDescribe the spell.\n"
         } else if kind == "item" {
@@ -476,9 +485,10 @@ pub(crate) fn folder_field(
     design::field(
         ui,
         label,
-        Some("Leave blank for the main folder. New folders are created on save."),
+        Some("Type a new folder, or choose one. New folders are made when you save."),
         None,
         |ui| {
+            ui.set_max_width(ui.available_width() - design::S);
             egui::Frame::new()
                 .fill(colors().well)
                 .stroke(egui::Stroke::new(
@@ -489,8 +499,10 @@ pub(crate) fn folder_field(
                 .inner_margin(egui::Margin::symmetric(design::XS as i8, 0))
                 .show(ui, |ui| {
                     ui.horizontal(|ui| {
-                        let width =
-                            (ui.available_width() - design::XXL - design::S).max(design::XXL);
+                        let width = (ui.available_width()
+                            - Action::quiet("").icon(icons::DOWN).natural_width(ui)
+                            - ui.spacing().item_spacing.x)
+                            .max(design::XXL);
                         let response = ui.add(
                             egui::TextEdit::singleline(value)
                                 .frame(false)
@@ -758,6 +770,37 @@ fn load_key(campaigns: &Campaigns) -> LoadKey {
     )
 }
 
+pub(crate) fn catalogue_subtitles(
+    catalogue: &crate::content_workspace::Catalogue,
+) -> std::collections::HashMap<Uuid, String> {
+    let loaded = Loaded {
+        notes: catalogue
+            .entries
+            .values()
+            .map(|e| Note {
+                path: e.entry.path.clone(),
+                text: String::new(),
+                entry: Some(e.entry.clone()),
+                error: None,
+                owner: Owner::Builtin,
+            })
+            .collect(),
+        ..Default::default()
+    };
+    loaded
+        .notes
+        .iter()
+        .zip(loaded.subtitles())
+        .filter_map(|(note, suffix)| Some((note.entry.as_ref()?.id, suffix.clone())))
+        .collect()
+}
+
+struct SelectionUndo {
+    campaign: Campaign,
+    before: Vec<crate::content_workspace::PackageSelection>,
+    after: Vec<crate::content_workspace::PackageSelection>,
+}
+
 struct DependencyUndo {
     root: PathBuf,
     path: String,
@@ -810,6 +853,7 @@ pub struct Library {
     scope_notice: Option<String>,
     new_form: bool,
     focus_new_name: bool,
+    focus_hp: bool,
     new_name: String,
     new_kind: String,
     new_folder: String,
@@ -827,6 +871,7 @@ pub struct Library {
     pub peek: Option<Uuid>,
     history: Vec<BackStep>,
     dependency_undo: Option<DependencyUndo>,
+    selection_undo: Option<SelectionUndo>,
     link_choices: Vec<Uuid>,
 }
 /// Sort so that "Level 2" comes before "Level 18".
@@ -1023,7 +1068,20 @@ impl Library {
         !self.dirty()
     }
 
-    pub fn refresh_destination(&mut self, _root: &Path, _ctx: &egui::Context) {
+    pub fn refresh_destination(&mut self, root: &Path, _ctx: &egui::Context) {
+        if self.dirty()
+            && let Some(note) = self
+                .selected
+                .and_then(|i| self.loaded.as_ref()?.notes.get(i))
+            && note.owner.root() == Some(root)
+        {
+            let text = note_path(root, &note.path)
+                .ok()
+                .and_then(|path| fs::read_to_string(path).ok());
+            if text.as_deref() != Some(&note.text) {
+                self.disk_change = Some(DiskChange { text });
+            }
+        }
         self.stale = true;
     }
     fn invalidate(&mut self) {
@@ -1092,6 +1150,20 @@ impl Library {
                     self.pending = None;
                     match result {
                         Ok(l) => {
+                            for module in campaigns.modules().to_vec() {
+                                if let Some(name) = l
+                                    .notes
+                                    .iter()
+                                    .find(|n| {
+                                        n.owner.id() == Some(module.id)
+                                            && n.entry.as_ref().is_some_and(|e| e.kind == "package")
+                                    })
+                                    .map(|n| n.name().to_owned())
+                                    && name != module.name
+                                {
+                                    let _ = campaigns.rename_module(module.id, name);
+                                }
+                            }
                             self.selected = self.reselect.as_ref().and_then(|(owner, path)| {
                                 l.notes
                                     .iter()
@@ -1177,7 +1249,11 @@ impl Library {
                             reload = true;
                             ui.close();
                         }
-                        if ui.button("Manage packages…").clicked() {
+                        if Action::quiet("Manage packages…")
+                            .icon(icons::SETTINGS)
+                            .show(ui)
+                            .clicked()
+                        {
                             open_form = true;
                             ui.close();
                         }
@@ -1235,6 +1311,30 @@ impl Library {
         }
         if let Some(message) = &self.message {
             design::message(ui, Tone::Success, message);
+        }
+        if self.selection_undo.as_ref().is_some_and(|undo| {
+            campaigns
+                .active_campaign()
+                .is_some_and(|c| c.id == undo.campaign.id)
+        }) && design::message_with_action(
+            ui,
+            Tone::Success,
+            "Every entry in this package is now used here.",
+            "Undo package use",
+        ) {
+            let undo = self.selection_undo.take().unwrap();
+            let result = crate::content_workspace::CampaignDocument::load(&undo.campaign).and_then(|mut document| {
+                if document.selections != undo.after { return Err("Campaign choices changed. Keep them and edit the package choices in Campaign.".into()); }
+                document.selections = undo.before;
+                document.save()
+            });
+            match result {
+                Ok(()) => {
+                    self.stale = true;
+                    self.content_changed = Some(undo.campaign.path);
+                }
+                Err(error) => self.error = Some(error),
+            }
         }
         if self.pending.is_some() {
             ui.horizontal(|ui| {
@@ -1535,43 +1635,30 @@ impl Library {
             }))
             .show_inside(ui, |ui| {
                 if compact {
-                    let controls = |ui: &mut egui::Ui| {
-                        Self::scope_menu(ui, compact, campaigns, &mut self.scope, &mut self.section, &mut self.search);
-        if let Scope::Package(package) = scope
-            && let Some((index, note)) = loaded.notes.iter().enumerate().find(|(_, n)| {
-                n.owner.id() == Some(package)
-                    && n.entry.as_ref().is_some_and(|e| e.kind == "package")
-            })
-            && design::link(ui, &format!("About {}", note.name())).clicked()
-            && !dirty
-        {
-            self.selected = Some(index);
-            self.draft = note.text.clone();
-            self.source = false;
-        }
-
-
-                    let combo = egui::ComboBox::from_id_salt("library_section")
-                        .icon(design::combo_icon)
-                        .width(ui.available_width())
-                        .truncate()
-                        .selected_text(match self.section { Section::All => "All", Section::Characters => "Characters", _ => self.section.label() })
-                        .show_ui(ui, |ui| {
-                            for &(_, sections) in Section::GROUPS {
-                                for &section in sections {
-                                    if count_of(section, &counts) == 0 { continue; }
-                                    let response = ui.selectable_label(self.section == section, section.label());
-                                    design::named(ui, &response, &format!("Library section: {}", section.label()));
-                                    if response.clicked() {
-                                        self.section = section;
-                                        self.search.clear();
+                    let half = (ui.available_width() - ui.spacing().item_spacing.x) / 2.0;
+                    ui.horizontal_top(|ui| {
+                        ui.allocate_ui_with_layout(egui::vec2(half, 0.0), egui::Layout::top_down(egui::Align::Min), |ui| {
+                            Self::scope_menu(ui, compact, campaigns, &mut self.scope, &mut self.section, &mut self.search);
+                        });
+                        let combo = egui::ComboBox::from_id_salt("library_section")
+                            .icon(design::combo_icon).width(half).truncate()
+                            .selected_text(match self.section { Section::All => "All", Section::Characters => "Characters", _ => self.section.label() })
+                            .show_ui(ui, |ui| {
+                                for &(_, sections) in Section::GROUPS {
+                                    for &section in sections {
+                                        if count_of(section, &counts) == 0 { continue; }
+                                        let response = ui.selectable_label(self.section == section, section.label());
+                                        design::named(ui, &response, &format!("Library section: {}", section.label()));
+                                        if response.clicked() { self.section = section; self.search.clear(); }
                                     }
                                 }
-                            }
-                        });
-                    design::named(ui, &combo.response, "Section");
-                    };
-                    ui.vertical(controls);
+                            });
+                        design::named(ui, &combo.response, "Section");
+                    });
+                    if let Scope::Package(package) = scope
+                        && let Some((index, note)) = loaded.notes.iter().enumerate().find(|(_, n)| n.owner.id() == Some(package) && n.entry.as_ref().is_some_and(|e| e.kind == "package"))
+                        && design::link(ui, &format!("About {}", note.name())).clicked() && !dirty
+                    { self.selected = Some(index); self.draft = note.text.clone(); self.source = false; }
                 }
                 ui.horizontal(|ui| {
                     let width =
@@ -1593,7 +1680,7 @@ impl Library {
                     }
                 });
                 ui.add_space(design::XS);
-                if searching || compact {
+                if searching || (compact && self.section != Section::All) {
                     design::group_heading(ui, if searching { "Search results" } else { self.section.label() }, matches.len());
                 }
                 if matches.is_empty() {
@@ -1729,11 +1816,10 @@ impl Library {
         ui.scope_builder(egui::UiBuilder::new().id("library_scope_host"), |ui| {
             let combo = egui::ComboBox::from_id_salt("library_scope")
                 .icon(design::combo_icon)
-                .width(ui.available_width().min(if compact {
-                    (ui.available_width() - design::S) * 0.6
-                } else {
-                    166.0
-                }))
+                .width(
+                    ui.available_width()
+                        .min(if compact { ui.available_width() } else { 166.0 }),
+                )
                 .truncate()
                 .selected_text(match scope {
                     Scope::Uses => "Can use".to_owned(),
@@ -1897,13 +1983,6 @@ impl Library {
                     }
                 });
                 ui.horizontal(|ui| {
-                    design::blocked_reason(
-                        ui,
-                        self.path
-                            .trim()
-                            .is_empty()
-                            .then_some("Choose a folder first."),
-                    );
                     if Action::secondary("Add folder")
                         .blocked(
                             locked.or(self
@@ -1927,33 +2006,61 @@ impl Library {
                             Err(error) => self.error = Some(error),
                         }
                     }
+                    design::blocked_reason(
+                        ui,
+                        self.path
+                            .trim()
+                            .is_empty()
+                            .then_some("Choose a folder first."),
+                    );
+                    ui.add_space(design::L);
                 });
 
                 ui.add_space(design::L);
                 design::group_label(ui, "New package");
+                let response = design::text_field(ui, "Name", &mut self.name, None, None);
+                if std::mem::take(&mut self.focus_package_name) {
+                    response.request_focus();
+                }
+                let parent = self.package_path.get_or_insert_with(|| {
+                    campaigns
+                        .modules()
+                        .last()
+                        .and_then(|module| module.path.parent())
+                        .map(Path::to_path_buf)
+                        .or_else(|| {
+                            campaigns
+                                .package_folder("new_package")
+                                .ok()
+                                .and_then(|p| p.parent().map(Path::to_path_buf))
+                        })
+                        .unwrap_or_default()
+                });
                 ui.horizontal_top(|ui| {
+                    let width = ui.available_width()
+                        - Action::secondary("Browse…").natural_width(ui)
+                        - ui.spacing().item_spacing.x;
                     ui.allocate_ui_with_layout(
-                        egui::vec2(
-                            (ui.available_width() - design::XXL * 3.0).max(design::XXL),
-                            0.0,
-                        ),
+                        egui::vec2(width, 0.0),
                         egui::Layout::top_down(egui::Align::Min),
                         |ui| {
-                            let response =
-                                design::text_field(ui, "Name", &mut self.name, None, None);
-                            if std::mem::take(&mut self.focus_package_name) {
-                                response.request_focus();
+                            let mut path = parent.display().to_string();
+                            if design::text_field(ui, "Folder", &mut path, None, None).changed() {
+                                *parent = PathBuf::from(path);
                             }
                         },
                     );
-                    if Action::secondary("Browse…")
-                        .name("Choose new package folder")
-                        .show(ui)
-                        .clicked()
-                        && let Some(parent) = crate::hermetic::pick_folder()
-                    {
-                        self.package_path = Some(parent);
-                    }
+                    ui.vertical(|ui| {
+                        ui.add_space(design::L + design::XS);
+                        if Action::secondary("Browse…")
+                            .name("Choose new package folder")
+                            .show(ui)
+                            .clicked()
+                            && let Some(chosen) = crate::hermetic::pick_folder()
+                        {
+                            *parent = chosen;
+                        }
+                    });
                 });
                 let namespace: String = self
                     .name
@@ -1975,21 +2082,14 @@ impl Library {
                             .unwrap_or_else(|| campaigns.package_folder(&namespace))
                     });
                 if let Ok(root) = &root {
-                    ui.label(
-                        Type::Small
-                            .rich(
-                                ui,
-                                if self.package_path.is_some() {
-                                    "Will create the package in the chosen folder."
-                                } else if campaigns.modules().is_empty() {
-                                    "Will create the package in Splat's package folder."
-                                } else {
-                                    "Will create the package beside the last registered package."
-                                },
-                            )
-                            .color(c.muted),
-                    )
-                    .on_hover_text(root.display().to_string());
+                    ui.add(
+                        egui::Label::new(
+                            Type::Small
+                                .rich(ui, format!("Will create {}", root.display()))
+                                .color(c.muted),
+                        )
+                        .wrap(),
+                    );
                 }
                 if campaigns.active_campaign().is_some() {
                     use_checkbox(
@@ -2306,6 +2406,7 @@ impl Library {
                                 self.section = Section::All;
                                 self.source = true;
                                 self.draft = text;
+                                self.focus_hp = self.new_kind == "creature";
                                 self.new_name.clear();
                                 self.new_folder.clear();
                                 self.new_form = false;
@@ -2504,7 +2605,31 @@ impl Library {
                 && !conflict
                 && ui.input_mut(|i| i.consume_key(egui::Modifiers::COMMAND, egui::Key::S)));
         let d = colors().document;
+        let about = note.entry.as_ref().is_some_and(|e| e.kind == "package");
+        let mut use_every = None;
         let package_word = match &note.owner {
+            Owner::Package(module) if about => {
+                let loaded = self.loaded.as_ref().unwrap();
+                let entries: Vec<_> = loaded
+                    .notes
+                    .iter()
+                    .filter(|n| {
+                        n.owner.id() == Some(module.id)
+                            && n.entry.as_ref().is_some_and(|e| {
+                                !["package", "reference"].contains(&e.kind.as_str())
+                            })
+                    })
+                    .collect();
+                let used = entries
+                    .iter()
+                    .filter(|n| loaded.in_scope(n, Scope::Uses))
+                    .count();
+                if used == entries.len() {
+                    "All entries used here".into()
+                } else {
+                    format!("Used here · {used} of {} entries", entries.len())
+                }
+            }
             Owner::Package(module) => format!(
                 "{} · {}",
                 module.name,
@@ -2567,16 +2692,17 @@ impl Library {
             }
         };
         let save_row = editable && (self.source || dirty);
-        let mut go_back = !dirty
-            && ui.input_mut(|input| input.consume_key(egui::Modifiers::ALT, egui::Key::ArrowLeft));
+        let mut go_back =
+            ui.input_mut(|input| input.consume_key(egui::Modifiers::ALT, egui::Key::ArrowLeft));
         ui.horizontal_wrapped(|ui| {
             if !self.history.is_empty()
                 && Action::quiet("Back")
                     .icon(icons::BACK)
                     .density(Density::Read)
                     .key("Alt+Left")
-                    .hint("Return to the entry before this link")
-                    .blocked(draft_reason)
+                    .hint(
+                        "Return to the entry before this link. During a draft, read it in Lookup.",
+                    )
                     .show(ui)
                     .clicked()
             {
@@ -2629,45 +2755,19 @@ impl Library {
                     Err(error) => self.error = Some(error),
                 }
             }
-            if !save_row {
-                if note.owner == Owner::Builtin && ui.available_width() < 180.0 {
-                    ui.label(Type::Small.rich(ui, icons::READ_ONLY))
-                        .on_hover_text("Built-in · Read only")
-                        .widget_info(|| {
-                            egui::WidgetInfo::labeled(
-                                egui::WidgetType::Label,
-                                true,
-                                "Built-in · Read only",
-                            )
-                        });
-                } else {
-                    design::status(ui, state);
-                }
-            }
-            if save_row {
-                let owner = match &note.owner {
-                    Owner::Package(_) => package_word.as_str(),
-                    Owner::Campaign(_) => "Campaign · Editable",
-                    Owner::Builtin => "Built-in · Read only",
-                };
-                if ui.available_width() < design::XXL * 5.0 {
-                    ui.label(Type::Small.rich(ui, icons::EDIT))
-                        .on_hover_text(owner)
-                        .widget_info(|| {
-                            egui::WidgetInfo::labeled(egui::WidgetType::Label, true, owner)
-                        });
-                } else {
-                    design::status(
-                        ui,
-                        Status {
-                            icon: icons::EDIT,
-                            word: owner,
-                            color: d.clean,
-                        },
-                    );
-                }
+            if let Owner::Package(module) = &note.owner
+                && about
+                && campaigns.active_campaign().is_some()
+                && package_word != "All entries used here"
+                && Action::quiet("Use every entry")
+                    .blocked(draft_reason)
+                    .show(ui)
+                    .clicked()
+            {
+                use_every = Some(module.clone());
             }
             if let Owner::Package(module) = &note.owner
+                && !about
                 && !self.loaded.as_ref().unwrap().in_scope(note, Scope::Uses)
                 && let Some(entry) = &note.entry
                 && Action::quiet("Use in this campaign")
@@ -2683,7 +2783,30 @@ impl Library {
                 || root
                     .ancestors()
                     .any(|parent| parent.join(".obsidian").is_dir());
-            crate::world::entry_file_actions(ui, root, &note.path, obsidian);
+            ui.horizontal_wrapped(|ui| {
+                design::status(
+                    ui,
+                    Status {
+                        icon: icons::EDIT,
+                        word: match &note.owner {
+                            Owner::Package(_) => &package_word,
+                            Owner::Campaign(_) => "Campaign · Editable",
+                            Owner::Builtin => "Built-in · Read only",
+                        },
+                        color: d.clean,
+                    },
+                );
+                crate::world::entry_file_actions(ui, root, &note.path, obsidian);
+            });
+        } else {
+            design::status(
+                ui,
+                Status {
+                    icon: icons::READ_ONLY,
+                    word: "Built-in · Read only",
+                    color: d.read_only,
+                },
+            );
         }
         // Save and Discard are one row, as far apart as the pane allows.
         if save_row && !conflict {
@@ -2802,22 +2925,31 @@ impl Library {
                             .interactive(editable),
                     );
                     design::named(ui, &response, "Markdown editor");
+                    if std::mem::take(&mut self.focus_hp)
+                        && let Some(at) = self.draft.find("max_hp: {value: ").map(|at| at + "max_hp: {value: ".len())
+                    {
+                        response.request_focus();
+                        let at = self.draft[..at].chars().count();
+                        let mut state = egui::TextEdit::load_state(ui.ctx(), response.id).unwrap_or_default();
+                        state.cursor.set_char_range(Some(egui::text::CCursorRange::two(egui::text::CCursor::new(at), egui::text::CCursor::new(at + 1))));
+                        state.store(ui.ctx(), response.id);
+                    }
                 } else {
                     let body = parsed.as_ref().map_or(self.draft.as_str(), |e| &e.body);
                     ui.push_id(&note.path, |ui| {
                         reader_style::measure(ui, |ui| {
                             ui.add_space(design::XS);
-                            ui.label(
-                                Type::Small
-                                    .rich(ui, format!("Library / {}", note.section().label()))
-                                    .color(colors().muted),
-                            );
+                            if !about {
+                                ui.label(Type::Small.rich(ui, format!("Library / {}", note.section().label())).color(colors().muted));
+                            }
                             let subtitle = reading_subtitle
                                 .strip_prefix(&format!(
                                     "{} · ",
                                     note.section().label().trim_end_matches('s')
                                 ))
                                 .unwrap_or(&reading_subtitle);
+                            let subtitle = subtitle.strip_suffix(" · Campaign").unwrap_or(subtitle);
+                            let subtitle = if subtitle == "Campaign" { "" } else { subtitle };
                             view::title_with_art(ui, title, subtitle, parsed.as_ref().ok());
                         });
                         open_link = view::show_with_related(
@@ -2989,6 +3121,33 @@ impl Library {
                 self.link_choices.clear();
             }
         }
+        if let Some(module) = use_every
+            && let Some(campaign) = campaigns.active_campaign()
+        {
+            let result =
+                crate::content_workspace::CampaignDocument::load(&campaign).and_then(|before| {
+                    crate::content_workspace::use_in_campaign(
+                        &campaign,
+                        module.id,
+                        &module.name,
+                        None,
+                    )?;
+                    let after = crate::content_workspace::CampaignDocument::load(&campaign)?;
+                    Ok(SelectionUndo {
+                        campaign: campaign.clone(),
+                        before: before.selections,
+                        after: after.selections,
+                    })
+                });
+            match result {
+                Ok(undo) => {
+                    self.selection_undo = Some(undo);
+                    self.stale = true;
+                    self.content_changed = Some(campaign.path);
+                }
+                Err(error) => self.error = Some(error),
+            }
+        }
         if save {
             self.save_selected(file_gone);
         }
@@ -3008,7 +3167,20 @@ impl Library {
             }
         }
         if go_back {
-            self.go_back();
+            if dirty {
+                self.peek = self.history.last().and_then(|step| {
+                    self.loaded
+                        .as_ref()?
+                        .notes
+                        .iter()
+                        .find(|note| note.owner.id() == step.owner && note.path == step.path)?
+                        .entry
+                        .as_ref()
+                        .map(|e| e.id)
+                });
+            } else {
+                self.go_back();
+            }
         }
     }
 }

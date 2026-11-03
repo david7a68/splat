@@ -239,8 +239,9 @@ pub fn tables(d: &mut Driver<'_>) {
         "A valid range accepts a typed roll and shows the matched row",
     );
     d.state("authored-table-typed-roll", Sizes::All);
-    d.scroll_until(READER, "Gap", 12);
-    d.wait_for_text("Gap");
+    d.set_base(SMALL);
+    d.scroll_until(READER, "Typed roll for Words", 24);
+    d.wait_for_text("Typed roll for Words");
     d.state("authored-table-gap-and-overlap", Sizes::All);
     d.observe(
         "World table author",
@@ -386,12 +387,152 @@ pub fn package_about(d: &mut Driver<'_>) {
     d.open_combo_at(LIBRARY_PACKAGE_DROPDOWN);
     d.click(MODULE);
     d.click("About Ashen Marches");
-    d.wait_for_text("Ashen Marches");
+    d.wait_for_text("Used here · 5 of 6 entries");
+    d.observe(
+        "W2 fixture",
+        d.visible_text("Used here · 5 of 6 entries")
+            && !d.visible_text("Engine support")
+            && !d.visible_text("Library / Other entries"),
+        "Four selected entries and one required entry count as package use",
+    );
     d.state("package-about", Sizes::All);
+    d.click("Use every entry");
+    d.wait_for_text("All entries used here");
+    d.state("package-every-entry-used", Sizes::All);
+    d.click("Undo package use");
+    d.wait_for_text("Used here · 5 of 6 entries");
+    d.state("package-use-undone", Sizes::All);
     d.click(EDIT_MARKDOWN);
-    d.type_into_editor("A package for the watch at Emberfall.\n");
+    let original = d.editor_text().unwrap();
+    let renamed = crate::content_workspace::patch_fields(
+        &original,
+        &[("splat_name", Some("Emberfall Watch".into()))],
+    )
+    .unwrap();
+    d.replace_text_in(
+        "Markdown editor",
+        &format!("{renamed}\nA package for the watch at Emberfall.\n"),
+    );
     d.click("Save");
     d.click("Read");
     d.wait_for_text("A package for the watch at Emberfall.");
     d.state("package-about-edited", Sizes::All);
+    go_campaign(d);
+    d.wait_for_text("Emberfall Watch");
+    d.state("renamed-package-in-campaign", Sizes::All);
+}
+
+/// External edits refresh all catalogue users; a draft still needs a choice.
+pub fn package_file_changed(d: &mut Driver<'_>) {
+    let path = d
+        .root
+        .join("modules/ashen-marches/Creatures/Cinder Wolf.md");
+    go_library(d);
+    search_library(d, "Cinder Wolf");
+    d.click_starting("Cinder Wolf · ");
+    d.wait_for_text("Bite");
+    d.state("package-before-disk-edit", Sizes::All);
+    let before = fs::read_to_string(&path).unwrap();
+    let changed = before
+        .replace("max_hp: {value: 22}", "max_hp: {value: 28}")
+        .replace("HP 22 (4d8 + 4)", "HP 28 (4d8 + 10)")
+        .replace("Bite.", "Cinder Bite.");
+    fs::write(&path, &changed).unwrap();
+    d.focus_window(false);
+    d.focus_window(true);
+    d.wait_for_text("Cinder Bite");
+    d.state("package-edit-round-trip", Sizes::All);
+    look_up(d, "Cinder Wolf");
+    d.wait_for_text("Cinder Bite");
+    d.state("changed-package-in-lookup", Sizes::All);
+    d.press(Key::Escape);
+    d.click(EDIT_MARKDOWN);
+    d.type_into_editor("The draft stays safe.\n");
+    fs::write(&path, changed.replace("Cinder Bite.", "Ash Bite.")).unwrap();
+    d.focus_window(false);
+    d.focus_window(true);
+    d.wait_for_text("This note changed on disk. Your draft is safe until you choose.");
+    d.expect("Overwrite with my draft");
+    d.state("package-draft-changed-on-disk", Sizes::All);
+    d.click("Reload and lose my draft");
+    d.click("Read");
+    d.wait_for_text("Ash Bite");
+    d.state("package-disk-version-kept", Sizes::All);
+}
+
+/// Deleting a file leaves its uses visible and its reader link unresolved.
+pub fn package_delete_entry(d: &mut Driver<'_>) {
+    let package = d.root.join("modules/ashen-marches");
+    let rules = package.join("Rules/Ash Exposure.md");
+    fs::write(
+        &rules,
+        format!(
+            "{}\n\n[[Cinder Wolf]]\n",
+            fs::read_to_string(&rules).unwrap()
+        ),
+    )
+    .unwrap();
+    go_library(d);
+    search_library(d, "Ash Exposure");
+    d.click_starting("Ash Exposure · ");
+    d.wait_for_text("Cinder Wolf");
+    d.state("package-entry-before-delete", Sizes::All);
+    fs::remove_file(package.join("Creatures/Cinder Wolf.md")).unwrap();
+    d.focus_window(false);
+    d.focus_window(true);
+    go_encounters(d);
+    open_saved_encounter(d, "Shrine of Cinders");
+    d.wait_for_text("unavailable");
+    d.state("deleted-package-entry-in-encounter", Sizes::All);
+    go_library(d);
+    search_library(d, "Ash Exposure");
+    d.click_starting("Ash Exposure · ");
+    d.wait_for_text("Cinder Wolf");
+    d.observe(
+        "Deleted package link",
+        !d.has("Cinder Wolf")
+            || !d
+                .nodes()
+                .iter()
+                .any(|n| n.name == "Cinder Wolf" && n.role == egui::accesskit::Role::Link),
+        "The deleted creature's words remain without a working link",
+    );
+    d.state("deleted-package-entry-reader-link", Sizes::All);
+}
+
+/// Copy a book creature into a shared package, then change its HP.
+pub fn book_to_package(d: &mut Driver<'_>) {
+    go_library(d);
+    search_library(d, "Aboleth");
+    d.click_starting("Aboleth · ");
+    d.click(COPY_TO);
+    d.click("Destination");
+    d.click(&format!("Package · {MODULE}"));
+    d.replace_text_in("Copy name", "Watch Aboleth");
+    d.type_into("Folder", "Creatures");
+    d.wait_for_text("Creatures/Watch Aboleth.md");
+    d.state("book-copy-to-package", Sizes::All);
+    d.click(CREATE_COPY);
+    d.wait_for_text("Copied to Ashen Marches as Watch Aboleth.");
+    d.click("Edit the copy");
+    d.wait_for_text("Markdown editor");
+    let original = d.editor_text().unwrap();
+    let parsed = splat::content::Entry::parse("Creatures/Watch Aboleth.md", &original).unwrap();
+    let mut stats = parsed.fields["splat_stats"].clone();
+    stats["max_hp"]["value"] = 180.into();
+    let changed =
+        crate::content_workspace::patch_fields(&original, &[("splat_stats", Some(stats))]).unwrap();
+    d.replace_text_in("Markdown editor", &changed);
+    d.click("Save");
+    d.click("Read");
+    d.wait_for_text("Watch Aboleth");
+    assert!(
+        fs::read_to_string(
+            d.root
+                .join("modules/ashen-marches/Creatures/Watch Aboleth.md")
+        )
+        .unwrap()
+        .contains("# Watch Aboleth")
+    );
+    d.state("book-creature-changed-in-package", Sizes::All);
 }

@@ -17,7 +17,7 @@ use std::{
 };
 use uuid::Uuid;
 
-const RESULT_ROW: f32 = design::XL + design::XS;
+const RESULT_ROW: f32 = design::XXL;
 pub const SEARCH_NAME: &str = "Search everything";
 /// How many lines of a long note show where the words were found.
 const FOUND_LINES: usize = 3;
@@ -105,7 +105,7 @@ pub struct ContentIndex {
     world: Vec<usize>,
     mentions: HashMap<Uuid, Vec<usize>>,
     /// What the campaign's files looked like just before this was read.
-    files_seen: Option<u64>,
+    files_seen: u64,
     pub errors: Vec<String>,
     pub broken_world: Vec<(String, String)>,
 }
@@ -283,7 +283,7 @@ impl ContentIndex {
                 entry: e.entry.clone(),
             })
             .collect();
-        let files_seen = campaign.map(|campaign| world::fingerprint(&campaign.path));
+        let files_seen = content_fingerprint(modules, campaign);
         if let Some(campaign) = campaign {
             let sessions = crate::sessions::folder(campaign)
                 .unwrap_or_else(|_| campaign.path.join(crate::sessions::DEFAULT_FOLDER));
@@ -848,9 +848,25 @@ pub struct Lookup {
     generator_problems: Vec<String>,
     generator_sources: Vec<String>,
     pub open_world_repair: Option<String>,
-    /// A check of the campaign's files, away from the frame.
+    /// A check of campaign and package files, away from the frame.
+    pub files_changed: bool,
     checking: Option<mpsc::Receiver<u64>>,
     was_focused: bool,
+}
+
+/// Include registered packages even when there is no active campaign.
+fn content_fingerprint(modules: &[Module], campaign: Option<&Campaign>) -> u64 {
+    use std::hash::{Hash, Hasher};
+    let mut hash = std::collections::hash_map::DefaultHasher::new();
+    for root in campaign
+        .map(|c| &c.path)
+        .into_iter()
+        .chain(modules.iter().map(|m| &m.path))
+    {
+        root.hash(&mut hash);
+        world::fingerprint(root).hash(&mut hash);
+    }
+    hash.finish()
 }
 
 impl Lookup {
@@ -868,15 +884,13 @@ impl Lookup {
         let active = campaigns.active_campaign();
         // Coming back from Obsidian, show what was just written there.
         let focused = ctx.input(|i| i.focused);
-        if focused
-            && !self.was_focused
-            && let Some(campaign) = &active
-        {
+        if focused && !self.was_focused {
             let (tx, rx) = mpsc::channel();
-            let path = campaign.path.clone();
+            let campaign = active.clone();
+            let modules = campaigns.modules().to_vec();
             let waker = ctx.clone();
             std::thread::spawn(move || {
-                let _ = tx.send(world::fingerprint(&path));
+                let _ = tx.send(content_fingerprint(&modules, campaign.as_ref()));
                 waker.request_repaint();
             });
             self.checking = Some(rx);
@@ -887,9 +901,10 @@ impl Lookup {
             if self
                 .index
                 .as_ref()
-                .is_some_and(|index| index.files_seen != Some(seen))
+                .is_some_and(|index| index.files_seen != seen)
             {
                 self.scope = None;
+                self.files_changed = true;
             }
         }
         self.campaign = active.clone();
@@ -1181,7 +1196,7 @@ impl Lookup {
         }
         let width = ui.available_width();
         let before = self.query.clone();
-        let show_clear = self.current.is_some() || !self.query.is_empty();
+        let show_clear = !self.query.is_empty();
         let response = ui
             .horizontal(|ui| {
                 let response = design::search_field(
@@ -1358,7 +1373,7 @@ impl Lookup {
                         let response = design::row(ui, RESULT_ROW, *selected, &full, |ui, rect| {
                             let name = ui.painter().layout_no_wrap(
                                 title.clone(),
-                                Type::Small.font(ui),
+                                Type::Body.font(ui),
                                 colors().text,
                             );
                             let tail = design::one_line(
@@ -1375,7 +1390,10 @@ impl Lookup {
                                 colors().text,
                             );
                             ui.painter().galley(
-                                egui::pos2(rect.left() + name.size().x, top),
+                                egui::pos2(
+                                    rect.left() + name.size().x,
+                                    rect.center().y - tail.size().y / 2.0,
+                                ),
                                 tail,
                                 colors().muted,
                             );
@@ -1637,17 +1655,36 @@ pub(crate) fn generated_card(
             .wrap(),
         );
     }
-    let attribution = if !problems.is_empty() && sources.is_empty() {
-        "Built-in names.".to_owned()
-    } else if sources.is_empty() {
-        "Built-in names. Mark a table npc-name in any note to use your own.".to_owned()
-    } else {
-        format!(
-            "Campaign tables: {}. Built-in lists fill the other parts.",
-            sources.join("; ")
-        )
-    };
-    ui.label(Type::Small.rich(ui, attribution).color(colors().muted));
+    if sources.is_empty() && problems.is_empty() {
+        ui.label(
+            Type::Small
+                .rich(
+                    ui,
+                    "Built-in names. Mark a table npc-name in any note to use your own.",
+                )
+                .color(colors().muted),
+        );
+    }
+    for source in sources {
+        let (kind, path) = source.split_once(": ").unwrap_or(("npc-name", source));
+        let label = if kind == "npc-name" {
+            "Names".to_owned()
+        } else {
+            style::human_label(kind)
+        };
+        ui.horizontal_wrapped(|ui| {
+            ui.label(
+                Type::Small
+                    .rich(ui, format!("{label} from"))
+                    .color(colors().muted),
+            );
+            if design::link(ui, path).clicked() {
+                ui.ctx().data_mut(|data| {
+                    data.insert_temp(egui::Id::new("markdown_clicked_note"), path.to_owned())
+                });
+            }
+        });
+    }
     for problem in problems {
         design::message(ui, Tone::Warning, problem);
         if let Some((path, _)) = problem.split_once(':')

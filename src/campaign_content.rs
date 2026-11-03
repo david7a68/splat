@@ -28,6 +28,7 @@ struct Snapshot {
     catalogue: Catalogue,
     /// The closure of these selections. It is too slow to calculate on every frame.
     closure: (Vec<PackageSelection>, Closure),
+    subtitles: std::collections::HashMap<Uuid, String>,
 }
 /// An invalid note: its path, its text on disk, and its draft.
 type Repair = (String, String, String);
@@ -68,11 +69,20 @@ pub struct CampaignContent {
     message: Option<String>,
     disabled_selections: std::collections::BTreeMap<Uuid, Selection>,
     refresh_pending: bool,
+    removed_package: Option<RemovedPackage>,
     repairs: Vec<Repair>,
     /// What `Discard` last dropped, for one step of undo.
     discarded_selections: Option<Vec<PackageSelection>>,
     discarded_repair: Option<(String, String)>,
 }
+struct RemovedPackage {
+    campaign: Uuid,
+    name: String,
+    before: Vec<PackageSelection>,
+    after: Vec<PackageSelection>,
+    users: Vec<(Uuid, String)>,
+}
+
 /// Return a useful YAML repair message and the physical line to mark.
 pub(crate) fn repair_problem(path: &str, text: &str) -> (Option<String>, Option<usize>) {
     let Some(problem) = Entry::parse(path, text).err() else {
@@ -193,7 +203,11 @@ impl CampaignContent {
                 parts.push(design::count(chosen, "entry chosen", "entries chosen"));
             }
             if needed > 0 {
-                parts.push(design::count(needed, "needed by them", "needed by them"));
+                parts.push(design::count(
+                    needed,
+                    "needed by your entries",
+                    "needed by your entries",
+                ));
             }
             parts.join(" · ")
         })
@@ -300,6 +314,7 @@ impl CampaignContent {
         if self.active.as_ref().is_none_or(|old| old.id != campaign.id) {
             self.discarded_selections = None;
             self.discarded_repair = None;
+            self.removed_package = None;
         }
     }
     fn reload(&mut self, ctx: &egui::Context, campaigns: &Campaigns, campaign: Campaign) {
@@ -336,6 +351,7 @@ impl CampaignContent {
                 Ok(Snapshot {
                     closure: (document.selections.clone(), closure),
                     document,
+                    subtitles: crate::library::catalogue_subtitles(&catalogue),
                     catalogue,
                 })
             });
@@ -745,6 +761,66 @@ impl CampaignContent {
                 }
             }
         });
+        let affected: Vec<_> = catalogue
+            .entries
+            .values()
+            .filter(|entry| entry.private && entry.entry.kind == "encounter")
+            .filter(|entry| {
+                splat::content::required_references(&entry.entry).is_ok_and(|references| {
+                    references.iter().any(|r| catalogue.resolve(r).is_err())
+                })
+            })
+            .map(|entry| (entry.entry.id, entry.entry.name.clone()))
+            .collect();
+        if let Some(removed) = &self.removed_package
+            && removed.campaign == active.id
+        {
+            let undo = design::message_with_action(
+                ui,
+                Tone::Success,
+                &format!("{} removed from this campaign.", removed.name),
+                "Undo package removal",
+            );
+            ui.horizontal_wrapped(|ui| {
+                for (at, (id, name)) in removed.users.iter().enumerate() {
+                    if at > 0 {
+                        ui.label("and");
+                    }
+                    if design::link(ui, name).clicked() {
+                        self.open_lookup = Some(*id);
+                    }
+                }
+                if !removed.users.is_empty() {
+                    ui.label(
+                        Type::Small
+                            .rich(ui, "still use its creatures.")
+                            .color(c.muted),
+                    );
+                }
+            });
+            if undo {
+                if document.selections != removed.after {
+                    self.error = Some(
+                        "Campaign choices changed. Keep them and edit the package choices here."
+                            .into(),
+                    );
+                } else {
+                    let after = document.selections.clone();
+                    document.selections = removed.before.clone();
+                    match document.save() {
+                        Ok(()) => {
+                            self.saved_selections = document.selections.clone();
+                            self.removed_package = None;
+                            self.reconcile.checked_at = None;
+                        }
+                        Err(error) => {
+                            document.selections = after;
+                            self.error = Some(error);
+                        }
+                    }
+                }
+            }
+        }
         let errors: Vec<_> = catalogue
             .errors
             .iter()
@@ -754,8 +830,19 @@ impl CampaignContent {
             design::section(
                 ui,
                 format!(
-                    "{} · affected uses unavailable",
-                    design::count(errors.len(), "content issue", "content issues")
+                    "{}",
+                    if affected.is_empty() {
+                        design::count(
+                            errors.len(),
+                            "content issue to repair",
+                            "content issues to repair",
+                        )
+                    } else {
+                        format!(
+                            "{} need a creature that is gone",
+                            design::count(affected.len(), "encounter", "encounters")
+                        )
+                    }
                 ),
                 |ui| {
                     egui::ScrollArea::vertical()
@@ -856,7 +943,27 @@ impl CampaignContent {
             });
         }
         if let Some(i) = remove {
+            let selection = document.selections[i].clone();
+            let before = document.selections.clone();
+            let users = selection.campaign_users(catalogue);
             document.selections.remove(i);
+            match document.save() {
+                Ok(()) => {
+                    self.saved_selections = document.selections.clone();
+                    self.removed_package = Some(RemovedPackage {
+                        campaign: active.id,
+                        name: selection.display_name().to_owned(),
+                        before,
+                        after: document.selections.clone(),
+                        users,
+                    });
+                    self.reconcile.checked_at = None;
+                }
+                Err(error) => {
+                    document.selections = before;
+                    self.error = Some(error);
+                }
+            }
         }
         design::rule(ui);
         design::Column::left("campaign_modules", 236.0, 180.0..=420.0)
@@ -1145,7 +1252,7 @@ impl CampaignContent {
                                     }
                                     ui.label(
                                         Type::Small
-                                            .rich(ui, crate::library::presentation::subtitle(entry))
+                                            .rich(ui, snapshot.subtitles.get(&id).cloned().unwrap_or_default())
                                             .color(c.muted),
                                     );
                                     if let Some(why) = &why {
@@ -1313,6 +1420,7 @@ mod tests {
             snapshot: Some(Snapshot {
                 closure: (document.selections.clone(), closure),
                 document,
+                subtitles: crate::library::catalogue_subtitles(&catalogue),
                 catalogue,
             }),
             ..Default::default()

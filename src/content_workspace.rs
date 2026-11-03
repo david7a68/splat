@@ -1177,6 +1177,19 @@ impl CopyPlan {
                 ),
             ],
         )?;
+        // Rename only the first matching H1. Keep all other prose and citations.
+        let body_start = text.find("\n---").map(|at| at + "\n---".len()).unwrap_or(0);
+        let mut offset = body_start;
+        for line in text[body_start..].split_inclusive('\n') {
+            if let Some(heading) = line.trim_end().strip_prefix("# ") {
+                if heading.trim() == source.entry.name {
+                    let end = offset + line.trim_end().len();
+                    text.replace_range(offset..end, &format!("# {}", name.trim()));
+                }
+                break;
+            }
+            offset += line.len();
+        }
         // Preserve the full original body and source citations; append attribution for bundled material.
         if source
             .entry

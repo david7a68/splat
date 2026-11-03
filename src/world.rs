@@ -941,10 +941,13 @@ impl Reader {
         let campaign = campaign?;
         let mut chosen = None;
         ui.add_space(design::M);
-        design::quiet_section(ui, "Make world entry", |ui| {
+        design::quiet_section(ui, "Give this note a type", |ui| {
             ui.label(
                 Type::Small
-                    .rich(ui, "Gives this note an identity. Its text does not change.")
+                    .rich(
+                        ui,
+                        "Adds a type to the file's front matter. The text does not change.",
+                    )
                     .color(colors().muted),
             );
             ui.horizontal_wrapped(|ui| {

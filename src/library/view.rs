@@ -54,7 +54,6 @@ impl Links for NoLinks {
 
 fn reading_view(ui: &mut egui::Ui, reading: &Reading, links: &dyn Links) -> Option<usize> {
     ui.add_space(design::M);
-    style::markdown(ui, &reading.summary);
     let mut selected = None;
     if !reading.related.is_empty() {
         ui.add_space(design::S);
@@ -234,7 +233,7 @@ fn content(
 ) -> Option<usize> {
     let mut open_link = None;
     if let Some(reading) = reading {
-        open_link = reading_view(ui, reading, links);
+        style::markdown(ui, &reading.summary);
     }
     if let Some(entry) = styled {
         let references = creature::spell_references(entry);
@@ -250,6 +249,9 @@ fn content(
     }
     if let Some(entry) = entry.filter(|entry| class::lists_features(entry)) {
         open_link = open_link.or(class::show_features(ui, entry, links));
+    }
+    if let Some(reading) = reading {
+        open_link = open_link.or(reading_view(ui, reading, links));
     }
     open_link
 }
@@ -300,7 +302,7 @@ fn reference(
         _ => "Not established",
     };
     // A verdict means nothing at a table, so it waits inside. Someone in the world has none.
-    if entry.is_none_or(|entry| entry.kind != "world") {
+    if entry.is_none_or(|entry| !["world", "package"].contains(&entry.kind.as_str())) {
         design::quiet_section(ui, "Engine support", |ui| {
             ui.label(support);
             if conversion.is_some() {
