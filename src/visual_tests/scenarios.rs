@@ -3669,7 +3669,7 @@ pub mod world {
         );
 
         d.click_containing("Gate Mechanics.md");
-        d.click("Roll forced_trip");
+        d.click("Roll 1d20");
         d.observe(
             "T14.3",
             d.visible_text("Rolled ") || d.has_containing("Rolled "),

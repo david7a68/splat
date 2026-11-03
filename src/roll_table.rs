@@ -195,7 +195,6 @@ pub fn roll_control(
         if Action::secondary(&format!("Roll {dice}"))
             .icon(design::icons::DICE)
             .density(Density::Read)
-            .name(&format!("Roll {key}"))
             .show(ui)
             .clicked()
         {
@@ -210,7 +209,7 @@ pub fn roll_control(
                 ))
                 .hint_text(Type::Small.rich(ui, "Typed roll")),
         );
-        design::named(ui, &response, &format!("Typed result for {key}"));
+        design::named(ui, &response, &format!("Typed roll on {dice}"));
         if response.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)) {
             match state.typed.trim().parse::<i64>() {
                 Ok(value) => request = Some(Some(value)),
