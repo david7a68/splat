@@ -172,6 +172,7 @@ struct Alert {
     session: Uuid,
     /// The recording stopped, so one press can start it again.
     can_record: bool,
+    retry: Option<PathBuf>,
 }
 
 struct Live {
@@ -182,6 +183,7 @@ struct Live {
 
 #[derive(Default)]
 pub struct Sessions {
+    pub run_open: bool,
     campaign: Option<Campaign>,
     folder: Option<PathBuf>,
     folder_error: Option<String>,
@@ -565,12 +567,16 @@ fn session_row(ui: &mut egui::Ui, selected: bool, title: &str, detail: &str) -> 
 }
 
 fn clock(seconds: u64) -> String {
-    format!(
-        "{:02}:{:02}:{:02}",
-        seconds / 3600,
-        (seconds / 60) % 60,
-        seconds % 60
-    )
+    if seconds < 3600 {
+        format!("{}:{:02}", seconds / 60, seconds % 60)
+    } else {
+        format!(
+            "{}:{:02}:{:02}",
+            seconds / 3600,
+            (seconds / 60) % 60,
+            seconds % 60
+        )
+    }
 }
 
 /// A length that cannot be read as a time of day.
@@ -609,6 +615,7 @@ impl Sessions {
                 self.raise(Alert {
                     session,
                     can_record: true,
+                    retry: None,
                     word: "Recording stopped",
                     words: format!(
                         "The recording of {label} stopped by itself. {kept} Check the microphone, then record again. The recorder said: {words}"
@@ -681,7 +688,13 @@ impl Sessions {
     /// What cannot wait, on every page. It sits at the bottom, so that it never moves `Next
     /// turn` under a pointer parked on it. A silence takes no banner: it is often only a quiet
     /// table, and it shows in the rail and on the run's own line.
-    pub fn banner(&mut self, ctx: &egui::Context, settings: &ProcessingSettings) {
+    pub fn banner(
+        &mut self,
+        ctx: &egui::Context,
+        settings: &ProcessingSettings,
+        book: &Book,
+        run_open: bool,
+    ) {
         let stalled = self
             .live
             .as_ref()
@@ -696,6 +709,7 @@ impl Sessions {
         if stalled.is_none() && self.alerts.is_empty() {
             return;
         }
+        let mut retry = None;
         let mut record_again = None;
         let mut open = None;
         let mut stop = false;
@@ -710,7 +724,14 @@ impl Sessions {
                     let session = self.live.as_ref().map(|live| live.session);
                     design::message(ui, Tone::Error, words);
                     ui.horizontal(|ui| {
-                        if Action::primary("Record again").show(ui).clicked() {
+                        if (if run_open {
+                            Action::secondary("Record again")
+                        } else {
+                            Action::primary("Record again")
+                        })
+                        .show(ui)
+                        .clicked()
+                        {
                             record_again = session;
                         }
                         let here = self.on_page && self.selected == session;
@@ -718,8 +739,8 @@ impl Sessions {
                             open = session;
                         }
                         ui.add_space(design::L);
-                        stop = Action::quiet("Stop")
-                            .name("Stop without recording again")
+                        stop = Action::quiet("Stop recording")
+                            .name("Stop recording")
                             .show(ui)
                             .clicked();
                     });
@@ -727,10 +748,31 @@ impl Sessions {
                 let mut dismiss = None;
                 for (index, alert) in self.alerts.iter().enumerate() {
                     design::message(ui, Tone::Error, &alert.words);
-                    ui.horizontal(|ui| {
+                    ui.horizontal_wrapped(|ui| {
+                        if let Some(path) = &alert.retry
+                            && (if run_open {
+                                Action::secondary("Process again")
+                            } else {
+                                Action::primary("Process again")
+                            })
+                            .blocked_if(
+                                self.job.is_some() || self.live.is_some(),
+                                "Stop recording or wait for processing to finish.",
+                            )
+                            .show(ui)
+                            .clicked()
+                        {
+                            retry = Some((alert.session, path.clone()));
+                        }
                         if alert.can_record
                             && self.live.is_none()
-                            && Action::primary("Record again").show(ui).clicked()
+                            && (if run_open {
+                                Action::secondary("Record again")
+                            } else {
+                                Action::primary("Record again")
+                            })
+                            .show(ui)
+                            .clicked()
                         {
                             record_again = Some(alert.session);
                         }
@@ -739,7 +781,7 @@ impl Sessions {
                             && self.tab == Tab::Recordings;
                         if !alert.can_record
                             && !here
-                            && Action::secondary("Open the session").show(ui).clicked()
+                            && Action::quiet("Open the session").show(ui).clicked()
                         {
                             open = Some(alert.session);
                         }
@@ -753,6 +795,9 @@ impl Sessions {
                     self.alerts.remove(index);
                 }
             });
+        if let Some((session, path)) = retry {
+            self.process_recording(ctx, &path, settings, book, session);
+        }
         if stop {
             self.finish_recording();
         }
@@ -768,6 +813,7 @@ impl Sessions {
                     words: format!("The recording did not start again. {error}"),
                     session,
                     can_record: true,
+                    retry: None,
                 });
             }
         }
@@ -807,7 +853,30 @@ impl Sessions {
     }
 
     fn finish_job(&mut self, result: Result<Option<String>, String>, session: Uuid) {
-        self.job = None;
+        let job = self.job.take();
+        let failed_recording = job.as_ref().map(|(job, _)| job.recording.clone());
+        let progress = job
+            .as_ref()
+            .map(|(job, _)| job.progress.words())
+            .unwrap_or_default();
+        if let Some(path) = &failed_recording {
+            let words = match &result {
+                Err(error) => Some(format!(
+                    "{}: {progress}. {error}",
+                    if error == processing::CANCELLED {
+                        "Processing cancelled"
+                    } else {
+                        "Failed"
+                    }
+                )),
+                _ => None,
+            };
+            if let Some(words) = words {
+                let _ = fs::write(path.with_extension("state.txt"), words);
+            } else {
+                let _ = fs::remove_file(path.with_extension("state.txt"));
+            }
+        }
         let label = self
             .notes
             .iter()
@@ -830,10 +899,7 @@ impl Sessions {
                 self.job_warned = true;
                 // The recording's row has the words, for as long as the result stands.
                 let _ = warning;
-                self.notice = Some((
-                    Tone::Warning,
-                    format!("{label} is processed, with a warning."),
-                ));
+                self.notice = None;
             }
             Err(error) if error == processing::CANCELLED => {
                 self.notice = Some((Tone::Info, error));
@@ -843,6 +909,7 @@ impl Sessions {
                 self.raise(Alert {
                     session,
                     can_record: false,
+                    retry: failed_recording,
                     word: "Processing failed",
                     words: format!("Processing {label} failed. What is done is kept. {error}"),
                 });
@@ -1087,18 +1154,25 @@ impl Sessions {
         self.select(Some(session));
     }
 
+    pub fn open_live_recording(&mut self) {
+        if let Some(session) = self.live.as_ref().map(|live| live.session) {
+            self.open(session);
+            self.tab = Tab::Recordings;
+        }
+    }
+
     pub fn recording(&self) -> bool {
         self.live.is_some()
     }
 
-    /// What the rail says while a microphone is live.
+    /// The same timed recording words on the rail and the session page.
     pub fn recording_detail(&self) -> Option<String> {
         let live = self.live.as_ref()?;
-        let time = clock(live.recorder.seconds());
-        Some(match live.recorder.health() {
-            Health::Stalled | Health::Stopped(_) => "Not saving".to_owned(),
-            Health::Silent => format!("Silent {time}"),
-            _ => format!("Rec {time}"),
+        let (_, word, _) = self.recording_status()?;
+        Some(if word == "Not saving audio" {
+            word.to_owned()
+        } else {
+            format!("{word} {}", clock(live.recorder.seconds()))
         })
     }
 
@@ -1201,7 +1275,14 @@ impl Sessions {
             return false;
         };
         let (session, label) = (live.session, live.label.clone());
+        let stopped = match live.recorder.health() {
+            Health::Stopped(words) => Some(format!("Stopped by itself: {words}")),
+            _ => None,
+        };
         let path = live.recorder.stop();
+        if let Some(words) = stopped {
+            let _ = fs::write(path.with_extension("state.txt"), words);
+        }
         let has_audio =
             crate::recording::Layout::read(&path).is_ok_and(|layout| layout.data_length > 0);
         if !has_audio {
@@ -1264,9 +1345,19 @@ impl Sessions {
         settings: &ProcessingSettings,
         book: &Book,
     ) {
-        let Some(session) = self.selected else {
-            return;
-        };
+        if let Some(session) = self.selected {
+            self.process_recording(ctx, recording, settings, book, session);
+        }
+    }
+
+    fn process_recording(
+        &mut self,
+        ctx: &egui::Context,
+        recording: &Path,
+        settings: &ProcessingSettings,
+        book: &Book,
+        session: Uuid,
+    ) {
         let note = self
             .notes
             .iter()
@@ -1282,12 +1373,24 @@ impl Sessions {
             .collect();
         let context = format!(
             "{note}\n\n{}\n\nEvents the DM already recorded:\n{}",
-            self.draft.as_ref().map_or("", |draft| draft.body.as_str()),
+            if self.selected == Some(session) {
+                self.draft
+                    .as_ref()
+                    .map_or_else(String::new, |draft| draft.body.clone())
+            } else {
+                self.notes
+                    .iter()
+                    .find(|note| note.id == session)
+                    .and_then(|note| fs::read_to_string(&note.path).ok())
+                    .map(|text| body_of(&text).to_owned())
+                    .unwrap_or_default()
+            },
             events.join("\n")
         );
         let (speech_key, llm_key) = settings.held_keys();
         self.notice = None;
         self.notice_session = None;
+        let _ = fs::remove_file(recording.with_extension("state.txt"));
         self.job_done = false;
         self.job_warned = false;
         self.alerts
@@ -1346,13 +1449,18 @@ impl Sessions {
 
     fn record_control(&mut self, ui: &mut egui::Ui, settings: &ProcessingSettings) {
         // Stop is here whichever session is open. It can be urgent, if a player asks.
+        if self.live.as_ref().is_some_and(|live| {
+            matches!(live.recorder.health(), Health::Stalled | Health::Stopped(_))
+        }) {
+            return;
+        }
         if let Some(live) = &self.live {
             let name = if Some(live.session) == self.selected {
                 "Stop recording".to_owned()
             } else {
                 format!("Stop recording of {}", live.label)
             };
-            if Action::destructive("Stop recording")
+            if Action::secondary("Stop recording")
                 .icon(icons::STOP_RECORDING)
                 .name(&name)
                 .hint(&name)
@@ -1373,12 +1481,17 @@ impl Sessions {
         {
             self.confirm_record = true;
         }
+        if let Some(reason) = reason {
+            ui.label(Type::Small.rich(ui, reason).color(colors().muted));
+        }
     }
 
     /// The live state, or the step before it. Always in the same place.
     fn record_line(&mut self, ui: &mut egui::Ui, settings: &ProcessingSettings) {
         // While a recording runs, the line keeps one height, so the note below never moves.
-        let live = self.live.is_some();
+        let live = self.live.as_ref().is_some_and(|live| {
+            !matches!(live.recorder.health(), Health::Stalled | Health::Stopped(_))
+        });
         let top = ui.cursor().top();
         self.record_line_body(ui, settings);
         if live && !self.confirm_record {
@@ -1396,16 +1509,7 @@ impl Sessions {
         {
             let time = clock(live.recorder.seconds());
             match live.recorder.health() {
-                Health::Stalled | Health::Stopped(_) => {
-                    design::message(
-                        ui,
-                        Tone::Error,
-                        &format!(
-                            "Not saving audio after {}. What was saved is kept.",
-                            spoken_length(live.recorder.seconds())
-                        ),
-                    );
-                }
+                Health::Stalled | Health::Stopped(_) => {}
                 health => {
                     let (word, color) = match health {
                         Health::Starting => ("Waiting for sound", c.muted),
@@ -1418,7 +1522,22 @@ impl Sessions {
                         // The first thing this page must say, large enough for a glance.
                         ui.label(
                             Type::Strong
-                                .rich(ui, format!("{} Recording {time}", icons::RECORD))
+                                .rich(
+                                    ui,
+                                    format!(
+                                        "{} {} {time}",
+                                        if *health == Health::Silent {
+                                            icons::WARN
+                                        } else {
+                                            icons::RECORD
+                                        },
+                                        if *health == Health::Silent {
+                                            "Recording silence"
+                                        } else {
+                                            "Recording"
+                                        }
+                                    ),
+                                )
                                 .color(c.recording),
                         );
                         ui.label(Type::Small.rich(ui, word).color(color));
@@ -1501,7 +1620,14 @@ impl Sessions {
                 {
                     self.play_this_one();
                 }
-                if Action::primary("Start recording").show(ui).clicked() {
+                if (if self.run_open {
+                    Action::secondary("Start recording")
+                } else {
+                    Action::primary("Start recording")
+                })
+                .show(ui)
+                .clicked()
+                {
                     self.confirm_record = false;
                     if let Some(session) = self.selected
                         && let Err(error) = self.start_recording(settings, session)
@@ -1564,18 +1690,8 @@ impl Sessions {
                     {
                         draft.overwrite();
                     }
-                    let showing = draft.on_disk.is_some();
-                    let label = if showing {
-                        "Hide disk version"
-                    } else {
-                        "Show disk version"
-                    };
-                    if Action::quiet(label).show(ui).clicked() {
-                        if showing {
-                            draft.on_disk = None;
-                        } else {
-                            draft.show_disk();
-                        }
+                    if Action::quiet("Show disk version").show(ui).clicked() {
+                        draft.show_disk();
                     }
                     if Action::quiet("Reload and lose my draft").show(ui).clicked()
                         && draft.reload_keeping_undo().is_err()
@@ -1583,18 +1699,6 @@ impl Sessions {
                         draft.state = DraftState::Missing;
                     }
                 });
-                if let Some(words) = &draft.on_disk {
-                    design::group_label(ui, "In the file now");
-                    egui::ScrollArea::vertical()
-                        .id_salt("note_on_disk")
-                        .max_height(160.0)
-                        .show(ui, |ui| {
-                            ui.add(
-                                egui::Label::new(Type::Mono.rich(ui, words).color(colors().muted))
-                                    .wrap(),
-                            );
-                        });
-                }
             }
             DraftState::Missing => {
                 design::message(
@@ -1859,8 +1963,50 @@ impl Sessions {
         if in_panel {
             Self::draft_problem(ui, draft);
         }
-        if draft.on_disk.is_some() {
-            design::group_label(ui, "Your draft");
+        if draft.state == DraftState::Conflict {
+            if draft.on_disk.is_none() {
+                draft.show_disk();
+            }
+            if let Some(disk) = &draft.on_disk {
+                let disk = disk.clone();
+                let left: Vec<_> = draft.body.lines().collect();
+                let right: Vec<_> = disk.lines().collect();
+                egui::ScrollArea::vertical()
+                    .id_salt("conflict_versions")
+                    .auto_shrink([false, false])
+                    .show(ui, |ui| {
+                        ui.columns(2, |columns| {
+                            for (at, (label, lines)) in
+                                [("Your draft", &left), ("In the file now", &right)]
+                                    .into_iter()
+                                    .enumerate()
+                            {
+                                design::group_label(&mut columns[at], label);
+                                for (line, text) in lines.iter().enumerate() {
+                                    let differs = left.get(line) != right.get(line);
+                                    let fill = if differs {
+                                        colors().selected
+                                    } else {
+                                        colors().page
+                                    };
+                                    egui::Frame::new().fill(fill).show(&mut columns[at], |ui| {
+                                        ui.add(
+                                            egui::Label::new(Type::Mono.rich(
+                                                ui,
+                                                format!(
+                                                    "{} {text}",
+                                                    if differs { "▎" } else { " " }
+                                                ),
+                                            ))
+                                            .wrap(),
+                                        );
+                                    });
+                                }
+                            }
+                        });
+                    });
+                return;
+            }
         }
         let focus = std::mem::take(&mut self.focus_notes);
         // A stray click leaves the keyboard on nothing, and the DM's eyes can be on the table.
@@ -2947,28 +3093,39 @@ impl Sessions {
             .job
             .as_ref()
             .is_some_and(|(job, _)| job.recording == recording.path);
-        let state = if live {
-            self.recording_status()
-                .map_or("Recording", |(_, word, _)| word)
-        } else if processing {
-            "Processing"
-        } else if recording.warning.is_some() {
-            "Processed, with a warning"
-        } else if recording.summary {
-            "Processed"
-        } else if recording.transcript {
-            "Partly processed"
-        } else {
-            "Not processed"
-        };
         ui.label(
             Type::Small
-                .rich(
-                    ui,
-                    format!("{length} · {} · {state}", megabytes(recording.bytes)),
-                )
+                .rich(ui, format!("{length} · {}", megabytes(recording.bytes)))
                 .color(c.muted),
         );
+        let stored = &recording.status;
+        let (icon, word, color) = if live {
+            self.recording_status()
+                .unwrap_or((icons::RECORD, "Recording", c.recording))
+        } else if processing {
+            (icons::BUSY, "Processing", c.connection.busy)
+        } else if let Some(words) = stored.as_deref() {
+            let state = if words.starts_with("Failed") {
+                "Failed"
+            } else if words.starts_with("Processing cancelled") {
+                "Cancelled"
+            } else {
+                "Stopped"
+            };
+            (icons::WARN, state, c.result.warning)
+        } else if recording.warning.is_some() {
+            (icons::WARN, "Processed, with a warning", c.result.warning)
+        } else if recording.summary {
+            (icons::OK, "Processed", c.result.success)
+        } else if recording.transcript {
+            (icons::DRAFT, "Partly processed", c.muted)
+        } else {
+            (icons::RECORD, "Not processed", c.muted)
+        };
+        design::status(ui, Status { icon, word, color }).on_hover_text(word);
+        if let Some(words) = stored {
+            ui.add(egui::Label::new(Type::Small.rich(ui, words).color(c.muted)).wrap());
+        }
         if let Some(warning) = &recording.warning {
             design::message(ui, Tone::Warning, warning);
         }
@@ -2976,38 +3133,11 @@ impl Sessions {
             .job
             .as_ref()
             .is_some_and(|(job, _)| job.recording == recording.path);
-        if job_here {
-            let words = self
-                .job
-                .as_ref()
-                .map(|(job, _)| job.progress.words())
-                .unwrap_or_default();
-            ui.horizontal(|ui| {
-                design::spinner(ui);
-                ui.label(Type::Small.rich(ui, words).color(c.muted));
-                let cancelling = self.job.as_ref().is_some_and(|(job, _)| job.cancelling());
-                if cancelling {
-                    ui.label(
-                        Type::Small
-                            .rich(ui, "Cancelling. This ends after the current step.")
-                            .color(c.muted),
-                    );
-                } else if Action::quiet("Cancel")
-                    .name("Cancel processing")
-                    .density(Density::Read)
-                    .show(ui)
-                    .clicked()
-                    && let Some((job, _)) = &self.job
-                {
-                    job.cancel();
-                }
-            });
-        }
         let mut open = None;
         let views: Vec<Made> = [
             (Made::Summary, recording.summary),
             (Made::Marked, recording.marked),
-            (Made::Review, recording.review),
+            (Made::Review, recording.review && !recording.check_missing()),
             (Made::Transcript, recording.transcript),
         ]
         .into_iter()
@@ -3025,10 +3155,40 @@ impl Sessions {
                 }
             });
         }
+        if recording.check_missing() {
+            ui.label(Type::Small.rich(ui, "No check ran").color(c.muted));
+        }
         let mut process = false;
         let mut again = false;
         let mut delete = false;
-        ui.horizontal_wrapped(|ui| {
+        ui.horizontal(|ui| {
+            if job_here {
+                let words = self
+                    .job
+                    .as_ref()
+                    .map(|(job, _)| job.progress.words())
+                    .unwrap_or_default();
+                {
+                    design::spinner(ui);
+                    ui.label(Type::Small.rich(ui, words).color(c.muted));
+                    let cancelling = self.job.as_ref().is_some_and(|(job, _)| job.cancelling());
+                    if cancelling {
+                        ui.label(
+                            Type::Small
+                                .rich(ui, "Cancelling. This ends after the current step.")
+                                .color(c.muted),
+                        );
+                    } else if Action::quiet("Cancel")
+                        .name("Cancel processing")
+                        .density(Density::Read)
+                        .show(ui)
+                        .clicked()
+                        && let Some((job, _)) = &self.job
+                    {
+                        job.cancel();
+                    }
+                }
+            }
             let reason = if live {
                 Some("Stop recording first.".to_owned())
             } else if self.job.is_some() {
@@ -3050,17 +3210,39 @@ impl Sessions {
                     .blocked(reason.as_deref())
                     .show(ui)
                     .clicked();
+                if let Some(reason) = &reason {
+                    ui.label(Type::Small.rich(ui, reason).color(c.muted));
+                }
                 process = pressed && !recording.summary;
                 again = pressed && recording.summary;
                 ui.add_space(design::L);
             }
-            delete = Action::quiet("Delete")
-                .name(&format!("Delete recording: {}", recording.name))
-                .density(Density::Read)
-                .blocked_if(live || job_here, "This recording is in use.")
-                .show(ui)
-                .clicked();
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                let menu = ui.menu_button("⋯", |ui| {
+                    delete = Action::quiet("Delete…")
+                        .name(&format!("Delete recording: {}", recording.name))
+                        .density(Density::Read)
+                        .blocked_if(live || job_here, "This recording is in use.")
+                        .show(ui)
+                        .clicked();
+                    if delete {
+                        ui.close();
+                    }
+                });
+                design::named(
+                    ui,
+                    &menu.response,
+                    &format!("More actions for {}", recording.title),
+                );
+            });
         });
+        if live || job_here {
+            ui.label(
+                Type::Small
+                    .rich(ui, "This recording is in use.")
+                    .color(c.muted),
+            );
+        }
         if self.confirm_again.as_deref() == Some(recording.path.as_path()) {
             design::message(
                 ui,
@@ -3068,7 +3250,13 @@ impl Sessions {
                 "This asks the LLM again, and replaces the summary, the clean transcript and what the check changed. The raw transcript stays. Events you added stay on the timeline, and a reworded suggestion can offer Add again.",
             );
             ui.horizontal(|ui| {
-                process = Action::primary("Replace the results").show(ui).clicked();
+                process = (if self.run_open {
+                    Action::secondary("Replace the results")
+                } else {
+                    Action::primary("Replace the results")
+                })
+                .show(ui)
+                .clicked();
                 if Action::quiet("Not now").show(ui).clicked() {
                     self.confirm_again = None;
                 }
@@ -3242,6 +3430,32 @@ impl Sessions {
     fn reading_view(&mut self, ui: &mut egui::Ui, book: &mut Book) {
         let c = colors();
         let session = self.selected;
+        if let Some(reading) = &self.reading {
+            let path = reading.recording.clone();
+            let mut made = reading.made;
+            let options: Vec<_> = [Made::Summary, Made::Marked, Made::Review, Made::Transcript]
+                .into_iter()
+                .filter(|made| {
+                    made.path(&path).exists()
+                        && (*made != Made::Review
+                            || self
+                                .recordings
+                                .iter()
+                                .find(|recording| recording.path == path)
+                                .is_none_or(|recording| !recording.check_missing()))
+                })
+                .map(|made| (made, made.word()))
+                .collect();
+            if design::segmented(ui, &mut made, &options)
+                && let Some(recording) = self
+                    .recordings
+                    .iter()
+                    .find(|recording| recording.path == path)
+                    .cloned()
+            {
+                self.open_reading(&recording, made, None, None);
+            }
+        }
         let Some(reading) = &mut self.reading else {
             return;
         };
@@ -3286,12 +3500,12 @@ impl Sessions {
                 ),
             );
         }
-        if matches!(reading.made, Made::Marked | Made::Review) {
+        if matches!(reading.made, Made::Summary | Made::Marked | Made::Review) {
             ui.label(
                 Type::Small
                     .rich(
                         ui,
-                        "Written by an LLM. The raw transcript has the words as heard.",
+                        "This is a draft from an LLM. Check it against your own memory.",
                     )
                     .color(c.muted),
             );
@@ -3379,6 +3593,11 @@ impl Sessions {
             .show(ui, |ui| {
                 note_width(ui, |ui| {
                     let body = &reading.parts[reading.part].1;
+                    let body = body.replace(
+                        "> This is a draft from an LLM. Check it against your own memory.\n",
+                        "",
+                    );
+                    let body = body.as_str();
                     let at = reading.mark.as_deref().and_then(|mark| body.find(mark));
                     match at {
                         Some(at) => {
@@ -3424,7 +3643,9 @@ impl Sessions {
             self.reading_view(ui, book);
             return;
         }
-        if let Some(problem) = settings.problem() {
+        if self.live.is_some() {
+            // Processing setup is shown after recording stops.
+        } else if let Some(problem) = settings.problem() {
             if design::message_with_action(ui, Tone::Info, &problem, "Open Settings") {
                 self.wants_processing_settings = true;
             }
@@ -3468,7 +3689,7 @@ impl Sessions {
             } else {
                 "No recordings of this session. Select Record above to make one.".to_owned()
             };
-            ui.add(egui::Label::new(Type::Body.rich(ui, words).color(colors().muted)).wrap());
+            design::empty_state(ui, icons::RECORD, "Session recordings", &words, |_| {});
             if !here
                 && self.live.is_none()
                 && reason.is_some()
@@ -3978,7 +4199,7 @@ impl Sessions {
             ui.label(Type::Heading.rich(ui, &template.name).color(c.text));
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 if template.path.is_some() {
-                    delete = Action::quiet("Delete")
+                    delete = Action::quiet("Delete…")
                         .name("Delete this template")
                         .density(Density::Read)
                         .show(ui)
@@ -4160,7 +4381,7 @@ impl Sessions {
         design::page_header(ui, "Session", Some(&campaign), |ui| {
             let list_alone = self.list_only && ui.ctx().content_rect().width() < 1500.0;
             if self.live.is_some() && (self.view != View::Notes || in_form || list_alone || empty) {
-                stop = Action::destructive("Stop recording")
+                stop = Action::secondary("Stop recording")
                     .icon(icons::STOP_RECORDING)
                     .show(ui)
                     .clicked();
@@ -4171,6 +4392,13 @@ impl Sessions {
                     .blocked_if(locked, "Choose what to do with this note first.")
                     .show(ui)
                     .clicked();
+                if locked {
+                    ui.label(
+                        Type::Small
+                            .rich(ui, "Choose what to do with this note first.")
+                            .color(colors().muted),
+                    );
+                }
             }
         });
         if stop {
@@ -4230,6 +4458,8 @@ impl Sessions {
 
     /// A job that stays in progress, for a capture of that state.
     pub fn simulate_job(&mut self, progress: processing::Progress) {
+        self.notice = None;
+        self.notice_session = None;
         let session = self.selected.expect("an open session");
         let path = self.recordings[0].path.clone();
         self.job = Some((Job::held(path, progress), session));
@@ -4237,13 +4467,14 @@ impl Sessions {
 
     /// A job that ends with a warning, stored as a real one is.
     pub fn simulate_job_end_warned(&mut self, words: &str) {
-        let (job, session) = self.job.take().expect("a job");
+        let (job, session) = self.job.as_ref().expect("a job");
+        let session = *session;
         fs::write(processing::warning_path(&job.recording), words).expect("the warning");
         self.finish_job(Ok(Some(words.to_owned())), session);
     }
 
     pub fn simulate_job_end(&mut self, result: Result<Option<String>, String>) {
-        let (_, session) = self.job.take().expect("a job");
+        let session = self.job.as_ref().expect("a job").1;
         self.finish_job(result, session);
     }
 

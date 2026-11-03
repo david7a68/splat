@@ -359,6 +359,23 @@ impl ProcessingSettings {
             KeySlot::Speech => self.config.speech_key_fits(),
             KeySlot::Llm => self.config.llm_key_fits(),
         };
+        let service = if slot == KeySlot::Llm && self.config.provider == Provider::Anthropic {
+            "Anthropic"
+        } else {
+            "this service"
+        };
+        let missing = format!("No {service} key. Paste one.");
+        let remove = if slot == KeySlot::Llm && !fits && self.config.llm_key_for.contains("openai")
+        {
+            "Remove OpenAI key"
+        } else {
+            "Remove"
+        };
+        let remove_name = if remove == "Remove" {
+            format!("Remove key: {label}")
+        } else {
+            remove.to_owned()
+        };
         let held = self.held(slot).is_some();
         let mut save = false;
         let mut forget = false;
@@ -371,7 +388,9 @@ impl ProcessingSettings {
                         .password(true)
                         .desired_width(width)
                         .margin(egui::vec2(design::S, 5.0))
-                        .hint_text(if saved {
+                        .hint_text(if saved && !fits {
+                            &missing
+                        } else if saved {
                             "Saved. Enter a new key to replace it."
                         } else {
                             "Paste the key"
@@ -385,10 +404,7 @@ impl ProcessingSettings {
                     .show(ui)
                     .clicked();
                 if saved || held {
-                    forget = Action::quiet("Remove")
-                        .name(&format!("Remove key: {label}"))
-                        .show(ui)
-                        .clicked();
+                    forget = Action::quiet(remove).name(&remove_name).show(ui).clicked();
                 }
             });
         });

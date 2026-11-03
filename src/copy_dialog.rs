@@ -22,6 +22,9 @@ pub struct CopyDialog {
     /// The open encounter draft, if a copied creature could join it now.
     pub draft: Option<String>,
     copied_creature: Option<Uuid>,
+    copied_entry: Option<splat::content::Entry>,
+    pub edit_copy: Option<splat::content::Entry>,
+    focus_name: bool,
     /// The DM chose to add the copy to the open draft.
     pub add_to_draft: Option<Uuid>,
 }
@@ -41,7 +44,7 @@ impl CopyDialog {
             ctx.request_repaint();
         });
         Self {
-            name: format!("{} copy", source.entry.name),
+            name: source.entry.name.clone(),
             // The likeliest place is the active campaign, unless the entry is already there.
             destination: campaigns
                 .active_campaign()
@@ -57,6 +60,9 @@ impl CopyDialog {
             refresh: None,
             draft: None,
             copied_creature: None,
+            copied_entry: None,
+            edit_copy: None,
+            focus_name: true,
             add_to_draft: None,
         }
     }
@@ -100,12 +106,22 @@ impl CopyDialog {
                             close = true;
                         }
                     }
-                    if Action::secondary("Close").show(ui).clicked() {
+                    let edit = if self.copied_creature.is_some() && self.draft.is_some() {
+                        Action::secondary("Edit the copy")
+                    } else {
+                        Action::primary("Edit the copy")
+                    };
+                    if edit.show(ui).clicked() {
+                        self.edit_copy = self.copied_entry.clone();
                         close = true;
                     }
                     if Action::secondary("Copy another").show(ui).clicked() {
                         self.completed = None;
                         self.plan = None;
+                    }
+                    ui.add_space(design::L);
+                    if Action::quiet("Close").show(ui).clicked() {
+                        close = true;
                     }
                 });
                 return;
@@ -163,8 +179,11 @@ impl CopyDialog {
                     });
                 design::named(ui, &combo.response, "Destination");
             });
-            let name_changed =
-                design::text_field(ui, "Copy name", &mut self.name, None, None).changed();
+            let response = design::text_field(ui, "Copy name", &mut self.name, None, None);
+            if std::mem::take(&mut self.focus_name) {
+                design::focus_and_select(ui, response.id, &self.name);
+            }
+            let name_changed = response.changed();
             let folder_changed = design::text_field(
                 ui,
                 "Subfolder",
@@ -184,20 +203,8 @@ impl CopyDialog {
             } else {
                 None
             };
-            // One row of actions, at the end: the review's own once there is one.
-            let mut review = false;
-            if self.plan.is_none() {
-                ui.horizontal(|ui| {
-                    review = Action::secondary("Review copy")
-                        .blocked(blocked)
-                        .show(ui)
-                        .clicked();
-                    if Action::quiet("Cancel").show(ui).clicked() {
-                        close = true;
-                    }
-                });
-            }
-            if review
+            if self.plan.is_none()
+                && blocked.is_none()
                 && let Some(destination) = destinations
                     .iter()
                     .find(|(c, id, ..)| Some((*c, *id)) == self.destination)
@@ -221,14 +228,26 @@ impl CopyDialog {
                     Err(e) => self.error = Some(e),
                 }
             }
+            if self.plan.is_none() {
+                if let Some(reason) = blocked {
+                    ui.label(Type::Small.rich(ui, reason).color(colors().muted));
+                }
+                if Action::quiet("Cancel").show(ui).clicked() {
+                    close = true;
+                }
+            }
             if let Some(plan) = &self.plan {
                 design::rule(ui);
-                ui.label(Type::Heading.rich(ui, "Ready to copy").color(colors().text));
+
                 ui.add(
-                    egui::Label::new(plan.root.join(&plan.relative).display().to_string()).wrap(),
+                    egui::Label::new(format!(
+                        "Will create {}",
+                        plan.root.join(&plan.relative).display()
+                    ))
+                    .wrap(),
                 );
                 if plan.dependencies.is_empty() {
-                    ui.label("No required content dependencies.");
+                    ui.label("No required dependencies");
                 } else {
                     design::section(
                         ui,
@@ -243,11 +262,13 @@ impl CopyDialog {
                         },
                     );
                 }
-                design::section(ui, "Review Markdown", |ui| {
-                    egui::ScrollArea::both().max_height(160.0).show(ui, |ui| {
-                        ui.monospace(&plan.text);
+                if !plan.dependencies.is_empty() {
+                    design::section(ui, "Review Markdown", |ui| {
+                        egui::ScrollArea::both().max_height(160.0).show(ui, |ui| {
+                            ui.monospace(&plan.text);
+                        });
                     });
-                });
+                }
                 let mut create = false;
                 ui.horizontal(|ui| {
                     create = Action::primary("Create copy").show(ui).clicked();
@@ -282,6 +303,8 @@ impl CopyDialog {
                                     .ok()
                                     .filter(|entry| to_active && entry.kind == "creature")
                                     .map(|entry| entry.id);
+                            self.copied_entry =
+                                splat::content::Entry::parse(&plan.relative, &plan.text).ok();
                             self.completed = Some(format!("Saved: {}", plan.relative));
                             self.refresh = Some(plan.root.clone());
                             self.error = None;

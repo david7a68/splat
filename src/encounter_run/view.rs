@@ -48,7 +48,7 @@ const MESSAGE_ROOM: f32 = 44.0;
 /// A message's height when the list needs the room.
 const MESSAGE_LINE: f32 = 28.0;
 /// What a message says in that one line.
-const NOTICE_SHORT: &str = "Undo history was cleared. Hover here, or see the Log.";
+const NOTICE_SHORT: &str = "Sheet changes. See Log.";
 const SCROLL_BAR: f32 = 12.0;
 /// A name-only row when the list has no other way to fit. Still a 24 px target and more.
 const TIGHT_ROW: f32 = 25.0;
@@ -778,13 +778,17 @@ impl Run {
             Layout::right_to_left(Align::Center),
             |ui| {
                 ui.set_min_height(28.0);
+                let undo_word = if design::number_width(ui, &undo_label, &Type::Strong.font(ui))
+                    > ui.available_width() * 0.5
+                {
+                    "Undo"
+                } else {
+                    &undo_label
+                };
                 undo = self
-                    .undo_action(&undo_label)
-                    .hint(if self.lookup_open {
-                        "Undo the last step"
-                    } else {
-                        "Undo the last step (U)"
-                    })
+                    .undo_action(undo_word)
+                    .name(&undo_label)
+                    .hint(&undo_label)
                     .show(ui)
                     .clicked();
                 ui.with_layout(Layout::left_to_right(Align::Center), |ui| {
@@ -1761,24 +1765,45 @@ impl Run {
             return;
         }
         let stopping = matches!(self.party_sync_plan(), PartySync::Stop(_));
-        if Action::quiet(if stopping { "Stop sync" } else { "Sync party" })
-            .icon(icons::SYNC_ON)
-            .density(Density::Read)
-            .name(if stopping {
-                "Stop party sync"
-            } else {
-                "Sync party"
-            })
-            .hint("Read every linked character's sheet. A value you changed stays, and you choose.")
-            .blocked_if(
-                !self.connected && !self.simulate_connection,
-                "Connect to D&D Beyond in Settings to sync.",
-            )
-            .show(ui)
-            .clicked()
+        let compact = ui.available_width() < 200.0;
+        if Action::quiet(if stopping {
+            "Stop sync"
+        } else if compact {
+            "Sync"
+        } else {
+            "Sync party"
+        })
+        .icon(icons::SYNC_ON)
+        .density(Density::Read)
+        .name(if stopping {
+            "Stop party sync"
+        } else {
+            "Sync party"
+        })
+        .hint("Read every linked character's sheet. A value you changed stays, and you choose.")
+        .blocked_if(
+            !self.connected && !self.simulate_connection,
+            "Connect to D&D Beyond in Settings to sync.",
+        )
+        .show(ui)
+        .clicked()
         {
             self.toggle_party_sync();
             self.return_focus = self.lookup_open;
+        }
+        if !self.connected && !self.simulate_connection {
+            ui.label(
+                Type::Small
+                    .rich(
+                        ui,
+                        if compact {
+                            "Sign in."
+                        } else {
+                            "Sign in to sync."
+                        },
+                    )
+                    .color(colors().muted),
+            );
         }
     }
 

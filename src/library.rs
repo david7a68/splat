@@ -629,7 +629,9 @@ pub struct Library {
     form: bool,
     path: String,
     name: String,
-    namespace: String,
+    pub run_open: bool,
+    pending_edit: Option<Entry>,
+    scope_notice: Option<String>,
     new_name: String,
     new_kind: String,
     source: bool,
@@ -746,6 +748,7 @@ impl Library {
         }
         if !self.loaded.as_ref().unwrap().in_scope(note, self.scope) {
             self.scope = Scope::All;
+            self.scope_notice = Some(format!("Scope is now Everything, to show {}.", note.name()));
         }
         self.selected = Some(index);
         self.draft = note.text.clone();
@@ -765,7 +768,14 @@ impl Library {
             .as_ref()
             .and_then(|l| self.selected.and_then(|i| l.notes.get(i)))
             .filter(|n| n.text != self.draft)?;
-        Some((note.name().to_owned(), note.owner.label()))
+        Some((
+            note.name().to_owned(),
+            match &note.owner {
+                Owner::Package(module) => format!("the {} package", module.name),
+                Owner::Campaign(campaign) => format!("the {} campaign", campaign.name),
+                Owner::Builtin => "the built-in package".to_owned(),
+            },
+        ))
     }
     pub fn dirty(&self) -> bool {
         self.loaded
@@ -811,6 +821,25 @@ impl Library {
         self.draft = self.loaded.as_ref().unwrap().notes[index].text.clone();
         true
     }
+    pub fn edit_copy(&mut self, entry: Entry) {
+        self.pending_edit = Some(entry);
+    }
+    pub fn can_save_and_close(&self) -> bool {
+        self.dirty()
+            && self.disk_change.is_none()
+            && self
+                .selected
+                .and_then(|i| self.loaded.as_ref()?.notes.get(i))
+                .is_some_and(|note| Entry::parse(&note.path, &self.draft).is_ok())
+    }
+    pub fn save_for_close(&mut self) -> bool {
+        if !self.can_save_and_close() {
+            return false;
+        }
+        self.save_selected(false);
+        !self.dirty()
+    }
+
     pub fn refresh_destination(&mut self, _root: &Path, _ctx: &egui::Context) {
         self.stale = true;
     }
@@ -879,11 +908,21 @@ impl Library {
                 Err(mpsc::TryRecvError::Empty) => {}
             }
         }
+        if self.pending.is_none()
+            && !self.stale
+            && let Some(entry) = self.pending_edit.take()
+        {
+            if self.reveal(&entry) {
+                self.source = true;
+            } else {
+                self.pending_edit = Some(entry);
+            }
+        }
         let dirty = self.dirty();
         let locked =
             (dirty || self.pending.is_some()).then_some("Save or discard this entry first.");
         // Beside Lookup at the minimum window, everything here gets smaller.
-        let compact = ui.available_width() < 640.0;
+        let compact = ui.available_width() < 900.0 || self.disk_change.is_some();
         let mut open_form = false;
         let mut reload = false;
         ui.horizontal(|ui| {
@@ -910,6 +949,9 @@ impl Library {
             });
         });
         design::rule(ui);
+        if let Some(words) = &self.scope_notice {
+            design::message(ui, Tone::Info, words);
+        }
         if reload {
             self.start_load(ui.ctx(), campaigns);
         }
@@ -1145,7 +1187,8 @@ impl Library {
         let list_width = (ui.available_width() * 0.38).clamp(190.0, 420.0);
         let mut peek = None;
         // Beside Lookup at the minimum window, a draft needs the room more than the list.
-        let hide_list = ui.available_width() < 480.0 && (dirty || self.source);
+        let hide_list =
+            self.disk_change.is_some() || (ui.available_width() < 480.0 && (dirty || self.source));
         if !hide_list {
             design::Column::left("library_entries", list_width, 190.0..=560.0)
             .frame(egui::Frame::new().inner_margin(egui::Margin {
@@ -1183,10 +1226,9 @@ impl Library {
                         .show_ui(ui, |ui| {
                             for &(_, sections) in Section::GROUPS {
                                 for &section in sections {
-                                    if ui
-                                        .selectable_label(self.section == section, section.label())
-                                        .clicked()
-                                    {
+                                    let response = ui.selectable_label(self.section == section, section.label());
+                                    design::named(ui, &response, &format!("Library section: {}", section.label()));
+                                    if response.clicked() {
                                         self.section = section;
                                         self.search.clear();
                                     }
@@ -1450,51 +1492,91 @@ impl Library {
                         }
                     });
                 });
-                ui.label("Register an existing package folder, or create a new package.");
-                design::text_field(ui, "Absolute folder path", &mut self.path, None, None);
-                design::group_label(ui, "For a new package only");
-                design::text_field(ui, "Name", &mut self.name, None, None);
-                design::text_field(ui, "Namespace", &mut self.namespace, None, None);
+                design::group_label(ui, "Add a package folder…");
                 ui.horizontal_wrapped(|ui| {
-                    let no_path = self.path.trim().is_empty();
-                    let register = Action::secondary("Register folder")
-                        .blocked(locked.or(no_path.then_some("Enter the folder's path first.")))
+                    design::text_input(
+                        ui,
+                        "Package folder",
+                        &mut self.path,
+                        "Choose a folder",
+                        240.0,
+                    );
+                    if Action::secondary("Browse…")
+                        .blocked(locked)
                         .show(ui)
-                        .clicked();
-                    let create = Action::primary("Create package")
+                        .clicked()
+                        && let Some(path) = crate::hermetic::pick_folder()
+                    {
+                        self.path = path.display().to_string();
+                    }
+                    if Action::secondary("Add folder")
                         .blocked(
-                            locked.or((no_path
-                                || self.name.trim().is_empty()
-                                || self.namespace.trim().is_empty())
-                            .then_some("Enter a path, a name and a namespace first.")),
+                            locked.or(self
+                                .path
+                                .trim()
+                                .is_empty()
+                                .then_some("Choose a folder first.")),
                         )
                         .show(ui)
-                        .clicked();
-                    if register || create {
-                        let result = if create {
-                            create_module(
-                                Path::new(self.path.trim()),
-                                &self.name,
-                                self.namespace.trim(),
-                            )
-                        } else {
-                            local_module(Path::new(self.path.trim()))
-                        };
-                        match result.and_then(|m| {
-                            campaigns.register_module(m.clone())?;
-                            Ok(m)
+                        .clicked()
+                    {
+                        match local_module(Path::new(self.path.trim())).and_then(|module| {
+                            campaigns.register_module(module.clone())?;
+                            Ok(module)
                         }) {
-                            Ok(m) => {
-                                self.scope = Scope::Package(m.id);
+                            Ok(module) => {
+                                self.scope = Scope::Package(module.id);
                                 self.form = false;
-                                self.search.clear();
-                                self.section = Section::All;
                                 self.stale = true;
                             }
-                            Err(e) => self.error = Some(e),
+                            Err(error) => self.error = Some(error),
                         }
                     }
                 });
+                ui.add_space(design::L);
+                design::group_label(ui, "New package");
+                design::text_field(ui, "Name", &mut self.name, None, None);
+                let reason = locked.or(self.name.trim().is_empty().then_some("Type a name first."));
+                if (if self.run_open {
+                    Action::secondary("Create")
+                } else {
+                    Action::primary("Create")
+                })
+                .blocked(reason)
+                .show(ui)
+                .clicked()
+                {
+                    let namespace: String = self
+                        .name
+                        .trim()
+                        .to_lowercase()
+                        .chars()
+                        .map(|c| if c.is_ascii_alphanumeric() { c } else { '_' })
+                        .collect();
+                    let root = campaigns.package_folder(&namespace);
+                    match root
+                        .and_then(|root| {
+                            fs::create_dir_all(
+                                root.parent().ok_or("No package folder is available.")?,
+                            )
+                            .map_err(|e| e.to_string())?;
+                            create_module(&root, &self.name, &namespace)
+                        })
+                        .and_then(|module| {
+                            campaigns.register_module(module.clone())?;
+                            Ok(module)
+                        }) {
+                        Ok(module) => {
+                            self.scope = Scope::Package(module.id);
+                            self.form = false;
+                            self.stale = true;
+                        }
+                        Err(error) => self.error = Some(error),
+                    }
+                }
+                if let Some(reason) = reason {
+                    ui.label(Type::Small.rich(ui, reason).color(c.muted));
+                }
                 ui.add_space(design::M);
                 design::group_label(ui, "Registered packages");
                 design::rule(ui);
@@ -1520,15 +1602,23 @@ impl Library {
                             ui.with_layout(
                                 egui::Layout::right_to_left(egui::Align::Center),
                                 |ui| {
-                                    if Action::destructive("Unregister…")
-                                        .density(Density::Read)
-                                        .name(&format!("Unregister {}", module.name))
-                                        .blocked(locked)
-                                        .show(ui)
-                                        .clicked()
-                                    {
-                                        self.confirm_unregister = Some(module.clone());
-                                    }
+                                    let menu = ui.menu_button("⋯", |ui| {
+                                        if Action::destructive("Unregister…")
+                                            .density(Density::Read)
+                                            .name(&format!("Unregister {}", module.name))
+                                            .blocked(locked)
+                                            .show(ui)
+                                            .clicked()
+                                        {
+                                            self.confirm_unregister = Some(module.clone());
+                                            ui.close();
+                                        }
+                                    });
+                                    design::named(
+                                        ui,
+                                        &menu.response,
+                                        &format!("More actions for {}", module.name),
+                                    );
                                 },
                             );
                         });
@@ -1681,6 +1771,7 @@ impl Library {
         self.reveal_row = true;
         self.draft = self.loaded.as_ref().unwrap().notes[index].text.clone();
         self.disk_change = None;
+        self.scope_notice = None;
         self.scope = step.scope;
         self.section = step.section;
         self.search = step.search;
@@ -1706,6 +1797,78 @@ impl Library {
                 self.editor_pane(ui, subtitle);
             });
         });
+    }
+
+    fn save_selected(&mut self, file_gone: bool) {
+        let Some(i) = self.selected else {
+            return;
+        };
+        let note = &self.loaded.as_ref().unwrap().notes[i];
+        let root = note.owner.root().expect("an editable note").to_path_buf();
+        let owner_is_campaign = matches!(note.owner, Owner::Campaign(_));
+        let result = Entry::parse(&note.path, &self.draft).and_then(|entry| {
+            if let Some(old) = &note.entry {
+                if entry.id != old.id || entry.kind != old.kind {
+                    return Err("Keep this entry's UUID and kind unchanged.".into());
+                }
+                if owner_is_campaign && entry.key != old.key {
+                    return Err("Keep the entry's UUID, kind and key unchanged.".into());
+                }
+                if old.kind == "package"
+                    && entry.fields.get("splat_namespace") != old.fields.get("splat_namespace")
+                {
+                    return Err("Keep the package namespace unchanged.".into());
+                }
+            }
+            if self
+                .loaded
+                .as_ref()
+                .unwrap()
+                .notes
+                .iter()
+                .enumerate()
+                .any(|(other, n)| {
+                    other != i
+                        && n.entry.as_ref().is_some_and(|e| {
+                            e.id == entry.id || (entry.key.is_some() && e.key == entry.key)
+                        })
+                })
+            {
+                return Err("Another entry already uses this UUID or key.".into());
+            }
+            let baseline = (!file_gone).then_some(note.text.as_str());
+            write_note(&root, &note.path, baseline, &self.draft)
+        });
+        match result {
+            Ok(entry) => {
+                let l = self.loaded.as_mut().unwrap();
+                if entry.kind == "package"
+                    && let Owner::Package(module) = &mut l.notes[i].owner
+                {
+                    self.renamed = Some((module.id, entry.name.clone()));
+                    module.name = entry.name.clone();
+                }
+                l.notes[i].entry = Some(entry);
+                l.notes[i].text = self.draft.clone();
+                l.notes[i].error = None;
+                l.invalidate();
+                self.matches = None;
+                self.scope_counts = None;
+                self.just_saved = true;
+                self.content_changed = Some(root);
+                l.refresh_diagnostics();
+                self.error = None;
+            }
+            Err(e) if e == NOTE_CHANGED => {
+                self.disk_change = Some(DiskChange {
+                    text: note_path(&root, &note.path)
+                        .ok()
+                        .and_then(|path| fs::read_to_string(path).ok()),
+                    show: false,
+                });
+            }
+            Err(e) => self.error = Some(e),
+        }
     }
 
     fn editor_pane(&mut self, ui: &mut egui::Ui, subtitle: &str) {
@@ -1858,38 +2021,61 @@ impl Library {
                 design::status(ui, state);
             }
         });
+        if dirty {
+            ui.label(
+                Type::Small
+                    .rich(ui, "Save or discard this draft to copy it, manage packages or switch campaign.")
+                    .color(colors().muted),
+            );
+        }
         // Save and Discard are one row, as far apart as the pane allows.
         if save_row {
             ui.horizontal(|ui| {
-                // Its right edge is the editor's, so Discard lines up with something.
+                // Keep the save row within the editor measure.
                 ui.set_max_width(ui.available_width().min(EDITOR_MAX_WIDTH));
                 let blocked = if conflict {
                     Some("Choose what to do with the changed file first.")
                 } else {
                     (!dirty).then_some("No changes to save.")
                 };
-                save |= Action::primary("Save")
+                design::status(ui, state);
+                if dirty
+                    && !conflict
+                    && Action::quiet("Discard changes")
+                        .density(Density::Read)
+                        .show(ui)
+                        .clicked()
+                {
+                    self.discarded = Some((note.owner.id(), note.path.clone(), self.draft.clone()));
+                    self.draft = note.text.clone();
+                    self.error = None;
+                }
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    save |= (if self.run_open {
+                        Action::secondary("Save")
+                    } else {
+                        Action::primary("Save")
+                    })
                     .density(Density::Read)
                     .blocked(blocked)
                     .key("Ctrl+S")
                     .show(ui)
                     .clicked();
-                design::status(ui, state);
-                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    if dirty
-                        && !conflict
-                        && Action::destructive("Discard changes")
-                            .density(Density::Read)
-                            .show(ui)
-                            .clicked()
-                    {
-                        self.discarded =
-                            Some((note.owner.id(), note.path.clone(), self.draft.clone()));
-                        self.draft = note.text.clone();
-                        self.error = None;
-                    }
                 });
             });
+            if conflict {
+                ui.label(
+                    Type::Small
+                        .rich(ui, "Choose what to do with the changed file first.")
+                        .color(colors().muted),
+                );
+            } else if !dirty {
+                ui.label(
+                    Type::Small
+                        .rich(ui, "No changes to save.")
+                        .color(colors().muted),
+                );
+            }
         }
         // Live, because Discard in this same frame changed the draft.
         if self.draft != note.text {
@@ -1912,7 +2098,7 @@ impl Library {
                     "This note's file has gone from disk. Your draft is safe here until you choose."
                 },
             );
-            ui.horizontal_wrapped(|ui| {
+            ui.horizontal(|ui| {
                 if change.text.is_some() {
                     let word = if change.show {
                         "Hide disk version"
@@ -1920,22 +2106,26 @@ impl Library {
                         "Show disk version"
                     };
                     // The safe look comes first, and overwriting says what it is.
-                    if Action::primary(word)
-                        .density(Density::Read)
-                        .show(ui)
-                        .clicked()
+                    if (if self.run_open {
+                        Action::secondary(word)
+                    } else {
+                        Action::primary(word)
+                    })
+                    .density(Density::Read)
+                    .show(ui)
+                    .clicked()
                     {
                         change.show = !change.show;
                     }
                 }
-                ui.add_space(design::XL);
-                if Action::destructive("Overwrite with my draft")
+                if Action::secondary("Overwrite with my draft")
                     .density(Density::Read)
                     .show(ui)
                     .clicked()
                 {
                     self.overwrite_disk = true;
                 }
+                ui.add_space(design::L);
                 reload_from_disk = Action::destructive("Reload and lose my draft")
                     .density(Density::Read)
                     .show(ui)
@@ -2006,71 +2196,7 @@ impl Library {
             return;
         }
         if save {
-            let root = note.owner.root().expect("an editable note").to_path_buf();
-            let owner_is_campaign = matches!(note.owner, Owner::Campaign(_));
-            let result = Entry::parse(&note.path, &self.draft).and_then(|entry| {
-                if let Some(old) = &note.entry {
-                    if entry.id != old.id || entry.kind != old.kind {
-                        return Err("Keep this entry's UUID and kind unchanged.".into());
-                    }
-                    if owner_is_campaign && entry.key != old.key {
-                        return Err("Keep the entry's UUID, kind and key unchanged.".into());
-                    }
-                    if old.kind == "package"
-                        && entry.fields.get("splat_namespace") != old.fields.get("splat_namespace")
-                    {
-                        return Err("Keep the package namespace unchanged.".into());
-                    }
-                }
-                if self
-                    .loaded
-                    .as_ref()
-                    .unwrap()
-                    .notes
-                    .iter()
-                    .enumerate()
-                    .any(|(other, n)| {
-                        other != i
-                            && n.entry.as_ref().is_some_and(|e| {
-                                e.id == entry.id || (entry.key.is_some() && e.key == entry.key)
-                            })
-                    })
-                {
-                    return Err("Another entry already uses this UUID or key.".into());
-                }
-                let baseline = (!file_gone).then_some(note.text.as_str());
-                write_note(&root, &note.path, baseline, &self.draft)
-            });
-            match result {
-                Ok(entry) => {
-                    let l = self.loaded.as_mut().unwrap();
-                    if entry.kind == "package"
-                        && let Owner::Package(module) = &mut l.notes[i].owner
-                    {
-                        self.renamed = Some((module.id, entry.name.clone()));
-                        module.name = entry.name.clone();
-                    }
-                    l.notes[i].entry = Some(entry);
-                    l.notes[i].text = self.draft.clone();
-                    l.notes[i].error = None;
-                    l.invalidate();
-                    self.matches = None;
-                    self.scope_counts = None;
-                    self.just_saved = true;
-                    self.content_changed = Some(root);
-                    l.refresh_diagnostics();
-                    self.error = None;
-                }
-                Err(e) if e == NOTE_CHANGED => {
-                    self.disk_change = Some(DiskChange {
-                        text: note_path(&root, &note.path)
-                            .ok()
-                            .and_then(|path| fs::read_to_string(path).ok()),
-                        show: false,
-                    });
-                }
-                Err(e) => self.error = Some(e),
-            }
+            self.save_selected(file_gone);
         }
         if let Some(index) = open_link {
             if dirty {

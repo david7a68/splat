@@ -343,6 +343,9 @@ pub fn cleaned_path(recording: &Path) -> PathBuf {
     recording.with_extension("cleaned.md")
 }
 
+/// The warning used when the first pass stands without a second-pass transcript.
+pub const NO_CHECK_WARNING: &str = "The second pass returned no transcript, so the first pass's transcript stands without a check.";
+
 /// What a person must know about the result, beside it, for as long as it stands.
 pub fn warning_path(recording: &Path) -> PathBuf {
     recording.with_extension("warning.md")
@@ -1078,10 +1081,7 @@ fn clean_and_review(
         }
     }
     let marked = reviewed.marked.unwrap_or_else(|| {
-        warning.get_or_insert_with(|| {
-            "The second pass returned no transcript, so the first pass's transcript stands without a check."
-                .to_owned()
-        });
+        warning.get_or_insert_with(|| NO_CHECK_WARNING.to_owned());
         &cleaned
     });
     write(marked_path(&request.recording), "marked", marked)?;

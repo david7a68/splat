@@ -1487,7 +1487,7 @@ impl Run {
                 };
                 format!("{word} {} participants{saved}", commands.len())
             }
-            Command::TableRoll(roll) => format!("roll on {}", roll.key),
+            Command::TableRoll(roll) => format!("roll {}", roll.dice),
         }
     }
     fn undo_label(&self) -> String {
@@ -1982,6 +1982,8 @@ impl Run {
         } else if self.connected && self.keep_party_synced {
             self.start_party_sync(linked);
         }
+        let mut changed_participants = Vec::new();
+        let mut sheet_indices = Vec::new();
         let mut identities = std::collections::BTreeSet::new();
         let mut changes = Vec::new();
         let mut from_sheet = Vec::new();
@@ -2050,6 +2052,7 @@ impl Run {
                 hold_local_changes(p, sync);
             }
             if sync.ready() {
+                let participant_before = p.clone();
                 let maximum_before = p.max_hp;
                 apply_sheet_values(p, sync.values(), sync.max_hp());
                 let after = SheetShadow::of(p);
@@ -2058,8 +2061,10 @@ impl Run {
                 let changed =
                     !shadow_differences(&before, &after).is_empty() || maximum_before != p.max_hp;
                 if changed {
+                    changed_participants.push((*index, participant_before));
                     let line = change_line(&p.name, &before, &after, (maximum_before, p.max_hp));
-                    if sync.updated || first_read {
+                    if !sync.chose_remote && (sync.updated || first_read) {
+                        sheet_indices.push(*index);
                         from_sheet.push(line);
                     } else {
                         from_panel.push(line);
@@ -2074,12 +2079,18 @@ impl Run {
                 }
                 self.sync_shadows.insert(*index, after);
                 sync.updated = false;
+                sync.chose_remote = false;
             } else {
                 self.sync_shadows.remove(index);
             }
         }
         if !changes.is_empty() {
             if !from_sheet.is_empty() || !from_panel.is_empty() {
+                let mut before_sync = self.state.clone();
+                for (index, participant) in changed_participants {
+                    before_sync.participants[index] = participant;
+                }
+                self.reconcile_sync_history(&before_sync, &sheet_indices, &from_panel);
                 self.note_sync_changes(&from_sheet, &from_panel);
             }
             self.dirty = true;
@@ -2092,11 +2103,96 @@ impl Run {
     }
 }
 impl Run {
-    /// Values reached the run with no step of their own: earlier steps can no longer be undone
-    /// safely. The log and the notice say what changed, from what to what.
+    fn participant_edit(participant: &Participant) -> serde_json::Value {
+        let mut value = serde_json::to_value(participant).expect("a saved participant");
+        // Read confirmations are facts, not changes made by the history step.
+        if let Some(fields) = value.as_object_mut() {
+            fields.remove("combat_values");
+            fields.remove("started");
+        }
+        value
+    }
+
+    /// Snapshots include the whole run. Drop a step only if it changed this character,
+    /// then carry the new sheet values through the snapshots that remain.
+    fn reconcile_sync_history(&mut self, before: &State, indices: &[usize], choices: &[String]) {
+        let mut kept = Vec::new();
+        let mut labels = Vec::new();
+        let mut dropped = Vec::new();
+        // A multi-target step is atomic. If it also touched another participant, its
+        // older steps cannot safely cross this boundary either. Say which steps were lost.
+        let mut affected: BTreeSet<usize> = indices.iter().copied().collect();
+        loop {
+            let old = affected.len();
+            for (at, previous) in self.history.iter().enumerate() {
+                let next = self.history.get(at + 1).unwrap_or(before);
+                let changed: Vec<_> = (0..next.participants.len().max(previous.participants.len()))
+                    .filter(|index| {
+                        match (
+                            previous.participants.get(*index),
+                            next.participants.get(*index),
+                        ) {
+                            (Some(a), Some(b)) => {
+                                Self::participant_edit(a) != Self::participant_edit(b)
+                            }
+                            _ => true,
+                        }
+                    })
+                    .collect();
+                if changed.iter().any(|index| affected.contains(index)) {
+                    affected.extend(changed);
+                }
+            }
+            if old == affected.len() {
+                break;
+            }
+        }
+        let indices: Vec<_> = affected.into_iter().collect();
+        for (at, previous) in self.history.iter().enumerate() {
+            let next = self.history.get(at + 1).unwrap_or(before);
+            let touches = indices.iter().any(|index| {
+                match (
+                    previous.participants.get(*index),
+                    next.participants.get(*index),
+                ) {
+                    (Some(a), Some(b)) => Self::participant_edit(a) != Self::participant_edit(b),
+                    _ => true,
+                }
+            });
+            if touches {
+                dropped.push(self.history_labels[at].clone());
+                continue;
+            }
+            let mut previous = previous.clone();
+            for index in &indices {
+                previous.participants[*index] = self.state.participants[*index].clone();
+            }
+            kept.push(previous);
+            labels.push(self.history_labels[at].clone());
+        }
+        self.history = kept;
+        self.history_labels = labels;
+        if !dropped.is_empty() {
+            let line = format!("Sheet update removed undo steps: {}.", dropped.join("; "));
+            self.state.log.push(line.clone());
+            for previous in &mut self.history {
+                previous.log.push(line.clone());
+            }
+        }
+        if !choices.is_empty() {
+            let mut previous = before.clone();
+            for index in &indices {
+                previous.participants[*index] = self.state.participants[*index].clone();
+            }
+            self.history.push(previous);
+            self.history_labels
+                .push(format!("{} (D&D Beyond)", choices.join("; ")));
+            self.dm_steps += 1;
+        }
+    }
+
+    /// The log keeps the complete change; the notice names each character's undo boundary.
     fn note_sync_changes(&mut self, from_sheet: &[String], from_panel: &[String]) {
-        self.history.clear();
-        self.history_labels.clear();
         let mut what = Vec::new();
         if !from_sheet.is_empty() {
             what.push(format!("From D&D Beyond: {}.", from_sheet.join("; ")));
@@ -2106,12 +2202,36 @@ impl Run {
         }
         let what = what.join(" ");
         self.state.log.push(what.clone());
-        self.notice = Some(format!("{what} Undo history was cleared."));
+        for previous in &mut self.history {
+            previous.log.push(what.clone());
+        }
+        let names: Vec<_> = self
+            .state
+            .participants
+            .iter()
+            .filter(|p| from_sheet.iter().any(|line| line.starts_with(&p.name)))
+            .map(|p| format!("Undo for {} stops here", p.name))
+            .collect();
+        self.notice = Some(if names.is_empty() {
+            what
+        } else {
+            format!("{what} {}.", names.join(". "))
+        });
         self.undo_stopped = true;
     }
     /// A sheet changed outside Splat, with these words for what changed.
     #[cfg(test)]
     pub(crate) fn note_sheet_update(&mut self, lines: &[String]) {
+        let before = self.state.clone();
+        let indices: Vec<_> = self
+            .state
+            .participants
+            .iter()
+            .enumerate()
+            .filter(|(_, p)| lines.iter().any(|line| line.starts_with(&p.name)))
+            .map(|(at, _)| at)
+            .collect();
+        self.reconcile_sync_history(&before, &indices, &[]);
         self.note_sync_changes(lines, &[]);
     }
 }
@@ -3788,7 +3908,7 @@ mod tests {
         );
     }
     #[test]
-    fn undo_cannot_bring_back_a_value_after_a_conflict_is_settled() {
+    fn a_conflict_choice_is_a_named_undo_step() {
         let (mut run, _, max) = matched_with_sheet(5);
         offline_tick(&mut run);
         run.apply(Command::Damage(0, 4)).unwrap();
@@ -3796,49 +3916,35 @@ mod tests {
         offline_tick(&mut run);
         reconnect(&mut run);
         read_sheet(&mut run, max, 2);
-        assert_eq!(run.state.participants[0].hp, Some(max - 9));
-        assert!(
-            !run.history.is_empty(),
-            "the conflict keeps the steps before it"
-        );
         run.syncs.get_mut(&0).unwrap().use_remote("hp");
         connected_tick(&mut run);
         assert_eq!(run.state.participants[0].hp, Some(max - 2));
-        // Nothing to take back under another name, and the notice says what happened.
-        assert!(run.history.is_empty());
-        assert_eq!(run.undo_label(), "Undo");
-        let notice = run.notice.clone().unwrap();
-        let change = format!("HP {} → {}", max - 9, max - 2);
-        assert!(notice.contains(&change), "{notice}");
-        assert!(notice.contains("From D&D Beyond"), "{notice}");
-        assert!(run.state.log.iter().any(|line| line.contains(&change)));
-        // Undo does nothing, so nothing older reaches the sheet.
+        assert!(run.undo_label().contains("D&D Beyond"));
         run.undo();
         connected_tick(&mut run);
-        assert_eq!(run.state.participants[0].hp, Some(max - 2));
-        assert_eq!(run.syncs[&0].values()["hp"]["removedHitPoints"], 2);
-        assert!(!run.syncs[&0].dirty(), "nothing older goes to D&D Beyond");
+        assert_eq!(run.state.participants[0].hp, Some(max - 9));
+        assert_eq!(run.syncs[&0].values()["hp"]["removedHitPoints"], 9);
+        assert!(!run.undo_label().contains("D&D Beyond"));
+        let cursor = run.state.cursor;
+        run.undo();
+        assert_ne!(run.state.cursor, cursor, "the prior turn step remains");
     }
     #[test]
-    fn an_edit_in_the_sync_panel_ends_the_steps_before_it_and_says_so() {
+    fn a_sync_panel_choice_keeps_earlier_steps() {
         let (mut run, _, max) = matched_with_sheet(5);
         run.apply(Command::Next).unwrap();
         connected_tick(&mut run);
-        assert!(!run.history.is_empty());
-        let edit = serde_json::json!({"removedHitPoints": 8, "temporaryHitPoints": 0});
-        run.syncs.get_mut(&0).unwrap().set_group("hp", edit);
-        connected_tick(&mut run);
-        assert_eq!(run.state.participants[0].hp, Some(max - 8));
-        assert!(run.history.is_empty());
-        let notice = run.notice.clone().unwrap();
-        assert!(notice.contains("In the sync panel"), "{notice}");
-        assert!(
-            notice.contains(&format!("HP {} → {}", max - 5, max - 8)),
-            "{notice}"
+        let count = run.history.len();
+        run.syncs.get_mut(&0).unwrap().set_group(
+            "hp",
+            serde_json::json!({"removedHitPoints": 8, "temporaryHitPoints": 0}),
         );
+        connected_tick(&mut run);
+        assert_eq!(run.history.len(), count + 1);
+        assert!(run.undo_label().contains("D&D Beyond"));
         run.undo();
         connected_tick(&mut run);
-        assert_eq!(run.syncs[&0].values()["hp"]["removedHitPoints"], 8);
+        assert_eq!(run.state.participants[0].hp, Some(max - 5));
     }
     #[test]
     fn a_named_step_undoes_as_before_with_sync_on() {
@@ -4139,6 +4245,7 @@ mod tests {
         connected_tick(&mut run);
         run.apply(Command::Health(0, Some(max), Some(max + 8)))
             .unwrap();
+        let correction = run.undo_label();
         connected_tick(&mut run);
         reconnect(&mut run);
         read_sheet(&mut run, max, 0);
@@ -4148,7 +4255,16 @@ mod tests {
             notice.contains(&format!("maximum HP {} → {max}", max + 8)),
             "{notice}"
         );
-        assert!(run.history.is_empty(), "the named step no longer matches");
+        assert!(
+            run.history_labels
+                .iter()
+                .all(|label| format!("Undo: {label}") != correction),
+            "the stale maximum correction is removed"
+        );
+        while !run.history.is_empty() {
+            run.undo();
+            assert_eq!(run.state.participants[0].max_hp, Some(max));
+        }
     }
     #[test]
     fn hp_above_the_sheets_maximum_never_sends_a_negative_value() {
@@ -4180,12 +4296,7 @@ mod tests {
     fn the_undo_notice_stays_until_the_dm_dismisses_it() {
         let (mut run, _, max) = matched_with_sheet(5);
         read_sheet(&mut run, max, 8);
-        assert!(
-            run.notice
-                .as_ref()
-                .unwrap()
-                .contains("Undo history was cleared")
-        );
+        assert!(run.notice.as_ref().unwrap().contains("Undo for "));
         assert!(run.undo_stopped, "plain Undo gives this reason on hover");
         run.next_turn();
         run.apply(Command::Damage(0, 1)).unwrap();
@@ -4555,18 +4666,64 @@ mod tests {
         assert_eq!(run.history.len(), 2);
     }
     #[test]
-    fn a_sheet_update_clears_undo_and_says_so() {
-        let mut run = run();
-        begin(&mut run);
-        run.apply(Command::Next).unwrap();
-        run.note_sheet_update(&["Guard 1".to_owned()]);
-        assert!(run.history.is_empty());
-        assert_eq!(run.undo_label(), "Undo");
+    fn a_sheet_update_keeps_unrelated_steps_and_never_restores_old_sheet_values() {
+        let (mut run, _, max) = matched_with_sheet(5);
+        let earlier = run.history.len();
+        let unrelated_hp = run.state.participants[1].hp;
+        let unrelated_temp = run.state.participants[1].temporary_hp;
+        run.apply(Command::Damage(1, 5)).unwrap();
+        run.apply(Command::Damage(0, 1)).unwrap();
+        connected_tick(&mut run);
+        read_sheet(&mut run, max, 6); // Acknowledge the local damage first.
+        read_sheet(&mut run, max, 8);
+        assert_eq!(
+            run.history.len(),
+            earlier + 1,
+            "the unrelated step stays and the character's own step is removed: {:?}; HP {:?}; conflicts {:?}",
+            run.history_labels,
+            run.state.participants[0].hp,
+            run.syncs[&0].conflict_keys()
+        );
+        run.undo();
+        assert_eq!(run.state.participants[1].hp, unrelated_hp);
+        assert_eq!(run.state.participants[1].temporary_hp, unrelated_temp);
+        assert_eq!(run.state.participants[0].hp, Some(max - 8));
         assert!(
-            run.notice
-                .as_ref()
-                .unwrap()
-                .contains("Undo history was cleared")
+            run.state
+                .log
+                .iter()
+                .any(|line| line.contains("removed undo steps"))
+        );
+    }
+    #[test]
+    fn a_sheet_update_drops_an_atomic_step_and_logs_its_unsafe_earlier_steps() {
+        let (mut run, _, max) = matched_with_sheet(5);
+        run.apply(Command::Damage(1, 5)).unwrap();
+        run.apply(Command::Several(vec![
+            Command::Damage(0, 1),
+            Command::Damage(1, 2),
+        ]))
+        .unwrap();
+        run.apply(Command::Note(2, "Still here".into())).unwrap();
+        connected_tick(&mut run);
+        read_sheet(&mut run, max, 6);
+        read_sheet(&mut run, max, 8);
+        assert!(
+            run.history_labels
+                .iter()
+                .all(|label| !label.contains("damage"))
+        );
+        assert!(run.undo_label().contains("note"));
+        let hp = run.state.participants[1].hp;
+        run.undo();
+        assert_eq!(run.state.participants[0].hp, Some(max - 8));
+        assert_eq!(run.state.participants[1].hp, hp);
+        assert!(!run.state.participants[2].notes.contains("Still here"));
+        assert!(
+            run.state
+                .log
+                .iter()
+                .any(|line| line.contains("removed undo steps") && line.contains("damage"))
         );
     }
     #[test]
@@ -4613,7 +4770,7 @@ mod tests {
         let before = run.state.log.len();
         let line = run.roll_table(table(None)).unwrap();
         assert!(
-            line.starts_with("gifts 1d6:") && line.ends_with("A potion"),
+            line.starts_with("Rolled ") && line.contains(" on 1d6:") && line.ends_with("A potion"),
             "{line}"
         );
         assert_eq!(run.state.log.len(), before + 1);
@@ -4622,7 +4779,7 @@ mod tests {
         // A player's own dice take no draw from the run's stream.
         assert_eq!(
             run.roll_table(table(Some(3))).unwrap(),
-            "gifts: 3, typed. A potion"
+            "Typed 3 on 1d6: A potion"
         );
     }
 

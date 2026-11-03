@@ -197,23 +197,82 @@ fn show_with_density(ui: &mut egui::Ui, markdown: &str, dense: bool) {
                             cell.to_owned()
                         }
                     };
-                    let widths = column_widths(ui, &rows, &columns, &display);
+                    let mut widths = column_widths(ui, &rows, &columns, &display);
+                    if rolls.is_some() && !widths.is_empty() {
+                        // Reserve the roll mark so it never wraps above the row label.
+                        for row in rows.iter().skip(1) {
+                            let label =
+                                display(row.get(columns[0]).map(String::as_str).unwrap_or(""));
+                            let marked = format!("{} {label}", design::icons::DICE);
+                            let width = ui
+                                .painter()
+                                .layout_no_wrap(marked, Type::Stat.font(ui), colors().text)
+                                .size()
+                                .x
+                                .ceil()
+                                + design::XS;
+                            widths[0] = widths[0].max(width);
+                        }
+                    }
                     // The rules end with the table, not at the measure.
                     let table_width = widths.iter().sum::<f32>()
                         + TABLE_GAP * widths.len().saturating_sub(1) as f32;
-                    let show_table = |ui: &mut egui::Ui| {
+                    let matched = rolls
+                        .as_ref()
+                        .and_then(|marker| crate::roll_table::matched_row(ui, marker, &rows));
+                    let left = ui.cursor().left();
+                    let clip = ui.clip_rect();
+                    let mut table_clip = clip;
+                    let mut frozen = Vec::new();
+                    let mut header = Vec::new();
+                    let mut bounds = egui::Rect::NOTHING;
+                    let mut show_table = |ui: &mut egui::Ui| {
                         ui.set_width(table_width);
                         for (i, row) in rows.iter().enumerate() {
+                            let top = ui.cursor().top();
+                            let mut cells = Vec::new();
                             design::table_row(ui, &widths, TABLE_GAP, |ui, position| {
-                                let cell = display(
+                                let mut cell = display(
                                     row.get(columns[position]).map(String::as_str).unwrap_or(""),
                                 );
+                                if matched == Some(i) && position == 0 {
+                                    cell = format!("{} {cell}", design::icons::DICE);
+                                }
                                 let role = if i == 0 { Type::StatLabel } else { Type::Stat };
-                                ui.add(
-                                    egui::Label::new(role.rich(ui, cell).color(colors().text))
+                                let response = ui.add(
+                                    egui::Label::new(role.rich(ui, &cell).color(colors().text))
                                         .wrap(),
                                 );
+                                cells.push((response.rect, cell, role));
                             });
+                            let bottom = ui.cursor().top();
+                            let rect = egui::Rect::from_min_max(
+                                egui::pos2(left, top),
+                                egui::pos2(left + table_width, bottom),
+                            );
+                            bounds = bounds.union(rect);
+                            if matched == Some(i) {
+                                ui.painter().rect_filled(
+                                    rect,
+                                    egui::CornerRadius::ZERO,
+                                    colors().selected,
+                                );
+                                for (rect, text, role) in &cells {
+                                    let galley = ui.painter().layout(
+                                        text.clone(),
+                                        role.font(ui),
+                                        colors().text,
+                                        rect.width(),
+                                    );
+                                    ui.painter().galley(rect.min, galley, colors().text);
+                                }
+                            }
+                            if i == 0 {
+                                header = cells.clone();
+                            }
+                            if let Some(cell) = cells.first() {
+                                frozen.push((rect, cell.clone(), matched == Some(i)));
+                            }
                         }
                     };
                     if table_width > ui.available_width() {
@@ -232,14 +291,90 @@ fn show_with_density(ui: &mut egui::Ui, markdown: &str, dense: bool) {
                             } else {
                                 egui::scroll_area::ScrollBarVisibility::AlwaysHidden
                             };
-                            egui::ScrollArea::horizontal()
+                            let output = egui::ScrollArea::horizontal()
                                 .id_salt(ui.next_auto_id())
                                 .max_width(ui.available_width())
                                 .scroll_bar_visibility(bars)
-                                .show(ui, show_table);
+                                .show(ui, &mut show_table);
+                            table_clip = clip.intersect(output.inner_rect);
                         });
                     } else {
-                        ui.scope(show_table);
+                        ui.scope(&mut show_table);
+                    }
+                    // Paint the row label at the reader's left edge, over sideways-scrolled cells.
+                    let painter = ui.painter().with_clip_rect(table_clip);
+                    let first_width = widths.first().copied().unwrap_or_default() + TABLE_GAP;
+                    let paint_cell = |rect: egui::Rect, text: &str, role: Type| {
+                        let galley = painter.layout(
+                            text.to_owned(),
+                            role.font(ui),
+                            colors().text,
+                            rect.width(),
+                        );
+                        painter.galley(rect.min, galley, colors().text);
+                    };
+                    for (row, (cell, text, role), selected) in &frozen {
+                        let rect = egui::Rect::from_min_max(
+                            egui::pos2(left, row.top()),
+                            egui::pos2(left + first_width, row.bottom()),
+                        );
+                        painter.rect_filled(
+                            rect,
+                            egui::CornerRadius::ZERO,
+                            if *selected {
+                                colors().selected
+                            } else {
+                                colors().page
+                            },
+                        );
+                        let fixed =
+                            egui::Rect::from_min_size(egui::pos2(left, cell.top()), cell.size());
+                        paint_cell(fixed, text, *role);
+                        painter.vline(
+                            rect.right(),
+                            rect.y_range(),
+                            egui::Stroke::new(design::HAIRLINE_WIDTH, colors().hairline),
+                        );
+                    }
+                    // The header follows the top of the reader until the table leaves view.
+                    if let Some((first, _, _)) = header.first() {
+                        let height = frozen
+                            .first()
+                            .map_or(first.height(), |(row, _, _)| row.height());
+                        let top = bounds.top().max(clip.top()).min(bounds.bottom() - height);
+                        let strip = egui::Rect::from_min_size(
+                            egui::pos2(left, top),
+                            egui::vec2(table_width, height),
+                        );
+                        painter.rect_filled(strip, egui::CornerRadius::ZERO, colors().page);
+                        for (at, (_, text, role)) in header.iter().enumerate() {
+                            if at == 0 {
+                                continue;
+                            }
+                            let cell_painter = &painter;
+                            let galley = cell_painter.layout(
+                                text.clone(),
+                                role.font(ui),
+                                colors().text,
+                                widths[at],
+                            );
+                            cell_painter.galley(
+                                egui::pos2(header[at].0.left(), top),
+                                galley,
+                                colors().text,
+                            );
+                        }
+                        let (_, text, role) = &header[0];
+                        painter.rect_filled(
+                            egui::Rect::from_min_size(strip.min, egui::vec2(first_width, height)),
+                            egui::CornerRadius::ZERO,
+                            colors().page,
+                        );
+                        paint_cell(
+                            egui::Rect::from_min_size(strip.min, egui::vec2(widths[0], height)),
+                            text,
+                            *role,
+                        );
                     }
                     if let Some(marker) = rolls.take() {
                         crate::roll_table::roll_control(ui, &marker, &rows);

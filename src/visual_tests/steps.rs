@@ -20,12 +20,9 @@ pub const SEARCH_LOOKUP: &str = "Search everything";
 pub const CLEAR_SEARCH: &str = "Clear";
 pub const SIDEBAR_CAMPAIGN_DROPDOWN: usize = 0;
 pub const LIBRARY_PACKAGE_DROPDOWN: usize = 1;
-pub const COPY_DESTINATION_DROPDOWN: usize = 2;
 pub const BACK_TO_RUN: &str = "Back to run";
 pub const COPY_TO: &str = "Copy to…";
-pub const REVIEW_COPY: &str = "Review copy";
 pub const CREATE_COPY: &str = "Create copy";
-pub const CLOSE_COPY: &str = "Close";
 pub const EDIT_MARKDOWN: &str = "Edit Markdown";
 pub const UNSAVED_NOTE: &str = "Unsaved";
 
@@ -183,8 +180,6 @@ pub fn participant_is_selected(d: &Driver<'_>, name: &str) -> bool {
 /// the destination the dialog starts with.
 pub fn copy_open_entry_to_campaign(d: &mut Driver<'_>) {
     d.click(COPY_TO);
-    d.click(REVIEW_COPY);
-    d.expect("Ready to copy");
     d.click(CREATE_COPY);
     d.expect("Saved: ");
 }

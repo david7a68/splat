@@ -17,7 +17,7 @@ use std::{
 };
 use uuid::Uuid;
 
-const RESULT_ROW: f32 = 40.0;
+const RESULT_ROW: f32 = design::XL + design::XS;
 pub const SEARCH_NAME: &str = "Search everything";
 /// How many lines of a long note show where the words were found.
 const FOUND_LINES: usize = 3;
@@ -968,8 +968,8 @@ impl Lookup {
         }
         let matches = self.matches.as_ref().unwrap().1.clone();
         if before != self.query && !query.is_empty() {
-            // In a short panel the best match opens by itself, and its text gets the height.
-            self.results_open = matches.is_empty() || ui.available_height() >= 600.0;
+            // Open the best match and keep the other answers in view.
+            self.results_open = true;
             match matches.first() {
                 Some(Hit::Entry(top)) => {
                     let (position, heading) = index.target_of(*top);
@@ -978,66 +978,6 @@ impl Lookup {
                     self.reading_written = None;
                 }
                 Some(Hit::Written(top)) => self.reading_written = Some(*top),
-                None => {}
-            }
-        }
-        // Outside the results, because a new name can also match unrelated prose.
-        if let Some(campaign) = self.campaign.clone() {
-            let mut made = None;
-            let mut generate = false;
-            ui.horizontal_wrapped(|ui| {
-                if !query.is_empty() {
-                    for (label, kind) in [("New NPC", "npc"), ("New location", "location")] {
-                        if Action::quiet(label)
-                            .icon(icons::ADD)
-                            .density(Density::Read)
-                            .show(ui)
-                            .clicked()
-                        {
-                            made = Some(world::create_entry(&campaign, &self.query, kind));
-                        }
-                    }
-                }
-                generate = self.generated.is_none()
-                    && Action::quiet("Generate NPC")
-                        .icon(icons::DICE)
-                        .density(Density::Read)
-                        .show(ui)
-                        .clicked();
-            });
-            let mut reroll = generate;
-            if let Some(npc) = &self.generated {
-                let (saved, again, discard) = generated_card(ui, npc, &self.generator_problems);
-                reroll = again;
-                if saved {
-                    made = Some(world::create_generated(&campaign, npc));
-                }
-                if discard {
-                    self.generated = None;
-                    self.create_error = None;
-                }
-            }
-            if reroll {
-                let tables = index.npc_tables();
-                match crate::npc_generator::roll(&tables) {
-                    Ok(npc) => {
-                        self.generated = Some(npc);
-                        self.create_error = None;
-                    }
-                    Err(error) => self.create_error = Some(error),
-                }
-                self.generator_problems = tables.problems;
-            }
-            match made {
-                Some(Ok(id)) => {
-                    self.generated = None;
-                    self.create_error = None;
-                    self.query.clear();
-                    self.results_open = false;
-                    self.refresh();
-                    self.waiting_for = Some(id);
-                }
-                Some(Err(error)) => self.create_error = Some(error),
                 None => {}
             }
         }
@@ -1079,19 +1019,6 @@ impl Lookup {
         }
         let show_results = self.results_open && !query.is_empty();
         if show_results {
-            ui.horizontal(|ui| {
-                ui.label(
-                    Type::Small
-                        .rich(
-                            ui,
-                            format!(
-                                "{} · everything",
-                                design::count(matches.len(), "result", "results")
-                            ),
-                        )
-                        .color(colors().muted),
-                );
-            });
             if matches.is_empty() {
                 ui.label(
                     Type::Body
@@ -1100,46 +1027,95 @@ impl Lookup {
                 );
             }
             // The reader stays the larger part of the panel, even at the minimum window.
-            let rows = matches
-                .len()
-                .min(if ui.available_height() < 600.0 { 3 } else { 5 });
+            let rows = matches.len().min(5);
+            let results: Vec<_> = matches
+                .iter()
+                .take(rows)
+                .enumerate()
+                .map(|(row, hit)| match *hit {
+                    Hit::Entry(position) => {
+                        let item = &index.items[position];
+                        (
+                            item.entry.name.clone(),
+                            format!("{} · {}", item.subtitle, item.owner),
+                            self.reading_written.is_none() && row == self.highlight,
+                        )
+                    }
+                    Hit::Written(at) => {
+                        let written = &self.written[at];
+                        (
+                            written.title.clone(),
+                            written.detail.clone(),
+                            self.reading_written == Some(at) && row == self.highlight,
+                        )
+                    }
+                })
+                .collect();
+            let width = results
+                .iter()
+                .map(|(title, detail, _)| {
+                    ui.painter()
+                        .layout_no_wrap(
+                            format!("{title} · {detail}"),
+                            Type::Small.font(ui),
+                            colors().text,
+                        )
+                        .size()
+                        .x
+                        + design::S
+                })
+                .fold(ui.available_width(), f32::max);
             ui.spacing_mut().item_spacing.y = 0.0;
-            egui::ScrollArea::vertical()
+            egui::ScrollArea::both()
                 .id_salt("lookup_results")
-                .max_height(RESULT_ROW * rows as f32)
+                .max_height(RESULT_ROW * rows as f32 + design::M)
                 .auto_shrink([false, true])
-                .show_rows(ui, RESULT_ROW, matches.len(), |ui, range| {
+                .show_rows(ui, RESULT_ROW, rows, |ui, range| {
+                    ui.set_width(width);
                     for row in range {
-                        let hit = matches[row];
-                        let (title, detail, selected) = match hit {
-                            Hit::Entry(position) => {
-                                let item = &index.items[position];
-                                (
-                                    item.entry.name.as_str(),
-                                    format!("{} · {}", item.subtitle, item.owner),
-                                    self.reading_written.is_none()
-                                        && self.current == Some(position),
-                                )
-                            }
-                            Hit::Written(at) => {
-                                let written = &self.written[at];
-                                (
-                                    written.title.as_str(),
-                                    written.detail.clone(),
-                                    self.reading_written == Some(at),
-                                )
-                            }
-                        };
-                        let response =
-                            design::two_line_row(ui, RESULT_ROW, selected, title, &detail);
+                        let (title, detail, selected) = &results[row];
+                        let response = design::row(ui, RESULT_ROW, *selected, title, |ui, rect| {
+                            let galley = ui.painter().layout_no_wrap(
+                                format!("{title} · {detail}"),
+                                Type::Small.font(ui),
+                                colors().text,
+                            );
+                            ui.painter().galley(
+                                rect.left_center() - egui::vec2(0.0, galley.size().y / 2.0),
+                                galley,
+                                colors().text,
+                            );
+                        })
+                        .on_hover_text(format!("{title} · {detail}"));
                         if response.clicked() {
-                            chosen = Some(hit);
+                            chosen = Some(matches[row]);
                         }
                     }
                 });
             ui.spacing_mut().item_spacing.y = design::XS;
         }
+        if show_results && matches.len() > 5 {
+            ui.menu_button(format!("Show all {}", matches.len()), |ui| {
+                egui::ScrollArea::vertical()
+                    .max_height(design::READER_MEASURE)
+                    .show(ui, |ui| {
+                        for hit in matches {
+                            let name = match hit {
+                                Hit::Entry(at) => &index.items[*at].entry.name,
+                                Hit::Written(at) => &self.written[*at].title,
+                            };
+                            if design::link(ui, name).clicked() {
+                                chosen = Some(*hit);
+                                ui.close();
+                            }
+                        }
+                    });
+            });
+        }
         if let Some(hit) = chosen {
+            if let Some(row) = matches.iter().position(|candidate| *candidate == hit) {
+                self.highlight = row;
+            }
             match hit {
                 Hit::Entry(position) => {
                     self.reading_written = None;
@@ -1150,6 +1126,89 @@ impl Lookup {
             // Arrow keys walk the list. A click on a row means read it.
             if !response.has_focus() {
                 self.results_open = false;
+            }
+        }
+        // Outside the results, because a new name can also match unrelated prose.
+        if let Some(campaign) = self.campaign.clone() {
+            let mut made = None;
+            let mut generate = false;
+            ui.horizontal_wrapped(|ui| {
+                if !query.is_empty()
+                    && !index
+                        .items
+                        .iter()
+                        .any(|item| item.entry.name.eq_ignore_ascii_case(&query))
+                    && !self
+                        .written
+                        .iter()
+                        .any(|item| item.title.eq_ignore_ascii_case(&query))
+                {
+                    let name = self
+                        .query
+                        .split_whitespace()
+                        .map(|word| {
+                            let mut chars = word.chars();
+                            chars.next().map_or_else(String::new, |first| {
+                                first.to_uppercase().collect::<String>()
+                                    + &chars.as_str().to_lowercase()
+                            })
+                        })
+                        .collect::<Vec<_>>()
+                        .join(" ");
+                    for (word, kind) in [("New NPC", "npc"), ("New location", "location")] {
+                        let label = format!("{word} \"{name}\"");
+                        if Action::quiet(&label)
+                            .icon(icons::ADD)
+                            .density(Density::Read)
+                            .show(ui)
+                            .clicked()
+                        {
+                            made = Some(world::create_entry(&campaign, &name, kind));
+                        }
+                    }
+                }
+                generate = query.is_empty()
+                    && self.generated.is_none()
+                    && Action::quiet("Generate NPC")
+                        .icon(icons::DICE)
+                        .density(Density::Read)
+                        .show(ui)
+                        .clicked();
+            });
+            let mut reroll = generate;
+            if let Some(npc) = &self.generated {
+                let (saved, again, discard) = generated_card(ui, npc, &self.generator_problems);
+                reroll = again;
+                if saved {
+                    made = Some(world::create_generated(&campaign, npc));
+                }
+                if discard {
+                    self.generated = None;
+                    self.create_error = None;
+                }
+            }
+            if reroll {
+                let tables = index.npc_tables();
+                match crate::npc_generator::roll(&tables) {
+                    Ok(npc) => {
+                        self.generated = Some(npc);
+                        self.create_error = None;
+                    }
+                    Err(error) => self.create_error = Some(error),
+                }
+                self.generator_problems = tables.problems;
+            }
+            match made {
+                Some(Ok(id)) => {
+                    self.generated = None;
+                    self.create_error = None;
+                    self.query.clear();
+                    self.results_open = false;
+                    self.refresh();
+                    self.waiting_for = Some(id);
+                }
+                Some(Err(error)) => self.create_error = Some(error),
+                None => {}
             }
         }
         design::rule(ui);
@@ -1199,7 +1258,19 @@ impl Lookup {
                 }
             });
         });
+        if self.library_draft {
+            ui.label(
+                Type::Small
+                    .rich(ui, "Save or discard the Library draft first.")
+                    .color(colors().muted),
+            );
+        }
         let mut nav = self.reader.choices(ui, &index);
+        if ui.rect_contains_pointer(ui.available_rect_before_wrap())
+            && ui.input(|input| input.smooth_scroll_delta.y != 0.0)
+        {
+            self.results_open = false;
+        }
         let (reader, campaign) = (&mut self.reader, self.campaign.as_ref());
         egui::ScrollArea::vertical()
             .id_salt(("lookup_reader", current.entry.id))

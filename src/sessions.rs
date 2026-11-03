@@ -468,8 +468,18 @@ pub struct Recording {
     pub review: bool,
     /// What the DM must know about the result, if anything.
     pub warning: Option<String>,
+    /// A retained processing failure, cancellation, or recorder stop.
+    pub status: Option<String>,
     /// The events an LLM marked. The DM chooses which go on the timeline.
     pub markers: Vec<crate::timeline::Marker>,
+}
+
+impl Recording {
+    pub fn check_missing(&self) -> bool {
+        self.warning
+            .as_deref()
+            .is_some_and(|warning| warning.contains(crate::processing::NO_CHECK_WARNING))
+    }
 }
 
 pub fn recordings_folder(folder: &Path, session: Uuid) -> PathBuf {
@@ -500,6 +510,7 @@ pub fn list_recordings(folder: &Path, session: Uuid) -> Vec<Recording> {
                 marked: crate::processing::marked_path(&path).exists(),
                 review: crate::processing::review_path(&path).exists(),
                 warning: fs::read_to_string(crate::processing::warning_path(&path)).ok(),
+                status: fs::read_to_string(path.with_extension("state.txt")).ok(),
                 markers: [
                     crate::processing::marked_path(&path),
                     crate::processing::summary_path(&path),
@@ -532,6 +543,7 @@ pub fn delete_recording(path: &Path) -> Result<(), String> {
         crate::processing::cleaned_path(path),
         crate::processing::review_path(path),
         crate::processing::warning_path(path),
+        path.with_extension("state.txt"),
     ] {
         match fs::remove_file(made) {
             Ok(()) => {}
@@ -1566,15 +1578,25 @@ mod tests {
         fs::write(folder.join("2026-11-01 19-00.wav"), &wav).unwrap();
         fs::write(folder.join("2026-11-01 21-00.wav"), &wav).unwrap();
         fs::write(folder.join("2026-11-01 21-00.transcript.md"), "x").unwrap();
+        fs::write(
+            folder.join("2026-11-01 21-00.state.txt"),
+            "Failed at part 3 of 24: busy",
+        )
+        .unwrap();
         let list = list_recordings(dir.path(), session);
         assert_eq!(list.len(), 2);
         assert_eq!(list[0].name, "2026-11-01 21-00");
         assert_eq!(list[0].seconds, Some(2));
         assert!(list[0].transcript && !list[0].summary);
+        assert_eq!(
+            list[0].status.as_deref(),
+            Some("Failed at part 3 of 24: busy")
+        );
         assert!(!list[1].transcript);
 
         delete_recording(&list[0].path).unwrap();
         assert!(!folder.join("2026-11-01 21-00.transcript.md").exists());
+        assert!(!folder.join("2026-11-01 21-00.state.txt").exists());
         assert_eq!(list_recordings(dir.path(), session).len(), 1);
         assert!(list_recordings(dir.path(), Uuid::from_u128(4)).is_empty());
     }
