@@ -146,9 +146,8 @@ fn interactive(node: &AccessKitNode<'_>) -> bool {
     }
 }
 
-/// egui's own scroll bar: unnamed, with no role, thin, and lying wholly outside a scroll
-/// surface, along the full length of that surface's edge. Scroll content lies inside the
-/// surface, and a control the app draws has a role and a name, so neither can match.
+/// Egui's own scroll bar: unnamed, with no role, thin, and following its surface
+/// along the full length of an edge. A nested horizontal bar can float upward.
 fn scroll_bar(node: &AccessKitNode<'_>, rect: egui::Rect, surfaces: &[egui::Rect]) -> bool {
     const SAME_EDGE: f32 = 1.0;
     node.role() == Role::Unknown
@@ -161,7 +160,8 @@ fn scroll_bar(node: &AccessKitNode<'_>, rect: egui::Rect, surfaces: &[egui::Rect
                 && rect.left() <= surface.right() + CHROME_THICKNESS;
             let wide = (rect.left() - surface.left()).abs() <= SAME_EDGE
                 && (rect.right() - surface.right()).abs() <= SAME_EDGE
-                && rect.top() >= surface.bottom()
+                // Egui moves a nested bar up into the visible part of its parent.
+                && rect.top() >= surface.top()
                 && rect.top() <= surface.bottom() + CHROME_THICKNESS;
             tall || wide
         })
@@ -238,7 +238,9 @@ fn walk<'t>(
         if scroll_surface(&child.accesskit_node()).is_some() {
             passed += 1;
         }
-        visit(&child, scope, inner, parent_is_window, &surfaces);
+        // Content comes before its own surface; egui's bars come after it. Only
+        // earlier surfaces can identify a bar, including one floated over content.
+        visit(&child, scope, inner, parent_is_window, &surfaces[..passed]);
         walk(&child, scope, inner, depth + 1, visit);
     }
 }
@@ -253,6 +255,40 @@ pub fn visit_nodes<'t>(
     walk(&root, id, None, 0, &mut |node, _, clip, _, _| {
         visit(node, clip)
     });
+}
+
+/// A real horizontal bar proves that content cut at this surface's sides can be
+/// revealed. Do not treat clipping in ordinary vertical readers this way.
+pub fn horizontal_scroll_regions(harness: &Harness<'_, Splat>) -> Vec<egui::Rect> {
+    let root = harness.root();
+    let mut regions = Vec::new();
+    walk(
+        &root,
+        root.accesskit_node().id().0,
+        None,
+        0,
+        &mut |node, _, _, _, surfaces| {
+            let access = node.accesskit_node();
+            if let Some(rect) = rect_of(&access)
+                && rect.width() > rect.height()
+            {
+                for surface in surfaces {
+                    if scroll_bar(&access, rect, &[*surface]) {
+                        regions.push(*surface);
+                    }
+                }
+            }
+        },
+    );
+    regions
+}
+
+fn can_scroll_sideways(rect: egui::Rect, clip: egui::Rect, regions: &[egui::Rect]) -> bool {
+    regions.iter().any(|region| {
+        region.intersects(rect)
+            && (region.left() - clip.left()).abs() <= crate::design::XS
+            && (region.right() - clip.right()).abs() <= crate::design::XS
+    })
 }
 
 /// Controls, and labels for the overlap and clipping checks. See `Control::is_label`.
@@ -322,6 +358,7 @@ const ELISION_ALLOWED: &[(&str, &str)] = &[(
 /// painted it, unless it is in the named list above.
 pub fn cut_text(
     shapes: &[egui::epaint::ClippedShape],
+    horizontal_regions: &[egui::Rect],
     scenario: &str,
     state: &str,
     window: &str,
@@ -329,16 +366,20 @@ pub fn cut_text(
     fn search(
         shape: &egui::Shape,
         clip: egui::Rect,
+        horizontal_regions: &[egui::Rect],
         found: &mut Vec<(String, egui::Rect, &'static str)>,
     ) {
         match shape {
-            egui::Shape::Vec(shapes) => shapes.iter().for_each(|shape| search(shape, clip, found)),
+            egui::Shape::Vec(shapes) => shapes
+                .iter()
+                .for_each(|shape| search(shape, clip, horizontal_regions, found)),
             egui::Shape::Text(text) => {
                 let bounds = text.visual_bounding_rect();
                 let words = text.galley.job.text.clone();
                 if text.galley.elided {
                     found.push((words, bounds, "Cut to an ellipsis"));
                 } else if bounds.intersects(clip)
+                    && !can_scroll_sideways(bounds, clip, horizontal_regions)
                     && (bounds.right() > clip.right() + OVERLAP_TOLERANCE
                         || bounds.left() < clip.left() - OVERLAP_TOLERANCE)
                 {
@@ -350,7 +391,12 @@ pub fn cut_text(
     }
     let mut found = Vec::new();
     for clipped in shapes {
-        search(&clipped.shape, clipped.clip_rect, &mut found);
+        search(
+            &clipped.shape,
+            clipped.clip_rect,
+            horizontal_regions,
+            &mut found,
+        );
     }
     found
         .into_iter()
@@ -401,6 +447,7 @@ fn display_name(control: &Control) -> String {
 /// Run the per-state checks over the controls in the tree.
 pub fn inspect(
     controls: &[Control],
+    horizontal_regions: &[egui::Rect],
     viewport: egui::Rect,
     scenario: &str,
     state: &str,
@@ -441,6 +488,9 @@ pub fn inspect(
         // Text cut off at the side of its pane cannot be read, and no scroll reveals it.
         if visible
             && !control.chrome
+            && !control
+                .clip
+                .is_some_and(|clip| can_scroll_sideways(control.rect, clip, horizontal_regions))
             && (control.rect.left() < shown(control).left() - OVERLAP_TOLERANCE
                 || control.rect.right() > shown(control).right() + OVERLAP_TOLERANCE)
         {
@@ -848,7 +898,7 @@ mod tests {
 
     fn checks_for(controls: &[Control]) -> Vec<String> {
         let viewport = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(400.0, 300.0));
-        inspect(controls, viewport, "seeded", "state", "400x300")
+        inspect(controls, &[], viewport, "seeded", "state", "400x300")
             .into_iter()
             .map(|violation| violation.check)
             .collect()
@@ -908,6 +958,94 @@ mod tests {
         let mut cut = control("Save", at(10.0, 10.0, 80.0, 30.0));
         cut.clip = Some(at(0.0, 0.0, 50.0, 300.0));
         assert!(checks_for(&[cut]).contains(&"clipped".to_owned()));
+    }
+
+    #[test]
+    fn horizontal_clipping_is_allowed_only_where_a_real_scroll_bar_can_reveal_it() {
+        let mut harness = Harness::builder()
+            .with_size(egui::vec2(300.0, 240.0))
+            .build_state(
+                |ctx, _: &mut crate::Splat| {
+                    egui::CentralPanel::default().show(ctx, |ui| {
+                        ui.spacing_mut().scroll = egui::style::ScrollStyle::solid();
+                        egui::ScrollArea::vertical().show(ui, |ui| {
+                            egui::ScrollArea::horizontal()
+                                .id_salt("wide-table")
+                                .show(ui, |ui| {
+                                    ui.set_min_size(egui::vec2(800.0, 800.0));
+                                    ui.horizontal(|ui| {
+                                        ui.add_space(200.0);
+                                        ui.label("A column beyond the visible edge");
+                                    });
+                                });
+                        });
+                    });
+                },
+                crate::Splat::default(),
+            );
+        harness.run_steps(3);
+        let regions = horizontal_scroll_regions(&harness);
+        assert_eq!(regions.len(), 1);
+        let found = controls(&harness);
+        let check = |regions: &[egui::Rect]| {
+            inspect(
+                &found,
+                regions,
+                harness.ctx.content_rect(),
+                "seeded",
+                "state",
+                "300x240",
+            )
+            .into_iter()
+            .filter(|violation| violation.check == "clipped")
+            .count()
+        };
+        assert!(check(&[]) > 0, "the column starts partly outside the pane");
+        assert_eq!(check(&regions), 0);
+        assert!(!cut_text(&harness.output().shapes, &[], "seeded", "state", "300x240").is_empty());
+        assert!(
+            cut_text(
+                &harness.output().shapes,
+                &regions,
+                "seeded",
+                "state",
+                "300x240"
+            )
+            .is_empty()
+        );
+        assert!(
+            found
+                .iter()
+                .any(|control| { control.chrome && control.rect.width() > control.rect.height() }),
+            "the bar floated up by the outer reader still counts as chrome"
+        );
+    }
+
+    #[test]
+    fn a_thin_unnamed_control_inside_horizontal_content_is_not_chrome() {
+        let mut harness = Harness::builder()
+            .with_size(egui::vec2(300.0, 240.0))
+            .build_state(
+                |ctx, _: &mut crate::Splat| {
+                    egui::CentralPanel::default().show(ctx, |ui| {
+                        ui.spacing_mut().scroll = egui::style::ScrollStyle::solid();
+                        let width = ui.available_width();
+                        egui::ScrollArea::horizontal().show(ui, |ui| {
+                            ui.allocate_exact_size(egui::vec2(width, 8.0), egui::Sense::click());
+                            ui.set_min_size(egui::vec2(800.0, 80.0));
+                        });
+                    });
+                },
+                crate::Splat::default(),
+            );
+        harness.run_steps(3);
+        let found: Vec<_> = controls(&harness)
+            .into_iter()
+            .filter(|control| !control.is_label() && control.rect.height() <= CHROME_THICKNESS)
+            .collect();
+        assert_eq!(found.len(), 2, "the control and the real bar: {found:?}");
+        assert_eq!(found.iter().filter(|control| control.chrome).count(), 1);
+        assert!(checks_for(&found).contains(&"target-size".to_owned()));
     }
 
     /// A long scrolled note passes behind a smaller scroll area above it. Its own area clips
@@ -991,10 +1129,11 @@ mod tests {
                 crate::Splat::default(),
             );
         harness.run_steps(2);
-        let details: Vec<String> = cut_text(&harness.output().shapes, "seeded", "state", "200x100")
-            .into_iter()
-            .map(|violation| violation.detail)
-            .collect();
+        let details: Vec<String> =
+            cut_text(&harness.output().shapes, &[], "seeded", "state", "200x100")
+                .into_iter()
+                .map(|violation| violation.detail)
+                .collect();
         assert!(
             details.iter().any(|d| d.starts_with("Cut to an ellipsis")),
             "{details:?}"

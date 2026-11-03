@@ -51,13 +51,72 @@ existing scroll-bar and resize-handle allowances to the ergonomics baseline;
 it has no workflow, target-size, clipping or overlap failures in app controls.
 Independent Standards and Spec reviews found no actionable issues.
 
-## Next iteration
+Merged as [PR 35](https://github.com/david7a68/splat/pull/35).
+
+## Iteration 2: readable tables
 
 Visual review found a moderate issue in the Wizard class table at the minimum
-window size: words such as “Memorize” and “Subclass” break into a few letters per
-line. The table needs readable column widths and horizontal scrolling when it
-cannot fit. Evidence: `library-browse__06-class-scrolled__960x640.png` in the
-before captures. Review wide tables in both Library and Lookup.
+window size: words such as “Memorize” and “Subclass” broke into a few letters per
+line. Evidence: `library-browse__06-class-scrolled__960x640.png` in the before
+captures. This affected both Library and Lookup because they share a reader.
+
+Columns now keep their longest word whole. Tables that cannot fit scroll
+sideways, with a short instruction. An ordinary wheel gesture still scrolls
+the note down. A nested scrollbar stays hidden until its table reaches the view,
+so it cannot cover earlier prose.
+
+The `reader-tables` workflow creates and saves a homebrew rule with 14 columns,
+reads its final column in Library, and reads that column again beside a live
+fight. A rendered unit check covers 280, 360 and 488 pixel reader widths. It
+failed before the fix because “Memorize Spell” became ten lines of fragments.
+The new ergonomics check recognizes actual horizontal scrollbars, including
+nested bars, and permits the side clipping they can reveal. Its regression test
+also checks that clipping without such a bar still fails.
+
+Visual review covers the Wizard table and both ends of the homebrew table in
+Library and Lookup at all three window sizes. Words remain whole, the last
+column can be read, prose after the table stays within the reader, and the
+current turn and Next turn stay visible beside Lookup. Captures are under
+`artifacts/screenshots/ui-audit-iteration-2/`.
+
+Validation: all 651 tests passed (11 manual tests ignored), including all 42 UI
+scenarios. Formatting and Clippy with warnings denied passed. The baseline adds
+only egui scrollbar counts. No app-control or workflow allowance was added.
+The check also has a regression for a thin, unnamed control inside scrollable
+content, so that control cannot be mistaken for a scrollbar.
+
+## Convergence review
+
+The final visual pass covers the eight workflows above, plus empty states,
+large rosters, long names, sync conflicts, saved-run recovery, session recording
+states, and resized columns. Real app captures are under the ignored
+`artifacts/screenshots/ui-audit-final/` folder. Seven contact sheets cover the
+remaining 28 scenarios; the table fixes were also checked at full resolution.
+The visual pass found no remaining moderate or higher issue.
+
+The existing nine clipped-label reports occur only after resizing Library
+columns at 960×640. They are list titles or metadata shortened with an ellipsis;
+opening an entry shows its full title and content. They are minor, and the
+baseline was not expanded for them. The final run enforced the saved baseline:
+42 scenarios, 870 captures, zero regressions and zero workflow failures.
+
+### Standards
+
+The independent review found no documented-standard violations or concrete
+regressions. It noted possible duplication of the wide-table test fixture
+between the rendered unit check and the UI journey. This is a low-priority
+judgement call; the fixtures remain independent at the two test levels.
+
+### Spec
+
+The independent review found no actionable findings. Table words and the final
+column are readable in both readers. Ordinary wheel input reaches the outer
+note. The clipping exception requires a real horizontal scrollbar, and tests
+retain checks for unscrollable clipping and unnamed app controls.
+
+Review totals: Standards 0 hard violations, 1 low-priority suggestion; Spec 0
+findings. Neither axis found a moderate or higher issue. The code and visual
+audit has converged, so no further fix iteration is needed.
 
 ## Limits
 

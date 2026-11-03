@@ -2917,11 +2917,21 @@ mod tests {
                 _ => None,
             })
             .collect();
-        assert!(
-            texts
-                .iter()
-                .all(|text| text.pos.x + text.galley.size().x <= 390.0)
-        );
+        // Stat-sized table cells can extend sideways inside their scroll area.
+        // Prose and feature links must still fit without horizontal scrolling.
+        assert!(output.shapes.iter().all(|shape| {
+            let egui::Shape::Text(text) = &shape.shape else {
+                return true;
+            };
+            text.pos.x + text.galley.size().x <= 390.0
+                || (shape.clip_rect.right() <= 390.0
+                    && text
+                        .galley
+                        .job
+                        .sections
+                        .iter()
+                        .all(|section| section.format.font_id.size == Type::Stat.size()))
+        }));
         let rendered = texts
             .iter()
             .map(|text| text.galley.job.text.as_str())

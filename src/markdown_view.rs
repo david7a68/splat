@@ -201,8 +201,8 @@ fn show_with_density(ui: &mut egui::Ui, markdown: &str, dense: bool) {
                     // The rules end with the table, not at the measure.
                     let table_width = widths.iter().sum::<f32>()
                         + TABLE_GAP * widths.len().saturating_sub(1) as f32;
-                    ui.scope(|ui| {
-                        ui.set_max_width(ui.available_width().min(table_width));
+                    let show_table = |ui: &mut egui::Ui| {
+                        ui.set_width(table_width);
                         for (i, row) in rows.iter().enumerate() {
                             design::table_row(ui, &widths, TABLE_GAP, |ui, position| {
                                 let cell = display(
@@ -215,7 +215,32 @@ fn show_with_density(ui: &mut egui::Ui, markdown: &str, dense: bool) {
                                 );
                             });
                         }
-                    });
+                    };
+                    if table_width > ui.available_width() {
+                        ui.label(
+                            Type::Small
+                                .rich(ui, "More columns: scroll sideways or use Shift+wheel.")
+                                .color(colors().muted),
+                        );
+                        ui.scope(|ui| {
+                            // Keep an ordinary wheel gesture scrolling the surrounding note.
+                            ui.style_mut().always_scroll_the_only_direction = false;
+                            // Egui floats a nested bar into its parent's visible area. Wait
+                            // until the table starts there, so it cannot cover earlier prose.
+                            let bars = if ui.cursor().top() < ui.clip_rect().bottom() {
+                                egui::scroll_area::ScrollBarVisibility::VisibleWhenNeeded
+                            } else {
+                                egui::scroll_area::ScrollBarVisibility::AlwaysHidden
+                            };
+                            egui::ScrollArea::horizontal()
+                                .id_salt(ui.next_auto_id())
+                                .max_width(ui.available_width())
+                                .scroll_bar_visibility(bars)
+                                .show(ui, show_table);
+                        });
+                    } else {
+                        ui.scope(show_table);
+                    }
                     if let Some(marker) = rolls.take() {
                         crate::roll_table::roll_control(ui, &marker, &rows);
                     }
@@ -462,8 +487,8 @@ fn local_figure_links(markdown: &str, local: impl Fn(&str) -> bool) -> Cow<'_, s
 
 const TABLE_GAP: f32 = design::M;
 
-/// Fit columns to their text. Never narrower than a column's longest word, while
-/// there is room, so "Constitution" does not break in a side panel.
+/// Fit columns to their text without breaking words. A table that cannot fit
+/// those widths scrolls within its reader.
 fn column_widths(
     ui: &egui::Ui,
     rows: &[Vec<String>],
@@ -477,6 +502,8 @@ fn column_widths(
                 .layout_no_wrap(text.to_owned(), font.clone(), colors().text)
                 .size()
                 .x
+                .ceil()
+                + design::XS
         })
     };
     let mut natural = vec![1.0_f32; columns.len()];
@@ -498,7 +525,7 @@ fn column_widths(
     }
     let floors: f32 = floor.iter().sum();
     if floors >= available {
-        return floor.iter().map(|w| w * available / floors).collect();
+        return floor;
     }
     let share = (available - floors) / (total - floors).max(1.0);
     natural
@@ -635,6 +662,86 @@ fn flush(ui: &mut egui::Ui, job: &mut LayoutJob, target: &mut Targets) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn wide_tables_keep_whole_words_and_can_scroll_to_the_last_column() {
+        let markdown = "| Level | Proficiency Bonus | Features | Cantrips | Prepared Spells | 1st | 2nd | 3rd | 4th | 5th | 6th | 7th | 8th | 9th |\n\
+                        | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |\n\
+                        | 5 | +3 | Memorize Spell | 4 | 9 | 4 | 3 | 2 | 0 | 0 | 0 | 0 | 0 | Ninth-slot |\n";
+        for width in [280.0, 360.0, 488.0] {
+            let context = egui::Context::default();
+            design::theme::install(&context);
+            let mut output = None;
+            for frame in 0..30 {
+                let events = if frame == 2 {
+                    vec![
+                        egui::Event::PointerMoved(egui::pos2(100.0, 80.0)),
+                        egui::Event::MouseWheel {
+                            unit: egui::MouseWheelUnit::Point,
+                            delta: egui::vec2(-2000.0, 0.0),
+                            modifiers: egui::Modifiers::NONE,
+                        },
+                    ]
+                } else {
+                    vec![]
+                };
+                let rendered = context.run(
+                    egui::RawInput {
+                        screen_rect: Some(egui::Rect::from_min_size(
+                            egui::Pos2::ZERO,
+                            egui::vec2(width, 500.0),
+                        )),
+                        time: Some(f64::from(frame) / 60.0),
+                        events,
+                        ..Default::default()
+                    },
+                    |ctx| {
+                        egui::CentralPanel::default().show(ctx, |ui| show(ui, markdown));
+                    },
+                );
+                if frame == 1 {
+                    let words = rendered.shapes.iter().find_map(|shape| match &shape.shape {
+                        egui::Shape::Text(text) if text.galley.job.text == "Memorize Spell" => {
+                            Some(
+                                text.galley
+                                    .rows
+                                    .iter()
+                                    .map(|row| row.text())
+                                    .collect::<Vec<_>>(),
+                            )
+                        }
+                        _ => None,
+                    });
+                    let words = words.expect("the feature column is painted");
+                    assert!(
+                        words.iter().any(|row| row.contains("Memorize"))
+                            && words.iter().any(|row| row.contains("Spell")),
+                        "table at {width}px breaks words: {words:?}"
+                    );
+                }
+                output = Some(rendered);
+            }
+            let output = output.unwrap();
+            let last_column: Vec<_> = output
+                .shapes
+                .iter()
+                .filter_map(|shape| match &shape.shape {
+                    egui::Shape::Text(text) if text.galley.job.text == "Ninth-slot" => {
+                        Some((shape.clip_rect, text.visual_bounding_rect()))
+                    }
+                    _ => None,
+                })
+                .collect();
+            assert!(
+                output.shapes.iter().any(|shape| {
+                    matches!(&shape.shape, egui::Shape::Text(text)
+                    if text.galley.job.text == "Ninth-slot"
+                        && shape.clip_rect.contains_rect(text.visual_bounding_rect()))
+                }),
+                "the last column must be readable after horizontal scrolling at {width}px: {last_column:?}"
+            );
+        }
+    }
 
     /// Click the first letter of these words in the actual laid-out paragraph.
     fn click_words(markdown: &str, words: &str) -> (Option<String>, Option<String>, Vec<String>) {

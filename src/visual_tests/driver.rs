@@ -1113,6 +1113,15 @@ impl<'a> Driver<'a> {
 
     /// Wheel-scroll down over this point. One notch is 100 points.
     pub fn scroll_at(&mut self, pos: egui::Pos2, notches: u32) {
+        self.scroll_by(pos, notches, egui::vec2(0.0, -100.0));
+    }
+
+    /// Scroll across a table to read columns outside the pane.
+    pub fn scroll_sideways_at(&mut self, pos: egui::Pos2, notches: u32) {
+        self.scroll_by(pos, notches, egui::vec2(-100.0, 0.0));
+    }
+
+    fn scroll_by(&mut self, pos: egui::Pos2, notches: u32, delta: egui::Vec2) {
         self.film_aim(
             egui::Rect::from_center_size(pos, egui::Vec2::ZERO),
             "Scroll",
@@ -1122,7 +1131,7 @@ impl<'a> Driver<'a> {
         for _ in 0..notches {
             self.harness.event(egui::Event::MouseWheel {
                 unit: egui::MouseWheelUnit::Point,
-                delta: egui::vec2(0.0, -100.0),
+                delta,
                 modifiers: egui::Modifiers::NONE,
             });
             self.harness.step();
@@ -1393,8 +1402,13 @@ impl<'a> Driver<'a> {
         }
         let viewport = self.harness.ctx.content_rect();
         let window = format!("{}x{}", size.0, size.1);
+        let horizontal_regions: Vec<_> = ergonomics::horizontal_scroll_regions(&self.harness)
+            .into_iter()
+            .map(|rect| rect * scale)
+            .collect();
         self.outcome.violations.extend(ergonomics::inspect(
             &controls,
+            &horizontal_regions,
             viewport,
             self.scenario,
             state,
@@ -1402,6 +1416,7 @@ impl<'a> Driver<'a> {
         ));
         self.outcome.violations.extend(ergonomics::cut_text(
             &self.harness.output().shapes,
+            &horizontal_regions,
             self.scenario,
             state,
             &window,
