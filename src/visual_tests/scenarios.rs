@@ -3824,6 +3824,11 @@ pub mod world {
             d.visible_text("Rolled ") || d.has_containing("Rolled "),
             "A marked table rolls, and its row shows",
         );
+        d.observe(
+            "World table header",
+            d.visible_text("d20"),
+            "The roll table names its first column",
+        );
         d.state("world-table-rolled", Sizes::Default);
 
         d.click(NAV_ENCOUNTERS);

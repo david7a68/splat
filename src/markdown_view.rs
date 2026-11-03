@@ -201,7 +201,11 @@ fn show_with_density(ui: &mut egui::Ui, markdown: &str, dense: bool) {
                         && let Some(header) = rows.first_mut().and_then(|row| row.first_mut())
                         && header.trim().is_empty()
                     {
-                        *header = dice.clone();
+                        *header = dice
+                            .strip_prefix('1')
+                            .filter(|value| value.starts_with('d'))
+                            .unwrap_or(dice)
+                            .to_owned();
                     }
                     let mut widths = column_widths(ui, &rows, &columns, &display);
                     if rolls.is_some() && !widths.is_empty() {
@@ -528,7 +532,10 @@ fn reader_table(
     let left = ui.cursor().left();
     let outer_clip = ui.clip_rect();
     let mut moving_origin = egui::pos2(left + widths[0] + TABLE_GAP, top);
-    let mut moving_clip = outer_clip;
+    let mut moving_clip = outer_clip.intersect(egui::Rect::from_min_max(
+        egui::pos2(left + widths[0] + TABLE_GAP, outer_clip.top()),
+        outer_clip.max,
+    ));
     ui.horizontal_top(|ui| {
         ui.spacing_mut().item_spacing.x = TABLE_GAP;
         ui.allocate_ui_with_layout(
@@ -607,11 +614,6 @@ fn reader_table(
             header[0].clone(),
             colors().text,
         );
-        painter.hline(
-            header_rect.x_range(),
-            header_rect.bottom(),
-            egui::Stroke::new(design::HAIRLINE_WIDTH, colors().hairline),
-        );
         if widths.len() > 1 {
             let painter = painter.with_clip_rect(moving_clip);
             let strip = egui::Rect::from_min_size(
@@ -629,6 +631,11 @@ fn reader_table(
                 x += widths[column] + TABLE_GAP;
             }
         }
+        painter.hline(
+            header_rect.x_range(),
+            header_rect.bottom(),
+            egui::Stroke::new(design::HAIRLINE_WIDTH, colors().hairline),
+        );
     }
 }
 
