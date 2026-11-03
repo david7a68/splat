@@ -1598,12 +1598,10 @@ pub mod run_absent_player {
             }
         }
         d.state("ready-with-one-absent", Sizes::All);
-        // The turn order follows the totals, with no place taken by the absent player.
-        let turn_order = d.painted_from_label(TURN_ORDER_FIRST);
         d.observe(
             "Absent player",
-            turn_order.contains(TURN_ORDER_FIRST),
-            format!("The setup's turn order starts with the highest total: {turn_order}"),
+            !d.has("Turn order") && d.has("Technical details"),
+            "Setup opens Prep without a second roster; the first turn is checked after Begin combat",
         );
         d.observe(
             "Absent player",
@@ -1767,6 +1765,10 @@ pub mod prep_to_table {
             "Rows do not move during initiative entry",
         );
         d.state("all-initiative-entered", Sizes::Default);
+        d.goal("enter the other players' initiative");
+        d.click("Correct");
+        d.click("Resolve ties");
+        d.state("resolve-ties", Sizes::Default);
         // Tied rows keep their arrows in two fixed places, so that a second click on one lands
         // on the same arrow.
         let arrows = |d: &Driver<'_>, word: &str| -> Vec<f32> {
@@ -1784,7 +1786,7 @@ pub mod prep_to_table {
                 && downs.windows(2).all(|x| x[0] == x[1]),
             format!("Tie arrows have fixed places: up {ups:?}, down {downs:?}"),
         );
-        d.goal("enter the other players' initiative");
+        d.begin_task();
 
         d.click(BEGIN);
         d.expect(ROUND);
@@ -2162,7 +2164,7 @@ pub mod nav_state {
     const SEARCH_RESULTS: &str = "Search results";
     const MEMBER: &str = "Iselle Marrowind";
     const SHEET_PAGE: &str = "Spells";
-    const SHEET_PAGE_TEXT: &str = "Spellcasting";
+    const SHEET_PAGE_TEXT: &str = "SPELLCASTING";
     const ENCOUNTER: &str = "Bridge Ambush";
     const ROSTER_TEXT: &str = "1. Brannoch Vale";
     const NOT_IMPLEMENTED: &str = "not implemented";
@@ -2245,7 +2247,7 @@ pub mod party_from_run {
     const SHEET_PAGE: &str = "Record";
     const SHEET_SUBPAGE: &str = "Spells";
     const CASTER: &str = "Iselle Marrowind";
-    const SHEET_ONLY_TEXT: &str = "Ability scores";
+    const SHEET_ONLY_TEXT: &str = "ABILITY SCORES";
     const OTHER_ROW: &str = "Oren Thistlewick";
     const FRESHNESS: &str = "Fetched";
     const SHEET_TAB: &str = "Sheet";
@@ -3861,9 +3863,9 @@ pub mod session_notes {
         d.click(ADD_DAY);
         d.type_text("Harvest Eve");
         // A day opens what follows it, so move it to the top.
-        for _ in 0..3 {
-            d.click("Move earlier");
-        }
+        d.scroll_until(pos2(850.0, 550.0), "Place this event after", 12);
+        d.click("Place this event after");
+        d.click("Start of the timeline");
         d.state("timeline-day-added", Sizes::All);
         d.click_containing("Long rest · Day 1 · Session 1");
         d.expect("Link text");
@@ -3881,7 +3883,7 @@ pub mod session_notes {
             "An event lists the session notes that link to it",
         );
         // The Reader follows the event's name now, not the name when it was linked.
-        d.click_containing("Rest at the mill");
+        d.click_starting("Rest at the mill ·");
         d.click("Open this session");
         read_note(d);
         d.observe(
@@ -3913,7 +3915,7 @@ pub mod session_notes {
         d.expect("Rest at the mill");
 
         // Back to the note from the event, and the file is readable outside Splat.
-        d.click_containing("Rest at the mill");
+        d.click_starting("Rest at the mill ·");
         d.click("Open this session");
         d.expect(&format!("Session 1: {TITLE}"));
 
@@ -3941,7 +3943,7 @@ pub mod session_notes {
         d.click("Notes changed on disk");
         d.expect("Overwrite with my draft");
         d.click(NAV_TIMELINE);
-        d.click_containing("Rest at the mill");
+        d.click_starting("Rest at the mill ·");
         d.click("Open this session");
         d.observe(
             "T11.4",
@@ -4012,7 +4014,7 @@ pub mod session_notes {
                 .is_some_and(|text| text.contains("Edited in the template.")),
             "A template edited a moment ago is what a new session starts from",
         );
-        d.click_starting(&format!("Session 1: {TITLE}"));
+        d.click_starting(&format!("Session 1: {TITLE} ·"));
         show_plan(d);
         d.observe(
             "T11.3",
@@ -4252,7 +4254,7 @@ pub mod session_notes {
         d.press_ctrl(Key::J);
         // The panel must not follow the page to an older note.
         d.click(NAV_SESSIONS);
-        d.click_starting(&format!("Session 1: {TITLE}"));
+        d.click_starting(&format!("Session 1: {TITLE} ·"));
         d.observe(
             "T11.8",
             !d.has("Close notes"),
@@ -5471,14 +5473,14 @@ pub mod session_plan_groups {
         d.type_text("Border Watch");
         d.type_into(FIND_CREATURE, "wolf");
         d.click_beside_exact("Wolf", ADD);
-        d.click_starting("Session 1: The Crossing");
+        d.click_starting("Session 1: The Crossing ·");
         d.expect("Go to it");
         d.state("plan-group-in-another-session", Sizes::Default);
         let stays_out = !d.has("Save group");
         d.click("Go to it");
         d.click("Save group");
         d.expect("Go to Arrivals for Border Watch");
-        d.click_starting("Session 1: The Crossing");
+        d.click_starting("Session 1: The Crossing ·");
         d.expect(&format!("Go to Arrivals for {GROUP_RIVALS}"));
         d.observe(
             "T14.6",
@@ -5494,7 +5496,7 @@ pub mod session_plan {
     /// New events go to this session, by the Timeline page's own control.
     fn go_timeline_choose_session(d: &mut Driver<'_>, session: &str) {
         d.click(NAV_TIMELINE);
-        d.open_combo_at(1);
+        d.click("Session for new events");
         d.click_starting(session);
     }
 
@@ -5553,8 +5555,11 @@ pub mod session_plan {
         read_note(d);
         d.observe(
             "T12.1",
-            !d.visible_text("[[") && d.has(FIRST),
-            "The Reader shows a link as its words, and lists it to follow",
+            !d.visible_text("[[")
+                && d.nodes().iter().any(|node| {
+                    node.role == egui::accesskit::Role::Link && node.name.contains(FIRST)
+                }),
+            "The Reader shows a fight's words as an inline link",
         );
         d.state("note-read-with-links", Sizes::Default);
         show_plan(d);

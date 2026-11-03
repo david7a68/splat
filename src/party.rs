@@ -266,7 +266,16 @@ impl Party {
         if let Some(e) = &self.reader.error {
             design::message(ui, Tone::Error, e);
         }
-        self.storage_notices(ui, session.is_some());
+        if !self.reader.warnings.is_empty()
+            || !self.reader.archived.is_empty()
+            || !self.reader.conflicts.is_empty()
+        {
+            egui::ScrollArea::vertical()
+                .id_salt("party_storage_notices")
+                .max_height(ui.available_height() / 3.0)
+                .auto_shrink([false, true])
+                .show(ui, |ui| self.storage_notices(ui, session.is_some()));
+        }
         ui.ctx().request_repaint_after(Duration::from_secs(1));
         if self.reader.members.is_empty() {
             if self.reader.loaded {
@@ -410,35 +419,37 @@ impl Party {
                     .rich(ui, "Your version is kept as a copy.")
                     .color(colors().muted),
             );
-            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                if self.reader.force_waiting() {
-                    ui.label(
-                        Type::Small
-                            .rich(ui, "Waiting for D&D Beyond.")
-                            .color(colors().muted),
-                    );
-                } else if connected {
-                    if Action::quiet("Replace with D&D Beyond sheet")
-                        .density(Density::Read)
-                        .show(ui)
-                        .clicked()
-                    {
-                        if conflicts.len() == 1 {
-                            self.reader.force_read();
-                        } else {
-                            self.reader.force_read_character(id);
+            ui.horizontal(|ui| {
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    if self.reader.force_waiting() {
+                        ui.label(
+                            Type::Small
+                                .rich(ui, "Waiting for D&D Beyond.")
+                                .color(colors().muted),
+                        );
+                    } else if connected {
+                        if Action::quiet("Replace with D&D Beyond sheet")
+                            .density(Density::Read)
+                            .show(ui)
+                            .clicked()
+                        {
+                            if conflicts.len() == 1 {
+                                self.reader.force_read();
+                            } else {
+                                self.reader.force_read_character(id);
+                            }
                         }
+                    } else if design::link(ui, "Open Settings").clicked() {
+                        self.wants_settings = true;
                     }
-                } else if design::link(ui, "Open Settings").clicked() {
-                    self.wants_settings = true;
-                }
-                if design::link(ui, "Show file")
-                    .on_hover_text(path.display().to_string())
-                    .clicked()
-                    && let Ok(url) = reqwest::Url::from_file_path(path)
-                {
-                    ui.ctx().open_url(egui::OpenUrl::new_tab(url.to_string()));
-                }
+                    if design::link(ui, "Show file")
+                        .on_hover_text(path.display().to_string())
+                        .clicked()
+                        && let Ok(url) = reqwest::Url::from_file_path(path)
+                    {
+                        ui.ctx().open_url(egui::OpenUrl::new_tab(url.to_string()));
+                    }
+                });
             });
         }
         for id in self.reader.conflicts.keys() {

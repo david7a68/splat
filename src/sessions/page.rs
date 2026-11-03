@@ -564,7 +564,10 @@ fn session_row(ui: &mut egui::Ui, selected: bool, title: &str, detail: &str) -> 
     let galley = ui
         .painter()
         .layout(title.to_owned(), font.font(ui), c.text, width);
-    let lines = galley.size().y + Type::Small.line();
+    let second = ui
+        .painter()
+        .layout(detail.to_owned(), Type::Small.font(ui), c.muted, width);
+    let lines = galley.size().y + second.size().y;
     let height = (lines + design::M).max(Density::Glance.control() + design::S);
     design::row(
         ui,
@@ -576,7 +579,6 @@ fn session_row(ui: &mut egui::Ui, selected: bool, title: &str, detail: &str) -> 
             let x = rect.left() + design::S;
             let first = galley.size().y;
             ui.painter().galley(egui::pos2(x, top), galley, c.text);
-            let second = design::one_line(ui, detail, Type::Small.font(ui), c.muted, width);
             ui.painter()
                 .galley(egui::pos2(x, top + first), second, c.muted);
         },
@@ -2327,7 +2329,8 @@ impl Sessions {
                 LastTime {
                     id: note.id,
                     label: note.label(),
-                    what_happened: section_text(&body, "What happened"),
+                    what_happened: section_text(&body, "What happened")
+                        .or_else(|| section_text(&body, "Open threads")),
                 }
             });
             self.last_time = Some((selected, found));
@@ -2611,7 +2614,7 @@ impl Sessions {
                                     }
                                 }).clicked() { self.wants_saved_run = Some(saved.path.clone()); }
                             } else {
-                                let action = if position == 0 && plan.open_run.is_none() {
+                                let action = if position == 0 && plan.open_run.is_none() && !self.confirm_record {
                                     Action::primary("Start fight")
                                 } else { Action::secondary("Start fight") };
                                 if action.icon(icons::RUN).name(&format!("Start fight: {}", fight.name))
@@ -2859,8 +2862,6 @@ impl Sessions {
                             .split_whitespace()
                             .filter_map(|part| part.chars().next())
                             .collect();
-                        ui.label(Type::Small.rich(ui, initials).color(colors().muted))
-                            .on_hover_text(&row.name);
                         let hp = format!("{}/{}", known(row.hp), known(row.max_hp));
                         let mut detail = format!("{}: {hp} HP", row.name);
                         if row.temporary_hp > 0 {
@@ -2875,16 +2876,35 @@ impl Sessions {
                         for condition in &row.conditions {
                             detail.push_str(&format!(" · {condition}"));
                         }
-                        ui.label(
-                            Type::Small
-                                .rich(ui, hp)
-                                .color(design::hp_color(design::hp_state(row.hp, row.max_hp))),
-                        )
-                        .on_hover_text(detail);
+                        let mut words = egui::text::LayoutJob::default();
+                        let format = |color| egui::TextFormat {
+                            font_id: Type::Small.font(ui),
+                            color,
+                            ..Default::default()
+                        };
+                        words.append(&initials, 0.0, format(colors().muted));
+                        words.append(
+                            &format!(" {hp}"),
+                            0.0,
+                            format(design::hp_color(design::hp_state(row.hp, row.max_hp))),
+                        );
+                        if row.temporary_hp > 0 {
+                            words.append(
+                                &format!(" {}", design::temp_hp_text(row.temporary_hp)),
+                                0.0,
+                                format(colors().hp.temp),
+                            );
+                        }
+                        ui.label(words).on_hover_text(detail);
                     }
                 });
                 ui.horizontal(|ui| {
-                    if design::link(ui, "Log").clicked() {
+                    // Padding gives this short word a target of at least 24 px.
+                    let log = design::link(ui, " Log ");
+                    log.widget_info(|| {
+                        egui::WidgetInfo::labeled(egui::WidgetType::Link, true, "Log")
+                    });
+                    if log.clicked() {
                         self.show_fight_log = !self.show_fight_log;
                     }
                     ui.label(Type::Small.rich(ui, "·").color(colors().muted));

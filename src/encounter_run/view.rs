@@ -2773,11 +2773,9 @@ impl Run {
                     .color(colors().result.success),
             });
             // Notes hide corrections and tie order, so one link leads there.
-            if self.hide_panel {
-                if design::link(ui, "Open Correct").clicked() {
-                    self.panel = Panel::Record;
-                    self.close_lookup = true;
-                }
+            if self.hide_panel && design::link(ui, "Open Correct").clicked() {
+                self.panel = Panel::Record;
+                self.close_lookup = true;
             }
         });
         design::rule(ui);
@@ -3103,8 +3101,8 @@ impl Run {
                         .color(colors().muted),
                 );
                 changes_block(ui, p, false);
-                self.record_tab(ui, self.selected);
                 design::quiet_section(ui, "Resolve ties", |ui| self.turn_order_preview(ui));
+                self.record_tab(ui, self.selected);
             }
             Panel::Log => self.log_tab(ui),
             Panel::Encounter => self.notes_tab(ui),
@@ -3172,7 +3170,8 @@ impl Run {
         }
         egui::ScrollArea::vertical()
             .id_salt("run_order_preview")
-            .auto_shrink([false, false])
+            .max_height(design::READER_MEASURE / 3.0)
+            .auto_shrink([false, true])
             .show(ui, |ui| {
                 ui.spacing_mut().item_spacing.y = 0.0;
                 let order = &self.state.order;
