@@ -196,8 +196,13 @@ pub fn add_group(name: &str) -> String {
 
 /// Fight tabs share a menu when the panel has no room for all six words.
 pub fn fight_tab(d: &mut Driver<'_>, tab: &str) {
-    if !d.has(tab) {
-        d.click("Fight ▾");
+    if !d.has(tab) && tab == "Arrivals" {
+        d.press_ctrl(eframe::egui::Key::G);
+        d.expect("This fight");
+    } else {
+        if !d.has(tab) {
+            d.click("Fight ▾");
+        }
+        d.click(tab);
     }
-    d.click(tab);
 }

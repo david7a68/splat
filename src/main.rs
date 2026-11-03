@@ -540,7 +540,7 @@ impl Splat {
             }
             ui.label(Type::Small.rich(ui, advice).color(colors().muted));
             ui.add_space(design::S);
-            let loses = !(only_sync && !sync_loss);
+            let loses = !only_sync || sync_loss;
             ui.horizontal(|ui| {
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     if only_run_unsaved {

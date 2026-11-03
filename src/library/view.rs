@@ -146,6 +146,7 @@ pub(crate) fn show_run(
     )
 }
 
+#[allow(clippy::too_many_arguments)]
 fn show_inner(
     ui: &mut egui::Ui,
     name: &str,

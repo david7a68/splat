@@ -1296,41 +1296,40 @@ impl Encounters {
         let (mut back, mut save, mut discard) = (false, false, false);
         // The title and its actions need more room than the panes do.
         let two_rows = ui.available_width() < 1040.0;
-        let title =
-            |ui: &mut egui::Ui, back: &mut bool, discard: &mut bool, draft: &mut GroupDraft| {
-                *back = Action::quiet(back_word)
-                    .icon(icons::BACK)
-                    .name(back_name)
-                    .blocked_if(dirty, "Save or discard this group first.")
-                    .show(ui)
-                    .clicked();
-                let room = if two_rows { 150.0 } else { 450.0 };
-                let width = (ui.available_width() - room).clamp(120.0, 360.0);
-                let response = ui.add(
-                    egui::TextEdit::singleline(&mut draft.name)
-                        .id(design::focus_id(NAME_FIELD))
-                        .desired_width(width)
-                        .min_size(egui::vec2(0.0, Density::Scan.control()))
-                        .margin(egui::vec2(design::S, 5.0))
-                        .font(Type::Heading.font(ui)),
-                );
-                design::named(ui, &response, &format!("Group name: {}", draft.name));
-                if focus_name {
-                    design::focus_and_select(ui, response.id, &draft.name);
-                }
-                let (icon, word, color) = if dirty {
-                    (icons::DRAFT, "Unsaved", colors().document.unsaved)
-                } else if let Some(note) = &saved_note {
-                    (icons::OK, note.as_str(), colors().document.saved)
-                } else {
-                    (icons::OK, "No changes", colors().muted)
-                };
-                design::status(ui, Status { icon, word, color });
-                if dirty {
-                    *discard = Action::quiet("Discard").show(ui).clicked();
-                }
+        let title = |ui: &mut egui::Ui, back: &mut bool, draft: &mut GroupDraft| {
+            *back = Action::quiet(back_word)
+                .icon(icons::BACK)
+                .name(back_name)
+                .blocked_if(dirty, "Save or discard this group first.")
+                .show(ui)
+                .clicked();
+            let room = if two_rows { 150.0 } else { 450.0 };
+            let width = (ui.available_width() - room).clamp(120.0, 360.0);
+            let response = ui.add(
+                egui::TextEdit::singleline(&mut draft.name)
+                    .id(design::focus_id(NAME_FIELD))
+                    .desired_width(width)
+                    .min_size(egui::vec2(0.0, Density::Scan.control()))
+                    .margin(egui::vec2(design::S, 5.0))
+                    .font(Type::Heading.font(ui)),
+            );
+            design::named(ui, &response, &format!("Group name: {}", draft.name));
+            if focus_name {
+                design::focus_and_select(ui, response.id, &draft.name);
+            }
+        };
+        let actions = |ui: &mut egui::Ui, save: &mut bool, discard: &mut bool| {
+            let (icon, word, color) = if dirty {
+                (icons::DRAFT, "Unsaved", colors().document.unsaved)
+            } else if let Some(note) = &saved_note {
+                (icons::OK, note.as_str(), colors().document.saved)
+            } else {
+                (icons::OK, "No changes", colors().muted)
             };
-        let actions = |ui: &mut egui::Ui, save: &mut bool| {
+            design::status(ui, Status { icon, word, color });
+            if dirty {
+                *discard = Action::quiet("Discard").show(ui).clicked();
+            }
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 *save = if dirty && !has_run {
                     Action::primary("Save group")
@@ -1344,12 +1343,12 @@ impl Encounters {
             });
         };
         if two_rows {
-            ui.horizontal(|ui| title(ui, &mut back, &mut discard, draft));
-            ui.horizontal(|ui| actions(ui, &mut save));
+            ui.horizontal(|ui| title(ui, &mut back, draft));
+            ui.horizontal(|ui| actions(ui, &mut save, &mut discard));
         } else {
             ui.horizontal(|ui| {
-                title(ui, &mut back, &mut discard, draft);
-                actions(ui, &mut save);
+                title(ui, &mut back, draft);
+                actions(ui, &mut save, &mut discard);
             });
         }
         design::rule(ui);
@@ -2088,7 +2087,11 @@ mod tests {
         .unwrap();
         let snapshot = Snapshot::load(&campaign, &[]).unwrap();
         let problem = snapshot.groups[0].problem.clone().unwrap();
-        assert!(problem.contains("Unavailable creature"), "{problem}");
+        assert!(problem.contains(&id.to_string()), "{problem}");
+        assert!(
+            problem.contains("not in this campaign's packages"),
+            "{problem}"
+        );
         assert!(snapshot.issues.iter().any(|issue| issue.contains("Stray")));
     }
 

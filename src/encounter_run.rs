@@ -119,7 +119,7 @@ impl RunGroup {
     pub(crate) fn summary(&self) -> String {
         let mut summary = format!(
             "{} · {} · {}",
-            crate::design::count(self.creature_count() as usize, "member", "members"),
+            crate::design::count(self.creature_count() as usize, "creature", "creatures"),
             crate::design::reader::human_label(&self.side),
             self.xp_label()
         );
@@ -996,7 +996,7 @@ impl Run {
     }
     pub(crate) fn select_arrival(&mut self, index: usize) {
         if index < self.state.participants.len() {
-            self.selected = index;
+            self.select(index);
             self.panel = Panel::Reference;
             self.scroll_to_selected = true;
         }

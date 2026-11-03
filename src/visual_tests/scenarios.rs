@@ -1630,6 +1630,7 @@ pub mod run_absent_player {
             ),
         );
         d.click(&format!("No initiative for {PLAYER}"));
+        d.state("initiative-field-in-row", Sizes::All);
         d.type_text("20");
         d.press(Key::Enter);
         d.state("initiative-set-in-combat", Sizes::Default);
@@ -1991,7 +1992,7 @@ pub mod run_sync_conflict {
     const DISMISS_NOTICE: &str = "Dismiss this message";
     const SYNC_PARTY: &str = "Sync party";
     const STOP_SYNC: &str = "Stop party sync";
-    const UNDO_CLEARED: &str = "sheet changes. Undo stopped. See Log";
+    const UNDO_CLEARED: &str = "Undo stopped. See Log";
     const CLOSE_PROMPT: &str = "has not confirmed changes";
     const DISABLED_REASON: &str = "Wait for pending sync";
 
@@ -2285,6 +2286,12 @@ pub mod party_from_run {
             "The spells page beside the run lists a caster's spells",
         );
         d.click_row(MEMBER);
+        d.observe(
+            "Spells beside run",
+            !d.has(SHEET_SUBPAGE) && d.visible_text("Ability scores"),
+            "A character with no spells opens Overview and has no Spells tab",
+        );
+        d.state("sheet-with-no-spells", Sizes::Default);
         d.begin_task();
         d.click(SHEET_PAGE);
         d.state("record-tab", Sizes::Default);
@@ -2419,8 +2426,9 @@ pub mod run_folder_defect {
                     close_run(d);
                 }
                 go_encounters(d);
-                if d.has(DISCARD) && !d.is_disabled(DISCARD) {
-                    d.click(DISCARD);
+                let discard = if d.has("Discard") { "Discard" } else { DISCARD };
+                if d.has(discard) && !d.is_disabled(discard) {
+                    d.click(discard);
                 }
                 if d.has(BACK_TO_LIST) && !d.is_disabled(BACK_TO_LIST) {
                     d.click(BACK_TO_LIST);
@@ -3116,7 +3124,7 @@ pub mod run_roster_conflict {
         d.click(ONE_MORE_CONDITION);
         d.observe(
             "Run notices",
-            !d.visible_text("sheet changes. Undo stopped. See Log"),
+            !d.visible_text("Undo stopped. See Log"),
             "A new action clears the old sync notice",
         );
         d.app_mut().encounters.simulate_sheet_update(LONG_MESSAGE);
@@ -3125,7 +3133,7 @@ pub mod run_roster_conflict {
         let cut = rows_cut(d);
         d.observe(
             "T1.3",
-            cut.is_empty() && d.visible_text("sheet changes. Undo stopped. See Log"),
+            cut.is_empty() && d.visible_text("Undo stopped. See Log"),
             format!(
                 "At 960x640 with a long message, it takes one line and every row stays: {cut:?}"
             ),
@@ -3347,7 +3355,6 @@ pub mod signed_in {
             row.contains(NOT_SENT)
                 && !d.row_words(NOTHING_TO_SEND).contains(STOPPED_ROW)
                 && d.visible_text("Signed out")
-                && d.visible_text("not sent")
                 && rail.contains(RAIL_OFFLINE)
                 && rail.contains(RAIL_STOPPED),
             format!(
@@ -3774,6 +3781,13 @@ pub mod world {
             d.has_containing("In the run · initiative 11") && !d.has("Add to run"),
             "The NPC's panel links to their row after they join",
         );
+        d.click("In the run · initiative 11");
+        d.observe(
+            "NPC arrival",
+            participant_is_selected(d, NPC),
+            "The status selects the NPC's row",
+        );
+        d.state("npc-selected-from-status", Sizes::Default);
     }
 }
 
@@ -5015,6 +5029,15 @@ pub mod encounter_groups {
         d.expect(FIRST_GOBLIN);
         d.state("group-added-in-setup", Sizes::Default);
         d.goal("add a group during setup");
+        d.click("Edit group");
+        d.expect("Group name: Lost Patrol");
+        let run_open = d.app_mut().encounters.has_run();
+        d.observe(
+            "Group repair",
+            run_open,
+            "Edit group opens the broken group and keeps the run open",
+        );
+        d.state("broken-group-open-for-repair", Sizes::Default);
     }
 }
 
@@ -5326,7 +5349,7 @@ pub mod run_overrides {
         d.state("setup-with-a-changed-row", Sizes::Default);
         d.observe(
             "T13.3",
-            d.has_containing("Changed · HP 43/43 · AC 15"),
+            d.has_containing("Changed · ◆ Enemies · HP 43/43 · AC 15"),
             "A new run starts with the slot's changes, and its setup row says so",
         );
         d.goal("start a run with a changed creature");

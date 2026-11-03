@@ -182,7 +182,7 @@ fn side_mark(painter: &egui::Painter, center: egui::Pos2, side: &str, size: f32)
 }
 
 /// The run's keyboard commands.
-const KEYS: [(&str, &str); 11] = [
+const KEYS: [(&str, &str); 12] = [
     ("N", "Next turn"),
     ("Enter", "Damage the selected rows by the amount"),
     ("Shift+Enter", "Heal the selected rows by the amount"),
@@ -192,6 +192,7 @@ const KEYS: [(&str, &str); 11] = [
     ("Up, Down", "Select another row"),
     ("A", "Focus the amount"),
     ("C", "Conditions"),
+    ("Ctrl+G", "Arrivals"),
     ("Ctrl+K", "Open or close Lookup. Escape also closes it"),
     ("Ctrl+J", "Open or close Notes. Escape also closes them"),
 ];
@@ -199,6 +200,13 @@ const KEYS: [(&str, &str); 11] = [
 impl Run {
     /// Returns true only after the DM chooses to close the run.
     pub fn show(&mut self, ui: &mut egui::Ui) -> bool {
+        if !matches!(self.state.phase, Phase::Ended { .. })
+            && ui.ctx().memory(|memory| memory.top_modal_layer()).is_none()
+            && ui.input_mut(|i| i.consume_key(Modifiers::COMMAND, Key::G))
+        {
+            self.panel = Panel::Groups;
+            self.close_lookup = true;
+        }
         self.refresh_portraits();
         let closed = match self.state.phase {
             Phase::Setup => self.setup_view(ui),
@@ -302,7 +310,7 @@ impl Run {
         )
     }
 
-    fn select(&mut self, index: usize) {
+    pub(super) fn select(&mut self, index: usize) {
         self.clear_targets();
         if self.selected != index {
             self.selected = index;
@@ -606,11 +614,11 @@ impl Run {
                     self.error_line(ui);
                     let room = ui.available_height() - DOCK_HEIGHT - FOOTER_HEIGHT;
                     // A message goes in the room under the list, so it moves no row while
-                    // the DM's eye is on them, and stays until they dismiss it. A long one wraps.
+                    // the DM's eye is on them. The next action clears it. A long one wraps.
                     let notice = self.notice.as_ref().map(|_| {
                         format!(
-                            "{} sheet changes. Undo stopped. See Log",
-                            self.notice_changes
+                            "{}. Undo stopped. See Log",
+                            design::count(self.notice_changes, "sheet change", "sheet changes")
                         )
                     });
                     let width = ui.available_width();
@@ -783,7 +791,7 @@ impl Run {
                         "Signed out of D&D Beyond. {}: not sent",
                         strip.unsent.join(", ")
                     ),
-                    &format!("Signed out · {} not sent", strip.unsent.len()),
+                    "Signed out",
                     c.result.error,
                 ),
             })
@@ -1000,12 +1008,43 @@ impl Run {
                     let turn = TurnMark::of(index, current, next_up);
                     let name = row_name(p, turn, sync);
                     let response = ui.push_id(&p.key, |ui| {
-                        design::row(ui, layout.height(scale), selected, &name, |ui, rect| {
-                            paint_row(ui, rect, p, turn, sync, scale, layout);
-                        })
+                        if self.live_initiative == Some(index) {
+                            let (rect, _) = ui.allocate_exact_size(
+                                vec2(ui.available_width(), layout.height(scale)),
+                                egui::Sense::hover(),
+                            );
+                            // The number field owns the initiative gutter while it is open.
+                            let target = Rect::from_min_max(
+                                pos2(
+                                    rect.left() + layout.initiative_right + design::XS,
+                                    rect.top(),
+                                ),
+                                rect.max,
+                            );
+                            let response = ui
+                                .scope_builder(egui::UiBuilder::new().max_rect(target), |ui| {
+                                    design::row(ui, rect.height(), selected, &name, |ui, _| {
+                                        paint_row(ui, rect, p, turn, sync, scale, layout);
+                                    })
+                                })
+                                .inner;
+                            (response, rect)
+                        } else {
+                            let response = design::row(
+                                ui,
+                                layout.height(scale),
+                                selected,
+                                &name,
+                                |ui, rect| {
+                                    paint_row(ui, rect, p, turn, sync, scale, layout);
+                                },
+                            );
+                            let rect = response.rect;
+                            (response, rect)
+                        }
                     });
-                    let response = response.inner.on_hover_text(&p.side);
-                    let rect = response.rect;
+                    let (response, rect) = response.inner;
+                    let response = response.on_hover_text(&p.side);
                     spans.push((rect.top() - origin, rect.bottom() - origin, index));
                     if response.clicked() {
                         clicked = Some((index, ui.input(|i| i.modifiers.command)));
@@ -1069,10 +1108,9 @@ impl Run {
                             }
                             if ui.input(|i| i.key_pressed(Key::Enter))
                                 && (response.has_focus() || response.lost_focus())
+                                && let Ok(total) = text.parse()
                             {
-                                if let Ok(total) = text.parse() {
-                                    set_initiative = Some((index, total));
-                                }
+                                set_initiative = Some((index, total));
                             }
                         });
                     }
@@ -1714,6 +1752,7 @@ impl Run {
                 return;
             }
             // Five actions share the narrowest row. None of them may lose a letter.
+            let compact = ui.available_width() < DOCK_ALL_WORDS_FROM;
             ui.spacing_mut().item_spacing.x = 0.0;
             // Off while sync has work to finish, and the label says so without a hover.
             let blocked = self.close_block();
@@ -1741,8 +1780,13 @@ impl Run {
             }
             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                 self.save_status(ui);
-                if Action::quiet("Keys")
-                    .icon(icons::KEYS)
+                let keys = Action::quiet("Keys");
+                let keys = if compact {
+                    keys
+                } else {
+                    keys.icon(icons::KEYS)
+                };
+                if keys
                     .density(Density::Read)
                     .name("Keyboard commands")
                     .selected(self.panel == Panel::Keys)
@@ -2077,7 +2121,13 @@ impl Run {
                 } else {
                     ui.menu_button("Fight ▾", |ui| {
                         for (panel, label) in fight {
-                            if ui.selectable_label(self.panel == panel, label).clicked() {
+                            let action = egui::Button::new(label).selected(self.panel == panel);
+                            let action = if panel == Panel::Groups {
+                                action.shortcut_text("Ctrl+G")
+                            } else {
+                                action
+                            };
+                            if ui.add(action).clicked() {
                                 self.panel = panel;
                                 ui.close();
                             }
@@ -2255,7 +2305,6 @@ impl Run {
     /// Returns true when the DM chooses to add this group.
     fn group_row(&mut self, ui: &mut egui::Ui, group: &super::RunGroup) -> bool {
         let c = colors();
-        ui.add_space(design::XS);
         let name = &group.name;
         let creatures = group.creature_count();
         let grip = ui.allocate_response(
@@ -2294,7 +2343,6 @@ impl Run {
             (totals.left() - grip.rect.left() - design::S).max(0.0),
             Type::Strong.font(ui),
         );
-        let cut = title.elided;
         ui.painter().galley(
             pos2(
                 grip.rect.left(),
@@ -2314,7 +2362,6 @@ impl Run {
             group.notes.trim(),
             self.initiative.grouping.arrival_rule()
         ));
-        let _ = cut;
         grip.dnd_set_drag_payload(GroupDrag(group.id));
         if grip.dragged() {
             ui.ctx().set_cursor_icon(egui::CursorIcon::Grabbing);
@@ -2371,9 +2418,16 @@ impl Run {
         };
         let mut add = false;
         ui.horizontal(|ui| {
-            let controls = design::L * 12.0;
+            let controls = design::number_width(ui, "Total", &Type::Small.font(ui))
+                + 72.0
+                + design::XS
+                + design::number_width(ui, "Add", &Type::Strong.font(ui))
+                + 2.0 * design::M
+                + 3.0 * ui.spacing().item_spacing.x;
             let width = (ui.available_width() - controls).max(design::XXL);
             ui.allocate_ui(vec2(width, Density::Read.control()), |ui| {
+                ui.set_min_width(width);
+                ui.set_max_width(width);
                 ui.add(egui::Label::new(Type::Small.rich(ui, &summary).color(c.muted)).wrap());
             });
             let field = format!("Initiative total for {name}");
@@ -2435,7 +2489,6 @@ impl Run {
                 self.wants_group_editor = Some(group.path.clone());
             }
         }
-        ui.add_space(design::XS);
         add
     }
 
@@ -3121,15 +3174,14 @@ impl Run {
         let mut enter = false;
         ui.horizontal(|ui| {
             ui.spacing_mut().item_spacing.x = design::XS;
-            // A word when the row has room for the longer one, so nothing moves when it changes.
-            // In a narrow pane the mark alone, and the row's second line says it.
+            // Keep the worded toggle in every width; party rows give up their per-row Roll.
             let presence_slot = design::L * 6.0;
             let actions =
                 72.0 + if npc { 76.0 } else { 0.0 } + 28.0 + presence_slot + 4.0 * design::XS;
             let name_width = (ui.available_width() - actions).max(110.0);
             let side = "";
             let plain = format!("{absent}{side}{numbers}");
-            // The side stays when the row has room. Record says it when the row has not.
+            // Changed values keep their mark beside the setup numbers.
             let detail = if p.changes.is_none() {
                 plain
             } else {
@@ -3142,6 +3194,7 @@ impl Run {
                     format!("{absent}{changed} · {numbers}")
                 }
             };
+            let row_name = format!("{name} · {detail}");
             let response = ui
                 .allocate_ui(vec2(name_width, row), |ui| {
                     let width = name_width - 2.0 * design::S;
@@ -3155,7 +3208,7 @@ impl Run {
                         ui.painter()
                             .layout(detail, Type::Small.font(ui), colors().muted, width);
                     let height = row.max(title.size().y + detail.size().y + design::S);
-                    design::row(ui, height, selected, name, |ui, rect| {
+                    design::row(ui, height, selected, &row_name, |ui, rect| {
                         let top = rect.top() + design::XS;
                         ui.painter().galley(
                             pos2(rect.left() + design::S, top),
@@ -4158,6 +4211,10 @@ fn condition_links(
     for (position, (condition, span)) in layout.condition_spans.iter().enumerate() {
         let entry = content.and_then(|content| content.condition_rule(condition));
         let custom = condition.split_whitespace().count() > 4;
+        // Wrapped official conditions remain readable; their rules still open in Lookup.
+        if !custom && galley.rows.len() > 1 {
+            continue;
+        }
         if entry.is_none() && !custom {
             continue;
         }
