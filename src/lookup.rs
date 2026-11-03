@@ -203,7 +203,7 @@ fn note_items(
         if heading.eq_ignore_ascii_case(&note.name) {
             continue;
         }
-        let name = format!("{} › {heading}", note.name);
+        let name = heading.clone();
         let path = format!("{}#{heading}", note.path);
         items.push(item(
             world::note_entry(&path, &name, String::new()),
@@ -221,10 +221,7 @@ impl ContentIndex {
         let catalogue = Catalogue::load(modules, campaign)?;
         let owner_name = |owner: Uuid, private: bool| {
             if private {
-                campaign.map_or_else(
-                    || "Campaign".to_owned(),
-                    |c| format!("Campaign · {}", c.name),
-                )
+                "Campaign".to_owned()
             } else {
                 catalogue.package_name(owner)
             }
@@ -920,7 +917,36 @@ impl Lookup {
     }
 
     fn panel(&mut self, ui: &mut egui::Ui) {
-        if design::panel_header(ui, "Lookup", "Close Lookup") {
+        ui.ctx().data_mut(|data| {
+            data.insert_temp(egui::Id::new("reader_surface"), egui::Id::new("lookup"))
+        });
+        let mut close = false;
+        ui.horizontal(|ui| {
+            ui.label(Type::Heading.rich(ui, "Lookup"));
+            if !self.history.is_empty()
+                && Action::quiet("Back").icon(icons::BACK).show(ui).clicked()
+            {
+                self.back();
+            }
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                close = design::icon_button(ui, icons::CLOSE, "Close Lookup").clicked();
+                if let Some(current) = self
+                    .index
+                    .as_ref()
+                    .and_then(|index| self.current.and_then(|at| index.items.get(at)))
+                    && !current.is_note()
+                    && design::locked(
+                        ui,
+                        self.library_draft
+                            .then_some("Save or discard the Library draft first."),
+                        |ui| design::icon_button(ui, icons::OPEN_OUT, "Open in Library").clicked(),
+                    )
+                {
+                    self.open_in_library = Some(current.entry.clone());
+                }
+            });
+        });
+        if close {
             self.close();
         }
         let width = ui.available_width();
@@ -999,6 +1025,7 @@ impl Lookup {
         let matches = &self.matches.as_ref().unwrap().1;
         let mut chosen = None;
         if !query.is_empty()
+            && !matches.is_empty()
             && !self.results_open
             && (self.current.is_some() || self.reading_written.is_some())
             && Action::quiet(&design::count(matches.len(), "result", "results"))
@@ -1109,22 +1136,25 @@ impl Lookup {
             ui.spacing_mut().item_spacing.y = design::XS;
         }
         if show_results && matches.len() > 5 {
-            ui.menu_button(format!("Show all {}", matches.len()), |ui| {
-                egui::ScrollArea::vertical()
-                    .max_height(design::READER_MEASURE)
-                    .show(ui, |ui| {
-                        for hit in matches {
-                            let name = match hit {
-                                Hit::Entry(at) => &index.items[*at].entry.name,
-                                Hit::Written(at) => &self.written[*at].title,
-                            };
-                            if design::link(ui, name).clicked() {
-                                chosen = Some(*hit);
-                                ui.close();
+            ui.menu_button(
+                format!("Show all {}", design::count(matches.len(), "", "").trim()),
+                |ui| {
+                    egui::ScrollArea::vertical()
+                        .max_height(design::READER_MEASURE)
+                        .show(ui, |ui| {
+                            for hit in matches {
+                                let name = match hit {
+                                    Hit::Entry(at) => &index.items[*at].entry.name,
+                                    Hit::Written(at) => &self.written[*at].title,
+                                };
+                                if design::link(ui, name).clicked() {
+                                    chosen = Some(*hit);
+                                    ui.close();
+                                }
                             }
-                        }
-                    });
-            });
+                        });
+                },
+            );
         }
         if let Some(hit) = chosen {
             if let Some(row) = matches.iter().position(|candidate| *candidate == hit) {
@@ -1245,41 +1275,6 @@ impl Lookup {
             }
             return;
         };
-        ui.horizontal(|ui| {
-            if !self.history.is_empty()
-                && Action::quiet("Back")
-                    .icon(icons::BACK)
-                    .density(Density::Read)
-                    .show(ui)
-                    .clicked()
-            {
-                self.back();
-            }
-            if current.is_note() {
-                return;
-            }
-            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                if Action::quiet("Open in Library")
-                    .icon(icons::OPEN_OUT)
-                    .density(Density::Read)
-                    .blocked_if(
-                        self.library_draft,
-                        "Save or discard the Library draft first.",
-                    )
-                    .show(ui)
-                    .clicked()
-                {
-                    self.open_in_library = Some(current.entry.clone());
-                }
-            });
-        });
-        if self.library_draft {
-            ui.label(
-                Type::Small
-                    .rich(ui, "Save or discard the Library draft first.")
-                    .color(colors().muted),
-            );
-        }
         let mut nav = self.reader.choices(ui, &index);
         if ui.rect_contains_pointer(ui.available_rect_before_wrap())
             && ui.input(|input| input.smooth_scroll_delta.y != 0.0)
@@ -1498,7 +1493,7 @@ mod tests {
                 .collect()
         };
         assert_eq!(names("gate mechanics")[0], "Gate Mechanics");
-        assert_eq!(names("reliability")[0], "Gate Mechanics › Reliability");
+        assert_eq!(names("reliability")[0], "Reliability");
         // A body match comes after every name match. A session note has its own results.
         assert_eq!(names("quartz"), ["Gate Mechanics"]);
         let hit = index.search("reliability")[0];

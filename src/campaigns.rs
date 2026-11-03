@@ -413,6 +413,7 @@ impl Campaigns {
         ui: &mut egui::Ui,
         session: Option<crate::auth::Session>,
         dndbeyond: &mut crate::dndbeyond::DndBeyond,
+        blocked: Option<&str>,
     ) {
         let c = colors();
         let Some(campaign) = self.active_campaign() else {
@@ -429,6 +430,7 @@ impl Campaigns {
             design::group_label(ui, "Folder");
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 if Action::quiet("Edit details")
+                    .blocked(blocked)
                     .density(Density::Read)
                     .show(ui)
                     .clicked()
@@ -449,7 +451,7 @@ impl Campaigns {
         ui.add_space(design::S);
         design::rule(ui);
         ui.add_space(design::S);
-        dndbeyond.show(ui, session, self);
+        dndbeyond.show(ui, session, self, blocked);
         ui.add_space(design::S);
         design::quiet_section(ui, "Technical details", |ui| {
             ui.label(format!("ID: {}", campaign.id));

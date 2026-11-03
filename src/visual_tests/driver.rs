@@ -1317,6 +1317,16 @@ impl<'a> Driver<'a> {
         self.film_frames(Overlay::caption(caption), super::video::AIM_FRAMES);
     }
 
+    pub fn column_edge(&self, name: &str) -> f32 {
+        self.harness
+            .ctx
+            .read_response(egui::Id::new(name).with("__resize"))
+            .expect("column resize handle")
+            .rect
+            .center()
+            .x
+    }
+
     /// Show the settled result of a step for long enough to read.
     fn film_result(&mut self, caption: &str) {
         self.film_frames(Overlay::caption(caption), super::video::HOLD_FRAMES);

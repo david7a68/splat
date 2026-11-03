@@ -285,7 +285,13 @@ impl DndBeyond {
             });
     }
 
-    pub fn show(&mut self, ui: &mut egui::Ui, session: Option<Session>, local: &mut Campaigns) {
+    pub fn show(
+        &mut self,
+        ui: &mut egui::Ui,
+        session: Option<Session>,
+        local: &mut Campaigns,
+        blocked: Option<&str>,
+    ) {
         ui.horizontal(|ui| {
             ui.label(
                 crate::design::Type::Heading
@@ -354,45 +360,53 @@ impl DndBeyond {
                     .unwrap_or_else(|| format!("Campaign {id}"))
             })
             .unwrap_or_else(|| "Not linked".into());
-        let dropdown =
-            egui::ComboBox::from_id_salt(("ddb_link", campaign.id))
-                .icon(crate::design::combo_icon)
-                .width(ui.available_width().min(520.0))
-                .selected_text(crate::design::Type::Body.rich(ui, label).color(
-                    if ui.is_enabled() {
-                        crate::design::colors().text
+        ui.horizontal(|ui| {
+            let dropdown = crate::design::locked(ui, blocked, |ui| {
+                egui::ComboBox::from_id_salt(("ddb_link", campaign.id))
+                    .icon(crate::design::combo_icon)
+                    .width(ui.available_width().min(if blocked.is_some() {
+                        crate::design::FORM_WIDTH / 2.0
                     } else {
-                        crate::design::colors().disabled
-                    },
-                ))
-                .show_ui(ui, |ui| {
-                    ui.selectable_value(&mut selected, None, "Not linked");
-                    for remote in &self.campaigns {
-                        let used = local.linked_elsewhere(&remote.id);
-                        ui.add_enabled_ui(!used, |ui| {
-                            let name = if used {
-                                format!("{} (already linked)", remote.name)
-                            } else {
-                                remote.name.clone()
-                            };
-                            ui.selectable_value(&mut selected, Some(remote.id.clone()), name);
-                        });
-                    }
-                });
-        crate::design::named(ui, &dropdown.response, "D&D Beyond campaign link");
-        if ui.is_rect_visible(dropdown.response.rect) {
-            self.visible_last_frame = true;
-            let key = current.clone().map(|id| (campaign.id, id));
-            if key.is_some()
-                && key != self.requested_visible_link
-                && self.pending.is_none()
-                && let Some(session) = session
-            {
-                self.requested_visible_link = key.clone();
-                self.pending_link = key;
-                self.refresh(session, ui.ctx());
+                        crate::design::FORM_WIDTH
+                    }))
+                    .selected_text(crate::design::Type::Body.rich(ui, label).color(
+                        if ui.is_enabled() {
+                            crate::design::colors().text
+                        } else {
+                            crate::design::colors().disabled
+                        },
+                    ))
+                    .show_ui(ui, |ui| {
+                        ui.selectable_value(&mut selected, None, "Not linked");
+                        for remote in &self.campaigns {
+                            let used = local.linked_elsewhere(&remote.id);
+                            ui.add_enabled_ui(!used, |ui| {
+                                let name = if used {
+                                    format!("{} (already linked)", remote.name)
+                                } else {
+                                    remote.name.clone()
+                                };
+                                ui.selectable_value(&mut selected, Some(remote.id.clone()), name);
+                            });
+                        }
+                    })
+            });
+            crate::design::named(ui, &dropdown.response, "D&D Beyond campaign link");
+            if ui.is_rect_visible(dropdown.response.rect) {
+                self.visible_last_frame = true;
+                let key = current.clone().map(|id| (campaign.id, id));
+                if key.is_some()
+                    && key != self.requested_visible_link
+                    && self.pending.is_none()
+                    && let Some(session) = session
+                {
+                    self.requested_visible_link = key.clone();
+                    self.pending_link = key;
+                    self.refresh(session, ui.ctx());
+                }
             }
-        }
+            crate::design::blocked_reason(ui, blocked);
+        });
         if selected != current {
             match local.link(selected.clone()) {
                 Ok(()) => {
