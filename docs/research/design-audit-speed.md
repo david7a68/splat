@@ -658,3 +658,247 @@ Sources: PR bodies linked above; the repository's
 [`IndexedParallelIterator`](https://docs.rs/rayon/1.12.0/rayon/iter/trait.IndexedParallelIterator.html)
 and [indexed collection implementation](https://docs.rs/rayon/1.12.0/src/rayon/iter/collect/mod.rs.html).
 The installed Rayon 1.12.0 source was also inspected; no dependency update is made.
+
+## Fifth scan: isolate visual worlds and bound diagnostic text waits
+
+2026-11-03. Base: `b8232ef` (main, merged with `git fetch origin && git merge
+origin/main`). Same machine and pinned toolchain. The lead supplied a reflinked
+warm `target/`; `CARGO_TARGET_DIR` was never set. The suite now has 54 scenarios
+and 1,119 PNGs.
+
+### Changes retained
+
+- On Linux, the visual-suite test probes an unprivileged user/mount namespace,
+  then re-executes **only that test** inside it. A private temporary folder is
+  bind-mounted over the original temporary directory. The app still opens and
+  paints `/tmp/splat-visual-world/...`; no app/UI code or path allowance changes.
+  The existing world lock now lives in that private folder. A separate lock in
+  each worktree's `target/` still serializes commands from that worktree, including
+  commands that would write the same capture label.
+- The backing folder stays on the **original temporary filesystem**. Only the
+  synthetic fixtures go there, as before; a full tree measured about 40–43 MiB.
+  Builds, copied executables, captures and videos stay in the worktree. The
+  parent's temporary-directory guard removes the private folder after the child,
+  including failed runs. Mounts end with the child. Unsupported Linux hosts,
+  non-Linux hosts and builds/captures inside the temporary directory retain the
+  original shared lock. `SPLAT_VISUAL_ISOLATE=0` explicitly selects that old route.
+  Linux devenv shells now include the `unshare`/`mount` utilities.
+- `wait_for_text` retains 180 seconds in normal mode. Under the existing
+  `SPLAT_VISUAL_DIAGNOSE=1`, missing painted text fails after five seconds and
+  includes the current screen's accessible text. It still panics: it cannot turn
+  a missing phrase into a successful scenario or an eligible observation. A
+  genuinely slow diagnostic run can therefore fail sooner; use normal mode for
+  its full allowance. Idle-based failure was rejected: the existing busy/repaint
+  signal does not prove that a delayed poll or deferred action cannot paint text.
+- `audit-gate` clears diagnostic mode along with its other feedback-only settings.
+  Every normal gate retains the original text timeout, checks and capture plan.
+
+### Measurements
+
+Times use `date +%s`, in wall seconds. The two-folder trials launch saved linked
+executables together through one `devenv shell --` from the worktree root, with
+separate working/output folders. Both select `party,settings`, run every check
+and capture for those scenarios, and save all 60 PNGs each. They are a focused
+lock-contention measurement, not a claim about two full suites' memory or CPU
+scaling. The original missing-text probe overlapped the first baseline repeat
+and first two-folder trial; one short rebuild overlapped that first pair. The
+lock-wait durations directly identify serialization despite those overlaps.
+A memory sample during the full gate found the isolated suite at 21.6 GiB RSS
+and its parent at 1.7 GiB. Running several full suites concurrently on this
+31 GiB host can therefore be limited by memory; this change removes fixture
+serialization, not that resource limit. Scheduling and scenario concurrency
+remain unchanged. Use `SPLAT_VISUAL_ISOLATE=0` to retain machine-wide serialization.
+
+| Measurement | Before | After |
+| --- | ---: | ---: |
+| Two simultaneous two-scenario runs, total wall | 31 s | 17 s |
+| Individual runs in that pair | 16 s / 31 s | 17 s / 17 s |
+| Longest world-lock wait in that pair | 15.744 s | under 0.00001 s |
+| Controlled absent painted text in diagnostic mode | 181 s | 6 s |
+
+The text probe builds an actual empty-world `Driver`, waits for a deliberately
+absent phrase, catches its panic and asserts that diagnostic feedback returns
+within 15 seconds. The original implementation fails that regression after
+180.85 seconds; the changed implementation passes while still catching the
+missing-text panic. The six-second wall measurement includes driver setup.
+The normal timeout and all successful text checks remain unchanged.
+A repeat of the retained pair before the final per-worktree lock took 18 s;
+the final-source pair took 17 s, with world-lock waits of 3.40 and 2.25 µs
+and worktree-lock waits of 3.42 and 4.32 µs.
+
+The first baseline `visual-test speed-5-before` took 76 s including a 19.14 s
+Splat rebuild; its suite took 55.79 s. A second baseline capture using the saved
+executable took 61 s wall / 60.22 s in the suite. Compilation and seed preparation
+are excluded from the focused two-folder and text rows. These are separate
+measurements and must not be added as an end-to-end saving.
+
+### Fidelity and rejected trial
+
+The first namespace trial bound a folder under `target/` over `/tmp`. It passed
+all checks but **was rejected**: disk directory order made the party scenario's
+existing `read_dir(...).find(...)` edit Brannoch's sheet instead of Sable's.
+Six captures changed. Disk fsyncs also made the full suite take 102.99 s and its
+gate 161 s. Keeping the private fixtures on the same temporary filesystem fixes
+both without changing that scenario or adding any baseline allowance. The
+retained two-folder captures are byte-identical to both original 60-PNG sets;
+`ergonomics.json`, `ergonomics.md` and `chrome-observation.json` also match exactly.
+
+The two unchanged full baseline runs have 111 changed PNG hashes and 29 captures
+above the existing channel tolerance of 2. Those differences are in dialogs,
+session notes and recording states already covered by the earlier noise caveat.
+Full capture inventories have 451 images at 960×640, 449 at 1200×800, 202 at
+1920×1080 and 17 at 2400×1600. No masks or tolerance changes were made.
+
+Final validation: `SPLAT_VISUAL_VIDEO=0 devenv shell -- audit-gate speed-5`
+passed in 110 s, including a 12.54 s Clippy rebuild and 22.12 s test build.
+All 712 tests passed (187 library + 525 binary), with the same 12 opt-in tests
+ignored; other binary and documentation targets also passed. The isolated
+visual suite took 57.98 s, ran all 54 scenarios and wrote all 1,119 captures.
+A retained full repeat passed in 73 s wall / 71.91 s in the suite; it overlapped
+file-by-file image analysis and the repository comparer, so this is not an
+isolated standalone-speed estimate.
+
+Full reports and `chrome-observation.json` are byte-identical across the four
+baseline and two retained full runs. Capture names and dimensions match, and
+every manifest hash was checked against its PNG. The two retained focused
+60-PNG sets are also byte-identical to their original sets. The namespace
+regression verifies that a file at the same absolute path is private and the
+host file remains intact. Controlled child failure and unavailable-namespace
+probes both retain failure status 101; a child scenario failure is never retried
+through the fallback. Rust/Nix formatting and `git diff --check` pass.
+
+Full-image comparison uses the unchanged tolerance of 2. A/B/C are the original
+standalone captures; D runs every original binary test with captures (64 s wall,
+523 passed, 12 ignored). It excludes only the temporary failing text probe added
+for this measurement, not any original test. E is the retained full gate, F its
+full capture repeat.
+
+| Capture pair | Changed PNG hashes | Above existing tolerance |
+| --- | ---: | ---: |
+| Original A / B | 111 | 29 |
+| Original A / C | 100 | 43 |
+| Original A / D | 74 | 28 |
+| Original A / retained E | 196 | 13 |
+| Original B / retained E | 181 | 33 |
+| Original C / retained E | 156 | 47 |
+| Original D / retained E | 234 | 32 |
+| Retained E / F | 155 | 24 |
+
+Every above-tolerance file in the cross-version comparisons also differs in
+a same-version comparison, including an original `session-recording` focused
+control. That control passed in 7 s, with its full scenario/check/capture plan;
+its two `recording-delete` images match E within the existing tolerance. They
+differ from original A by the same 2,884 pixels each. Inspection shows only the
+existing “Recording saved” notice and the resulting rail layout. Its
+[eight-second lifetime](../../src/sessions/page.rs) uses real `Instant` time, so
+scenario load changes whether it is still visible. No timeout, notice, scenario
+or allowance was changed to conceal these pixels. This proves the existing
+transient variation, not byte-identical full runs.
+
+The repository `visual-compare speed-5-before speed-5` agrees with the independent
+image analysis: 1,119 pairs, 183 differences within tolerance, 13 above it, and
+expected failure status 101. The latter files are included in the demonstrated
+noise above; the comparator and its failure behavior remain unchanged.
+
+Raw logs, second-resolution timestamps,
+benchmark harnesses and file-by-file comparisons live under ignored
+`artifacts/screenshots/audit-speed-5/`; captures use sibling `speed-5-*` labels.
+No `artifacts/design-audit/` files are committed.
+
+### PR 62 review: measure memory and restore a machine-wide admission limit
+
+Merged `origin/main` at `1c5472e28dea5c1529cdcfce1bfedcca2261cbae` before this
+revision. The measured merged source has 57 scenarios and 1,176 captures. This
+revision supersedes the unrestricted namespace admission described above.
+
+#### Memory measurements
+
+Each run used a separate `systemd-run --user --scope -p MemoryAccounting=yes`
+scope, through `devenv shell --` from the worktree root. No memory limit was set.
+The linked merged-source executable was built and saved before adding slots;
+compilation is excluded. PNG capture was on, video off. The scope contains the
+suite's parent, namespace child and a small Python monitor. The monitor reads
+`memory.peak`, `memory.swap.peak`, process-tree `/proc/<pid>/smaps_rollup` PSS and
+SwapPss, and file sizes/allocated blocks under the private fixture folder. It
+pauses 250 ms between samples; PSS and fixture peaks are sampled, while the
+cgroup peaks are kernel counters. Only exited short-lived processes vanished
+during `/proc` reads; there were no permission failures. The old shared-world
+lock was held externally during these pre-slot measurements to avoid overlapping
+another main-branch full suite. Only one measured suite ran at a time.
+
+| Measurement | Full suite | `--only party,settings` |
+| --- | ---: | ---: |
+| Wall time, `date +%s` | 70 s | 16 s |
+| Cgroup RAM peak, `memory.peak` | 24.275 GiB | 1.592 GiB |
+| Cgroup swap peak, `memory.swap.peak` | 2.085 GiB | 0 GiB |
+| Sampled cgroup RAM + swap peak | 25.650 GiB | 1.590 GiB |
+| Sampled process-tree resident PSS peak | 23.788 GiB | 1.621 GiB |
+| Sampled process-tree PSS + SwapPss peak | 25.159 GiB | 1.621 GiB |
+| Fixture file bytes, sampled peak | 33.367 MiB | 1.057 MiB |
+| Fixture allocated blocks in `/tmp`, sampled peak | 44.289 MiB | 1.449 MiB |
+| Captures | 1,176 | 60 |
+
+Both runs passed all selected checks. Cgroup accounting includes charged tmpfs
+and file-cache pages; PSS describes mappings, including proportional shares of
+pages charged to other cgroups. These are different accounting views and their
+peaks need not coincide. Do not add PSS to the cgroup figures or add the fixtures
+a second time to cgroup memory. RAM-peak plus swap-peak is a conservative
+26.360 GiB upper bound for this full run, leaving about 4.9 GiB on the measured
+31.26 GiB host for other work. Two such full suites cannot fit with headroom.
+
+**Default: `SPLAT_VISUAL_SLOTS=1`.** This retains the old maximum of one active
+full visual suite. Focused runs use the same limit: a slot must be safe for any
+suite that enters it. `SPLAT_VISUAL_SLOTS` accepts a positive integer override;
+all worktrees should use the same value. Raising it to 2 on this host is not
+safe when full gates can run. The two-slot override test below used only the
+measured-small focused runs, with no full suite running.
+
+#### Admission and tests
+
+Before namespace setup, a process scans all configured slot lock files in the
+original temporary directory. It takes any free slot with `File::try_lock`,
+or waits 100 ms and scans again. Its permit stays held through the suite and
+report generation. The namespace child inherits the admission decision and
+must not acquire locks inside its private temporary directory.
+
+Slot zero reuses `$TMPDIR/splat-visual-world.lock` (normally `/tmp/`); higher
+slots use `splat-visual-slot-1.lock`, `splat-visual-slot-2.lock`, and so on.
+Thus an older main-branch worktree holding the original lock also occupies
+slot zero, including during rollout of this change. Slot files are never
+unlinked on release. Non-isolated/fallback runs take ownership of the already
+held slot-zero world lock rather than trying to lock it twice. They retain the
+old serial shared-world behavior. Different admitted namespace runs still
+have independent worlds at the same visible paths.
+
+`SPLAT_VISUAL_TIMINGS=1` now prints `Timing visual slot wait = ... (slot i/N)`
+before the existing worktree/world/setup timings. Scenario scripts, scheduling,
+checks, capture sizes, renderer, baseline and allowances are unchanged.
+
+| Two focused runs started together from different folders | Default one slot | Two-slot override |
+| --- | ---: | ---: |
+| Total wall seconds | 29 s | 16 s |
+| Individual wall seconds | 29 s / 15 s | 16 s / 16 s |
+| Slot wait | 14.615 s / 0.000257 s | 0.000052 s / 0.000085 s |
+| Slots used | 1 then 1 | 1 and 2 |
+
+All four focused runs passed and wrote every one of their 60 captures. Their
+namespace backing folders were distinct. A separate `SPLAT_VISUAL_ISOLATE=0`
+focused capture run passed in 14.93 s inside the suite, confirming that the
+legacy-lock transfer does not deadlock. Unit tests cover invalid/zero counts,
+exhaustion, choosing a free higher slot, release/reuse, the legacy-lock handoff
+and a waiting caller proceeding after release. Formatting and Clippy passed.
+
+The single final gate passed: `env -u SPLAT_VISUAL_SLOTS SPLAT_VISUAL_VIDEO=0
+SPLAT_VISUAL_TIMINGS=1 devenv shell -- audit-gate speed-5-slots`, 91 s wall.
+Formatting, warnings-denied Clippy, all 719 tests (187 library + 532 binary),
+the same 12 ignored opt-in tests, other binary/documentation targets, all 57
+scenarios and all 1,176 captures passed. Slot admission reported 8.19 µs for
+slot 1/1. The visual suite took 74.58 s. The full ergonomics JSON/Markdown and
+chrome observation are byte-identical to the merged-source pre-slot run; capture
+names match and every final manifest hash was verified. All six focused capture
+sets (pre-slot, both one-slot runs, both two-slot runs, and fallback) are
+byte-identical across their 60 PNGs. `git diff --check` passed.
+Raw memory samples, cgroup paths, commands, logs and focused-pair timings are in
+ignored `artifacts/screenshots/audit-speed-5-slots/`. All captures and the saved
+measurement executable remain on disk in the worktree; only the original small
+synthetic fixture trees use `/tmp`. No design-audit artifacts are committed.

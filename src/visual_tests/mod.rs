@@ -15,6 +15,10 @@
 //! - `SPLAT_VISUAL_SCENARIOS=party,settings` runs only those scenarios.
 //! - `SPLAT_VISUAL_DIAGNOSE=1` collects text expectations, then still fails the run.
 //! - `SPLAT_VISUAL_TIMINGS=1` prints stage timings without changing captures.
+//! - `SPLAT_VISUAL_SLOTS` overrides the machine-wide suite limit (default 1).
+//!   Set the same positive count in every worktree; each slot needs full-suite RAM.
+//! - Linux isolates temporary files with a mount namespace when available.
+//!   `SPLAT_VISUAL_ISOLATE=0` retains the shared-world lock for comparison.
 //! - `visual-baseline-chrome <label>` applies eligible saved chrome measurements.
 //! - `SPLAT_VISUAL_VIDEO=1`, with captures on, also encodes one video per scenario
 //!   with ffmpeg, into the output folder's `video/`.
@@ -23,7 +27,10 @@ mod dm_audit;
 mod driver;
 pub(crate) mod ergonomics;
 mod fixture;
+#[cfg(target_os = "linux")]
+mod isolation;
 mod scenarios;
+mod slots;
 mod steps;
 mod video;
 
@@ -303,12 +310,18 @@ fn enforcement() -> Enforce {
 }
 
 /// A fixed folder, because the campaign paths it holds appear in the UI. A lock
-/// keeps another test process out while this one owns the folder.
-fn world_root() -> (fs::File, PathBuf) {
+/// keeps another test process out while this one owns the folder. On Linux this
+/// is inside a private mount namespace when supported, with private fixtures on
+/// the same temporary filesystem.
+fn world_root(locked: Option<fs::File>) -> (fs::File, PathBuf) {
     let temp = std::env::temp_dir();
-    let lock = fs::File::create(temp.join("splat-visual-world.lock")).expect("create world lock");
     let started = Instant::now();
-    lock.lock().expect("lock world folder");
+    let lock = locked.unwrap_or_else(|| {
+        let lock =
+            fs::File::create(temp.join("splat-visual-world.lock")).expect("create world lock");
+        lock.lock().expect("lock world folder");
+        lock
+    });
     if std::env::var_os("SPLAT_VISUAL_TIMINGS").is_some() {
         println!("Timing world lock wait = {:?}", started.elapsed());
     }
@@ -474,6 +487,11 @@ fn visual_update_chrome() {
 /// Every scenario runs in one test, so the report and baseline see one whole run.
 #[test]
 fn visual_suite() {
+    let mut slot = slots::acquire();
+    #[cfg(target_os = "linux")]
+    if isolation::run() {
+        return;
+    }
     let started = Instant::now();
     let (directory, capture) = output_directory();
     fs::create_dir_all(&directory).expect("create output folder");
@@ -488,7 +506,7 @@ fn visual_suite() {
     if record {
         fs::create_dir_all(directory.join("video")).expect("create video folder");
     }
-    let (_lock, root) = world_root();
+    let (_lock, root) = world_root(slot.as_mut().and_then(slots::Permit::take_world_lock));
     let cache = root.join("character-cache");
     fs::create_dir_all(&cache).expect("create character cache");
     crate::hermetic::closed::use_cache_root(cache);
