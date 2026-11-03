@@ -617,7 +617,7 @@ pub(crate) fn detail_columns(ui: &mut egui::Ui, detail: &str, source: Option<&st
         });
         return;
     }
-    const COLUMNS: [(&str, f32); 3] = [("CR ", 66.0), ("HP ", 46.0), ("AC ", 38.0)];
+    const COLUMNS: [(&str, &str); 3] = [("CR ", "CR 1/8"), ("HP ", "HP 999"), ("AC ", "AC 25")];
     let parts: Vec<&str> = detail.split(" · ").collect();
     let other = parts
         .iter()
@@ -626,7 +626,8 @@ pub(crate) fn detail_columns(ui: &mut egui::Ui, detail: &str, source: Option<&st
     ui.spacing_mut().interact_size.y = 0.0;
     ui.horizontal(|ui| {
         ui.spacing_mut().item_spacing.x = 0.0;
-        for (prefix, width) in COLUMNS {
+        for (prefix, widest) in COLUMNS {
+            let width = design::number_width(ui, widest, &Type::Small.font(ui)) + design::S;
             let part = parts
                 .iter()
                 .find(|part| part.starts_with(prefix))
@@ -643,7 +644,7 @@ pub(crate) fn detail_columns(ui: &mut egui::Ui, detail: &str, source: Option<&st
             );
         }
         if detail.starts_with("NPC · as ") {
-            ui.add_space(design::S);
+            ui.add_space(design::M - design::S);
             ui.label(
                 Type::Small
                     .rich(ui, parts[..2].join(" · "))
@@ -652,11 +653,29 @@ pub(crate) fn detail_columns(ui: &mut egui::Ui, detail: &str, source: Option<&st
         }
         // Only whole: a cut name says nothing, and Read always shows it.
         if let Some(source) = source
-            && design::number_width(ui, source, &Type::Small.font(ui)) <= ui.available_width()
+            && design::number_width(ui, source, &Type::Small.font(ui)) + design::M - design::S
+                <= ui.available_width()
         {
+            ui.add_space(design::M - design::S);
             ui.label(Type::Small.rich(ui, source).color(colors().muted));
         }
     });
+}
+
+fn editor_save_state(
+    ui: &mut egui::Ui,
+    state: Status<'_>,
+    dirty: bool,
+    blocked: Option<&str>,
+) -> bool {
+    ui.set_min_height(Density::Read.control());
+    design::status(ui, state);
+    dirty
+        && Action::quiet("Discard")
+            .density(Density::Read)
+            .blocked(blocked)
+            .show(ui)
+            .clicked()
 }
 
 fn grouped(value: u64) -> String {
@@ -2902,7 +2921,7 @@ impl Encounters {
             } else {
                 (icons::OK, "No changes", colors().muted)
             };
-            discard = design::save_row_state(
+            discard = editor_save_state(
                 ui,
                 Status { icon, word, color },
                 dirty,
@@ -3236,6 +3255,18 @@ impl Encounters {
         peek: &mut Option<Uuid>,
         roster: SearchRoster<'_>,
     ) -> Option<(Uuid, bool)> {
+        Self::creature_search_with_summary(ui, creatures, search, focus_search, peek, roster, "")
+    }
+
+    fn creature_search_with_summary<'a>(
+        ui: &mut egui::Ui,
+        creatures: impl Iterator<Item = &'a Creature>,
+        search: &mut String,
+        focus_search: &mut bool,
+        peek: &mut Option<Uuid>,
+        roster: SearchRoster<'_>,
+        summary: &str,
+    ) -> Option<(Uuid, bool)> {
         let mut chosen = None;
         let response = design::search_field(
             ui,
@@ -3246,6 +3277,12 @@ impl Encounters {
         );
         if std::mem::take(focus_search) {
             design::focus_and_select(ui, response.id, search);
+        }
+        if !summary.is_empty() {
+            let shown =
+                design::words_that_fit(ui, summary, &Type::Small.font(ui), ui.available_width());
+            ui.label(Type::Small.rich(ui, shown).color(colors().muted))
+                .on_hover_text(summary);
         }
         let query = search.to_lowercase();
         let mut matches: Vec<&Creature> = creatures
@@ -3922,6 +3959,67 @@ fn roster_detail(detail: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn editor_save_row_has_one_height_in_every_state() {
+        let ctx = egui::Context::default();
+        design::theme::install(&ctx);
+        let _ = ctx.run(Default::default(), |ctx| {
+            egui::CentralPanel::default().show(ctx, |ui| {
+                let mut heights = Vec::new();
+                for (dirty, word) in [(true, "Unsaved"), (false, "Saved"), (false, "No changes")] {
+                    heights.push(
+                        ui.horizontal(|ui| {
+                            editor_save_state(
+                                ui,
+                                Status {
+                                    icon: icons::OK,
+                                    word,
+                                    color: colors().muted,
+                                },
+                                dirty,
+                                None,
+                            );
+                        })
+                        .response
+                        .rect
+                        .height(),
+                    );
+                }
+                assert_eq!(heights, vec![Density::Read.control(); 3]);
+            });
+        });
+    }
+
+    #[test]
+    fn creature_detail_columns_reserve_room_for_their_widest_values() {
+        let ctx = egui::Context::default();
+        design::theme::install(&ctx);
+        let output = ctx.run(Default::default(), |ctx| {
+            egui::CentralPanel::default().show(ctx, |ui| {
+                detail_columns(ui, "CR 1/8 · HP 999 · AC 25", Some("Ashen Marches"));
+            });
+        });
+        let bounds = |word| {
+            output
+                .shapes
+                .iter()
+                .find_map(|shape| match &shape.shape {
+                    egui::Shape::Text(text) if text.galley.job.text == word => {
+                        Some(egui::Rect::from_min_size(text.pos, text.galley.size()))
+                    }
+                    _ => None,
+                })
+                .expect("the stat and source text must be painted")
+        };
+        for (before, after, gap) in [
+            ("CR 1/8", "HP 999", design::S),
+            ("HP 999", "AC 25", design::S),
+            ("AC 25", "Ashen Marches", design::M),
+        ] {
+            assert!(bounds(after).left() - bounds(before).right() >= gap - 0.5);
+        }
+    }
+
     #[test]
     fn changed_row_cuts_long_source_before_the_full_hand_change_link() {
         let ctx = egui::Context::default();

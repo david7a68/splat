@@ -853,6 +853,14 @@ pub mod party {
             "The affected party row marks its local edits",
         );
         d.state("copy-has-local-edits-signed-out", Sizes::Default);
+        d.click_beside("sheet file has your own edits", CONNECT_FIRST);
+        d.observe(
+            "iter-18-B-P3",
+            d.page_title().as_deref() == Some("Settings")
+                && d.focused_name().as_deref() == Some("Paste session cookie"),
+            "The local-edits message opens Settings with the cookie field focused",
+        );
+        d.click(NAV_PARTY);
 
         d.app_mut()
             .settings
@@ -4171,7 +4179,7 @@ pub mod signed_in {
             "Locked link",
             d.visible_text(BLOCKED_REASON)
                 && d.is_disabled(EDIT_DETAILS)
-                && d.is_disabled("Session folder"),
+                && d.is_disabled("Folder"),
             "With a run open, the link tab states why it is locked, and its controls are",
         );
         d.state("link-tab-during-run", Sizes::Default);
@@ -4921,19 +4929,19 @@ pub mod session_notes {
         d.click("Sessions");
         d.click("Campaign");
         d.click("Link and folder");
-        d.expect("Session folder");
+        d.expect("SESSION FOLDER");
         d.state("session-folder-in-campaign", Sizes::All);
         d.app_mut().timeline.save();
-        d.replace_text_in("Session folder", "30 Sessions");
+        d.replace_text_in("Folder", "30 Sessions");
         d.expect("Move files and save");
         d.expect("Unsaved");
         d.click("Discard");
         d.observe(
             "iter-7-S3",
-            d.field_text("Session folder").as_deref() == Some("Sessions"),
+            d.field_text("Folder").as_deref() == Some("Sessions"),
             "Discard restores the saved session folder",
         );
-        d.replace_text_in("Session folder", "30 Sessions");
+        d.replace_text_in("Folder", "30 Sessions");
         d.expect("Save without moving");
         d.state("session-folder-move-offered", Sizes::All);
         d.click("Move files and save");
@@ -4967,6 +4975,24 @@ pub mod session_notes {
             "Adding an event to an older session says so before it happens",
         );
         d.state("session-events-older", Sizes::Default);
+        d.observe_both(
+            "iter-18-B-rest-row",
+            "The rest summary and ruling share one line",
+            |d| {
+                let title = d
+                    .nodes()
+                    .into_iter()
+                    .find(|node| node.name == "Rest at the mill");
+                title.is_some_and(|title| {
+                    let area = egui::Rect::from_min_max(
+                        title.rect.left_top(),
+                        egui::pos2(title.rect.left() + 400.0, title.rect.bottom() + 36.0),
+                    );
+                    d.painted_rect_in("Everyone", area)
+                        .is_some_and(|line| line.height() <= crate::design::Type::Small.line())
+                })
+            },
+        );
         write_note(d);
         d.observe(
             "T11.8",
@@ -5278,6 +5304,34 @@ pub mod session_notes {
         );
         d.state("timeline-with-run", Sizes::All);
         d.observe_both(
+            "iter-18-B-S2-timeline",
+            "The open fight uses the same second-line offset as other Timeline rows",
+            |d| {
+                let nodes = d.nodes();
+                let offsets: Vec<_> = nodes
+                    .iter()
+                    .filter(|node| node.name.contains(" · "))
+                    .filter_map(|node| {
+                        let (title, _) = node.name.split_once(" · ")?;
+                        let first = d.painted_rect_in(title, node.rect)?;
+                        let second = d.painted_rect_in(
+                            if title == RUN { "Round 2" } else { "Day 1" },
+                            node.rect,
+                        )?;
+                        (second.top() > first.top()).then_some((title, second.top() - first.top()))
+                    })
+                    .collect();
+                offsets
+                    .iter()
+                    .find(|(title, _)| *title == RUN)
+                    .is_some_and(|(_, offset)| {
+                        offsets
+                            .iter()
+                            .any(|(title, other)| *title != RUN && (offset - other).abs() <= 1.0)
+                    })
+            },
+        );
+        d.observe_both(
             "iter-14-S1",
             "The open fight's Timeline row says Round 2 without Paused",
             |d| {
@@ -5329,6 +5383,36 @@ pub mod session_notes {
             "The Timeline round link opens the run",
         );
         d.audit_goal_within("iter-14-S1", "open the run from its Timeline round", 1);
+        d.click(NAV_SESSIONS);
+        show_plan(d);
+        d.observe_both(
+            "iter-18-B-S2-plan",
+            "The open fight's plan summary stays on the standard second line",
+            |d| {
+                let title = d
+                    .nodes()
+                    .into_iter()
+                    .find(|node| node.name == RUN && node.is_link());
+                title.is_some_and(|title| {
+                    let area = egui::Rect::from_min_max(
+                        title.rect.left_top(),
+                        egui::pos2(title.rect.left() + 400.0, title.rect.bottom() + 36.0),
+                    );
+                    d.painted_rect_in("Round 2", area)
+                        .zip(d.painted_rect_in(RUN, title.rect))
+                        .is_some_and(|(line, first)| {
+                            (line.top()
+                                - first.top()
+                                - crate::design::Density::Read.control()
+                                - crate::design::XS / 2.0)
+                                .abs()
+                                <= 2.0
+                        })
+                })
+            },
+        );
+        d.state("plan-open-fight-aligned", Sizes::Default);
+        write_note(d);
         d.click(NAV_TIMELINE);
         d.begin_task();
 
@@ -6829,6 +6913,12 @@ pub mod session_plan_groups {
         d.click_beside_exact("Wolf", ADD);
         d.click_beside_exact("Wolf", ADD);
         d.state("plan-group-assembled", Sizes::All);
+        let summary_visible = d.at_size(SMALL, |d| d.visible_text("2 × Wolf"));
+        d.observe(
+            "iter-18-B-PX3",
+            summary_visible,
+            "The compact Add creatures pane keeps a member summary",
+        );
         d.click("Save group");
         d.expect("Edit group Ash Pack");
         d.state("plan-group-saved", Sizes::All);
@@ -6856,11 +6946,12 @@ pub mod session_plan_groups {
         d.begin_task();
         d.click(&format!("More actions for {GROUP_RIVALS}"));
         d.click(&format!("Remove group {GROUP_RIVALS} from the plan"));
-        d.expect("Undo remove from plan");
+        d.expect("Undo remove");
         d.state("group-removed-from-plan", Sizes::Default);
         d.observe(
             "P1",
-            d.in_view("Undo remove from plan") && d.visible_text("Group removed from this plan."),
+            d.in_view("Undo remove")
+                && d.visible_text(&format!("Removed “{GROUP_RIVALS}” from tonight.")),
             "Remove group keeps its message and Undo in view after capture resize",
         );
         d.observe(
@@ -6868,7 +6959,7 @@ pub mod session_plan_groups {
             !d.has(&format!("Edit group {GROUP_RIVALS}")),
             "The row menu removes a group from this plan",
         );
-        d.click("Undo remove from plan");
+        d.click("Undo remove");
         d.expect(&format!("Edit group {GROUP_RIVALS}"));
         d.begin_task();
 
@@ -6982,6 +7073,11 @@ pub mod session_plan {
         d.expect("Session 2: The Crossing");
         d.wait_for_text("Hobb the miller says");
         d.state("new-session-with-last-time", Sizes::All);
+        d.observe_both(
+            "iter-18-B-S4",
+            "The new note's first source line is fully visible",
+            |d| d.first_source_line_visible("# Session 2: The Crossing"),
+        );
         d.observe(
             "T12.6",
             d.has("Last time:")
@@ -7331,6 +7427,27 @@ pub mod session_plan {
         d.expect("Everyone at full");
         assert!(d.has("Long rest added. Everyone starts the next fight at full."));
         d.state("timeline-long-rest-restores", Sizes::All);
+        d.observe_both(
+            "iter-18-B-S1",
+            "The untitled rest header says Long rest once",
+            |d| {
+                let nodes = d.nodes();
+                let left = nodes
+                    .iter()
+                    .find(|node| {
+                        node.name == "Title" && node.role == egui::accesskit::Role::TextInput
+                    })
+                    .map(|node| node.rect.left());
+                let area = nodes
+                    .iter()
+                    .find(|node| node.name == "Copy link")
+                    .zip(left)
+                    .map(|(node, left)| {
+                        egui::Rect::from_min_max(egui::pos2(left, 0.0), node.rect.right_bottom())
+                    });
+                area.is_some_and(|area| d.painted_in(area).matches("Long rest").count() == 1)
+            },
+        );
         d.click("Not at full");
         assert!(!crate::timeline::party_state(&d.app_mut().timeline.events, session).rested);
         d.state("timeline-rest-ruling-off", Sizes::Default);
