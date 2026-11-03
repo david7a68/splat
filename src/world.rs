@@ -409,6 +409,20 @@ pub fn place(entry: &Entry) -> Option<Reference> {
     reference(world_field(entry, "in")?)
 }
 
+fn link_name(value: &Value, fallback: &str) -> String {
+    value
+        .as_str()
+        .or_else(|| value.get("link").and_then(Value::as_str))
+        .map(|link| {
+            link.trim_matches(['[', ']'])
+                .split('|')
+                .next_back()
+                .unwrap_or(link)
+                .to_owned()
+        })
+        .unwrap_or_else(|| fallback.to_owned())
+}
+
 fn creature(entry: &Entry) -> Option<Reference> {
     reference(world_field(entry, "creature")?)
 }
@@ -1066,32 +1080,8 @@ impl Reader {
         }
     }
 
-    fn relationship_width(ui: &egui::Ui, item: &Item, index: &ContentIndex) -> f32 {
-        let mut width = design::XXL;
-        for key in ["creature", "in", "status"] {
-            let target = if key == "in" {
-                index.place_of(item.entry.id)
-            } else if key == "creature" {
-                creature(&item.entry).and_then(|r| index.position_of(&r))
-            } else {
-                None
-            };
-            let text = target
-                .map(|at| index.items[at].entry.name.clone())
-                .unwrap_or_else(|| {
-                    world_field(&item.entry, key)
-                        .and_then(Value::as_str)
-                        .map(|s| {
-                            if key == "status" {
-                                s.to_owned()
-                            } else {
-                                format!("{} · Not found", s.trim_matches(['[', ']']))
-                            }
-                        })
-                        .unwrap_or_else(|| "not set".into())
-                });
-            width = width.max(design::number_width(ui, &text, &Type::Body.font(ui)) + design::L);
-        }
+    fn relationship_width(ui: &egui::Ui) -> f32 {
+        let width = design::XXL * 4.0 + design::L;
         width.min(
             (ui.available_width()
                 - (design::XXL * 3.0 + design::S)
@@ -1131,9 +1121,10 @@ impl Reader {
                     );
                     ui.allocate_ui_with_layout(
                         egui::vec2(width, design::Density::Scan.control()),
-                        egui::Layout::top_down(egui::Align::Min),
+                        egui::Layout::left_to_right(egui::Align::Center).with_main_wrap(true),
                         |ui| {
                             ui.set_min_width(width);
+                            ui.set_max_width(width);
                             value(ui);
                         },
                     );
@@ -1200,7 +1191,7 @@ impl Reader {
         campaign: &Campaign,
     ) -> Option<Go> {
         let mut go = None;
-        let value_width = Self::relationship_width(ui, item, index);
+        let value_width = Self::relationship_width(ui);
         for (key, label) in [("creature", "Stat block"), ("in", "In")] {
             if key == "creature" && world_type(&item.entry) != "npc" {
                 continue;
@@ -1239,23 +1230,19 @@ impl Reader {
                                 Type::Small
                                     .rich(
                                         ui,
-                                        if key == "creature" {
-                                            format!("{} Stat block not found", design::icons::WARN)
-                                        } else {
-                                            format!(
-                                                "{} {} · Not found",
-                                                design::icons::WARN,
-                                                value
-                                                    .as_str()
-                                                    .unwrap_or("Entry")
-                                                    .trim_matches(['[', ']'])
-                                            )
-                                        },
+                                        format!(
+                                            "{} {} · Not found",
+                                            design::icons::WARN,
+                                            value
+                                                .as_str()
+                                                .unwrap_or("Entry")
+                                                .trim_matches(['[', ']'])
+                                        ),
                                     )
                                     .color(colors().result.warning),
                             );
                         } else {
-                            ui.label(Type::Small.rich(ui, "none").color(colors().muted));
+                            ui.label(Type::Small.rich(ui, "not set").color(colors().muted));
                         }
                     },
                     notice.as_deref(),
@@ -1389,7 +1376,12 @@ impl Reader {
                     ui,
                     design::Status {
                         icon: design::icons::WARN,
-                        word: "Stat block not found",
+                        word: &format!(
+                            "Fights as {} · Not found",
+                            world_field(&item.entry, "creature")
+                                .map(|v| link_name(v, "Stat block"))
+                                .unwrap_or_else(|| "Stat block".into())
+                        ),
                         color: colors().result.warning,
                     },
                 );
@@ -1420,7 +1412,7 @@ impl Reader {
             return Some(go);
         }
         if !self.compact {
-            let value_width = Self::relationship_width(ui, item, index);
+            let value_width = Self::relationship_width(ui);
             if !self.status_editing {
                 let value = status(&item.entry);
                 if Self::relationship_row(
@@ -1477,7 +1469,7 @@ impl Reader {
         if !self.compact
             && let Some(change) = &self.undo
             && change.path == item.entry.path
-            && !Self::notice_fits(ui, Self::relationship_width(ui, item, index), &change.word)
+            && !Self::notice_fits(ui, Self::relationship_width(ui), &change.word)
             && ui
                 .horizontal(|ui| Self::change_notice(ui, &change.word))
                 .inner

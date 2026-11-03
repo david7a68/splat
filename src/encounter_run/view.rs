@@ -3074,18 +3074,20 @@ impl Run {
     /// Recording only. Colour says nothing here, because nothing is wrong.
     fn death_saves(&mut self, ui: &mut egui::Ui, index: usize, successes: u8, failures: u8) {
         let c = colors();
-        ui.add_space(design::L);
         design::group_heading(ui, "Death saves", 0);
         let mut command = None;
         ui.horizontal(|ui| {
             ui.set_min_height(Density::Read.control());
             ui.spacing_mut().item_spacing.x = design::XS;
-            ui.label(Type::Small.rich(ui, "Death saves").color(c.text));
             ui.label(
                 Type::Small
                     .rich(
                         ui,
-                        format!("{successes} {} · {failures} {}", icons::OK, icons::CLOSE),
+                        format!(
+                            "{} · {}",
+                            design::count(successes as usize, "success", "successes"),
+                            design::count(failures as usize, "failure", "failures")
+                        ),
                     )
                     .color(c.text),
             );
@@ -3193,6 +3195,7 @@ impl Run {
                 });
             }
             if p.hp == Some(0) {
+                ui.add_space(design::L);
                 self.death_saves(ui, index, p.successes, p.failures);
             }
             let spells = crate::party::has_spells(&record);
@@ -3303,7 +3306,8 @@ impl Run {
                 let p = &self.state.participants[index];
                 let mut hp = p.hp;
                 let mut max = p.max_hp;
-                design::group_label(ui, "Correct HP");
+                if p.hp == Some(0) { ui.add_space(design::L); }
+                design::group_heading(ui, "Correct HP", 0);
                 let sheet_decides = self.syncs.get(&index).is_some_and(|sync| sync.ready());
                 optional_number(ui, "Current HP", &mut hp, 0..=1_000_000);
                 design::locked(ui, sheet_decides.then_some(MAX_FROM_SHEET), |ui| {

@@ -1336,10 +1336,6 @@ fn section_heading(ui: &mut egui::Ui, title: &str) {
     ui.add_space(design::L);
     design::group_heading(ui, title, 0);
 }
-fn subsection_heading(ui: &mut egui::Ui, title: &str) {
-    ui.add_space(design::XS);
-    design::group_heading(ui, title, 0);
-}
 const TILE_WIDTH: f32 = 112.0;
 
 /// A row of stat tiles that breaks evenly: six across, or three, or two. A lone tile on a
@@ -1465,7 +1461,7 @@ pub(crate) fn overview(ui: &mut egui::Ui, record: &EntitySnapshot, live: Option<
             });
         }
     });
-    subsection_heading(ui, "Skills");
+    section_heading(ui, "Skills");
     ui.columns(across, |cols| {
         for (at, skill) in record.character.skills.iter().enumerate() {
             cols[at % across].horizontal(|ui| {
@@ -1522,7 +1518,7 @@ pub(crate) fn overview(ui: &mut egui::Ui, record: &EntitySnapshot, live: Option<
     }
     ui.add_space(design::S);
     let proficiencies = |ui: &mut egui::Ui| {
-        subsection_heading(ui, "Proficiencies & languages");
+        section_heading(ui, "Proficiencies & languages");
         for group in &record.character.proficiencies {
             let values = text(&group["values"]);
             if !values.is_empty() {
@@ -1531,7 +1527,7 @@ pub(crate) fn overview(ui: &mut egui::Ui, record: &EntitySnapshot, live: Option<
         }
     };
     let defenses = |ui: &mut egui::Ui| {
-        subsection_heading(ui, "Defenses & senses");
+        section_heading(ui, "Defenses & senses");
         for (label, values) in [
             ("Resistance", &record.character.resistances),
             ("Immunity", &record.character.immunities),
@@ -1548,12 +1544,12 @@ pub(crate) fn overview(ui: &mut egui::Ui, record: &EntitySnapshot, live: Option<
                 text(&sense["distance"])
             ));
         }
-        subsection_heading(ui, "Death saves");
+        section_heading(ui, "Death saves");
         ui.label(format!(
             "{} successes · {} failures",
             record.initial.death_saves.successes, record.initial.death_saves.failures
         ));
-        subsection_heading(ui, "Conditions");
+        section_heading(ui, "Conditions");
         let names: Vec<String> = live.map_or_else(
             || {
                 record

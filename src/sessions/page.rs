@@ -3728,12 +3728,15 @@ impl Sessions {
                     any = true;
                     let row = ui.push_id(group.id, |ui| {
                         let mut read_group = false;
-                        plan_row(ui, &widths, icons::GROUP, |ui| {
+                        let group_action = if plan.arrivals_open { Action::quiet("Arrivals").icon(icons::GROUP) } else { Action::quiet("Edit") };
+                        let action_width = group_action.density(Density::Read).natural_width(ui) + Density::Read.control() + design::S;
+                        let group_widths = [width - action_width - design::S, action_width];
+                        plan_row(ui, &group_widths, icons::GROUP, |ui| {
                             if design::wrapped_link(ui, &group.name).clicked() { read_group = true; }
                         }, |ui| {
-                            let summary = plan_summary(&group.summary());
+                            let summary = format!("{} · {}{} · {}", group.xp_label(), group.member_summary(), if group.members.iter().any(|m| !m.overrides.is_empty()) { " · Changed" } else { "" }, design::reader::human_label(&group.side));
                             let shown = design::words_that_fit(ui, &summary, &Type::Small.font(ui), ui.available_width());
-                            ui.label(Type::Small.rich(ui, shown).color(c.muted)).on_hover_text(group.summary());
+                            ui.label(Type::Small.rich(ui, shown).color(c.muted)).on_hover_text(&summary);
                             if let Some(problem) = &group.problem { wrapped_words(ui, Type::Small, problem, c.result.warning); }
                         }, |ui| {
                             design::row_menu(ui, &group.name, |ui| {

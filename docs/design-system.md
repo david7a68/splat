@@ -143,7 +143,7 @@ when a prose AC or HP line disagrees and offers `Use <value>` with Undo. Missing
 replacements use the shared search row, with CR, HP, AC and `Use`. Replace all matching
 rows is on by default; it keeps their names and starting values, with one Undo.
 
-World uses labelled `Stat block`, `In` and `Status` rows with `Change` actions. New NPCs
+World uses labelled `Stat block`, `In` and `Status` rows with `Change` actions. Values share a fixed column and text baseline; empty values say `not set`. Missing links keep their names. New NPCs
 show their future path below the name. A missing place stays visible as `Not found`.
 
 `theme::install` sets one global `egui::Style`, so any plain egui widget still fits: hover,
@@ -477,7 +477,7 @@ Inline creation forms use a Label title, fields, then a named Create action, its
 
 Settings uses `CAMPAIGNS` and `D&D BEYOND ACCOUNT` group headings in both layouts. In the compact layout, the open account form replaces the status line and its `Connect…` link. The account verb is `Connect`; states include `Not connected` and `Signed out of D&D Beyond`. A keyring warning owns its `Connect again` action. `Disconnect` is quiet and follows the trust text. A quiet action on its own line aligns its word with the text above it; its target can extend into the gutter. The add-campaign form closes after a successful add.
 
-Settings shows one Connecting status, and Cancel aligns with the column. Connect is primary when a cookie is entered, no campaign form is open and no run owns the primary action. An unchanged campaign form blocks Save details with No changes to save. Settings leaves its header context empty; campaign counts stay on their list heading. The rail shortens Connected · not remembered to Not remembered; its hover text and accessible name keep the full state. The import form keeps the campaign name in its field and omits the remote identifier, repeated heading and open row's Add action. An API key saved for another service keeps Save key visible with Paste a key first; removing that other key is a separate quiet action.
+Settings shows one Connecting status, and Cancel aligns with the column. Connect is primary when a cookie is entered, no campaign form is open and no run owns the primary action. An unchanged campaign form blocks Save details with No changes to save. Settings leaves its header context empty; campaign counts stay on their list heading. The rail shows Connected · not remembered when it fits, or Connected with the warning icon and colour; its hover text and accessible name keep the full state. The import form keeps the campaign name in its field and omits the remote identifier, repeated heading and open row's Add action. An API key saved for another service keeps Save key visible with Paste a key first; removing that other key is a separate quiet action.
 
 Recording settings clip at the tab rule, with `L` above each section. Visible field labels are `Service`, `Address`, `Model` and `API key`; accessible names keep the service context. A remove-key button names its slot and service, for example Remove speech key (OpenAI). It sits below the key state at the column’s left edge. A saved key for the chosen service with no replacement typed hides Save key and its empty-field reason.
 
@@ -516,7 +516,7 @@ and save stages all files without replacing an existing file, saves the settings
 then removes unchanged originals. Save without moving keeps the files in the old
 folder. Saving run settings is blocked while a run is open.
 
-New entry, Create package and Copy to a package keep Use in this campaign on by default. The help says what selection will be saved. A package entry shows its package and Used here or Not used here; Use in this campaign saves the missing choice. The clean Library save row shows No changes at the left; blocked Save gives No changes to save on hover. Other clean save rows keep their existing blocked save reason. Unsaved, Saved and errors keep their left status.
+New entry, Create package and Copy to a package keep Use in this campaign on by default. The help says what selection will be saved. A package entry shows its package and Used here or Not used here; Use in this campaign saves the missing choice. Clean save rows show No changes at the left; blocked Save gives No changes to save only on hover and in its accessible description. Unsaved, Saved and errors keep their left status.
 
 Every reader resolves `[[Name]]`, `[[Name#Heading]]` and `[[Name|text]]` against World notes and the entries the campaign can use. Duplicate names open a chooser. Missing names keep their words, with a dotted underline and Not found in this campaign on hover. Reference keys keep working. The shared resolver is `ContentIndex::resolve_link`; Markdown readers call `reader_markdown` through the current index.
 
@@ -599,8 +599,7 @@ Built-in templates use the styled source face without an input well, at full col
 The session Number field is five L units wide.
 
 Encounter drafts keep Save or discard to switch campaign on their save row.
-A blocked Start fight shows Close the open run first beside it. Clean group saves use
-No changes to save beside Save group, with no second clean status.
+A blocked Start fight shows Close the open run first beside it. Clean group saves show No changes at the left. Save group keeps its clean reason on hover.
 NPC search results keep CR, HP and AC in fixed columns and put NPC · as Guard after AC.
 An offline Party now line offers Connect to sync. The first-sheet-read help keeps its Settings link inside the Small sentence. Initiative tie arrows have one fixed slot
 before the ordinal and use the standard setup row height.
@@ -636,3 +635,19 @@ warning on hover and in its accessible name. A stalled row omits its session nam
 
 Processing destinations show beside Process and Continue processing, and in the
 Process again confirmation. A saved key field invites a replacement key.
+
+
+## Library and preparation audit, iteration 9
+
+Library keeps its validation count in the page header. Its menu opens the messages.
+Repair errors use file line numbers and put the caret on the line to fix. A repaired
+note reloads campaign use at once. A later disk change clears Undo discard.
+Draft reasons keep their reserved height and start at the editor's left edge.
+New entry reveals its selected list row after the catalogue reloads. Hidden source
+headings and comments add no reader space. Manage packages offers Clear only for
+filled fields. Folder suggestions use the combo arrow and normal text colour.
+
+Plan group summaries put XP first, then members, Changed and side. They measure
+against their own action. Tabbed member and roster views omit the repeated count.
+Sheet group headings use an L gap. Death-save counts use words; Correct HP has an
+L gap after death saves. Missing encounter entries have a warning icon.

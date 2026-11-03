@@ -402,11 +402,11 @@ Local packages support new entries and Markdown editing. **About <package name>*
 
 **Use in this campaign** starts on for new entries, new packages and copies to packages. It saves the package choice too, so the content can be found in the encounter editor. The reader shows whether an entry is used here and offers the same action when it is not. **Save** checks note
 structure, keeps existing UUIDs and kinds, rejects duplicate identities, and checks
-for external edits before replacing a file. Validation messages show unresolved
+for external edits before replacing a file. The header validation count opens messages for unresolved
 references; a package-only check can report references to other packages as unresolved.
-Invalid entry notes remain available for repair. If the file changed on disk, the save stops
+Invalid entry notes remain available for repair, with file line numbers and the caret on the error. Saving a repair restores the campaign-use state at once. If the file changed on disk, the save stops
 and shows disk and draft side by side, with marked lines and **Next difference**. Choose **Overwrite with my draft** or **Reload and lose my draft**.
-**Discard changes** takes one press and offers **Undo discard** until the next edit. Changing
+**Discard** takes one press and offers **Undo discard** until the next edit or disk change. If the file was deleted, **Overwrite with my draft** creates it again. Changing
 pages keeps the draft in memory.
 Save before closing the app; drafts are not persisted.
 
@@ -415,7 +415,7 @@ Every reader accepts Obsidian links: `[[Name]]`, `[[Name#Heading]]` and `[[Name|
 In **Campaign → Packages**, enable a whole package or select individual
 entries. Required dependencies are included separately with their reasons, and rule
 groups include all members. Whole-package selections include future additions;
-individual selections do not. **Save selections** writes `splat_packages` into the
+individual selections do not. When all current entries are selected, **Include future additions** switches to the whole package. **Save selections** writes `splat_packages` into the
 campaign manifest while preserving unrelated fields, comments, and note text. A
 campaign without a manifest gets `Campaign.md` on first save, with its existing UUID
 and the default SRD selection. Missing packages and unresolved references remain visible.

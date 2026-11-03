@@ -544,7 +544,43 @@ pub fn package_file_changed(d: &mut Driver<'_>) {
     d.click("Save");
     d.click("Read");
     d.wait_for_text("Ash Bite");
+    d.expect("Ashen Marches · Used here");
     d.state("package-yaml-repaired", Sizes::All);
+
+    // Keep the original repair proof at step 08; repeat the break for its consumers.
+    fs::write(&path, &broken).unwrap();
+    d.focus_window(false);
+    d.focus_window(true);
+    go_encounters(d);
+    open_saved_encounter(d, "Bridge Ambush");
+    d.expect("Not found. Its package entry was deleted.");
+    d.state("invalid-package-in-encounter", Sizes::All);
+    d.click("Back to encounters");
+    resume_run_from_cold_start(d);
+    d.click_row("Cinder Wolf 1");
+    d.click("Stat block");
+    d.expect("Bite");
+    d.state("invalid-package-in-paused-run", Sizes::All);
+    close_run(d);
+    go_library(d);
+    search_library(d, "Cinder Wolf");
+    d.click_starting("Creatures/Cinder Wolf.md · ");
+    d.click(EDIT_MARKDOWN);
+    d.replace_editor_text(&valid);
+    d.click("Save");
+    d.click("Read");
+    d.wait_for_text("Ashen Marches · Used here");
+    go_encounters(d);
+    open_saved_encounter(d, "Bridge Ambush");
+    assert!(!d.has_containing("Not found. Its package entry was deleted."));
+    d.state("repaired-package-in-encounter", Sizes::All);
+    d.click("Back to encounters");
+    resume_run_from_cold_start(d);
+    d.click_row("Cinder Wolf 1");
+    d.click("Stat block");
+    d.expect("Bite");
+    d.expect_same("The paused run keeps its saved creature snapshot across a package repair.");
+    d.state("repaired-package-in-paused-run", Sizes::All);
 }
 
 /// Deleting a file leaves its uses visible and its reader link unresolved.
@@ -618,6 +654,29 @@ pub fn package_delete_entry(d: &mut Driver<'_>) {
     d.expect("Not found. Its package entry was deleted.");
     d.expect_same("Undo replacement restores the original missing-creature rows and warning.");
     d.state("deleted-package-entry-replacement-undone", Sizes::All);
+    go_library(d);
+    search_library(d, "Ash Exposure");
+    d.click_starting("Ash Exposure · ");
+    d.click(EDIT_MARKDOWN);
+    d.type_into_editor("The draft survives a deleted file.\n");
+    fs::remove_file(&rules).unwrap();
+    d.focus_window(false);
+    d.focus_window(true);
+    d.wait_for_text(
+        "This entry's file has gone from disk. Your draft is safe here until you choose.",
+    );
+    d.state("draft-file-deleted-on-disk", Sizes::All);
+    d.click("Overwrite with my draft");
+    d.wait_for_text("Saved");
+    reveal_editor_passage(d, "The draft survives a deleted file.");
+    assert!(
+        fs::read_to_string(&rules)
+            .unwrap()
+            .contains("The draft survives a deleted file.")
+    );
+    d.state("deleted-draft-file-saved", Sizes::All);
+    d.click("Read");
+    d.expect("The draft survives a deleted file.");
 }
 
 /// Copy a book creature into a shared package, then change its HP.
@@ -677,7 +736,7 @@ pub fn world_note_deleted(d: &mut Driver<'_>) {
         "Watchkeeper",
         "npc",
         &format!(
-            "  in: '[[Watch House]]'\n  creature: {{id: {}}}\n",
+            "  in: '[[Watch House]]'\n  creature: {{id: {}, link: '[[Watchkeeper Guard]]'}}\n",
             block.id
         ),
     );
@@ -698,11 +757,11 @@ pub fn world_note_deleted(d: &mut Driver<'_>) {
     fs::remove_file(root(d).join("Watchkeeper Guard.md")).unwrap();
     d.focus_window(false);
     d.focus_window(true);
-    d.wait_for_text("Stat block not found");
+    d.wait_for_text("Watchkeeper Guard · Not found");
     d.type_into("Search the world", "Watchkeeper");
     d.state("npc-stat-block-deleted-in-world", Sizes::All);
     look_up(d, "Watchkeeper");
-    d.wait_for_text("Stat block not found");
+    d.wait_for_text("Watchkeeper Guard · Not found");
     d.state("npc-stat-block-deleted-in-lookup", Sizes::All);
     d.press(Key::Escape);
     go_encounters(d);

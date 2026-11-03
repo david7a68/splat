@@ -463,6 +463,13 @@ pub mod reader_tables {
         d.click("Kind of entry");
         d.click("Rule");
         d.click("Create entry");
+        assert!(
+            d.nodes()
+                .iter()
+                .any(|n| n.name.starts_with("Spell Progression · ") && n.fully_in_view()),
+            "the new entry row is in view"
+        );
+        assert!(d.app_mut().library.selected_name() == Some("Spell Progression"));
         d.type_into_editor(
             "| Level | Proficiency Bonus | Features | Cantrips | Prepared Spells | 1st | 2nd | 3rd | 4th | 5th | 6th | 7th | 8th | 9th |\n\
              | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |\n\
@@ -2664,7 +2671,7 @@ pub mod party_from_run {
         d.click_row(MEMBER);
         d.state("zero-hp-selected", Sizes::Default);
         d.click("Correct");
-        d.expect("Death saves");
+        d.expect("DEATH SAVES");
         d.click("Add a death save success");
         d.observe(
             "Death saves",
@@ -7048,8 +7055,8 @@ pub mod package_to_table {
         let edited = text
             .replace("max_hp: {value: 1}", "max_hp: {value: 22}")
             .replace("armor_class: {value: 10}", "armor_class: {value: 15}")
-            .replace("strength:\n    value: 10", "strength:\n    value: 18")
-            .replace("dexterity:\n    value: 10", "dexterity:\n    value: 14");
+            .replace("strength: {value: 10}", "strength: {value: 18}")
+            .replace("dexterity: {value: 10}", "dexterity: {value: 14}");
         assert_ne!(text, edited);
         d.replace_editor_text(&edited);
         d.click("Save");
@@ -7165,7 +7172,7 @@ pub mod remove_package_in_use {
         );
         go_campaign(d);
         d.click("Reload from disk");
-        d.expect("Ashen Marches is no longer on this computer.");
+        d.expect("Splat cannot find Ashen Marches.");
         d.expect("Remove from this campaign");
         d.expect("Find the folder…");
         d.observe(

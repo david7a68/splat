@@ -2903,6 +2903,7 @@ impl Encounters {
                     expanded,
                     linked.then_some(party),
                     &mut make_yours,
+                    true,
                 ),
                 EditorPane::Add => {
                     match &mut self.creature {
@@ -2963,6 +2964,7 @@ impl Encounters {
                     expanded,
                     linked.then_some(party),
                     &mut make_yours,
+                    false,
                 );
             });
         self.after_panes(creature_step, make_yours, active, campaigns.modules());
@@ -3176,6 +3178,7 @@ impl Encounters {
         chosen
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn roster_pane(
         ui: &mut egui::Ui,
         draft: &mut Draft,
@@ -3184,13 +3187,14 @@ impl Encounters {
         expanded: &mut Option<String>,
         linked_party: Option<&Party>,
         make_yours: &mut Option<usize>,
+        tabbed: bool,
     ) -> bool {
         // All of it scrolls, so that the settings give up their room to a group being built.
         egui::ScrollArea::vertical()
             .id_salt("encounter_editor")
             .auto_shrink([false, false])
             .show(ui, |ui| {
-                design::group_heading(ui, "Roster", draft.setup.roster.len());
+                if !tabbed { design::group_heading(ui, "Roster", draft.setup.roster.len()); }
                 // Without a link there is no sheet to sync with, whatever the note says.
                 let live = linked_party.filter(|_| draft.setup.combat_sync);
                 if draft.setup.roster.is_empty() {
@@ -3345,7 +3349,7 @@ impl Encounters {
                 let identity = definition.filter(|_| slot.overrides.contains_key("name")).map(|entry| format!(" · as {}", entry.name)).unwrap_or_default();
                 let side = design::reader::human_label(&slot.side);
                 let detail = if missing {
-                    format!("{side} · {MISSING_CREATURE}")
+                    format!("{side} · {} {MISSING_CREATURE}", icons::WARN)
                 } else if detail.is_empty() {
                     format!("{side_icon} {side}{identity}")
                 } else {
@@ -3626,6 +3630,9 @@ impl Encounters {
                         ));
                     }
                 }
+                if !changed {
+                    design::save_row_state(ui, Status { icon: icons::OK, word: "No changes", color: colors().muted }, false, None);
+                }
                 if !changed
                     && self.discarded_options.is_some()
                     && design::draft_discarded(ui)
@@ -3648,7 +3655,7 @@ impl Encounters {
                         } else {
                             let pressed = Action::primary("Save run settings").key("Ctrl+S")
                                 .blocked(blocked).show(ui).clicked();
-                            design::blocked_reason(ui, blocked);
+                            design::blocked_reason(ui, blocked.filter(|_| changed));
                             pressed
                         }
                     })

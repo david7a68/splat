@@ -700,6 +700,60 @@ mod reading_tests {
         notes
     }
 
+    #[test]
+    fn every_builtin_subclass_has_one_gap_before_its_first_visible_block() {
+        let loaded = crate::library::load(None).unwrap();
+        let mut count = 0;
+        for entry in loaded
+            .notes
+            .iter()
+            .filter_map(|n| n.entry.as_ref())
+            .filter(|e| category(e) == "subclass")
+        {
+            let sections = reading_sections(&entry.body, &entry.name);
+            let source = sections.iter().find(|s| s.title == "Source text").unwrap();
+            let prose = overview_markdown(source.body);
+            let first_y = |reader: bool| {
+                let ctx = eframe::egui::Context::default();
+                crate::design::theme::install(&ctx);
+                let output = ctx.run(Default::default(), |ctx| {
+                    eframe::egui::CentralPanel::default().show(ctx, |ui| {
+                        if reader {
+                            crate::library::reader::show(
+                                ui,
+                                Some(entry),
+                                std::slice::from_ref(source),
+                                true,
+                                false,
+                            );
+                        } else {
+                            ui.add_space(design::L);
+                            design::reader::source_prose(ui, &prose);
+                        }
+                    });
+                });
+                output
+                    .shapes
+                    .iter()
+                    .filter_map(|s| match &s.shape {
+                        eframe::egui::Shape::Text(t) if !t.galley.job.text.trim().is_empty() => {
+                            Some(t.pos.y)
+                        }
+                        _ => None,
+                    })
+                    .min_by(f32::total_cmp)
+                    .unwrap()
+            };
+            assert!(
+                (first_y(true) - first_y(false)).abs() < 1.0,
+                "{} adds space for hidden content",
+                entry.name
+            );
+            count += 1;
+        }
+        assert!(count > 0);
+    }
+
     fn letters(text: &str) -> String {
         text.chars()
             .filter(|c| c.is_alphanumeric())
