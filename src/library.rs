@@ -210,6 +210,7 @@ impl Note {
 #[derive(Default)]
 struct Loaded {
     notes: Vec<Note>,
+    owners: Vec<Owner>,
     /// Problems that kept content from loading. The notes cannot show these again.
     load_errors: Vec<String>,
     diagnostics: Vec<String>,
@@ -222,11 +223,11 @@ struct Loaded {
 impl Loaded {
     fn duplicate_ids(&self) -> &std::collections::HashSet<Uuid> {
         self.duplicate_ids.get_or_init(|| {
-            let mut seen = std::collections::HashSet::new();
             self.notes
                 .iter()
-                .filter_map(|note| note.entry.as_ref())
-                .filter_map(|entry| (!seen.insert(entry.id)).then_some(entry.id))
+                .enumerate()
+                .filter(|(at, _)| !self.duplicates(*at).is_empty())
+                .filter_map(|(_, note)| note.entry.as_ref().map(|entry| entry.id))
                 .collect()
         })
     }
@@ -254,14 +255,14 @@ impl Loaded {
             .collect()
     }
     fn duplicates(&self, index: usize) -> Vec<usize> {
-        let Some(id) = self.notes[index].entry.as_ref().map(|entry| entry.id) else {
+        let Some(target) = self.notes[index].entry.as_ref() else {
             return Vec::new();
         };
         self.notes
             .iter()
             .enumerate()
             .filter_map(|(i, note)| {
-                (i != index && note.entry.as_ref().is_some_and(|entry| entry.id == id)).then_some(i)
+                (i != index && note.entry.as_ref().is_some_and(|entry| entry.id == target.id || (target.key.is_some() && target.key == entry.key))).then_some(i)
             })
             .collect()
     }
@@ -969,6 +970,7 @@ fn load(module: Option<&Module>) -> Result<Loaded, String> {
 /// The whole catalogue: built-in, every package, and the active campaign's own entries.
 fn load_all(modules: &[Module], campaign: Option<&Campaign>) -> Result<Loaded, String> {
     let mut all = load(None)?;
+    all.owners = modules.iter().cloned().map(Owner::Package).chain(campaign.cloned().map(Owner::Campaign)).collect();
     for module in modules {
         if let Err(error) = splat::content::art::ArtIndex::default().add_package(&module.path) {
             all.load_errors.push(format!("{}: {error}", module.name));
@@ -3164,13 +3166,35 @@ impl Library {
                     .is_ok_and(|path| !path.exists()))
         {
             let moved = crate::content_workspace::note_id(&note.text)
-                .map(|id| moved_note(note.owner.root().unwrap(), id, &note.path))
+                .map(|id| {
+                    let mut owners = vec![note.owner.clone()];
+                    for owner in &self.loaded.as_ref().unwrap().owners {
+                        if !owners.contains(owner) { owners.push(owner.clone()); }
+                    }
+                    for other in &self.loaded.as_ref().unwrap().notes {
+                        if other.owner.root().is_some() && !owners.contains(&other.owner) { owners.push(other.owner.clone()); }
+                    }
+                    let mut found = None;
+                    for owner in owners {
+                        let old = if owner == note.owner { note.path.as_str() } else { "" };
+                        if let Some((path, text)) = moved_note(owner.root().unwrap(), id, old)? {
+                            if found.is_some() { return Err("Several files have this entry's ID. Choose one in Library.".to_owned()); }
+                            found = Some((owner, path, text));
+                        }
+                    }
+                    Ok(found)
+                })
                 .transpose();
             match moved {
-                Ok(Some(Some((path, text)))) => {
+                Ok(Some(Some((owner, path, text)))) => {
                     let note = &mut self.loaded.as_mut().unwrap().notes[i];
                     note.path = path;
-                    note.text = text;
+                    note.owner = owner;
+                    if note.text != text {
+                        self.disk_change = Some(DiskChange { text: Some(text), moved_to: Some(note.path.clone()) });
+                        self.error = Some(NOTE_CHANGED.into());
+                        return;
+                    }
                     file_gone = false;
                     self.stale = true;
                 }
@@ -4395,6 +4419,57 @@ mod tests {
     }
 
     #[test]
+    fn saving_a_note_moved_to_another_owner_does_not_create_a_second_file() {
+        let temp = tempfile::tempdir().unwrap();
+        let first = create_module(&temp.path().join("first"), "First", "first").unwrap();
+        let second = create_module(&temp.path().join("second"), "Second", "second").unwrap();
+        let text = note_text("Wolf", "creature", None);
+        fs::write(first.path.join("Wolf.md"), &text).unwrap();
+        let loaded = load_all(&[first.clone(), second.clone()], None).unwrap();
+        let selected = loaded.notes.iter().position(|note| note.path == "Wolf.md").unwrap();
+        let mut library = Library { loaded: Some(loaded), selected: Some(selected), draft: format!("{text}\nMy draft.\n"), ..Default::default() };
+        fs::rename(first.path.join("Wolf.md"), second.path.join("Moved.md")).unwrap();
+        library.save_selected(false);
+        assert!(library.error.is_none(), "{:?}", library.error);
+        assert!(!first.path.join("Wolf.md").exists());
+        assert_eq!(fs::read_to_string(second.path.join("Moved.md")).unwrap(), library.draft);
+    }
+
+    #[test]
+    fn saving_a_moved_and_edited_note_opens_comparison_before_writing() {
+        let temp = tempfile::tempdir().unwrap();
+        let module = create_module(&temp.path().join("package"), "Test", "test").unwrap();
+        let text = note_text("Wolf", "creature", None);
+        fs::write(module.path.join("Wolf.md"), &text).unwrap();
+        let loaded = load(Some(&module)).unwrap();
+        let selected = loaded.notes.iter().position(|note| note.path == "Wolf.md").unwrap();
+        let mut library = Library { loaded: Some(loaded), selected: Some(selected), draft: format!("{text}\nMy draft.\n"), ..Default::default() };
+        fs::rename(module.path.join("Wolf.md"), module.path.join("Moved.md")).unwrap();
+        let outside = format!("{text}\nOutside edit.\n");
+        fs::write(module.path.join("Moved.md"), &outside).unwrap();
+        library.save_selected(false);
+        assert!(library.disk_change.is_some());
+        assert_eq!(fs::read_to_string(module.path.join("Moved.md")).unwrap(), outside);
+        assert!(library.draft.contains("My draft."));
+    }
+
+    #[test]
+    fn repairing_a_created_package_replaces_its_actual_manifest() {
+        let temp = tempfile::tempdir().unwrap();
+        let module = create_module(&temp.path().join("package"), "Test", "test").unwrap();
+        let (entries, _) = content::read_directory(&module.path).unwrap();
+        let path = module.path.join(&entries[0].path);
+        let valid = fs::read_to_string(&path).unwrap();
+        fs::write(&path, valid.replace("splat_namespace: test", "splat_namespace: [")).unwrap();
+        let repair = crate::content_workspace::ManifestWrite::write(&module).unwrap();
+        assert!(repair.replaced());
+        assert_eq!(content::read_directory(&module.path).unwrap().0.len(), 1);
+        repair.undo().unwrap();
+        fs::write(&path, valid).unwrap();
+        assert_eq!(local_module(&module.path).unwrap().id, module.id);
+    }
+
+    #[test]
     fn copying_without_a_destination_is_blocked() {
         let campaigns = Campaigns::default();
         assert_eq!(
@@ -4660,6 +4735,7 @@ mod tests {
             dndbeyond_campaign_name: None,
         };
         fs::create_dir_all(&campaign.path).unwrap();
+        CampaignDocument::new(&campaign).unwrap().save().unwrap();
         let text = note_text("Test rule", "rule", None);
         let id = Entry::parse("Rule.md", &text).unwrap().id;
         fs::write(module.path.join("Rule.md"), &text).unwrap();

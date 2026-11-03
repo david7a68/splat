@@ -401,6 +401,14 @@ impl CampaignContent {
         self.repair_section(ui, campaigns, &active);
         if let Some(error) = &self.error {
             design::message(ui, Tone::Error, error);
+            if error.contains("Campaign.md is missing")
+                && Action::secondary("Write Campaign.md again").show(ui).clicked()
+            {
+                match campaigns.write_campaign_again(&active) {
+                    Ok(()) => self.refresh_pending = true,
+                    Err(error) => self.error = Some(error),
+                }
+            }
         }
         if let Some(message) = &self.message {
             design::message(ui, Tone::Success, message);
@@ -1497,13 +1505,17 @@ mod tests {
     use super::*;
 
     fn campaign(root: &std::path::Path) -> Campaign {
-        Campaign {
+        let campaign = Campaign {
             id: uuid::Uuid::new_v4(),
             name: "Test campaign".into(),
             path: root.into(),
             dndbeyond_campaign_id: None,
             dndbeyond_campaign_name: None,
+        };
+        if campaign.path.is_dir() && !campaign.path.join("Campaign.md").exists() {
+            crate::content_workspace::CampaignDocument::new(&campaign).unwrap().save().unwrap();
         }
+        campaign
     }
 
     fn finished(content: &mut CampaignContent, checked: Checked) {

@@ -1023,32 +1023,60 @@ pub fn patch_fields(
 }
 
 pub fn read_directory(root: &Path) -> Result<(Vec<Entry>, Vec<Diagnostic>), String> {
-    fn walk(root: &Path, current: &Path, files: &mut Vec<(String, String)>) -> Result<(), String> {
-        let mut paths = std::fs::read_dir(current)
-            .map_err(|e| e.to_string())?
-            .map(|e| e.map(|e| e.path()))
-            .collect::<Result<Vec<_>, _>>()
-            .map_err(|e| e.to_string())?;
+    fn walk(root: &Path, current: &Path, files: &mut Vec<(String, String)>, errors: &mut Vec<Diagnostic>) -> Result<(), String> {
+        let mut report = |path: &Path, message: String| errors.push(Diagnostic {
+            path: path.strip_prefix(root).unwrap_or(path).to_string_lossy().into_owned(), message,
+        });
+        let listing = match std::fs::read_dir(current) {
+            Ok(listing) => listing,
+            Err(error) if current == root => return Err(format!("{}: {error}", root.display())),
+            Err(error) => { report(current, error.to_string()); return Ok(()); }
+        };
+        let mut paths = Vec::new();
+        for entry in listing {
+            match entry {
+                Ok(entry) => paths.push(entry.path()),
+                Err(error) => report(current, error.to_string()),
+            }
+        }
         paths.sort();
         for path in paths {
-            let Some(meta) = unless_vanished(std::fs::symlink_metadata(&path))? else {
-                continue;
+            if path.file_name().is_some_and(|name| name.to_string_lossy().starts_with('.')) { continue; }
+            let meta = match unless_vanished(std::fs::symlink_metadata(&path)) {
+                Ok(Some(meta)) => meta,
+                Ok(None) => continue,
+                Err(message) => {
+                    errors.push(Diagnostic { path: path.strip_prefix(root).unwrap_or(&path).to_string_lossy().into_owned(), message });
+                    continue;
+                }
             };
             if meta.file_type().is_symlink() {
                 continue;
             }
             if meta.is_dir() {
-                walk(root, &path, files)?
+                walk(root, &path, files, errors)?
             } else if path.extension().is_some_and(|x| x == "md") {
-                let Some(text) = unless_vanished(std::fs::read_to_string(&path))? else {
-                    continue;
+                let text = match unless_vanished(std::fs::read_to_string(&path)) {
+                    Ok(Some(text)) => text,
+                    Ok(None) => continue,
+                    Err(message) => {
+                        errors.push(Diagnostic { path: path.strip_prefix(root).unwrap_or(&path).to_string_lossy().into_owned(), message });
+                        continue;
+                    }
                 };
                 let normalized = text.trim_start_matches('\u{feff}').replace("\r\n", "\n");
+                let name = path.strip_prefix(root).unwrap_or(&path).to_string_lossy().into_owned();
                 let Some(frontmatter) = normalized.strip_prefix("---\n") else {
+                    if normalized.trim_start().starts_with("splat_") {
+                        errors.push(Diagnostic { path: name, message: "Line 1: Splat fields need an opening --- line.".into() });
+                    }
                     continue;
                 };
                 let frontmatter = frontmatter.split("\n---").next().unwrap_or(frontmatter);
                 if !frontmatter.lines().any(|line| line.starts_with("splat_")) {
+                    if ["schema:", "id:", "kind:"].iter().all(|key| frontmatter.lines().any(|line| line.starts_with(key))) {
+                        errors.push(Diagnostic { path: name, message: "Line 2: These fields look like Splat content. Restore their splat_ prefixes.".into() });
+                    }
                     continue;
                 }
                 let name = path
@@ -1062,7 +1090,8 @@ pub fn read_directory(root: &Path) -> Result<(Vec<Entry>, Vec<Diagnostic>), Stri
         Ok(())
     }
     let mut files = Vec::new();
-    walk(root, root, &mut files)?;
+    let mut errors = Vec::new();
+    walk(root, root, &mut files, &mut errors)?;
     // Parallel parsing preserves traversal order for entries and diagnostics.
     let parsed: Vec<_> = files
         .into_par_iter()
@@ -1071,7 +1100,6 @@ pub fn read_directory(root: &Path) -> Result<(Vec<Entry>, Vec<Diagnostic>), Stri
         })
         .collect();
     let mut entries = Vec::new();
-    let mut errors = Vec::new();
     for result in parsed {
         match result {
             Ok(entry) => entries.push(entry),

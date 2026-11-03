@@ -32,6 +32,20 @@ pub(crate) fn note_id(text: &str) -> Option<Uuid> {
 
 pub(crate) const DELETED_MANIFEST: &str = "Package.md was deleted. Entries are still available. Write it again, or restore it from a backup.";
 
+pub(crate) fn package_manifest_path(module: &Module) -> String {
+    if let Ok((entries, errors)) = content::read_directory(&module.path) {
+        if let Some(entry) = entries.iter().find(|entry| entry.kind == "package") {
+            return entry.path.clone();
+        }
+        for error in errors {
+            if matches!(error.path.as_str(), "Package.md" | "Module.md")
+                || fs::read_to_string(module.path.join(&error.path)).is_ok_and(|text| text.lines().any(|line| line.trim() == "splat_kind: package"))
+            { return error.path; }
+        }
+    }
+    "Package.md".into()
+}
+
 /// A copied note gets its file's name in the same write as its new identity.
 pub(crate) fn new_note_identity(text: &str, path: &str, id: Uuid) -> Result<String, String> {
     let entry = Entry::parse(path, text)?;
@@ -73,12 +87,16 @@ pub(crate) struct PackageCopy {
 }
 impl PackageCopy {
     pub fn write(root: &Path, name: &str) -> Result<Self, String> {
+        Self::write_owner(root, name, "package")
+    }
+
+    pub fn write_owner(root: &Path, name: &str, kind: &str) -> Result<Self, String> {
         if name.trim().is_empty() || name.contains(['\n', '\r']) {
             return Err("Type a package name first.".into());
         }
         let root = root.canonicalize().map_err(|e| e.to_string())?;
         let (entries, errors) = content::read_directory(&root)?;
-        if !errors.is_empty() || entries.iter().filter(|e| e.kind == "package").count() != 1 {
+        if !errors.is_empty() || entries.iter().filter(|e| e.kind == kind).count() != 1 {
             return Err("Repair the copied files before registering this package.".into());
         }
         let ids: BTreeMap<_, _> = entries
@@ -88,7 +106,7 @@ impl PackageCopy {
         if ids.len() != entries.len() {
             return Err("Repair duplicate identities inside this folder first.".into());
         }
-        let manifest = entries.iter().find(|e| e.kind == "package").unwrap();
+        let manifest = entries.iter().find(|e| e.kind == kind).unwrap();
         let id = ids[&manifest.id];
         let namespace = format!("package_{}", id.simple());
         let mut files = Vec::new();
@@ -106,12 +124,16 @@ impl PackageCopy {
                     Some(format!("{namespace}:{}", ids[&entry.id].simple()).into()),
                 ),
             ];
-            if entry.kind == "package" {
+            if entry.kind == kind {
                 fields.push(("splat_name", Some(name.trim().into())));
                 fields.push(("splat_namespace", Some(namespace.clone().into())));
+                if kind == "campaign" {
+                    fields.push(("splat_dndbeyond_campaign_id", Some(Value::Null)));
+                    fields.push(("splat_dndbeyond_campaign_name", Some(Value::Null)));
+                }
             }
             after = patch_fields(&after, &fields)?;
-            if entry.kind == "package" {
+            if entry.kind == kind {
                 after = rename_first_heading(after, &entry.name, name.trim());
             }
             files.push((entry.path.clone(), before, after));
@@ -168,6 +190,7 @@ impl PackageCopy {
 /// A repair keeps the registered identity and never overwrites a later disk edit.
 pub(crate) struct ManifestWrite {
     root: PathBuf,
+    path: String,
     before: Option<String>,
     after: String,
 }
@@ -191,15 +214,17 @@ impl ManifestWrite {
             &note_text(&module.name, "package", Some(namespace)),
             &[("splat_id", Some(module.id.to_string().into()))],
         )?;
-        let path = module.path.join("Package.md");
+        let relative = package_manifest_path(module);
+        let path = module.path.join(&relative);
         let before = match fs::read_to_string(path) {
             Ok(text) => Some(text),
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => None,
             Err(error) => return Err(error.to_string()),
         };
-        write_note(&module.path, "Package.md", before.as_deref(), &after)?;
+        write_note(&module.path, &relative, before.as_deref(), &after)?;
         Ok(Self {
             root: module.path.clone(),
+            path: relative,
             before,
             after,
         })
@@ -213,7 +238,7 @@ impl ManifestWrite {
             .as_deref()
             .ok_or("The write did not replace a file.")?;
         // A broken manifest cannot pass write_note's parse check.
-        let path = note_path(&self.root, "Package.md")?;
+        let path = note_path(&self.root, &self.path)?;
         if fs::read_to_string(&path).map_err(|e| e.to_string())? != self.after {
             return Err("Package.md changed on disk. Reload before undoing.".into());
         }
@@ -446,6 +471,7 @@ pub struct Catalogue {
     pub modules: Vec<ModuleIndex>,
     pub entries: BTreeMap<Uuid, IndexedEntry>,
     keys: BTreeMap<String, Uuid>,
+    duplicate_keys: BTreeSet<String>,
     pub errors: Vec<String>,
     pub manifest_problems: BTreeMap<Uuid, String>,
     pub unreadable: BTreeMap<Uuid, UnreadableNote>,
@@ -613,10 +639,16 @@ impl Catalogue {
             return Err(format!("Duplicate identity: {}", entry.name));
         }
         if let Some(key) = &entry.key {
-            if self.keys.contains_key(key) {
-                return Err(format!("Duplicate key: {key}"));
+            if self.keys.contains_key(key) || self.duplicate_keys.contains(key) {
+                let mut paths: Vec<_> = self.entries.values().filter(|other| other.entry.key.as_ref() == Some(key))
+                    .map(|other| self.files.get(&other.entry.id).map_or_else(|| other.entry.path.clone(), |(path, _)| path.display().to_string())).collect();
+                paths.push(self.files.get(&entry.id).map_or_else(|| entry.path.clone(), |(path, _)| path.display().to_string()));
+                self.errors.push(format!("{} share the key {key}. Choose a new identity in Library.", paths.join(" and ")));
+                self.keys.remove(key);
+                self.duplicate_keys.insert(key.clone());
+            } else {
+                self.keys.insert(key.clone(), entry.id);
             }
-            self.keys.insert(key.clone(), entry.id);
         }
         self.entries.insert(
             entry.id,
@@ -699,15 +731,15 @@ impl Catalogue {
                     continue;
                 }
             };
-            if !entries.iter().any(|entry| entry.kind == "package")
+            let manifest_path = package_manifest_path(module);
+            if !entries.iter().any(|entry| entry.kind == "package" && entry.id == module.id)
                 && module.path.is_dir()
-                && (errors.iter().any(|error| error.path == "Package.md")
-                    || !module.path.join("Package.md").exists())
             {
-                let problem = if let Ok(text) = fs::read_to_string(module.path.join("Package.md")) {
-                    let (_, line) = crate::campaign_content::repair_problem("Package.md", &text);
+                let problem = if let Ok(text) = fs::read_to_string(module.path.join(&manifest_path)) {
+                    let (_, line) = crate::campaign_content::repair_problem(&manifest_path, &text);
                     format!(
-                        "Package.md cannot be read{}",
+                        "{manifest_path} {}{}",
+                        if Entry::parse(&manifest_path, &text).is_ok() { "has another identity" } else { "cannot be read" },
                         line.map_or(String::new(), |line| format!(" (line {line})"))
                     )
                 } else {
@@ -734,6 +766,8 @@ impl Catalogue {
                     })
                     .unwrap_or_else(|| format!("recovery_{}", module.id.simple()));
                 let mut manifest = builtin_manifest();
+                entries.retain(|entry| entry.kind != "package");
+                manifest.path = manifest_path;
                 manifest.id = module.id;
                 manifest.key = None;
                 manifest.name = module.name.clone();
@@ -1001,10 +1035,10 @@ pub struct Closure {
     pub errors: Vec<String>,
 }
 
-fn campaign_manifest(root: &Path) -> Result<Option<Entry>, String> {
+fn campaign_manifest(root: &Path, expected: Option<Uuid>) -> Result<Option<Entry>, String> {
     let (entries, errors) = content::read_directory(root)?;
     if !errors.is_empty() && !entries.iter().any(|e| e.kind == "campaign") {
-        return Err("Repair invalid notes before creating a campaign manifest.".into());
+        return Err(errors.iter().map(|error| format!("{}: {}", error.path, error.message)).collect::<Vec<_>>().join("\n"));
     }
     if entries
         .iter()
@@ -1012,12 +1046,15 @@ fn campaign_manifest(root: &Path) -> Result<Option<Entry>, String> {
     {
         return Err("A campaign folder cannot contain a package manifest.".into());
     }
-    let mut manifests = entries.into_iter().filter(|e| e.kind == "campaign");
-    let manifest = manifests.next();
-    if manifests.next().is_some() {
-        return Err("A campaign needs exactly one manifest.".into());
+    let mut manifests: Vec<_> = entries.into_iter().filter(|e| e.kind == "campaign").collect();
+    if manifests.len() > 1 {
+        let matching: Vec<_> = manifests.iter().filter(|entry| Some(entry.id) == expected).collect();
+        if matching.len() == 1 {
+            return Ok(Some(matching[0].clone()));
+        }
+        return Err(format!("A campaign needs exactly one manifest: {}.", manifests.iter().map(|entry| entry.path.as_str()).collect::<Vec<_>>().join(", ")));
     }
-    Ok(manifest)
+    Ok(manifests.pop())
 }
 
 fn campaign_metadata(entry: &Entry, mut campaign: Campaign) -> Result<Campaign, String> {
@@ -1058,7 +1095,7 @@ pub struct CampaignDocument {
 impl CampaignDocument {
     pub fn discover(root: &Path) -> Result<Option<Campaign>, String> {
         let root = root.canonicalize().map_err(|e| e.to_string())?;
-        campaign_manifest(&root)?
+        campaign_manifest(&root, None)?
             .map(|entry| {
                 campaign_metadata(
                     &entry,
@@ -1081,15 +1118,21 @@ impl CampaignDocument {
         let document = Self::load(campaign)?;
         let entry = Entry::parse(&document.path, &document.text)?;
         *campaign = campaign_metadata(&entry, campaign.clone())?;
-        if !entry.fields.contains_key("splat_dndbeyond_campaign_id") {
-            Self::save_metadata(campaign, None)?;
-        }
         Ok(())
     }
 
     pub fn save_metadata(campaign: &Campaign, previous: Option<&Campaign>) -> Result<(), String> {
-        let document = Self::load(campaign)?;
+        let document = if previous.is_none() && campaign_manifest(&campaign.path, Some(campaign.id))?.is_none() {
+            Self::new(campaign)?
+        } else {
+            Self::load(campaign)?
+        };
         let entry = Entry::parse(&document.path, &document.text)?;
+        if document.baseline.is_some()
+            && entry.fields.contains_key("splat_dndbeyond_campaign_id")
+            && entry.fields.contains_key("splat_dndbeyond_campaign_name")
+            && campaign_metadata(&entry, campaign.clone())? == *campaign
+        { return Ok(()); }
         if let Some(previous) = previous
             && entry.fields.contains_key("splat_dndbeyond_campaign_id")
             && campaign_metadata(&entry, previous.clone())? != *previous
@@ -1125,22 +1168,8 @@ impl CampaignDocument {
         Ok(())
     }
 
-    pub fn load(campaign: &Campaign) -> Result<Self, String> {
-        let (path, baseline, text) = if let Some(manifest) = campaign_manifest(&campaign.path)? {
-            if manifest.id != campaign.id {
-                return Err(format!(
-                    "Campaign “{}” does not match its folder. Settings has ID {}, but {} in {} has ID {}. Correct the ID or folder in settings.json, then reload.",
-                    campaign.name,
-                    campaign.id,
-                    manifest.path,
-                    campaign.path.display(),
-                    manifest.id,
-                ));
-            }
-            let text = fs::read_to_string(note_path(&campaign.path, &manifest.path)?)
-                .map_err(|e| e.to_string())?;
-            (manifest.path.clone(), Some(text.clone()), text)
-        } else {
+    /// Only a new campaign or an explicit repair may start with defaults.
+    pub fn new(campaign: &Campaign) -> Result<Self, String> {
             let text = note_text(
                 &campaign.name,
                 "campaign",
@@ -1163,7 +1192,27 @@ impl CampaignDocument {
                     ),
                 ],
             )?;
-            ("Campaign.md".into(), None, text)
+        let selections = serde_yaml_ng::from_value(Entry::parse("Campaign.md", &text)?.fields["splat_packages"].clone()).map_err(|e| e.to_string())?;
+        Ok(Self { campaign: campaign.clone(), path: "Campaign.md".into(), baseline: None, text, selections })
+    }
+
+    pub fn load(campaign: &Campaign) -> Result<Self, String> {
+        let (path, baseline, text) = if let Some(manifest) = campaign_manifest(&campaign.path, Some(campaign.id))? {
+            if manifest.id != campaign.id {
+                return Err(format!(
+                    "Campaign “{}” does not match its folder. Settings has ID {}, but {} in {} has ID {}. Correct the ID or folder in settings.json, then reload.",
+                    campaign.name,
+                    campaign.id,
+                    manifest.path,
+                    campaign.path.display(),
+                    manifest.id,
+                ));
+            }
+            let text = fs::read_to_string(note_path(&campaign.path, &manifest.path)?)
+                .map_err(|e| e.to_string())?;
+            (manifest.path.clone(), Some(text.clone()), text)
+        } else {
+            return Err("Campaign.md is missing. Write Campaign.md again, or restore it from a backup.".into());
         };
         let entry = Entry::parse(&path, &text)?;
         let selections: Vec<PackageSelection> = match entry.fields.get("splat_packages") {
@@ -1807,6 +1856,24 @@ mod tests {
     }
 
     #[test]
+    fn duplicate_keys_keep_both_files_and_other_content_available() {
+        let temp = tempfile::tempdir().unwrap();
+        fs::write(temp.path().join("Package.md"), note_text("Test", "package", Some("test"))).unwrap();
+        let module = crate::library::local_module(temp.path()).unwrap();
+        let mut ids = Vec::new();
+        for name in ["First", "Second", "Third"] {
+            let text = patch_fields(&note_text(name, "creature", None), &[("splat_key", Some("test:wolf".into()))]).unwrap();
+            ids.push(Entry::parse(name, &text).unwrap().id);
+            fs::write(temp.path().join(format!("{name}.md")), text).unwrap();
+        }
+        let catalogue = Catalogue::load(&[module], None).unwrap();
+        assert!(ids.iter().all(|id| catalogue.entries.contains_key(id)));
+        assert!(catalogue.resolve(&Reference::Key("test:wolf".into())).is_err());
+        let errors = catalogue.errors.join("\n");
+        assert!(errors.contains("First.md") && errors.contains("Second.md") && errors.contains("Third.md"));
+    }
+
+    #[test]
     fn package_copy_refuses_broken_files_without_changing_the_manifest() {
         let temp = tempfile::tempdir().unwrap();
         let manifest = note_text("Original", "package", Some("original"));
@@ -2109,13 +2176,17 @@ mod tests {
         Entry::parse(&format!("{name}.md"), &note_text(name, kind, None)).unwrap()
     }
     fn campaign(path: PathBuf) -> Campaign {
-        Campaign {
+        let campaign = Campaign {
             id: Uuid::new_v4(),
             name: "Test campaign".into(),
             path,
             dndbeyond_campaign_id: None,
             dndbeyond_campaign_name: None,
+        };
+        if campaign.path.is_dir() && !campaign.path.join("Campaign.md").exists() {
+            crate::content_workspace::CampaignDocument::new(&campaign).unwrap().save().unwrap();
         }
+        campaign
     }
     fn require(entry: &mut Entry, id: Uuid) {
         entry.fields.insert(
@@ -2379,7 +2450,7 @@ mod tests {
         let temp = tempfile::tempdir().unwrap();
         let campaign = campaign(temp.path().into());
         let mut doc = CampaignDocument::load(&campaign).unwrap();
-        assert!(doc.baseline.is_none());
+        assert!(doc.baseline.is_some(), "The fixture explicitly created this campaign.");
         assert_eq!(doc.selections.len(), 1);
         doc.save().unwrap();
         let saved = fs::read_to_string(temp.path().join("Campaign.md")).unwrap();

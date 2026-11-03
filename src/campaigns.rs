@@ -11,6 +11,9 @@ pub struct Campaigns {
     store: Option<Store>,
     data: UserData,
     error: Option<String>,
+    manifest_errors: std::collections::BTreeMap<Uuid, String>,
+    held_manifests: std::collections::BTreeMap<Uuid, (String, String)>,
+    campaign_copy: Option<(crate::content_workspace::PackageCopy, UserData)>,
     writable: bool,
     editing: Option<Uuid>,
     focus_name: bool,
@@ -36,6 +39,9 @@ impl Default for Campaigns {
             store: None,
             data: UserData::default(),
             error: None,
+            manifest_errors: Default::default(),
+            held_manifests: Default::default(),
+            campaign_copy: None,
             writable: false,
             editing: None,
             focus_name: false,
@@ -155,6 +161,28 @@ impl Campaigns {
         Ok(())
     }
 
+    fn register_campaign_copy(&mut self) -> Result<(), String> {
+        let path = PathBuf::from(self.path.trim());
+        let found = CampaignDocument::discover(&path)?.ok_or("Choose a copied campaign folder first.")?;
+        if !self.data.campaigns.iter().any(|known| known.id == found.id && known.path != found.path) {
+            return Err("This folder is not a copy of a registered campaign.".into());
+        }
+        let copy = crate::content_workspace::PackageCopy::write_owner(&path, &self.name, "campaign")?;
+        let campaign = CampaignDocument::discover(&path)?.ok_or("Campaign.md is missing.")?;
+        let before = self.data.clone();
+        let mut after = before.clone();
+        after.active_campaign_id = Some(campaign.id);
+        after.campaigns.push(campaign);
+        if let Err(error) = self.persist(after) {
+            copy.undo()?;
+            return Err(error);
+        }
+        self.campaign_copy = Some((copy, before));
+        self.clear_form();
+        self.added = Some("The copy is registered as a new campaign. Its D&D Beyond link is off.".into());
+        Ok(())
+    }
+
     pub fn all(&self) -> &[Campaign] {
         &self.data.campaigns
     }
@@ -203,6 +231,15 @@ impl Campaigns {
                     .into(),
             );
         }
+        let namespace_of = |module: &crate::persistence::Module| {
+            splat::content::read_directory(&module.path).ok()?.0.into_iter()
+                .find(|entry| entry.kind == "package")?.fields.get("splat_namespace")?.as_str().map(str::to_owned)
+        };
+        if let Some(namespace) = namespace_of(&module)
+            && self.data.modules.iter().any(|known| namespace == namespace_of(known).unwrap_or_default())
+        {
+            return Err(format!("The namespace {namespace} is already registered. Use a different namespace."));
+        }
         let mut data = self.data.clone();
         data.modules.push(module);
         self.persist(data)
@@ -235,6 +272,9 @@ impl Campaigns {
             store: Some(store),
             data,
             error: None,
+            manifest_errors: Default::default(),
+            held_manifests: Default::default(),
+            campaign_copy: None,
             writable: true,
             editing: None,
             focus_name: false,
@@ -288,18 +328,21 @@ impl Campaigns {
         if let Some(store) = &mut self.store {
             match store.load() {
                 Ok(mut data) => {
-                    if let Err(error) = data
-                        .campaigns
-                        .iter_mut()
-                        .try_for_each(CampaignDocument::reload_metadata)
-                        .and_then(|()| data.validate())
-                    {
+                    self.manifest_errors.clear();
+                    for campaign in &mut data.campaigns {
+                        if let Err(error) = CampaignDocument::reload_metadata(campaign) {
+                            self.manifest_errors.insert(campaign.id, format!("{}: {error}", campaign.path.display()));
+                        } else if let Ok(document) = CampaignDocument::load(campaign) {
+                            self.held_manifests.insert(campaign.id, (document.path, document.text));
+                        }
+                    }
+                    if let Err(error) = data.validate() {
                         self.error = Some(error);
                         self.writable = false;
                         return;
                     }
                     self.data = data;
-                    self.error = None;
+                    self.error = (!self.manifest_errors.is_empty()).then(|| self.manifest_errors.values().cloned().collect::<Vec<_>>().join("\n"));
                     self.writable = true;
                     self.clear_form();
                 }
@@ -325,7 +368,22 @@ impl Campaigns {
         }
         store.save(&data)?;
         self.data = data;
+        for campaign in &self.data.campaigns {
+            if let Ok(document) = CampaignDocument::load(campaign) {
+                self.held_manifests.insert(campaign.id, (document.path, document.text));
+            }
+        }
         self.error = None;
+        Ok(())
+    }
+
+    pub fn write_campaign_again(&self, campaign: &Campaign) -> Result<(), String> {
+        if let Some((path, text)) = self.held_manifests.get(&campaign.id) {
+            crate::library::write_note(&campaign.path, path, None, text)?;
+        } else {
+            let mut document = CampaignDocument::new(campaign)?;
+            document.save()?;
+        }
         Ok(())
     }
 
@@ -650,8 +708,7 @@ impl Campaigns {
         ui.horizontal(|ui| {
             design::group_heading(ui, "Campaigns", self.data.campaigns.len());
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                if !self.data.campaigns.is_empty()
-                    && Action::quiet("Reload from disk")
+                if Action::quiet("Reload from disk")
                         .blocked(blocked)
                         .icon(icons::REFRESH)
                         .density(Density::Read)
@@ -711,6 +768,9 @@ impl Campaigns {
                             if !campaign.path.is_dir() {
                                 Self::folder_status(ui, &campaign)
                                     .on_hover_text(campaign.path.display().to_string());
+                            }
+                            if let Some(error) = self.manifest_errors.get(&campaign.id) {
+                                ui.label(Type::Small.rich(ui, error).color(c.result.error));
                             }
                             {
                                 let link = campaign
@@ -785,6 +845,20 @@ impl Campaigns {
             {
                 self.wants_encounters = true;
                 self.added = None;
+            }
+            if self.campaign_copy.is_some()
+                && Action::quiet("Undo register campaign").icon(icons::UNDO).show(ui).clicked()
+            {
+                let result = (|| {
+                    let (copy, before) = self.campaign_copy.as_ref().unwrap();
+                    self.store.as_ref().ok_or("Settings are unavailable.")?.check_save(before)?;
+                    copy.undo()?;
+                    self.persist(before.clone())
+                })();
+                match result {
+                    Ok(()) => { self.campaign_copy = None; self.added = None; }
+                    Err(error) => self.error = Some(error),
+                }
             }
             ui.add_space(design::S);
             dndbeyond.show_import(ui, session.clone(), self);
@@ -934,6 +1008,13 @@ impl Campaigns {
                 });
                 if let Some(error) = &self.error {
                     design::message(ui, Tone::Error, error);
+                    if error.contains("registered at another folder") {
+                        let reason = self.name.trim().is_empty().then_some("Type a name first.");
+                        if Action::secondary("Register as a new campaign").blocked(reason).show(ui).clicked() {
+                            if let Err(error) = self.register_campaign_copy() { self.error = Some(error); }
+                        }
+                        design::blocked_reason(ui, reason);
+                    }
                 }
             };
             let form = if direct {
@@ -989,6 +1070,78 @@ fn links_to(campaign: &Campaign, remote_id: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn copied_campaign_can_register_with_new_identities_and_kept_fields() {
+        let temp = tempfile::tempdir().unwrap();
+        let original = temp.path().join("original");
+        let copied = temp.path().join("copy");
+        for folder in [&original, &copied] { std::fs::create_dir(folder).unwrap(); }
+        let mut campaigns = Campaigns::at(temp.path().join("settings.json"));
+        campaigns.name = "Original".into();
+        campaigns.path = original.to_string_lossy().into_owned();
+        campaigns.save_form().unwrap();
+        let campaign = campaigns.active_campaign().unwrap();
+        let before = std::fs::read_to_string(original.join("Campaign.md")).unwrap();
+        std::fs::write(copied.join("Campaign.md"), &before).unwrap();
+        campaigns.name = "New campaign".into();
+        campaigns.path = copied.to_string_lossy().into_owned();
+        assert!(campaigns.save_form().is_err());
+        campaigns.register_campaign_copy().unwrap();
+        assert_ne!(campaigns.active_campaign().unwrap().id, campaign.id);
+        assert_eq!(campaigns.active_campaign().unwrap().name, "New campaign");
+        assert_eq!(std::fs::read_to_string(original.join("Campaign.md")).unwrap(), before);
+        campaigns.campaign_copy.as_ref().unwrap().0.undo().unwrap();
+        assert_eq!(std::fs::read_to_string(copied.join("Campaign.md")).unwrap(), before);
+    }
+
+    #[test]
+    fn broken_campaign_manifest_does_not_hide_other_campaigns() {
+        let temp = tempfile::tempdir().unwrap();
+        let settings = temp.path().join("settings.json");
+        let mut campaigns = Campaigns::at(settings.clone());
+        for name in ["Broken", "Healthy"] {
+            let folder = temp.path().join(name);
+            std::fs::create_dir(&folder).unwrap();
+            campaigns.name = name.into();
+            campaigns.path = folder.to_string_lossy().into_owned();
+            campaigns.save_form().unwrap();
+        }
+        let healthy = campaigns.active_campaign().unwrap();
+        let path = temp.path().join("Broken/Campaign.md");
+        let valid = std::fs::read_to_string(&path).unwrap();
+        std::fs::write(&path, "---\nsplat_id: [\n---\n").unwrap();
+        campaigns.reload();
+        assert_eq!(campaigns.all().len(), 2);
+        assert_eq!(campaigns.active_campaign(), Some(healthy.clone()));
+        assert!(format!("{:?}", campaigns.error).contains("Campaign.md"));
+        std::fs::write(&path, &valid).unwrap();
+        std::fs::write(path.with_file_name("Campaign copy.md"), &valid).unwrap();
+        let reopened = Campaigns::open_at(settings);
+        assert_eq!(reopened.active_campaign(), Some(healthy));
+        assert!(format!("{:?}", reopened.error).contains("Campaign copy.md"));
+    }
+
+    #[test]
+    fn deleted_campaign_manifest_needs_explicit_repair_and_keeps_held_choices() {
+        let temp = tempfile::tempdir().unwrap();
+        let mut campaigns = Campaigns::at(temp.path().join("settings.json"));
+        campaigns.name = "Home".into();
+        campaigns.path = temp.path().to_string_lossy().into_owned();
+        campaigns.save_form().unwrap();
+        let campaign = campaigns.active_campaign().unwrap();
+        let path = campaign.path.join("Campaign.md");
+        let text = std::fs::read_to_string(&path).unwrap().replace("splat_schema: 1", "splat_schema: 1\nsplat_session_storage: {directory: My sessions}\ntags: [keep]");
+        std::fs::write(&path, &text).unwrap();
+        campaigns.reload();
+        std::fs::remove_file(&path).unwrap();
+        campaigns.reload();
+        assert!(!path.exists(), "Reload must never recreate the manifest");
+        assert!(CampaignDocument::load(&campaign).is_err());
+        assert!(format!("{:?}", campaigns.error).contains("Campaign.md is missing"));
+        campaigns.write_campaign_again(&campaign).unwrap();
+        assert_eq!(std::fs::read_to_string(path).unwrap(), text);
+    }
 
     #[test]
     fn copied_package_folder_names_the_duplicate_identity_without_registering_it() {
@@ -1063,10 +1216,16 @@ mod tests {
                 dndbeyond_campaign_name: None,
             });
         }
+        for campaign in &data.campaigns {
+            CampaignDocument::new(campaign).unwrap().save().unwrap();
+        }
         let mut campaigns = Campaigns {
             store: Some(store),
             data,
             error: None,
+            manifest_errors: Default::default(),
+            held_manifests: Default::default(),
+            campaign_copy: None,
             writable: true,
             editing: None,
             focus_name: false,

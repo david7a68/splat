@@ -1651,6 +1651,7 @@ mod tests {
             dndbeyond_campaign_id: None,
             dndbeyond_campaign_name: None,
         };
+        CampaignDocument::new(&campaign).unwrap().save().unwrap();
         let old = folder(&campaign).unwrap();
         let note = create_note(&old, &new_note(1, "The Bridge", "My words.")).unwrap();
         let relative = [
@@ -1703,6 +1704,7 @@ mod tests {
             dndbeyond_campaign_id: None,
             dndbeyond_campaign_name: None,
         };
+        CampaignDocument::new(&campaign).unwrap().save().unwrap();
         assert_eq!(folder(&campaign).unwrap(), dir.path().join(DEFAULT_FOLDER));
         assert_eq!(
             save_folder(&campaign, "D20.42.22 Sessions").unwrap(),

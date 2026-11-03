@@ -1950,13 +1950,17 @@ mod tests {
     use super::*;
 
     fn campaign(root: &std::path::Path) -> Campaign {
-        Campaign {
+        let campaign = Campaign {
             id: Uuid::new_v4(),
             name: "Arena".into(),
             path: root.into(),
             dndbeyond_campaign_id: None,
             dndbeyond_campaign_name: None,
+        };
+        if campaign.path.is_dir() && !campaign.path.join("Campaign.md").exists() {
+            crate::content_workspace::CampaignDocument::new(&campaign).unwrap().save().unwrap();
         }
+        campaign
     }
     fn creature(root: &std::path::Path, name: &str) -> Uuid {
         let id = Uuid::new_v4();

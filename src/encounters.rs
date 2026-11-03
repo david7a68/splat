@@ -4140,13 +4140,17 @@ mod tests {
         assert!(encounters.group_undo_ready(), "back at the list");
     }
     fn campaign(root: &std::path::Path) -> Campaign {
-        Campaign {
+        let campaign = Campaign {
             id: Uuid::new_v4(),
             name: "Test campaign".into(),
             path: root.into(),
             dndbeyond_campaign_id: Some("123".into()),
             dndbeyond_campaign_name: None,
+        };
+        if campaign.path.is_dir() && !campaign.path.join("Campaign.md").exists() {
+            crate::content_workspace::CampaignDocument::new(&campaign).unwrap().save().unwrap();
         }
+        campaign
     }
     fn creature(root: &std::path::Path, name: &str, party: bool) -> Uuid {
         let text = crate::library::note_text(name, "creature", None);

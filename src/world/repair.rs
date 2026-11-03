@@ -42,6 +42,7 @@ pub(super) struct Repair {
     draft: String,
     discarded: Option<String>,
     error: Option<String>,
+    disk: Option<String>,
 }
 
 impl Repair {
@@ -54,6 +55,7 @@ impl Repair {
             draft: text,
             discarded: None,
             error: None,
+            disk: None,
         })
     }
 
@@ -68,6 +70,18 @@ impl Repair {
     }
 
     pub fn show(&mut self, ui: &mut egui::Ui, campaign: &Campaign) -> bool {
+        if let Ok(path) = crate::library::note_path(&campaign.path, &self.path)
+            && let Ok(text) = std::fs::read_to_string(path)
+            && text != self.baseline
+        {
+            if self.dirty() { self.disk = Some(text); }
+            else {
+                self.baseline = text.clone();
+                self.draft = text;
+                self.discarded = None;
+                self.error = None;
+            }
+        }
         let (problem, line) = crate::campaign_content::repair_problem(&self.path, &self.draft);
         design::reader::title(
             ui,
@@ -78,6 +92,20 @@ impl Repair {
                 .as_ref(),
         );
         super::file_actions(ui, campaign, &self.path);
+        if let Some(disk) = self.disk.clone() {
+            design::message(ui, design::Tone::Warning, "This note changed on disk. Choose which text to keep.");
+            let mut reloaded = false;
+            ui.horizontal(|ui| {
+                if design::Action::secondary("Use disk version").show(ui).clicked() {
+                    self.draft = disk.clone();
+                    reloaded = true;
+                }
+                if design::Action::secondary("Keep my draft").show(ui).clicked() { reloaded = true; }
+            });
+            design::draft_comparison(ui, &self.draft, &disk, &self.path);
+            if reloaded { self.baseline = disk; self.disk = None; self.error = None; self.discarded = None; }
+            return false;
+        }
         if let Some(problem) = &problem {
             design::message(ui, design::Tone::Error, problem);
         }
