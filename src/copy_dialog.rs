@@ -5,6 +5,7 @@ use crate::{
     persistence::Campaign,
 };
 use eframe::egui;
+use splat::content::Entry;
 use std::{path::PathBuf, sync::mpsc};
 use uuid::Uuid;
 
@@ -179,24 +180,26 @@ impl CopyDialog {
                 .collect();
             let old = self.destination;
             design::field(ui, "Destination", None, None, |ui| {
-                let combo = egui::ComboBox::from_id_salt("copy_destination")
-                    .icon(design::combo_icon)
-                    .width(ui.available_width())
-                    .selected_text(
-                        destinations
-                            .iter()
-                            .find(|(c, id, ..)| Some((*c, *id)) == self.destination)
-                            .map_or("Choose destination", |d| d.2.as_str()),
-                    )
-                    .show_ui(ui, |ui| {
-                        for (campaign, id, label, ..) in &destinations {
-                            ui.selectable_value(
-                                &mut self.destination,
-                                Some((*campaign, *id)),
-                                label,
-                            );
-                        }
-                    });
+                let combo = crate::library::form_control(ui, |ui| {
+                    egui::ComboBox::from_id_salt("copy_destination")
+                        .icon(design::combo_icon)
+                        .width(ui.available_width())
+                        .selected_text(
+                            destinations
+                                .iter()
+                                .find(|(c, id, ..)| Some((*c, *id)) == self.destination)
+                                .map_or("Choose destination", |d| d.2.as_str()),
+                        )
+                        .show_ui(ui, |ui| {
+                            for (campaign, id, label, ..) in &destinations {
+                                ui.selectable_value(
+                                    &mut self.destination,
+                                    Some((*campaign, *id)),
+                                    label,
+                                );
+                            }
+                        })
+                });
                 design::named(ui, &combo.response, "Destination");
             });
             let response = design::text_field(ui, "Copy name", &mut self.name, None, None);
@@ -263,7 +266,7 @@ impl CopyDialog {
                             ) {
                                 Ok(plan) => {
                                     self.plan = Some(plan);
-                                    self.error = Some(error);
+                                    self.error = None;
                                 }
                                 Err(error) => self.error = Some(error),
                             }
@@ -284,19 +287,38 @@ impl CopyDialog {
             if let Some(plan) = &self.plan {
                 design::rule(ui);
 
-                ui.add(
-                    egui::Label::new(
-                        Type::Small
-                            .rich(
-                                ui,
-                                format!("Will create {}", plan.root.join(&plan.relative).display()),
-                            )
-                            .color(colors().muted),
-                    )
-                    .wrap(),
-                );
+                let destination = destinations
+                    .iter()
+                    .find(|(campaign, id, ..)| Some((*campaign, *id)) == self.destination)
+                    .unwrap();
+                let name = destination
+                    .2
+                    .split_once(" · ")
+                    .map_or(destination.2.as_str(), |(_, name)| name);
+                crate::library::creation_path(ui, &plan.root, &plan.relative, name);
+                let shared_names: Vec<_> = plan
+                    .shared
+                    .iter()
+                    .filter_map(|dependency| {
+                        Entry::parse(&dependency.relative, &dependency.text)
+                            .ok()
+                            .map(|entry| entry.name)
+                    })
+                    .collect();
                 for dependency in &plan.shared {
-                    ui.label(format!("Also copies {}", dependency.relative));
+                    if let Ok(entry) = Entry::parse(&dependency.relative, &dependency.text) {
+                        ui.label(
+                            Type::Small
+                                .rich(
+                                    ui,
+                                    format!(
+                                        "Also copies {}, which {} needs.",
+                                        entry.name, self.source.entry.name
+                                    ),
+                                )
+                                .color(colors().muted),
+                        );
+                    }
                 }
                 if plan.dependencies.is_empty() {
                     ui.label(
@@ -304,7 +326,11 @@ impl CopyDialog {
                             .rich(ui, "No required dependencies")
                             .color(colors().muted),
                     );
-                } else {
+                } else if plan
+                    .dependencies
+                    .iter()
+                    .any(|name| !shared_names.contains(name))
+                {
                     design::section(
                         ui,
                         format!("Required entries: {}", plan.dependencies.len()),

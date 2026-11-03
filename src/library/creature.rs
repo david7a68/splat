@@ -227,7 +227,7 @@ fn rules_prose(entry: &Entry, source: &str) -> String {
             }
             for (key, label) in DETAILS {
                 let label = if key == "cr_text" { "CR" } else { label };
-                if line.starts_with(&format!("{label} ")) && field(entry, key).is_some() {
+                if line.starts_with(&format!("{label} ")) && detail(entry, key).is_some() {
                     return false;
                 }
             }
@@ -382,10 +382,7 @@ fn ability_row(ui: &mut egui::Ui, entry: &Entry, ability: &str) {
         cell(
             ui,
             56.0,
-            &save.map_or_else(
-                || "Save —".into(),
-                |v| format!("Save {}", design::signed(v)),
-            ),
+            &save.map_or_else(String::new, |v| format!("Save {}", design::signed(v))),
             Type::Stat,
             c.muted,
         );
@@ -567,8 +564,10 @@ fn detail(entry: &Entry, key: &str) -> Option<String> {
     if key != "movement_text" {
         return None;
     }
-    let stats = entry.fields.get("splat_stats")?.as_mapping()?;
-    let movement = stats
+    let movement = entry
+        .fields
+        .get("splat_stats")?
+        .as_mapping()?
         .iter()
         .filter_map(|(key, data)| {
             let key = key.as_str()?;
@@ -584,7 +583,14 @@ fn detail(entry: &Entry, key: &str) -> Option<String> {
             })
         })
         .collect::<Vec<_>>();
-    Some(movement.join(", "))
+    if !movement.is_empty() {
+        return Some(movement.join(", "));
+    }
+    entry.body.lines().find_map(|line| {
+        line.trim()
+            .strip_prefix("Speed ")
+            .map(|text| text.trim_end().trim_end_matches('\\').trim_end().to_owned())
+    })
 }
 
 /// Identity, vitals, abilities and details: what the entry has, and no empty cells.
@@ -690,6 +696,45 @@ pub(super) fn show(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn legacy_source_cr_and_speed_are_shown_once_without_markdown_breaks() {
+        let text = crate::library::note_text("Cinder Wolf", "creature", None);
+        let mut entry = Entry::parse("Cinder Wolf.md", &text).unwrap();
+        entry
+            .fields
+            .get_mut("splat_creature")
+            .unwrap()
+            .as_mapping_mut()
+            .unwrap()
+            .remove("cr_text");
+        entry
+            .fields
+            .get_mut("splat_stats")
+            .unwrap()
+            .as_mapping_mut()
+            .unwrap()
+            .remove("speed");
+        entry.body = "## Source text\n\nMedium humanoid, Unaligned\\\nAC 10  Initiative +0 (10)\\\nHP 1\\\nSpeed 30 ft.\\\nCR 1 (XP 200; PB +2)\\  \n\n### Actions\n\nBite. Roll damage.\n".into();
+        let sections = presentation::reading_sections(&entry.body, &entry.name);
+        let source = sections
+            .iter()
+            .find(|s| s.title == "Source text")
+            .unwrap()
+            .body;
+        assert_eq!(
+            detail(&entry, "cr_text").as_deref(),
+            Some("1 (XP 200; PB +2)")
+        );
+        assert_eq!(detail(&entry, "movement_text").as_deref(), Some("30 ft."));
+        let prose = rules_prose(&entry, source);
+        assert!(!prose.contains("CR 1"));
+        assert!(!prose.contains("Speed 30"));
+        assert!(prose.contains("Bite."));
+        entry.fields.get_mut("splat_creature").unwrap()["cr_text"] = "2 (XP 450)".into();
+        assert_eq!(detail(&entry, "cr_text").as_deref(), Some("2 (XP 450)"));
+        assert!(!rules_prose(&entry, source).contains("CR 1"));
+    }
 
     #[test]
     fn prose_vitals_warn_and_use_updates_the_fight_source() {

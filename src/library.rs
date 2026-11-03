@@ -68,11 +68,30 @@ impl Owner {
     }
 }
 
-/// The line under the reader's title. It wraps, so unlike a list row it always has room to
-/// name the package, the built-in one too.
+fn name_list(names: &[String]) -> String {
+    let shown = &names[..names.len().min(3)];
+    if names.len() > 3 {
+        return format!("{} and {} more", shown.join(", "), names.len() - 3);
+    }
+    match shown {
+        [] => String::new(),
+        [name] => name.clone(),
+        [rest @ .., last] => format!("{} and {last}", rest.join(", ")),
+    }
+}
+
+fn draft_words(campaign: bool) -> &'static str {
+    if campaign {
+        "Save or discard to copy, add an entry, change packages or switch campaign."
+    } else {
+        "Save or discard to copy, add an entry or change packages."
+    }
+}
+
+/// The reader's kind line keeps its kind, class, level and source.
 fn reader_subtitle(owner: &Owner, listed: &str, class_level: Option<String>) -> String {
     match class_level {
-        Some(level) => format!("{level} · {}", owner.source()),
+        Some(level) => format!("Class feature · {level} · {}", owner.source()),
         None if *owner == Owner::Builtin => format!("{listed} · {BUILTIN_NAME}"),
         None => listed.to_owned(),
     }
@@ -447,12 +466,26 @@ pub(crate) fn note_text(name: &str, kind: &str, namespace: Option<&str>) -> Stri
     }
     let mut yaml = serde_yaml_ng::to_string(&fields).expect("string fields");
     if kind == "creature" {
-        for (key, value) in [("max_hp", 1), ("armor_class", 10), ("initiative", 0)] {
+        for (key, value) in [
+            ("max_hp", 1),
+            ("armor_class", 10),
+            ("initiative", 0),
+            ("strength", 10),
+            ("dexterity", 10),
+            ("constitution", 10),
+            ("intelligence", 10),
+            ("wisdom", 10),
+            ("charisma", 10),
+        ] {
             yaml = yaml.replace(
                 &format!("  {key}:\n    value: {value}"),
                 &format!("  {key}: {{value: {value}}}"),
             );
         }
+        yaml = yaml.replace(
+            "  speed:\n    value: 30\n    unit: ft",
+            "  speed: {value: 30, unit: ft}",
+        );
     }
     format!(
         "---\n{}---\n\n# {}\n\n{}",
@@ -474,6 +507,25 @@ pub(crate) fn note_text(name: &str, kind: &str, namespace: Option<&str>) -> Stri
             ""
         }
     )
+}
+
+/// Consistent type and inset for entry form controls, including the editable Folder.
+pub(crate) fn form_control<R>(ui: &mut egui::Ui, add: impl FnOnce(&mut egui::Ui) -> R) -> R {
+    ui.scope(|ui| {
+        ui.style_mut().override_font_id = Some(Type::Strong.font(ui));
+        ui.spacing_mut().button_padding.x = design::S;
+        add(ui)
+    })
+    .inner
+}
+
+pub(crate) fn creation_path(ui: &mut egui::Ui, root: &Path, relative: &str, destination: &str) {
+    let full = format!("Will create {}", root.join(relative).display());
+    let short = format!("Will create {destination}/{relative}");
+    let text = design::words_that_fit(ui, &short, &Type::Small.font(ui), ui.available_width());
+    let response = ui.label(Type::Small.rich(ui, text).color(colors().muted));
+    design::named(ui, &response, &full);
+    response.on_hover_text(full);
 }
 
 /// Existing folders, with an optional kind folder as the first suggestion.
@@ -522,55 +574,57 @@ pub(crate) fn folder_field(
         Some("Type a new folder, or choose one. New folders are made when you save."),
         None,
         |ui| {
-            egui::Frame::new()
-                .fill(colors().well)
-                .stroke(egui::Stroke::new(
-                    design::HAIRLINE_WIDTH,
-                    colors().field_border,
-                ))
-                .corner_radius(design::RADIUS_CONTROL as u8)
-                .inner_margin(egui::Margin::symmetric(design::S as i8, 0))
-                .show(ui, |ui| {
-                    ui.horizontal(|ui| {
-                        let width =
-                            (ui.available_width() - design::XL - ui.spacing().item_spacing.x)
-                                .max(design::XXL);
-                        let response = ui.add(
-                            egui::TextEdit::singleline(value)
-                                .frame(false)
-                                .font(Type::Strong.font(ui))
-                                .margin(egui::Vec2::ZERO)
-                                .desired_width(width)
-                                .min_size(egui::vec2(width, design::XL))
-                                .hint_text("Main folder"),
-                        );
-                        design::named(ui, &response, label);
-                        let response = ui.add(
-                            egui::Button::new(Type::Body.rich(ui, icons::DOWN))
-                                .frame(false)
-                                .min_size(egui::vec2(design::XL, design::XL)),
-                        );
-                        design::named(ui, &response, &format!("Suggestions for {label}"));
-                        egui::Popup::menu(&response).show(|ui| {
-                            if ui
-                                .selectable_label(value.is_empty(), "Main folder")
-                                .clicked()
-                            {
-                                value.clear();
-                                ui.close();
-                            }
-                            for folder in folders
-                                .iter()
-                                .filter(|folder| folder.to_lowercase().contains(&query))
-                            {
-                                if ui.selectable_label(value == folder, folder).clicked() {
-                                    *value = folder.clone();
+            form_control(ui, |ui| {
+                egui::Frame::new()
+                    .fill(colors().well)
+                    .stroke(egui::Stroke::new(
+                        design::HAIRLINE_WIDTH,
+                        colors().field_border,
+                    ))
+                    .corner_radius(design::RADIUS_CONTROL as u8)
+                    .inner_margin(egui::Margin::symmetric(design::S as i8, 0))
+                    .show(ui, |ui| {
+                        ui.horizontal(|ui| {
+                            let width =
+                                (ui.available_width() - design::XL - ui.spacing().item_spacing.x)
+                                    .max(design::XXL);
+                            let response = ui.add(
+                                egui::TextEdit::singleline(value)
+                                    .frame(false)
+                                    .font(Type::Strong.font(ui))
+                                    .margin(egui::Vec2::ZERO)
+                                    .desired_width(width)
+                                    .min_size(egui::vec2(width, design::XL))
+                                    .hint_text(Type::Strong.rich(ui, "Main folder")),
+                            );
+                            design::named(ui, &response, label);
+                            let response = ui.add(
+                                egui::Button::new(Type::Body.rich(ui, icons::DOWN))
+                                    .frame(false)
+                                    .min_size(egui::vec2(design::XL, design::XL)),
+                            );
+                            design::named(ui, &response, &format!("Suggestions for {label}"));
+                            egui::Popup::menu(&response).show(|ui| {
+                                if ui
+                                    .selectable_label(value.is_empty(), "Main folder")
+                                    .clicked()
+                                {
+                                    value.clear();
                                     ui.close();
                                 }
-                            }
+                                for folder in folders
+                                    .iter()
+                                    .filter(|folder| folder.to_lowercase().contains(&query))
+                                {
+                                    if ui.selectable_label(value == folder, folder).clicked() {
+                                        *value = folder.clone();
+                                        ui.close();
+                                    }
+                                }
+                            });
                         });
                     });
-                });
+            });
         },
     );
 }
@@ -1152,17 +1206,11 @@ impl Library {
         if self.disk_change.is_some() {
             Some("Choose what to do with the changed file first.")
         } else if self.dirty() {
-            Some(
-                if self
-                    .selected
+            Some(draft_words(
+                self.selected
                     .and_then(|i| self.loaded.as_ref().map(|l| &l.notes[i].owner))
-                    .is_some_and(|owner| matches!(owner, Owner::Campaign(_)))
-                {
-                    "Save or discard to copy, add an entry, change packages or switch campaign."
-                } else {
-                    "Save or discard to copy, add an entry or change packages."
-                },
-            )
+                    .is_some_and(|owner| matches!(owner, Owner::Campaign(_))),
+            ))
         } else {
             None
         }
@@ -1731,9 +1779,14 @@ impl Library {
                         && !loaded.notes.iter().any(|note| note.owner.id() == Some(id) && note.entry.as_ref().is_some_and(|entry| entry.kind != "package")) {
                         let name = campaigns.modules().iter().find(|m| m.id == id).map_or("this package", |m| m.name.as_str());
                         let mut create = false;
-                        design::empty_state(ui, icons::LIBRARY, &format!("No entries in {name} yet."), "Create the first entry.", |ui| {
-                            create = Action::secondary("New entry").icon(icons::ADD).show(ui).clicked();
-                        });
+                        if self.new_form {
+                            ui.label(Type::Title.rich(ui, icons::LIBRARY).color(colors().muted));
+                            ui.label(Type::Title.rich(ui, format!("No entries in {name} yet.")).color(colors().text));
+                        } else {
+                            design::empty_state(ui, icons::LIBRARY, &format!("No entries in {name} yet."), "Create the first entry.", |ui| {
+                                create = Action::secondary("New entry").icon(icons::ADD).show(ui).clicked();
+                            });
+                        }
                         if create { self.new_form = true; self.focus_new_name = true; self.new_kind = "creature".into(); }
                     } else {
                     let text = if scope == Scope::Campaign && !searching {
@@ -1959,12 +2012,31 @@ impl Library {
                     package: crate::content_workspace::EntryRef::id(module.id),
                     selection: crate::content_workspace::Selection::Selected { entries: entry_ids },
                 };
-                let count = selection.campaign_users(&catalogue).len();
-                if count > 0 {
+                let users = selection.campaign_users(&catalogue);
+                if !users.is_empty() {
+                    let mut names = Vec::new();
+                    for (id, _) in &users {
+                        if let Some(user) = catalogue.entries.get(id) {
+                            for reference in
+                                content::required_references(&user.entry).unwrap_or_default()
+                            {
+                                if let Ok(id) = catalogue.resolve(&reference)
+                                    && let Some(entry) = catalogue.entries.get(&id)
+                                    && entry.owner == module.id
+                                {
+                                    names.push(entry.entry.name.clone());
+                                }
+                            }
+                        }
+                    }
+                    names.sort();
+                    names.dedup();
+                    let users: Vec<_> = users.into_iter().map(|(_, name)| name).collect();
                     ui.label(format!(
-                        "{} uses {} of them.",
+                        "{} uses {}, in {}.",
                         campaign.name,
-                        design::count(count, "", "").trim()
+                        name_list(&names),
+                        name_list(&users)
                     ));
                 }
             }
@@ -2331,37 +2403,43 @@ impl Library {
                     self.new_kind = "creature".into();
                 }
                 design::group_label(ui, "Kind");
-                let combo = egui::ComboBox::from_id_salt("new_kind")
-                    .width(ui.available_width())
-                    .icon(design::combo_icon)
-                    .selected_text(
-                        self.new_kind
-                            .replace('_', " ")
-                            .chars()
-                            .enumerate()
-                            .map(|(i, c)| if i == 0 { c.to_ascii_uppercase() } else { c })
-                            .collect::<String>(),
-                    )
-                    .show_ui(ui, |ui| {
-                        for kind in ["creature", "spell", "item", "effect", "rule", "rule_group"] {
-                            let word = kind.replace('_', " ");
-                            let word = format!("{}{}", word[..1].to_uppercase(), &word[1..]);
-                            ui.selectable_value(&mut self.new_kind, kind.into(), word);
-                        }
-                    });
+                let combo = form_control(ui, |ui| {
+                    egui::ComboBox::from_id_salt("new_kind")
+                        .width(ui.available_width())
+                        .icon(design::combo_icon)
+                        .selected_text(
+                            self.new_kind
+                                .replace('_', " ")
+                                .chars()
+                                .enumerate()
+                                .map(|(i, c)| if i == 0 { c.to_ascii_uppercase() } else { c })
+                                .collect::<String>(),
+                        )
+                        .show_ui(ui, |ui| {
+                            for kind in
+                                ["creature", "spell", "item", "effect", "rule", "rule_group"]
+                            {
+                                let word = kind.replace('_', " ");
+                                let word = format!("{}{}", word[..1].to_uppercase(), &word[1..]);
+                                ui.selectable_value(&mut self.new_kind, kind.into(), word);
+                            }
+                        })
+                });
                 design::named(ui, &combo.response, "Kind of entry");
-                design::group_label(ui, "Where");
-                let combo = egui::ComboBox::from_id_salt("new_place")
-                    .icon(design::combo_icon)
-                    .width(ui.available_width())
-                    .truncate()
-                    .selected_text(places[place].label())
-                    .show_ui(ui, |ui| {
-                        for (i, owner) in places.iter().enumerate() {
-                            ui.selectable_value(&mut place, i, owner.label());
-                        }
-                    });
-                design::named(ui, &combo.response, "Where the entry goes");
+                design::group_label(ui, "Destination");
+                let combo = form_control(ui, |ui| {
+                    egui::ComboBox::from_id_salt("new_place")
+                        .icon(design::combo_icon)
+                        .width(ui.available_width())
+                        .truncate()
+                        .selected_text(places[place].label())
+                        .show_ui(ui, |ui| {
+                            for (i, owner) in places.iter().enumerate() {
+                                ui.selectable_value(&mut place, i, owner.label());
+                            }
+                        })
+                });
+                design::named(ui, &combo.response, "Destination");
                 folder_field(
                     ui,
                     "Folder",
@@ -2379,17 +2457,12 @@ impl Library {
                     )
                 };
                 if !self.new_name.trim().is_empty() {
-                    ui.label(
-                        Type::Small
-                            .rich(
-                                ui,
-                                format!(
-                                    "Will create {}",
-                                    places[place].root().unwrap().join(&relative).display()
-                                ),
-                            )
-                            .color(colors().muted),
-                    );
+                    let destination = match &places[place] {
+                        Owner::Package(package) => &package.name,
+                        Owner::Campaign(campaign) => &campaign.name,
+                        Owner::Builtin => BUILTIN_NAME,
+                    };
+                    creation_path(ui, places[place].root().unwrap(), &relative, destination);
                 }
                 if matches!(places[place], Owner::Package(_))
                     && campaigns.active_campaign().is_some()
@@ -2982,6 +3055,7 @@ impl Library {
         if save_row && !conflict {
             ui.horizontal(|ui| {
                 ui.set_max_width(editor_width);
+                ui.set_min_height(Density::Scan.control());
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     let blocked = if conflict {
                         Some("Choose what to do with the changed file first.")
@@ -3008,18 +3082,25 @@ impl Library {
                     });
                 });
             });
-            // This line always occupies the same two lines of the editor, so typing
-            // changes its words without moving the caret. Other controls use its hint.
-            let reason = draft_reason.unwrap_or("");
-            ui.allocate_ui_with_layout(
-                egui::vec2(editor_width, Type::Small.line() * 2.0),
-                egui::Layout::top_down(egui::Align::Min),
-                |ui| {
-                    ui.add(
-                        egui::Label::new(Type::Small.rich(ui, reason).color(colors().muted)).wrap(),
-                    );
-                },
-            );
+            // Measure the same words in both states, so the first edit keeps the caret in place.
+            let words = draft_words(matches!(note.owner, Owner::Campaign(_)));
+            let height = egui::WidgetText::from(Type::Small.rich(ui, words))
+                .into_galley(
+                    ui,
+                    Some(egui::TextWrapMode::Wrap),
+                    editor_width,
+                    Type::Small.font(ui),
+                )
+                .size()
+                .y;
+            let (slot, _) =
+                ui.allocate_exact_size(egui::vec2(editor_width, height), egui::Sense::hover());
+            if let Some(reason) = draft_reason {
+                ui.put(
+                    slot,
+                    egui::Label::new(Type::Small.rich(ui, reason).color(colors().muted)).wrap(),
+                );
+            }
         }
         // Live, because Discard in this same frame changed the draft.
         if self.draft != note.text {
@@ -3462,6 +3543,12 @@ mod tests {
     #[test]
     fn creature_template_uses_fields_on_every_read_surface() {
         let text = note_text("Copper Drake", "creature", None);
+        assert!(
+            !text
+                .lines()
+                .any(|line| line.trim_start().starts_with("value:"))
+        );
+        assert!(text.contains("speed: {value: 30, unit: ft}"));
         let entry = Entry::parse("Copper Drake.md", &text).unwrap();
         assert_eq!(
             entry.fields["splat_creature"]["type"].as_str(),
@@ -3687,7 +3774,7 @@ mod tests {
         // A class page's own line replaces the list's, so it needs the name too.
         assert_eq!(
             reader_subtitle(&package, "Rule", Some("Bard · Level 3".into())),
-            "Bard · Level 3 · Ashen Marches"
+            "Class feature · Bard · Level 3 · Ashen Marches"
         );
     }
 

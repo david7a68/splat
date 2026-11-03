@@ -180,6 +180,32 @@ pub fn places(d: &mut Driver<'_>) {
         "A place loop remains visible and says why",
     );
     d.state("place-loop", Sizes::All);
+
+    d.click_containing("Rook Ambry · ");
+    let path = root(d).join("NPCs/Rook Ambry.md");
+    let external = fs::read_to_string(&path)
+        .unwrap()
+        .replace("A note for tonight.", "## Watch schedule\n\nObsidian added the watch schedule.\n\nRook takes the first watch at the east gate. At midnight, the relief patrol leaves Watch House and checks the bridge.\n\nThe captain keeps a spare key in the guard room. Visitors must give their names before they enter the keep.");
+    fs::write(&path, &external).unwrap();
+    // No focus event: Change must re-read the file before it patches this one key.
+    d.click("Change In");
+    d.type_text("Watch House");
+    d.click("Watch House");
+    let after = fs::read_to_string(&path).unwrap();
+    assert!(after.contains("Obsidian added the watch schedule."));
+    assert_ne!(
+        splat::content::Entry::parse("NPCs/Rook Ambry.md", &after)
+            .unwrap()
+            .fields["splat_world"]["in"],
+        splat::content::Entry::parse("NPCs/Rook Ambry.md", &external)
+            .unwrap()
+            .fields["splat_world"]["in"]
+    );
+    d.wait_for_text("Obsidian added the watch schedule.");
+    d.expect("Place changed.");
+    d.state("place-change-keeps-disk-edit", Sizes::All);
+    d.click("Undo World change");
+    assert_eq!(fs::read_to_string(&path).unwrap(), external);
 }
 
 pub fn round_trip(d: &mut Driver<'_>) {
@@ -500,6 +526,25 @@ pub fn package_file_changed(d: &mut Driver<'_>) {
     d.click("Read");
     d.wait_for_text("Ash Bite");
     d.state("package-disk-version-kept", Sizes::All);
+
+    d.click("What the Library shows: Can use");
+    d.click("Ashen Marches");
+    let valid = fs::read_to_string(&path).unwrap();
+    let broken = valid.replace("splat_kind: creature", "splat_kind: [");
+    assert_ne!(broken, valid);
+    fs::write(&path, &broken).unwrap();
+    d.focus_window(false);
+    d.focus_window(true);
+    d.wait_for_text("Invalid note");
+    d.state("package-yaml-broken-on-disk", Sizes::All);
+    d.click(EDIT_MARKDOWN);
+    d.expect("Save");
+    d.state("package-yaml-repair-editor", Sizes::All);
+    d.replace_editor_text(&valid);
+    d.click("Save");
+    d.click("Read");
+    d.wait_for_text("Ash Bite");
+    d.state("package-yaml-repaired", Sizes::All);
 }
 
 /// Deleting a file leaves its uses visible and its reader link unresolved.
