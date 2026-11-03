@@ -1749,7 +1749,9 @@ impl Splat {
             self.encounters.new_from_plan();
             self.page = Page::Encounters;
         }
-        if std::mem::take(&mut self.sessions.wants_back_to_run) {
+        if std::mem::take(&mut self.sessions.wants_back_to_run)
+            || std::mem::take(&mut self.timeline_page.wants_back_to_run)
+        {
             self.page = Page::Run;
         }
         if let Some(id) = self.campaign_content.open_lookup.take() {

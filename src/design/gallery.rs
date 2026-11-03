@@ -129,7 +129,9 @@ pub fn components(ui: &mut egui::Ui) {
     let c = colors();
     page_header(ui, "Encounters", Some("2 ready · 1 in progress"), |ui| {
         let _ = Action::secondary("New encounter").icon(icons::ADD).show(ui);
-        let _ = Action::quiet("Reload from disk").show(ui);
+        let _ = Action::quiet("Reload from disk")
+            .icon(icons::REFRESH)
+            .show(ui);
     });
     design_group(ui, "Buttons: enabled, blocked");
     for (kind, label) in [

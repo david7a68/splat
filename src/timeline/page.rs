@@ -1,6 +1,6 @@
 //! The Timeline page: the whole campaign in story order, apart from any one session.
 use super::{Book, Event, Kind, clock, clock_now, clock_words, day_numbers, reference};
-use crate::design::{self, Action, Density, Tone, Type, colors, icons};
+use crate::design::{self, Action, Density, Status, Tone, Type, colors, icons};
 use eframe::egui;
 use std::time::{Duration, Instant};
 use uuid::Uuid;
@@ -65,6 +65,8 @@ pub struct TimelinePage {
     opened: bool,
     /// The run open now, whose event must stay while it runs.
     pub open_run: Option<Uuid>,
+    /// The DM followed an open fight's status back to the run.
+    pub wants_back_to_run: bool,
     /// Filters and the selection belong to one campaign.
     campaign: Option<Uuid>,
     /// The DM asked to open this session's page.
@@ -301,7 +303,9 @@ impl TimelinePage {
         let c = colors();
         let selected = self.selected.as_deref() == Some(event.id.as_str());
         let title = event.label(day);
-        let mut detail = event.summary_with_result(session, &super::played_fight_summary(event));
+        let open = event.run.is_some() && event.run == self.open_run;
+        let summary = super::played_fight_summary(event, open);
+        let mut detail = event.summary_with_result(session, &summary);
         // Filters and scrolling hide the Day rows, so each row says its own.
         if event.kind != Kind::Day && day > 0 {
             detail = if detail.is_empty() {
@@ -315,57 +319,97 @@ impl TimelinePage {
         } else {
             format!("{title} · {detail}")
         };
-        let response = design::row(ui, ROW, selected, &name, |ui, rect| {
-            let painter = ui.painter();
-            let spine = rect.left() + SPINE;
-            let width = rect.width() - TEXT_AT - design::S;
-            let icon_y = rect.center().y;
-            if event.kind != Kind::Day {
-                for (from, to) in [(rect.top(), icon_y - 11.0), (icon_y + 11.0, rect.bottom())] {
-                    painter.vline(
-                        spine,
-                        egui::Rangef::new(from, to),
-                        egui::Stroke::new(design::HAIRLINE_WIDTH, c.rule),
+        let response = design::row(
+            ui,
+            if open { design::XL } else { ROW },
+            selected,
+            &name,
+            |ui, rect| {
+                let painter = ui.painter();
+                let spine = rect.left() + SPINE;
+                let width = rect.width() - TEXT_AT - design::S;
+                let icon_y = rect.center().y;
+                if event.kind != Kind::Day {
+                    for (from, to) in [(rect.top(), icon_y - 11.0), (icon_y + 11.0, rect.bottom())]
+                    {
+                        painter.vline(
+                            spine,
+                            egui::Rangef::new(from, to),
+                            egui::Stroke::new(design::HAIRLINE_WIDTH, c.rule),
+                        );
+                    }
+                }
+                painter.text(
+                    egui::pos2(spine, icon_y),
+                    egui::Align2::CENTER_CENTER,
+                    event.kind.icon(),
+                    Type::Name.font(ui),
+                    if event.kind == Kind::Day {
+                        c.text
+                    } else {
+                        c.muted
+                    },
+                );
+                let galley = if event.kind == Kind::Day {
+                    let mut job = design::group_heading_text(ui, &title, 0);
+                    job.wrap.max_width = width;
+                    job.wrap.max_rows = 1;
+                    painter.layout_job(job)
+                } else {
+                    let font = if selected { Type::Strong } else { Type::Body };
+                    design::one_line(ui, &title, font.font(ui), c.text, width)
+                };
+                let lines = if detail.is_empty() || open {
+                    galley.size().y
+                } else {
+                    galley.size().y + Type::Small.line()
+                };
+                let top = rect.center().y - lines / 2.0;
+                let x = rect.left() + TEXT_AT;
+                painter.galley(egui::pos2(x, top), galley, c.text);
+                if !detail.is_empty() && !open {
+                    let second =
+                        design::one_line(ui, &detail, Type::Small.font(ui), c.muted, width);
+                    painter.galley(
+                        egui::pos2(x, top + lines - Type::Small.line()),
+                        second,
+                        c.muted,
                     );
                 }
-            }
-            painter.text(
-                egui::pos2(spine, icon_y),
-                egui::Align2::CENTER_CENTER,
-                event.kind.icon(),
-                Type::Name.font(ui),
-                if event.kind == Kind::Day {
-                    c.text
-                } else {
-                    c.muted
-                },
+            },
+        );
+        if open && !summary.is_empty() {
+            // Keep the title and round link in separate hit targets.
+            let rect = egui::Rect::from_min_max(
+                response.rect.left_bottom(),
+                response.rect.right_bottom() + egui::vec2(0.0, design::XL),
             );
-            let galley = if event.kind == Kind::Day {
-                let mut job = design::group_heading_text(ui, &title, 0);
-                job.wrap.max_width = width;
-                job.wrap.max_rows = 1;
-                painter.layout_job(job)
-            } else {
-                let font = if selected { Type::Strong } else { Type::Body };
-                design::one_line(ui, &title, font.font(ui), c.text, width)
-            };
-            let lines = if detail.is_empty() {
-                galley.size().y
-            } else {
-                galley.size().y + Type::Small.line()
-            };
-            let top = rect.center().y - lines / 2.0;
-            let x = rect.left() + TEXT_AT;
-            painter.galley(egui::pos2(x, top), galley, c.text);
-            if !detail.is_empty() {
-                let second = design::one_line(ui, &detail, Type::Small.font(ui), c.muted, width);
-                painter.galley(
-                    egui::pos2(x, top + lines - Type::Small.line()),
-                    second,
-                    c.muted,
-                );
-            }
-        });
+            ui.allocate_rect(rect, egui::Sense::hover());
+            let rect = egui::Rect::from_min_max(
+                rect.min + egui::vec2(TEXT_AT, 0.0),
+                rect.max - egui::vec2(design::S, 0.0),
+            );
+            ui.scope_builder(egui::UiBuilder::new().max_rect(rect), |ui| {
+                ui.horizontal(|ui| {
+                    ui.spacing_mut().item_spacing.x = 0.0;
+                    let (before, after) = detail.split_once(&summary).unwrap_or(("", ""));
+                    ui.label(Type::Small.rich(ui, before).color(c.muted));
+                    if design::status_link(
+                        ui,
+                        Status {
+                            icon: icons::RUN,
+                            word: &summary,
+                            color: c.text,
+                        },
+                    )
+                    .clicked()
+                    {
+                        self.wants_back_to_run = true;
+                    }
+                    ui.add(egui::Label::new(Type::Small.rich(ui, after).color(c.muted)).truncate());
+                });
+            });
+        }
         if response.clicked() {
             self.reset_detail = self.selected.as_ref() != Some(&event.id);
             self.selected = Some(event.id.clone());
@@ -825,7 +869,13 @@ impl TimelinePage {
                 design::field(ui, "From the run", None, None, |ui| {
                     ui.label(
                         Type::Body
-                            .rich(ui, super::played_fight_summary(event))
+                            .rich(
+                                ui,
+                                super::played_fight_summary(
+                                    event,
+                                    event.run.is_some() && event.run == self.open_run,
+                                ),
+                            )
                             .color(c.text),
                     );
                 });
