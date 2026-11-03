@@ -3587,6 +3587,9 @@ pub mod nav_table {
         for name in d.rail_page_buttons() {
             d.click(&name);
             let title = d.page_title();
+            if name.starts_with("Run · ") {
+                close_run(d);
+            }
             titles.push((name, title));
         }
         let mut distinct: Vec<&Option<String>> = titles.iter().map(|(_, title)| title).collect();
@@ -3599,12 +3602,6 @@ pub mod nav_table {
                 && titles.iter().all(|(_, t)| t.is_some()),
             format!("Each control in the rail opens a page with its own title: {titles:?}"),
         );
-
-        // The paused Run item opens a fight while the rail routes are checked.
-        if d.app_mut().encounters.has_run() {
-            d.click(BACK_TO_RUN);
-            close_run(d);
-        }
 
         // G1: a disabled control says why, on the pages that have the most of them.
         go_encounters(d);

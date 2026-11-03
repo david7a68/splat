@@ -36,7 +36,7 @@
       "run-sync-conflict": 28,
       "run-sync-states": 21,
       "session-notes": 137,
-      "session-plan": 106,
+      "session-plan": 116,
       "session-plan-groups": 45,
       "session-recording": 106,
       "settings": 17,
@@ -53,7 +53,8 @@
       "library-author": 2,
       "library-browse": 9,
       "library-scope": 5,
-      "session-recording": 7
+      "session-recording": 7,
+      "session-plan": 21
     },
     "target-size/egui-chrome": {
       "campaign-content": 66,
@@ -91,7 +92,7 @@
       "run-sync-conflict": 28,
       "run-sync-states": 21,
       "session-notes": 137,
-      "session-plan": 106,
+      "session-plan": 113,
       "session-plan-groups": 45,
       "session-recording": 105,
       "settings": 17,
