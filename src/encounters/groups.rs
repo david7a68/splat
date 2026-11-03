@@ -382,6 +382,7 @@ pub(super) fn load(
             let mut members = Vec::new();
             let mut problems = Vec::new();
             let mut unavailable = 0_u64;
+            let mut unavailable_members = Vec::new();
             let (mut xp, mut xp_unknown) = (0_u64, Vec::new());
             for (index, member) in group.members.iter().enumerate() {
                 let what = format!("Member {}", index + 1);
@@ -390,9 +391,25 @@ pub(super) fn load(
                     .ok()
                     .and_then(|id| Some((id, creatures.iter().find(|c| c.id == id)?)))
                 else {
-                    problems.push(
-                        "Unavailable creature: check the packages this campaign uses.".to_owned(),
-                    );
+                    let link_name = e.entry.fields.get("splat_encounter_group")
+                        .and_then(|group| group.get("members"))
+                        .and_then(|members| members.get(index))
+                        .and_then(|member| member.get("creature"))
+                        .and_then(|creature| creature.get("link"))
+                        .and_then(Value::as_str)
+                        .map(crate::sessions::plain_links)
+                        .filter(|name| Uuid::parse_str(name.trim()).is_err()
+                            && !splat::content::resource_key(name.trim()));
+                    let name = member.overrides.name.as_deref()
+                        .or(link_name.as_deref())
+                        .map(str::trim)
+                        .filter(|name| !name.is_empty())
+                        .unwrap_or("unknown creature");
+                    let fault_name = if name == "unknown creature" { "an unknown creature" } else { name };
+                    problems.push(format!(
+                        "{what}, {fault_name}: not in this campaign's packages. Campaign → Packages."
+                    ));
+                    unavailable_members.push((index, member.count, name.to_owned()));
                     unavailable = unavailable.saturating_add(member.count);
                     continue;
                 };
@@ -402,7 +419,11 @@ pub(super) fn load(
                     Some(format!("{what}: {} has a D&D Beyond sheet.", entry.name))
                 } else {
                     match &resolved {
-                        Err(error) => Some(format!("{what} ({}): {error}", entry.name)),
+                        Err(error) => Some(format!(
+                            "{what}, {}: {}",
+                            entry.name,
+                            error.replace("1000000", "1,000,000").replace('-', "−")
+                        )),
                         Ok(resolved) if resolved.max_hp.is_none() => Some(format!(
                             "{what}: {} has no maximum HP. Set it in this member's overrides.",
                             entry.name
@@ -439,7 +460,8 @@ pub(super) fn load(
                 xp,
                 xp_unknown,
                 unavailable,
-                problem: (!problems.is_empty()).then(|| problems.join(" ")),
+                unavailable_members,
+                problem: (!problems.is_empty()).then(|| problems.join("\n")),
             }))
         })
         .collect();
@@ -465,12 +487,16 @@ fn list_row(ui: &mut egui::Ui, group: &RunGroup, blocked: Option<&'static str>) 
                         .truncate(),
                 );
                 if let Some(problem) = &group.problem {
-                    ui.add(
-                        egui::Label::new(
-                            Type::Small.rich(ui, problem).color(colors().result.warning),
-                        )
-                        .wrap(),
-                    );
+                    for fault in problem.lines() {
+                        ui.add(
+                            egui::Label::new(
+                                Type::Small
+                                    .rich(ui, format!("{} {fault}", icons::WARN))
+                                    .color(colors().result.warning),
+                            )
+                            .wrap(),
+                        );
+                    }
                 }
             });
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
@@ -858,7 +884,7 @@ pub(super) fn show_changes(
                 ui,
                 Status {
                     icon: icons::CHANGED,
-                    word: "Overrides, here only",
+                    word: "Changed",
                     color: colors().participant.changed,
                 },
             );
@@ -995,9 +1021,9 @@ pub(super) fn overrides_form(
     let heading = design::group_label(
         ui,
         if sides.is_some() {
-            "Overrides, for this encounter only"
+            "Changes in this encounter"
         } else {
-            "Overrides, for this group only"
+            "Changes in this group"
         },
     );
     if ui
@@ -1110,43 +1136,85 @@ pub(super) fn overrides_form(
     }
 }
 
-/// Names split by commas. The words stay as typed while the field has the keyboard, or a
-/// comma just typed would vanish.
+/// The same official names and local Other effect as the run.
 fn conditions_row(ui: &mut egui::Ui, conditions: &mut Vec<String>) {
-    const NAME: &str = "Starting conditions";
-    ui.horizontal(|ui| {
-        let (rect, _) = ui.allocate_exact_size(
-            egui::vec2(LABEL_WIDTH, Density::Read.control()),
-            egui::Sense::hover(),
-        );
-        ui.painter().text(
-            rect.left_center(),
-            egui::Align2::LEFT_CENTER,
-            NAME,
-            Type::Small.font(ui),
-            colors().muted,
-        );
-        let id = ui.id().with(NAME);
-        let mut text = ui
-            .data(|data| data.get_temp::<String>(id))
-            .unwrap_or_else(|| conditions.join(", "));
-        let width = (ui.available_width() - design::S).clamp(120.0, 320.0);
-        let response = design::text_input(ui, NAME, &mut text, "Poisoned, Prone", width);
-        if response.has_focus() {
-            ui.data_mut(|data| data.insert_temp(id, text.clone()));
-        } else {
-            ui.data_mut(|data| data.remove_temp::<String>(id));
-        }
-        if response.changed() {
-            let mut seen = Vec::<String>::new();
-            for name in text.split(',').map(str::trim).filter(|n| !n.is_empty()) {
-                if !seen.iter().any(|other| same_condition(other, name)) {
-                    seen.push(name.to_owned());
+    design::group_label(ui, "Starting conditions");
+    ui.horizontal_wrapped(|ui| {
+        for (_, name) in crate::combat_sync::CONDITIONS {
+            let found = conditions.iter().position(|c| same_condition(c, name));
+            if crate::encounter_run::view::toggle(
+                ui,
+                name,
+                if found.is_some() {
+                    icons::OK
+                } else {
+                    icons::ADD
+                },
+                found.is_some(),
+                name,
+                Density::Read,
+            )
+            .clicked()
+            {
+                if let Some(at) = found {
+                    conditions.remove(at);
+                } else {
+                    conditions.push(name.to_owned());
                 }
             }
-            *conditions = seen;
         }
     });
+    let official = |c: &str| {
+        crate::combat_sync::CONDITIONS
+            .iter()
+            .any(|(_, name)| same_condition(c, name))
+    };
+    let custom: Vec<_> = conditions
+        .iter()
+        .filter(|c| !official(c))
+        .cloned()
+        .collect();
+    for effect in custom {
+        ui.horizontal(|ui| {
+            ui.label(Type::Small.rich(ui, &effect).color(colors().muted));
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                let menu = ui.menu_button("⋯", |ui| {
+                    if ui.button("Remove").clicked() {
+                        conditions.retain(|c| c != &effect);
+                        ui.close();
+                    }
+                });
+                design::named(ui, &menu.response, &format!("More actions for {effect}"));
+            });
+        });
+    }
+    let id = ui.id().with("starting_other_effect");
+    let mut text = ui
+        .data(|data| data.get_temp::<String>(id))
+        .unwrap_or_default();
+    ui.horizontal(|ui| {
+        let field = design::text_input(
+            ui,
+            "Other effect",
+            &mut text,
+            "Other effect",
+            design::FORM_WIDTH.min(ui.available_width() - design::L * 8.0),
+        );
+        let enter = field.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
+        if (Action::secondary("Add effect")
+            .density(Density::Read)
+            .show(ui)
+            .clicked()
+            || enter)
+            && !text.trim().is_empty()
+        {
+            if !conditions.iter().any(|c| same_condition(c, text.trim())) {
+                conditions.push(text.trim().to_owned());
+            }
+            text.clear();
+        }
+    });
+    ui.data_mut(|data| data.insert_temp(id, text));
 }
 
 impl Encounters {
@@ -1222,6 +1290,7 @@ impl Encounters {
         campaigns: &Campaigns,
         in_plan: bool,
     ) {
+        let has_run = self.has_run();
         let dirty = self.draft_dirty();
         // The Session page has no save of its own to give this key to.
         let save_key = in_plan
@@ -1262,6 +1331,8 @@ impl Encounters {
             if focus_name {
                 design::focus_and_select(ui, response.id, &draft.name);
             }
+        };
+        let actions = |ui: &mut egui::Ui, save: &mut bool, discard: &mut bool| {
             let (icon, word, color) = if dirty {
                 (icons::DRAFT, "Unsaved", colors().document.unsaved)
             } else if let Some(note) = &saved_note {
@@ -1270,10 +1341,11 @@ impl Encounters {
                 (icons::OK, "No changes", colors().muted)
             };
             design::status(ui, Status { icon, word, color });
-        };
-        let actions = |ui: &mut egui::Ui, save: &mut bool, discard: &mut bool| {
+            if dirty {
+                *discard = Action::quiet("Discard").show(ui).clicked();
+            }
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                *save = if dirty {
+                *save = if dirty && !has_run {
                     Action::primary("Save group")
                 } else {
                     Action::secondary("Save group")
@@ -1282,10 +1354,6 @@ impl Encounters {
                 .key("Ctrl+S")
                 .show(ui)
                 .clicked();
-                ui.add_space(design::XL);
-                if dirty {
-                    *discard = Action::destructive("Discard changes").show(ui).clicked();
-                }
             });
         };
         if two_rows {
@@ -1527,7 +1595,7 @@ fn members(
                 || "Unavailable creature".to_owned(),
                 |entry| entry.name.clone(),
             );
-            let button = format!("Overrides for {name}");
+            let button = format!("Changes for {name}");
             let name = if entry.is_some() {
                 shown_name(&member.overrides, name)
             } else {
@@ -2033,8 +2101,67 @@ mod tests {
         .unwrap();
         let snapshot = Snapshot::load(&campaign, &[]).unwrap();
         let problem = snapshot.groups[0].problem.clone().unwrap();
-        assert!(problem.contains("Unavailable creature"), "{problem}");
+        assert!(!problem.contains(&id.to_string()), "{problem}");
+        assert!(
+            problem.contains("Member 1, an unknown creature"),
+            "{problem}"
+        );
+        assert_eq!(snapshot.groups[0].member_summary(), "1 × unknown creature");
+        assert!(
+            problem.contains("not in this campaign's packages"),
+            "{problem}"
+        );
         assert!(snapshot.issues.iter().any(|issue| issue.contains("Stray")));
+    }
+
+    #[test]
+    fn missing_group_members_keep_display_names_without_exposing_keys() {
+        for (extra, name) in [
+            ("", "unknown creature"),
+            (", link: '[[missing:goblin_boss]]'", "unknown creature"),
+            (
+                ", link: '[[00000000-0000-4000-8000-000000000001]]'",
+                "unknown creature",
+            ),
+            (
+                ", link: '[[Creatures/Goblin Boss|Goblin Boss]]'",
+                "Goblin Boss",
+            ),
+        ] {
+            let dir = tempfile::tempdir().unwrap();
+            let campaign = campaign(dir.path());
+            write_note(dir.path(), "Stray.md", None, &format!(
+                "---\nsplat_schema: 1\nsplat_id: {}\nsplat_kind: encounter_group\nsplat_name: Stray\nsplat_encounter_group:\n  side: enemies\n  members:\n  - creature: {{key: 'missing:goblin_boss'{extra}}}\n    count: 2\n---\n", Uuid::new_v4()
+            )).unwrap();
+            let snapshot = Snapshot::load(&campaign, &[]).unwrap();
+            let group = &snapshot.groups[0];
+            let problem = group.problem.as_ref().unwrap();
+            assert!(problem.contains(name), "{problem}");
+            assert!(!problem.contains("missing:goblin_boss"), "{problem}");
+            assert!(
+                !problem.contains("00000000-0000-4000-8000-000000000001"),
+                "{problem}"
+            );
+            assert_eq!(group.member_summary(), format!("2 × {name}"));
+            assert_eq!(group.creature_count(), 2);
+        }
+        let dir = tempfile::tempdir().unwrap();
+        let campaign = campaign(dir.path());
+        let id = Uuid::new_v4();
+        write_note(dir.path(), "Stray.md", None, &format!(
+            "---\nsplat_schema: 1\nsplat_id: {}\nsplat_kind: encounter_group\nsplat_name: Stray\nsplat_encounter_group:\n  side: enemies\n  members:\n  - creature: {{id: {id}}}\n    overrides: {{name: Captain Varra}}\n---\n", Uuid::new_v4()
+        )).unwrap();
+        let snapshot = Snapshot::load(&campaign, &[]).unwrap();
+        let group = &snapshot.groups[0];
+        assert!(
+            group
+                .problem
+                .as_ref()
+                .unwrap()
+                .contains("Member 1, Captain Varra:")
+        );
+        assert!(!group.problem.as_ref().unwrap().contains(&id.to_string()));
+        assert_eq!(group.member_summary(), "1 × Captain Varra");
     }
 
     fn encounter(root: &std::path::Path, name: &str) -> Uuid {

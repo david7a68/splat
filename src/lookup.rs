@@ -611,6 +611,7 @@ impl view::Links for ContentIndex {
 #[derive(Default)]
 pub struct Lookup {
     pub open: bool,
+    pub run_open: bool,
     query: String,
     index: Option<Arc<ContentIndex>>,
     pending: Option<mpsc::Receiver<Result<ContentIndex, String>>>,
@@ -1342,6 +1343,7 @@ fn generated_card(
     ui: &mut egui::Ui,
     npc: &crate::npc_generator::Generated,
     problems: &[String],
+    run_open: bool,
 ) -> (bool, bool, bool) {
     design::group_label(ui, "Generated NPC");
     ui.add(egui::Label::new(Type::Strong.rich(ui, &npc.name).color(colors().text)).wrap());
@@ -1360,10 +1362,14 @@ fn generated_card(
     }
     let (mut saved, mut again, mut discard) = (false, false, false);
     ui.horizontal_wrapped(|ui| {
-        saved = Action::primary("Save NPC")
-            .density(Density::Read)
-            .show(ui)
-            .clicked();
+        saved = (if run_open {
+            Action::secondary("Save NPC")
+        } else {
+            Action::primary("Save NPC")
+        })
+        .density(Density::Read)
+        .show(ui)
+        .clicked();
         again = Action::secondary("Reroll")
             .icon(icons::DICE)
             .density(Density::Read)

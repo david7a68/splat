@@ -529,6 +529,7 @@ pub fn npc_group(npc: &Entry, stat_block: &Entry, side: &str) -> Arc<RunGroup> {
         xp: 0,
         xp_unknown: Vec::new(),
         unavailable: 0,
+        unavailable_members: Vec::new(),
         problem,
     })
 }
@@ -592,6 +593,8 @@ pub struct Reader {
     pub join: Option<Join>,
     pub open_timeline: Option<String>,
     pub sides: RunSides,
+    pub in_run: std::collections::BTreeMap<Uuid, (usize, Option<i64>)>,
+    pub select_run: Option<usize>,
 }
 
 impl Reader {
@@ -783,6 +786,25 @@ impl Reader {
         if world_type(&item.entry) != "npc" {
             return None;
         }
+        if let Some((index, initiative)) = self.in_run.get(&item.entry.id) {
+            let word = format!(
+                "In the run · initiative {}",
+                initiative.map_or_else(|| "unknown".to_owned(), |n| n.to_string())
+            );
+            if design::status_link(
+                ui,
+                design::Status {
+                    icon: design::icons::RUN,
+                    word: &word,
+                    color: colors().accent,
+                },
+            )
+            .clicked()
+            {
+                self.select_run = Some(*index);
+            }
+            return None;
+        }
         let sides = self.sides.as_ref()?;
         let Some(adding) = &mut self.adding else {
             if Action::secondary("Add to run")
@@ -931,7 +953,7 @@ fn add_form(
     );
     let mut end = None;
     ui.horizontal(|ui| {
-        if Action::primary("Add")
+        if Action::secondary("Add")
             .density(Density::Read)
             .blocked_if(adding.stat_block.is_none(), "Choose a stat block first.")
             .show(ui)

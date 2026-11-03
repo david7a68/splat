@@ -943,6 +943,12 @@ impl CombatSync {
     /// Each conflict with both values and its two ways out. The run shows this beside
     /// the roster, so it does not stop the table.
     pub fn conflicts(&mut self, ui: &mut egui::Ui) {
+        self.conflicts_inner(ui, None, true);
+    }
+    pub(crate) fn conflicts_for(&mut self, ui: &mut egui::Ui, name: &str) {
+        self.conflicts_inner(ui, Some(name), false);
+    }
+    fn conflicts_inner(&mut self, ui: &mut egui::Ui, name: Option<&str>, explanation: bool) {
         use crate::design::{self, Action, Density, Type, colors};
         for (key, message) in self.blocked.clone() {
             let c = colors();
@@ -950,11 +956,20 @@ impl CombatSync {
                 Type::Heading
                     .rich(
                         ui,
-                        format!("{} {} conflict", design::icons::WARN, group_label(&key)),
+                        format!(
+                            "{}{} {} conflict",
+                            name.map_or_else(String::new, |n| format!("{n} · ")),
+                            design::icons::WARN,
+                            group_label(&key)
+                        ),
                     )
                     .color(c.sync.conflict),
             );
-            ui.add(egui::Label::new(Type::Small.rich(ui, message.as_str()).color(c.text)).wrap());
+            if explanation {
+                ui.add(
+                    egui::Label::new(Type::Small.rich(ui, message.as_str()).color(c.text)).wrap(),
+                );
+            }
             // The two values side by side, so the difference is what the eye finds.
             egui::Grid::new(("conflict_values", &key))
                 .num_columns(2)
