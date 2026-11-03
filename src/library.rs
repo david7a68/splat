@@ -678,7 +678,9 @@ struct DiskChange {
 }
 /// Where Back returns to after following a link.
 struct BackStep {
+    owner: Option<Uuid>,
     path: String,
+    scope: Scope,
     section: Section,
     search: String,
 }
@@ -735,10 +737,15 @@ impl Library {
             .filter(|_| self.selected != Some(index))
         {
             self.history.push(BackStep {
+                owner: current.owner.id(),
                 path: current.path.clone(),
+                scope: self.scope,
                 section: self.section,
                 search: self.search.clone(),
             });
+        }
+        if !self.loaded.as_ref().unwrap().in_scope(note, self.scope) {
+            self.scope = Scope::All;
         }
         self.selected = Some(index);
         self.draft = note.text.clone();
@@ -1657,19 +1664,24 @@ impl Library {
     }
 
     fn go_back(&mut self) {
+        if self.dirty() {
+            return;
+        }
         let Some(step) = self.history.pop() else {
             return;
         };
-        let Some(index) = self
-            .loaded
-            .as_ref()
-            .and_then(|l| l.notes.iter().position(|n| n.path == step.path))
-        else {
+        let Some(index) = self.loaded.as_ref().and_then(|l| {
+            l.notes
+                .iter()
+                .position(|n| n.owner.id() == step.owner && n.path == step.path)
+        }) else {
             return;
         };
         self.selected = Some(index);
         self.reveal_row = true;
         self.draft = self.loaded.as_ref().unwrap().notes[index].text.clone();
+        self.disk_change = None;
+        self.scope = step.scope;
         self.section = step.section;
         self.search = step.search;
         self.matches = None;
@@ -1809,6 +1821,7 @@ impl Library {
                 .density(Density::Read)
                 .hint("Return to the entry before this link")
                 .blocked_if(self.history.is_empty(), "No earlier entry to return to.")
+                .blocked_if(dirty, "Save or discard this entry before going back.")
                 .show(ui)
                 .clicked()
             {
@@ -2083,6 +2096,84 @@ impl Library {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn navigation_library() -> Library {
+        let notes = ["First", "Second", "Destination"]
+            .into_iter()
+            .map(|name| {
+                let text = note_text(name, "rule", None);
+                Note {
+                    path: if name == "Destination" {
+                        "Destination.md".into()
+                    } else {
+                        "Rule.md".into()
+                    },
+                    entry: Some(Entry::parse("Rule.md", &text).unwrap()),
+                    text,
+                    error: None,
+                    owner: Owner::Package(Module {
+                        id: Uuid::new_v4(),
+                        name: name.into(),
+                        path: name.into(),
+                    }),
+                }
+            })
+            .collect();
+        Library {
+            loaded: Some(Loaded {
+                notes,
+                ..Default::default()
+            }),
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn back_keeps_an_unsaved_homebrew_draft() {
+        let mut library = navigation_library();
+        library.open_entry(0);
+        library.open_entry(1);
+        library.draft.push_str("Unsaved ruling.");
+        let draft = library.draft.clone();
+        library.go_back();
+        assert_eq!(library.selected, Some(1));
+        assert_eq!(library.draft, draft);
+        assert_eq!(library.history.len(), 1);
+    }
+
+    #[test]
+    fn back_returns_to_the_right_owner_and_scope() {
+        let mut library = navigation_library();
+        let owner = library.loaded.as_ref().unwrap().notes[1]
+            .owner
+            .id()
+            .unwrap();
+        library.scope = Scope::Package(owner);
+        library.open_entry(1);
+        library.search = "Second".into();
+        library.open_entry(2);
+        library.scope = Scope::All;
+        library.go_back();
+        assert_eq!(library.selected, Some(1));
+        assert_eq!(library.scope, Scope::Package(owner));
+        assert_eq!(library.search, "Second");
+    }
+
+    #[test]
+    fn following_a_link_reveals_an_entry_outside_the_package_scope() {
+        let mut library = navigation_library();
+        let owner = library.loaded.as_ref().unwrap().notes[1]
+            .owner
+            .id()
+            .unwrap();
+        library.scope = Scope::Package(owner);
+        library.open_entry(1);
+        library.open_entry(2);
+        let loaded = library.loaded.as_ref().unwrap();
+        assert!(loaded.in_scope(&loaded.notes[2], library.scope));
+        library.go_back();
+        assert_eq!(library.scope, Scope::Package(owner));
+    }
     /// Run alone so the first load starts without a warmed process cache.
     #[test]
     #[ignore]

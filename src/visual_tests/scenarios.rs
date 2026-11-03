@@ -344,6 +344,68 @@ pub mod library_author {
     }
 }
 
+/// Follow a homebrew reference across owners, then edit without losing the draft to Back.
+pub mod library_navigation {
+    use super::*;
+
+    pub fn run(d: &mut Driver<'_>) {
+        let path = d.root.join("modules/ashen-marches/Rules/Ash Exposure.md");
+        let text = std::fs::read_to_string(&path).unwrap();
+        let target_path = "Notes/Captain Varra.md";
+        let target_text =
+            std::fs::read_to_string(d.root.join("campaigns/emberfall").join(target_path)).unwrap();
+        let target = splat::content::Entry::parse(target_path, &target_text).unwrap();
+        let reading = serde_yaml_ng::to_value(serde_json::json!({
+            "title": "Ash Exposure",
+            "summary": "Captain Varra knows the road through the ash fields.",
+            "related": {target.id.to_string(): "Read Captain Varra"}
+        }))
+        .unwrap();
+        let text =
+            crate::content_workspace::patch_fields(&text, &[("splat_reading", Some(reading))])
+                .unwrap();
+        std::fs::write(path, text).unwrap();
+
+        go_library(d);
+        d.open_combo_at(LIBRARY_PACKAGE_DROPDOWN);
+        d.click(MODULE);
+        d.click_starting("Ash Exposure · ");
+        d.state("homebrew-reference", Sizes::All);
+        d.click("Read Captain Varra");
+        d.expect("The last commander of the Emberfall watch.");
+        d.state("reference-outside-package", Sizes::All);
+        d.click("Back");
+        d.expect("Read Captain Varra");
+        d.observe(
+            "Homebrew navigation",
+            d.has_containing(MODULE),
+            "Back restores the package scope after a reference to a campaign entry",
+        );
+        d.click("Read Captain Varra");
+        d.click(EDIT_MARKDOWN);
+        d.type_into_editor("Varra now carries a silver sword. ");
+        d.state("draft-with-history", Sizes::All);
+        d.observe(
+            "Draft safety",
+            d.is_disabled("Back")
+                && d.editor_text()
+                    .is_some_and(|text| text.contains("silver sword")),
+            "Back cannot replace an unsaved homebrew draft",
+        );
+        d.click("Save");
+        d.click("Back");
+        d.expect("Read Captain Varra");
+        d.click("Read Captain Varra");
+        d.click(EDIT_MARKDOWN);
+        d.observe(
+            "Saved homebrew",
+            d.editor_text()
+                .is_some_and(|text| text.contains("silver sword")),
+            "The homebrew edit remains after saving and returning through Back",
+        );
+    }
+}
+
 /// W9: choose what a campaign uses, then edit a campaign-owned entry.
 pub mod campaign_content {
     use super::*;
