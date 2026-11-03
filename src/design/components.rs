@@ -871,9 +871,36 @@ pub fn field<R>(
     error: Option<&str>,
     add: impl FnOnce(&mut Ui) -> R,
 ) -> R {
+    field_label(ui, label, Type::Label, help, error, add)
+}
+
+/// A settings field whose sentence-case label sits below a group heading.
+pub fn small_field<R>(
+    ui: &mut Ui,
+    label: &str,
+    help: Option<&str>,
+    error: Option<&str>,
+    add: impl FnOnce(&mut Ui) -> R,
+) -> R {
+    field_label(ui, label, Type::Small, help, error, add)
+}
+
+fn field_label<R>(
+    ui: &mut Ui,
+    label: &str,
+    role: Type,
+    help: Option<&str>,
+    error: Option<&str>,
+    add: impl FnOnce(&mut Ui) -> R,
+) -> R {
     let c = colors();
     ui.spacing_mut().item_spacing.y = XS;
-    ui.label(Type::Label.rich(ui, label.to_uppercase()).color(c.muted));
+    let label = if matches!(role, Type::Label) {
+        label.to_uppercase()
+    } else {
+        label.to_owned()
+    };
+    ui.label(role.rich(ui, label).color(c.muted));
     let inner = add(ui);
     if let Some(help) = help {
         ui.label(Type::Small.rich(ui, help).color(c.muted));
@@ -893,7 +920,28 @@ pub fn text_field(
     help: Option<&str>,
     error: Option<&str>,
 ) -> Response {
-    field(ui, label, help, error, |ui| {
+    text_field_label(ui, label, Type::Label, text, help, error)
+}
+
+pub fn small_text_field(
+    ui: &mut Ui,
+    label: &str,
+    text: &mut String,
+    help: Option<&str>,
+    error: Option<&str>,
+) -> Response {
+    text_field_label(ui, label, Type::Small, text, help, error)
+}
+
+fn text_field_label(
+    ui: &mut Ui,
+    label: &str,
+    role: Type,
+    text: &mut String,
+    help: Option<&str>,
+    error: Option<&str>,
+) -> Response {
+    field_label(ui, label, role, help, error, |ui| {
         let width = ui.available_width().min(FORM_WIDTH) - 2.0 * S;
         let response = ui.add(
             egui::TextEdit::singleline(text)

@@ -463,8 +463,24 @@ pub(super) fn vitals(ui: &mut egui::Ui, entry: &Entry, values: Option<&super::vi
                 printed
             };
             for (label, text) in rows {
+                let run_hp = values.filter(|_| label == "HIT POINTS").map(|values| {
+                    format!(
+                        "{} / {}",
+                        values
+                            .current_hp
+                            .map_or_else(|| "Unknown".to_owned(), |hp| hp.to_string()),
+                        values
+                            .hp
+                            .map_or_else(|| "Unknown".to_owned(), |hp| hp.to_string())
+                    )
+                });
                 let width = design::number_width(ui, label, &Type::Label.font(ui))
                     .max(design::number_width(ui, &text, &Type::Prose.font(ui)))
+                    .max(design::number_width(
+                        ui,
+                        run_hp.as_deref().unwrap_or(&text),
+                        &Type::Prose.font(ui),
+                    ))
                     + design::S;
                 ui.allocate_ui_with_layout(
                     egui::vec2(width, 0.0),
@@ -497,7 +513,7 @@ pub(super) fn vitals(ui: &mut egui::Ui, entry: &Entry, values: Option<&super::vi
                                 )
                             },
                         );
-                        ui.label(Type::Prose.rich(ui, shown).color(c.text));
+                        ui.label(Type::Prose.rich(ui, run_hp.unwrap_or(shown)).color(c.text));
                         if let Some(live) = live
                             && live != printed
                         {

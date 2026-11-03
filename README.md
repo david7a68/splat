@@ -101,10 +101,11 @@ or set `SPLAT_VISUAL_CONTACT_SHEET=1` to make it with a full `visual-test` run.
   Video and optional contact-sheet settings work as for `visual-test`.
 
 A live initiative change says `acts next round` when its place has passed. Setup counts
-rows below the visible list, including missing initiatives and ties. Session note boxes
+rows below the visible list, including missing initiatives and ties between independent rolls. Shared rolls do not produce a tie warning. Session note boxes
 keep their edges visible while the text scrolls. Saved runs keep the last change in the
 same words as the close dialog.
 
+Run cards show current and maximum HP and one compact **Add by hand** summary.
 Live run rows keep their first condition and shorten change bonuses first. Setup
 shows places once every present participant has initiative. Recording recovery
 keeps its state in the session list; a missing input offers **Choose an input**.
@@ -112,7 +113,7 @@ keeps its state in the session list; a missing input offers **Choose an input**.
 **Continue processing** also names what it sends. With a complete transcript, it says
 that the audio is not sent again. With a partial transcript, it names the remaining
 audio parts. Recording silence has no elapsed time in its status word. The Session
-page shows the recorded time in the detail; the rail keeps it on hover.
+page shows the recorded time in the detail; the rail keeps it on hover. On Recordings, the silent row owns this detail and its input help. Processing says **Processing**, with the full step on hover.
 
 Library has **New entry** in its header. Its form opens in the reader column and closes after creation. World has **New ▾** for a plain note, a note with a type, an NPC, a location, or a generated NPC. List headings use capitals and a count. Page headers show state or nonzero counts beside the title, with a rule and an `L` gap below. Counts use thousands separators.
 
@@ -209,7 +210,8 @@ campaign to replace it.
 After connecting, expand **Add from D&D Beyond** and select a campaign. Its
 name and ID fill the form under that row. Then choose its data folder with **Browse…**
 or enter a path, and select **Add campaign**. No local campaign is required first.
-You can also choose an existing folder and select **Add campaign** without connecting. Campaigns stay on the left of Settings, with the account on the right. On a narrow window, campaigns come first and **Connect…** opens the account form. The Campaign page also has the add form when no campaign exists. Removal is in each row’s **More actions** menu.
+The Folder help explains that Splat keeps notes, encounters and runs there; a folder in an Obsidian vault works. Add and edit forms keep Cancel at the left and the commit action at the right.
+You can also choose an existing folder and select **Add campaign** without connecting. Campaigns stay on the left of Settings, with the account on the right. On a narrow window, campaigns come first unless a run is open; then the account comes first. **Connect…** opens the account form. The Campaign page also has the add form when no campaign exists. Removal is in each row’s **More actions** menu.
 
 Splat creates or discovers the campaign manifest in that folder. It stores the
 name and D&D Beyond link there, alongside existing custom paths and content

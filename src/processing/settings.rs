@@ -393,7 +393,7 @@ impl ProcessingSettings {
         let remove_name = format!("{remove}: {label}");
         let held = self.held(slot).is_some();
         let mut save = false;
-        design::field(ui, "API key", None, None, |ui| {
+        design::small_field(ui, "API key", None, None, |ui| {
             ui.horizontal(|ui| {
                 let field = self.field(slot);
                 let empty = field.typing.trim().is_empty();
@@ -493,7 +493,7 @@ impl ProcessingSettings {
 
     fn input_section(&mut self, ui: &mut egui::Ui) {
         let c = colors();
-        ui.label(Type::Heading.rich(ui, "Recording").color(c.text));
+        design::group_heading(ui, "Recording", 0);
         match &self.probe {
             None => {
                 ui.label(
@@ -537,7 +537,7 @@ impl ProcessingSettings {
                         },
                     );
                     let mut changed = false;
-                    design::field(ui, "Input", None, None, |ui| {
+                    design::small_field(ui, "Input", None, None, |ui| {
                         let inner = egui::ComboBox::from_id_salt("recording_input")
                             .selected_text(&label)
                             .width(ui.available_width().min(design::FORM_WIDTH))
@@ -583,7 +583,7 @@ impl ProcessingSettings {
 
     fn speech_section(&mut self, ui: &mut egui::Ui) {
         let c = colors();
-        ui.label(Type::Heading.rich(ui, "Speech service").color(c.text));
+        design::group_heading(ui, "Speech service", 0);
         ui.label(
             Type::Small
                 .rich(ui, "Writes a transcript from the audio, before the LLM. The Codex CLI cannot take audio, so this is a separate service, with its own key. It must offer the OpenAI audio/transcriptions API.")
@@ -594,7 +594,7 @@ impl ProcessingSettings {
             .find(|(_, url, _)| self.config.speech_url == *url)
             .map_or(OTHER_SERVICE, |(name, ..)| name);
         let mut chosen = None;
-        design::field(ui, "Service", None, None, |ui| {
+        design::small_field(ui, "Service", None, None, |ui| {
             let inner = egui::ComboBox::from_id_salt("speech_service")
                 .selected_text(current)
                 .width(ui.available_width().min(design::FORM_WIDTH))
@@ -620,10 +620,11 @@ impl ProcessingSettings {
             self.persist();
         }
         let mut changed = false;
-        let response = design::text_field(ui, "Address", &mut self.config.speech_url, None, None);
+        let response =
+            design::small_text_field(ui, "Address", &mut self.config.speech_url, None, None);
         design::named(ui, &response, "Speech address");
         changed |= response.changed();
-        let response = design::text_field(
+        let response = design::small_text_field(
             ui,
             "Model",
             &mut self.config.speech_model,
@@ -640,7 +641,7 @@ impl ProcessingSettings {
 
     fn llm_section(&mut self, ui: &mut egui::Ui) {
         let c = colors();
-        ui.label(Type::Heading.rich(ui, "LLM").color(c.text));
+        design::group_heading(ui, "LLM", 0);
         ui.label(
             Type::Small
                 .rich(
@@ -656,7 +657,7 @@ impl ProcessingSettings {
             })
             .map_or(OTHER_SERVICE, |(name, ..)| name);
         let mut chosen = None;
-        design::field(ui, "Service", None, None, |ui| {
+        design::small_field(ui, "Service", None, None, |ui| {
             let inner = egui::ComboBox::from_id_salt("llm_service")
                 .selected_text(current)
                 .width(ui.available_width().min(design::FORM_WIDTH))
@@ -685,11 +686,12 @@ impl ProcessingSettings {
         let mut changed = false;
         let codex = self.config.provider == Provider::CodexCli;
         if !codex {
-            let response = design::text_field(ui, "Address", &mut self.config.llm_url, None, None);
+            let response =
+                design::small_text_field(ui, "Address", &mut self.config.llm_url, None, None);
             design::named(ui, &response, "LLM address");
             changed |= response.changed();
         }
-        let response = design::text_field(
+        let response = design::small_text_field(
             ui,
             "Model",
             &mut self.config.llm_model,
@@ -728,7 +730,7 @@ impl ProcessingSettings {
                     super::default_review_prompt(),
                 ),
             ] {
-                design::field(ui, label, Some(help), None, |ui| {
+                design::small_field(ui, label, Some(help), None, |ui| {
                     let response = ui.add(
                         egui::TextEdit::multiline(prompt)
                             .desired_width(

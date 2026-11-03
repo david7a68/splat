@@ -859,6 +859,7 @@ impl Campaigns {
                         self.path = path.to_string_lossy().into_owned();
                     }
                 });
+                ui.add(egui::Label::new(Type::Small.rich(ui, "Splat keeps this campaign's notes, encounters and runs here. A folder in your Obsidian vault works.").color(colors().muted)).wrap());
                 ui.horizontal(|ui| {
                     let submit = if editing {
                         "Save details"
@@ -914,26 +915,19 @@ impl Campaigns {
                     } else {
                         design::blocked_reason(ui, reason);
                     }
-                    if !editing && action().blocked(reason).show(ui).clicked() {
-                        match self.save_form() {
-                            Ok(()) => added = true,
-                            Err(error) => self.error = Some(error),
-                        }
-                    }
                     if (editing || !missing || self.remote.is_some())
                         && Action::quiet("Cancel").show(ui).clicked()
                     {
                         self.clear_form();
                     }
-                    if editing {
-                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                            if action().blocked(reason).show(ui).clicked()
-                                && let Err(error) = self.save_form()
-                            {
-                                self.error = Some(error);
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        if action().blocked(reason).show(ui).clicked() {
+                            match self.save_form() {
+                                Ok(()) => added = !editing,
+                                Err(error) => self.error = Some(error),
                             }
-                        });
-                    }
+                        }
+                    });
                 });
                 if let Some(error) = &self.error {
                     design::message(ui, Tone::Error, error);
