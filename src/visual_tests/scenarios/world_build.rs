@@ -568,16 +568,38 @@ pub fn package_manifest_broken(d: &mut Driver<'_>) {
     d.expect("Package.md was deleted");
     assert!(!d.has("Find the folder…"));
     d.state("manifest-deleted-campaign", Sizes::All);
+    d.click("Write Package.md again");
+    d.settle();
+    assert!(!d.has_containing("Package.md was deleted"));
+    assert_eq!(
+        crate::library::local_module(&folder).unwrap().id,
+        crate::content_workspace::note_id(&valid).unwrap()
+    );
+    d.expect_same(
+        "Writing the registered details restores the same valid Campaign state as a backup repair.",
+    );
+    d.state("manifest-written-again-campaign", Sizes::All);
+    fs::remove_file(&path).unwrap();
+    d.focus_window(false);
+    d.focus_window(true);
     go_library(d);
     search_library(d, "Cinder Wolf");
     d.click_starting("Cinder Wolf · ");
     d.expect("22 (4d8 + 4)");
     d.state("manifest-deleted-library-keeps-entries", Sizes::All);
+    search_library(d, "Package.md");
+    d.click_starting("Package.md · ");
+    d.expect("Write Package.md again");
+    d.state("manifest-deleted-library-repair", Sizes::All);
+    d.click("Write Package.md again");
+    d.settle();
+    assert!(!d.has_containing("Package.md was deleted"));
+    d.state("manifest-written-again-library", Sizes::All);
     go_encounters(d);
     d.expect("Cinder Wolf");
     assert!(!d.has_containing("Not found"));
     d.expect_same("Deleting the manifest keeps the encounter's creature entries as before.");
-    d.state("manifest-deleted-encounter-keeps-creatures", Sizes::All);
+    d.state("manifest-restored-encounter-keeps-creatures", Sizes::All);
 }
 
 pub fn package_file_changed(d: &mut Driver<'_>) {
@@ -1099,4 +1121,92 @@ pub fn world_note_deleted(d: &mut Driver<'_>) {
     d.type_into(FIND_CREATURE, "Watchkeeper");
     d.expect("No creatures match");
     d.state("npc-deleted-stat-block-encounter-search", Sizes::All);
+}
+
+/// Copying a typed note must keep both files reachable.
+pub fn world_note_duplicated(d: &mut Driver<'_>) {
+    let campaign = d.app_mut().campaigns.active_campaign().unwrap();
+    let catalogue = crate::content_workspace::Catalogue::load(&[], Some(&campaign)).unwrap();
+    let guard = catalogue
+        .entries
+        .values()
+        .find(|entry| entry.entry.name == "Guard" && entry.entry.kind == "creature")
+        .unwrap()
+        .entry
+        .id;
+    let id = entry(
+        d,
+        "NPCs/Rook Ambry.md",
+        "Rook Ambry",
+        "npc",
+        &format!("  creature: {{id: {guard}}}\n"),
+    );
+    go_encounters(d);
+    d.click("Reload from disk");
+    d.click(NEW_ENCOUNTER);
+    d.type_text("Rook's watch");
+    d.type_into(FIND_CREATURE, "Rook Ambry");
+    d.click_beside_exact("Rook Ambry", "Add");
+    d.click(SAVE_ENCOUNTER);
+    d.wait_for_text("Saved");
+    let original = root(d).join("NPCs/Rook Ambry.md");
+    let copy = root(d).join("NPCs/Rook Ambry copy.md");
+    let before = fs::read_to_string(&original).unwrap();
+    fs::copy(&original, &copy).unwrap();
+    d.focus_window(false);
+    d.focus_window(true);
+    d.expect("6. Rook Ambry");
+    d.state("copied-world-npc-encounter-keeps-guard", Sizes::All);
+    d.click(NAV_WORLD);
+    d.click_starting("Rook Ambry.md ·");
+    d.expect("New identity for Rook Ambry copy.md");
+    d.expect("New identity for Rook Ambry.md");
+    d.state("duplicate-world-files-and-repair", Sizes::All);
+    look_up(d, "Rook Ambry");
+    d.expect("New identity for Rook Ambry copy.md");
+    d.state("duplicate-world-files-in-lookup", Sizes::All);
+    d.press(Key::Escape);
+    d.click("New identity for Rook Ambry copy.md");
+    d.wait_for_text("Undo new identity");
+    assert_eq!(
+        crate::content_workspace::note_id(&fs::read_to_string(&original).unwrap()),
+        Some(id)
+    );
+    assert_ne!(
+        crate::content_workspace::note_id(&fs::read_to_string(&copy).unwrap()),
+        Some(id)
+    );
+    assert_eq!(fs::read_to_string(&original).unwrap(), before);
+    d.state("world-copy-repaired", Sizes::All);
+    d.click("Undo new identity");
+    d.wait_for_text("New identity for Rook Ambry copy.md");
+    assert_eq!(fs::read_to_string(&copy).unwrap(), before);
+    d.expect_same("Undo restores the same copied files and identity warning.");
+    d.state("world-copy-repair-undone", Sizes::All);
+}
+
+pub fn package_folder_copied(d: &mut Driver<'_>) {
+    fn copy_folder(from: &std::path::Path, to: &std::path::Path) {
+        fs::create_dir_all(to).unwrap();
+        for file in fs::read_dir(from).unwrap() {
+            let file = file.unwrap();
+            let target = to.join(file.file_name());
+            if file.path().is_dir() {
+                copy_folder(&file.path(), &target);
+            } else {
+                fs::copy(file.path(), target).unwrap();
+            }
+        }
+    }
+    let copied = d.root.join("modules/ashen-marches-copy");
+    copy_folder(&d.root.join("modules/ashen-marches"), &copied);
+    let module = crate::library::local_module(&copied).unwrap();
+    go_library(d);
+    d.click("Packages");
+    d.click("Manage packages…");
+    d.type_into("Package folder", &copied.to_string_lossy());
+    d.click("Add folder");
+    d.expect(&format!("This folder has the same package identity as Ashen Marches ({}). Choose a package with a different identity.", module.id));
+    assert_eq!(d.app_mut().campaigns.modules().len(), 1);
+    d.state("copied-package-names-duplicate-identity", Sizes::All);
 }

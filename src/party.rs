@@ -605,6 +605,8 @@ impl Party {
                         hp: Some(hp),
                         max_hp: record.stat("max_hp"),
                         temporary_hp,
+                        death_saves: record.initial.death_saves.clone(),
+                        death_saves_shown: false,
                         conditions: record
                             .initial
                             .conditions
@@ -684,6 +686,9 @@ pub struct LiveValues {
     pub max_hp: Option<i64>,
     pub temporary_hp: i64,
     pub conditions: Vec<String>,
+    pub death_saves: splat::character::DeathSaves,
+    /// The run already drew its editable block above this page.
+    pub death_saves_shown: bool,
 }
 
 /// One entry on a sheet page: its name and its facts.
@@ -1424,6 +1429,28 @@ fn skill_order(record: &EntitySnapshot) -> Vec<usize> {
     });
     order
 }
+fn overview_death_saves(record: &EntitySnapshot, live: Option<&LiveValues>) -> Option<String> {
+    if live.is_some_and(|values| values.death_saves_shown) {
+        return None;
+    }
+    let saves = live.map_or(&record.initial.death_saves, |values| &values.death_saves);
+    Some(format!(
+        "{} {} · {} {}",
+        saves.successes,
+        if saves.successes == 1 {
+            "success"
+        } else {
+            "successes"
+        },
+        saves.failures,
+        if saves.failures == 1 {
+            "failure"
+        } else {
+            "failures"
+        }
+    ))
+}
+
 pub(crate) fn overview(ui: &mut egui::Ui, record: &EntitySnapshot, live: Option<&LiveValues>) {
     let narrow = ui.available_width() < 560.0;
     section_heading(ui, "Combat");
@@ -1588,11 +1615,10 @@ pub(crate) fn overview(ui: &mut egui::Ui, record: &EntitySnapshot, live: Option<
                 text(&sense["distance"])
             ));
         }
-        section_heading(ui, "Death saves");
-        ui.label(format!(
-            "{} successes · {} failures",
-            record.initial.death_saves.successes, record.initial.death_saves.failures
-        ));
+        if let Some(words) = overview_death_saves(record, live) {
+            section_heading(ui, "Death saves");
+            ui.label(words);
+        }
         section_heading(ui, "Conditions");
         let names: Vec<String> = live.map_or_else(
             || {
@@ -2011,6 +2037,49 @@ pub(crate) fn details(ui: &mut egui::Ui, record: &EntitySnapshot, page: usize, s
 mod sheet_now_tests {
     use super::{EntitySnapshot, SheetNow, SlotsLeft, party_line};
     use serde_json::json;
+    #[test]
+    fn overview_death_saves_covers_live_stored_hidden_and_all_counts() {
+        for successes in 0..=2 {
+            for failures in 0..=2 {
+                let expected = format!(
+                    "{successes} {} · {failures} {}",
+                    if successes == 1 {
+                        "success"
+                    } else {
+                        "successes"
+                    },
+                    if failures == 1 { "failure" } else { "failures" }
+                );
+                let mut stored = wizard(0);
+                stored.initial.death_saves = splat::character::DeathSaves {
+                    successes,
+                    failures,
+                };
+                assert_eq!(
+                    super::overview_death_saves(&stored, None),
+                    Some(expected.clone())
+                );
+                let mut live = super::LiveValues {
+                    hp: Some(1),
+                    max_hp: Some(25),
+                    temporary_hp: 0,
+                    conditions: vec![],
+                    death_saves: stored.initial.death_saves.clone(),
+                    death_saves_shown: false,
+                };
+                stored.initial.death_saves.successes = 3;
+                stored.initial.death_saves.failures = 3;
+                assert_eq!(
+                    super::overview_death_saves(&stored, Some(&live)),
+                    Some(expected)
+                );
+                live.hp = Some(0);
+                live.death_saves_shown = true;
+                assert_eq!(super::overview_death_saves(&stored, Some(&live)), None);
+            }
+        }
+    }
+
     #[test]
     fn negative_sheet_modifier_uses_true_minus() {
         let mut record = wizard(0);

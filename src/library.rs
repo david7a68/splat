@@ -927,8 +927,10 @@ fn load(module: Option<&Module>) -> Result<Loaded, String> {
         }
         if missing_manifest {
             notes.push(Note {
-                path: "Package.md".into(), text: String::new(), entry: None,
-                error: Some("Package.md was deleted. Restore it from your backup. Entries are still available.".into()),
+                path: "Package.md".into(),
+                text: String::new(),
+                entry: None,
+                error: Some(crate::content_workspace::DELETED_MANIFEST.into()),
                 owner: Owner::Package(module.clone()),
             });
         }
@@ -1105,6 +1107,7 @@ pub struct Library {
     discarded: Option<(Option<Uuid>, String, String)>,
     discarded_note: Option<Note>,
     identity_undo: Option<IdentityUndo>,
+    manifest_write: Option<crate::content_workspace::ManifestWrite>,
     /// A save was refused because the file changed. The draft waits for the DM's choice.
     disk_change: Option<DiskChange>,
     /// The note on screen was saved, and has not changed since.
@@ -3162,6 +3165,55 @@ impl Library {
     }
 
     fn editor_pane(&mut self, ui: &mut egui::Ui, subtitle: &str, campaigns: &Campaigns) {
+        if let Some(write) = &self.manifest_write
+            && write.replaced()
+            && Action::quiet("Undo write Package.md")
+                .icon(icons::UNDO)
+                .blocked(self.draft_reason())
+                .show(ui)
+                .clicked()
+        {
+            match write.undo() {
+                Ok(root) => {
+                    self.content_changed = Some(root);
+                    self.manifest_write = None;
+                    self.stale = true;
+                }
+                Err(error) => self.error = Some(error),
+            }
+        }
+        let recovery = self
+            .selected
+            .and_then(|at| self.loaded.as_ref()?.notes.get(at))
+            .filter(|note| note.path == "Package.md" && note.error.is_some())
+            .and_then(|note| match &note.owner {
+                Owner::Package(module) => Some(module.clone()),
+                _ => None,
+            });
+        if let Some(module) = recovery {
+            if !module.path.join("Package.md").exists() {
+                design::message(
+                    ui,
+                    Tone::Warning,
+                    crate::content_workspace::DELETED_MANIFEST,
+                );
+            }
+            if Action::quiet("Write Package.md again")
+                .blocked(self.draft_reason())
+                .show(ui)
+                .clicked()
+            {
+                match crate::content_workspace::ManifestWrite::write(&module) {
+                    Ok(write) => {
+                        self.manifest_write = Some(write);
+                        self.stale = true;
+                        self.content_changed = Some(module.path);
+                    }
+                    Err(error) => self.error = Some(error),
+                }
+                return;
+            }
+        }
         let gone_notice = self.discarded_note.as_ref().map(|note| {
             let names = self
                 .loaded

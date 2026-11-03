@@ -122,6 +122,7 @@ pub struct ContentIndex {
     files_seen: u64,
     pub errors: Vec<String>,
     pub broken_world: Vec<(String, String)>,
+    pub duplicate_world: BTreeMap<String, Vec<String>>,
 }
 
 /// Among equal matches: the DM's own entry, then the book, then a sheet's copy.
@@ -261,6 +262,12 @@ impl ContentIndex {
                 usable.extend(closure.direct);
                 usable.extend(closure.required.keys().copied());
             }
+            usable.extend(
+                catalogue
+                    .duplicate_world
+                    .iter()
+                    .map(|entry| world::note_id(&entry.entry.path)),
+            );
             usable
         });
         let owner_name = |owner: Uuid, private: bool| {
@@ -286,10 +293,24 @@ impl ContentIndex {
         let mut items: Vec<Item> = catalogue
             .entries
             .values()
+            .chain(catalogue.duplicate_world.iter())
             .filter(|e| !["package", "campaign", "reference"].contains(&e.entry.kind.as_str()))
             .map(|e| Item {
                 lower: e.entry.name.to_lowercase(),
-                subtitle: presentation::subtitle(&e.entry),
+                subtitle: if catalogue
+                    .duplicate_world
+                    .iter()
+                    .any(|other| other.entry.id == e.entry.id)
+                {
+                    format!(
+                        "{} · {} Duplicate identity · {}",
+                        presentation::subtitle(&e.entry),
+                        icons::WARN,
+                        e.entry.path
+                    )
+                } else {
+                    presentation::subtitle(&e.entry)
+                },
                 owner: if from_sheet(&e.entry) {
                     FROM_SHEET.to_owned()
                 } else {
@@ -307,7 +328,19 @@ impl ContentIndex {
                 } else {
                     String::new()
                 },
-                entry: e.entry.clone(),
+                entry: {
+                    let mut entry = e.entry.clone();
+                    if e.private
+                        && entry.kind == "world"
+                        && catalogue
+                            .duplicate_world
+                            .iter()
+                            .any(|other| other.entry.path == entry.path)
+                    {
+                        entry.id = world::note_id(&entry.path);
+                    }
+                    entry
+                },
             })
             .collect();
         let files_seen = content_fingerprint(modules, campaign);
@@ -332,6 +365,21 @@ impl ContentIndex {
                 .entries
                 .iter()
                 .map(|(id, entry)| (*id, entry.owner))
+                .collect(),
+            duplicate_world: catalogue
+                .duplicate_world
+                .iter()
+                .map(|entry| {
+                    (
+                        entry.entry.path.clone(),
+                        catalogue
+                            .duplicate_world
+                            .iter()
+                            .filter(|other| other.entry.id == entry.entry.id)
+                            .map(|other| other.entry.path.clone())
+                            .collect(),
+                    )
+                })
                 .collect(),
             errors: catalogue.errors.clone(),
             files_seen,
@@ -1278,7 +1326,18 @@ impl Lookup {
                         ui,
                         self.library_draft
                             .then_some("Save or discard the Library draft first."),
-                        |ui| design::icon_button(ui, icons::OPEN_OUT, "Open in Library").clicked(),
+                        |ui| {
+                            design::icon_button(
+                                ui,
+                                icons::OPEN_OUT,
+                                if current.entry.kind == "world" {
+                                    "Open in World"
+                                } else {
+                                    "Open in Library"
+                                },
+                            )
+                            .clicked()
+                        },
                     )
                 {
                     self.open_in_library = Some(current.entry.clone());
@@ -1900,6 +1959,45 @@ mod tests {
             assert!(lookup.open && lookup.results_open);
             assert_eq!(lookup.query, words);
         }
+    }
+
+    #[test]
+    fn copied_world_notes_stay_visible_in_world_and_lookup() {
+        let id = Uuid::new_v4();
+        let before = entry_note(id, "Rook", "  type: npc");
+        let (dir, campaign) = campaign_with(&[("Rook.md", &before), ("Rook copy.md", &before)]);
+        let index = ContentIndex::load(&[], Some(&campaign)).unwrap();
+        assert_eq!(index.duplicate_world.len(), 2);
+        assert_eq!(
+            index.world_groups("").values().map(Vec::len).sum::<usize>(),
+            2
+        );
+        assert_eq!(
+            index
+                .items
+                .iter()
+                .filter(|item| item.entry.name == "Rook")
+                .count(),
+            2
+        );
+        assert!(
+            index
+                .errors
+                .iter()
+                .any(|error| error.contains("Choose one in World"))
+        );
+        assert!(index.position(id).is_none());
+        assert!(
+            matches!(index.follow("Rook", &index.items[index.world[0]]), Go::Many(positions) if positions.len() == 2)
+        );
+        std::fs::write(dir.path().join("Rook third.md"), &before).unwrap();
+        assert_eq!(
+            ContentIndex::load(&[], Some(&campaign))
+                .unwrap()
+                .duplicate_world
+                .len(),
+            3
+        );
     }
 
     fn campaign_with(notes: &[(&str, &str)]) -> (tempfile::TempDir, Campaign) {

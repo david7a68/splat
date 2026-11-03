@@ -177,13 +177,16 @@ impl Campaigns {
     }
 
     pub fn register_module(&mut self, module: crate::persistence::Module) -> Result<(), String> {
-        if self
+        if let Some(registered) = self
             .data
             .modules
             .iter()
-            .any(|m| m.id == module.id || m.path == module.path)
+            .find(|m| m.id == module.id || m.path == module.path)
         {
-            return Err("This package is already registered.".into());
+            return Err(format!(
+                "This folder has the same package identity as {} ({}). Choose a package with a different identity.",
+                registered.name, registered.id
+            ));
         }
         if self
             .data
@@ -986,6 +989,33 @@ fn links_to(campaign: &Campaign, remote_id: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn copied_package_folder_names_the_duplicate_identity_without_registering_it() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut campaigns = Campaigns::at(dir.path().join("settings.json"));
+        let original = dir.path().join("original");
+        let copied = dir.path().join("copy");
+        std::fs::create_dir(&original).unwrap();
+        std::fs::create_dir(&copied).unwrap();
+        std::fs::write(
+            original.join("Package.md"),
+            crate::library::note_text("Ashen Marches", "package", Some("ashen")),
+        )
+        .unwrap();
+        std::fs::copy(original.join("Package.md"), copied.join("Package.md")).unwrap();
+        let module = crate::library::local_module(&original).unwrap();
+        campaigns.register_module(module.clone()).unwrap();
+        let before = std::fs::read(copied.join("Package.md")).unwrap();
+        let error = campaigns
+            .register_module(crate::library::local_module(&copied).unwrap())
+            .unwrap_err();
+        assert!(error.contains("same package identity as Ashen Marches"));
+        assert!(error.contains(&module.id.to_string()));
+        assert!(!error.contains("already registered"));
+        assert_eq!(campaigns.modules().len(), 1);
+        assert_eq!(std::fs::read(copied.join("Package.md")).unwrap(), before);
+    }
 
     #[test]
     fn import_and_reopen_preserve_campaign_identity_and_custom_settings() {

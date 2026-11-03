@@ -70,6 +70,7 @@ pub struct CampaignContent {
     disabled_selections: std::collections::BTreeMap<Uuid, Selection>,
     refresh_pending: bool,
     removed_package: Option<RemovedPackage>,
+    manifest_write: Option<crate::content_workspace::ManifestWrite>,
     repairs: Vec<Repair>,
     /// What `Discard` last dropped, for one step of undo.
     discarded_selections: Option<Vec<PackageSelection>>,
@@ -650,6 +651,9 @@ impl CampaignContent {
     }
 
     fn packages(&mut self, ui: &mut egui::Ui, campaigns: &Campaigns, active: &Campaign) {
+        let manifest_locked = self
+            .dirty()
+            .then_some("Save or discard campaign changes first.");
         let snapshot = self.snapshot.as_mut().unwrap();
         let catalogue = &snapshot.catalogue;
         let document = &mut snapshot.document;
@@ -784,8 +788,29 @@ impl CampaignContent {
                     design::message(
                         ui,
                         Tone::Warning,
-                        &format!("{}: {problem} Entries are still available.", module.name),
+                        &format!(
+                            "{}: {problem}{}",
+                            module.name,
+                            if problem == crate::content_workspace::DELETED_MANIFEST {
+                                ""
+                            } else {
+                                " Entries are still available."
+                            }
+                        ),
                     );
+                    if Action::quiet("Write Package.md again")
+                        .blocked(manifest_locked)
+                        .show(ui)
+                        .clicked()
+                    {
+                        match crate::content_workspace::ManifestWrite::write(module) {
+                            Ok(write) => {
+                                self.manifest_write = Some(write);
+                                self.refresh_pending = true;
+                            }
+                            Err(error) => self.error = Some(error),
+                        }
+                    }
                     if module.path.join("Package.md").exists()
                         && Action::quiet("Open in Library").show(ui).clicked()
                     {
@@ -797,6 +822,22 @@ impl CampaignContent {
                         });
                     }
                 });
+            }
+        }
+        if let Some(write) = &self.manifest_write
+            && write.replaced()
+            && Action::quiet("Undo write Package.md")
+                .icon(icons::UNDO)
+                .blocked(manifest_locked)
+                .show(ui)
+                .clicked()
+        {
+            match write.undo() {
+                Ok(_) => {
+                    self.manifest_write = None;
+                    self.refresh_pending = true;
+                }
+                Err(error) => self.error = Some(error),
             }
         }
         let affected: Vec<_> = catalogue

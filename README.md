@@ -746,3 +746,9 @@ recording row owns its error or stall message. Other pages show the banner. A li
 **Stop recording** before **Process**. A processed row keeps **Process again…** in its
 menu above **Delete…**, with confirmation before it replaces results. The Recordings tab
 keeps Stop recording on the row. Its list has a width limit; result readers keep the full pane.
+
+Package repair keeps entries available when `Package.md` breaks or is deleted.
+**Write Package.md again** restores the registered identity and package details.
+Replacing a broken file offers **Undo write Package.md**. Copied World notes stay
+visible in World and Lookup with a duplicate warning and file-specific identity
+repair. Each repair has Undo. A run's Sheet uses its live death-save counts once.

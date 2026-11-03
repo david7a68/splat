@@ -1644,8 +1644,19 @@ impl Splat {
         if let Some(path) = ctx.data_mut(|data| {
             data.remove_temp::<std::path::PathBuf>(egui::Id::new("open_library_repair"))
         }) {
-            self.library.repair_file(path);
-            self.page = Page::Library;
+            if crate::world::repair_in_world(&path)
+                && let Some(campaign) = self.campaigns.active_campaign()
+                && let Ok(relative) = path.strip_prefix(&campaign.path)
+            {
+                self.world_page.reveal(
+                    campaign.id,
+                    crate::world::note_id(&relative.to_string_lossy().replace('\\', "/")),
+                );
+                self.page = Page::World;
+            } else {
+                self.library.repair_file(path);
+                self.page = Page::Library;
+            }
         }
         if let Some(path) =
             ctx.data_mut(|data| data.remove_temp::<String>(egui::Id::new("edit_run_encounter")))
@@ -1849,10 +1860,16 @@ impl Splat {
             }
             None => {}
         }
-        if let Some(entry) = self.lookup.open_in_library.take()
-            && self.library.reveal(&entry)
-        {
-            self.page = Page::Library;
+        if let Some(entry) = self.lookup.open_in_library.take() {
+            if entry.kind == "world"
+                && let Some(campaign) = self.campaigns.active_campaign()
+            {
+                self.world_page.reveal(campaign.id, entry.id);
+                self.lookup.close();
+                self.page = Page::World;
+            } else if self.library.reveal(&entry) {
+                self.page = Page::Library;
+            }
         }
     }
 }

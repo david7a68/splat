@@ -2821,6 +2821,18 @@ pub mod party_from_run {
             "Editable counts below the tabs replace the duplicate manual fields",
         );
         d.state("death-saves-under-correct", Sizes::Default);
+        d.click(SHEET_TAB);
+        d.expect("1 success · 0 failures");
+        d.observe_both(
+            "C1",
+            "The Sheet shows the run's death saves once and omits stored counts",
+            |d| {
+                let words = d.painted_in(egui::Rect::EVERYTHING);
+                words.matches("1 success · 0 failures").count() == 1
+                    && !words.contains("0 successes")
+            },
+        );
+        d.state("live-death-saves-once", Sizes::All);
 
         // The third view of a run. It reads differently, and undo can reopen it.
         d.click(END_ENCOUNTER);

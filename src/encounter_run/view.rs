@@ -3286,6 +3286,11 @@ impl Run {
                 max_hp: p.max_hp,
                 temporary_hp: p.temporary_hp,
                 conditions: p.conditions.clone(),
+                death_saves: splat::character::DeathSaves {
+                    successes: u64::from(p.successes),
+                    failures: u64::from(p.failures),
+                },
+                death_saves_shown: p.hp == Some(0),
             };
             changes_block(ui, p, false);
             let freshness = crate::party::freshness(&record, self.connected);
