@@ -668,6 +668,12 @@ Library shows **Back** with **Alt+Left** whenever an earlier entry is available.
 
 The visual suite includes `npc-in-lookup`, `package-rename` and `package-about`. `share-to-package` checks the new references after **Share both**, and Library navigation checks the dependency copy action and its Undo.
 
+On window focus, Splat checks campaign notes and every registered package for disk changes. Library, Lookup and encounter search reload changed content. A changed draft opens the disk comparison. A package's About page counts its used entries and offers **Use every entry** with Undo. Removing an unavailable package also offers Undo and keeps links to the encounters that need its creatures.
+
+If a package creature is deleted on disk, its encounter row keeps the last known name or says **Missing creature**. The warning explains the deletion. **Edit** chooses a replacement; the row menu still removes it. The NPC **Add to run** form labels its side choice **SIDE** and uses the roster's side names.
+
+New creature entries start with AC 10 and HP 1, with the HP value selected in the editor. A renamed copy also renames its first H1 when it matches the source name. Package creation shows a **Folder** field and the full destination path. `package-file-changed`, `package-delete-entry` and `book-to-package` cover these disk and copy paths.
+
 The run header keeps two lines after each action. Undo has a fixed slot; hover gives the
 full action. Recording silence stays ahead of connection notices, while a sync conflict
 comes first. Keys keeps its word beside each panel. When several unfinished copies of

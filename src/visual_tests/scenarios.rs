@@ -369,7 +369,7 @@ pub mod library_navigation {
         let text =
             crate::content_workspace::patch_fields(&text, &[("splat_reading", Some(reading))])
                 .unwrap();
-        let text = format!("{text}\n\n[[Captain Varra|Wiki Captain Varra]]\n\n[[Missing place]]\n");
+        let text = format!("{text}\n\n[[Ashfall|Wiki watch spell]]\n\n[[Missing place]]\n");
         std::fs::write(path, text).unwrap();
 
         go_library(d);
@@ -387,8 +387,8 @@ pub mod library_navigation {
         d.state("dependency-copy-reconnected", Sizes::All);
         d.click("Undo dependency copy");
         d.wait_for_text("Captain Varra is in this campaign only.");
-        d.click("Wiki Captain Varra");
-        d.expect("The last commander of the Emberfall watch.");
+        d.click("Wiki watch spell");
+        d.wait_for_text("Hot ash falls");
         d.observe(
             "C4",
             !d.has("Close Lookup"),
@@ -397,7 +397,7 @@ pub mod library_navigation {
         d.state("wiki-link-in-library", Sizes::All);
         d.click("Back");
         d.click("Read Captain Varra");
-        d.expect("The last commander of the Emberfall watch.");
+        d.wait_for_text("The last commander of the Emberfall watch.");
         d.state("reference-outside-package", Sizes::All);
         d.observe(
             "Library toolbar",
@@ -410,11 +410,20 @@ pub mod library_navigation {
         d.observe(
             "Draft safety",
             d.has("Back")
-                && d.is_disabled("Back")
+                && !d.is_disabled("Back")
                 && d.editor_text()
                     .is_some_and(|text| text.contains("silver sword")),
             "The editor keeps its draft beside the list",
         );
+        d.click("Back");
+        d.expect("Close Lookup");
+        d.observe(
+            "Draft Back",
+            d.editor_text()
+                .is_some_and(|text| text.contains("silver sword")),
+            "Back opens Lookup and keeps the draft",
+        );
+        d.press(Key::Escape);
         d.click("Save");
         d.click("Read");
         d.observe(
@@ -4155,7 +4164,6 @@ pub mod world {
         );
         d.state("world-heading-beside-run", Sizes::All);
 
-        d.clear_text_in(SEARCH_LOOKUP);
         d.click("Clear");
         d.click("Generate NPC");
         d.expect("Save NPC");
@@ -4186,6 +4194,9 @@ pub mod world {
         d.type_into("Stat block", "Guard");
         d.click("Guard");
         d.type_into("Initiative", "11");
+        d.expect("SIDE");
+        d.wait_for_text("Enemies");
+        d.state("npc-add-to-run-form", Sizes::All);
         d.click("Add");
         d.settle();
         d.observe(
@@ -6890,7 +6901,9 @@ pub mod share_to_package {
         d.wait_for_text("Watch/Captains/Watch Orders.md");
         d.state("share-to-new-folder", Sizes::All);
         d.click("Share both");
-        d.wait_for_text("Copied to Ashen Marches as Watch Orders.");
+        d.wait_for_text(
+            "Copied Watch Orders and Captain Varra to Ashen Marches, in Watch/Captains.",
+        );
         let package = d.root.join("modules/ashen-marches");
         let (entries, errors) = splat::content::read_directory(&package).unwrap();
         assert!(errors.is_empty());
@@ -6953,7 +6966,14 @@ pub mod remove_package_in_use {
         d.state("missing-package-technical-details", Sizes::Default);
         d.click("Technical details");
         d.click("Remove from this campaign");
-        d.click("Save selections");
+        d.wait_for_text("Ashen Marches removed from this campaign.");
+        d.expect("Bridge Ambush");
+        d.expect("Shrine of Cinders");
+        d.state("missing-package-removed-with-undo", Sizes::All);
+        d.click("Undo package removal");
+        d.wait_for_text("Find the folder…");
+        d.state("package-removal-undone", Sizes::All);
+        d.click("Remove from this campaign");
         let campaign = d.app_mut().campaigns.active_campaign().unwrap();
         let document = crate::content_workspace::CampaignDocument::load(&campaign).unwrap();
         d.observe(
@@ -6965,5 +6985,9 @@ pub mod remove_package_in_use {
             "Removing the unavailable package saves the other campaign choices",
         );
         d.state("missing-package-removed", Sizes::Default);
+        go_encounters(d);
+        resume_run_from_cold_start(d);
+        d.wait_for_text(NEXT_TURN);
+        d.state("paused-run-after-package-removal", Sizes::All);
     }
 }

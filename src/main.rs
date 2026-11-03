@@ -1862,6 +1862,20 @@ impl eframe::App for Splat {
         self.art.poll(ctx, self.campaigns.modules());
         art::show_viewer(ctx);
         self.lookup.poll(ctx, &self.campaigns);
+        if std::mem::take(&mut self.lookup.files_changed) {
+            let roots: Vec<_> = self
+                .campaigns
+                .modules()
+                .iter()
+                .map(|m| m.path.clone())
+                .chain(self.campaigns.active_campaign().map(|c| c.path))
+                .collect();
+            for root in roots {
+                self.library.refresh_destination(&root, ctx);
+                self.campaign_content.refresh_destination(&root);
+                self.encounters.refresh_content(ctx, &self.campaigns, &root);
+            }
+        }
         ctx.data_mut(|data| {
             let key = egui::Id::new("reader_link_index");
             if let Some(index) = self.lookup.index() {
