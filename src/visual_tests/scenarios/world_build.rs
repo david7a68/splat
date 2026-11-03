@@ -654,6 +654,7 @@ pub fn world_note_deleted(d: &mut Driver<'_>) {
     d.focus_window(false);
     d.focus_window(true);
     d.wait_for_text("Stat block not found");
+    d.type_into("Search the world", "Watchkeeper");
     d.state("npc-stat-block-deleted-in-world", Sizes::All);
     look_up(d, "Watchkeeper");
     d.wait_for_text("Stat block not found");
