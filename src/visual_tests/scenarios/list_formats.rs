@@ -73,9 +73,24 @@ pub fn run(d: &mut Driver<'_>) {
     d.click("Reload from disk");
     d.settle();
     d.expect("Imaginary initiative");
-    d.expect("is not a rule in this campaign");
+    d.expect("Combat initiative choice");
+    d.expect("Splat uses the D&D default");
     d.state("campaign-flagged-rule-choice", Sizes::All);
     assert_eq!(fs::read_to_string(&manifest).unwrap(), flagged);
+    d.click("Choose in Rules and runs");
+    d.expect("Combat initiative choice");
+    d.expect("Roll NPC initiative");
+    d.state("rules-and-runs-flagged-choice", Sizes::All);
+    d.click("Roll NPC initiative");
+    d.click("Individually");
+    d.click("Save run settings");
+    d.expect("No changes");
+    d.observe_both(
+        "W12 rule repair",
+        "Saving the chosen rule clears its warning",
+        |d| !d.has_containing("Imaginary initiative") && d.visible_text("Individually"),
+    );
+    d.state("rules-and-runs-choice-repaired", Sizes::All);
     fs::write(&manifest, &after).unwrap();
 
     d.click(NAV_ENCOUNTERS);

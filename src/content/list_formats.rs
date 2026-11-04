@@ -332,11 +332,6 @@ pub fn read(text: &str, fields: &mut Mapping, flags: &mut Vec<Flag>) {
                 .iter()
                 .any(|prefix| trimmed.starts_with(prefix))
             {
-                flags.push(Flag {
-                    line: line + 1,
-                    message: "Package line not read. Use a package task or an indented Only: list."
-                        .into(),
-                });
                 last_enabled = false;
                 last_task = false;
                 continue;
@@ -1628,9 +1623,9 @@ pub fn resolve(entry: &mut Entry, entries: &[Entry], source: &str) {
         }
     }
     if entry.kind == "campaign" && formats::schema(&entry.fields) == Ok(2) {
-        entry
-            .flags
-            .retain(|flag| !flag.message.starts_with("Choice "));
+        entry.flags.retain(|flag| {
+            !flag.message.starts_with("Choice ") && !flag.message.contains(" choice \"")
+        });
         if let Some(table) = table(&entry.body, "Rule choices", RULES) {
             let rules: Vec<_> = entries.iter().filter(|e| e.kind == "rule").collect();
             let mut seen = std::collections::BTreeSet::new();
@@ -1654,7 +1649,13 @@ pub fn resolve(entry: &mut Entry, entries: &[Entry], source: &str) {
                     Err("Use a rule name".into())
                 } else {
                     formats::resolve_readable(visible, rules.iter().copied())
-                };
+                }
+                .or_else(|error| {
+                    machine(&row[1].value, "id")
+                        .and_then(|id| Uuid::parse_str(&id).ok())
+                        .filter(|id| rules.iter().any(|rule| rule.id == *id))
+                        .ok_or(error)
+                });
                 if let Some(choices) = entry
                     .fields
                     .get_mut("splat_rule_choices")
@@ -1672,11 +1673,18 @@ pub fn resolve(entry: &mut Entry, entries: &[Entry], source: &str) {
                                 .count();
                             let message = if same_name > 1 {
                                 format!(
-                                    "Choice \"{visible}\" matches {same_name} rules. Use a link to one of them."
+                                    "{} choice \"{visible}\" matches {same_name} rules. Use a link to one of them.",
+                                    row[0].value
                                 )
                             } else {
                                 format!(
-                                    "Choice \"{visible}\" is not a rule in this campaign. Use one rule name or link."
+                                    "{} choice \"{visible}\" is not a rule. {}",
+                                    row[0].value,
+                                    if slot == "dnd2024:rules/combat_initiative" {
+                                        "Splat uses the D&D default (groups of identical NPCs) until you fix it."
+                                    } else {
+                                        "Splat uses the default until you fix it."
+                                    }
                                 )
                             };
                             entry.flags.push(Flag { line, message });
