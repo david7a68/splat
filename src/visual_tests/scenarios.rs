@@ -16,6 +16,7 @@ use super::{
 use eframe::egui::{self, Key, Pos2, pos2};
 pub mod file_formats;
 pub mod integrity;
+pub mod list_formats;
 pub mod stat_formats;
 pub mod world_build;
 

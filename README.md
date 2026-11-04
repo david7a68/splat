@@ -811,3 +811,19 @@ copy, and has one Undo that restores the files. A run's Sheet uses its live deat
 Copy registration has **Use in this campaign**. It starts off when the campaign uses the original. **Use the copy's entries** changes encounter and group sources while keeping their names, counts and changes, with Undo. Duplicate repair actions name the folder when filenames match and can repair a whole copied folder at once.
 
 After **Unregister**, Library offers **Undo unregister**. Campaign keeps the last folder and offers **Register it again**. A missing folder shows its last path and, when there is one matching folder nearby, **Use this folder**. Folder recovery has Undo.
+
+## Obsidian file layouts
+
+Splat reads both layouts. A DM save converts an old file once, with an Undo action.
+Library and Campaign also offer **Convert files…** with a comparison before saving.
+A run never converts `Timeline.md`.
+
+- Timeline version 2 keeps days and events in the body. Day IDs sit in `%% splat id=… %%`
+  below the heading. Event IDs stay at the end of the list item.
+- Campaign schema 2 uses flat properties, package task items, and a Rule/Choice table.
+  Clear a package task in Obsidian to turn that package off.
+- Encounter groups use a member table. Saved encounters use a roster table, with slot
+  keys in comments in the Note cell. New files use the entry name.
+
+Bad rows stay in the file and have a line warning. Saves keep other prose and properties.
+Run files stay JSON. Turn on Obsidian Sync's **other file types** option to sync them.

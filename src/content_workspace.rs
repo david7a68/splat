@@ -463,7 +463,7 @@ pub fn destinations(root: &Path, modules: &[Module]) -> campaign_package::Destin
     let document = CampaignDocument::discover(root)
         .ok()
         .flatten()
-        .and_then(|campaign| CampaignDocument::load(&campaign).ok());
+        .and_then(|campaign| CampaignDocument::load_with_modules(&campaign, modules).ok());
     let Some(document) = document else {
         return Default::default();
     };
@@ -512,7 +512,7 @@ pub fn destinations(root: &Path, modules: &[Module]) -> campaign_package::Destin
     campaign_package::Destinations::new(document.campaign.id, packages)
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct EntryRef {
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -522,6 +522,17 @@ pub struct EntryRef {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub link: Option<String>,
 }
+impl PartialEq for EntryRef {
+    fn eq(&self, other: &Self) -> bool {
+        if self.id.is_some() || self.key.is_some() || other.id.is_some() || other.key.is_some() {
+            self.id == other.id && self.key == other.key
+        } else {
+            self.link == other.link
+        }
+    }
+}
+impl Eq for EntryRef {}
+
 impl EntryRef {
     pub fn id(id: Uuid) -> Self {
         Self {
@@ -541,6 +552,7 @@ impl EntryRef {
         self.id
             .map(|id| id.to_string())
             .or(self.key.clone())
+            .or(self.link.clone())
             .unwrap_or_default()
     }
 }
@@ -861,6 +873,15 @@ impl Catalogue {
     }
 
     pub fn resolve_ref(&self, reference: &EntryRef) -> Result<Uuid, String> {
+        if reference.id.is_none()
+            && reference.key.is_none()
+            && let Some(raw) = reference.link.as_deref()
+        {
+            return content::formats::resolve_readable(
+                raw,
+                self.entries.values().map(|e| &e.entry),
+            );
+        }
         self.resolve(&reference.reference()?)
     }
     /// The package an unresolved reference points into, when no such package is loaded.
@@ -1046,6 +1067,37 @@ impl Catalogue {
                     entries: package_entries,
                     private: true,
                 });
+            }
+        }
+        let list_entries: Vec<_> = result.entries.values().map(|e| e.entry.clone()).collect();
+        for indexed in result.entries.values_mut() {
+            content::list_formats::resolve(&mut indexed.entry, &list_entries);
+            if indexed.entry.kind == "campaign"
+                && content::formats::schema(&indexed.entry.fields) == Ok(2)
+                && let Some((_, source)) = result.files.get(&indexed.entry.id)
+            {
+                let mut packages = false;
+                for line in content::layout::content_lines(source) {
+                    if line.value.starts_with("## ") {
+                        packages = line.value.trim().eq_ignore_ascii_case("## Packages");
+                    }
+                    if packages
+                        && (line.value.starts_with("- [x] ")
+                            || line.value.starts_with("- [ ] ")
+                            || line.value.starts_with("- [X] "))
+                        && !line.value.contains(" ^")
+                        && content::formats::resolve_readable(
+                            &line.value[6..],
+                            list_entries.iter().filter(|e| e.kind == "package"),
+                        )
+                        .is_err()
+                    {
+                        indexed.entry.flags.push(content::layout::Flag {
+                            line: line.line,
+                            message: "Package name not found or ambiguous".into(),
+                        });
+                    }
+                }
             }
         }
         let mut resolved = Vec::new();
@@ -1400,7 +1452,7 @@ impl CampaignDocument {
         {
             return Err("Campaign settings changed on disk. Reload before saving.".into());
         }
-        let text = patch_fields(
+        let text = content::formats::patch_model(
             &document.text,
             &[
                 ("splat_name", Some(campaign.name.clone().into())),
@@ -1420,6 +1472,7 @@ impl CampaignDocument {
                 ),
             ],
         )?;
+        let text = content::formats::convert(&document.path, &text)?;
         Ok(crate::file_batch::Change::text(
             note_path(&campaign.path, &document.path)?,
             document.baseline.as_deref(),
@@ -1495,13 +1548,17 @@ impl CampaignDocument {
         };
         let mut seen = BTreeSet::new();
         for selection in &selections {
-            selection.package.reference()?;
+            if selection.package.link.is_none() {
+                selection.package.reference()?;
+            }
             if !seen.insert(selection.package.label()) {
                 return Err("Duplicate package selection.".into());
             }
             if let Selection::Selected { entries } = &selection.selection {
                 for entry in entries {
-                    entry.reference()?;
+                    if entry.link.is_none() {
+                        entry.reference()?;
+                    }
                 }
             }
         }
@@ -1513,14 +1570,43 @@ impl CampaignDocument {
             selections,
         })
     }
+    pub fn load_with_modules(campaign: &Campaign, modules: &[Module]) -> Result<Self, String> {
+        let mut document = Self::load(campaign)?;
+        document.resolve_packages(modules);
+        Ok(document)
+    }
+    fn resolve_packages(&mut self, modules: &[Module]) {
+        let manifests: Vec<_> = std::iter::once(builtin_manifest())
+            .chain(modules.iter().filter_map(|module| {
+                content::read_directory(&module.path)
+                    .ok()?
+                    .0
+                    .into_iter()
+                    .find(|e| e.kind == "package")
+            }))
+            .collect();
+        for selection in &mut self.selections {
+            if selection.package.id.is_none()
+                && selection.package.key.is_none()
+                && let Some(raw) = selection.package.link.as_deref()
+                && let Ok(id) = content::formats::resolve_readable(raw, &manifests)
+            {
+                selection.package = EntryRef::id(id);
+            }
+        }
+        self.selections
+            .retain(|s| s.package.id.is_some() || s.package.key.is_some());
+    }
+
     pub fn save(&mut self) -> Result<(), String> {
-        let text = patch_fields(
+        let text = content::formats::patch_model(
             &self.text,
             &[(
                 "splat_packages",
                 Some(serde_yaml_ng::to_value(&self.selections).map_err(|e| e.to_string())?),
             )],
         )?;
+        let text = content::formats::convert(&self.path, &text)?;
         write_note(
             &self.campaign.path,
             &self.path,

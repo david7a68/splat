@@ -196,6 +196,7 @@ pub struct Sessions {
     folder_error: Option<String>,
     folder_text: String,
     folder_notice: Option<String>,
+    layouts: crate::formats_ui::State,
     view: View,
     tab: Tab,
     /// The list of sessions stands beside this one, and it already gives the date.
@@ -6048,6 +6049,7 @@ impl Sessions {
                 );
                 return;
             }
+            let before_layout = crate::content_workspace::CampaignDocument::load(&campaign).ok();
             let saved = if move_files {
                 super::move_storage(&campaign, &self.folder_text)
             } else {
@@ -6055,6 +6057,17 @@ impl Sessions {
             };
             match saved {
                 Ok(folder) => {
+                    if let Some(before) = before_layout
+                        && let Ok(after) =
+                            crate::content_workspace::CampaignDocument::load(&campaign)
+                    {
+                        self.layouts.remember_conversion(
+                            &campaign.path,
+                            &after.path,
+                            &before.text,
+                            &after.text,
+                        );
+                    }
                     self.folder = Some(folder);
                     self.folder_error = None;
                     self.folder_notice =
@@ -6084,6 +6097,14 @@ impl Sessions {
         book: &mut Book,
         plan: &Plan<'_>,
     ) {
+        if self.layouts.show_any(ui)
+            && let Some(campaign) = &self.campaign
+        {
+            self.manifest_changed = Some(campaign.path.clone());
+            self.folder = super::folder(campaign).ok();
+            self.draft = None;
+            self.refresh();
+        }
         let folder_missing = self.folder.as_ref().is_none_or(|folder| !folder.is_dir());
         let (page_title, count, singular, plural) = if self.view == View::Templates {
             ("Templates", self.templates.len(), "template", "templates")

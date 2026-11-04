@@ -92,7 +92,10 @@ fn timeline_body(d: &mut Driver<'_>, folder: &std::path::Path) {
         .map(|day| format!("Day {day}: The party followed the river."))
         .collect::<Vec<_>>()
         .join("\n");
+    // D1 covers the legacy body comparison; schema 2 keeps prose in place.
+    d.app_mut().timeline.run_open = true;
     d.app_mut().timeline.save();
+    d.app_mut().timeline.run_open = false;
     let path = folder.join("Timeline.md");
     let text = format!("{}\nDM's paragraph.\n", fs::read_to_string(&path).unwrap());
     fs::write(&path, &text).unwrap();

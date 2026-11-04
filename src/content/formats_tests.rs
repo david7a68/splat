@@ -726,3 +726,235 @@ fn fmt_f2_spell_item_edits_preserve_other_cells_and_extras() {
         assert_eq!(edited, text.replace(before, after));
     }
 }
+
+#[test]
+fn fmt_f3_campaign_golden_toggle_noise_and_bad_rows() {
+    let id = "00000000-0000-0000-0000-000000000002";
+    let old = note(
+        "campaign",
+        &format!(
+            "splat_namespace: rook\nsplat_run_storage: {{directory: Runs}}\nsplat_packages: [{{name: Core, package: {{id: {id}}}, selection: {{mode: all}}}}]\nsplat_rule_choices: {{'dnd2024:rules/combat_initiative': {{id: {id}}}}}"
+        ),
+        "# Rook\n\nDM prose.\n",
+    );
+    let new=note("campaign", "splat_namespace: rook\nsplat_run_folder: Runs",&format!("# Rook\n\nDM prose.\n\n## Packages\n\n- [x] Core ^{id}\n\n## Rule choices\n\n| Rule | Choice |\n| --- | --- |\n| Combat initiative | Side initiative %% splat rule=dnd2024:rules/combat_initiative id={id} %% |\n")).replace("splat_schema: 1","splat_schema: 2");
+    assert_eq!(model(&old), model(&new));
+    let converted = formats::convert("Campaign.md", &old).unwrap();
+    assert_eq!(model(&old), model(&converted));
+    assert!(converted.contains("DM prose."));
+    assert_eq!(
+        converted,
+        formats::convert("Campaign.md", &converted).unwrap()
+    );
+    let off =
+        formats::patch_model(&new, &[("splat_packages", Some(Value::Sequence(vec![])))]).unwrap();
+    assert_eq!(off, new.replace("[x]", "[ ]"));
+    let on = formats::patch_model(
+        &off,
+        &[(
+            "splat_packages",
+            Some(model(&old)["splat_packages"].clone()),
+        )],
+    )
+    .unwrap();
+    assert_eq!(on, new);
+    let bad = new
+        .replace("- [x] Core", "- [q] Core")
+        .replace(&format!("id={id}"), "id=oops");
+    let entry = Entry::parse("Campaign.md", &bad).unwrap();
+    assert_eq!(entry.flags.len(), 2);
+    assert!(
+        entry.fields["splat_packages"]
+            .as_sequence()
+            .unwrap()
+            .is_empty()
+    );
+    assert!(
+        entry.fields["splat_rule_choices"]
+            .as_mapping()
+            .unwrap()
+            .is_empty()
+    );
+    let renamed = formats::patch_model(&bad, &[("splat_name", Some("New name".into()))]).unwrap();
+    assert_eq!(
+        renamed,
+        bad.replace("splat_name: Rook", "splat_name: New name")
+    );
+}
+
+#[test]
+fn fmt_f3_group_golden_one_cell_noise_and_bad_changes() {
+    let key = "dnd2024:creatures/goblin_warrior";
+    let old = note(
+        "encounter_group",
+        &format!(
+            "splat_encounter_group: {{side: enemies, members: [{{creature: {{key: '{key}'}}, count: 2, overrides: {{name: Scout, max_hp: {{add: 5}}, note: Quiet}}}}]}}"
+        ),
+        "# Rook\n\nDM prose.\n",
+    );
+    let new=note("encounter_group","splat_side: enemies",&format!("# Rook\n\nDM prose.\n\n| Count | Creature | Name | Changes | Note |\n| --- | --- | --- | --- | --- |\n| 2 | [Goblin](splat:{key}) | Scout | HP +5 | Quiet |\n")).replace("splat_schema: 1","splat_schema: 2");
+    assert_eq!(model(&old), model(&new));
+    let converted = formats::convert("Group.md", &old).unwrap();
+    assert_eq!(model(&old), model(&converted));
+    assert_eq!(converted, formats::convert("Group.md", &converted).unwrap());
+    let mut group = model(&new)["splat_encounter_group"].clone();
+    group["members"][0]["overrides"]["max_hp"]["add"] = 10.into();
+    let edited = formats::patch_model(&new, &[("splat_encounter_group", Some(group))]).unwrap();
+    assert_eq!(edited, new.replace("HP +5", "HP +10"));
+    let bad = format!("{new}| 1 | [Goblin](splat:{key}) | | HP lots | Keep this |\n");
+    let entry = Entry::parse("Group.md", &bad).unwrap();
+    assert_eq!(entry.flags.len(), 1);
+    assert!(entry.flags[0].message.contains("Changes"));
+    assert_eq!(
+        entry.fields["splat_encounter_group"]["members"]
+            .as_sequence()
+            .unwrap()
+            .len(),
+        1
+    );
+    let renamed = formats::patch_model(&bad, &[("splat_name", Some("New name".into()))]).unwrap();
+    assert!(renamed.contains("HP lots | Keep this"));
+}
+
+#[test]
+fn fmt_f3_roster_golden_one_cell_noise_and_bad_rows() {
+    let key = "dnd2024:creatures/goblin_warrior";
+    let old = note(
+        "encounter",
+        &format!(
+            "splat_encounter: {{roster: [{{key: actor_one, creature: {{key: '{key}'}}, side: enemies, controller: {{kind: manual, role: gm}}, overrides: {{max_hp: {{add: 5}}}}}}], sides: {{party: {{hostile_to: [enemies]}}, enemies: {{hostile_to: [party]}}}}, assumptions: [], completion: {{mode: manual}}, limits: {{rounds: 20, resolution_events: 10000}}}}"
+        ),
+        "# Rook\n\nDM prose.\n",
+    );
+    let new=note("encounter","",&format!("# Rook\n\nDM prose.\n\n## Roster\n\n| Side | Creature | Name | Changes | Note |\n| --- | --- | --- | --- | --- |\n| enemies | [Goblin](splat:{key}) | | HP +5 | %% splat slot=actor_one %% |\n")).replace("splat_schema: 1","splat_schema: 2");
+    assert_eq!(model(&old), model(&new));
+    let converted = formats::convert("Encounter.md", &old).unwrap();
+    assert_eq!(model(&old), model(&converted));
+    assert_eq!(
+        converted,
+        formats::convert("Encounter.md", &converted).unwrap()
+    );
+    let mut encounter = model(&new)["splat_encounter"].clone();
+    encounter["roster"][0]["overrides"]["max_hp"]["add"] = 10.into();
+    let edited = formats::patch_model(&new, &[("splat_encounter", Some(encounter))]).unwrap();
+    assert_eq!(edited, new.replace("HP +5", "HP +10"));
+    let bad = format!(
+        "{new}| enemies | [Goblin](splat:{key}) | | HP lots | %% splat slot=actor_two %% |\n"
+    );
+    let entry = Entry::parse("Encounter.md", &bad).unwrap();
+    assert_eq!(entry.flags.len(), 1);
+    assert_eq!(
+        entry.fields["splat_encounter"]["roster"]
+            .as_sequence()
+            .unwrap()
+            .len(),
+        1
+    );
+    let renamed = formats::patch_model(&bad, &[("splat_name", Some("New name".into()))]).unwrap();
+    assert!(renamed.contains("HP lots"));
+}
+
+#[test]
+fn fmt_f3_roster_custom_sides_party_slots_and_controller_round_trip() {
+    let old = note(
+        "encounter",
+        "splat_encounter: {roster: [{key: actor_party, party_slot: lead, side: Rivals, controller: {kind: manual, role: player}, initial: {hp: 12}, overrides: {}}], sides: {Rivals: {hostile_to: [party]}, party: {hostile_to: [Rivals]}}, assumptions: [], completion: {mode: manual}, limits: {rounds: 30, resolution_events: 10000}}",
+        "DM prose.\n",
+    );
+    let new = formats::convert("Encounter.md", &old).unwrap();
+    assert!(new.contains("splat_sides:"));
+    assert!(new.contains("Rivals (player) |  |"));
+    assert_eq!(model(&old), model(&new));
+    let mut setup = model(&new)["splat_encounter"].clone();
+    setup["roster"][0]["initial"]["hp"] = 13.into();
+    let edited = formats::patch_model(&new, &[("splat_encounter", Some(setup.clone()))]).unwrap();
+    assert_eq!(model(&edited)["splat_encounter"], setup);
+    assert!(edited.contains("DM prose."));
+}
+
+#[test]
+fn fmt_f3_table_append_without_final_newline_and_remove_preserve_noise() {
+    let old = note(
+        "encounter_group",
+        "splat_encounter_group: {side: enemies, members: [{creature: {key: 'dnd2024:creatures/goblin_warrior'}}]}",
+        "DM prose.\n",
+    );
+    let new = formats::convert("Group.md", &old).unwrap();
+    let new = new.trim_end();
+    let mut group = model(new)["splat_encounter_group"].clone();
+    let mut member = group["members"][0].clone();
+    member["count"] = 3.into();
+    group["members"].as_sequence_mut().unwrap().push(member);
+    let appended =
+        formats::patch_model(new, &[("splat_encounter_group", Some(group.clone()))]).unwrap();
+    assert_eq!(model(&appended)["splat_encounter_group"], group);
+    group["members"].as_sequence_mut().unwrap().remove(0);
+    let removed =
+        formats::patch_model(&appended, &[("splat_encounter_group", Some(group.clone()))]).unwrap();
+    assert_eq!(model(&removed)["splat_encounter_group"], group);
+    assert!(removed.contains("DM prose."));
+}
+
+#[test]
+fn fmt_f3_campaign_toggle_ignores_unrelated_tasks_and_rule_edit_is_one_cell() {
+    let id = "00000000-0000-0000-0000-000000000002";
+    let other = "00000000-0000-0000-0000-000000000003";
+    let old = note(
+        "campaign",
+        &format!(
+            "splat_namespace: rook\nsplat_packages: [{{name: Core, package: {{id: {id}}}, selection: {{mode: all}}}}]\nsplat_rule_choices: {{'dnd2024:rules/combat_initiative': {{id: {id}}}}}"
+        ),
+        &format!("## DM tasks\n\n- [x] Ask players ^{id}\n\nDM prose.\n"),
+    );
+    let new = formats::convert("Campaign.md", &old)
+        .unwrap()
+        .replace('\n', "\r\n");
+    let edited = formats::patch_model(
+        &new,
+        &[("splat_packages", Some(Value::Sequence(Vec::new())))],
+    )
+    .unwrap();
+    assert_eq!(
+        edited,
+        new.replace(&format!("- [x] Core ^{id}"), &format!("- [ ] Core ^{id}"))
+    );
+    let mut rules = model(&new)["splat_rule_choices"].clone();
+    rules["dnd2024:rules/combat_initiative"]["id"] = other.into();
+    let edited = formats::patch_model(&new, &[("splat_rule_choices", Some(rules))]).unwrap();
+    assert_eq!(
+        edited,
+        new.replace(
+            &format!("{id} %% splat rule=dnd2024:rules/combat_initiative id={id}"),
+            &format!("{other} %% splat rule=dnd2024:rules/combat_initiative id={other}")
+        )
+    );
+}
+
+#[test]
+fn fmt_f3_campaign_name_only_package_gets_id_on_save() {
+    let id = "00000000-0000-0000-0000-000000000002";
+    let old = note(
+        "campaign",
+        &format!(
+            "splat_namespace: rook\nsplat_packages: [{{name: Core, package: {{id: {id}}}, selection: {{mode: all}}}}]"
+        ),
+        "DM prose.\n",
+    );
+    let new = formats::convert("Campaign.md", &old).unwrap();
+    let external = new.replace(&format!("Core ^{id}"), "Core");
+    let edited = formats::patch_model(
+        &external,
+        &[(
+            "splat_packages",
+            Some(model(&old)["splat_packages"].clone()),
+        )],
+    )
+    .unwrap();
+    assert_eq!(edited, new);
+    let off = formats::patch_model(
+        &external,
+        &[("splat_packages", Some(Value::Sequence(Vec::new())))],
+    )
+    .unwrap();
+    assert_eq!(off, external.replace("[x]", "[ ]"));
+}

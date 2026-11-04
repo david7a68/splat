@@ -55,9 +55,23 @@ pub struct State {
 }
 
 impl State {
+    pub fn show_any(&mut self, ui: &mut egui::Ui) -> bool {
+        let path = self.notice_file.clone();
+        self.show(ui, None, path.as_deref())
+    }
+
     pub fn remember(&mut self, root: &Path, path: &str, before: &str, after: &str) {
         self.undo = vec![Change::text(root.join(path), Some(before), Some(after))];
         self.notice_file = Some(root.join(path));
+    }
+    pub fn remember_conversion(&mut self, root: &Path, path: &str, before: &str, after: &str) {
+        if Entry::parse(path, before)
+            .is_ok_and(|e| splat::content::formats::schema(&e.fields) == Ok(1))
+            && Entry::parse(path, after)
+                .is_ok_and(|e| splat::content::formats::schema(&e.fields) == Ok(2))
+        {
+            self.remember(root, path, before, after);
+        }
     }
 
     pub fn scan(&mut self, campaigns: &Campaigns) {
@@ -133,6 +147,30 @@ impl State {
                 }
             }
         }
+        if let Some(campaign) = campaigns.active_campaign()
+            && let Ok(folder) = crate::sessions::folder(&campaign)
+        {
+            let path = folder.join(crate::timeline::FILE);
+            if path.is_file() && !fs::metadata(&path).is_ok_and(|m| m.permissions().readonly()) {
+                match fs::read_to_string(&path)
+                    .map_err(|e| e.to_string())
+                    .and_then(|before| {
+                        let after =
+                            crate::timeline::formats::convert(&before, &Default::default())?;
+                        Ok((before, after))
+                    }) {
+                    Ok((before, after)) if before != after => preview.push(Preview {
+                        owner: 0,
+                        root: folder,
+                        path: crate::timeline::FILE.into(),
+                        before,
+                        after,
+                    }),
+                    Ok(_) => {}
+                    Err(error) => self.skipped.push(format!("Timeline.md: {error}")),
+                }
+            }
+        }
         preview.sort_by(|a, b| a.owner.cmp(&b.owner).then(a.path.cmp(&b.path)));
         self.selected = 0;
         self.preview = Some(preview);
@@ -155,12 +193,27 @@ impl State {
             {
                 continue;
             }
-            match write_note(&file.root, &file.path, Some(&file.before), &file.after) {
-                Ok(_) => self.undo.push(Change::text(
-                    file.root.join(&file.path),
-                    Some(&file.before),
-                    Some(&file.after),
-                )),
+            let change = Change::text(
+                file.root.join(&file.path),
+                Some(&file.before),
+                Some(&file.after),
+            );
+            let result = if file.path == crate::timeline::FILE {
+                (|| {
+                    let path = note_path(&file.root, &file.path)?;
+                    if [&path, &file.root]
+                        .iter()
+                        .any(|p| fs::metadata(p).is_ok_and(|m| m.permissions().readonly()))
+                    {
+                        return Err("This file is read only.".into());
+                    }
+                    file_batch::apply(std::slice::from_ref(&change))
+                })()
+            } else {
+                write_note(&file.root, &file.path, Some(&file.before), &file.after).map(|_| ())
+            };
+            match result {
+                Ok(()) => self.undo.push(change),
                 Err(error) => self.skipped.push(format!("{}: {error}", file.path)),
             }
         }
@@ -230,7 +283,9 @@ impl State {
                 ));
                 let mut kinds = std::collections::BTreeMap::<String, usize>::new();
                 for file in &selected_files {
-                    if let Ok(entry) = Entry::parse(&file.path, &file.before) {
+                    if file.path == crate::timeline::FILE {
+                        *kinds.entry("timeline".into()).or_default() += 1;
+                    } else if let Ok(entry) = Entry::parse(&file.path, &file.before) {
                         let kind = if entry.fields.contains_key("splat_character") {
                             "character".into()
                         } else {
@@ -341,6 +396,97 @@ mod tests {
         }
         files.sort();
         files
+    }
+
+    #[test]
+    fn fmt_f2_f3_owner_filter_keeps_lists_and_timeline_with_their_owner() {
+        let dir = tempfile::tempdir().unwrap();
+        let world = crate::visual_tests::fixture::World::build(
+            dir.path(),
+            &dir.path().join("cache"),
+            "conversion-list-owners",
+            crate::visual_tests::fixture::Seed::Formats,
+        )
+        .unwrap();
+        let app = world.app();
+        let campaign = app.campaigns.active_campaign().unwrap();
+        let manifest = campaign.path.join("Campaign.md");
+        let mut fields = (*Entry::parse("Campaign.md", &fs::read_to_string(&manifest).unwrap())
+            .unwrap()
+            .fields)
+            .clone();
+        fields.insert("splat_schema".into(), 1.into());
+        fs::write(
+            manifest,
+            format!("---\n{}---\n", serde_yaml_ng::to_string(&fields).unwrap()),
+        )
+        .unwrap();
+        for root in
+            std::iter::once(&campaign.path).chain(app.campaigns.modules().iter().map(|m| &m.path))
+        {
+            fs::write(root.join("Legacy guards.md"), format!("---\nsplat_schema: 1\nsplat_id: {}\nsplat_kind: encounter_group\nsplat_name: Legacy guards\nsplat_encounter_group: {{side: enemies, members: [{{creature: {{key: 'dnd2024:creatures/goblin_warrior'}}, count: 2, overrides: {{name: Scout, note: Quiet}}}}]}}\n---\n", uuid::Uuid::new_v4())).unwrap();
+        }
+        let timeline = crate::sessions::open_folder(&campaign)
+            .unwrap()
+            .join(crate::timeline::FILE);
+        let old_timeline = "---\ntimeline_version: 1\ntimeline:\n- id: t-owner-day\n  kind: day\n  title: The crossing\n---\n\n# Timeline\n";
+        fs::write(&timeline, old_timeline).unwrap();
+        let campaign_before = snapshot(&campaign.path);
+        let generated = app
+            .campaigns
+            .modules()
+            .iter()
+            .find(|m| m.name == "Generated Book")
+            .unwrap();
+        let generated_before = snapshot(&generated.path);
+        let mut state = State::default();
+        state.scan(&app.campaigns);
+        let files = state.preview.as_ref().unwrap();
+        for kind in ["campaign", "encounter_group", "encounter"] {
+            assert!(
+                files.iter().any(|f| f.owner == 0
+                    && Entry::parse(&f.path, &f.before).is_ok_and(|e| e.kind == kind)),
+                "{kind}: {:?}",
+                state.skipped
+            );
+        }
+        assert!(
+            files
+                .iter()
+                .any(|f| f.owner == 0 && f.path == crate::timeline::FILE)
+        );
+        for owner in &mut state.owners {
+            owner.checked = owner.name == "Ashen Marches";
+        }
+        state.apply();
+        assert_eq!(snapshot(&campaign.path), campaign_before);
+        assert_eq!(snapshot(&generated.path), generated_before);
+        let package = app
+            .campaigns
+            .modules()
+            .iter()
+            .find(|m| m.name == "Ashen Marches")
+            .unwrap();
+        assert!(
+            fs::read_to_string(package.path.join("Legacy guards.md"))
+                .unwrap()
+                .contains("splat_schema: 2")
+        );
+        state.scan(&app.campaigns);
+        state.apply();
+        assert!(
+            fs::read_to_string(&timeline)
+                .unwrap()
+                .contains("timeline_version: 2")
+        );
+        assert!(
+            fs::read_to_string(campaign.path.join("Legacy guards.md"))
+                .unwrap()
+                .contains("splat_schema: 2")
+        );
+        assert_eq!(snapshot(&generated.path), generated_before);
+        state.undo().unwrap();
+        assert_eq!(snapshot(&campaign.path), campaign_before);
     }
 
     #[test]

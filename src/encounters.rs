@@ -22,6 +22,36 @@ use std::{
 };
 use uuid::Uuid;
 
+fn named_note_path(root: &std::path::Path, folder: &str, name: &str) -> Result<String, String> {
+    let stem: String = name
+        .trim()
+        .chars()
+        .map(|c| {
+            if c.is_control() || "<>:\"/\\|?*#[]^".contains(c) {
+                '-'
+            } else {
+                c
+            }
+        })
+        .collect();
+    let stem = stem.trim_matches([' ', '.']);
+    if stem.is_empty() {
+        return Err("Enter a file name.".into());
+    }
+    for number in 1..10000 {
+        let suffix = if number == 1 {
+            String::new()
+        } else {
+            format!(" {number}")
+        };
+        let path = format!("{folder}/{stem}{suffix}.md");
+        if !root.join(&path).exists() {
+            return Ok(path);
+        }
+    }
+    Err("Choose another name for this file.".into())
+}
+
 mod disk;
 mod groups;
 mod history;
@@ -93,6 +123,7 @@ struct Draft {
     saved_name: String,
     saved_setup: Setup,
     saved_body: String,
+    flags: Vec<splat::content::layout::Flag>,
     /// The groups that belong to this encounter. They are built here and saved with it.
     groups: Vec<GroupDraft>,
     deleted_groups: Vec<GroupDraft>,
@@ -128,6 +159,7 @@ impl Draft {
             body: String::new(),
             saved_setup: Setup::default(),
             saved_body: String::new(),
+            flags: Vec::new(),
             groups: Vec::new(),
             deleted_groups: Vec::new(),
             groups_read: true,
@@ -155,11 +187,12 @@ impl Draft {
             baseline: Some(text.clone()),
             source: text,
             saved_name: entry.name.clone(),
-            name: entry.name,
+            name: entry.name.clone(),
             saved_setup: setup.clone(),
             setup,
-            body: entry.body.trim().to_owned(),
-            saved_body: entry.body.trim().to_owned(),
+            body: splat::content::list_formats::prose(&entry),
+            saved_body: splat::content::list_formats::prose(&entry),
+            flags: entry.flags.clone(),
             groups: Vec::new(),
             deleted_groups: Vec::new(),
             groups_read: false,
@@ -226,8 +259,22 @@ impl Draft {
         }
     }
     fn text(&self) -> Result<String, String> {
-        let text = patch_fields(
-            &self.source,
+        let source = if self.body == self.saved_body {
+            self.source.clone()
+        } else if splat::content::formats::schema(&Entry::parse(&self.path, &self.source)?.fields)
+            == Ok(2)
+        {
+            splat::content::list_formats::with_prose(&self.source, &self.body)?
+        } else {
+            with_body(&self.source, &self.body)
+        };
+        let patch = if self.baseline.is_none() {
+            patch_fields
+        } else {
+            splat::content::formats::patch_model
+        };
+        let text = patch(
+            &source,
             &[
                 ("splat_name", Some(self.name.clone().into())),
                 (
@@ -236,12 +283,7 @@ impl Draft {
                 ),
             ],
         )?;
-        // Words the DM did not touch keep their exact form.
-        Ok(if self.body == self.saved_body {
-            text
-        } else {
-            with_body(&text, &self.body)
-        })
+        Ok(text)
     }
     fn add(&mut self, id: Uuid, party: bool) {
         self.setup.roster.push(Slot {
@@ -263,18 +305,43 @@ impl Draft {
         }
     }
     fn save(&mut self, campaign: &Campaign, modules: &[Module]) -> Result<(), String> {
+        if self.baseline.is_none() {
+            self.path = named_note_path(&campaign.path, "Encounters", &self.name)?;
+        }
         self.recovery
             .check(&campaign.path, &mut self.path, self.baseline.as_deref())?;
         let snapshot = Snapshot::load(campaign, modules)?;
         self.validate(&snapshot)?;
         let text = self.text()?;
+        let text = splat::content::formats::convert_resolved(
+            &self.path,
+            &text,
+            snapshot.catalogue.entries.values().map(|e| &e.entry),
+        )?;
         let entry = Entry::parse(&self.path, &text)?;
         debug_assert_eq!(entry.id, self.id);
         // Nothing is written unless the encounter and every changed group can be.
         let mut group_texts = Vec::new();
+        let mut reserved_paths = BTreeSet::from([self.path.clone()]);
         for (index, group) in self.groups.iter_mut().enumerate() {
             if group.dirty() {
+                let old_path = group.path().to_owned();
                 group.check_disk(campaign)?;
+                if !group.has_file() {
+                    let stem = group.path().trim_end_matches(".md").to_owned();
+                    let mut number = 2;
+                    while reserved_paths.contains(group.path()) {
+                        group.set_new_path(format!("{stem} {number}.md"));
+                        number += 1;
+                    }
+                }
+                if self.add_to.as_deref() == Some(old_path.as_str()) {
+                    self.add_to = Some(group.path().to_owned());
+                }
+                if self.focus_group.as_deref() == Some(old_path.as_str()) {
+                    self.focus_group = Some(group.path().to_owned());
+                }
+                reserved_paths.insert(group.path().to_owned());
                 let text = group
                     .checked(&snapshot, campaign, Some(self.id))
                     .map_err(|e| match group.name().trim() {
@@ -1117,7 +1184,7 @@ impl Snapshot {
         })
     }
     fn load(campaign: &Campaign, modules: &[Module]) -> Result<Self, String> {
-        let document = CampaignDocument::load(campaign)?;
+        let document = CampaignDocument::load_with_modules(campaign, modules)?;
         let catalogue = Catalogue::load(modules, Some(campaign))?;
         let closure = catalogue.closure(&document.selections, campaign.id);
         let main_source = crate::content_workspace::builtin_manifest().id;
@@ -1299,6 +1366,7 @@ impl Snapshot {
 }
 #[derive(Default)]
 pub struct Encounters {
+    layouts: crate::formats_ui::State,
     active: Option<Campaign>,
     snapshot: Option<Snapshot>,
     pending: Option<mpsc::Receiver<Result<Snapshot, String>>>,
@@ -1969,6 +2037,7 @@ impl Encounters {
             self.error = Some(error);
             return;
         }
+        let before = draft.baseline.clone();
         let outcome = draft.save(active, modules);
         let groups_saved = std::mem::take(&mut draft.groups_written);
         // The group being built stays in view, because it still takes what the search adds.
@@ -1978,6 +2047,14 @@ impl Encounters {
                 self.saved = true;
                 self.error = None;
                 self.message = Some("Encounter saved.".into());
+                if let Some(before) = before {
+                    self.layouts.remember_conversion(
+                        &active.path,
+                        &draft.path,
+                        &before,
+                        &draft.source,
+                    );
+                }
                 if std::mem::take(&mut self.plan_on_save) {
                     self.saved_for_plan = Some(draft.name.clone());
                 }
@@ -2341,14 +2418,22 @@ impl Encounters {
             }
             participants.push(participant);
         }
-        let setup = serde_yaml_ng::to_string(&fresh.setup).map_err(|e| e.to_string())?;
+        let mut run_setup = fresh.setup.clone();
+        for slot in &mut run_setup.roster {
+            if let Some(reference) = &mut slot.creature
+                && (reference.id.is_some() || reference.key.is_some())
+            {
+                reference.link = None;
+            }
+        }
+        let setup = serde_yaml_ng::to_string(&run_setup).map_err(|e| e.to_string())?;
         let entry = Entry::parse(&fresh.path, &fresh.source)?;
         let mut run = crate::encounter_run::Run::new(
             fresh.name,
             participants,
             format!(
                 "{}\n\n{}\n\nPhases, assumptions, completion conditions, and limits are resolved manually.\n\n```yaml\n{setup}\n```",
-                entry.body,
+                splat::content::list_formats::prose(&entry),
                 crate::encounter_run::SETUP_HEADING,
             ),
         )?;
@@ -2449,6 +2534,9 @@ impl Encounters {
         let Some(active) = campaigns.active_campaign() else {
             return;
         };
+        if self.layout_notice(ui, &active, campaigns.modules()) {
+            return;
+        }
         if self
             .active
             .as_ref()
@@ -2569,6 +2657,21 @@ impl Encounters {
                 Err(error) => self.error = Some(format!("The run did not come back: {error}")),
             }
         }
+    }
+
+    fn layout_notice(&mut self, ui: &mut egui::Ui, active: &Campaign, modules: &[Module]) -> bool {
+        if !self.layouts.show_any(ui) {
+            return false;
+        }
+        if let Some(draft) = &self.draft {
+            self.draft = Draft::open(&active.path, &draft.path).ok();
+        }
+        if let Some(draft) = &self.group_draft {
+            self.group_draft = GroupDraft::open(&active.path, draft.path()).ok();
+        }
+        self.refreshing = true;
+        self.start_load(ui.ctx(), active.clone(), modules.to_vec());
+        true
     }
 
     fn results(&mut self, ui: &mut egui::Ui) {
@@ -2944,6 +3047,15 @@ impl Encounters {
     ) {
         if self.encounter_disk_view(ui, active, campaigns.modules()) {
             return;
+        }
+        if let Some(draft) = &self.draft {
+            for flag in &draft.flags {
+                design::message(
+                    ui,
+                    Tone::Warning,
+                    &format!("Line {}: {}", flag.line, flag.message),
+                );
+            }
         }
         let dirty = self.encounter_dirty();
         let creature_dirty = self.creature_dirty();
@@ -4071,6 +4183,16 @@ impl Encounters {
             );
         }
         if settings_saved {
+            if let Some(snapshot) = &self.snapshot
+                && let Ok(document) = crate::content_workspace::CampaignDocument::load(&active)
+            {
+                self.layouts.remember_conversion(
+                    &active.path,
+                    &document.path,
+                    &snapshot.campaign_text,
+                    &document.text,
+                );
+            }
             self.saved = true;
             self.reload(ui.ctx(), active, campaigns.modules().to_vec());
         }
@@ -4667,7 +4789,7 @@ mod tests {
         let path = dir.path().join(&draft.path);
         let external = fs::read_to_string(&path)
             .unwrap()
-            .replace("splat_schema: 1", "tags: [DM]\nsplat_schema: 1");
+            .replace("splat_schema:", "tags: [DM]\nsplat_schema:");
         fs::write(&path, &external).unwrap();
         draft.body = "My words".into();
         assert!(draft.save(&campaign, &[]).is_err());
@@ -5016,7 +5138,7 @@ mod tests {
         let path = dir.path().join(&d.path);
         let text = fs::read_to_string(&path).unwrap();
         // The run holds what it began with. A later edit of the file changes nothing in it.
-        let edited = text.replace("add: 10", "add: 99");
+        let edited = text.replace("HP +10", "HP +99");
         assert_ne!(text, edited);
         fs::write(&path, &edited).unwrap();
         run.autosave();
@@ -5084,8 +5206,12 @@ mod tests {
         slot_override(&mut d, 0, "{note: Sealed}");
         d.save(&campaign, &[]).unwrap();
         let path = dir.path().join(&d.path);
-        let text = fs::read_to_string(&path)
+        let mut fields = (*Entry::parse(&d.path, &fs::read_to_string(&path).unwrap())
             .unwrap()
+            .fields)
+            .clone();
+        fields.insert("splat_schema".into(), 1.into());
+        let text = format!("---\n{}---\n", serde_yaml_ng::to_string(&fields).unwrap())
             .replace("note: Sealed", "level: 3");
         fs::write(&path, text).unwrap();
         let error = Draft::open(dir.path(), &d.path).err().unwrap();

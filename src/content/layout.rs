@@ -52,6 +52,14 @@ impl<'a> Document<'a> {
         Self { text }
     }
 
+    pub fn table(&self, headers: &[&str]) -> Option<Table> {
+        Section {
+            text: self.text,
+            range: 0..self.text.len(),
+        }
+        .table(headers)
+    }
+
     pub fn section(&self, name: &str) -> Option<Section<'a>> {
         self.section_at_level(name, None)
     }
@@ -318,4 +326,27 @@ pub fn replace_value(
         return Err("Edit changed another value".into());
     }
     Ok(after)
+}
+
+/// Original line spans outside fenced and indented code blocks.
+pub fn content_lines(text: &str) -> Vec<Cell> {
+    let code: Vec<_> = Parser::new_ext(text, Options::ENABLE_TABLES)
+        .into_offset_iter()
+        .filter_map(|(event, range)| {
+            matches!(event, Event::Start(Tag::CodeBlock(_))).then_some(range)
+        })
+        .collect();
+    let mut offset = 0;
+    text.split_inclusive('\n')
+        .enumerate()
+        .filter_map(|(line, raw)| {
+            let start = offset;
+            offset += raw.len();
+            (!code.iter().any(|range| range.contains(&start))).then(|| Cell {
+                range: start..offset,
+                line: line + 1,
+                value: raw.trim_end_matches(['\n', '\r']).into(),
+            })
+        })
+        .collect()
 }

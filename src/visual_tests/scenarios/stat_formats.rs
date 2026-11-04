@@ -37,7 +37,8 @@ pub fn run(d: &mut Driver<'_>) {
     go_campaign(d);
     d.click("Convert files…");
     d.expect("Generated package; its converter writes the layout");
-    d.expect("1 rule file · 1 World note");
+    d.expect("4 files can use the new layout.");
+    d.expect("1 encounter file · 1 rule file · 1 timeline file · 1 World note");
     d.state("grouped-conversion-preview", Sizes::All);
     d.click("Ashen Marches");
     d.click("File to convert");

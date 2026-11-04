@@ -492,7 +492,8 @@ pub(super) fn vitals(ui: &mut egui::Ui, entry: &Entry, values: Option<&super::vi
                     _ => stat(entry, "initiative"),
                 };
                 let invalid = entry.fields.get("splat_schema").and_then(|v| v.as_u64()) == Some(2)
-                    && printed.is_none() && text != "Unknown";
+                    && printed.is_none()
+                    && text != "Unknown";
                 let display = if invalid {
                     format!("{} {text}", design::icons::WARN)
                 } else {

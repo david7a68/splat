@@ -202,6 +202,17 @@ pub fn problems(ui: &mut egui::Ui, book: &mut Book) -> bool {
     {
         book.undo_reload();
     }
+    for flag in &book.flags {
+        design::message(
+            ui,
+            Tone::Warning,
+            &format!("Line {}: {}", flag.line, flag.message),
+        );
+    }
+    let path = book.path.clone();
+    if book.layouts.show(ui, None, path.as_deref()) {
+        book.reload();
+    }
     if let Some(warning) = &book.duplicate {
         design::message(ui, Tone::Warning, warning);
     }
@@ -245,14 +256,18 @@ pub fn problems(ui: &mut egui::Ui, book: &mut Book) -> bool {
                 Ok((draft, disk)) => {
                     let face = egui::TextStyle::Monospace.resolve(ui.style());
                     let height = ui.fonts_mut(|fonts| fonts.row_height(&face));
-                    design::draft_comparison_styled(
-                        ui,
-                        &draft,
-                        &disk,
-                        ("timeline_conflict", &book.path, &disk),
-                        face,
-                        height,
-                    );
+                    let id = ("timeline_conflict", &book.path, &disk);
+                    // Seed the shared comparison's cursor once. Schema conversion must
+                    // not hide the body edit that caused this conflict.
+                    let cursor = ui.make_persistent_id(("draft_difference", id));
+                    if let Some(line) = book.conflict_body_line(&disk) {
+                        ui.data_mut(|data| {
+                            if data.get_temp::<usize>(cursor).is_none() {
+                                data.insert_temp(cursor, line);
+                            }
+                        });
+                    }
+                    design::draft_comparison_styled(ui, &draft, &disk, id, face, height);
                 }
                 Err(error) => {
                     design::message(ui, Tone::Error, &error);
@@ -1012,6 +1027,15 @@ impl TimelinePage {
                 design::named(ui, &response, "Notes on this event");
                 changed |= response.changed();
             });
+            for (label, value) in &event.extra {
+                if let (Some(label), Some(value)) = (label.as_str(), value.as_str()) {
+                    ui.label(
+                        Type::Body
+                            .rich(ui, format!("{label}: {value}"))
+                            .color(c.muted),
+                    );
+                }
+            }
             design::quiet_section(ui, "Link text", |ui| {
                 ui.add(egui::Label::new(Type::Mono.rich(ui, &link).color(c.muted)).wrap());
             });

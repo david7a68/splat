@@ -1,7 +1,8 @@
 //! The campaign's timeline: every encounter, rest, travel interval, day and major event,
 //! in story order. It stands apart from session notes. A note refers to an event by its
 //! stable ID, and the same link works in Obsidian, because each event is a block in
-//! `Timeline.md`. The list in the frontmatter is the record. Splat writes the body from it.
+//! `Timeline.md`. Version 2 keeps the events in the body; version 1 stays readable.
+pub(crate) mod formats;
 pub mod page;
 
 use crate::design::icons;
@@ -556,11 +557,14 @@ fn parse(text: &str) -> Result<Vec<Event>, String> {
         .or_else(|| rest.strip_suffix("\n---").map(str::len))
         .ok_or("Its frontmatter has no end.")?;
     let front: Front = serde_yaml_ng::from_str(&rest[..end]).map_err(|e| e.to_string())?;
-    if front.timeline_version != VERSION {
+    if ![VERSION, 2].contains(&front.timeline_version) {
         return Err(format!(
             "Timeline version {} is not supported.",
             front.timeline_version
         ));
+    }
+    if front.timeline_version == 2 {
+        return Ok(formats::parse(&text).0);
     }
     let mut seen = std::collections::BTreeSet::new();
     for event in &front.timeline {
@@ -581,6 +585,10 @@ fn new_id() -> String {
 pub struct Book {
     path: Option<PathBuf>,
     pub events: Vec<Event>,
+    pub flags: Vec<splat::content::layout::Flag>,
+    run_write: bool,
+    pub run_open: bool,
+    layouts: crate::formats_ui::State,
     baseline: Option<Vec<u8>>,
     /// The generated body last written, even while frontmatter is edited elsewhere.
     written_body: Option<String>,
@@ -665,7 +673,7 @@ impl Book {
                     .map_err(|e| e.to_string())
                     .and_then(parse)
                 {
-                    Ok(events) => {
+                    Ok(mut events) => {
                         let text = String::from_utf8_lossy(&bytes);
                         let body = crate::sessions::body_of(&text).replace("\r\n", "\n");
                         let generated = render(&events, &self.session_links).unwrap_or_default();
@@ -673,7 +681,15 @@ impl Book {
                             .written_body
                             .as_deref()
                             .unwrap_or_else(|| crate::sessions::body_of(&generated));
-                        self.body_changed = body != expected;
+                        self.body_changed = !formats::is_v2(&text) && body != expected;
+                        self.flags = if formats::is_v2(&text) {
+                            let (resolved, flags) =
+                                formats::parse_with_sessions(&text, &self.session_links);
+                            events = resolved;
+                            flags
+                        } else {
+                            Vec::new()
+                        };
                         let days = day_numbers(&events);
                         self.link_titles = events
                             .iter()
@@ -716,6 +732,7 @@ impl Book {
 
     /// Note an edit. It saves after a short pause, or at the next `save`.
     pub fn touch(&mut self) {
+        self.run_write = false;
         self.rest_undo = None;
         let days = day_numbers(&self.events);
         for (at, event) in self.events.iter().enumerate() {
@@ -738,6 +755,11 @@ impl Book {
     }
 
     fn text_for(&self, events: &[Event], source: Option<&str>) -> Result<String, String> {
+        if let Some(source) = source
+            && formats::is_v2(source)
+        {
+            return formats::patch(source, events, &self.session_links, self.run_write);
+        }
         let generated = render(events, &self.session_links)?;
         let body = crate::sessions::body_of(&generated);
         if let Some(source) = source {
@@ -756,6 +778,20 @@ impl Book {
         }
     }
 
+    /// Keep an edited legacy body in view even when saving also converts the schema.
+    fn conflict_body_line(&self, disk: &str) -> Option<usize> {
+        if !self.body_changed {
+            return None;
+        }
+        let generated = render(&self.events, &self.session_links).ok()?;
+        let expected: Vec<_> = crate::sessions::body_of(&generated).lines().collect();
+        let body: Vec<_> = crate::sessions::body_of(disk).lines().collect();
+        let offset = disk.lines().count().saturating_sub(body.len());
+        (0..expected.len().max(body.len()))
+            .find(|&line| expected.get(line) != body.get(line))
+            .map(|line| (offset + line).min(disk.lines().count().saturating_sub(1)))
+    }
+
     pub fn conflict_comparison(&self) -> Result<(String, String), String> {
         let path = self.path.as_ref().ok_or("No campaign is open.")?;
         let disk = fs::read_to_string(path).map_err(|e| format!("{}: {e}", path.display()))?;
@@ -766,7 +802,13 @@ impl Book {
                 event.extra.extend(disk.extra.clone());
             }
         }
-        Ok((self.text_for(&events, Some(&disk))?, disk))
+        let draft = self.text_for(&events, Some(&disk))?;
+        let draft = if self.run_open {
+            draft
+        } else {
+            formats::convert(&draft, &self.session_links)?
+        };
+        Ok((draft, disk))
     }
 
     fn write(&mut self) -> Result<(), String> {
@@ -777,7 +819,15 @@ impl Book {
             .map(std::str::from_utf8)
             .transpose()
             .map_err(|e| e.to_string())?;
+        let conversion = source
+            .filter(|text| !formats::is_v2(text) && !self.run_write && !self.run_open)
+            .map(str::to_owned);
         let text = self.text_for(&self.events, source)?;
+        let text = if !self.run_write && !self.run_open {
+            formats::convert(&text, &self.session_links)?
+        } else {
+            text
+        };
         let body = crate::sessions::body_of(&text).to_owned();
         let parent = path.parent().ok_or("Invalid timeline location.")?;
         if !parent.is_dir() {
@@ -801,11 +851,15 @@ impl Book {
         }
         .map_err(|e| e.to_string())?;
         crate::sessions::sync_folder(parent)?;
+        if let Some(before) = conversion {
+            self.layouts.remember(parent, FILE, &before, &text);
+        }
         self.baseline = Some(text.into_bytes());
         self.written_body = Some(body);
         self.body_changed = false;
         self.saved_events.clone_from(&self.events);
         self.dirty = false;
+        self.run_write = false;
         self.reordered.clear();
         self.conflict = false;
         self.error = None;
@@ -856,6 +910,7 @@ impl Book {
                 }
             }
         }
+        self.run_write = false;
         if let Err(error) = self.write() {
             self.error = Some(format!("The timeline was not saved. {error}"));
         }
@@ -1071,7 +1126,9 @@ impl Book {
     pub fn record_run(&mut self, fact: &RunFact, session: Option<Uuid>, played: bool) {
         // It stays in place for this, because what comes next must follow its order.
         let removed = self.removed.clone();
+        let dm_edit = self.dirty && !self.run_write;
         self.apply_run(fact, session, played);
+        self.run_write = !dm_edit;
         self.removed = removed;
     }
 
@@ -1278,6 +1335,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let mut book = book(dir.path());
         book.add(Kind::Travel, None);
+        book.run_write = true;
         book.save();
         let path = dir.path().join(FILE);
         let text = fs::read_to_string(&path)
@@ -1292,6 +1350,7 @@ mod tests {
         book.reload();
         book.events[0].title = "Road".into();
         book.touch();
+        book.run_write = true;
         book.save();
         let saved = fs::read_to_string(path).unwrap();
         assert!(saved.contains("tags:"));
@@ -1303,7 +1362,9 @@ mod tests {
     fn integrity_d1_an_edited_body_opens_the_disk_conflict() {
         let dir = tempfile::tempdir().unwrap();
         let mut book = book(dir.path());
+        book.run_open = true;
         book.add(Kind::Travel, None);
+        book.run_write = true;
         book.save();
         let path = dir.path().join(FILE);
         let text = format!("{}\nDM's paragraph.\n", fs::read_to_string(&path).unwrap());
@@ -1319,6 +1380,10 @@ mod tests {
         fs::write(&path, &text).unwrap();
         let (draft, disk) = book.conflict_comparison().unwrap();
         assert_eq!(disk, text);
+        assert_eq!(
+            disk.lines().nth(book.conflict_body_line(&disk).unwrap()),
+            Some("")
+        );
         assert!(!draft.contains("DM's paragraph."));
         assert!(draft.contains("tags: [DM]") && draft.contains("weather: rain"));
         book.overwrite();
@@ -1485,10 +1550,10 @@ mod tests {
 
         let text = fs::read_to_string(dir.path().join(FILE)).unwrap();
         assert!(
-            text.contains(&format!("## Day 1: Harvest Eve ^{day}")),
+            text.contains(&format!("## Day 1: Harvest Eve\n%% splat id={day} %%")),
             "{text}"
         );
-        assert!(text.contains(&format!("- **Long rest** ^{rest}")), "{text}");
+        assert!(text.contains(&format!("- Long rest:  ^{rest}")), "{text}");
         assert!(text.contains("3 days"), "{text}");
         // The catalogue scan treats any `splat_` frontmatter line as an entry.
         assert!(!text.lines().any(|line| line.starts_with("splat_")));

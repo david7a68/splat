@@ -160,7 +160,12 @@ opens a modal with each file's before and after text, the counts by kind in word
 and files skipped. It uses the shared comparison: lines wrap, changed lines are
 marked, both sides scroll together, and it opens at the first difference.
 It is blocked while a run is open. Malformed flat properties stay in the
-file; the reader shows a warning with the line number and keeps the note available.
+file; the reader shows a warning with the line number and keeps the note available. Timeline version 2 uses event lists and day IDs in comments below the headings.
+Campaign packages use tasks; a toggle changes one character. Rule choices, group members,
+and saved encounter rosters use tables. A bad cell names its line and stays on disk.
+Encounter and group notes forms show the DM's prose and keep the managed table outside
+that form. New files use the entry name. Run updates change only the event's Result line
+and never convert a Timeline.
 
 `theme::install` sets one global `egui::Style`, so any plain egui widget still fits: hover,
 active, focus ring, disabled, text selection, text edit, solid scroll bars, windows,

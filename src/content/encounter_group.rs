@@ -58,6 +58,9 @@ fn creature(what: &str, value: &Value) -> Result<Reference, String> {
             .filter(|key| resource_key(key))
             .map(|key| Reference::Key(key.to_owned()))
             .ok_or_else(invalid),
+        (None, None) if map.get("link").and_then(Value::as_str).is_some() => {
+            Ok(Reference::Id(Uuid::nil()))
+        }
         _ => Err(invalid()),
     }
 }
