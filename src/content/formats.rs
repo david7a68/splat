@@ -76,6 +76,7 @@ pub fn read(schema: u64, text: &str, fields: &mut Mapping) -> Vec<Flag> {
         });
     };
     if schema == 2 {
+        super::list_formats::read(text, fields, &mut flags);
         if fields.get("splat_kind").and_then(Value::as_str) == Some("rule") {
             fields
                 .entry(Value::from("splat_rule"))
@@ -217,6 +218,9 @@ fn expand_pages(value: &Value) -> Option<Value> {
 pub fn eligible(entry: &Entry) -> bool {
     [
         "world",
+        "campaign",
+        "encounter_group",
+        "encounter",
         "package",
         "rule",
         "rule_group",
@@ -235,6 +239,9 @@ pub fn patch_model(text: &str, changes: &[(&str, Option<Value>)]) -> Result<Stri
     let original = Entry::parse("note.md", text)?;
     if schema(&original.fields)? == 1 {
         return patch_fields(text, changes);
+    }
+    if ["campaign", "encounter_group", "encounter"].contains(&original.kind.as_str()) {
+        return super::list_formats::patch(text, changes);
     }
     let mut after = text.to_owned();
     for (key, value) in changes {
@@ -411,6 +418,9 @@ pub fn convert(path: &str, text: &str) -> Result<String, String> {
     if !entry.flags.is_empty() {
         return Err("Fix flagged values before converting this file.".into());
     }
+    if ["campaign", "encounter_group", "encounter"].contains(&entry.kind.as_str()) {
+        return super::list_formats::convert(text, &entry);
+    }
     let newline = if text.contains("\r\n") { "\r\n" } else { "\n" };
     let mut changes = vec![("splat_schema", Some(2.into()))];
     if let Some(world) = entry.fields.get("splat_world").and_then(Value::as_mapping) {
@@ -554,11 +564,100 @@ pub fn convert_resolved<'a>(
     entries: impl IntoIterator<Item = &'a Entry>,
 ) -> Result<String, String> {
     let original = Entry::parse(path, text)?;
+    let entries: Vec<_> = entries.into_iter().collect();
+    if schema(&original.fields)? == 1
+        && ["campaign", "encounter_group", "encounter"].contains(&original.kind.as_str())
+    {
+        let mut enriched = original.clone();
+        fn enrich(value: &mut Value, entries: &[&Entry]) {
+            match value {
+                Value::Mapping(map) => {
+                    if let Some(id) = map
+                        .get("id")
+                        .and_then(Value::as_str)
+                        .and_then(|s| uuid::Uuid::parse_str(s).ok())
+                        && let Some(target) = entries.iter().find(|e| e.id == id)
+                        && target.key.is_none()
+                        && !map.contains_key("link")
+                    {
+                        map.insert(
+                            "link".into(),
+                            format!(
+                                "[[{}|{}]]",
+                                target.path.trim_end_matches(".md"),
+                                target.name
+                            )
+                            .into(),
+                        );
+                    }
+                    for value in map.values_mut() {
+                        enrich(value, entries);
+                    }
+                }
+                Value::Sequence(values) => {
+                    for value in values {
+                        enrich(value, entries)
+                    }
+                }
+                _ => {}
+            }
+        }
+        for key in ["splat_encounter_group", "splat_encounter"] {
+            if let Some(value) = enriched.fields.get_mut(key) {
+                enrich(value, &entries);
+            }
+        }
+        if let Some(packages) = enriched
+            .fields
+            .get_mut("splat_packages")
+            .and_then(Value::as_sequence_mut)
+        {
+            for package in packages {
+                let id = package
+                    .get("package")
+                    .and_then(|p| p.get("id"))
+                    .and_then(Value::as_str)
+                    .and_then(|s| uuid::Uuid::parse_str(s).ok());
+                if let Some(target) = entries.iter().find(|e| Some(e.id) == id) {
+                    package["name"] = target.name.clone().into();
+                }
+            }
+        }
+        let mut after = super::list_formats::convert(text, &enriched)?;
+        if let Some(table) = super::layout::Document::new(&after)
+            .section("Rule choices")
+            .and_then(|s| s.table(super::list_formats::RULES))
+        {
+            let mut patches = Vec::new();
+            for row in table.rows {
+                let Some(slot) = super::list_formats::machine(&row[1].value, "rule") else {
+                    continue;
+                };
+                let chosen = super::list_formats::machine(&row[1].value, "id");
+                if let Some(target) = entries
+                    .iter()
+                    .find(|e| e.key.as_deref() == Some(slot.as_str()))
+                {
+                    patches.push((row[0].range.clone(), target.name.clone()));
+                }
+                if let Some(target) = entries.iter().find(|e| Some(e.id.to_string()) == chosen) {
+                    patches.push((
+                        row[1].range.clone(),
+                        format!("{} %% splat rule={slot} id={} %%", target.name, target.id),
+                    ));
+                }
+            }
+            patches.sort_by_key(|(r, _)| r.start);
+            for (range, value) in patches.into_iter().rev() {
+                after.replace_range(range, &value);
+            }
+        }
+        return Ok(after);
+    }
     let mut after = convert(path, text)?;
     if schema(&original.fields)? != 1 || original.kind != "world" {
         return Ok(after);
     }
-    let entries: Vec<_> = entries.into_iter().collect();
     for (key, flat) in [("creature", "splat_stat_block"), ("in", "splat_in")] {
         let Some(raw) = original
             .fields

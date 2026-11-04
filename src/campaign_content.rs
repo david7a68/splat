@@ -392,16 +392,17 @@ impl CampaignContent {
                         .collect()
                 })
                 .unwrap_or_default();
-            let result = CampaignDocument::load(&campaign).and_then(|document| {
-                let catalogue = Catalogue::load(&modules, Some(&campaign))?;
-                let closure = catalogue.closure(&document.selections, document.campaign.id);
-                Ok(Snapshot {
-                    closure: (document.selections.clone(), closure),
-                    document,
-                    subtitles: crate::library::catalogue_subtitles(&catalogue),
-                    catalogue,
-                })
-            });
+            let result =
+                CampaignDocument::load_with_modules(&campaign, &modules).and_then(|document| {
+                    let catalogue = Catalogue::load(&modules, Some(&campaign))?;
+                    let closure = catalogue.closure(&document.selections, document.campaign.id);
+                    Ok(Snapshot {
+                        closure: (document.selections.clone(), closure),
+                        document,
+                        subtitles: crate::library::catalogue_subtitles(&catalogue),
+                        catalogue,
+                    })
+                });
             let _ = tx.send((repairs, result));
             ctx.request_repaint();
         });
@@ -464,11 +465,15 @@ impl CampaignContent {
             self.message = None;
         }
         self.repair_section(ui, campaigns, &active);
+        let notice_path = self
+            .snapshot
+            .as_ref()
+            .map(|s| active.path.join(&s.document.path));
         if self.layouts.show(
             ui,
             self.run_open
                 .then_some("Close the run before converting files."),
-            None,
+            notice_path.as_deref(),
         ) {
             self.reload(ui.ctx(), campaigns, active.clone());
         }
@@ -773,6 +778,15 @@ impl CampaignContent {
         let snapshot = self.snapshot.as_mut().unwrap();
         let catalogue = &snapshot.catalogue;
         let document = &mut snapshot.document;
+        if let Some(entry) = catalogue.entries.get(&active.id) {
+            for flag in &entry.entry.flags {
+                design::message(
+                    ui,
+                    Tone::Warning,
+                    &format!("Line {}: {}", flag.line, flag.message),
+                );
+            }
+        }
         if snapshot.closure.0 != document.selections {
             snapshot.closure = (
                 document.selections.clone(),
@@ -880,8 +894,15 @@ impl CampaignContent {
                         selection.name = Some(module.name.clone());
                     }
                 }
+                let before_layout = document.text.clone();
                 match document.save() {
                     Ok(()) => {
+                        self.layouts.remember_conversion(
+                            &active.path,
+                            &document.path,
+                            &before_layout,
+                            &document.text,
+                        );
                         self.saved_selections = document.selections.clone();
                         self.reconcile.checked_at = None;
                         self.message = Some("Campaign selections saved.".into());
@@ -1026,8 +1047,15 @@ impl CampaignContent {
                 } else {
                     let after = document.selections.clone();
                     document.selections = removed.before.clone();
+                    let before_layout = document.text.clone();
                     match document.save() {
                         Ok(()) => {
+                            self.layouts.remember_conversion(
+                                &active.path,
+                                &document.path,
+                                &before_layout,
+                                &document.text,
+                            );
                             self.saved_selections = document.selections.clone();
                             self.removed_package = None;
                             self.reconcile.checked_at = None;
@@ -1249,8 +1277,15 @@ impl CampaignContent {
             let before = document.selections.clone();
             let users = selection.campaign_users(catalogue);
             document.selections.remove(i);
+            let before_layout = document.text.clone();
             match document.save() {
                 Ok(()) => {
+                    self.layouts.remember_conversion(
+                        &active.path,
+                        &document.path,
+                        &before_layout,
+                        &document.text,
+                    );
                     self.saved_selections = document.selections.clone();
                     self.removed_package = Some(RemovedPackage {
                         campaign: active.id,

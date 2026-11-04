@@ -284,9 +284,14 @@ impl Options {
             .unwrap_or_default();
         choices.insert(
             MECHANIC.into(),
-            serde_yaml_ng::to_value(EntryRef::id(rule_id)).map_err(|e| e.to_string())?,
+            serde_yaml_ng::to_value(EntryRef {
+                id: Some(rule_id),
+                key: None,
+                link: Some("Campaign initiative".into()),
+            })
+            .map_err(|e| e.to_string())?,
         );
-        let text = patch_fields(
+        let text = splat::content::formats::patch_model(
             &document.text,
             &[
                 ("splat_rule_choices", Some(choices.into())),
@@ -301,6 +306,7 @@ impl Options {
                 ),
             ],
         )?;
+        let text = splat::content::formats::convert(&document.path, &text)?;
         fs::create_dir_all(rule_path.parent().ok_or("Invalid rules folder")?)
             .map_err(|e| e.to_string())?;
         crate::file_batch::apply(&[

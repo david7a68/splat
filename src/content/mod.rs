@@ -29,6 +29,7 @@ mod reading;
 pub use reading::Reading;
 pub mod formats;
 pub mod layout;
+pub mod list_formats;
 mod markdown;
 mod shared;
 pub use shared::validate_with_builtin;
@@ -273,7 +274,7 @@ impl Entry {
                 return Err(format!("{name} must be a mapping"));
             }
         }
-        if self.kind == "encounter_group" {
+        if self.kind == "encounter_group" && formats::schema(&self.fields)? == 1 {
             encounter_group::EncounterGroup::of(self)?;
         }
         if self.kind == "world"
@@ -1252,6 +1253,10 @@ pub fn read_directory(root: &Path) -> Result<(Vec<Entry>, Vec<Diagnostic>), Stri
             Ok(entry) => entries.push(entry),
             Err(error) => errors.push(error),
         }
+    }
+    let catalogue = entries.clone();
+    for entry in &mut entries {
+        list_formats::resolve(entry, &catalogue);
     }
     Ok((entries, errors))
 }

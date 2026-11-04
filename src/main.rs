@@ -1408,6 +1408,7 @@ impl Splat {
                     let links = self.sessions.links();
                     let current = self.sessions.current();
                     self.timeline_page.open_run = self.run_fact.as_ref().map(|fact| fact.id);
+                    self.timeline.run_open = self.encounters.has_run();
                     self.timeline_page.saved_runs = self.encounters.saved_runs();
                     self.timeline_page.dated = self.sessions.current_dated();
                     self.timeline_page.places = self
@@ -1936,6 +1937,7 @@ impl eframe::App for Splat {
         if ctx.input(|i| i.viewport().close_requested()) {
             // An edit in its pause before saving is saved now, not reported as a loss.
             self.sessions.flush();
+            self.timeline.run_open = self.encounters.has_run();
             self.timeline.save();
             if (self.library.dirty()
                 || self.world_page.dirty()
@@ -2008,6 +2010,7 @@ impl eframe::App for Splat {
         self.processing.poll(ctx);
         self.processing.recording_now = self.sessions.recording();
         let open = self.campaigns.active_campaign();
+        self.timeline.run_open = self.encounters.has_run();
         self.sessions.poll(ctx, open.as_ref(), &mut self.timeline);
         self.sessions
             .expire_event_link_undo(self.page == Page::Timeline, &self.timeline);

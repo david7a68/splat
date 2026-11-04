@@ -58,6 +58,8 @@ pub enum Seed {
     World,
     /// World, with old and new World layouts and one malformed flat property.
     Formats,
+    /// Both list layouts, with an invalid table cell.
+    ListFormats,
     /// `Campaign`, plus ended runs: one on the timeline under a session, one with no event.
     History,
     /// `Groups`, plus groups that belong to an encounter, and one whose encounter is gone.
@@ -133,7 +135,7 @@ fn seed_campaigns(
         write_run(&active, &module.path, &party, RUN_12, &[(5, 15), (2, 7)])?;
         write_run(&active, &module.path, &party, RUN_20, &[(12, 15), (3, 7)])?;
     }
-    if matches!(seed, Seed::Groups | Seed::OwnedGroups) {
+    if matches!(seed, Seed::Groups | Seed::OwnedGroups | Seed::ListFormats) {
         write_groups(&active, &module.path, &party)?;
     }
     if seed == Seed::History {
@@ -148,6 +150,8 @@ fn seed_campaigns(
     if seed == Seed::Formats {
         write_format_notes(&active.path)?;
     }
+
+    seed_list_layouts(&active, &quiet, &unlinked, &module, scenario, seed)?;
 
     let data = UserData {
         version: 3,
@@ -1287,4 +1291,79 @@ fn cached_art_is_byte_identical_and_world_files_remain_independent() {
         fs::read(first.path().join("Art/cinder-wolf.png")).unwrap(),
         b"edited by one scenario"
     );
+}
+
+/// Mix schemas without changing the model or the existing workflow's words.
+fn seed_list_layouts(
+    active: &Campaign,
+    quiet: &Campaign,
+    unlinked: &Campaign,
+    module: &Module,
+    scenario: &str,
+    seed: Seed,
+) -> Result<(), String> {
+    // Keep a legacy campaign too, including its package choices.
+    {
+        let campaign = unlinked;
+        let path = campaign.path.join("Campaign.md");
+        let text = fs::read_to_string(&path).map_err(|e| e.to_string())?;
+        let entry = Entry::parse("Campaign.md", &text)?;
+        let mut fields = (*entry.fields).clone();
+        fields.insert("splat_schema".into(), 1.into());
+        fs::write(
+            path,
+            format!(
+                "---\n{}---\n\n# {}\n",
+                serde_yaml_ng::to_string(&fields).map_err(|e| e.to_string())?,
+                entry.name
+            ),
+        )
+        .map_err(|e| e.to_string())?;
+    }
+    let catalogue =
+        crate::content_workspace::Catalogue::load(std::slice::from_ref(module), Some(active))?;
+    let entries = splat::content::read_directory(&active.path)?.0;
+    let mut groups = 0;
+    let mut encounters = 0;
+    for entry in entries {
+        let convert = match entry.kind.as_str() {
+            "encounter_group" => {
+                groups += 1;
+                groups % 2 == 1
+            }
+            "encounter" => {
+                encounters += 1;
+                encounters % 2 == 1
+            }
+            _ => false,
+        };
+        if convert && scenario != "data-integrity" {
+            let path = active.path.join(&entry.path);
+            let before = fs::read_to_string(&path).map_err(|e| e.to_string())?;
+            let after = splat::content::formats::convert_resolved(
+                &entry.path,
+                &before,
+                catalogue.entries.values().map(|e| &e.entry),
+            )
+            .map_err(|e| format!("{}: {e}", entry.path))?;
+            fs::write(path, after).map_err(|e| e.to_string())?;
+        }
+    }
+    // A quiet campaign has a version 2 timeline while older History fixtures stay version 1.
+    let quiet_folder = crate::sessions::open_folder(quiet)?;
+    fs::write(
+        quiet_folder.join(crate::timeline::FILE),
+        crate::timeline::formats::render(&[], &Default::default()),
+    )
+    .map_err(|e| e.to_string())?;
+    if seed == Seed::ListFormats {
+        let folder = crate::sessions::open_folder(active)?;
+        fs::write(folder.join(crate::timeline::FILE),"---\ntimeline_version: 1\ntimeline:\n- id: t-f3-day\n  kind: day\n  title: The crossing\n- id: t-f3-road\n  kind: travel\n  title: Old bridge\n  duration: 10 minutes\n  notes: The party argued about the toll.\n---\n\n# Timeline\n").map_err(|e|e.to_string())?;
+        let text = format!(
+            "---\nsplat_schema: 2\nsplat_id: {}\nsplat_kind: encounter_group\nsplat_name: Bridge guards\nsplat_side: enemies\n---\n\nThe guards demand a toll.\n\n## Members\n\n| Count | Creature | Name | Changes | Note |\n| --- | --- | --- | --- | --- |\n| 1 | [Goblin](splat:dnd2024:creatures/goblin_warrior) | Scout | HP lots | Keep this row |\n| 2 | [Goblin](splat:dnd2024:creatures/goblin_warrior) | | | |\n",
+            stable_id("visual:f3:guards")
+        );
+        write_note(&active.path, "Encounter Groups/Bridge guards.md", &text)?;
+    }
+    Ok(())
 }
