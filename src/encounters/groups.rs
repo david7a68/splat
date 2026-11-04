@@ -2454,7 +2454,12 @@ fn unread_member(
         let unread = ui.add(
             egui::Label::new(
                 Type::Small
-                    .rich(ui, format!("Not read: {raw} · {}", member.flag.message))
+                    .rich(
+                        ui,
+                        format!(
+                            "Changes \"{raw}\" not read. Set the changes below, then save the group."
+                        ),
+                    )
                     .color(colors().result.warning),
             )
             .wrap(),
