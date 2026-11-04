@@ -66,6 +66,7 @@ pub struct CampaignContent {
     /// The DM's choice of list. Until they choose, a package opens on the list it needs.
     pub run_open: bool,
     pub open_lookup: Option<Uuid>,
+    pub open_run_settings: bool,
     pub found_package: Option<Module>,
     pub forget_package: Option<Uuid>,
     recovered: Option<(Module, Option<Module>)>,
@@ -815,7 +816,18 @@ impl CampaignContent {
                 );
             }
             if !entry.entry.flags.is_empty() {
-                crate::world::file_actions(ui, active, &document.path);
+                ui.horizontal_wrapped(|ui| {
+                    crate::world::entry_file_parts(ui, &active.path, &document.path, true);
+                    if entry
+                        .entry
+                        .flags
+                        .iter()
+                        .any(|flag| flag.message.contains(" choice \""))
+                    {
+                        self.open_run_settings =
+                            Action::quiet("Choose in Rules and runs").show(ui).clicked();
+                    }
+                });
             }
         }
         if snapshot.closure.0 != document.selections {
