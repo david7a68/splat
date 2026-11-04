@@ -1082,12 +1082,16 @@ impl Catalogue {
                         packages = line.value.trim().eq_ignore_ascii_case("## Packages");
                     }
                     if packages
-                        && (line.value.starts_with("- [x] ")
-                            || line.value.starts_with("- [ ] ")
-                            || line.value.starts_with("- [X] "))
+                        && ["- ", "* ", "+ "]
+                            .iter()
+                            .any(|prefix| line.value.trim_start().starts_with(prefix))
+                        && matches!(
+                            line.value.trim_start().get(2..5),
+                            Some("[x]" | "[X]" | "[ ]")
+                        )
                         && !line.value.contains(" ^")
                         && content::formats::resolve_readable(
-                            &line.value[6..],
+                            &line.value.trim_start()[6..],
                             list_entries.iter().filter(|e| e.kind == "package"),
                         )
                         .is_err()
@@ -1606,7 +1610,9 @@ impl CampaignDocument {
                 Some(serde_yaml_ng::to_value(&self.selections).map_err(|e| e.to_string())?),
             )],
         )?;
-        let text = content::formats::convert(&self.path, &text)?;
+        let mut entries = content::read_directory(&self.campaign.path)?.0;
+        entries.extend(content::builtin::entries().iter().cloned());
+        let text = content::formats::convert_resolved(&self.path, &text, &entries)?;
         write_note(
             &self.campaign.path,
             &self.path,

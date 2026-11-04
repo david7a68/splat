@@ -821,7 +821,12 @@ A run never converts `Timeline.md`.
 - Timeline version 2 keeps days and events in the body. Day IDs sit in `%% splat id=… %%`
   below the heading. Event IDs stay at the end of the list item.
 - Campaign schema 2 uses flat properties, package task items, and a Rule/Choice table.
-  Clear a package task in Obsidian to turn that package off.
+  Clear a package task in Obsidian to turn that package off. Bullets `-`, `*` and `+`,
+  tab indents, and commas inside links are accepted. A rule choice uses the visible
+  rule name or link; its next save updates the stored id. Unknown choices have a line warning.
+- World type names ignore case. Unique stat-block names and vault requirement links
+  stay readable in Properties. Character payloads and package routes use folded
+  Splat data callouts.
 - Encounter groups use a member table. Saved encounters use a roster table, with slot
   keys in comments in the Note cell. New files use the entry name.
 

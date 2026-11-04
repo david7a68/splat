@@ -213,7 +213,7 @@ An on toggle uses `selected`, its icon or a check, and its word. It does not use
 Delete and Remove belong in a row menu, away from the primary action. A save row has the save-state word and quiet `Discard` at the left, and `Save` at the right.
 Use red only for an action that loses something.
 
-When one cause blocks several controls, state the reason once at the cause: the draft's save row, the run strip, or the recording row. Other blocked controls use the same reason as hover text and accessible description. The rail never repeats the sentence. Its campaign switcher keeps its height and shows a lock; its popup starts with the reason and disables campaign choices. A package draft does not block a campaign switch.
+When one cause blocks several controls, state the reason once at the cause: the draft's save row, the run strip, or the recording row. Other blocked controls use the same reason as hover text and accessible description. The rail never repeats the sentence. Its campaign switcher keeps its height and shows a lock; its popup starts with the reason and disables campaign choices. A package draft blocks a campaign switch. Its reason stays on the save row, after Unsaved and Discard, so the first edit does not move content. The repair editor uses the same placement.
 
 Every icon comes from `design::icons`. Do not pass a raw symbol as widget text. The `missing-glyph` ergonomics check reads painted text and fails if the selected font and its fallbacks lack a character. Its unit test seeds an unassigned character.
 
@@ -845,3 +845,9 @@ Unregister keeps the last folder in Settings. Library offers Undo unregister; Ca
 Missing package recovery looks beside known package folders. A unique match offers Use this folder. The picker starts beside the old folder. Both paths have Undo.
 World place choices stay beside In. Always use this one saves a path with Undo. Changes name both values. File and stored names that differ offer a guarded name update with Undo.
 Unreadable content names its path and keeps other files available. Missing Campaign.md needs an explicit write from held text. Paused stat blocks state when their snapshot differs from the current file.
+
+## Campaign and World audit, iteration 19
+
+A missing Campaign.md states whether Splat holds the last read copy and counts its packages and rules. With no copy, the action says Write a new Campaign.md and explains that it uses default packages. The action sits beside that explanation. Writing Package.md shows a success message and Undo write Package.md, including when the file was missing.
+
+An off package with required entries shows None chosen and the needed count, an indeterminate checkbox, and the encounters that use its creatures. Unread World values name the field, bad value, source line and repair; the list and header flag the note.
