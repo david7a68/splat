@@ -577,7 +577,7 @@ fn fmt_f2_malformed_cells_stay_first_alias_wins_and_old_yaml_is_ignored() {
     );
     assert!(entry.fields["splat_stats"].get("save_dexterity").is_none());
     for words in [
-        "Hit Points \"about twenty\" needs a number first",
+        "Hit Points \"about twenty\" not read (line 21). Use a number first.",
         "Duplicate Hit Points",
         "Save needs",
         "Old data ignored",
@@ -593,7 +593,7 @@ fn fmt_f2_malformed_cells_stay_first_alias_wins_and_old_yaml_is_ignored() {
             entry
                 .flags
                 .iter()
-                .find(|f| f.message.contains("Hit Points \"about twenty\" needs"))
+                .find(|f| f.message.contains("Hit Points \"about twenty\" not read"))
                 .unwrap()
                 .line
                 - 1
