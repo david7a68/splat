@@ -5110,6 +5110,7 @@ impl Sessions {
                                     && book
                                         .event_of_marker(key)
                                         .is_some_and(|event| event.id == *id)
+                                    && book.add_notice_current(id)
                                 {
                                     let id = id.clone();
                                     let words = book.added_words(
@@ -6346,6 +6347,74 @@ impl Sessions {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn i19_h1_recording_reader_drops_undo_after_later_save_or_outside_edit() {
+        for outside in [false, true] {
+            let dir = tempfile::tempdir().unwrap();
+            let path = dir.path().join(timeline::FILE);
+            fs::write(&path, "---\ntimeline_version: 1\ntimeline: []\n---\n\n# Timeline\n\nSplat writes this page from the list above. Edit the list, or use Splat.\n").unwrap();
+            let mut book = Book::default();
+            book.open(Some(dir.path()));
+            let marker = timeline::Marker {
+                kind: timeline::Kind::Event,
+                title: "Gate opens".into(),
+                at: "00:01".into(),
+                place: String::new(),
+                duration: String::new(),
+            };
+            let id = book.add_marker(&marker, "recording:0", None);
+            book.save();
+            assert!(book.error.is_none(), "{:?}", book.error);
+            assert!(
+                book.added_words(&id, "Added.").contains("new layout"),
+                "{}",
+                fs::read_to_string(&path).unwrap()
+            );
+            let mut sessions = Sessions {
+                recording_added: Some(id.clone()),
+                reading: Some(Reading {
+                    recording: dir.path().join("Recording.wav"),
+                    name: "Recording".into(),
+                    made: Made::Marked,
+                    parts: vec![(String::new(), marker.reading_words())],
+                    part: 0,
+                    mark: None,
+                    marker: Some((marker, "recording:0".into())),
+                    short_of: None,
+                }),
+                ..Default::default()
+            };
+            let ctx = egui::Context::default();
+            design::theme::install(&ctx);
+            let mut render = |book: &mut Book| {
+                let mut frame = || {
+                    ctx.run(Default::default(), |ctx| {
+                        egui::CentralPanel::default()
+                            .show(ctx, |ui| sessions.reading_view(ui, book));
+                    })
+                };
+                frame();
+                frame().shapes.into_iter().any(|shape| {
+                    matches!(shape.shape, egui::Shape::Text(text) if text.galley.job.text.contains("Undo add"))
+                })
+            };
+            assert!(render(&mut book));
+            if outside {
+                let saved = fs::read_to_string(&path).unwrap();
+                fs::write(&path, format!("{saved}\nOutside edit.\n")).unwrap();
+            } else {
+                book.add(timeline::Kind::Travel, None);
+                book.save();
+            }
+            assert!(!book.add_notice_current(&id), "outside={outside}");
+            assert!(
+                !render(&mut book),
+                "outside={outside}, error={:?}",
+                book.error
+            );
+        }
+    }
 
     #[test]
     fn integrity_d9_identity_undo_stays_with_its_campaign() {
