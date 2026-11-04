@@ -1310,3 +1310,125 @@ probes/comparison scripts are under ignored
 No Rust source, lockfile, profile or app behavior changes. Builds and captures
 stay on disk in the worktree; no large files went into `/tmp`, and no
 `artifacts/design-audit/` files are committed.
+
+## Sixteenth scan: Library duplicate checks
+
+2026-11-03. Fetched and merged `origin/main` first; base
+`b40baeba239b51ad9a3067aff159d2c2d24f156c` (PR 97). Used the lead's warm
+`target/`, without `CARGO_TARGET_DIR`. Commands run from this worktree through
+`devenv shell --`; video is disabled with `SPLAT_VISUAL_VIDEO=0`.
+
+### Cause and retained fix
+
+PR 94 (`e9aa571`) changed `Loaded::duplicate_ids` from one pass into a call to
+`duplicates` for every note. Each call scanned all notes to check both IDs and
+keys. The new copied-package repair UI also calls `duplicate_folder_paths` on
+each frame; it repeated that same full scan for every non-manifest note.
+The resulting quadratic work affects normal app catalogue loading and the
+copied-package repair view, as well as the visual tests.
+
+The fix builds one index from IDs and keys to note positions for each `Loaded`
+snapshot. Duplicate queries use those positions, remove the queried note, then
+sort and deduplicate them to preserve the original result and order. Existing
+`Loaded::invalidate` clears this index with the other derived metadata after
+edits. No disk contents or parse results are cached across snapshots. ID and key
+checks, warnings, repair choices, file checks and capture scripts are unchanged.
+
+A regression test compares every query with the original full-scan predicate.
+It covers ID collisions, key collisions between different IDs, overlapping
+collisions, missing keys, unreadable notes and invalidation after identity edits.
+The existing duplicate-repair and folder-identity tests also pass.
+
+### Content-loading probes
+
+Temporary timers around `Entry::parse`, embedded loaders, `Catalogue::load` and
+`ContentIndex::load` ran with `SPLAT_VISUAL_TIMINGS=1`. The full original-source
+probe passed all 68 scenarios and 1,561 captures in 141.99 s. It counted:
+
+| Work | Calls in the full suite | Sum of overlapping elapsed times |
+| --- | ---: | ---: |
+| Embedded SRD load | 1; 1,453 notes parsed | 0.227 s |
+| Embedded definition load | 1; 2,065 notes parsed | 0.475 s |
+| Catalogue load | 1,064 | 132.682 s |
+| Content index load | 193 | 157.790 s |
+| Entry parsing, including local fixtures and edits | 396,615 | See raw caller totals |
+
+The 3,518 embedded notes parse once per process, shared by all scenarios.
+Local campaign/package notes are read repeatedly; 211,961 parse calls came from
+`read_directory`. These loads include fixture creation, generated character
+publishing, manifest/folder checks and scenario edits. They are not all redundant
+and are not removed. The elapsed sums overlap and must not be read as suite wall
+time or predicted savings. Convert files scanning starts on an explicit click;
+its dialog does parse preview summaries each frame, but this probe counted only
+1,138 such parses. No polling or scan frequency is changed.
+
+A temporary focused harness populated a `Loaded` with all 3,518 embedded entries,
+then ran ten fresh duplicate-ID calculations and ten folder checks. It exercised
+the same methods used by the app, with unchanged input on each side:
+
+| Work, ten repetitions | Before | After |
+| --- | ---: | ---: |
+| Duplicate IDs, clearing the derived cache each time | 2.880 s | 0.0295 s |
+| Duplicate folder check | 2.701 s | 0.0239 s |
+
+The harness clears only the duplicate-ID set between repetitions; the new index
+remains valid while the unchanged notes stay loaded. These exploratory probes
+overlapped the instrumented full suite. They establish
+the algorithm's cost, not isolated-host throughput. All probes and their extra
+test were removed before the full gate.
+
+### Full timing and fidelity
+
+All full runs set `SPLAT_VISUAL_TIMINGS=1`. The clean control restores the exact
+original Rust source, then runs `visual-test speed-16-before-clean`. The retained
+run restores the exact Rust source that passed the gate, then runs
+`visual-test speed-16-after`. Both commands enter a fresh devenv shell. The
+`time` totals below start inside that shell and include the test build.
+
+| Work | Original source | Retained fix |
+| --- | ---: | ---: |
+| Full standalone visual suite | 154.82 s | 139.46 s |
+| Standalone command, including test build | 163.84 s | 151.41 s |
+| Test build within that command | 8.33 s | 11.29 s |
+| Copied-package scenario, driver + script | 126.50 s | 89.05 s |
+| Full `audit-gate speed-16` visual suite | — | **111.09 s** |
+| Full gate command, including builds and all tests | — | 142.95 s |
+
+The standalone pair reduces measured suite time by 15.36 s / 9.9%. The later
+retained run overlapped unrelated `rustc` and `wild` processes; the host's load
+average reached 42.17 / 28.60 / 20.13. This is one pair on a shared host, not an
+isolated-machine estimate. The earlier full gate had a lower suite time despite
+running the ordinary tests too. Its source is byte-identical to the retained
+standalone source. Gate wall time has no original-gate control in this scan.
+The focused duplicate-check measurement and copied-package scenario support the
+cause independently of the noisy whole-suite timing. PR 90's old suite time
+also predates added scenarios and content checks.
+
+`SPLAT_VISUAL_VIDEO=0 devenv shell -- audit-gate speed-16`, with the additional
+`SPLAT_VISUAL_TIMINGS=1` setting, passed formatting, warnings-denied all-target
+Clippy, 225 library tests and 687 binary tests. The same 12 opt-in binary tests
+remain ignored; other binary/documentation targets passed. The visual suite ran
+all 68 scenarios and 1,561 PNGs: 600 at 960×640, 598 at 1200×800, 346 at
+1920×1080 and 17 at 2400×1600. Every manifest hash matches its PNG. Full
+ergonomics JSON/Markdown and chrome observations are byte-identical to the
+original-source runs. No baseline, allowance, tolerance, size or capture changed.
+
+Pixel comparisons use the existing channel tolerance of two. The clean original
+versus the gate has 1,493 byte-identical images, 41 within tolerance and 27 above.
+Original-source repeats also vary: the initial original run has 28 above-tolerance
+files against the clean control, and the instrumented original run has 34.
+Twenty-three of the gate's 27 files also vary in those original controls. The
+remaining four recording captures differ only in the existing eight-second
+“Recording saved” rail notice; the changed region was inspected. This is the
+same transient state documented in the ninth scan. These runs prove matching
+coverage and reports, not byte-identical screenshots. No tolerance or mask was
+changed. The retained standalone run has 1,505 identical PNGs, 40 within
+tolerance and 16 above; every above-tolerance file also varies in an original
+control. Its reports and full inventory match too.
+
+Raw timings, caller counts, temporary harnesses and capture comparisons are under
+ignored `artifacts/screenshots/audit-speed-16/`; captures use sibling
+`speed-16*` labels. The initial 153.28 s suite was interrupted for a failed GDB
+stack sample and is excluded from the clean timing comparison. Build output and
+captures stay in the worktree; no large files were placed in `/tmp`, and no
+`artifacts/design-audit/` files are committed.
