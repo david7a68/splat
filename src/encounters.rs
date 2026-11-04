@@ -461,7 +461,7 @@ impl Draft {
                         let mut named = slot.clone();
                         named.overrides.remove("name");
                         let name = roster_name(&named, None, &snapshot.known_creature_names);
-                        reference.id.and_then(|id| snapshot.catalogue.unreadable.get(&id))
+                        snapshot.catalogue.unreadable_ref(reference)
                             .map_or_else(|| if count > 1 {
                                 format!("{count} {name} rows have no creature. Their package entry was deleted. Choose a replacement in the roster.")
                             } else {
@@ -2529,7 +2529,7 @@ impl Encounters {
     pub fn read_runs_again(&mut self, active: &Campaign) {
         if let Some(s) = &mut self.snapshot {
             match s
-                .options
+                .saved_options
                 .directory(active)
                 .and_then(|dir| crate::encounter_run::Run::list(&dir, active.id))
             {
@@ -3811,8 +3811,8 @@ impl Encounters {
                     .map(|e| &e.entry);
                 let name = roster_name(slot, definition, &snapshot.known_creature_names);
                 let missing = definition.is_none();
-                let unreadable = slot.creature.as_ref().and_then(|reference| reference.id)
-                    .and_then(|id| snapshot.catalogue.unreadable.get(&id));
+                let unreadable = slot.creature.as_ref()
+                    .and_then(|reference| snapshot.catalogue.unreadable_ref(reference));
                 let creature =
                     resolved.and_then(|id| snapshot.creatures.iter().find(|c| c.id == id));
                 let synced = live.is_some() && creature.is_some_and(|c| c.party);
@@ -5146,6 +5146,13 @@ mod tests {
         drop(run);
         editor.snapshot = Some(Snapshot::load(&campaign, &[]).unwrap());
         assert_eq!(editor.paused_run_count(), 1);
+        editor.snapshot.as_mut().unwrap().options.folder = "Unsaved folder".into();
+        editor.read_runs_again(&campaign);
+        assert_eq!(
+            editor.paused_run_count(),
+            1,
+            "an unsaved folder is not read"
+        );
         fs::rename(&folder, dir.path().join("Moved runs")).unwrap();
         editor.read_runs_again(&campaign);
         editor.read_runs_again(&campaign);

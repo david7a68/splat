@@ -116,6 +116,9 @@ fn reference(text: &str) -> Result<Value, String> {
         if !super::resource_key(key) {
             return Err("Creature: invalid key".into());
         }
+        if let Some(id) = machine(text, "id") {
+            return Ok(map(&[("id", id.into()), ("link", raw.into())]));
+        }
         return Ok(map(&[("key", key.into())]));
     }
     if raw.starts_with("[[") && raw.ends_with("]]") {
@@ -1421,7 +1424,12 @@ pub fn write_references<'a>(
                     {
                         continue;
                     }
-                    format!("[{}](splat:{key})", target.name)
+                    let backup = if reference.get("key").is_none() {
+                        format!(" %% splat id={} %%", target.id)
+                    } else {
+                        String::new()
+                    };
+                    format!("[{}](splat:{key}){backup}", target.name)
                 } else {
                     format!(
                         "[[{}|{}]] %% splat id={} %%",
@@ -1472,7 +1480,22 @@ pub fn resolve(entry: &mut Entry, entries: &[Entry], source: &str) {
     fn visit(value: &mut Value, entries: &[Entry]) {
         match value {
             Value::Mapping(m) => {
+                // A named package link keeps its saved id when the package is absent.
+                // A changed, valid link still takes the identity shown in the cell.
+                if m.contains_key("id")
+                    && let Some(key) = m.get("link").and_then(Value::as_str).and_then(|raw| {
+                        raw.split_once("](splat:")
+                            .and_then(|(_, tail)| tail.strip_suffix(')'))
+                    })
+                    && let Some(target) = entries
+                        .iter()
+                        .find(|entry| entry.key.as_deref() == Some(key))
+                {
+                    m.insert("id".into(), target.id.to_string().into());
+                }
                 if let Some(raw) = m.get("link").and_then(Value::as_str).map(str::to_owned)
+                    && !m.contains_key("id")
+                    && !m.contains_key("key")
                     && let Ok(id) = formats::resolve_readable(&raw, entries.iter())
                 {
                     if let Some(target) = entries.iter().find(|entry| entry.id == id)

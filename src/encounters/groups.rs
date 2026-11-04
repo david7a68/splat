@@ -2317,10 +2317,10 @@ fn unread_member(
             apply = Some(text.clone());
         }
     }
-    if remove || apply.is_some() {
-        if let Err(error) = draft.repair_member(line, apply.as_deref(), snapshot) {
-            draft.repair_error = Some(error);
-        }
+    if (remove || apply.is_some())
+        && let Err(error) = draft.repair_member(line, apply.as_deref(), snapshot)
+    {
+        draft.repair_error = Some(error);
     }
     if let Some(error) = &draft.repair_error {
         design::message(ui, Tone::Warning, error);
@@ -3058,7 +3058,12 @@ mod tests {
         fs::remove_file(dir.path().join("Arena.md")).unwrap();
         let snapshot = Snapshot::load(&campaign, &[]).unwrap();
         let group = &snapshot.groups[0];
-        assert_eq!(group.encounter, Some(arena), "a run of it still offers it");
+        assert_eq!(
+            group.encounter,
+            Some(arena),
+            "a run of it still offers it: {}",
+            fs::read_to_string(dir.path().join(&draft.path)).unwrap()
+        );
         assert_eq!(group.encounter_name, None);
         assert!(group.problem.is_none(), "{:?}", group.problem);
         assert!(

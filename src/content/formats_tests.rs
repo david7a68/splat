@@ -1034,6 +1034,24 @@ fn i19_x4_unique_creature_names_read_and_save_as_named_links() {
                 saved.contains("[Goblin Warrior](splat:dnd2024:creatures/goblin_warrior)"),
                 "{saved}"
             );
+            assert_eq!(
+                Entry::parse("List.md", &saved).unwrap().fields[key][rows][0]["creature"]["id"],
+                Value::from(target.id.to_string())
+            );
+            let mut replacement = target.clone();
+            replacement.id = uuid::Uuid::new_v4();
+            replacement.key = Some("dnd2024:creatures/scout".into());
+            let changed = saved.replace("creatures/goblin_warrior", "creatures/scout");
+            let mut changed_entry = Entry::parse("List.md", &changed).unwrap();
+            super::list_formats::resolve(
+                &mut changed_entry,
+                &[target.clone(), replacement.clone()],
+                &changed,
+            );
+            assert_eq!(
+                changed_entry.fields[key][rows][0]["creature"]["id"],
+                Value::from(replacement.id.to_string())
+            );
             let mut duplicate = target.clone();
             duplicate.id = uuid::Uuid::new_v4();
             let mut ambiguous = Entry::parse("List.md", &text).unwrap();
