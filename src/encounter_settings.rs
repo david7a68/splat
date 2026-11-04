@@ -85,7 +85,16 @@ impl Default for Options {
 impl Options {
     pub fn load(campaign: &Campaign, catalogue: &Catalogue) -> Result<Self, String> {
         let document = CampaignDocument::load(campaign)?;
-        let entry = Entry::parse(&document.path, &document.text)?;
+        let mut entry = Entry::parse(&document.path, &document.text)?;
+        splat::content::list_formats::resolve(
+            &mut entry,
+            &catalogue
+                .entries
+                .values()
+                .map(|e| e.entry.clone())
+                .collect::<Vec<_>>(),
+            &document.text,
+        );
         let folder = match entry
             .fields
             .get("splat_run_storage")

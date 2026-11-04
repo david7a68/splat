@@ -626,7 +626,26 @@ pub mod campaign_content {
         d.state("packages-partial-selection", Sizes::All);
         d.goal("see a partial package selection");
 
+        let positions = |d: &Driver<'_>| {
+            ["D&D 2024", "Use Ash Wraith"].map(|label| {
+                d.nodes()
+                    .iter()
+                    .find(|n| n.name.starts_with(label))
+                    .unwrap()
+                    .rect
+                    .top()
+            })
+        };
+        let before = [(960.0, 640.0), (1200.0, 800.0)].map(|size| d.at_size(size, positions));
         d.click(&format!("Use {UNSELECTED_ENTRY}"));
+        for (size, expected) in [(960.0, 640.0), (1200.0, 800.0)].into_iter().zip(before) {
+            let after = d.at_size(size, positions);
+            d.observe(
+                "i19-U1",
+                after == expected,
+                "The first tick keeps the package and entry rows at the same y.",
+            );
+        }
         d.expect(CHANGED);
         d.expect("Include future additions");
         d.expect("2,070 entries chosen · 1 needed");
@@ -635,7 +654,7 @@ pub mod campaign_content {
             "A package draft states the campaign switch lock",
             |d| d.visible_text(crate::encounters::draft_switch_reason()),
         );
-        d.state("selection-changed", Sizes::Default);
+        d.state("selection-changed", Sizes::All);
         d.click(DISCARD_SELECTION);
         d.goal("change and discard a selection");
 
@@ -749,14 +768,27 @@ pub mod campaign_content {
                 .is_some_and(|text| text.contains("splat_id")),
             "The repair is reachable without leaving the page",
         );
-        let draft = d.editor_text().unwrap() + "\nRepair draft.\n";
+        let before = [(960.0, 640.0), (1200.0, 800.0)]
+            .map(|size| d.at_size(size, |d| d.place_of(SAVE_SELECTIONS).unwrap().top()));
+        let draft = d
+            .editor_text()
+            .unwrap()
+            .replacen("splat_id: [", "splat_id: [ ", 1);
         d.replace_text_in("Note text", &draft);
+        for (size, y) in [(960.0, 640.0), (1200.0, 800.0)].into_iter().zip(before) {
+            let after = d.at_size(size, |d| d.place_of(SAVE_SELECTIONS).unwrap().top());
+            d.observe(
+                "i19-U1-repair",
+                after == y,
+                "The first repair edit does not move the selection save row.",
+            );
+        }
         d.observe_both(
             "iter-18-A-repair-lock",
             "A repair draft states the campaign switch lock",
             |d| d.visible_text(crate::encounters::draft_switch_reason()),
         );
-        d.state("repair-dirty", Sizes::Default);
+        d.state("repair-dirty", Sizes::All);
         d.click("Discard");
         std::fs::remove_file(d.root.join(BROKEN_NOTE)).unwrap();
         let manifest = d.root.join("campaigns/emberfall/Campaign.md");
@@ -764,6 +796,9 @@ pub mod campaign_content {
         std::fs::remove_file(&manifest).unwrap();
         d.click(RELOAD);
         d.wait_for_text("Write Campaign.md again");
+        d.expect(
+            "Campaign.md is missing. Splat still has the copy it last read: 2 packages, 0 rules.",
+        );
         assert!(!manifest.exists());
         d.state("missing-campaign-manifest-needs-explicit-write", Sizes::All);
         d.click("Write Campaign.md again");
@@ -777,6 +812,14 @@ pub mod campaign_content {
             "Undo removes only the restored manifest and returns to the same missing-file view.",
         );
         d.state("campaign-manifest-write-undone", Sizes::All);
+        d.restart();
+        go_campaign(d);
+        d.wait_for_text("Write a new Campaign.md");
+        d.expect("Splat has no copy. This writes a new Campaign.md with the default packages.");
+        d.state("missing-campaign-manifest-without-copy", Sizes::All);
+        d.click("Write a new Campaign.md");
+        d.wait_for_text("Undo write Campaign.md");
+        assert!(manifest.exists());
     }
 }
 

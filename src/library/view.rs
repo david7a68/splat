@@ -201,7 +201,9 @@ fn show_inner(
             design::message(
                 ui,
                 crate::design::Tone::Warning,
-                &if flag.message.starts_with("Hit Points \"") {
+                &if flag.message.contains(" not read (line ") {
+                    flag.message.clone()
+                } else if flag.message.starts_with("Hit Points \"") {
                     format!("{} (line {}).", flag.message, flag.line)
                 } else {
                     format!("Line {}: {}", flag.line, flag.message)

@@ -212,6 +212,33 @@ pub fn unread_group_members(text: &str, flags: &[Flag]) -> Vec<UnreadGroupMember
     unread
 }
 
+fn only_references(raw: &str) -> Result<Vec<Value>, String> {
+    let mut square = 0usize;
+    let mut round = 0usize;
+    let mut start = 0;
+    let mut values = Vec::new();
+    for (at, ch) in raw.char_indices() {
+        match ch {
+            '[' => square += 1,
+            ']' => square = square.saturating_sub(1),
+            '(' if square == 0 => round += 1,
+            ')' if square == 0 => round = round.saturating_sub(1),
+            ',' if square == 0 && round == 0 => {
+                values.push(reference(raw[start..at].trim())?);
+                start = at + 1;
+            }
+            _ => {}
+        }
+    }
+    if square != 0 || round != 0 {
+        return Err("Only: link not closed".into());
+    }
+    if !raw.trim().is_empty() {
+        values.push(reference(raw[start..].trim())?);
+    }
+    Ok(values)
+}
+
 pub fn read(text: &str, fields: &mut Mapping, flags: &mut Vec<Flag>) {
     let kind = fields
         .get("splat_kind")
@@ -237,6 +264,7 @@ pub fn read(text: &str, fields: &mut Mapping, flags: &mut Vec<Flag>) {
         let mut packages = Vec::new();
         let mut in_packages = false;
         let mut last_enabled = false;
+        let mut last_task = false;
         let mut seen = std::collections::BTreeSet::new();
         for source_line in super::layout::content_lines(text) {
             let line = source_line.line - 1;
@@ -248,9 +276,37 @@ pub fn read(text: &str, fields: &mut Mapping, flags: &mut Vec<Flag>) {
             if !in_packages {
                 continue;
             }
-            if let Some(only) = raw.strip_prefix("  - Only: ") {
+            let trimmed = raw.trim_start();
+            if raw.len() != trimmed.len()
+                && let Some(only) = trimmed
+                    .get(2..)
+                    .filter(|_| {
+                        ["- ", "* ", "+ "]
+                            .iter()
+                            .any(|prefix| trimmed.starts_with(prefix))
+                    })
+                    .and_then(|s| s.strip_prefix("Only:"))
+            {
+                if !last_task {
+                    flags.push(Flag {
+                        line: line + 1,
+                        message: "Only: needs a package task first.".into(),
+                    });
+                } else if !last_enabled && let Err(message) = only_references(only.trim()) {
+                    flags.push(Flag {
+                        line: line + 1,
+                        message,
+                    });
+                }
                 if last_enabled && let Some(last) = packages.last_mut() {
-                    let entries: Result<Vec<_>, _> = only.split(", ").map(reference).collect();
+                    *last = set_selection(
+                        last,
+                        map(&[
+                            ("mode", "selected".into()),
+                            ("entries", Value::Sequence(Vec::new())),
+                        ]),
+                    );
+                    let entries = only_references(only.trim());
                     match entries {
                         Ok(entries) => {
                             *last = set_selection(
@@ -269,9 +325,23 @@ pub fn read(text: &str, fields: &mut Mapping, flags: &mut Vec<Flag>) {
                 }
                 continue;
             }
-            if !raw.starts_with("- ") {
+            if trimmed.is_empty() || (trimmed.starts_with("%%") && trimmed.ends_with("%%")) {
                 continue;
             }
+            if !["- ", "* ", "+ "]
+                .iter()
+                .any(|prefix| trimmed.starts_with(prefix))
+            {
+                flags.push(Flag {
+                    line: line + 1,
+                    message: "Package line not read. Use a package task or an indented Only: list."
+                        .into(),
+                });
+                last_enabled = false;
+                last_task = false;
+                continue;
+            }
+            let raw = trimmed;
             let parsed = (|| {
                 let enabled = match raw.get(2..5) {
                     Some("[x]" | "[X]") => true,
@@ -304,6 +374,7 @@ pub fn read(text: &str, fields: &mut Mapping, flags: &mut Vec<Flag>) {
                 ))
             })();
             last_enabled = matches!(&parsed, Ok((true, _)));
+            last_task = parsed.is_ok();
             match parsed {
                 Ok((true, value)) => packages.push(value),
                 Ok((false, _)) => {}
@@ -612,7 +683,8 @@ fn choice_name(choice: &Value) -> &str {
     choice
         .get("link")
         .and_then(Value::as_str)
-        .unwrap_or_else(|| words(choice, "id"))
+        .filter(|name| !name.trim().is_empty() && Uuid::parse_str(name).is_err())
+        .unwrap_or("Campaign initiative")
 }
 
 /// Generate just the owned list/table and flat fields; all other machine values stay at the end.
@@ -1007,11 +1079,13 @@ pub fn patch(text: &str, changes: &[(&str, Option<Value>)]) -> Result<String, St
                     in_packages = line.trim().eq_ignore_ascii_case("## Packages");
                 }
                 if in_packages
-                    && (line.starts_with("- [x] ")
-                        || line.starts_with("- [X] ")
-                        || line.starts_with("- [ ] "))
+                    && ["- ", "* ", "+ "]
+                        .iter()
+                        .any(|prefix| line.trim_start().starts_with(prefix))
+                    && matches!(line.trim_start().get(2..5), Some("[x]" | "[X]" | "[ ]"))
                 {
-                    let item = &line.trim_end()[6..];
+                    let indent = line.len() - line.trim_start().len();
+                    let item = &line.trim()[6..];
                     let (name, id) = item.rsplit_once(" ^").unwrap_or((item, ""));
                     let selected = wanted.iter().find(|p| {
                         if id.is_empty() {
@@ -1030,7 +1104,7 @@ pub fn patch(text: &str, changes: &[(&str, Option<Value>)]) -> Result<String, St
                         }
                     }
                     patches.push((
-                        offset + 3..offset + 4,
+                        offset + indent + 3..offset + indent + 4,
                         if enabled { "x" } else { " " }.to_owned(),
                     ));
                 }
@@ -1053,7 +1127,8 @@ pub fn patch(text: &str, changes: &[(&str, Option<Value>)]) -> Result<String, St
                     let mut offset = 0;
                     for line in after.split_inclusive('\n') {
                         if line.trim_end().ends_with(&format!(" ^{id}")) {
-                            let range = offset + 6..offset + line.trim_end().len() - id.len() - 2;
+                            let range = offset + (line.len() - line.trim_start().len()) + 6
+                                ..offset + line.trim_end().len() - id.len() - 2;
                             after.replace_range(range, name);
                             break;
                         }
@@ -1072,12 +1147,17 @@ pub fn patch(text: &str, changes: &[(&str, Option<Value>)]) -> Result<String, St
                 let mut child_range = None;
                 let mut insertion = None;
                 for line in after.split_inclusive('\n') {
-                    if insertion.is_some() && !line.starts_with("  ") {
+                    if insertion.is_some() && !line.starts_with([' ', '\t']) {
                         break;
                     }
                     if line.trim_end().ends_with(&format!(" ^{id}")) {
                         insertion = Some(offset + line.len());
-                    } else if insertion.is_some() && line.starts_with("  - Only:") {
+                    } else if insertion.is_some()
+                        && line.starts_with([' ', '\t'])
+                        && ["- Only:", "* Only:", "+ Only:"]
+                            .iter()
+                            .any(|prefix| line.trim_start().starts_with(prefix))
+                    {
                         child_range = Some(offset..offset + line.len());
                     }
                     offset += line.len();
@@ -1448,7 +1528,10 @@ pub fn write_references<'a>(
     if entry.kind == "campaign" {
         let mut offset = 0;
         for line in text.split_inclusive('\n') {
-            if line.trim_start().starts_with("- Only:") {
+            if ["- Only:", "* Only:", "+ Only:"]
+                .iter()
+                .any(|prefix| line.trim_start().starts_with(prefix))
+            {
                 for target in &entries {
                     if let Some(key) = &target.key {
                         let suffix = format!("](splat:{key})");
@@ -1540,6 +1623,65 @@ pub fn resolve(entry: &mut Entry, entries: &[Entry], source: &str) {
                         line: cell.line,
                         message: format!("Creature {raw} not found or ambiguous"),
                     });
+                }
+            }
+        }
+    }
+    if entry.kind == "campaign" && formats::schema(&entry.fields) == Ok(2) {
+        entry
+            .flags
+            .retain(|flag| !flag.message.starts_with("Choice "));
+        if let Some(table) = table(&entry.body, "Rule choices", RULES) {
+            let rules: Vec<_> = entries.iter().filter(|e| e.kind == "rule").collect();
+            let mut seen = std::collections::BTreeSet::new();
+            for row in table.rows.into_iter().filter(|row| row.len() == 2) {
+                let slot = machine(&row[1].value, "rule").unwrap_or_else(|| {
+                    if row[0].value.eq_ignore_ascii_case("Combat initiative") {
+                        "dnd2024:rules/combat_initiative".into()
+                    } else {
+                        row[0].value.clone()
+                    }
+                });
+                if !super::resource_key(&slot) || !seen.insert(slot.clone()) {
+                    continue;
+                }
+                let line = row[1].line + entry.body_line.saturating_sub(1);
+                entry
+                    .flags
+                    .retain(|flag| flag.line != line || flag.message != "Rule choice id not found");
+                let visible = row[1].value.split("%%").next().unwrap_or("").trim();
+                let resolved = if Uuid::parse_str(visible).is_ok() {
+                    Err("Use a rule name".into())
+                } else {
+                    formats::resolve_readable(visible, rules.iter().copied())
+                };
+                if let Some(choices) = entry
+                    .fields
+                    .get_mut("splat_rule_choices")
+                    .and_then(Value::as_mapping_mut)
+                {
+                    match resolved {
+                        Ok(id) => {
+                            choices.insert(slot.into(), map(&[("id", id.to_string().into())]));
+                        }
+                        Err(_) => {
+                            choices.remove(slot.as_str());
+                            let same_name = rules
+                                .iter()
+                                .filter(|rule| rule.name.eq_ignore_ascii_case(visible))
+                                .count();
+                            let message = if same_name > 1 {
+                                format!(
+                                    "Choice \"{visible}\" matches {same_name} rules. Use a link to one of them."
+                                )
+                            } else {
+                                format!(
+                                    "Choice \"{visible}\" is not a rule in this campaign. Use one rule name or link."
+                                )
+                            };
+                            entry.flags.push(Flag { line, message });
+                        }
+                    }
                 }
             }
         }

@@ -60,8 +60,23 @@ pub fn run(d: &mut Driver<'_>) {
         "An Obsidian task toggle removes the package from the active campaign selection.",
     );
     d.expect("No changes");
+    d.expect("None chosen · 3 needed");
+    d.expect("Arena Final, Bridge Ambush, Lost Patrol, Rival Team and Shrine of Cinders use its creatures.");
     d.state("campaign-package-off-in-obsidian", Sizes::All);
     assert_eq!(fs::read_to_string(&manifest).unwrap(), after);
+
+    let flagged = after.replace("| --- | --- |\n", "| --- | --- |\n| Combat initiative | Imaginary initiative %% splat rule=dnd2024:rules/combat_initiative id=00000000-0000-0000-0000-000000000002 %% |\n");
+    assert_ne!(flagged, after);
+    fs::write(&manifest, &flagged).unwrap();
+    d.focus_window(false);
+    d.focus_window(true);
+    d.click("Reload from disk");
+    d.settle();
+    d.expect("Imaginary initiative");
+    d.expect("is not a rule in this campaign");
+    d.state("campaign-flagged-rule-choice", Sizes::All);
+    assert_eq!(fs::read_to_string(&manifest).unwrap(), flagged);
+    fs::write(&manifest, &after).unwrap();
 
     d.click(NAV_ENCOUNTERS);
     d.click_starting("GROUPS");
