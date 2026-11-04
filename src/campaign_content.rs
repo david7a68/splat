@@ -478,11 +478,20 @@ impl CampaignContent {
             self.reload(ui.ctx(), campaigns, active.clone());
         }
         if let Some(error) = &self.error {
-            design::message(ui, Tone::Error, error);
-            if error.contains("Campaign.md is missing")
-                && Action::secondary("Write Campaign.md again")
-                    .show(ui)
-                    .clicked()
+            // One cause, one message: a missing Campaign.md says what Splat can write
+            // and offers it on the same line.
+            let missing = error.contains("Campaign.md is missing");
+            if !missing {
+                design::message(ui, Tone::Error, error);
+            }
+            let (preview, action) = campaigns.campaign_write_preview(&active);
+            if missing
+                && design::message_with_action(
+                    ui,
+                    Tone::Error,
+                    &format!("Campaign.md is missing. {preview}"),
+                    action,
+                )
             {
                 match campaigns.write_campaign_again(&active) {
                     Ok(write) => {
@@ -716,6 +725,12 @@ impl CampaignContent {
                             *draft = text.clone();
                             self.discarded_repair = None;
                         }
+                        if draft != baseline {
+                            design::blocked_reason(
+                                ui,
+                                Some(crate::encounters::draft_switch_reason()),
+                            );
+                        }
                         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                             let pressed = Action::secondary("Save repaired note")
                                 .density(Density::Read)
@@ -750,9 +765,6 @@ impl CampaignContent {
                             }
                         });
                     });
-                    if draft != baseline {
-                        design::blocked_reason(ui, Some(crate::encounters::draft_switch_reason()));
-                    }
                 });
             }
         }
@@ -783,8 +795,11 @@ impl CampaignContent {
                 design::message(
                     ui,
                     Tone::Warning,
-                    &format!("Line {}: {}", flag.line, flag.message),
+                    &format!("{}, line {}: {}", document.path, flag.line, flag.message),
                 );
+            }
+            if !entry.entry.flags.is_empty() {
+                crate::world::file_actions(ui, active, &document.path);
             }
         }
         if snapshot.closure.0 != document.selections {
@@ -854,6 +869,9 @@ impl CampaignContent {
                     .show(ui)
                     .clicked();
             }
+            if document.selections != self.saved_selections {
+                design::blocked_reason(ui, Some(crate::encounters::draft_switch_reason()));
+            }
             let pressed = ui
                 .with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     let reason_fits = repair.is_none_or(|reason| {
@@ -912,9 +930,6 @@ impl CampaignContent {
                 }
             }
         });
-        if document.selections != self.saved_selections {
-            design::blocked_reason(ui, Some(crate::encounters::draft_switch_reason()));
-        }
         if let Some(reason) = reason_below {
             ui.horizontal(|ui| {
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
@@ -979,12 +994,18 @@ impl CampaignContent {
             }
         }
         if let Some(write) = &self.manifest_write
-            && write.replaced()
-            && Action::quiet("Undo write Package.md")
-                .icon(icons::UNDO)
-                .blocked(manifest_locked)
-                .show(ui)
-                .clicked()
+            && design::locked(ui, manifest_locked, |ui| {
+                design::message_with_action(
+                    ui,
+                    Tone::Success,
+                    if write.replaced() {
+                        "Package.md was replaced."
+                    } else {
+                        "Package.md was written again."
+                    },
+                    "Undo write Package.md",
+                )
+            })
         {
             match write.undo() {
                 Ok(_) => {
@@ -1330,21 +1351,15 @@ impl CampaignContent {
                                     Selection::Selected { entries } => entries.len(),
                                 });
                             // What the campaign's other choices pull in is ticked too.
-                            let required =
-                                existing.map_or(0, |i| match &document.selections[i].selection {
-                                    Selection::All => 0,
-                                    Selection::Selected { entries } => module
-                                        .entries
-                                        .iter()
-                                        .filter(|id| {
-                                            catalogue.selectable(**id)
-                                                && closure.required.contains_key(id)
-                                                && !entries.iter().any(|e| {
-                                                    catalogue.resolve_ref(e).ok() == Some(**id)
-                                                })
-                                        })
-                                        .count(),
-                                });
+                            let required = module
+                                .entries
+                                .iter()
+                                .filter(|id| {
+                                    catalogue.selectable(**id)
+                                        && closure.required.contains_key(id)
+                                        && !closure.direct.contains(id)
+                                })
+                                .count();
                             let partial = count + required < total
                                 && existing.is_some_and(|i| {
                                     matches!(&document.selections[i].selection,
@@ -1373,10 +1388,10 @@ impl CampaignContent {
                                     );
                                 }
                                 ui.horizontal(|ui| {
-                                    let check = ui.add(
-                                        egui::Checkbox::new(&mut enabled, "")
-                                            .indeterminate(partial),
-                                    );
+                                    let check = ui
+                                        .add(egui::Checkbox::new(&mut enabled, "").indeterminate(
+                                            partial || (count == 0 && required > 0),
+                                        ));
                                     design::named(ui, &check, &format!("Use {}", module.name));
                                     if check.changed() {
                                         self.message = None;
@@ -1403,7 +1418,12 @@ impl CampaignContent {
                                         Density::Glance.row() + design::XS,
                                         !self.dependencies && self.module == Some(module.id),
                                         &module.name,
-                                        &if required > 0 {
+                                        &if count == 0 && required > 0 {
+                                            format!(
+                                                "None chosen · {}",
+                                                design::count(required, "needed", "needed")
+                                            )
+                                        } else if required > 0 {
                                             format!(
                                                 "{} of {} · {} needed",
                                                 design::count(count + required, "", "").trim(),
@@ -1431,6 +1451,34 @@ impl CampaignContent {
                                         self.search.clear();
                                     }
                                 });
+                                if count == 0 && required > 0 {
+                                    let selection = PackageSelection {
+                                        name: Some(module.name.clone()),
+                                        package: EntryRef::id(module.id),
+                                        selection: Selection::All,
+                                    };
+                                    let users = selection.campaign_users(catalogue);
+                                    let mut users = users;
+                                    users.sort_by(|a, b| a.1.cmp(&b.1));
+                                    let names = users
+                                        .iter()
+                                        .map(|(_, name)| name.as_str())
+                                        .collect::<Vec<_>>();
+                                    let names = match names.as_slice() {
+                                        [] => String::new(),
+                                        [name] => (*name).to_owned(),
+                                        [rest @ .., last] => {
+                                            format!("{} and {last}", rest.join(", "))
+                                        }
+                                    };
+                                    if !names.is_empty() {
+                                        ui.label(
+                                            Type::Small
+                                                .rich(ui, format!("{names} use its creatures."))
+                                                .color(c.muted),
+                                        );
+                                    }
+                                }
                             });
                         }
                         design::rule(ui);

@@ -643,6 +643,11 @@ pub(crate) fn reading_sections<'a>(body: &'a str, name: &str) -> Vec<ReadingSect
     let headings: Vec<_> = Parser::new(body)
         .into_offset_iter()
         .filter_map(|(event, range)| {
+            if matches!(event, Event::Start(Tag::BlockQuote(_)))
+                && body[range.clone()].starts_with("> [!note]- Splat data")
+            {
+                return Some(("Splat data".into(), range));
+            }
             if !matches!(
                 event,
                 Event::Start(Tag::Heading {

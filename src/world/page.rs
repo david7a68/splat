@@ -110,6 +110,7 @@ impl WorldPage {
                         || index
                             .duplicate_world
                             .contains_key(&index.items[*at].entry.path)
+                        || !index.items[*at].entry.flags.is_empty()
                         || crate::roll_table::fault_count(&index.items[*at].entry.body) > 0
                 })
                 .count()
@@ -148,6 +149,7 @@ impl WorldPage {
                                 let item = &index.items[at];
                                 if (!super::broken_links(item, index).is_empty()
                                     || index.duplicate_world.contains_key(&item.entry.path)
+                                    || !item.entry.flags.is_empty()
                                     || crate::roll_table::fault_count(&item.entry.body) > 0)
                                     && design::link(ui, &item.entry.name).clicked()
                                 {
@@ -502,6 +504,12 @@ impl WorldPage {
                 };
                 let detail = if duplicate {
                     format!("{} Duplicate identity", icons::WARN)
+                } else if !entry.flags.is_empty() {
+                    format!(
+                        "{} {}",
+                        icons::WARN,
+                        design::count(entry.flags.len(), "value not read", "values not read")
+                    )
                 } else if faults > 0 {
                     format!(
                         "{} {}",

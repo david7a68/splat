@@ -457,7 +457,12 @@ fn check_fence(raw: &str) -> Result<(), String> {
     let first = lines.first().ok_or("Missing YAML fence")?.trim_start();
     let delimiter = first.chars().next().ok_or("Missing YAML fence")?;
     let width = first.chars().take_while(|c| *c == delimiter).count();
-    let last = lines.last().ok_or("Missing closing YAML fence")?.trim();
+    let last = lines
+        .last()
+        .ok_or("Missing closing YAML fence")?
+        .trim()
+        .trim_start_matches('>')
+        .trim();
     if lines.len() < 2 || last.len() < width || !last.chars().all(|c| c == delimiter) {
         return Err("Unclosed marked YAML fence".into());
     }

@@ -1151,3 +1151,200 @@ fn i19_conversion_keeps_explicit_challenge_mismatch_and_flags_it() {
             .any(|flag| flag.message == "CR 3 is XP 700; XP 200 is used")
     );
 }
+
+#[test]
+fn i19_x5_visible_rule_choice_wins_and_save_updates_its_id() {
+    let old_id = "00000000-0000-0000-0000-000000000002";
+    let target = Entry::parse(
+        "Rules/Individual.md",
+        &note("rule", "splat_rule: {}", "")
+            .replace("splat_name: Rook", "splat_name: Individual initiative"),
+    )
+    .unwrap();
+    for visible in [
+        "Individual initiative",
+        "[[Rules/Individual|Individual initiative]]",
+    ] {
+        let source = note("campaign", "splat_namespace: rook", &format!("## Rule choices\n\n| Rule | Choice |\n| --- | --- |\n| Combat initiative | {visible} %% splat rule=dnd2024:rules/combat_initiative id={old_id} %% |\n")).replace("splat_schema: 1", "splat_schema: 2");
+        let mut entry = Entry::parse("Campaign.md", &source).unwrap();
+        super::list_formats::resolve(&mut entry, std::slice::from_ref(&target));
+        assert_eq!(
+            entry.fields["splat_rule_choices"]["dnd2024:rules/combat_initiative"]["id"],
+            Value::from(target.id.to_string())
+        );
+        let saved = formats::convert_resolved("Campaign.md", &source, [&target]).unwrap();
+        assert!(saved.contains(&format!("id={} %%", target.id)));
+        assert!(!saved.contains(&format!("| {old_id} %%")));
+    }
+}
+
+#[test]
+fn i19_x5_unknown_rule_choice_is_flagged_and_not_used() {
+    let source = note("campaign", "splat_namespace: rook", "## Rule choices\n\n| Rule | Choice |\n| --- | --- |\n| Combat initiative | Imaginary initiative %% splat rule=dnd2024:rules/combat_initiative id=00000000-0000-0000-0000-000000000002 %% |\n").replace("splat_schema: 1", "splat_schema: 2");
+    let mut entry = Entry::parse("Campaign.md", &source).unwrap();
+    super::list_formats::resolve(&mut entry, &[]);
+    assert!(
+        entry.fields["splat_rule_choices"]
+            .as_mapping()
+            .unwrap()
+            .is_empty()
+    );
+    assert_eq!(entry.flags.len(), 1);
+    assert!(entry.flags[0].message.contains("Imaginary initiative"));
+    assert_eq!(
+        source
+            .lines()
+            .nth(entry.flags[0].line - 1)
+            .unwrap()
+            .chars()
+            .next(),
+        Some('|')
+    );
+}
+
+#[test]
+fn i19_world_properties_accept_case_and_explain_bad_values() {
+    for (typed, stored) in [("NPC", "npc"), ("Location", "location")] {
+        let source = note(
+            "world",
+            &format!("splat_type: {typed}\nsplat_status: [alive]"),
+            "",
+        )
+        .replace("splat_schema: 1", "splat_schema: 2");
+        let entry = Entry::parse("World.md", &source).unwrap();
+        assert_eq!(entry.fields["splat_world"]["type"], Value::from(stored));
+        assert_eq!(entry.flags.len(), 1);
+        assert!(
+            entry.flags[0]
+                .message
+                .contains("Status \"[alive]\" not read (line 7). Use a short word, such as alive.")
+        );
+    }
+}
+
+#[test]
+fn i19_readable_stat_block_and_vault_requirement_survive_save() {
+    let creature = Entry::parse(
+        "Creatures/captain.md",
+        &note(
+            "creature",
+            "splat_key: dnd2024:creatures/bandit_captain\nsplat_creature: {}",
+            "",
+        )
+        .replace("splat_name: Rook", "splat_name: Bandit Captain"),
+    )
+    .unwrap();
+    let required = Entry::parse(
+        "Rules/Other.md",
+        &note("rule", "splat_rule: {}\nsplat_key: srd:rules/other", "")
+            .replace("splat_name: Rook", "splat_name: Other")
+            .replace(
+                "00000000-0000-0000-0000-000000000001",
+                "00000000-0000-0000-0000-000000000002",
+            ),
+    )
+    .unwrap();
+    let old = note(
+        "world",
+        &format!(
+            "splat_world: {{type: npc, creature: {{key: dnd2024:creatures/bandit_captain}}}}\nsplat_requires: [{{id: {}}}]",
+            required.id
+        ),
+        "",
+    );
+    let saved = formats::convert_resolved("World.md", &old, [&creature, &required]).unwrap();
+    assert!(saved.contains("splat_stat_block: Bandit Captain"));
+    assert!(saved.contains("[[Rules/Other|Other]]"));
+    assert_eq!(
+        saved,
+        formats::convert_resolved("World.md", &saved, [&creature, &required]).unwrap()
+    );
+    let mut duplicate = creature.clone();
+    duplicate.id = uuid::Uuid::new_v4();
+    duplicate.key = Some("other:creatures/captain".into());
+    let saved =
+        formats::convert_resolved("World.md", &old, [&creature, &duplicate, &required]).unwrap();
+    assert!(saved.contains("splat_stat_block: dnd2024:creatures/bandit_captain"));
+}
+
+#[test]
+fn i19_package_and_character_data_are_folded_and_editable() {
+    for (kind, data) in [
+        (
+            "package",
+            "splat_namespace: rook\nsplat_import_routes: {items: pack:items}",
+        ),
+        (
+            "creature",
+            "splat_creature: {}\nsplat_character: {level: 1}",
+        ),
+    ] {
+        let data = if kind == "creature" {
+            format!(
+                "splat_creature: {{}}\nsplat_character: {}",
+                serde_json::to_string(&super::character::Sheet {
+                    level: 1,
+                    ..Default::default()
+                })
+                .unwrap()
+            )
+        } else {
+            data.into()
+        };
+        let old = note(kind, &data, "# Rook\n\nKeep my prose.\n");
+        let folded = formats::convert("Note.md", &old).unwrap();
+        assert!(folded.contains("> [!note]- Splat data"));
+        assert!(!folded.contains("## Splat data"));
+        assert_eq!(model(&old), model(&folded));
+        let key = if kind == "package" {
+            "splat_import_routes"
+        } else {
+            "splat_character"
+        };
+        let mut value = model(&folded)[key].clone();
+        let (field, revised) = if kind == "package" {
+            ("items", Value::from("pack:revised"))
+        } else {
+            ("level", Value::from(2))
+        };
+        value[field] = revised.clone();
+        let edited = formats::patch_model(&folded, &[(key, Some(value))]).unwrap();
+        assert_eq!(model(&edited)[key][field], revised);
+        assert!(edited.contains("Keep my prose."));
+        assert_eq!(edited, formats::convert("Note.md", &edited).unwrap());
+    }
+}
+
+#[test]
+fn i19_package_tasks_and_only_links_accept_obsidian_lists_without_selecting_all() {
+    let id = "00000000-0000-0000-0000-000000000002";
+    for bullet in ["-", "*", "+"] {
+        let source = note("campaign", "splat_namespace: rook", &format!("## Packages\n\n{bullet} [x] Core ^{id}\n\t+ Only: [[Creatures/Rook, elder|Rook, elder]], [Goblin, scout](splat:dnd2024:creatures/goblin)\n")).replace("splat_schema: 1", "splat_schema: 2");
+        let entry = Entry::parse("Campaign.md", &source).unwrap();
+        assert!(entry.flags.is_empty(), "{:?}", entry.flags);
+        let selection = &entry.fields["splat_packages"][0]["selection"];
+        assert_eq!(selection["mode"], Value::from("selected"));
+        assert_eq!(selection["entries"].as_sequence().unwrap().len(), 2);
+        let edited = formats::patch_model(
+            &source,
+            &[("splat_packages", Some(Value::Sequence(Vec::new())))],
+        )
+        .unwrap();
+        assert_eq!(edited, source.replace("[x]", "[ ]"));
+        let bad = source.replace("\t+ Only:", "Unrecognised:");
+        assert_eq!(Entry::parse("Campaign.md", &bad).unwrap().flags.len(), 1);
+        let bad = source.replace("[[Creatures/Rook, elder|Rook, elder]]", "[[Unclosed");
+        let entry = Entry::parse("Campaign.md", &bad).unwrap();
+        assert_eq!(entry.flags.len(), 1);
+        assert_eq!(
+            entry.fields["splat_packages"][0]["selection"]["mode"],
+            Value::from("selected")
+        );
+        assert!(
+            entry.fields["splat_packages"][0]["selection"]["entries"]
+                .as_sequence()
+                .unwrap()
+                .is_empty()
+        );
+    }
+}

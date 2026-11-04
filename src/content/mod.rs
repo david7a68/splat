@@ -50,6 +50,9 @@ pub struct Entry {
     pub kind: String,
     pub fields: Fields,
     pub body: String,
+    /// Physical source line of the body, for flags resolved after all notes load.
+    #[serde(skip)]
+    pub body_line: usize,
     pub inventory: Vec<InventoryRow>,
     pub inventory_containers: Vec<String>,
     #[serde(default)]
@@ -241,6 +244,11 @@ impl Entry {
             name,
             kind,
             fields: fields.into(),
+            body_line: text[..text.len() - body.len()]
+                .bytes()
+                .filter(|b| *b == b'\n')
+                .count()
+                + 1,
             body,
             inventory,
             inventory_containers,

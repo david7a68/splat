@@ -461,6 +461,9 @@ fn rewritten(
         let body = replace(
             entry
                 .body
+                .split("\n> [!note]- Splat data")
+                .next()
+                .unwrap()
                 .split("\n## Splat data")
                 .next()
                 .unwrap_or(&entry.body)
