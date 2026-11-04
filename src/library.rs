@@ -243,6 +243,12 @@ impl Note {
     }
 }
 #[derive(Default)]
+struct DuplicateIndex {
+    ids: std::collections::HashMap<Uuid, Vec<usize>>,
+    keys: std::collections::HashMap<String, Vec<usize>>,
+}
+
+#[derive(Default)]
 struct Loaded {
     notes: Vec<Note>,
     owners: Vec<Owner>,
@@ -254,6 +260,7 @@ struct Loaded {
     subtitles: std::sync::OnceLock<Vec<String>>,
     counts: std::sync::OnceLock<Vec<(Section, usize)>>,
     duplicate_ids: std::sync::OnceLock<std::collections::HashSet<Uuid>>,
+    duplicates: std::sync::OnceLock<DuplicateIndex>,
 }
 impl Loaded {
     fn can_rename_links(&self, selected: usize, old: &str, new: &str) -> bool {
@@ -340,21 +347,45 @@ impl Loaded {
             })
             .collect()
     }
+    fn duplicate_index(&self) -> &DuplicateIndex {
+        self.duplicates.get_or_init(|| {
+            let mut index = DuplicateIndex::default();
+            for (at, note) in self.notes.iter().enumerate() {
+                if let Some(entry) = &note.entry {
+                    index.ids.entry(entry.id).or_default().push(at);
+                    if let Some(key) = &entry.key {
+                        index.keys.entry(key.clone()).or_default().push(at);
+                    }
+                }
+            }
+            index
+        })
+    }
     fn duplicates(&self, index: usize) -> Vec<usize> {
         let Some(target) = self.notes[index].entry.as_ref() else {
             return Vec::new();
         };
-        self.notes
-            .iter()
-            .enumerate()
-            .filter_map(|(i, note)| {
-                (i != index
-                    && note.entry.as_ref().is_some_and(|entry| {
-                        entry.id == target.id || (target.key.is_some() && target.key == entry.key)
-                    }))
-                .then_some(i)
-            })
-            .collect()
+        let lookup = self.duplicate_index();
+        let mut matches: Vec<_> = lookup
+            .ids
+            .get(&target.id)
+            .into_iter()
+            .flatten()
+            .chain(
+                target
+                    .key
+                    .as_ref()
+                    .and_then(|key| lookup.keys.get(key))
+                    .into_iter()
+                    .flatten(),
+            )
+            .copied()
+            .filter(|&at| at != index)
+            .collect();
+        // The original scan returns each matching note once, in Library order.
+        matches.sort_unstable();
+        matches.dedup();
+        matches
     }
     /// Checks all the loaded content as one, so that a reference can resolve to built-in
     /// content or to another package. The check of one package alone cannot see those.
@@ -485,6 +516,7 @@ impl Loaded {
         self.subtitles.take();
         self.counts.take();
         self.duplicate_ids.take();
+        self.duplicates.take();
     }
     fn build_subtitles(&self) -> Vec<String> {
         let mut subtitles: Vec<_> = self
@@ -4881,6 +4913,74 @@ impl Library {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn duplicate_checks_keep_id_key_matches_and_refresh_after_edits() {
+        let base = Entry::parse("Rule.md", &note_text("Rule", "rule", None)).unwrap();
+        let mut loaded = Loaded::default();
+        // Same ID, same key, both, no key, and unreadable notes all occur in a
+        // loaded Library. A key collision must mark both distinct IDs.
+        for (id, key) in [
+            (1, Some("test:a")),
+            (2, Some("test:a")),
+            (1, Some("test:b")),
+            (3, Some("test:b")),
+            (1, Some("test:a")),
+            (4, None),
+            (5, None),
+        ] {
+            let mut entry = base.clone();
+            entry.id = Uuid::from_u128(id);
+            entry.key = key.map(str::to_owned);
+            loaded.notes.push(Note {
+                path: format!("{}.md", loaded.notes.len()),
+                text: String::new(),
+                entry: Some(entry),
+                error: None,
+                owner: Owner::Builtin,
+            });
+        }
+        loaded.notes.push(Note {
+            path: "Broken.md".into(),
+            text: String::new(),
+            entry: None,
+            error: Some("Invalid YAML".into()),
+            owner: Owner::Builtin,
+        });
+        let check = |loaded: &Loaded| {
+            let mut ids = std::collections::HashSet::new();
+            for (at, note) in loaded.notes.iter().enumerate() {
+                let expected: Vec<_> = loaded
+                    .notes
+                    .iter()
+                    .enumerate()
+                    .filter_map(|(other, candidate)| {
+                        let target = note.entry.as_ref()?;
+                        let candidate = candidate.entry.as_ref()?;
+                        (at != other
+                            && (target.id == candidate.id
+                                || (target.key.is_some() && target.key == candidate.key)))
+                            .then_some(other)
+                    })
+                    .collect();
+                assert_eq!(loaded.duplicates(at), expected);
+                if !expected.is_empty() {
+                    ids.insert(note.entry.as_ref().unwrap().id);
+                }
+            }
+            assert_eq!(loaded.duplicate_ids(), &ids);
+        };
+        check(&loaded);
+        for (at, note) in loaded.notes.iter_mut().enumerate() {
+            if let Some(entry) = &mut note.entry {
+                entry.id = Uuid::from_u128(at as u128 + 10);
+                entry.key = None;
+            }
+        }
+        loaded.invalidate();
+        check(&loaded);
+        assert!(loaded.duplicate_ids().is_empty());
+    }
 
     #[test]
     fn fmt_f2_generated_package_save_keeps_schema_one_without_conversion_undo() {
