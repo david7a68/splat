@@ -72,6 +72,8 @@ pub(super) struct GroupDraft {
     saved_setup: GroupSetup,
     saved_notes: String,
     flags: Vec<splat::content::layout::Flag>,
+    repair: Option<(usize, String)>,
+    repair_error: Option<String>,
 }
 
 /// The note with this text after its frontmatter. The frontmatter stays as it is.
@@ -116,6 +118,8 @@ impl GroupDraft {
             notes: String::new(),
             saved_notes: String::new(),
             flags: Vec::new(),
+            repair: None,
+            repair_error: None,
         }
     }
     /// A new group that belongs to this encounter. Saving it is what makes it so.
@@ -128,7 +132,7 @@ impl GroupDraft {
         let text = fs::read_to_string(note_path(root, path)?).map_err(|e| e.to_string())?;
         let mut entry = Entry::parse(path, &text)?;
         let (entries, _) = splat::content::read_directory(root)?;
-        splat::content::list_formats::resolve(&mut entry, &entries);
+        splat::content::list_formats::resolve(&mut entry, &entries, "");
         if entry.kind != "encounter_group" {
             return Err("Select an encounter group note.".into());
         }
@@ -143,6 +147,8 @@ impl GroupDraft {
             baseline: Some(text.clone()),
             source: text,
             flags: entry.flags.clone(),
+            repair: None,
+            repair_error: None,
             saved_name: entry.name.clone(),
             name: entry.name,
             saved_setup: setup.clone(),
@@ -175,17 +181,24 @@ impl GroupDraft {
             || self.name != self.saved_name
             || self.setup != self.saved_setup
             || self.notes != self.saved_notes
+            || self.baseline.as_deref() != Some(self.source.as_str())
     }
     fn text(&self) -> Result<String, String> {
+        let disk_source = self
+            .recovery
+            .change
+            .as_ref()
+            .and_then(|change| change.text.as_deref())
+            .unwrap_or(&self.source);
         let source = if self.notes == self.saved_notes {
-            self.source.clone()
+            disk_source.to_owned()
         } else if self.baseline.is_some()
-            && splat::content::formats::schema(&Entry::parse(&self.path, &self.source)?.fields)
+            && splat::content::formats::schema(&Entry::parse(&self.path, disk_source)?.fields)
                 == Ok(2)
         {
-            splat::content::list_formats::with_prose(&self.source, &self.notes)?
+            splat::content::list_formats::with_prose(disk_source, &self.notes)?
         } else {
-            with_notes(&self.source, &self.notes)?
+            with_notes(disk_source, &self.notes)?
         };
         let patch = if self.baseline.is_none() {
             splat::content::patch_fields
@@ -203,6 +216,75 @@ impl GroupDraft {
             ],
         )?;
         Ok(text)
+    }
+    fn write_text(&self, snapshot: &Snapshot) -> Result<String, String> {
+        splat::content::formats::convert_resolved(
+            &self.path,
+            &self.text()?,
+            snapshot
+                .catalogue
+                .entries
+                .values()
+                .map(|entry| &entry.entry),
+        )
+    }
+
+    fn repair_member(
+        &mut self,
+        line: usize,
+        changes: Option<&str>,
+        snapshot: &Snapshot,
+    ) -> Result<(), String> {
+        use splat::content::{layout::Document, list_formats};
+        let member = list_formats::unread_group_members(&self.source, &self.flags)
+            .into_iter()
+            .find(|member| member.flag.line == line)
+            .ok_or("This row is no longer flagged.")?;
+        let table = Document::new(&self.source)
+            .table(list_formats::GROUP)
+            .ok_or("Member table not found")?;
+        let row = table
+            .rows
+            .iter()
+            .find(|row| row[0].line == line)
+            .ok_or("Member row not found")?;
+        let mut source = self.source.clone();
+        if let Some(changes) = changes {
+            list_formats::changes(changes, &row[2].value, &row[4].value)?;
+            source.replace_range(row[3].range.clone(), &changes.replace('|', "\\|"));
+        } else {
+            let start = source[..row[0].range.start]
+                .rfind('\n')
+                .map_or(0, |at| at + 1);
+            let end = source[row[0].range.start..]
+                .find('\n')
+                .map_or(source.len(), |at| row[0].range.start + at + 1);
+            source.replace_range(start..end, "");
+        }
+        let mut entry = Entry::parse(&self.path, &source)?;
+        let entries: Vec<_> = snapshot
+            .catalogue
+            .entries
+            .values()
+            .map(|entry| entry.entry.clone())
+            .collect();
+        list_formats::resolve(&mut entry, &entries, &source);
+        if changes.is_some() {
+            if let Some(flag) = entry.flags.iter().find(|flag| flag.line == line) {
+                return Err(flag.message.clone());
+            }
+            let setup: GroupSetup =
+                serde_yaml_ng::from_value(entry.fields["splat_encounter_group"].clone())
+                    .map_err(|error| error.to_string())?;
+            self.setup
+                .members
+                .insert(member.before, setup.members[member.before].clone());
+        }
+        self.source = source;
+        self.flags = entry.flags;
+        self.repair = None;
+        self.repair_error = None;
+        Ok(())
     }
     pub(super) fn add(&mut self, id: Uuid) {
         // The same creature again is one more of it, unless that member has its own changes.
@@ -340,12 +422,7 @@ impl GroupDraft {
         saving: Option<Uuid>,
     ) -> Result<String, String> {
         self.validate(snapshot, saving)?;
-        let text = self.text()?;
-        let text = splat::content::formats::convert_resolved(
-            &self.path,
-            &text,
-            snapshot.catalogue.entries.values().map(|e| &e.entry),
-        )?;
+        let text = self.write_text(snapshot)?;
         let entry = Entry::parse(&self.path, &text)?;
         if snapshot.catalogue.entries.values().any(|e| {
             e.entry.id == entry.id
@@ -390,8 +467,9 @@ impl GroupDraft {
         &mut self,
         ui: &mut egui::Ui,
         root: &std::path::Path,
+        snapshot: &Snapshot,
     ) -> Result<Option<bool>, String> {
-        let choice = self.recovery.show(ui, &self.text()?);
+        let choice = self.recovery.show(ui, &self.write_text(snapshot)?);
         if let Some(keep) = choice {
             if keep {
                 if let Some(change) = self.recovery.accept() {
@@ -720,13 +798,19 @@ impl Encounters {
         campaign: &Campaign,
         modules: &[Module],
     ) -> bool {
+        let Some(snapshot) = self.snapshot.as_ref() else {
+            return false;
+        };
         let Some(draft) = self.group_draft.as_mut() else {
             return false;
         };
         if draft.recovery.change.is_none() {
             return false;
         }
-        if let Some(keep) = draft.recovery.show(ui, &draft.text().unwrap_or_default()) {
+        if let Some(keep) = draft
+            .recovery
+            .show(ui, &draft.write_text(snapshot).unwrap_or_default())
+        {
             if keep {
                 if let Some(change) = draft.recovery.accept() {
                     draft.path = change.path;
@@ -1977,7 +2061,7 @@ fn group_fields(
 
 /// How many creatures will arrive, and what they are worth, as the list and the panel say it.
 fn members_heading(draft: &GroupDraft, snapshot: &Snapshot) -> String {
-    let (mut xp, mut unknown) = (0_u64, false);
+    let (mut xp, mut unknown) = (0_u64, !draft.flags.is_empty());
     for member in &draft.setup.members {
         let each = snapshot
             .catalogue
@@ -2015,7 +2099,7 @@ fn members(
             .filter(|member| member.before.min(total) == index)
             .enumerate()
         {
-            unread_member(ui, member, index + preceding + offset + 1, snapshot);
+            unread_member(ui, member, index + preceding + offset + 1, snapshot, draft);
         }
         let Some(member) = draft.setup.members.get_mut(index) else {
             break;
@@ -2120,6 +2204,7 @@ fn unread_member(
     member: &splat::content::list_formats::UnreadGroupMember,
     number: usize,
     snapshot: &Snapshot,
+    draft: &mut GroupDraft,
 ) {
     let reference: Option<EntryRef> = member
         .creature
@@ -2167,7 +2252,11 @@ fn unread_member(
     design::message(
         ui,
         Tone::Warning,
-        &format!("{name}: {problem} (line {}).", member.flag.line),
+        &format!(
+            "{}, line {}: {problem}.",
+            draft.path.rsplit('/').next().unwrap_or(&draft.path),
+            member.flag.line
+        ),
     );
     let blocked = if member.flag.message.starts_with("Changes:") {
         "This member cannot join a fight until its Changes cell is fixed. Other members can join."
@@ -2175,6 +2264,50 @@ fn unread_member(
         "This member cannot join a fight until this row is fixed. Other members can join."
     };
     ui.add(egui::Label::new(Type::Small.rich(ui, blocked).color(colors().muted)).wrap());
+    crate::world::entry_file_actions(ui, &snapshot.campaign_root, &draft.path, true);
+    let line = member.flag.line;
+    let mut remove = false;
+    ui.horizontal(|ui| {
+        if Action::quiet("Edit")
+            .density(Density::Read)
+            .name("Edit flagged member")
+            .show(ui)
+            .clicked()
+        {
+            let text = splat::content::layout::Document::new(&draft.source)
+                .table(splat::content::list_formats::GROUP)
+                .and_then(|table| table.rows.into_iter().find(|row| row[0].line == line))
+                .and_then(|row| row.get(3).map(|cell| cell.value.clone()))
+                .unwrap_or_default();
+            draft.repair = Some((line, text));
+        }
+        super::row_menu(ui, "flagged member", |ui| {
+            if super::menu_action(ui, "Remove member", None) {
+                remove = true;
+            }
+        });
+    });
+    let mut apply = None;
+    if let Some((repair_line, text)) = &mut draft.repair
+        && *repair_line == line
+    {
+        design::text_input(ui, "Changes cell", text, "HP +5", ui.available_width());
+        if Action::secondary("Done")
+            .density(Density::Read)
+            .show(ui)
+            .clicked()
+        {
+            apply = Some(text.clone());
+        }
+    }
+    if (remove || apply.is_some())
+        && let Err(error) = draft.repair_member(line, apply.as_deref(), snapshot)
+    {
+        draft.repair_error = Some(error);
+    }
+    if let Some(error) = &draft.repair_error {
+        design::message(ui, Tone::Warning, error);
+    }
     design::rule(ui);
 }
 
@@ -2222,6 +2355,78 @@ mod tests {
         )
         .unwrap();
         id
+    }
+
+    #[test]
+    fn i19_w2_flagged_member_offers_repair_and_remove() {
+        use egui_kittest::kittest::Queryable;
+        let dir = tempfile::tempdir().unwrap();
+        let active = campaign(dir.path());
+        let id = creature(dir.path(), "Scout");
+        let mut group = GroupDraft::new();
+        group.name = "Scouts".into();
+        group.add(id);
+        group.save(&active, &[]).unwrap();
+        let path = dir.path().join(group.path());
+        let original = fs::read_to_string(&path).unwrap();
+        let line = original
+            .lines()
+            .find(|line| line.starts_with("| 1 |"))
+            .unwrap();
+        let bad = line.replace("|  |  |", "|  | HP lots |");
+        assert_ne!(line, bad);
+        let source = original.replace(line, &format!("{bad}\n{line}"));
+        fs::write(&path, &source).unwrap();
+        group = GroupDraft::open(dir.path(), group.path()).unwrap();
+        assert_eq!(group.flags.len(), 1);
+        let snapshot = Snapshot::load(&active, &[]).unwrap();
+        let mut harness = egui_kittest::Harness::builder()
+            .with_size(egui::vec2(880.0, 800.0))
+            .build_state(
+                move |ctx, state: &mut (GroupDraft, Option<String>)| {
+                    egui::CentralPanel::default()
+                        .show(ctx, |ui| members(ui, &mut state.0, &snapshot, &mut state.1));
+                },
+                (group, None),
+            );
+        design::theme::install(&harness.ctx);
+        harness.run_steps(2);
+        harness.get_by_label("Edit in Obsidian");
+        harness.get_by_label("Show file");
+        harness.get_by_label("Edit flagged member").click();
+        harness.run_steps(2);
+        harness.get_by_label("Changes cell");
+        harness
+            .get_by_label("More actions for flagged member")
+            .click();
+        harness.run_steps(2);
+        harness.get_by_label("Remove member").click();
+        harness.run_steps(2);
+        let group = &mut harness.state_mut().0;
+        group.save(&active, &[]).unwrap();
+        assert_eq!(fs::read_to_string(&path).unwrap(), original);
+        fs::write(&path, &source).unwrap();
+        harness.state_mut().0 = GroupDraft::open(dir.path(), harness.state().0.path()).unwrap();
+        harness.run_steps(2);
+        harness.get_by_label("Edit flagged member").click();
+        harness.run_steps(2);
+        assert_eq!(
+            harness.get_by_label("Changes cell").value().as_deref(),
+            Some("HP lots")
+        );
+        harness.get_by_label("Changes cell").click();
+        harness.key_press_modifiers(egui::Modifiers::COMMAND, egui::Key::A);
+        harness.run_steps(1);
+        harness.get_by_label("Changes cell").type_text("HP +5");
+        harness.run_steps(2);
+        harness.get_by_label("Done").click();
+        harness.run_steps(2);
+        harness.state_mut().0.save(&active, &[]).unwrap();
+        assert_eq!(
+            fs::read_to_string(path).unwrap(),
+            source.replace("HP lots", "HP +5")
+        );
+        assert!(harness.state().0.flags.is_empty());
     }
 
     #[test]
@@ -2836,7 +3041,12 @@ mod tests {
         fs::remove_file(dir.path().join("Arena.md")).unwrap();
         let snapshot = Snapshot::load(&campaign, &[]).unwrap();
         let group = &snapshot.groups[0];
-        assert_eq!(group.encounter, Some(arena), "a run of it still offers it");
+        assert_eq!(
+            group.encounter,
+            Some(arena),
+            "a run of it still offers it: {}",
+            fs::read_to_string(dir.path().join(&draft.path)).unwrap()
+        );
         assert_eq!(group.encounter_name, None);
         assert!(group.problem.is_none(), "{:?}", group.problem);
         assert!(
@@ -3030,6 +3240,43 @@ mod tests {
             Draft::open(dir.path(), &draft.path).unwrap().name,
             saved_name
         );
+    }
+
+    #[test]
+    fn i19_p1_group_comparison_matches_overwrite() {
+        for schema in [1, 2] {
+            let dir = tempfile::tempdir().unwrap();
+            let campaign = campaign(dir.path());
+            let mut group = GroupDraft::new();
+            group.name = "Scouts".into();
+            group.add(creature(dir.path(), "Scout"));
+            let legacy = group.text().unwrap();
+            group.save(&campaign, &[]).unwrap();
+            if schema == 1 {
+                fs::write(dir.path().join(&group.path), legacy).unwrap();
+                group = GroupDraft::open(dir.path(), &group.path).unwrap();
+            }
+            let path = dir.path().join(group.path());
+            let external = format!(
+                "{}\nDM's outside account.\n",
+                fs::read_to_string(&path)
+                    .unwrap()
+                    .replace("splat_schema:", "tags: [dawn]\nsplat_schema:")
+            );
+            fs::write(&path, &external).unwrap();
+            group.name = "Dawn scouts".into();
+            assert!(group.save(&campaign, &[]).is_err());
+            let comparison = group
+                .write_text(&Snapshot::load(&campaign, &[]).unwrap())
+                .unwrap();
+            assert!(comparison.contains("tags: [dawn]"));
+            assert!(comparison.contains("DM's outside account."));
+            let change = group.recovery.accept().unwrap();
+            group.source = change.text.clone().unwrap();
+            group.baseline = change.text;
+            group.save(&campaign, &[]).unwrap();
+            assert_eq!(fs::read_to_string(path).unwrap(), comparison);
+        }
     }
 
     #[test]

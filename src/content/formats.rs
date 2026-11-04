@@ -435,7 +435,7 @@ pub fn resolve_readable<'a>(
             .collect();
         return match found.as_slice() {
             [entry] => Ok(entry.id),
-            [] => Err(format!("Requirement {raw} not found")),
+            [] => resolve_readable(target, entries.iter().copied()),
             many => Err(format!(
                 "Requirement {raw} matches {} entries; use a link",
                 many.len()
@@ -725,6 +725,7 @@ pub fn convert_resolved<'a>(
         super::list_formats::resolve(
             &mut resolved,
             &entries.iter().map(|e| (*e).clone()).collect::<Vec<_>>(),
+            text,
         );
         let mut after = text.to_owned();
         if let Some(table) = super::layout::Document::new(text)
@@ -762,7 +763,7 @@ pub fn convert_resolved<'a>(
                 }
             }
         }
-        return Ok(after);
+        return super::list_formats::write_references(&after, entries.iter().copied());
     }
     if schema(&original.fields)? == 1
         && ["campaign", "encounter_group", "encounter"].contains(&original.kind.as_str())
@@ -851,7 +852,7 @@ pub fn convert_resolved<'a>(
                 after.replace_range(range, &value);
             }
         }
-        return Ok(after);
+        return super::list_formats::write_references(&after, entries.iter().copied());
     }
     let mut after = convert(path, text)?;
     if let Some(required) = original
@@ -896,7 +897,7 @@ pub fn convert_resolved<'a>(
         )?;
     }
     if original.kind != "world" {
-        return Ok(after);
+        return super::list_formats::write_references(&after, entries.iter().copied());
     }
     for (key, flat) in [("creature", "splat_stat_block"), ("in", "splat_in")] {
         let Some(raw) = original

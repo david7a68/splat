@@ -1169,7 +1169,7 @@ fn i19_x5_visible_rule_choice_wins_and_save_updates_its_id() {
     ] {
         let source = note("campaign", "splat_namespace: rook", &format!("## Rule choices\n\n| Rule | Choice |\n| --- | --- |\n| Combat initiative | {visible} %% splat rule=dnd2024:rules/combat_initiative id={old_id} %% |\n")).replace("splat_schema: 1", "splat_schema: 2");
         let mut entry = Entry::parse("Campaign.md", &source).unwrap();
-        super::list_formats::resolve(&mut entry, std::slice::from_ref(&target));
+        super::list_formats::resolve(&mut entry, std::slice::from_ref(&target), &source);
         assert_eq!(
             entry.fields["splat_rule_choices"]["dnd2024:rules/combat_initiative"]["id"],
             Value::from(target.id.to_string())
@@ -1184,7 +1184,7 @@ fn i19_x5_visible_rule_choice_wins_and_save_updates_its_id() {
 fn i19_x5_unknown_rule_choice_is_flagged_and_not_used() {
     let source = note("campaign", "splat_namespace: rook", "## Rule choices\n\n| Rule | Choice |\n| --- | --- |\n| Combat initiative | Imaginary initiative %% splat rule=dnd2024:rules/combat_initiative id=00000000-0000-0000-0000-000000000002 %% |\n").replace("splat_schema: 1", "splat_schema: 2");
     let mut entry = Entry::parse("Campaign.md", &source).unwrap();
-    super::list_formats::resolve(&mut entry, &[]);
+    super::list_formats::resolve(&mut entry, &[], &source);
     assert!(
         entry.fields["splat_rule_choices"]
             .as_mapping()
@@ -1349,4 +1349,160 @@ fn i19_package_tasks_and_only_links_accept_obsidian_lists_without_selecting_all(
                 .is_empty()
         );
     }
+}
+
+#[test]
+fn i19_x3_copied_roster_row_becomes_a_new_saved_slot() {
+    let row = "| enemies | [Goblin](splat:dnd2024:creatures/goblin_warrior) | | HP +5 | %% splat slot=actor_one %% |\n";
+    let text = note("encounter", "", &format!("## Roster\n\n| Side | Creature | Name | Changes | Note |\n| --- | --- | --- | --- | --- |\n{row}{row}")).replace("splat_schema: 1", "splat_schema: 2");
+    let entry = Entry::parse("Encounter.md", &text).unwrap();
+    assert!(entry.flags.is_empty(), "{:?}", entry.flags);
+    let setup = &entry.fields["splat_encounter"];
+    assert_eq!(setup["roster"].as_sequence().unwrap().len(), 2);
+    assert_ne!(setup["roster"][0]["key"], setup["roster"][1]["key"]);
+    let saved = formats::patch_model(&text, &[("splat_encounter", Some(setup.clone()))]).unwrap();
+    assert_eq!(saved.matches("slot=actor_one ").count(), 1);
+    assert_eq!(model(&saved)["splat_encounter"], *setup);
+    assert_eq!(
+        saved,
+        formats::patch_model(&saved, &[("splat_encounter", Some(setup.clone()))]).unwrap()
+    );
+}
+
+#[test]
+fn i19_x4_unique_creature_names_read_and_save_as_named_links() {
+    let target = Entry::parse(
+        "goblin_warrior.md",
+        &note(
+            "creature",
+            "splat_key: dnd2024:creatures/goblin_warrior\nsplat_creature: {}",
+            "",
+        )
+        .replace("splat_name: Rook", "splat_name: Goblin Warrior"),
+    )
+    .unwrap();
+    for name in ["Goblin Warrior", "[[Goblin Warrior]]"] {
+        for (kind, heading, first, columns) in [
+            (
+                "encounter_group",
+                "Members",
+                "2",
+                super::list_formats::GROUP,
+            ),
+            (
+                "encounter",
+                "Roster",
+                "enemies",
+                super::list_formats::ROSTER,
+            ),
+        ] {
+            let text = note(kind, "splat_side: enemies", &format!("## {heading}\n\n| {} |\n| --- | --- | --- | --- | --- |\n| {first} | {name} | | | |\n", columns.join(" | "))).replace("splat_schema: 1", "splat_schema: 2");
+            let mut entry = Entry::parse("List.md", &text).unwrap();
+            super::list_formats::resolve(&mut entry, std::slice::from_ref(&target), &text);
+            assert!(entry.flags.is_empty(), "{name}: {:?}", entry.flags);
+            let key = if kind == "encounter" {
+                "splat_encounter"
+            } else {
+                "splat_encounter_group"
+            };
+            let rows = if kind == "encounter" {
+                "roster"
+            } else {
+                "members"
+            };
+            assert_eq!(
+                entry.fields[key][rows][0]["creature"]["key"],
+                Value::from("dnd2024:creatures/goblin_warrior")
+            );
+            let saved = formats::convert_resolved("List.md", &text, [&target]).unwrap();
+            assert!(
+                saved.contains("[Goblin Warrior](splat:dnd2024:creatures/goblin_warrior)"),
+                "{saved}"
+            );
+            assert_eq!(
+                Entry::parse("List.md", &saved).unwrap().fields[key][rows][0]["creature"]["id"],
+                Value::from(target.id.to_string())
+            );
+            let mut replacement = target.clone();
+            replacement.id = uuid::Uuid::new_v4();
+            replacement.key = Some("dnd2024:creatures/scout".into());
+            let changed = saved.replace("creatures/goblin_warrior", "creatures/scout");
+            let mut changed_entry = Entry::parse("List.md", &changed).unwrap();
+            super::list_formats::resolve(
+                &mut changed_entry,
+                &[target.clone(), replacement.clone()],
+                &changed,
+            );
+            assert_eq!(
+                changed_entry.fields[key][rows][0]["creature"]["id"],
+                Value::from(replacement.id.to_string())
+            );
+            let mut duplicate = target.clone();
+            duplicate.id = uuid::Uuid::new_v4();
+            let mut ambiguous = Entry::parse("List.md", &text).unwrap();
+            super::list_formats::resolve(&mut ambiguous, &[target.clone(), duplicate], &text);
+            assert!(
+                ambiguous
+                    .flags
+                    .iter()
+                    .any(|flag| flag.message.contains("ambiguous"))
+            );
+        }
+    }
+}
+
+#[test]
+fn i19_x16_starting_hp_lives_in_the_changes_cell() {
+    let old = note(
+        "encounter",
+        "splat_encounter: {roster: [{key: actor_guard, creature: {key: 'dnd2024:creatures/guard'}, side: enemies, controller: {kind: manual, role: gm}, initial: {hp: 12, temporary_hp: 3}, overrides: {}}], sides: {party: {hostile_to: [enemies]}, enemies: {hostile_to: [party]}}, assumptions: [], completion: {mode: manual}, limits: {rounds: 20, resolution_events: 10000}}",
+        "",
+    );
+    let saved = formats::convert("Encounter.md", &old).unwrap();
+    assert!(saved.contains("Start HP 12"), "{saved}");
+    assert!(!saved.contains("hp: 12"));
+    assert_eq!(model(&old), model(&saved));
+    let edited = saved.replace("Start HP 12", "Start HP 8");
+    assert_eq!(
+        model(&edited)["splat_encounter"]["roster"][0]["initial"]["hp"],
+        Value::from(8)
+    );
+    let cleared = saved.replace("Start HP 12", "");
+    assert!(
+        model(&cleared)["splat_encounter"]["roster"][0]["initial"]
+            .get("hp")
+            .is_none()
+    );
+}
+
+#[test]
+fn i19_x9_saved_links_use_catalogue_names_and_keep_custom_aliases() {
+    let target = Entry::parse(
+        "goblin_warrior.md",
+        &note(
+            "creature",
+            "splat_key: dnd2024:creatures/goblin_warrior\nsplat_creature: {}",
+            "",
+        )
+        .replace("splat_name: Rook", "splat_name: Goblin Warrior"),
+    )
+    .unwrap();
+    let text = note("encounter_group", "splat_side: enemies", "## Members\n\n| Count | Creature | Name | Changes | Note |\n| --- | --- | --- | --- | --- |\n| 2 | [goblin warrior](splat:dnd2024:creatures/goblin_warrior) | | | |\n").replace("splat_schema: 1", "splat_schema: 2");
+    let saved = formats::convert_resolved("Group.md", &text, [&target]).unwrap();
+    assert_eq!(saved, text.replace("[goblin warrior]", "[Goblin Warrior]"));
+    let alias = text.replace("[goblin warrior]", "[Gate guards]");
+    assert_eq!(
+        formats::convert_resolved("Group.md", &alias, [&target]).unwrap(),
+        alias
+    );
+    let campaign = note(
+        "campaign",
+        "splat_namespace: rook",
+        "## Packages\n\n  - Only: [goblin warrior](splat:dnd2024:creatures/goblin_warrior)\n",
+    )
+    .replace("splat_schema: 1", "splat_schema: 2");
+    assert_eq!(
+        formats::convert_resolved("Campaign.md", &campaign, [&target]).unwrap(),
+        campaign.replace("[goblin warrior]", "[Goblin Warrior]")
+    );
 }

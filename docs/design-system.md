@@ -278,7 +278,7 @@ Beside the note, the plan takes 40% of the page width, between 330 and 480 px.
 Fight summaries keep each part together and join a separator to the next part.
 Planned, played and running fights use the empty action space for their second line, up to
 the menu. `Ended · Round 1` stays together.
-Group summaries shorten to one line with the full text on hover. A recording count
+Group summaries wrap to two lines, then shorten with the full text on hover. A recording count
 sits inside its tab, in muted text and in the tab's accessible name. Notes saved
 centres on the title's action row. A new template has an L gap above its heading
 and an M gap below it; the list's help stays out of the form.
@@ -327,7 +327,7 @@ The side picker offers `Party`, `Enemies`, and `Other…` in every editor. Only 
 All editor section headings use `group_heading`. In the tabbed layout, Add participants has no repeated heading.
 
 A plan group editor takes the full notes column; the note stays behind its tab.
-Plan summaries sit below the taller of the name and action, up to the menu slot.
+Plan summaries sit below the name and action with no extra item gap, up to the menu slot.
 Member counts and XP use one dot-separated line. Count stays at the left; Edit and
 the row menu sit together at the right. Encounter editors show one clean-state word.
 
@@ -854,6 +854,10 @@ Unregister keeps the last folder in Settings. Library offers Undo unregister; Ca
 Missing package recovery looks beside known package folders. A unique match offers Use this folder. The picker starts beside the old folder. Both paths have Undo.
 World place choices stay beside In. Always use this one saves a path with Undo. Changes name both values. File and stored names that differ offer a guarded name update with Undo.
 Unreadable content names its path and keeps other files available. Missing Campaign.md needs an explicit write from held text. Paused stat blocks state when their snapshot differs from the current file.
+
+Flagged group members name their file and line. They keep Edit in Obsidian, Show file,
+Edit and a row menu with Remove member. Edit shows the original Changes cell; Done
+repairs that cell in the draft. Unknown member XP adds `+ unknown` to the total.
 
 ## Campaign and World audit, iteration 19
 

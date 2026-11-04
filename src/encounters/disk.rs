@@ -136,6 +136,9 @@ impl super::Encounters {
         campaign: &crate::persistence::Campaign,
         modules: &[crate::persistence::Module],
     ) -> bool {
+        let Some(snapshot) = self.snapshot.as_ref() else {
+            return false;
+        };
         let Some(draft) = self.draft.as_mut() else {
             return false;
         };
@@ -145,7 +148,7 @@ impl super::Encounters {
                 .iter_mut()
                 .find(|group| group.has_disk_change())
             {
-                match group.disk_choice(ui, &campaign.path) {
+                match group.disk_choice(ui, &campaign.path, snapshot) {
                     Ok(Some(true)) => self.save_draft(ui.ctx(), campaign, modules),
                     Ok(Some(false)) => self.error = None,
                     Err(error) => self.error = Some(error),
@@ -155,7 +158,9 @@ impl super::Encounters {
             }
             return false;
         }
-        let choice = draft.recovery.show(ui, &draft.text().unwrap_or_default());
+        let choice = draft
+            .recovery
+            .show(ui, &draft.write_text(snapshot).unwrap_or_default());
         if let Some(keep) = choice {
             if keep {
                 if let Some(change) = draft.recovery.accept() {
