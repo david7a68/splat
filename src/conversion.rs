@@ -16,6 +16,65 @@ pub struct File {
     pub after: String,
 }
 
+/// Read the same registered roots as the app, through the conversion-only reader.
+/// Loading settings here never saves them or opens the credential store.
+pub fn catalogue(local: &[Entry]) -> Result<Vec<Entry>, String> {
+    let data = crate::persistence::Store::user()?.load()?;
+    catalogue_with(local, &data)
+}
+
+fn catalogue_with(
+    local: &[Entry],
+    data: &crate::persistence::UserData,
+) -> Result<Vec<Entry>, String> {
+    let mut entries = local.to_vec();
+    let mut ids: std::collections::BTreeSet<_> = entries.iter().map(|e| e.id).collect();
+    for entry in content::builtin::entries()
+        .iter()
+        .chain(content::definitions::entries()?)
+    {
+        if ids.insert(entry.id) {
+            entries.push(entry.clone());
+        }
+    }
+    for root in data
+        .modules
+        .iter()
+        .map(|m| &m.path)
+        .chain(data.campaigns.iter().map(|c| &c.path))
+    {
+        let (registered, _) = content::legacy::read_directory(root)?;
+        for entry in registered {
+            if ids.insert(entry.id) {
+                entries.push(entry);
+            }
+        }
+    }
+    Ok(entries)
+}
+
+/// Count unavailable identities without including private note content in output.
+pub fn unresolved(entry: &Entry, catalogue: &[Entry]) -> usize {
+    fn visit(value: &serde_yaml_ng::Value, catalogue: &[Entry]) -> usize {
+        match value {
+            serde_yaml_ng::Value::Mapping(map) => {
+                let missing = map
+                    .get("key")
+                    .or_else(|| map.get("id"))
+                    .and_then(serde_yaml_ng::Value::as_str)
+                    .filter(|raw| content::resource_key(raw) || uuid::Uuid::parse_str(raw).is_ok())
+                    .is_some_and(|raw| content::formats::resolve_readable(raw, catalogue).is_err());
+                usize::from(missing) + map.values().map(|v| visit(v, catalogue)).sum::<usize>()
+            }
+            serde_yaml_ng::Value::Sequence(values) => {
+                values.iter().map(|v| visit(v, catalogue)).sum()
+            }
+            _ => 0,
+        }
+    }
+    entry.fields.values().map(|v| visit(v, catalogue)).sum()
+}
+
 pub fn publish(file: &File) -> Result<Change, String> {
     let path = note_path(&file.root, &file.path)?;
     if [&path, &file.root]
@@ -251,6 +310,38 @@ fn diagnostic_line(text: &str, message: &str) -> usize {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn conversion_catalogue_reads_registered_legacy_packages_and_builtins() {
+        let dir = tempfile::tempdir().unwrap();
+        let id = uuid::Uuid::new_v4();
+        fs::write(dir.path().join("Scout.md"), format!("---\nsplat_schema: 1\nsplat_id: {id}\nsplat_kind: creature\nsplat_name: Scout\nsplat_creature: {{size: small, type: beast}}\n---\n# Scout\n")).unwrap();
+        let data = crate::persistence::UserData {
+            modules: vec![crate::persistence::Module {
+                id: uuid::Uuid::new_v4(),
+                name: "Synthetic book".into(),
+                path: dir.path().into(),
+            }],
+            ..Default::default()
+        };
+        let catalogue = catalogue_with(&[], &data).unwrap();
+        assert!(catalogue.iter().any(|e| e.id == id));
+        assert!(
+            catalogue
+                .iter()
+                .any(|e| e.id == content::builtin::entries()[0].id)
+        );
+        let text = format!(
+            "---\nsplat_schema: 1\nsplat_id: {}\nsplat_kind: encounter_group\nsplat_name: Scouts\nsplat_encounter_group: {{side: enemies, members: [{{creature: {{id: {id}}}, count: 1}}]}}\n---\n# Scouts\n",
+            uuid::Uuid::new_v4()
+        );
+        let file = preview(dir.path(), "Group.md", text, &catalogue).unwrap();
+        assert!(file.after.contains("Scout"));
+        formats::verify_conversion("Group.md", &file.before, &file.after, &catalogue).unwrap();
+        let group = content::legacy::parse("Group.md", &file.before).unwrap();
+        assert_eq!(unresolved(&group, &catalogue), 0);
+        assert_eq!(unresolved(&group, &[]), 1);
+    }
 
     #[test]
     fn dialog_and_command_publisher_refuse_an_outside_edit() {

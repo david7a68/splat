@@ -1,4 +1,4 @@
-//! Dispatch before the instance lock, settings, keyring, or window is opened.
+//! Dispatch before the instance lock, keyring, or window is opened.
 use crate::{content_workspace::generated_package, conversion};
 use splat::content;
 use std::{fs, io::Write, path::Path};
@@ -20,7 +20,8 @@ fn execute(args: &[String], out: &mut impl Write) -> Result<i32, String> {
         return Err(usage());
     }
     if args[2..].iter().any(|arg| {
-        command != "convert" || !["--include-generated", "--dry-run"].contains(&arg.as_str())
+        command != "convert"
+            || !["--include-generated", "--dry-run", "--verify"].contains(&arg.as_str())
     }) {
         return Err(usage());
     }
@@ -41,8 +42,15 @@ fn execute(args: &[String], out: &mut impl Write) -> Result<i32, String> {
         return Ok(i32::from(!problems.is_empty()));
     }
     let dry = args.iter().any(|a| a == "--dry-run");
+    let verify = args.iter().any(|a| a == "--verify");
+    if verify && !dry {
+        return Err("--verify requires --dry-run".into());
+    }
     let include = args.iter().any(|a| a == "--include-generated");
     let (entries, errors) = content::legacy::read_directory(&root)?;
+    let catalogue = conversion::catalogue(&entries)?;
+    let mut verified = std::collections::BTreeMap::<String, (usize, usize)>::new();
+    let mut warnings = 0;
     let mut skipped = errors.len();
     let mut converted = 0;
     for error in errors {
@@ -61,7 +69,46 @@ fn execute(args: &[String], out: &mut impl Write) -> Result<i32, String> {
             .to_string();
         let result = (|| -> Result<bool, String> {
             let before = fs::read_to_string(&path).map_err(|e| e.to_string())?;
-            let file = conversion::preview(&root, &relative, before, &entries)?;
+            let file = conversion::preview(&root, &relative, before, &catalogue)?;
+            if verify {
+                let kind = entries
+                    .iter()
+                    .find(|e| e.path == relative)
+                    .map(|e| e.kind.as_str())
+                    .unwrap_or(if relative.ends_with(".json") {
+                        "run"
+                    } else {
+                        "timeline"
+                    });
+                let counts = verified.entry(kind.into()).or_default();
+                let result = if kind == "run" || kind == "timeline" {
+                    // These converters already compare the complete decoded models.
+                    Ok(kind.into())
+                } else {
+                    content::formats::verify_conversion(
+                        &relative,
+                        &file.before,
+                        &file.after,
+                        &catalogue,
+                    )
+                };
+                counts.0 += 1;
+                if let Err(error) = result {
+                    counts.1 += 1;
+                    return Err(error);
+                }
+            }
+            if let Some(entry) = entries.iter().find(|e| e.path == relative) {
+                let missing = conversion::unresolved(entry, &catalogue);
+                if missing > 0 {
+                    warnings += missing;
+                    writeln!(
+                        out,
+                        "{relative}: warning: {missing} unresolved references kept unchanged"
+                    )
+                    .map_err(|e| e.to_string())?;
+                }
+            }
             if file.before == file.after {
                 return Ok(false);
             }
@@ -109,9 +156,17 @@ fn execute(args: &[String], out: &mut impl Write) -> Result<i32, String> {
         if dry { "would convert" } else { "converted" }
     )
     .map_err(|e| e.to_string())?;
+    writeln!(out, "{warnings} unresolved reference warnings.").map_err(|e| e.to_string())?;
+    for (kind, (count, differences)) in verified {
+        writeln!(
+            out,
+            "Verify {kind}: {count} checked; {differences} differences."
+        )
+        .map_err(|e| e.to_string())?;
+    }
     Ok(i32::from(skipped != 0))
 }
 fn usage() -> String {
-    "Usage: splat convert <folder> [--include-generated] [--dry-run]\n       splat check <folder>"
+    "Usage: splat convert <folder> [--include-generated] [--dry-run [--verify]]\n       splat check <folder>"
         .into()
 }

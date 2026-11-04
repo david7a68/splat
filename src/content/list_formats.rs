@@ -176,7 +176,10 @@ fn reference(text: &str) -> Result<Value, String> {
         if let Some(key) = machine(text, "key") {
             result.insert("key".into(), key.into());
         }
-        result.insert("link".into(), raw.into());
+        // A UUID-only wikilink is the readable spelling of an id-only reference.
+        if Uuid::parse_str(target).is_err() || raw != format!("[[{target}]]") {
+            result.insert("link".into(), raw.into());
+        }
         return Ok(Value::Mapping(result));
     }
     let value = formats::model_reference(raw.clone().into());
@@ -1602,7 +1605,13 @@ pub fn write_references<'a>(
                     continue;
                 };
                 let reference = reference(&cell.value)?;
-                let id = resolve_reference(&reference, &entries)?;
+                let id = match resolve_reference(&reference, &entries) {
+                    Ok(id) => id,
+                    Err(_) if reference.get("id").is_some() || reference.get("key").is_some() => {
+                        continue;
+                    }
+                    Err(error) => return Err(error),
+                };
                 let target = entries
                     .iter()
                     .find(|entry| entry.id == id)

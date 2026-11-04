@@ -284,6 +284,96 @@ pub fn eligible(entry: &Entry) -> bool {
         || entry.fields.contains_key("splat_character")
 }
 
+/// Compare reader models in memory, ignoring schema and resolved link spelling.
+/// Error messages contain field names only, never source values.
+pub fn verify_conversion(
+    path: &str,
+    before: &str,
+    after: &str,
+    entries: &[Entry],
+) -> Result<String, String> {
+    fn reference(value: &mut Value, entries: &[Entry]) {
+        let raw = value
+            .get("key")
+            .or_else(|| value.get("id"))
+            .or_else(|| value.get("link"))
+            .unwrap_or(value);
+        if let Some(raw) = raw.as_str()
+            && let Ok(id) = resolve_readable(raw, entries)
+        {
+            *value = Value::Mapping([("id".into(), id.to_string().into())].into_iter().collect());
+        }
+    }
+    fn model(entry: &Entry, entries: &[Entry]) -> Mapping {
+        fn visit(value: &mut Value, entries: &[Entry]) {
+            match value {
+                Value::Mapping(map) => {
+                    if !map.is_empty()
+                        && map.keys().all(|k| {
+                            k.as_str()
+                                .is_some_and(|s| ["id", "key", "link"].contains(&s))
+                        })
+                    {
+                        reference(value, entries);
+                    } else {
+                        for value in map.values_mut() {
+                            visit(value, entries);
+                        }
+                    }
+                }
+                Value::Sequence(values) => {
+                    for value in values {
+                        visit(value, entries);
+                    }
+                }
+                _ => {}
+            }
+        }
+        let mut fields = (*entry.fields).clone();
+        for key in ["splat_origin", "splat_requires"] {
+            if let Some(value) = fields.get_mut(key) {
+                if let Value::Sequence(values) = value {
+                    for value in values {
+                        reference(value, entries);
+                    }
+                } else {
+                    reference(value, entries);
+                }
+            }
+        }
+        if let Some(world) = fields
+            .get_mut("splat_world")
+            .and_then(Value::as_mapping_mut)
+        {
+            for key in ["in", "creature"] {
+                if let Some(value) = world.get_mut(key) {
+                    reference(value, entries);
+                }
+            }
+        }
+        for value in fields.values_mut() {
+            visit(value, entries);
+        }
+        super::list_formats::canonical(&fields)
+    }
+    let old = super::legacy::parse(path, before)?;
+    let new = Entry::parse(path, after)?;
+    let a = model(&old, entries);
+    let b = model(&new, entries);
+    if a != b {
+        let mut keys: Vec<_> = a
+            .keys()
+            .chain(b.keys())
+            .filter(|k| a.get(*k) != b.get(*k))
+            .filter_map(Value::as_str)
+            .collect();
+        keys.sort();
+        keys.dedup();
+        return Err(format!("Model differs in {}", keys.join(", ")));
+    }
+    Ok(old.kind)
+}
+
 /// Patch canonical fields in their original flat property or marked end fence.
 /// This is for model-based copy and repair code. It never renders the note body.
 pub fn patch_model(text: &str, changes: &[(&str, Option<Value>)]) -> Result<String, String> {
@@ -927,15 +1017,15 @@ pub fn convert_resolved<'a>(
                     return raw.into();
                 };
                 let target = entries.iter().find(|entry| entry.id == id).unwrap();
-                if let Some(key) = target
+                let readable = if let Some(key) = target
                     .key
                     .as_ref()
                     .filter(|key| key.starts_with("dnd2024:"))
                 {
                     if resolve_readable(&target.name, entries.iter().copied()) == Ok(id) {
-                        target.name.clone().into()
+                        target.name.clone()
                     } else {
-                        key.clone().into()
+                        key.clone()
                     }
                 } else {
                     format!(
@@ -943,7 +1033,11 @@ pub fn convert_resolved<'a>(
                         target.path.trim_end_matches(".md"),
                         target.name
                     )
-                    .into()
+                };
+                if resolve_readable(&readable, entries.iter().copied()) == Ok(id) {
+                    readable.into()
+                } else {
+                    raw.into()
                 }
             })
             .collect();

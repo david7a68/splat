@@ -7,6 +7,7 @@ fn run(root: &std::path::Path, command: &str, flags: &[&str]) -> Output {
         .arg(command)
         .arg(root)
         .args(flags)
+        .env("XDG_CONFIG_HOME", root.join(".config"))
         .env_remove("DISPLAY")
         .env_remove("WAYLAND_DISPLAY")
         .output()
@@ -28,7 +29,7 @@ fn convert_and_check_are_headless_and_dry_run_writes_nothing() {
     assert_eq!(check.status.code(), Some(1));
     let output = String::from_utf8(check.stdout).unwrap();
     assert!(output.contains("Rook.md:2: Old layout"), "{output}");
-    let dry = run(dir.path(), "convert", &["--dry-run"]);
+    let dry = run(dir.path(), "convert", &["--dry-run", "--verify"]);
     assert!(dry.status.success());
     assert!(
         String::from_utf8(dry.stdout)
@@ -36,6 +37,10 @@ fn convert_and_check_are_headless_and_dry_run_writes_nothing() {
             .contains("1 files would convert; 0 skipped")
     );
     assert_eq!(fs::read_to_string(&path).unwrap(), before);
+    assert_eq!(
+        run(dir.path(), "convert", &["--verify"]).status.code(),
+        Some(2)
+    );
     assert!(run(dir.path(), "convert", &[]).status.success());
     assert!(
         fs::read_to_string(&path)
@@ -119,4 +124,31 @@ fn malformed_run_is_reported_and_skipped() {
             .contains("Broken.json:2:")
     );
     assert_eq!(run(dir.path(), "convert", &[]).status.code(), Some(1));
+}
+
+#[test]
+fn missing_reference_is_a_warning_and_dry_run_verifies_the_saved_identity() {
+    let dir = tempfile::tempdir().unwrap();
+    let text = format!(
+        "---\nsplat_schema: 1\nsplat_id: {}\nsplat_kind: encounter_group\nsplat_name: Scouts\nsplat_encounter_group: {{side: enemies, members: [{{creature: {{id: '00000000-0000-0000-0000-000000000099'}}, count: 1}}]}}\n---\n# Scouts\n",
+        uuid::Uuid::new_v4()
+    );
+    let path = dir.path().join("Scouts.md");
+    fs::write(&path, &text).unwrap();
+    let result = run(dir.path(), "convert", &["--dry-run", "--verify"]);
+    assert!(result.status.success());
+    let output = String::from_utf8(result.stdout).unwrap();
+    assert!(
+        output.contains("1 files would convert; 0 skipped."),
+        "{output}"
+    );
+    assert!(
+        output.contains("1 unresolved reference warnings."),
+        "{output}"
+    );
+    assert!(
+        output.contains("Verify encounter_group: 1 checked; 0 differences."),
+        "{output}"
+    );
+    assert_eq!(fs::read_to_string(path).unwrap(), text);
 }

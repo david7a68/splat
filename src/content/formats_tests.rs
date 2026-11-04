@@ -1902,3 +1902,110 @@ fn world_conversion_keeps_both_reference_identity_and_readable_link() {
     assert_eq!(model(&old), model(&new));
     assert!(Entry::parse("Rook.md", &new).unwrap().flags.is_empty());
 }
+
+#[test]
+fn vault_conversion_saved_creature_values_are_authoritative() {
+    let old = note(
+        "creature",
+        "splat_creature: {size: 'medium or small', type: 'humanoid (scout)', hit_points_text: '19 (3d8 + 6)', movement_text: '30 ft., fly 60 ft.', cr_text: '2 (XP 450; PB +2)'}\nsplat_stats: {max_hp: {value: 19}, speed: {value: 60}}",
+        "# Rook\n\n## Source text\n\nLarge beast, Unaligned\\\nHP 99 (18d10)\\\nSpeed 20 ft.\\\n\n### Actions\n\nA synthetic attack.\n",
+    );
+    let converted = formats::convert("Rook.md", &old).unwrap();
+    assert_eq!(model(&old), model(&converted));
+    assert!(converted.contains("> [!quote]- Printed stat block (not read; edit the table above)\n> Large beast, Unaligned\\\n> HP 99 (18d10)\\\n> Speed 20 ft.\\\n"));
+}
+
+#[test]
+fn vault_conversion_spell_and_item_optional_values_round_trip() {
+    for (kind, data) in [
+        (
+            "spell",
+            "splat_spell: {concentration: false, ritual: false, casting_time: Action, range_text: '120 feet', duration: Instantaneous}",
+        ),
+        (
+            "spell",
+            "splat_spell: {concentration: true, ritual: true, casting_time: Action, range_text: Sight, duration: 'up to 1 minute'}",
+        ),
+        (
+            "item",
+            "splat_item: {category: wondrous_item, equipment: {attunement: ''}}",
+        ),
+        (
+            "item",
+            "splat_item: {category: wondrous_item, rarity: unknown}",
+        ),
+        (
+            "spell",
+            "splat_spell: {range: {feet: 60}, range_text: 'special range'}",
+        ),
+    ] {
+        let old = note(kind, data, "# Rook\n");
+        let converted = formats::convert("Rook.md", &old).unwrap();
+        assert_eq!(model(&old), model(&converted));
+    }
+}
+
+#[test]
+fn vault_conversion_missing_reference_keeps_identity() {
+    let id = "00000000-0000-0000-0000-000000000099";
+    let old = note(
+        "encounter_group",
+        &format!(
+            "splat_encounter_group: {{side: enemies, members: [{{creature: {{id: {id}}}, count: 1}}]}}"
+        ),
+        "# Rook\n",
+    );
+    let converted = formats::convert_resolved("Rook.md", &old, []).unwrap();
+    assert_eq!(model(&old), model(&converted));
+    assert!(converted.contains(id));
+    formats::verify_conversion("Rook.md", &old, &converted, &[]).unwrap();
+    assert!(
+        formats::verify_conversion(
+            "Rook.md",
+            &old,
+            &converted.replace("splat_name: Rook", "splat_name: Changed"),
+            &[]
+        )
+        .is_err()
+    );
+}
+
+#[test]
+fn vault_conversion_composite_type_with_independent_tags_round_trips() {
+    let old = note(
+        "creature",
+        "splat_creature: {type: 'humanoid (Scout)', tags_text: '(Ranger)'}",
+        "# Rook\n",
+    );
+    let converted = formats::convert("Rook.md", &old).unwrap();
+    assert_eq!(model(&old), model(&converted));
+    assert!(converted.contains("| Type | humanoid (Scout) |"));
+    assert!(converted.contains("| Type Tags | (Ranger) |"));
+}
+
+#[test]
+fn vault_conversion_requirement_does_not_choose_an_ambiguous_package_path() {
+    let target = super::legacy::parse(
+        "Package.md",
+        &note(
+            "package",
+            "splat_namespace: rook\nsplat_key: rook:package/core",
+            "# Rook\n",
+        ),
+    )
+    .unwrap();
+    let other = super::legacy::parse(
+        "Package.md",
+        &note("package", "splat_namespace: other", "# Other\n")
+            .replace("000000000001", "000000000002"),
+    )
+    .unwrap();
+    let old = note(
+        "package",
+        "splat_namespace: third\nsplat_requires: [{key: 'rook:package/core'}]",
+        "# Rook\n",
+    );
+    let entries = [target, other];
+    let converted = formats::convert_resolved("Third.md", &old, &entries).unwrap();
+    formats::verify_conversion("Third.md", &old, &converted, &entries).unwrap();
+}
