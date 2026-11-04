@@ -398,9 +398,22 @@ pub fn read_legacy_identity(body: &str, fields: &mut Mapping) {
             .trim_end_matches('\\')
             .trim()
             .trim_matches('*');
-        let (identity, alignment) = line
-            .split_once(',')
-            .map_or((line, None), |(a, b)| (a, Some(b.trim())));
+        let mut depth = 0_i32;
+        let mut comma = None;
+        for (at, ch) in line.char_indices() {
+            match ch {
+                '(' => depth += 1,
+                ')' => depth -= 1,
+                ',' if depth == 0 => comma = Some(at),
+                _ => {}
+            }
+        }
+        if depth != 0 {
+            continue;
+        }
+        let (identity, alignment) = comma.map_or((line, None), |at| {
+            (&line[..at], Some(line[at + 1..].trim()))
+        });
         let Some((size, kind)) = identity.split_once(' ') else {
             continue;
         };
@@ -771,6 +784,20 @@ fn owned_keys(root: &str) -> Vec<&'static str> {
         ],
         _ => vec!["category", "rarity", "equipment"],
     }
+}
+
+/// The execution adapter ignores known reader text, while retaining unknown
+/// keys for its strict mechanics validator to reject.
+pub(crate) fn creature_mechanics(fields: &Mapping) -> Mapping {
+    let display = owned_keys("splat_creature");
+    fields
+        .iter()
+        .filter(|(key, _)| {
+            key.as_str()
+                .is_none_or(|key| ["size", "type"].contains(&key) || !display.contains(&key))
+        })
+        .map(|(key, value)| (key.clone(), value.clone()))
+        .collect()
 }
 
 fn printed_identity(value: String) -> String {

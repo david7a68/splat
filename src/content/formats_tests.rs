@@ -440,6 +440,13 @@ fn fmt_f2_printed_identity_fills_missing_properties_and_writes_reader_case() {
     assert!(explicit.contains("| Size | Small |"));
     assert!(explicit.contains("| Type | Fey |"));
     assert!(explicit.contains("| Alignment | Neutral |"));
+    let tagged = old.replace(
+        "Medium beast, Unaligned",
+        "Medium humanoid (human, elf), Neutral",
+    );
+    let tagged = formats::convert("Rook.md", &tagged).unwrap();
+    assert!(tagged.contains("| Type | Humanoid (human, elf) |"));
+    assert!(tagged.contains("| Alignment | Neutral |"));
 }
 
 #[test]
