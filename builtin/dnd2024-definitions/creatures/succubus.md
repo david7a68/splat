@@ -1,35 +1,62 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 7e9cb656-6ad5-5a5c-9c31-0effa594bc32
 splat_kind: creature
 splat_key: dnd2024:creatures/succubus
 splat_name: Succubus
-splat_origin:
-  key: dnd2024:reference/creature/succubus
+splat_origin: dnd2024:reference/creature/succubus
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 331
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 331, https://www.dndbeyond.com/srd
 ---
 
 # Succubus
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Medium |
+| Type | Fiend |
+| Alignment | Neutral Evil |
+| Armor Class | 15 |
+| Hit Points | 71 (13d8 + 13) |
+| Initiative | +3 (13) |
+| Speed | 30 ft., Fly 60 ft. |
+| Challenge | 4 (XP 1,100; PB +2) |
+| Skills | Deception +9, Insight +5, Perception +5, Persuasion +9, Stealth +7 |
+| Senses | Darkvision 60 ft.; Passive Perception 15 |
+| Languages | Abyssal, Common, Infernal; telepathy 60 ft. |
+| Resistances | Cold, Fire, Poison, Psychic |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 8 | -1 | -1 |
+| Dex | 17 | +3 | +3 |
+| Con | 13 | +1 | +1 |
+| Int | 15 | +2 | +2 |
+| Wis | 12 | +1 | +1 |
+| Cha | 20 | +5 | +5 |
+
 
 ## Source text
 
 <!-- SRD page 331 -->
 
-Medium Fiend, Neutral Evil\
-AC 15 Initiative +3 (13)\
-HP 71 (13d8 + 13)\
-Speed 30 ft., Fly 60 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 8 −1 −1 Dex 17 +3 +3 Con 13 +1 +1\
-Int 15 +2 +2 Wis 12 +1 +1 Cha 20 +5 +5\
-Skills Deception +9, Insight +5, Perception +5, Persuasion +9, Stealth +7\
-Resistances Cold, Fire, Poison, Psychic\
-Senses Darkvision 60 ft.; Passive Perception 15\
-Languages Abyssal, Common, Infernal; telepathy 60 ft.\
-CR 4 (XP 1,100; PB +2)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Medium Fiend, Neutral Evil\
+> AC 15 Initiative +3 (13)\
+> HP 71 (13d8 + 13)\
+> Speed 30 ft., Fly 60 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 8 −1 −1 Dex 17 +3 +3 Con 13 +1 +1\
+> Int 15 +2 +2 Wis 12 +1 +1 Cha 20 +5 +5\
+> Skills Deception +9, Insight +5, Perception +5, Persuasion +9, Stealth +7\
+> Resistances Cold, Fire, Poison, Psychic\
+> Senses Darkvision 60 ft.; Passive Perception 15\
+> Languages Abyssal, Common, Infernal; telepathy 60 ft.\
+> CR 4 (XP 1,100; PB +2)
+
 
 ### Traits
 
@@ -51,47 +78,11 @@ Shape-Shift. The succubus shape-shifts into a Medium or Small Humanoid, or it re
 
 Original layout: [[../../srd-5.2.1/pages/331|page 331]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` medium ` |
-| ` type ` | ` fiend ` |
-| ` alignment ` | ` Neutral Evil ` |
-| ` movement_text ` | ` 30 ft., Fly 60 ft. ` |
-| ` skills_text ` | ` Deception +9, Insight +5, Perception +5, Persuasion +9, Stealth +7 ` |
-| ` resistances_text ` | ` Cold, Fire, Poison, Psychic ` |
-| ` senses_text ` | ` Darkvision 60 ft.; Passive Perception 15 ` |
-| ` languages_text ` | ` Abyssal, Common, Infernal; telepathy 60 ft. ` |
-| ` cr_text ` | ` 4 (XP 1,100; PB +2) ` |
-| ` hit_points_text ` | ` 71 (13d8 + 13) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 8 ` | ` -1 ` |
-| ` Dexterity ` | ` 17 ` | ` 3 ` |
-| ` Constitution ` | ` 13 ` | ` 1 ` |
-| ` Intelligence ` | ` 15 ` | ` 2 ` |
-| ` Wisdom ` | ` 12 ` | ` 1 ` |
-| ` Charisma ` | ` 20 ` | ` 5 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 15 ` |  |
-| ` max_hp ` | ` 71 ` |  |
-| ` initiative ` | ` 3 ` |  |
-| ` speed ` | ` 30 ` | ` ft ` |
-| ` fly_speed ` | ` 60 ` | ` ft ` |
 
 ## Health
 
@@ -352,3 +343,13 @@ geometry_assumptions:
   - plane
   - form_appearance
 ```
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_stats_extras -->
+> 
+> ```yaml
+> fly_speed:
+>   unit: ft
+>   value: 60
+> ```
+

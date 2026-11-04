@@ -1,35 +1,62 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: de897d10-b4b2-5e40-92b8-ea286c2d35cd
 splat_kind: creature
 splat_key: dnd2024:creatures/guardian_naga
 splat_name: Guardian Naga
-splat_origin:
-  key: dnd2024:reference/creature/guardian_naga
+splat_origin: dnd2024:reference/creature/guardian_naga
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 296
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 296, https://www.dndbeyond.com/srd
 ---
 
 # Guardian Naga
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Large |
+| Type | Celestial |
+| Alignment | Lawful Good |
+| Armor Class | 18 |
+| Hit Points | 136 (16d10 + 48) |
+| Initiative | +4 (14) |
+| Speed | 40 ft., Climb 40 ft., Swim 40 ft. |
+| Challenge | 10 (XP 5,900; PB +4) |
+| Skills | Arcana +11, History +11, Religion +11 |
+| Senses | Darkvision 60 ft.; Passive Perception 14 |
+| Languages | Celestial, Common |
+| Immunities | Poison; Charmed, Paralyzed, Poisoned, Restrained |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 19 | +4 | +4 |
+| Dex | 18 | +4 | +8 |
+| Con | 16 | +3 | +7 |
+| Int | 16 | +3 | +7 |
+| Wis | 19 | +4 | +8 |
+| Cha | 18 | +4 | +8 |
+
 
 ## Source text
 
 <!-- SRD page 296 -->
 
-Large Celestial, Lawful Good\
-AC 18 Initiative +4 (14)\
-HP 136 (16d10 + 48)\
-Speed 40 ft., Climb 40 ft., Swim 40 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 19 +4 +4 Dex 18 +4 +8 Con 16 +3 +7\
-Int 16 +3 +7 Wis 19 +4 +8 Cha 18 +4 +8\
-Skills Arcana +11, History +11, Religion +11\
-Immunities Poison; Charmed, Paralyzed, Poisoned, Restrained\
-Senses Darkvision 60 ft.; Passive Perception 14\
-Languages Celestial, Common\
-CR 10 (XP 5,900; PB +4)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Large Celestial, Lawful Good\
+> AC 18 Initiative +4 (14)\
+> HP 136 (16d10 + 48)\
+> Speed 40 ft., Climb 40 ft., Swim 40 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 19 +4 +4 Dex 18 +4 +8 Con 16 +3 +7\
+> Int 16 +3 +7 Wis 19 +4 +8 Cha 18 +4 +8\
+> Skills Arcana +11, History +11, Religion +11\
+> Immunities Poison; Charmed, Paralyzed, Poisoned, Restrained\
+> Senses Darkvision 60 ft.; Passive Perception 14\
+> Languages Celestial, Common\
+> CR 10 (XP 5,900; PB +4)
+
 
 ### Traits
 
@@ -50,48 +77,11 @@ At Will: Thaumaturgy\
 
 Original layout: [[../../srd-5.2.1/pages/296|page 296]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` large ` |
-| ` type ` | ` celestial ` |
-| ` alignment ` | ` Lawful Good ` |
-| ` movement_text ` | ` 40 ft., Climb 40 ft., Swim 40 ft. ` |
-| ` skills_text ` | ` Arcana +11, History +11, Religion +11 ` |
-| ` immunities_text ` | ` Poison; Charmed, Paralyzed, Poisoned, Restrained ` |
-| ` senses_text ` | ` Darkvision 60 ft.; Passive Perception 14 ` |
-| ` languages_text ` | ` Celestial, Common ` |
-| ` cr_text ` | ` 10 (XP 5,900; PB +4) ` |
-| ` hit_points_text ` | ` 136 (16d10 + 48) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 19 ` | ` 4 ` |
-| ` Dexterity ` | ` 18 ` | ` 8 ` |
-| ` Constitution ` | ` 16 ` | ` 7 ` |
-| ` Intelligence ` | ` 16 ` | ` 7 ` |
-| ` Wisdom ` | ` 19 ` | ` 8 ` |
-| ` Charisma ` | ` 18 ` | ` 8 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 18 ` |  |
-| ` max_hp ` | ` 136 ` |  |
-| ` initiative ` | ` 4 ` |  |
-| ` speed ` | ` 40 ` | ` ft ` |
-| ` climb_speed ` | ` 40 ` | ` ft ` |
-| ` swim_speed ` | ` 40 ` | ` ft ` |
 
 ## Health
 
@@ -434,3 +424,16 @@ geometry_assumptions:
   - plane
   - form_appearance
 ```
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_stats_extras -->
+> 
+> ```yaml
+> swim_speed:
+>   unit: ft
+>   value: 40
+> climb_speed:
+>   unit: ft
+>   value: 40
+> ```
+

@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 0a6c8f2a-a31d-54c2-84f6-c2804a638acf
 splat_kind: rule
 splat_key: dnd2024:rules/activating_a_magic_item_charges
 splat_name: Charges
-splat_origin:
-  key: dnd2024:reference/pages/206
+splat_origin: dnd2024:reference/pages/206
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 206
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 206, https://www.dndbeyond.com/srd
 ---
 
 # Charges

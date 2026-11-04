@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 97f523c3-606a-5245-8ca7-afe5600c74e6
 splat_kind: rule
 splat_key: dnd2024:glossary/weapon
 splat_name: Weapon
-splat_origin:
-  key: dnd2024:reference/glossary/weapon
+splat_origin: dnd2024:reference/glossary/weapon
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 191
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 191, https://www.dndbeyond.com/srd
 ---
 
 # Weapon

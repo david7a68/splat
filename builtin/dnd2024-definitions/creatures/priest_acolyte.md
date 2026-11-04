@@ -1,35 +1,62 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 7d5560c6-5f2f-5d25-90b2-f22462ec433f
 splat_kind: creature
 splat_key: dnd2024:creatures/priest_acolyte
 splat_name: Priest Acolyte
-splat_origin:
-  key: dnd2024:reference/creature/priest_acolyte
+splat_origin: dnd2024:reference/creature/priest_acolyte
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 316
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 316, https://www.dndbeyond.com/srd
 ---
 
 # Priest Acolyte
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Medium or Small |
+| Type | Humanoid (Cleric) |
+| Alignment | Neutral |
+| Armor Class | 13 |
+| Hit Points | 11 (2d8 + 2) |
+| Initiative | +0 (10) |
+| Speed | 30 ft. |
+| Challenge | 1/4 (XP 50; PB +2) |
+| Skills | Medicine +4, Religion +2 |
+| Senses | Passive Perception 12 |
+| Languages | Common |
+| Gear | Chain Shirt, Holy Symbol, Mace |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 14 | +2 | +2 |
+| Dex | 10 | +0 | +0 |
+| Con | 12 | +1 | +1 |
+| Int | 10 | +0 | +0 |
+| Wis | 14 | +2 | +2 |
+| Cha | 11 | +0 | +0 |
+
 
 ## Source text
 
 <!-- SRD page 316 -->
 
 Medium or Small Humanoid (Cleric), Neutral\
-AC 13 Initiative +0 (10)\
-HP 11 (2d8 + 2)\
-Speed 30 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 14 +2 +2 Dex 10 +0 +0 Con 12 +1 +1\
-Int 10 +0 +0 Wis 14 +2 +2 Cha 11 +0 +0\
-Skills Medicine +4, Religion +2\
-Gear Chain Shirt, Holy Symbol, Mace\
-Senses Passive Perception 12\
-Languages Common\
-CR 1/4 (XP 50; PB +2)
+> [!quote]- Printed stat block (not read; edit the table above)
+> AC 13 Initiative +0 (10)\
+> HP 11 (2d8 + 2)\
+> Speed 30 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 14 +2 +2 Dex 10 +0 +0 Con 12 +1 +1\
+> Int 10 +0 +0 Wis 14 +2 +2 Cha 11 +0 +0\
+> Skills Medicine +4, Religion +2\
+> Gear Chain Shirt, Holy Symbol, Mace\
+> Senses Passive Perception 12\
+> Languages Common\
+> CR 1/4 (XP 50; PB +2)
+
 
 ### Actions
 
@@ -47,48 +74,11 @@ Divine Aid (1/Day). The priest casts Bless, Healing Word, or Sanctuary, using th
 
 Original layout: [[../../srd-5.2.1/pages/316|page 316]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` medium ` |
-| ` type ` | ` humanoid ` |
-| ` alignment ` | ` Neutral ` |
-| ` size_options_text ` | ` Medium or Small ` |
-| ` tags_text ` | ` (Cleric) ` |
-| ` movement_text ` | ` 30 ft. ` |
-| ` skills_text ` | ` Medicine +4, Religion +2 ` |
-| ` gear_text ` | ` Chain Shirt, Holy Symbol, Mace ` |
-| ` senses_text ` | ` Passive Perception 12 ` |
-| ` languages_text ` | ` Common ` |
-| ` cr_text ` | ` 1/4 (XP 50; PB +2) ` |
-| ` hit_points_text ` | ` 11 (2d8 + 2) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 14 ` | ` 2 ` |
-| ` Dexterity ` | ` 10 ` | ` 0 ` |
-| ` Constitution ` | ` 12 ` | ` 1 ` |
-| ` Intelligence ` | ` 10 ` | ` 0 ` |
-| ` Wisdom ` | ` 14 ` | ` 2 ` |
-| ` Charisma ` | ` 11 ` | ` 0 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 13 ` |  |
-| ` max_hp ` | ` 11 ` |  |
-| ` initiative ` | ` 0 ` |  |
-| ` speed ` | ` 30 ` | ` ft ` |
 
 ## Health
 

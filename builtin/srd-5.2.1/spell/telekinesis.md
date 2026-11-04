@@ -1,10 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "f7a4769c-8cd3-5d71-9b00-09517bcaca6b"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/telekinesis"
 splat_name: "Telekinesis"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [167, 168], "executable": false}
+splat_pages:
+- 167
+- 168
 ---
 
 # Telekinesis
@@ -30,3 +32,13 @@ If the object is worn or carried by a creature, that creature must succeed on a 
 You can exert fine control on objects with your telekinetic grip, such as manipulating a simple tool, opening a door or a container, stowing or retrieving an item from an open container, or pouring the contents from a vial.
 
 Original layout: [[../pages/167|page 167]], [[../pages/168|page 168]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

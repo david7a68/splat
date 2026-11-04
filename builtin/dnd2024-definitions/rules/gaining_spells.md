@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 80c6e5dc-0a3c-5a4a-a6d5-52f6f3381221
 splat_kind: rule
 splat_key: dnd2024:rules/gaining_spells
 splat_name: Gaining Spells
-splat_origin:
-  key: dnd2024:reference/pages/104
+splat_origin: dnd2024:reference/pages/104
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 104
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 104, https://www.dndbeyond.com/srd
 ---
 
 # Gaining Spells

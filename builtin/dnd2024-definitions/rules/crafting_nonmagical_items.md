@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 10605318-c041-5207-be01-b99126d74e7c
 splat_kind: rule
 splat_key: dnd2024:rules/crafting_nonmagical_items
 splat_name: Crafting Nonmagical Items
-splat_origin:
-  key: dnd2024:reference/pages/103
+splat_origin: dnd2024:reference/pages/103
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 103
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 103, https://www.dndbeyond.com/srd
 ---
 
 # Crafting Nonmagical Items

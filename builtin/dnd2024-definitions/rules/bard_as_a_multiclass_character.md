@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 657f9051-fe6c-5ebf-895a-fbd2eff8ebc7
 splat_kind: rule
 splat_key: dnd2024:rules/bard_as_a_multiclass_character
 splat_name: As a Multiclass Character
-splat_origin:
-  key: dnd2024:reference/pages/031
+splat_origin: dnd2024:reference/pages/031
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 31
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 31, https://www.dndbeyond.com/srd
 ---
 
 # As a Multiclass Character

@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 3fc3bcca-9101-5850-aec5-f2ee508380ba
 splat_kind: spell
 splat_key: dnd2024:spells/elementalism
 splat_name: Elementalism
-splat_origin:
-  key: dnd2024:reference/spell/elementalism
+splat_origin: dnd2024:reference/spell/elementalism
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 127
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 127, https://www.dndbeyond.com/srd
 ---
 
 # Elementalism
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | Cantrip |
+| School | Transmutation |
+| Classes | Druid, Sorcerer, Wizard |
+| Casting Time | Action |
+| Range | 30 feet |
+| Components | V, S |
+| Duration | Instantaneous |
+
 
 ## Source text
 
@@ -38,28 +49,9 @@ Sculpt Element. You cause dirt, sand, fire, smoke, mist, or water that can fit i
 
 Original layout: [[../../srd-5.2.1/pages/127|page 127]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 0 ` |
-| ` school ` | ` transmutation ` |
-| ` classes ` | ` ["druid", "sorcerer", "wizard"] ` |
-| ` components ` | ` ["verbal", "somatic"] ` |
-| ` concentration ` | ` false ` |
-| ` duration ` | ` Instantaneous ` |
-| ` casting_time ` | ` Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
-
-<!-- splat:values path=splat_spell/range -->
-
-| Field | Value |
-| --- | --- |
-| ` feet ` | ` 30 ` |
 
 ## Rule
 

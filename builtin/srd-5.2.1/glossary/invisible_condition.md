@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "de2a0aa1-c4ca-5449-86e1-e8b3c48b10a3"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/glossary/invisible_condition"
 splat_name: "Invisible [Condition]"
-splat_reference: {"source": "SRD 5.2.1", "category": "glossary", "pages": [184], "executable": false}
+splat_pages:
+- 184
 ---
 
 # Invisible [Condition]
@@ -20,3 +21,13 @@ Concealed. You aren’t affected by any effect that requires its target to be se
 Attacks Affected. Attack rolls against you have Disadvantage, and your attack rolls have Advantage. If a creature can somehow see you, you don’t gain this benefit against that creature.
 
 Original layout: [[../pages/184|page 184]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: glossary
+> executable: false
+> ```
+

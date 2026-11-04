@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: bf2a6ef1-f17f-5c00-b9dd-6620049145bf
 splat_kind: spell
 splat_key: dnd2024:spells/hex
 splat_name: Hex
-splat_origin:
-  key: dnd2024:reference/spell/hex
+splat_origin: dnd2024:reference/spell/hex
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 140
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 140, https://www.dndbeyond.com/srd
 ---
 
 # Hex
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 1 |
+| School | Enchantment |
+| Classes | Warlock |
+| Casting Time | Bonus Action |
+| Range | 90 feet |
+| Components | V, S, M (the petrified eye of a newt) |
+| Duration | Concentration, up to 1 hour |
+
 
 ## Source text
 
@@ -32,37 +43,11 @@ Using a Higher-Level Spell Slot. Your Concentration can last longer with a spell
 
 Original layout: [[../../srd-5.2.1/pages/140|page 140]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 1 ` |
-| ` school ` | ` enchantment ` |
-| ` classes ` | ` ["warlock"] ` |
-| ` components ` | ` ["verbal", "somatic", "material"] ` |
-| ` concentration ` | ` true ` |
-| ` duration ` | ` Concentration, up to 1 hour ` |
-| ` casting_time ` | ` Bonus Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
 
-<!-- splat:values path=splat_spell/range -->
 
-| Field | Value |
-| --- | --- |
-| ` feet ` | ` 90 ` |
-
-### Material
-
-<!-- splat:values path=splat_spell/material -->
-
-| Field | Value |
-| --- | --- |
-| ` description ` | ` the petrified eye of a newt ` |
-| ` consumed ` | ` false ` |
 
 ## Rule
 
@@ -138,3 +123,12 @@ maximum:
   value: 1
   unit: hour
 ```
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_spell_extras -->
+> 
+> ```yaml
+> material:
+>   consumed: false
+> ```
+

@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "f143b88c-74fe-5aa0-9b49-780e983ae46f"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/summon_dragon"
 splat_name: "Summon Dragon"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [166], "executable": false}
+splat_pages:
+- 166
 ---
 
 # Summon Dragon
@@ -51,3 +52,13 @@ Rend. Melee Attack Roll: Bonus equals your spell attack modifier, reach 10 feet.
 Breath Weapon. Dexterity Saving Throw: DC equals your spell save DC, each creature in a 30-foot Cone. Failure: 2d6 damage of a type this spirit has Resistance to (your choice when you cast the spell). Success: Half damage.
 
 Original layout: [[../pages/166|page 166]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

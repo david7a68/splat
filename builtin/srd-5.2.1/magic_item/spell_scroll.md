@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "68cf8909-1d0d-5421-941f-f10093242d85"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/magic_item/spell_scroll"
 splat_name: "Spell Scroll"
-splat_reference: {"source": "SRD 5.2.1", "category": "magic_item", "pages": [244], "executable": false}
+splat_pages:
+- 244
 ---
 
 # Spell Scroll
@@ -38,3 +39,13 @@ The level of the spell on the scroll determines the spell’s saving throw DC an
 Copying a Scroll into a Spellbook. A Wizard spell on a Spell Scroll can be copied into a spellbook. When a spell is copied in this way, the copier must succeed on an Intelligence (Arcana) check with a DC equal to 10 plus the spell’s level. On a successful check, the spell is copied. Whether the check succeeds or fails, the Spell Scroll is destroyed.
 
 Original layout: [[../pages/244|page 244]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: magic_item
+> executable: false
+> ```
+

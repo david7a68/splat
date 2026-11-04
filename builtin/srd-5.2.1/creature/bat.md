@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "c0237922-5140-555d-b33a-bb73a16bda91"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/bat"
 splat_name: "Bat"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [345], "executable": false}
+splat_pages:
+- 345
 ---
 
 # Bat
@@ -27,3 +28,13 @@ CR 0 (XP 10; PB +2)
 Bite. Melee Attack Roll: +4, reach 5 ft. Hit: 1 Piercing damage.
 
 Original layout: [[../pages/345|page 345]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

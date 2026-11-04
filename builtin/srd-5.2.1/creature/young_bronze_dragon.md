@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "b27a4598-a4b0-5553-ab00-6b33370e2be8"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/young_bronze_dragon"
 splat_name: "Young Bronze Dragon"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [270], "executable": false}
+splat_pages:
+- 270
 ---
 
 # Young Bronze Dragon
@@ -39,3 +40,13 @@ Lightning Breath (Recharge 5–6). Dexterity Saving Throw: DC 15, each creature 
 Repulsion Breath. Strength Saving Throw: DC 15, each creature in a 30-foot Cone. Failure: The target is pushed up to 40 feet straight away from the dragon and has the Prone condition.
 
 Original layout: [[../pages/270|page 270]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

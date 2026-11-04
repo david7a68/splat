@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: cda544df-8444-5a1d-810a-e75823ae0f9f
 splat_kind: item
 splat_key: dnd2024:items/ring_of_spell_turning
 splat_name: Ring of Spell Turning
-splat_origin:
-  key: dnd2024:reference/magic_item/ring_of_spell_turning
+splat_origin: dnd2024:reference/magic_item/ring_of_spell_turning
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 239
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 239, https://www.dndbeyond.com/srd
 ---
 
 # Ring of Spell Turning
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Ring |
+| Rarity | Legendary |
+| Attunement | Yes |
+
 
 ## Source text
 
@@ -24,22 +31,9 @@ While wearing this ring, you have Advantage on saving throws against spells. If 
 
 Original layout: [[../../srd-5.2.1/pages/239|page 239]].
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` ring ` |
-| ` rarity ` | ` legendary ` |
 
-### Equipment
-
-<!-- splat:values path=splat_item/equipment -->
-
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` required ` |
 
 ## Rule
 

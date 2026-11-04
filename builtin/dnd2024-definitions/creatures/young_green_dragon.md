@@ -1,35 +1,62 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 55036dfe-5c31-5350-a624-942d197a4b11
 splat_kind: creature
 splat_key: dnd2024:creatures/young_green_dragon
 splat_name: Young Green Dragon
-splat_origin:
-  key: dnd2024:reference/creature/young_green_dragon
+splat_origin: dnd2024:reference/creature/young_green_dragon
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 293, 294
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 293, 294, https://www.dndbeyond.com/srd
 ---
 
 # Young Green Dragon
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Large |
+| Type | Dragon (Chromatic) |
+| Alignment | Lawful Evil |
+| Armor Class | 18 |
+| Hit Points | 136 (16d10 + 48) |
+| Initiative | +4 (14) |
+| Speed | 40 ft., Fly 80 ft., Swim 40 ft. |
+| Challenge | 8 (XP 3,900; PB +3) |
+| Skills | Deception +5, Perception +7, Stealth +4 |
+| Senses | Blindsight 30 ft., Darkvision 120 ft.; Passive Perception 17 |
+| Languages | Common, Draconic |
+| Immunities | Poison; Poisoned |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 19 | +4 | +4 |
+| Dex | 12 | +1 | +4 |
+| Con | 17 | +3 | +3 |
+| Int | 16 | +3 | +3 |
+| Wis | 13 | +1 | +4 |
+| Cha | 15 | +2 | +2 |
+
 
 ## Source text
 
 <!-- SRD page 293 -->
 
-Large Dragon (Chromatic), Lawful Evil\
-AC 18 Initiative +4 (14)\
-HP 136 (16d10 + 48)\
-Speed 40 ft., Fly 80 ft., Swim 40 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 19 +4 +4 Dex 12 +1 +4 Con 17 +3 +3\
-Int 16 +3 +3 Wis 13 +1 +4 Cha 15 +2 +2\
-Skills Deception +5, Perception +7, Stealth +4\
-Immunities Poison; Poisoned\
-Senses Blindsight 30 ft., Darkvision 120 ft.; Passive Perception 17\
-Languages Common, Draconic\
-CR 8 (XP 3,900; PB +3)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Large Dragon (Chromatic), Lawful Evil\
+> AC 18 Initiative +4 (14)\
+> HP 136 (16d10 + 48)\
+> Speed 40 ft., Fly 80 ft., Swim 40 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 19 +4 +4 Dex 12 +1 +4 Con 17 +3 +3\
+> Int 16 +3 +3 Wis 13 +1 +4 Cha 15 +2 +2\
+> Skills Deception +5, Perception +7, Stealth +4\
+> Immunities Poison; Poisoned\
+> Senses Blindsight 30 ft., Darkvision 120 ft.; Passive Perception 17\
+> Languages Common, Draconic\
+> CR 8 (XP 3,900; PB +3)
+
 
 ### Traits
 
@@ -47,49 +74,11 @@ Poison Breath (Recharge 5–6). Constitution Saving Throw: DC 14, each creature 
 
 Original layout: [[../../srd-5.2.1/pages/293|page 293]], [[../../srd-5.2.1/pages/294|page 294]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` large ` |
-| ` type ` | ` dragon ` |
-| ` alignment ` | ` Lawful Evil ` |
-| ` tags_text ` | ` (Chromatic) ` |
-| ` movement_text ` | ` 40 ft., Fly 80 ft., Swim 40 ft. ` |
-| ` skills_text ` | ` Deception +5, Perception +7, Stealth +4 ` |
-| ` immunities_text ` | ` Poison; Poisoned ` |
-| ` senses_text ` | ` Blindsight 30 ft., Darkvision 120 ft.; Passive Perception 17 ` |
-| ` languages_text ` | ` Common, Draconic ` |
-| ` cr_text ` | ` 8 (XP 3,900; PB +3) ` |
-| ` hit_points_text ` | ` 136 (16d10 + 48) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 19 ` | ` 4 ` |
-| ` Dexterity ` | ` 12 ` | ` 4 ` |
-| ` Constitution ` | ` 17 ` | ` 3 ` |
-| ` Intelligence ` | ` 16 ` | ` 3 ` |
-| ` Wisdom ` | ` 13 ` | ` 4 ` |
-| ` Charisma ` | ` 15 ` | ` 2 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 18 ` |  |
-| ` max_hp ` | ` 136 ` |  |
-| ` initiative ` | ` 4 ` |  |
-| ` speed ` | ` 40 ` | ` ft ` |
-| ` fly_speed ` | ` 80 ` | ` ft ` |
-| ` swim_speed ` | ` 40 ` | ` ft ` |
 
 ## Health
 
@@ -312,3 +301,16 @@ geometry_assumptions:
   - plane
   - form_appearance
 ```
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_stats_extras -->
+> 
+> ```yaml
+> fly_speed:
+>   unit: ft
+>   value: 80
+> swim_speed:
+>   unit: ft
+>   value: 40
+> ```
+

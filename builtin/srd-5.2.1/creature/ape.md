@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "97875881-aa56-5fe1-b865-ab6692abb161"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/ape"
 splat_name: "Ape"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [344], "executable": false}
+splat_pages:
+- 344
 ---
 
 # Ape
@@ -32,3 +33,13 @@ Fist. Melee Attack Roll: +5, reach 5 ft. Hit: 5 (1d4 + 3) Bludgeoning damage.
 Rock (Recharge 6). Ranged Attack Roll: +5, range 25/50 ft. Hit: 10 (2d6 + 3) Bludgeoning damage.
 
 Original layout: [[../pages/344|page 344]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

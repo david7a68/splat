@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 74c1cc78-2a18-533e-bc9f-7f2d3b211559
 splat_kind: rule_group
 splat_key: dnd2024:subclasses/wizard_wizard_subclass_evoker
 splat_name: 'Wizard Subclass: Evoker'
-splat_origin:
-  key: dnd2024:reference/pages/082
+splat_origin: dnd2024:reference/pages/082
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 82
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 82, https://www.dndbeyond.com/srd
 ---
 
 # Wizard Subclass: Evoker

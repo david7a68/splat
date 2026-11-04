@@ -3,6 +3,7 @@ import json
 import re
 import yaml
 import mapped_tables
+from schema2_notes import convert
 from functools import partial
 
 DUMP = getattr(yaml, 'CSafeDumper', yaml.SafeDumper)
@@ -118,4 +119,8 @@ def render_note(front, body, names=None, current=""):
         del fields['splat_requires_mechanics']
     parts = ['---\n', yaml.dump(meta,Dumper=DUMP,sort_keys=False,allow_unicode=True,width=100), '---\n\n', body.strip().split('\n',1)[0], '\n\n## Source text\n\n', body.strip().split('\n',1)[1].lstrip() if '\n' in body.strip() else '', '\n\n']
     for key,value in fields.items(): parts.append(render_value(key,value,names=names,current=current))
-    return ''.join(parts).rstrip() + '\n'
+    text = convert(''.join(parts).rstrip() + '\n', current)
+    # The pinned SRD prints Archmage at XP 8,000 for CR 12. Keep that supplied award.
+    if front.get('splat_key') == 'dnd2024:creatures/archmage':
+        text = text.replace('## Stat block\n', '## Stat block\n\n%% splat reward=printed %%\n', 1)
+    return text

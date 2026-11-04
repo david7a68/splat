@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "f6147528-7253-5e4b-9ebe-5252143bf824"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/spirit_naga"
 splat_name: "Spirit Naga"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [329], "executable": false}
+splat_pages:
+- 329
 ---
 
 # Spirit Naga
@@ -41,3 +42,13 @@ At Will: Detect Magic, Mage Hand, Minor Illusion, Water Breathing\
 2/Day Each: Detect Thoughts, Dimension Door, Hold Person (level 3 version), Lightning Bolt (level 4 version)
 
 Original layout: [[../pages/329|page 329]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

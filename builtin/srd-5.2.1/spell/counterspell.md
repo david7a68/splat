@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "20346446-bd26-5784-ba29-7d167068dda6"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/counterspell"
 splat_name: "Counterspell"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [120], "executable": false}
+splat_pages:
+- 120
 ---
 
 # Counterspell
@@ -20,3 +21,13 @@ Duration: Instantaneous
 You attempt to interrupt a creature in the process of casting a spell. The creature makes a Constitution saving throw. On a failed save, the spell dissipates with no effect, and the action, Bonus Action, or Reaction used to cast it is wasted. If that spell was cast with a spell slot, the slot isn’t expended.
 
 Original layout: [[../pages/120|page 120]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

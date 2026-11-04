@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 04416556-8bb8-5721-876a-6c88dbbfe67a
 splat_kind: rule
 splat_key: dnd2024:rules/character_species_size
 splat_name: Size
-splat_origin:
-  key: dnd2024:reference/pages/083
+splat_origin: dnd2024:reference/pages/083
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 83, 84
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 83, 84, https://www.dndbeyond.com/srd
 ---
 
 # Size

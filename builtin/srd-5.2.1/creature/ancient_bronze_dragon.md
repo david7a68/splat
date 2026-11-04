@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "c120b137-16d7-5544-901d-4395f248cf3a"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/ancient_bronze_dragon"
 splat_name: "Ancient Bronze Dragon"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [271], "executable": false}
+splat_pages:
+- 271
 ---
 
 # Ancient Bronze Dragon
@@ -57,3 +58,13 @@ Pounce. The dragon moves up to half its Speed, and it makes one Rend attack.
 Thunderclap. Constitution Saving Throw: DC 22, each creature in a 20-foot-radius Sphere centered on a point the dragon can see within 120 feet. Failure: 13 (3d8) Thunder damage, and the target has the Deafened condition until the end of its next turn.
 
 Original layout: [[../pages/271|page 271]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

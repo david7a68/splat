@@ -77,24 +77,6 @@ pub(super) struct GroupDraft {
     repair_error: Option<String>,
 }
 
-/// The note with this text after its frontmatter. The frontmatter stays as it is.
-fn with_notes(text: &str, notes: &str) -> Result<String, String> {
-    // The frontmatter's own line ending. A body can have another one.
-    let start = text.find("---").ok_or("Missing frontmatter")? + 3;
-    let newline = if text[start..].starts_with("\r\n") {
-        "\r\n"
-    } else {
-        "\n"
-    };
-    let end = format!("{newline}---");
-    let close = text[start..].find(&end).ok_or("Missing frontmatter end")? + start + end.len();
-    let notes = notes.trim().replace('\n', newline);
-    Ok(format!(
-        "{}{newline}{newline}{notes}{newline}",
-        &text[..close]
-    ))
-}
-
 impl GroupDraft {
     pub(super) fn new() -> Self {
         let id = crate::hermetic::new_uuid();
@@ -110,7 +92,7 @@ impl GroupDraft {
             path: format!("{FOLDER}/{id}.md"),
             baseline: None,
             source: format!(
-                "---\nsplat_schema: 1\nsplat_id: {id}\nsplat_kind: encounter_group\nsplat_name: New group\nsplat_encounter_group: {{}}\n---\n\n"
+                "---\nsplat_schema: 2\nsplat_id: {id}\nsplat_kind: encounter_group\nsplat_name: New group\nsplat_side: enemies\n---\n\n## Members\n\n| Count | Creature | Name | Changes | Note |\n| --- | --- | --- | --- | --- |\n"
             ),
             name: name.clone(),
             saved_name: name,
@@ -195,20 +177,10 @@ impl GroupDraft {
             .unwrap_or(&self.source);
         let source = if self.notes == self.saved_notes {
             disk_source.to_owned()
-        } else if self.baseline.is_some()
-            && splat::content::formats::schema(&Entry::parse(&self.path, disk_source)?.fields)
-                == Ok(2)
-        {
+        } else {
             splat::content::list_formats::with_prose(disk_source, &self.notes)?
-        } else {
-            with_notes(disk_source, &self.notes)?
         };
-        let patch = if self.baseline.is_none() {
-            splat::content::patch_fields
-        } else {
-            splat::content::formats::patch_model
-        };
-        let text = patch(
+        let text = splat::content::formats::patch_model(
             &source,
             &[
                 ("splat_name", Some(self.name.clone().into())),
@@ -224,8 +196,7 @@ impl GroupDraft {
         super::disk::comparison_text(&self.path, self.text()?, snapshot)
     }
     fn write_text(&self, snapshot: &Snapshot) -> Result<String, String> {
-        splat::content::formats::convert_resolved(
-            &self.path,
+        splat::content::list_formats::write_references(
             &self.text()?,
             snapshot
                 .catalogue
@@ -625,9 +596,11 @@ pub(super) fn load(
                         .and_then(Value::as_str);
                     let name = missing_member_name(member.overrides.name.as_deref(), link);
                     let fault_name = &name;
-                    problems.push(format!(
+                    problems.push(if let Some(note) = catalogue.old_layout_ref(&member.creature).and_then(|id| catalogue.unreadable.get(&id)) {
+                        note.word.clone()
+                    } else { format!(
                         "{what}, {fault_name}: not in this campaign's packages. Campaign → Packages."
-                    ));
+                    ) });
                     unavailable_members.push((index, member.count, name.to_owned()));
                     unavailable = unavailable.saturating_add(member.count);
                     continue;
@@ -663,6 +636,14 @@ pub(super) fn load(
             }
             let mut warnings = Vec::new();
             for member in unread {
+                let reference = member.creature.clone().and_then(|value| serde_yaml_ng::from_value::<EntryRef>(value).ok());
+                if let Some(note) = reference.as_ref().and_then(|reference| catalogue.unreadable_ref(reference)).filter(|note| note.old_layout) {
+                    warnings.push(note.word.clone());
+                    let count = member.count.unwrap_or(1);
+                    unavailable = unavailable.saturating_add(count);
+                    unavailable_members.push((member.before, count, member.label.clone()));
+                    continue;
+                }
                 let name = member.creature.clone()
                     .and_then(|value| serde_yaml_ng::from_value::<EntryRef>(value).ok())
                     .and_then(|reference| catalogue.resolve_ref(&reference).ok())
@@ -674,7 +655,7 @@ pub(super) fn load(
                 let shown = if member.name.is_empty() { &name } else { &member.name };
                 unavailable_members.push((member.before, count, format!("{shown} (not read)")));
             }
-            if members.is_empty() && !warnings.is_empty() { problems.push("No members can join. Edit group to fix them.".into()); }
+            if members.is_empty() && warnings.iter().any(|word| !word.contains("uses the old layout.")) { problems.push("No members can join. Edit group to fix them.".into()); }
             Some(Arc::new(RunGroup {
                 id: e.entry.id,
                 path: e.entry.path.clone(),
@@ -1718,8 +1699,6 @@ impl Encounters {
         // Only a group for any encounter can be linked in a plan.
         let was_linkable = draft.saved_setup.encounter.is_none();
         let path = draft.path.clone();
-        self.layouts.clear();
-        let before = draft.baseline.clone();
         match draft.save(active, modules) {
             Ok(()) => {
                 let name = draft.name.trim().to_owned();
@@ -1727,14 +1706,7 @@ impl Encounters {
                 self.saved = true;
                 self.error = None;
                 self.message = Some("Group saved.".into());
-                if let Some(before) = before {
-                    self.layouts.remember_conversion(
-                        &active.path,
-                        &draft.path,
-                        &before,
-                        &draft.source,
-                    );
-                }
+
                 // The list and an open run read groups from the snapshot.
                 self.refreshing = true;
                 self.start_load(ctx, active.clone(), modules.to_vec());
@@ -1815,14 +1787,7 @@ impl Encounters {
             ("Encounters", "Back to encounters")
         };
         let compact = ui.available_width() < 760.0;
-        let notice_path = self
-            .group_draft
-            .as_ref()
-            .map(|draft| active.path.join(draft.path()));
-        if self.layouts.has_action() && !self.layouts.current(notice_path.as_deref()) {
-            self.message = None;
-        }
-        let layout_notice = !dirty && self.layouts.current(notice_path.as_deref());
+
         let saved_note = self.message.clone();
         let focus_name = std::mem::take(&mut self.focus_name);
         let draft = self.group_draft.as_mut().expect("the editor has a draft");
@@ -1889,7 +1854,7 @@ impl Encounters {
             } else {
                 (icons::OK, "No changes", colors().muted)
             };
-            if !layout_notice {
+            {
                 discard = super::editor_save_state(ui, Status { icon, word, color }, dirty, None);
             }
             if dirty && in_plan {
@@ -1908,10 +1873,7 @@ impl Encounters {
                 );
             }
         }
-        if layout_notice && self.layout_notice(ui, active, campaigns.modules()) {
-            self.message = None;
-            return;
-        }
+
         if back {
             self.clear_notice();
             self.close_group_in_plan();
@@ -2247,6 +2209,9 @@ fn members(
                 let response = ui.add(egui::Label::new(Type::Small.rich(ui, super::stat_line(&detail)).color(colors().muted)).wrap());
                 design::named(ui, &response, &detail);
             }
+            if let Some(note) = snapshot.catalogue.unreadable_ref(&member.creature).filter(|note| note.old_layout) {
+                crate::formats_ui::old_notice(ui, &note.word, vec![note.path.clone()]);
+            }
             ui.horizontal(|ui| {
                 ui.label(Type::Small.rich(ui, "Count").color(colors().muted));
                 let count = ui.add(egui::DragValue::new(&mut member.count).range(1..=MAX_COUNT)
@@ -2328,6 +2293,14 @@ fn unread_member(
         .creature
         .clone()
         .and_then(|value| serde_yaml_ng::from_value(value).ok());
+    if let Some(note) = reference
+        .as_ref()
+        .and_then(|reference| snapshot.catalogue.unreadable_ref(reference))
+        .filter(|note| note.old_layout)
+    {
+        crate::formats_ui::old_notice(ui, &note.word, vec![note.path.clone()]);
+        return;
+    }
     let entry = reference
         .as_ref()
         .and_then(|reference| snapshot.catalogue.resolve_ref(reference).ok())
@@ -2538,9 +2511,9 @@ mod tests {
             root,
             &format!("{name}.md"),
             None,
-            &format!(
+            &splat::content::formats::convert("Fixture.md", &format!(
                 "---\nsplat_schema: 1\nsplat_id: {id}\nsplat_kind: creature\nsplat_name: {name}\nsplat_creature: {{cr_text: '1/4 (XP 50; PB +2)'}}\nsplat_stats:\n  max_hp: {{value: 10}}\n  armor_class: {{value: 15}}\n  initiative: {{value: 2}}\n  speed: {{value: 30}}\n---\n"
-            ),
+            )).expect("schema-2 fixture"),
         )
         .unwrap();
         id
@@ -2752,10 +2725,10 @@ mod tests {
             dir.path(),
             "Patrol encounter.md",
             None,
-            &format!(
+            &splat::content::formats::convert("Fixture.md", &format!(
                 "---\nsplat_schema: 1\nsplat_id: {}\nsplat_kind: encounter\nsplat_name: Patrol\nsplat_encounter: {{roster: []}}\n---\n",
                 Uuid::new_v4()
-            ),
+            )).expect("schema-2 fixture"),
         )
         .unwrap();
         let ctx = egui::Context::default();
@@ -2792,10 +2765,10 @@ mod tests {
             dir.path(),
             "Ford.md",
             None,
-            &format!(
+            &splat::content::formats::convert("Fixture.md", &format!(
                 "---\nsplat_schema: 1\nsplat_id: {}\nsplat_kind: encounter\nsplat_name: Ford\nsplat_encounter: {{roster: []}}\n---\n",
                 Uuid::new_v4()
-            ),
+            )).expect("schema-2 fixture"),
         )
         .unwrap();
         second.name = "ford".into();
@@ -2814,9 +2787,9 @@ mod tests {
                 dir.path(),
                 &format!("{name}.md"),
                 None,
-                &format!(
+                &splat::content::formats::convert("Fixture.md", &format!(
                     "---\nsplat_schema: 1\nsplat_id: {id}\nsplat_kind: encounter\nsplat_name: {name}\nsplat_encounter: {{roster: []}}\n---\n"
-                ),
+                )).expect("schema-2 fixture"),
             )
             .unwrap();
             id
@@ -2852,9 +2825,9 @@ mod tests {
             dir.path(),
             "Bridge.md",
             None,
-            &format!(
+            &splat::content::formats::convert("Fixture.md", &format!(
                 "---\nsplat_schema: 1\nsplat_id: {owner}\nsplat_kind: encounter\nsplat_name: Bridge\nsplat_encounter: {{roster: []}}\n---\n"
-            ),
+            )).expect("schema-2 fixture"),
         )
         .unwrap();
         let ctx = egui::Context::default();
@@ -2919,7 +2892,7 @@ mod tests {
             dir.path(),
             "Hero.md",
             None,
-            &format!("---\nsplat_schema: 1\nsplat_id: {id}\nsplat_kind: creature\nsplat_name: Hero\nsplat_creature: {{}}\nsplat_external: {{provider: dndbeyond, character_id: '1'}}\n---\n"),
+            &splat::content::formats::convert("Fixture.md", &format!("---\nsplat_schema: 1\nsplat_id: {id}\nsplat_kind: creature\nsplat_name: Hero\nsplat_creature: {{}}\nsplat_external: {{provider: dndbeyond, character_id: '1'}}\n---\n")).expect("schema-2 fixture"),
         )
         .unwrap();
         let snapshot = Snapshot::load(&campaign, &[]).unwrap();
@@ -3101,10 +3074,10 @@ mod tests {
             dir.path(),
             "Stray.md",
             None,
-            &format!(
+            &splat::content::formats::convert("Fixture.md", &format!(
                 "---\nsplat_schema: 1\nsplat_id: {}\nsplat_kind: encounter_group\nsplat_name: Stray\nsplat_encounter_group:\n  side: enemies\n  members:\n  - creature: {{id: {id}}}\n---\n",
                 Uuid::new_v4()
-            ),
+            )).expect("schema-2 fixture"),
         )
         .unwrap();
         let snapshot = Snapshot::load(&campaign, &[]).unwrap();
@@ -3135,9 +3108,9 @@ mod tests {
         ] {
             let dir = tempfile::tempdir().unwrap();
             let campaign = campaign(dir.path());
-            write_note(dir.path(), "Stray.md", None, &format!(
+            write_note(dir.path(), "Stray.md", None, &splat::content::formats::convert("Fixture.md", &format!(
                 "---\nsplat_schema: 1\nsplat_id: {}\nsplat_kind: encounter_group\nsplat_name: Stray\nsplat_encounter_group:\n  side: enemies\n  members:\n  - creature: {{key: 'missing:goblin_boss'{extra}}}\n    count: 2\n---\n", Uuid::new_v4()
-            )).unwrap();
+            )).expect("schema-2 fixture")).unwrap();
             let snapshot = Snapshot::load(&campaign, &[]).unwrap();
             let group = &snapshot.groups[0];
             let problem = group.problem.as_ref().unwrap();
@@ -3153,9 +3126,9 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let campaign = campaign(dir.path());
         let id = Uuid::new_v4();
-        write_note(dir.path(), "Stray.md", None, &format!(
+        write_note(dir.path(), "Stray.md", None, &splat::content::formats::convert("Fixture.md", &format!(
             "---\nsplat_schema: 1\nsplat_id: {}\nsplat_kind: encounter_group\nsplat_name: Stray\nsplat_encounter_group:\n  side: enemies\n  members:\n  - creature: {{id: {id}}}\n    overrides: {{name: Captain Varra}}\n---\n", Uuid::new_v4()
-        )).unwrap();
+        )).expect("schema-2 fixture")).unwrap();
         let snapshot = Snapshot::load(&campaign, &[]).unwrap();
         let group = &snapshot.groups[0];
         assert!(
@@ -3175,9 +3148,9 @@ mod tests {
             root,
             &format!("{name}.md"),
             None,
-            &format!(
+            &splat::content::formats::convert("Fixture.md", &format!(
                 "---\nsplat_schema: 1\nsplat_id: {id}\nsplat_kind: encounter\nsplat_name: {name}\nsplat_encounter:\n  roster: []\n  sides: {{}}\n  assumptions: []\n  completion: {{mode: manual}}\n  limits: {{rounds: 1, resolution_events: 1}}\n---\n"
-            ),
+            )).expect("schema-2 fixture"),
         )
         .unwrap();
         id
@@ -3264,10 +3237,10 @@ mod tests {
             dir.path(),
             "Linked.md",
             None,
-            &format!(
+            &splat::content::formats::convert("Fixture.md", &format!(
                 "---\nsplat_schema: 1\nsplat_id: {}\nsplat_kind: encounter_group\nsplat_name: Linked\nsplat_encounter_group:\n  side: enemies\n  encounter: {{id: {arena}, link: '[[Arena]]'}}\n  members:\n  - creature: {{id: {scout}}}\n---\n",
                 Uuid::new_v4()
-            ),
+            )).expect("schema-2 fixture"),
         )
         .unwrap();
         let mut draft = GroupDraft::open(dir.path(), "Linked.md").unwrap();
@@ -3432,92 +3405,72 @@ mod tests {
     #[test]
     fn i19_e_group_comparison_matches_disk_layout_and_overwrite() {
         use egui_kittest::kittest::Queryable;
-        for schema in [1, 2] {
-            let dir = tempfile::tempdir().unwrap();
-            let campaign = campaign(dir.path());
-            let mut group = GroupDraft::new();
-            group.name = "Scouts".into();
-            group.add(creature(dir.path(), "Scout"));
-            let legacy = group.text().unwrap();
-            group.save(&campaign, &[]).unwrap();
-            if schema == 1 {
-                fs::write(dir.path().join(&group.path), legacy).unwrap();
-                group = GroupDraft::open(dir.path(), &group.path).unwrap();
-            }
-            let path = dir.path().join(group.path());
-            let external = format!(
-                "{}\nDM's outside account.\n",
-                fs::read_to_string(&path)
-                    .unwrap()
-                    .replace("splat_schema:", "tags: [dawn]\nsplat_schema:")
-            );
-            fs::write(&path, &external).unwrap();
-            group.name = "Dawn scouts".into();
-            assert!(group.save(&campaign, &[]).is_err());
-            let snapshot = Snapshot::load(&campaign, &[]).unwrap();
-            let mut harness = egui_kittest::Harness::new(|ctx| {
-                egui::CentralPanel::default().show(ctx, |ui| {
-                    assert_eq!(group.disk_choice(ui, dir.path(), &snapshot).unwrap(), None);
-                });
-            });
-            harness.run_steps(2);
-            harness.get_by_label("1 line differs");
-            drop(harness);
-            let editor = Encounters {
-                group_draft: Some(group),
-                snapshot: Some(Snapshot::load(&campaign, &[]).unwrap()),
-                ..Default::default()
-            };
-            let mut harness = egui_kittest::Harness::builder().build_state(
-                |ctx, editor: &mut Encounters| {
-                    egui::CentralPanel::default().show(ctx, |ui| {
-                        if !editor.group_disk_view(ui, &campaign, &[]) {
-                            editor.layout_notice(ui, &campaign, &[]);
-                        }
-                    });
-                },
-                editor,
-            );
-            harness.run_steps(2);
-            harness.get_by_label("1 line differs");
-            let comparison = harness
-                .state()
-                .group_draft
-                .as_ref()
+        let dir = tempfile::tempdir().unwrap();
+        let campaign = campaign(dir.path());
+        let mut group = GroupDraft::new();
+        group.name = "Scouts".into();
+        group.add(creature(dir.path(), "Scout"));
+        group.save(&campaign, &[]).unwrap();
+        let path = dir.path().join(group.path());
+        let external = format!(
+            "{}\nDM's outside account.\n",
+            fs::read_to_string(&path)
                 .unwrap()
-                .comparison_text(&snapshot)
-                .unwrap();
-            assert_eq!(
-                comparison,
-                external.replace("splat_name: Scouts", "splat_name: Dawn scouts")
-            );
-            let overwrite = splat::content::formats::convert_resolved(
-                &harness.state().group_draft.as_ref().unwrap().path,
-                &comparison,
-                snapshot
-                    .catalogue
-                    .entries
-                    .values()
-                    .map(|entry| &entry.entry),
-            )
+                .replace("splat_schema:", "tags: [dawn]\nsplat_schema:")
+        );
+        fs::write(&path, &external).unwrap();
+        group.name = "Dawn scouts".into();
+        assert!(group.save(&campaign, &[]).is_err());
+        let snapshot = Snapshot::load(&campaign, &[]).unwrap();
+        let mut harness = egui_kittest::Harness::new(|ctx| {
+            egui::CentralPanel::default().show(ctx, |ui| {
+                assert_eq!(group.disk_choice(ui, dir.path(), &snapshot).unwrap(), None);
+            });
+        });
+        harness.run_steps(2);
+        harness.get_by_label("1 line differs");
+        drop(harness);
+        let editor = Encounters {
+            group_draft: Some(group),
+            snapshot: Some(Snapshot::load(&campaign, &[]).unwrap()),
+            ..Default::default()
+        };
+        let mut harness = egui_kittest::Harness::builder().build_state(
+            |ctx, editor: &mut Encounters| {
+                egui::CentralPanel::default()
+                    .show(ctx, |ui| if !editor.group_disk_view(ui, &campaign, &[]) {});
+            },
+            editor,
+        );
+        harness.run_steps(2);
+        harness.get_by_label("1 line differs");
+        let comparison = harness
+            .state()
+            .group_draft
+            .as_ref()
+            .unwrap()
+            .comparison_text(&snapshot)
             .unwrap();
-            if schema == 2 {
-                assert_eq!(comparison, overwrite, "schema 2 keeps the current layout");
-            }
-            assert!(comparison.contains("tags: [dawn]"));
-            assert!(comparison.contains("DM's outside account."));
-            harness.get_by_label("Overwrite with my draft").click();
-            harness.run_steps(2);
-            assert_eq!(harness.state().error, None);
-            assert_eq!(fs::read_to_string(&path).unwrap(), overwrite);
-            if schema == 1 {
-                harness.get_by_label("Undo save");
-                assert!(harness.query_by_label("Undo").is_none());
-                harness.get_by_label("Undo save").click();
-                harness.run_steps(2);
-                assert_eq!(fs::read_to_string(&path).unwrap(), external);
-            }
-        }
+        assert_eq!(
+            comparison,
+            external.replace("splat_name: Scouts", "splat_name: Dawn scouts")
+        );
+        let overwrite = splat::content::formats::convert_resolved(
+            &harness.state().group_draft.as_ref().unwrap().path,
+            &comparison,
+            snapshot
+                .catalogue
+                .entries
+                .values()
+                .map(|entry| &entry.entry),
+        )
+        .unwrap();
+        assert!(comparison.contains("tags: [dawn]"));
+        assert!(comparison.contains("DM's outside account."));
+        harness.get_by_label("Overwrite with my draft").click();
+        harness.run_steps(2);
+        assert_eq!(harness.state().error, None);
+        assert_eq!(fs::read_to_string(&path).unwrap(), overwrite);
     }
 
     #[test]
@@ -3578,10 +3531,10 @@ mod tests {
         let entry = |creature: &str, body: &str| {
             Entry::parse(
                 "c.md",
-                &format!(
+                &splat::content::formats::convert("Fixture.md", &format!(
                     "---\nsplat_schema: 1\nsplat_id: {}\nsplat_kind: creature\nsplat_name: C\nsplat_creature: {creature}\n---\n\n{body}\n",
                     Uuid::new_v4()
-                ),
+                )).expect("schema-2 fixture"),
             )
             .unwrap()
         };
@@ -3596,7 +3549,11 @@ mod tests {
             )),
             Some(8400)
         );
-        assert_eq!(creature_xp(&entry("{}", "CR 3 (XP 700; PB +2)")), Some(700));
+        assert_eq!(
+            creature_xp(&entry("{}", "CR 3 (XP 700; PB +2)")),
+            None,
+            "Only the schema-2 Challenge row supplies CR"
+        );
         assert_eq!(creature_xp(&entry("{cr_text: '3'}", "")), Some(700));
         assert_eq!(creature_xp(&entry("{}", "No such line.")), None);
         assert_eq!(
@@ -3611,14 +3568,6 @@ mod tests {
     }
 
     #[test]
-    fn notes_go_after_a_frontmatter_whose_line_endings_differ_from_its_body() {
-        let text = with_notes("---\nsplat_name: x\n---\n\nold\r\n---\r\nolder\r\n", "new").unwrap();
-        assert_eq!(text, "---\nsplat_name: x\n---\n\nnew\n");
-        let text = with_notes("---\r\nsplat_name: x\r\n---\r\n\r\nold\r\n", "a\nb").unwrap();
-        assert_eq!(text, "---\r\nsplat_name: x\r\n---\r\n\r\na\r\nb\r\n");
-    }
-
-    #[test]
     fn a_creature_no_run_could_add_is_refused_when_the_group_is_saved() {
         let dir = tempfile::tempdir().unwrap();
         let campaign = campaign(dir.path());
@@ -3627,7 +3576,7 @@ mod tests {
             dir.path(),
             "Blank.md",
             None,
-            &format!("---\nsplat_schema: 1\nsplat_id: {id}\nsplat_kind: creature\nsplat_name: Blank\nsplat_creature: {{}}\n---\n"),
+            &splat::content::formats::convert("Fixture.md", &format!("---\nsplat_schema: 1\nsplat_id: {id}\nsplat_kind: creature\nsplat_name: Blank\nsplat_creature: {{}}\n---\n")).expect("schema-2 fixture"),
         )
         .unwrap();
         let mut draft = GroupDraft::new();

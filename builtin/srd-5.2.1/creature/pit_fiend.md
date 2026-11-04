@@ -1,10 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "b824cb56-61f8-535f-8e7d-bf3292391dcf"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/pit_fiend"
 splat_name: "Pit Fiend"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [314, 315], "executable": false}
+splat_pages:
+- 314
+- 315
 ---
 
 # Pit Fiend
@@ -50,3 +52,13 @@ Fiery Mace. Melee Attack Roll: +14, reach 10 ft. Hit: 22 (4d6 + 8) Force damage 
 Hellfire Spellcasting (Recharge 4–6). The pit fiend casts Fireball (level 5 version) twice, requiring no Material components and using Charisma as the spellcasting ability (spell save DC 21). It can replace one Fireball with Hold Monster (level 7 version) or Wall of Fire.
 
 Original layout: [[../pages/314|page 314]], [[../pages/315|page 315]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

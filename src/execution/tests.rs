@@ -176,37 +176,6 @@ fn unresolved_facts_do_not_spend_resources_or_randomness() {
     .unwrap();
     assert_eq!(e.actors["skeleton"].hp, 7);
 }
-#[test]
-fn fmt_f2_reader_identity_and_table_conversion_preserve_strict_execution() {
-    let mut entry = builtin::entries()
-        .unwrap()
-        .into_iter()
-        .find(|e| e.name == "Guard")
-        .unwrap();
-    let before = compile(&entry).unwrap();
-    let text = format!(
-        "---\n{}---\n{}",
-        serde_yaml_ng::to_string(&*entry.fields).unwrap(),
-        entry.body
-    );
-    let converted = crate::content::formats::convert("Guard.md", &text).unwrap();
-    let converted = crate::content::Entry::parse("Guard.md", &converted).unwrap();
-    let after = compile(&converted).unwrap();
-    assert_eq!(
-        serde_json::to_value(before.stats).unwrap(),
-        serde_json::to_value(after.stats).unwrap()
-    );
-    assert_eq!(
-        serde_json::to_value(before.creature).unwrap(),
-        serde_json::to_value(after.creature).unwrap()
-    );
-    entry.fields.get_mut("splat_creature").unwrap()["unknown_mechanic"] = true.into();
-    assert!(
-        compile(&entry)
-            .unwrap_err()
-            .contains("unknown field `unknown_mechanic`")
-    );
-}
 
 #[test]
 fn compiler_rejects_unknown_mechanics_instead_of_ignoring_them() {

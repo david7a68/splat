@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 82876aba-1989-5725-996a-87a4669768f3
 splat_kind: rule
 splat_key: dnd2024:rules/character_species_special_traits
 splat_name: Special Traits
-splat_origin:
-  key: dnd2024:reference/pages/084
+splat_origin: dnd2024:reference/pages/084
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 84
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 84, https://www.dndbeyond.com/srd
 ---
 
 # Special Traits

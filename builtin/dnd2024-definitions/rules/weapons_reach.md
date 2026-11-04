@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 2a3dabab-9c38-55dc-9bf9-412bc5eaef1a
 splat_kind: rule
 splat_key: dnd2024:rules/weapons_reach
 splat_name: Reach
-splat_origin:
-  key: dnd2024:reference/pages/090
+splat_origin: dnd2024:reference/pages/090
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 90
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 90, https://www.dndbeyond.com/srd
 ---
 
 # Reach

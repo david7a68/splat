@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: ce9081a6-0245-5d7f-8d29-be9a3f5f2d46
 splat_kind: rule
 splat_key: dnd2024:class_features/fiend_patron_level_6_dark_one_s_own_luck
 splat_name: 'Level 6: Dark One’s Own Luck'
-splat_origin:
-  key: dnd2024:reference/pages/076
+splat_origin: dnd2024:reference/pages/076
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 76
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 76, https://www.dndbeyond.com/srd
 ---
 
 # Level 6: Dark One’s Own Luck

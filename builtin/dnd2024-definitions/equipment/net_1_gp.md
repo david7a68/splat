@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 1146923b-6200-5244-a2d0-54a361b76f2d
 splat_kind: item
 splat_key: dnd2024:equipment/net_1_gp
 splat_name: Net (1 GP)
-splat_origin:
-  key: dnd2024:reference/pages/098
+splat_origin: dnd2024:reference/pages/098
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 98
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 98, https://www.dndbeyond.com/srd
 ---
 
 # Net (1 GP)
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Adventuring Gear |
+| Rarity |  |
+| Attunement | No |
+
 
 ## Source text
 
@@ -22,39 +29,13 @@ When you take the Attack action, you can replace one of your attacks with throwi
 
 To escape, the target or a creature within 5 feet of it must take an action to make a DC 10 Strength (Athletics) check, freeing the Restrained creature on a success. Destroying the Net (AC 10; 5 HP; Immunity to Bludgeoning, Poison, and Psychic damage) also frees the target, ending the effect.
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` adventuring_gear ` |
 
-### Equipment
 
-<!-- splat:values path=splat_item/equipment -->
 
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` none ` |
 
-### Price
 
-<!-- splat:values path=splat_item/price -->
-
-| Field | Value |
-| --- | --- |
-| ` value ` | ` 1 ` |
-| ` unit ` | ` gp ` |
-
-### Mass
-
-<!-- splat:values path=splat_item/mass -->
-
-| Field | Value |
-| --- | --- |
-| ` value ` | ` 3.0 ` |
-| ` unit ` | ` lb ` |
 
 ## Rule
 
@@ -133,3 +114,16 @@ success: free_target
 | --- | --- |
 | ` value ` | ` 3.0 ` |
 | ` unit ` | ` lb ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_item_extras -->
+> 
+> ```yaml
+> price:
+>   unit: gp
+>   value: 1
+> mass:
+>   unit: lb
+>   value: 3.0
+> ```
+

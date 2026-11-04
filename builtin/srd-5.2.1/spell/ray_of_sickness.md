@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "d3204852-4d69-576e-abcb-2d443daccec3"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/ray_of_sickness"
 splat_name: "Ray of Sickness"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [158], "executable": false}
+splat_pages:
+- 158
 ---
 
 # Ray of Sickness
@@ -22,3 +23,13 @@ You shoot a greenish ray at a creature within range. Make a ranged spell attack 
 Using a Higher-Level Spell Slot. The damage increases by 1d8 for each spell slot level above 1.
 
 Original layout: [[../pages/158|page 158]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

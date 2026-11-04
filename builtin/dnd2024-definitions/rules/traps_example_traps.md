@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 4ff2d475-624f-55a7-884f-49a62a18d970
 splat_kind: rule
 splat_key: dnd2024:rules/traps_example_traps
 splat_name: Example Traps
-splat_origin:
-  key: dnd2024:reference/pages/199
+splat_origin: dnd2024:reference/pages/199
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 199
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 199, https://www.dndbeyond.com/srd
 ---
 
 # Example Traps

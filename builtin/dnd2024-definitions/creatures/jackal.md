@@ -1,34 +1,60 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 3bfdbb1f-f2d2-523b-94c2-aa6f9d8362d4
 splat_kind: creature
 splat_key: dnd2024:creatures/jackal
 splat_name: Jackal
-splat_origin:
-  key: dnd2024:reference/creature/jackal
+splat_origin: dnd2024:reference/creature/jackal
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 356
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 356, https://www.dndbeyond.com/srd
 ---
 
 # Jackal
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Small |
+| Type | Beast |
+| Alignment | Unaligned |
+| Armor Class | 12 |
+| Hit Points | 3 (1d6) |
+| Initiative | +2 (12) |
+| Speed | 40 ft. |
+| Challenge | 0 (XP 10; PB +2) |
+| Skills | Perception +5, Stealth +4 |
+| Senses | Darkvision 90 ft.; Passive Perception 15 |
+| Languages | None |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 8 | -1 | -1 |
+| Dex | 15 | +2 | +2 |
+| Con | 11 | +0 | +0 |
+| Int | 3 | -4 | -4 |
+| Wis | 12 | +1 | +1 |
+| Cha | 6 | -2 | -2 |
+
 
 ## Source text
 
 <!-- SRD page 356 -->
 
-Small Beast, Unaligned\
-AC 12  Initiative +2 (12)\
-HP 3 (1d6)\
-Speed 40 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 8 −1 −1 Dex 15 +2 +2 Con 11 +0 +0\
-Int 3 −4 −4 Wis 12 +1 +1 Cha 6 −2 −2\
-Skills Perception +5, Stealth +4\
-Senses Darkvision 90 ft.; Passive Perception 15\
-Languages None\
-CR 0 (XP 10; PB +2)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Small Beast, Unaligned\
+> AC 12  Initiative +2 (12)\
+> HP 3 (1d6)\
+> Speed 40 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 8 −1 −1 Dex 15 +2 +2 Con 11 +0 +0\
+> Int 3 −4 −4 Wis 12 +1 +1 Cha 6 −2 −2\
+> Skills Perception +5, Stealth +4\
+> Senses Darkvision 90 ft.; Passive Perception 15\
+> Languages None\
+> CR 0 (XP 10; PB +2)
+
 
 ### Actions
 
@@ -36,45 +62,11 @@ Bite. Melee Attack Roll: +1, reach 5 ft. Hit: 1 (1d4 – 1) Piercing damage.
 
 Original layout: [[../../srd-5.2.1/pages/356|page 356]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` small ` |
-| ` type ` | ` beast ` |
-| ` alignment ` | ` Unaligned ` |
-| ` movement_text ` | ` 40 ft. ` |
-| ` skills_text ` | ` Perception +5, Stealth +4 ` |
-| ` senses_text ` | ` Darkvision 90 ft.; Passive Perception 15 ` |
-| ` languages_text ` | ` None ` |
-| ` cr_text ` | ` 0 (XP 10; PB +2) ` |
-| ` hit_points_text ` | ` 3 (1d6) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 8 ` | ` -1 ` |
-| ` Dexterity ` | ` 15 ` | ` 2 ` |
-| ` Constitution ` | ` 11 ` | ` 0 ` |
-| ` Intelligence ` | ` 3 ` | ` -4 ` |
-| ` Wisdom ` | ` 12 ` | ` 1 ` |
-| ` Charisma ` | ` 6 ` | ` -2 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 12 ` |  |
-| ` max_hp ` | ` 3 ` |  |
-| ` initiative ` | ` 2 ` |  |
-| ` speed ` | ` 40 ` | ` ft ` |
 
 ## Health
 

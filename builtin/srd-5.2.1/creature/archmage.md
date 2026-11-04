@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "e2584077-1962-5934-b270-491e97fa3a03"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/archmage"
 splat_name: "Archmage"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [305], "executable": false}
+splat_pages:
+- 305
 ---
 
 # Archmage
@@ -51,3 +52,13 @@ Misty Step (3/Day). The mage casts Misty Step, using the same spellcasting abili
 Protective Magic (3/Day). The archmage casts Counterspell or Shield in response to the spell’s trigger, using the same spellcasting ability as Spellcasting.
 
 Original layout: [[../pages/305|page 305]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

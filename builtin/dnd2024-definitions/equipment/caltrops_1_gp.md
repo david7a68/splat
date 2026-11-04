@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: a4cb4197-cac1-5c91-874d-53516761b2f1
 splat_kind: item
 splat_key: dnd2024:equipment/caltrops_1_gp
 splat_name: Caltrops (1 GP)
-splat_origin:
-  key: dnd2024:reference/pages/096
+splat_origin: dnd2024:reference/pages/096
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 96
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 96, https://www.dndbeyond.com/srd
 ---
 
 # Caltrops (1 GP)
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Adventuring Gear |
+| Rarity |  |
+| Attunement | No |
+
 
 ## Source text
 
@@ -20,39 +27,13 @@ splat_sources:
 
 As a Utilize action, you can spread Caltrops from their bag to cover a 5-foot-square area within 5 feet of yourself. A creature that enters this area for the first time on a turn must succeed on a DC 15 Dexterity saving throw or take 1 Piercing damage and have its Speed reduced to 0 until the start of its next turn. It takes 10 minutes to recover the Caltrops.
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` adventuring_gear ` |
 
-### Equipment
 
-<!-- splat:values path=splat_item/equipment -->
 
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` none ` |
 
-### Price
 
-<!-- splat:values path=splat_item/price -->
-
-| Field | Value |
-| --- | --- |
-| ` value ` | ` 1 ` |
-| ` unit ` | ` gp ` |
-
-### Mass
-
-<!-- splat:values path=splat_item/mass -->
-
-| Field | Value |
-| --- | --- |
-| ` value ` | ` 2.0 ` |
-| ` unit ` | ` lb ` |
 
 ## Rule
 
@@ -106,3 +87,16 @@ duration:
 | --- | --- |
 | ` value ` | ` 2.0 ` |
 | ` unit ` | ` lb ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_item_extras -->
+> 
+> ```yaml
+> price:
+>   unit: gp
+>   value: 1
+> mass:
+>   unit: lb
+>   value: 2.0
+> ```
+

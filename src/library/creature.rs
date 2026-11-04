@@ -120,43 +120,11 @@ pub(super) fn use_vital(
     key: &str,
     value: i64,
 ) -> Result<String, String> {
-    if entry.fields.get("splat_schema").and_then(|v| v.as_u64()) == Some(2) {
-        let mut stats = entry.fields["splat_stats"].clone();
-        stats[key]["value"] = value.into();
-        return splat::content::formats::patch_model(text, &[("splat_stats", Some(stats))]);
-    }
-    // Book copies keep stats in a marked Markdown map. Change its value cell only.
-    let mut in_stats = false;
-    let mut offset = 0;
-    for line in text.split_inclusive('\n') {
-        if line.starts_with("<!-- splat:") {
-            in_stats = line.contains("path=splat_stats ");
-        }
-        if line.starts_with('#') {
-            in_stats = false;
-        }
-        if in_stats && line.starts_with('|') {
-            let cells: Vec<_> = line.split('|').collect();
-            if cells
-                .get(1)
-                .is_some_and(|cell| cell.trim().trim_matches('`').trim() == key)
-                && let Some(cell) = cells.get(2)
-            {
-                let start = offset + cells[0].len() + cells[1].len() + 2;
-                let mut changed = text.to_owned();
-                changed.replace_range(start..start + cell.len(), &format!(" ` {value} ` "));
-                Entry::parse(&entry.path, &changed)?;
-                return Ok(changed);
-            }
-        }
-        offset += line.len();
-    }
     let mut stats = entry.fields["splat_stats"].clone();
     stats[key]["value"] = value.into();
-    let changed = splat::content::patch_fields(text, &[("splat_stats", Some(stats))])?;
-    let updated = Entry::parse(&entry.path, &changed)?;
-    crate::content_workspace::creature_copy_fields(&changed, &updated)
+    splat::content::formats::patch_model(text, &[("splat_stats", Some(stats))])
 }
+
 fn value(entry: &Entry, key: &str) -> String {
     stat(entry, key).map_or_else(|| "—".into(), |v| v.to_string())
 }
@@ -894,16 +862,19 @@ mod tests {
     fn copied_stat_action_keeps_one_line_per_stat_in_book_order() {
         let source =
             splat::content::definitions::source_file("definitions/creatures/aboleth.md").unwrap();
-        let entry = Entry::parse("Aboleth.md", source).unwrap();
-        let text = crate::content_workspace::creature_copy_fields(source, &entry).unwrap();
+        let text = source.to_owned();
         let entry = Entry::parse("Aboleth.md", &text).unwrap();
         let changed = use_vital(&text, &entry, "max_hp", 180).unwrap();
         assert!(
-            changed.contains("splat_stats:\n  max_hp: {value: 180}\n"),
+            changed.contains("| Hit Points | 180 (20d10 + 40) |"),
             "{}",
             changed.chars().take(1800).collect::<String>()
         );
-        assert!(!changed.contains("    value:"));
+        assert_eq!(
+            Entry::parse("Aboleth.md", &changed).unwrap().fields["splat_stats"]["max_hp"]["value"]
+                .as_i64(),
+            Some(180)
+        );
     }
 
     #[test]
@@ -914,14 +885,15 @@ mod tests {
         let changed = use_vital(text, &entry, "max_hp", 180).unwrap();
         let changed = Entry::parse("Aboleth.md", &changed).unwrap();
         assert_eq!(stat(&changed, "max_hp"), Some(180));
-        assert!(vital_rows(&changed).contains(&("HIT POINTS", "180".into())));
+        assert!(vital_rows(&changed).contains(&("HIT POINTS", "180 (20d10 + 40)".into())));
         assert!(without_vitals(&changed, &changed.body).contains("Mucus Cloud"));
     }
 
     #[test]
     fn a_hand_written_creature_reads_as_a_stat_block_with_only_what_it_has() {
         let text = "---\nsplat_schema: 1\nsplat_id: 8f4a2f8e-41f0-4c4a-9d4c-0a7a1a1b2c3d\nsplat_kind: creature\nsplat_name: Varra\nsplat_creature: {size: medium}\nsplat_stats:\n  max_hp: {value: 52}\n  armor_class: {value: 16}\n---\n\n# Varra\n\n## Actions\n\nLongsword. Melee Attack Roll: +5.\n";
-        let entry = Entry::parse("Notes/Varra.md", text).unwrap();
+        let text = splat::content::formats::convert("Notes/Varra.md", text).unwrap();
+        let entry = Entry::parse("Notes/Varra.md", &text).unwrap();
         assert!(has_stats(&entry));
         assert_eq!(
             vital_rows(&entry),
@@ -974,7 +946,7 @@ mod tests {
         let prose = rules_prose(&entry, &source);
         assert!(prose.contains("Immunities Charmed (except from its vampire master)"));
         assert!(prose.contains("Vampiric Connection."));
-        assert!(!prose.contains("HP 65"));
+        assert_eq!(prose.matches("HP 65").count(), 1);
         entry.body = "## Description\nA custom creature with structured actions.".into();
         assert!(
             !supports(

@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 6c2d30e1-4f6e-58d9-969d-cc0b02db8430
 splat_kind: spell
 splat_key: dnd2024:spells/mislead
 splat_name: Mislead
-splat_origin:
-  key: dnd2024:reference/spell/mislead
+splat_origin: dnd2024:reference/spell/mislead
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 150
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 150, https://www.dndbeyond.com/srd
 ---
 
 # Mislead
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 5 |
+| School | Illusion |
+| Classes | Bard, Warlock, Wizard |
+| Casting Time | Action |
+| Range |  |
+| Components | S |
+| Duration | Concentration, up to 1 hour |
+
 
 ## Source text
 
@@ -32,28 +43,9 @@ You can see through its eyes and hear through its ears as if you were located wh
 
 Original layout: [[../../srd-5.2.1/pages/150|page 150]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 5 ` |
-| ` school ` | ` illusion ` |
-| ` classes ` | ` ["bard", "warlock", "wizard"] ` |
-| ` components ` | ` ["somatic"] ` |
-| ` concentration ` | ` true ` |
-| ` duration ` | ` Concentration, up to 1 hour ` |
-| ` casting_time ` | ` Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
-
-<!-- splat:values path=splat_spell/range -->
-
-| Field | Value |
-| --- | --- |
-| ` mode ` | ` self ` |
 
 ## Rule
 
@@ -122,3 +114,12 @@ maximum:
   value: 1
   unit: hour
 ```
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_spell_extras -->
+> 
+> ```yaml
+> range:
+>   mode: self
+> ```
+

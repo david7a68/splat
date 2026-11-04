@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 3dae3c2f-76fc-57ce-a4b1-3b629c7e6a0b
 splat_kind: rule
 splat_key: dnd2024:rules/ranger_as_a_level_1_character
 splat_name: As a Level 1 Character
-splat_origin:
-  key: dnd2024:reference/pages/057
+splat_origin: dnd2024:reference/pages/057
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 57
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 57, https://www.dndbeyond.com/srd
 ---
 
 # As a Level 1 Character

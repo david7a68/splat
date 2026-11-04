@@ -1,10 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "32b3978c-59b3-5c68-95cb-ab6ec8ba4fe6"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/seeming"
 splat_name: "Seeming"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [160, 161], "executable": false}
+splat_pages:
+- 160
+- 161
 ---
 
 # Seeming
@@ -28,3 +30,13 @@ The changes wrought by this spell fail to hold up to physical inspection. For ex
 A creature that takes the Study action to examine a target can make an Intelligence (Investigation) check against your spell save DC. If it succeeds, it becomes aware that the target is disguised.
 
 Original layout: [[../pages/160|page 160]], [[../pages/161|page 161]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

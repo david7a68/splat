@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: f3af9c26-a19d-59e7-ac2c-593ee01d30b0
 splat_kind: rule
 splat_key: dnd2024:rules/weapons_vex
 splat_name: Vex
-splat_origin:
-  key: dnd2024:reference/pages/090
+splat_origin: dnd2024:reference/pages/090
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 90
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 90, https://www.dndbeyond.com/srd
 ---
 
 # Vex

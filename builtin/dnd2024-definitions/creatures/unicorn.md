@@ -1,34 +1,60 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 3dcfc58e-7518-58cb-a708-6e67789cc063
 splat_kind: creature
 splat_key: dnd2024:creatures/unicorn
 splat_name: Unicorn
-splat_origin:
-  key: dnd2024:reference/creature/unicorn
+splat_origin: dnd2024:reference/creature/unicorn
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 334
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 334, https://www.dndbeyond.com/srd
 ---
 
 # Unicorn
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Large |
+| Type | Celestial |
+| Alignment | Lawful Good |
+| Armor Class | 12 |
+| Hit Points | 97 (13d10 + 26) |
+| Initiative | +8 (18) |
+| Speed | 50 ft. |
+| Challenge | 5 (XP 1,800; PB +3) |
+| Senses | Darkvision 60 ft.; Passive Perception 13 |
+| Languages | Celestial, Elvish, Sylvan; telepathy 120 ft. |
+| Immunities | Poison; Charmed, Paralyzed, Poisoned |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 18 | +4 | +4 |
+| Dex | 14 | +2 | +2 |
+| Con | 15 | +2 | +2 |
+| Int | 11 | +0 | +0 |
+| Wis | 17 | +3 | +3 |
+| Cha | 16 | +3 | +3 |
+
 
 ## Source text
 
 <!-- SRD page 334 -->
 
-Large Celestial, Lawful Good\
-AC 12 Initiative +8 (18)\
-HP 97 (13d10 + 26)\
-Speed 50 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 18 +4 +4 Dex 14 +2 +2 Con 15 +2 +2\
-Int 11 +0 +0 Wis 17 +3 +3 Cha 16 +3 +3\
-Immunities Poison; Charmed, Paralyzed, Poisoned\
-Senses Darkvision 60 ft.; Passive Perception 13\
-Languages Celestial, Elvish, Sylvan; telepathy 120 ft.\
-CR 5 (XP 1,800; PB +3)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Large Celestial, Lawful Good\
+> AC 12 Initiative +8 (18)\
+> HP 97 (13d10 + 26)\
+> Speed 50 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 18 +4 +4 Dex 14 +2 +2 Con 15 +2 +2\
+> Int 11 +0 +0 Wis 17 +3 +3 Cha 16 +3 +3\
+> Immunities Poison; Charmed, Paralyzed, Poisoned\
+> Senses Darkvision 60 ft.; Passive Perception 13\
+> Languages Celestial, Elvish, Sylvan; telepathy 120 ft.\
+> CR 5 (XP 1,800; PB +3)
+
 
 ### Traits
 
@@ -63,45 +89,11 @@ Shimmering Shield. The unicorn targets itself or one creature it can see within 
 
 Original layout: [[../../srd-5.2.1/pages/334|page 334]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` large ` |
-| ` type ` | ` celestial ` |
-| ` alignment ` | ` Lawful Good ` |
-| ` movement_text ` | ` 50 ft. ` |
-| ` immunities_text ` | ` Poison; Charmed, Paralyzed, Poisoned ` |
-| ` senses_text ` | ` Darkvision 60 ft.; Passive Perception 13 ` |
-| ` languages_text ` | ` Celestial, Elvish, Sylvan; telepathy 120 ft. ` |
-| ` cr_text ` | ` 5 (XP 1,800; PB +3) ` |
-| ` hit_points_text ` | ` 97 (13d10 + 26) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 18 ` | ` 4 ` |
-| ` Dexterity ` | ` 14 ` | ` 2 ` |
-| ` Constitution ` | ` 15 ` | ` 2 ` |
-| ` Intelligence ` | ` 11 ` | ` 0 ` |
-| ` Wisdom ` | ` 17 ` | ` 3 ` |
-| ` Charisma ` | ` 16 ` | ` 3 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 12 ` |  |
-| ` max_hp ` | ` 97 ` |  |
-| ` initiative ` | ` 8 ` |  |
-| ` speed ` | ` 50 ` | ` ft ` |
 
 ## Health
 

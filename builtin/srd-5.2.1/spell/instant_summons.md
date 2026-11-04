@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "6e99fcf7-d0d1-59e2-b898-4d0fd8e90ebe"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/instant_summons"
 splat_name: "Instant Summons"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [143], "executable": false}
+splat_pages:
+- 143
 ---
 
 # Instant Summons
@@ -24,3 +25,13 @@ Thereafter, you can take a Magic action to speak the object’s name and crush t
 If another creature is holding or carrying the object, crushing the sapphire doesn’t transport it, but instead you learn who that creature is and where that creature is currently located.
 
 Original layout: [[../pages/143|page 143]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

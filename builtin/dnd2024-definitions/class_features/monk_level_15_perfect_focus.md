@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: e04152e0-b024-5dc6-9893-240fbb60edcc
 splat_kind: rule
 splat_key: dnd2024:class_features/monk_level_15_perfect_focus
 splat_name: 'Level 15: Perfect Focus'
-splat_origin:
-  key: dnd2024:reference/pages/052
+splat_origin: dnd2024:reference/pages/052
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 52
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 52, https://www.dndbeyond.com/srd
 ---
 
 # Level 15: Perfect Focus

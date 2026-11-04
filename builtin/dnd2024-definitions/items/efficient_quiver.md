@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 10512d84-4e76-5d69-ace0-3a78554c747a
 splat_kind: item
 splat_key: dnd2024:items/efficient_quiver
 splat_name: Efficient Quiver
-splat_origin:
-  key: dnd2024:reference/magic_item/efficient_quiver
+splat_origin: dnd2024:reference/magic_item/efficient_quiver
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 219
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 219, https://www.dndbeyond.com/srd
 ---
 
 # Efficient Quiver
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Wondrous Item |
+| Rarity | Uncommon |
+| Attunement | No |
+
 
 ## Source text
 
@@ -26,22 +33,9 @@ You can draw any item the quiver contains as if doing so from a regular quiver o
 
 Original layout: [[../../srd-5.2.1/pages/219|page 219]].
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` wondrous_item ` |
-| ` rarity ` | ` uncommon ` |
 
-### Equipment
-
-<!-- splat:values path=splat_item/equipment -->
-
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` none ` |
 
 ## Rule
 

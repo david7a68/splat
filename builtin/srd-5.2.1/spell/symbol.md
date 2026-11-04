@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "0ee7bdb1-db7f-525f-beed-236bcfa1448d"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/symbol"
 splat_name: "Symbol"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [167], "executable": false}
+splat_pages:
+- 167
 ---
 
 # Symbol
@@ -42,3 +43,13 @@ Sleep. Each target must succeed on a Wisdom saving throw or have the Unconscious
 Stunning. Each target must succeed on a Wisdom saving throw or have the Stunned condition for 1 minute.
 
 Original layout: [[../pages/167|page 167]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

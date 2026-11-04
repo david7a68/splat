@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: ceb10285-1b13-5711-9a2e-fb5076221df7
 splat_kind: rule
 splat_key: dnd2024:rules/casting_spells_reaction_and_bonus_action_triggers
 splat_name: Reaction and Bonus Action Triggers
-splat_origin:
-  key: dnd2024:reference/pages/105
+splat_origin: dnd2024:reference/pages/105
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 105
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 105, https://www.dndbeyond.com/srd
 ---
 
 # Reaction and Bonus Action Triggers

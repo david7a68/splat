@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 579b889f-b6c7-53dd-b742-da6eec87361a
 splat_kind: spell
 splat_key: dnd2024:spells/sequester
 splat_name: Sequester
-splat_origin:
-  key: dnd2024:reference/spell/sequester
+splat_origin: dnd2024:reference/spell/sequester
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 161
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 161, https://www.dndbeyond.com/srd
 ---
 
 # Sequester
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 7 |
+| School | Transmutation |
+| Classes | Wizard |
+| Casting Time | Action |
+| Range |  |
+| Components | V, S, M (gem dust worth 5,000+ GP, which the spell consumes) |
+| Duration | Until dispelled |
+
 
 ## Source text
 
@@ -32,37 +43,11 @@ You can set a condition for the spell to end early. The condition can be anythin
 
 Original layout: [[../../srd-5.2.1/pages/161|page 161]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 7 ` |
-| ` school ` | ` transmutation ` |
-| ` classes ` | ` ["wizard"] ` |
-| ` components ` | ` ["verbal", "somatic", "material"] ` |
-| ` concentration ` | ` false ` |
-| ` duration ` | ` Until dispelled ` |
-| ` casting_time ` | ` Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
 
-<!-- splat:values path=splat_spell/range -->
 
-| Field | Value |
-| --- | --- |
-| ` mode ` | ` touch ` |
-
-### Material
-
-<!-- splat:values path=splat_spell/material -->
-
-| Field | Value |
-| --- | --- |
-| ` description ` | ` gem dust worth 5,000+ GP, which the spell consumes ` |
-| ` consumed ` | ` true ` |
 
 ## Rule
 
@@ -146,3 +131,14 @@ Original layout: [[../../srd-5.2.1/pages/161|page 161]].
 | --- | --- |
 | ` exactly_one ` | ` ["target_creature", "target_object"] ` |
 | ` must_match_selected_mode ` | ` true ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_spell_extras -->
+> 
+> ```yaml
+> material:
+>   consumed: true
+> range:
+>   mode: touch
+> ```
+

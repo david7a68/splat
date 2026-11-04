@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "aff47a79-d180-57e6-acf4-59821bcf33f0"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/blink_dog"
 splat_name: "Blink Dog"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [266], "executable": false}
+splat_pages:
+- 266
 ---
 
 # Blink Dog
@@ -32,3 +33,13 @@ Bite. Melee Attack Roll: +5, reach 5 ft. Hit: 5 (1d4 + 3) Piercing damage.
 Teleport (Recharge 4–6). The dog teleports up to 40 feet to an unoccupied space it can see.
 
 Original layout: [[../pages/266|page 266]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 1599e01f-a7f5-552c-8392-e402e8d98cf0
 splat_kind: spell
 splat_key: dnd2024:spells/earthquake
 splat_name: Earthquake
-splat_origin:
-  key: dnd2024:reference/spell/earthquake
+splat_origin: dnd2024:reference/spell/earthquake
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 127
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 127, https://www.dndbeyond.com/srd
 ---
 
 # Earthquake
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 8 |
+| School | Transmutation |
+| Classes | Cleric, Druid, Sorcerer |
+| Casting Time | Action |
+| Range | 500 feet |
+| Components | V, S, M (a fractured rock) |
+| Duration | Concentration, up to 1 minute |
+
 
 ## Source text
 
@@ -38,37 +49,11 @@ A creature within a distance from a collapsing structure equal to half the struc
 
 Original layout: [[../../srd-5.2.1/pages/127|page 127]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 8 ` |
-| ` school ` | ` transmutation ` |
-| ` classes ` | ` ["cleric", "druid", "sorcerer"] ` |
-| ` components ` | ` ["verbal", "somatic", "material"] ` |
-| ` concentration ` | ` true ` |
-| ` duration ` | ` Concentration, up to 1 minute ` |
-| ` casting_time ` | ` Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
 
-<!-- splat:values path=splat_spell/range -->
 
-| Field | Value |
-| --- | --- |
-| ` feet ` | ` 500 ` |
-
-### Material
-
-<!-- splat:values path=splat_spell/material -->
-
-| Field | Value |
-| --- | --- |
-| ` description ` | ` a fractured rock ` |
-| ` consumed ` | ` false ` |
 
 ## Rule
 
@@ -185,3 +170,12 @@ structures:
     skill: athletics
     dc: 20
 ```
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_spell_extras -->
+> 
+> ```yaml
+> material:
+>   consumed: false
+> ```
+

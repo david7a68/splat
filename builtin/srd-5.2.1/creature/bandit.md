@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "9ccd7ffe-363d-537c-9a4e-326e4694fb94"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/bandit"
 splat_name: "Bandit"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [261], "executable": false}
+splat_pages:
+- 261
 ---
 
 # Bandit
@@ -30,3 +31,13 @@ Scimitar. Melee Attack Roll: +3, reach 5 ft. Hit: 4 (1d6 + 1) Slashing damage.
 Light Crossbow. Ranged Attack Roll: +3, range 80/320 ft. Hit: 5 (1d8 + 1) Piercing damage.
 
 Original layout: [[../pages/261|page 261]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

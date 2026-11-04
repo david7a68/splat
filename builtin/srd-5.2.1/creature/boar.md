@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "659fed0e-af5b-5e2b-b245-b26e3d39a32e"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/boar"
 splat_name: "Boar"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [346], "executable": false}
+splat_pages:
+- 346
 ---
 
 # Boar
@@ -31,3 +32,13 @@ Bloodied Fury. While Bloodied, the boar has Advantage on attack rolls.
 Gore. Melee Attack Roll: +3, reach 5 ft. Hit: 4 (1d6 + 1) Piercing damage. If the target is a Medium or smaller creature and the boar moved 20+ feet straight toward it immediately before the hit, the target takes an extra 3 (1d6) Piercing damage and has the Prone condition.
 
 Original layout: [[../pages/346|page 346]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

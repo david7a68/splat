@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: f4ab86fd-f6e9-5557-9649-abe86bb353b1
 splat_kind: item
 splat_key: dnd2024:items/staff_of_the_python
 splat_name: Staff of the Python
-splat_origin:
-  key: dnd2024:reference/magic_item/staff_of_the_python
+splat_origin: dnd2024:reference/magic_item/staff_of_the_python
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 247
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 247, https://www.dndbeyond.com/srd
 ---
 
 # Staff of the Python
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Staff |
+| Rarity | Uncommon |
+| Attunement | Yes |
+
 
 ## Source text
 
@@ -28,22 +35,9 @@ As a Bonus Action, you can command the snake to revert to staff form in its curr
 
 Original layout: [[../../srd-5.2.1/pages/247|page 247]].
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` staff ` |
-| ` rarity ` | ` uncommon ` |
 
-### Equipment
-
-<!-- splat:values path=splat_item/equipment -->
-
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` required ` |
 
 ## Rule
 

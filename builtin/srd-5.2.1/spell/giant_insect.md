@@ -1,10 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "66cccf5c-57f5-557a-9414-1a038e928d4c"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/giant_insect"
 splat_name: "Giant Insect"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [135, 136], "executable": false}
+splat_pages:
+- 135
+- 136
 ---
 
 # Giant Insect
@@ -55,3 +57,13 @@ Web Bolt (Spider Only). Ranged Attack Roll: Bonus equals your spell attack modif
 Venomous Spew (Centipede Only). Constitution Saving Throw: Your spell save DC, one creature the insect can see within 10 feet. Failure: The target has the Poisoned condition until the start of the insect’s next turn.
 
 Original layout: [[../pages/135|page 135]], [[../pages/136|page 136]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

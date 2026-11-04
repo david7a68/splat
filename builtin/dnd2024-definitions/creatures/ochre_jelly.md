@@ -1,35 +1,62 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 2d3a918a-f418-5eea-a832-45d6ee544c4c
 splat_kind: creature
 splat_key: dnd2024:creatures/ochre_jelly
 splat_name: Ochre Jelly
-splat_origin:
-  key: dnd2024:reference/creature/ochre_jelly
+splat_origin: dnd2024:reference/creature/ochre_jelly
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 312
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 312, https://www.dndbeyond.com/srd
 ---
 
 # Ochre Jelly
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Large |
+| Type | Ooze |
+| Alignment | Unaligned |
+| Armor Class | 8 |
+| Hit Points | 52 (7d10 + 14) |
+| Initiative | -2 (8) |
+| Speed | 20 ft., Climb 20 ft. |
+| Challenge | 2 (XP 450; PB +2) |
+| Senses | Blindsight 60 ft.; Passive Perception 8 |
+| Languages | None |
+| Resistances | Acid |
+| Immunities | Lightning, Slashing; Charmed, Deafened, Exhaustion, Frightened, Grappled, Prone, Restrained |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 15 | +2 | +2 |
+| Dex | 6 | -2 | -2 |
+| Con | 14 | +2 | +2 |
+| Int | 2 | -4 | -4 |
+| Wis | 6 | -2 | -2 |
+| Cha | 1 | -5 | -5 |
+
 
 ## Source text
 
 <!-- SRD page 312 -->
 
-Large Ooze, Unaligned\
-AC 8 Initiative −2 (8)\
-HP 52 (7d10 + 14)\
-Speed 20 ft., Climb 20 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 15 +2 +2 Dex 6 −2 −2 Con 14 +2 +2\
-Int 2 −4 −4 Wis 6 −2 −2 Cha 1 −5 −5\
-Resistances Acid\
-Immunities Lightning, Slashing; Charmed, Deafened, Exhaustion, Frightened, Grappled, Prone, Restrained\
-Senses Blindsight 60 ft.; Passive Perception 8\
-Languages None\
-CR 2 (XP 450; PB +2)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Large Ooze, Unaligned\
+> AC 8 Initiative −2 (8)\
+> HP 52 (7d10 + 14)\
+> Speed 20 ft., Climb 20 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 15 +2 +2 Dex 6 −2 −2 Con 14 +2 +2\
+> Int 2 −4 −4 Wis 6 −2 −2 Cha 1 −5 −5\
+> Resistances Acid\
+> Immunities Lightning, Slashing; Charmed, Deafened, Exhaustion, Frightened, Grappled, Prone, Restrained\
+> Senses Blindsight 60 ft.; Passive Perception 8\
+> Languages None\
+> CR 2 (XP 450; PB +2)
+
 
 ### Traits
 
@@ -47,47 +74,11 @@ Split. Trigger: While the jelly is Large or Medium and has 10+ Hit Points, it be
 
 Original layout: [[../../srd-5.2.1/pages/312|page 312]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` large ` |
-| ` type ` | ` ooze ` |
-| ` alignment ` | ` Unaligned ` |
-| ` movement_text ` | ` 20 ft., Climb 20 ft. ` |
-| ` resistances_text ` | ` Acid ` |
-| ` immunities_text ` | ` Lightning, Slashing; Charmed, Deafened, Exhaustion, Frightened, Grappled, Prone, Restrained ` |
-| ` senses_text ` | ` Blindsight 60 ft.; Passive Perception 8 ` |
-| ` languages_text ` | ` None ` |
-| ` cr_text ` | ` 2 (XP 450; PB +2) ` |
-| ` hit_points_text ` | ` 52 (7d10 + 14) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 15 ` | ` 2 ` |
-| ` Dexterity ` | ` 6 ` | ` -2 ` |
-| ` Constitution ` | ` 14 ` | ` 2 ` |
-| ` Intelligence ` | ` 2 ` | ` -4 ` |
-| ` Wisdom ` | ` 6 ` | ` -2 ` |
-| ` Charisma ` | ` 1 ` | ` -5 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 8 ` |  |
-| ` max_hp ` | ` 52 ` |  |
-| ` initiative ` | ` -2 ` |  |
-| ` speed ` | ` 20 ` | ` ft ` |
-| ` climb_speed ` | ` 20 ` | ` ft ` |
 
 ## Health
 
@@ -233,3 +224,13 @@ each:
 | ` provider ` | ` caller ` |
 | ` required_facts ` | ` ["distance", "area_membership", "visibility", "occupancy", "movement_path"] ` |
 | ` validate_against_typed_constraints ` | ` true ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_stats_extras -->
+> 
+> ```yaml
+> climb_speed:
+>   unit: ft
+>   value: 20
+> ```
+

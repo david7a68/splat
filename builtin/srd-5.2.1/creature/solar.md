@@ -1,10 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "a330df1a-8652-543d-8f56-b97ae8d97385"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/solar"
 splat_name: "Solar"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [326, 327], "executable": false}
+splat_pages:
+- 326
+- 327
 ---
 
 # Solar
@@ -62,3 +64,13 @@ Blinding Gaze. Constitution Saving Throw: DC 25, one creature the solar can see 
 Radiant Teleport. The solar teleports up to 60 feet to an unoccupied space it can see. Dexterity Saving Throw: DC 25, each creature in a 10-foot Emanation originating from the solar at its destination space. Failure: 11 (2d10) Radiant damage. Success: Half damage.
 
 Original layout: [[../pages/326|page 326]], [[../pages/327|page 327]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

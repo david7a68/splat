@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 3372e62c-39f0-5f70-8e07-a95722ffd0a4
 splat_kind: spell
 splat_key: dnd2024:spells/freedom_of_movement
 splat_name: Freedom of Movement
-splat_origin:
-  key: dnd2024:reference/spell/freedom_of_movement
+splat_origin: dnd2024:reference/spell/freedom_of_movement
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 134
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 134, https://www.dndbeyond.com/srd
 ---
 
 # Freedom of Movement
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 4 |
+| School | Abjuration |
+| Classes | Bard, Cleric, Druid, Ranger |
+| Casting Time | Action |
+| Range |  |
+| Components | V, S, M (a leather strap) |
+| Duration | 1 hour |
+
 
 ## Source text
 
@@ -32,37 +43,11 @@ Using a Higher-Level Spell Slot. You can target one additional creature for each
 
 Original layout: [[../../srd-5.2.1/pages/134|page 134]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 4 ` |
-| ` school ` | ` abjuration ` |
-| ` classes ` | ` ["bard", "cleric", "druid", "ranger"] ` |
-| ` components ` | ` ["verbal", "somatic", "material"] ` |
-| ` concentration ` | ` false ` |
-| ` duration ` | ` 1 hour ` |
-| ` casting_time ` | ` Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
 
-<!-- splat:values path=splat_spell/range -->
 
-| Field | Value |
-| --- | --- |
-| ` mode ` | ` touch ` |
-
-### Material
-
-<!-- splat:values path=splat_spell/material -->
-
-| Field | Value |
-| --- | --- |
-| ` description ` | ` a leather strap ` |
-| ` consumed ` | ` false ` |
 
 ## Rule
 
@@ -121,3 +106,14 @@ swim_speed:
 | --- | --- |
 | ` per_slot_above ` | ` 4 ` |
 | ` additional_targets ` | ` 1 ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_spell_extras -->
+> 
+> ```yaml
+> material:
+>   consumed: false
+> range:
+>   mode: touch
+> ```
+

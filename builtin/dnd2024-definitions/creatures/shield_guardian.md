@@ -1,34 +1,60 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: f2cd7371-10dd-5eda-86b7-c87817a8a6df
 splat_kind: creature
 splat_key: dnd2024:creatures/shield_guardian
 splat_name: Shield Guardian
-splat_origin:
-  key: dnd2024:reference/creature/shield_guardian
+splat_origin: dnd2024:reference/creature/shield_guardian
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 323
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 323, https://www.dndbeyond.com/srd
 ---
 
 # Shield Guardian
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Large |
+| Type | Construct |
+| Alignment | Unaligned |
+| Armor Class | 17 |
+| Hit Points | 142 (15d10 + 60) |
+| Initiative | -1 (9) |
+| Speed | 30 ft. |
+| Challenge | 7 (XP 2,900; PB +3) |
+| Senses | Blindsight 10 ft., Darkvision 60 ft.; Passive Perception 10 |
+| Languages | Understands commands given in any language but can’t speak |
+| Immunities | Poison; Charmed, Exhaustion, Frightened, Paralyzed, Petrified, Poisoned |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 18 | +4 | +4 |
+| Dex | 8 | -1 | -1 |
+| Con | 18 | +4 | +4 |
+| Int | 7 | -2 | -2 |
+| Wis | 10 | +0 | +0 |
+| Cha | 3 | -4 | -4 |
+
 
 ## Source text
 
 <!-- SRD page 323 -->
 
-Large Construct, Unaligned\
-AC 17  Initiative −1 (9)\
-HP 142 (15d10 + 60)\
-Speed 30 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 18 +4 +4 Dex 8 −1 −1 Con 18 +4 +4\
-Int 7 −2 −2 Wis 10 +0 +0 Cha 3 −4 −4\
-Immunities Poison; Charmed, Exhaustion, Frightened, Paralyzed, Petrified, Poisoned\
-Senses Blindsight 10 ft., Darkvision 60 ft.; Passive Perception 10\
-Languages Understands commands given in any language but can’t speak\
-CR 7 (XP 2,900; PB +3)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Large Construct, Unaligned\
+> AC 17  Initiative −1 (9)\
+> HP 142 (15d10 + 60)\
+> Speed 30 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 18 +4 +4 Dex 8 −1 −1 Con 18 +4 +4\
+> Int 7 −2 −2 Wis 10 +0 +0 Cha 3 −4 −4\
+> Immunities Poison; Charmed, Exhaustion, Frightened, Paralyzed, Petrified, Poisoned\
+> Senses Blindsight 10 ft., Darkvision 60 ft.; Passive Perception 10\
+> Languages Understands commands given in any language but can’t speak\
+> CR 7 (XP 2,900; PB +3)
+
 
 ### Traits
 
@@ -50,45 +76,11 @@ Protection. Trigger: An attack roll hits the wearer of the guardian’s amulet w
 
 Original layout: [[../../srd-5.2.1/pages/323|page 323]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` large ` |
-| ` type ` | ` construct ` |
-| ` alignment ` | ` Unaligned ` |
-| ` movement_text ` | ` 30 ft. ` |
-| ` immunities_text ` | ` Poison; Charmed, Exhaustion, Frightened, Paralyzed, Petrified, Poisoned ` |
-| ` senses_text ` | ` Blindsight 10 ft., Darkvision 60 ft.; Passive Perception 10 ` |
-| ` languages_text ` | ` Understands commands given in any language but can’t speak ` |
-| ` cr_text ` | ` 7 (XP 2,900; PB +3) ` |
-| ` hit_points_text ` | ` 142 (15d10 + 60) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 18 ` | ` 4 ` |
-| ` Dexterity ` | ` 8 ` | ` -1 ` |
-| ` Constitution ` | ` 18 ` | ` 4 ` |
-| ` Intelligence ` | ` 7 ` | ` -2 ` |
-| ` Wisdom ` | ` 10 ` | ` 0 ` |
-| ` Charisma ` | ` 3 ` | ` -4 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 17 ` |  |
-| ` max_hp ` | ` 142 ` |  |
-| ` initiative ` | ` -1 ` |  |
-| ` speed ` | ` 30 ` | ` ft ` |
 
 ## Health
 

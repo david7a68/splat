@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 0a38a9c2-4dbf-5f8b-8ed9-1ea2346a6e28
 splat_kind: item
 splat_key: dnd2024:items/necklace_of_prayer_beads
 splat_name: Necklace of Prayer Beads
-splat_origin:
-  key: dnd2024:reference/magic_item/necklace_of_prayer_beads
+splat_origin: dnd2024:reference/magic_item/necklace_of_prayer_beads
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 233
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 233, https://www.dndbeyond.com/srd
 ---
 
 # Necklace of Prayer Beads
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Wondrous Item |
+| Rarity | Rare |
+| Attunement | Yes |
+
 
 ## Source text
 
@@ -35,23 +42,9 @@ Six types of magic beads exist. The GM decides the type of each bead on the neck
 
 Original layout: [[../../srd-5.2.1/pages/233|page 233]].
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` wondrous_item ` |
-| ` rarity ` | ` rare ` |
 
-### Equipment
-
-<!-- splat:values path=splat_item/equipment -->
-
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` required ` |
-| ` attunement_requirement_text ` | ` a Cleric, Druid, or Paladin ` |
 
 ## Rule
 
@@ -137,3 +130,12 @@ columns:
 | ` Smiting ` | ` [17, 18] ` | [Shining Smite](<../spells/shining_smite.md> "dnd2024:spells/shining_smite") | ` Bonus action ` | ` user.spell_save_dc ` | ` 2 ` | ` 1 ` | ` time.dawn ` | ` Per bead ` |
 | ` Summons ` | ` [19, 19] ` | [Guardian of Faith](<../spells/guardian_of_faith.md> "dnd2024:spells/guardian_of_faith") | ` Bonus action ` | ` user.spell_save_dc ` | ` 4 ` | ` 1 ` | ` time.dawn ` | ` Per bead ` |
 | ` Wind walking ` | ` [20, 20] ` | [Wind Walk](<../spells/wind_walk.md> "dnd2024:spells/wind_walk") | ` Bonus action ` | ` user.spell_save_dc ` | ` 6 ` | ` 1 ` | ` time.dawn ` | ` Per bead ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_item_extras -->
+> 
+> ```yaml
+> equipment:
+>   attunement_requirement_text: a Cleric, Druid, or Paladin
+> ```
+

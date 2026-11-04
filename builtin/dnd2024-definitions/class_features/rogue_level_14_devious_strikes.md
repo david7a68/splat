@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: e102040a-fbb9-5eb3-9f47-0dae6fe81a30
 splat_kind: rule
 splat_key: dnd2024:class_features/rogue_level_14_devious_strikes
 splat_name: 'Level 14: Devious Strikes'
-splat_origin:
-  key: dnd2024:reference/pages/063
+splat_origin: dnd2024:reference/pages/063
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 63
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 63, https://www.dndbeyond.com/srd
 ---
 
 # Level 14: Devious Strikes

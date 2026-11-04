@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 1d1221e4-9603-5796-a1b2-0c96e76eb210
 splat_kind: item
 splat_key: dnd2024:items/tome_of_understanding
 splat_name: Tome of Understanding
-splat_origin:
-  key: dnd2024:reference/magic_item/tome_of_understanding
+splat_origin: dnd2024:reference/magic_item/tome_of_understanding
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 250
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 250, https://www.dndbeyond.com/srd
 ---
 
 # Tome of Understanding
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Wondrous Item |
+| Rarity | Very Rare |
+| Attunement | No |
+
 
 ## Source text
 
@@ -24,22 +31,9 @@ This book contains intuition and insight exercises, and its words are charged wi
 
 Original layout: [[../../srd-5.2.1/pages/250|page 250]].
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` wondrous_item ` |
-| ` rarity ` | ` very_rare ` |
 
-### Equipment
-
-<!-- splat:values path=splat_item/equipment -->
-
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` none ` |
 
 ## Rule
 

@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: cd5c201b-e2f5-53a7-8358-133b1488bffa
 splat_kind: spell
 splat_key: dnd2024:spells/heroes_feast
 splat_name: Heroes’ Feast
-splat_origin:
-  key: dnd2024:reference/spell/heroes_feast
+splat_origin: dnd2024:reference/spell/heroes_feast
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 140
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 140, https://www.dndbeyond.com/srd
 ---
 
 # Heroes’ Feast
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 6 |
+| School | Conjuration |
+| Classes | Bard, Cleric, Druid |
+| Casting Time | 10 minutes |
+| Range |  |
+| Components | V, S, M (a gem-encrusted bowl worth 1,000+ GP, which the spell consumes) |
+| Duration | Instantaneous |
+
 
 ## Source text
 
@@ -30,37 +41,11 @@ A creature that partakes gains several benefits, which last for 24 hours. The cr
 
 Original layout: [[../../srd-5.2.1/pages/140|page 140]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 6 ` |
-| ` school ` | ` conjuration ` |
-| ` classes ` | ` ["bard", "cleric", "druid"] ` |
-| ` components ` | ` ["verbal", "somatic", "material"] ` |
-| ` concentration ` | ` false ` |
-| ` duration ` | ` Instantaneous ` |
-| ` casting_time ` | ` 10 minutes ` |
-| ` ritual ` | ` false ` |
 
-### Range
 
-<!-- splat:values path=splat_spell/range -->
 
-| Field | Value |
-| --- | --- |
-| ` mode ` | ` self ` |
-
-### Material
-
-<!-- splat:values path=splat_spell/material -->
-
-| Field | Value |
-| --- | --- |
-| ` description ` | ` a gem-encrusted bowl worth 1,000+ GP, which the spell consumes ` |
-| ` consumed ` | ` true ` |
 
 ## Rule
 
@@ -117,3 +102,14 @@ hit_point_maximum_increase:
   dice: 2d10
 hit_points_gained: same_as_maximum_increase
 ```
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_spell_extras -->
+> 
+> ```yaml
+> material:
+>   consumed: true
+> range:
+>   mode: self
+> ```
+

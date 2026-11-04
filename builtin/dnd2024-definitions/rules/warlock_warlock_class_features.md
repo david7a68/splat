@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 95d524ef-f1e5-5022-b1f5-8060e6aaf1d8
 splat_kind: rule
 splat_key: dnd2024:rules/warlock_warlock_class_features
 splat_name: Warlock Class Features
-splat_origin:
-  key: dnd2024:reference/pages/070
+splat_origin: dnd2024:reference/pages/070
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 70
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 70, https://www.dndbeyond.com/srd
 ---
 
 # Warlock Class Features

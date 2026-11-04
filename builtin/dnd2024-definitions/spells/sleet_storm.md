@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 6ebcd8ec-1036-5ca6-82ff-1bcd29d51812
 splat_kind: spell
 splat_key: dnd2024:spells/sleet_storm
 splat_name: Sleet Storm
-splat_origin:
-  key: dnd2024:reference/spell/sleet_storm
+splat_origin: dnd2024:reference/spell/sleet_storm
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 163
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 163, https://www.dndbeyond.com/srd
 ---
 
 # Sleet Storm
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 3 |
+| School | Conjuration |
+| Classes | Druid, Sorcerer, Wizard |
+| Casting Time | Action |
+| Range | 150 feet |
+| Components | V, S, M (a miniature umbrella) |
+| Duration | Concentration, up to 1 minute |
+
 
 ## Source text
 
@@ -30,37 +41,11 @@ Ground in the Cylinder is Difficult Terrain. When a creature enters the Cylinder
 
 Original layout: [[../../srd-5.2.1/pages/163|page 163]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 3 ` |
-| ` school ` | ` conjuration ` |
-| ` classes ` | ` ["druid", "sorcerer", "wizard"] ` |
-| ` components ` | ` ["verbal", "somatic", "material"] ` |
-| ` concentration ` | ` true ` |
-| ` duration ` | ` Concentration, up to 1 minute ` |
-| ` casting_time ` | ` Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
 
-<!-- splat:values path=splat_spell/range -->
 
-| Field | Value |
-| --- | --- |
-| ` feet ` | ` 150 ` |
-
-### Material
-
-<!-- splat:values path=splat_spell/material -->
-
-| Field | Value |
-| --- | --- |
-| ` description ` | ` a miniature umbrella ` |
-| ` consumed ` | ` false ` |
 
 ## Rule
 
@@ -155,3 +140,12 @@ failure:
 | ` source ` | ` supplied_world_geometry ` |
 | ` unknown_facts ` | ` require_resolution ` |
 | ` infer_unprovided_geometry ` | ` false ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_spell_extras -->
+> 
+> ```yaml
+> material:
+>   consumed: false
+> ```
+

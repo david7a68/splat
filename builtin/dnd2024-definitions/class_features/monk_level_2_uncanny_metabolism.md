@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 01599a29-8e25-5f64-8700-c40a986f7395
 splat_kind: rule
 splat_key: dnd2024:class_features/monk_level_2_uncanny_metabolism
 splat_name: 'Level 2: Uncanny Metabolism'
-splat_origin:
-  key: dnd2024:reference/pages/051
+splat_origin: dnd2024:reference/pages/051
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 51
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 51, https://www.dndbeyond.com/srd
 ---
 
 # Level 2: Uncanny Metabolism

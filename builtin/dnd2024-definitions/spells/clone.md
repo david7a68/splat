@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 5cf2e046-608a-5241-aebe-1cc8b112d6e6
 splat_kind: spell
 splat_key: dnd2024:spells/clone
 splat_name: Clone
-splat_origin:
-  key: dnd2024:reference/spell/clone
+splat_origin: dnd2024:reference/spell/clone
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 115, 116
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 115, 116, https://www.dndbeyond.com/srd
 ---
 
 # Clone
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 8 |
+| School | Necromancy |
+| Classes | Wizard |
+| Casting Time | 1 hour |
+| Range |  |
+| Components | V, S, M (a diamond worth 1,000+ GP, which the spell consumes, and a sealable vessel worth 2,000+ GP that is large enough to hold the creature being cloned) |
+| Duration | Instantaneous |
+
 
 ## Source text
 
@@ -32,37 +43,11 @@ If the original creature dies after the clone finishes forming, the creature’s
 
 Original layout: [[../../srd-5.2.1/pages/115|page 115]], [[../../srd-5.2.1/pages/116|page 116]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 8 ` |
-| ` school ` | ` necromancy ` |
-| ` classes ` | ` ["wizard"] ` |
-| ` components ` | ` ["verbal", "somatic", "material"] ` |
-| ` concentration ` | ` false ` |
-| ` duration ` | ` Instantaneous ` |
-| ` casting_time ` | ` 1 hour ` |
-| ` ritual ` | ` false ` |
 
-### Range
 
-<!-- splat:values path=splat_spell/range -->
 
-| Field | Value |
-| --- | --- |
-| ` mode ` | ` touch ` |
-
-### Material
-
-<!-- splat:values path=splat_spell/material -->
-
-| Field | Value |
-| --- | --- |
-| ` description ` | ` a diamond worth 1,000+ GP, which the spell consumes, and a sealable vessel worth 2,000+ GP that is large enough to hold the creature being cloned ` |
-| ` consumed ` | ` true ` |
 
 ## Rule
 
@@ -155,3 +140,14 @@ concentration: false
 maximum:
   kind: instantaneous
 ```
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_spell_extras -->
+> 
+> ```yaml
+> material:
+>   consumed: true
+> range:
+>   mode: touch
+> ```
+

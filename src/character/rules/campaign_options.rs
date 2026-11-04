@@ -396,10 +396,10 @@ mod tests {
             coverage(&serde_json::to_value(record.entry().unwrap().fields).unwrap()).unwrap(),
         )
         .unwrap();
-        let n = note("invalid.md".into(), fields, "").unwrap();
         assert!(
-            Entry::parse(&n.relative_path, &n.markdown)
-                .unwrap_err()
+            note("invalid.md".into(), fields, "")
+                .err()
+                .unwrap()
                 .contains("selections")
         );
         let mut notes = record.content_notes().unwrap();

@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 0cdad0a1-f0bb-5c2a-859a-469173a32d0f
 splat_kind: rule
 splat_key: dnd2024:rules/travel_pace_vehicles
 splat_name: Vehicles
-splat_origin:
-  key: dnd2024:reference/pages/192
+splat_origin: dnd2024:reference/pages/192
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 192
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 192, https://www.dndbeyond.com/srd
 ---
 
 # Vehicles

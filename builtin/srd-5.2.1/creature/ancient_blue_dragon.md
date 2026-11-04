@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "b00ce872-8db1-5d76-8f4d-7248607624bc"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/ancient_blue_dragon"
 splat_name: "Ancient Blue Dragon"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [267], "executable": false}
+splat_pages:
+- 267
 ---
 
 # Ancient Blue Dragon
@@ -52,3 +53,13 @@ Sonic Boom. The dragon uses Spellcasting to cast Shatter (level 3 version). The 
 Tail Swipe. The dragon makes one Rend attack.
 
 Original layout: [[../pages/267|page 267]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

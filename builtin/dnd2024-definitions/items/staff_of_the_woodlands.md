@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 967410a1-be27-5ac3-b0f8-f61e07e362d8
 splat_kind: item
 splat_key: dnd2024:items/staff_of_the_woodlands
 splat_name: Staff of the Woodlands
-splat_origin:
-  key: dnd2024:reference/magic_item/staff_of_the_woodlands
+splat_origin: dnd2024:reference/magic_item/staff_of_the_woodlands
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 247
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 247, https://www.dndbeyond.com/srd
 ---
 
 # Staff of the Woodlands
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Staff |
+| Rarity | Rare |
+| Attunement | Yes |
+
 
 ## Source text
 
@@ -41,23 +48,9 @@ Regaining Charges. The staff regains 1d6 expended charges daily at dawn. If you 
 
 Original layout: [[../../srd-5.2.1/pages/247|page 247]].
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` staff ` |
-| ` rarity ` | ` rare ` |
 
-### Equipment
-
-<!-- splat:values path=splat_item/equipment -->
-
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` required ` |
-| ` attunement_requirement_text ` | ` a Druid ` |
 
 ## Rule
 
@@ -191,3 +184,12 @@ eligibility:
   class_any:
   - druid
 ```
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_item_extras -->
+> 
+> ```yaml
+> equipment:
+>   attunement_requirement_text: a Druid
+> ```
+

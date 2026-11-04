@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "956241f7-5ed5-557f-8799-d15d4586984b"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/hex"
 splat_name: "Hex"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [140], "executable": false}
+splat_pages:
+- 140
 ---
 
 # Hex
@@ -24,3 +25,13 @@ If the target drops to 0 Hit Points before this spell ends, you can take a Bonus
 Using a Higher-Level Spell Slot. Your Concentration can last longer with a spell slot of level 2 (up to 4 hours), 3–4 (up to 8 hours), or 5+ (24 hours).
 
 Original layout: [[../pages/140|page 140]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

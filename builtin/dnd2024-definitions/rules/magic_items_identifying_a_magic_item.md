@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 0bf29251-9306-51c3-a8be-2ff8f7bcf1fd
 splat_kind: rule
 splat_key: dnd2024:rules/magic_items_identifying_a_magic_item
 splat_name: Identifying a Magic Item
-splat_origin:
-  key: dnd2024:reference/pages/102
+splat_origin: dnd2024:reference/pages/102
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 102
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 102, https://www.dndbeyond.com/srd
 ---
 
 # Identifying a Magic Item

@@ -1,10 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "1928ffd6-f6c3-54ef-a392-d5b236e9df16"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/ice_storm"
 splat_name: "Ice Storm"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [141, 142], "executable": false}
+splat_pages:
+- 141
+- 142
 ---
 
 # Ice Storm
@@ -26,3 +28,13 @@ Hailstones turn ground in the Cylinder into Difficult Terrain until the end of y
 Using a Higher-Level Spell Slot. The Bludgeoning damage increases by 1d10 for each spell slot level above 4.
 
 Original layout: [[../pages/141|page 141]], [[../pages/142|page 142]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

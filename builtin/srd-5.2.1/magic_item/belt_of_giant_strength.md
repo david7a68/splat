@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "da6c7db6-29b3-5888-a4ce-0493d831f75b"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/magic_item/belt_of_giant_strength"
 splat_name: "Belt of Giant Strength"
-splat_reference: {"source": "SRD 5.2.1", "category": "magic_item", "pages": [213], "executable": false}
+splat_pages:
+- 213
 ---
 
 # Belt of Giant Strength
@@ -24,3 +25,13 @@ While wearing this belt, your Strength changes to a score granted by the belt. T
 | Belt of Giant Strength (storm) | 29 | Legendary |
 
 Original layout: [[../pages/213|page 213]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: magic_item
+> executable: false
+> ```
+

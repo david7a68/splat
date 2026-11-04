@@ -1,33 +1,58 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 1b37be75-c5c9-5acc-9039-e032862c647f
 splat_kind: creature
 splat_key: dnd2024:creatures/basilisk
 splat_name: Basilisk
-splat_origin:
-  key: dnd2024:reference/creature/basilisk
+splat_origin: dnd2024:reference/creature/basilisk
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 262
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 262, https://www.dndbeyond.com/srd
 ---
 
 # Basilisk
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Medium |
+| Type | Monstrosity |
+| Alignment | Unaligned |
+| Armor Class | 15 |
+| Hit Points | 52 (8d8 + 16) |
+| Initiative | -1 (9) |
+| Speed | 20 ft. |
+| Challenge | 3 (XP 700; PB +2) |
+| Senses | Darkvision 60 ft.; Passive Perception 9 |
+| Languages | None |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 16 | +3 | +3 |
+| Dex | 8 | -1 | -1 |
+| Con | 15 | +2 | +2 |
+| Int | 2 | -4 | -4 |
+| Wis | 8 | -1 | -1 |
+| Cha | 7 | -2 | -2 |
+
 
 ## Source text
 
 <!-- SRD page 262 -->
 
-Medium Monstrosity, Unaligned\
-AC 15 Initiative −1 (9)\
-HP 52 (8d8 + 16)\
-Speed 20 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 16 +3 +3 Dex 8 −1 −1 Con 15 +2 +2\
-Int 2 −4 −4 Wis 8 −1 −1 Cha 7 −2 −2\
-Senses Darkvision 60 ft.; Passive Perception 9\
-Languages None\
-CR 3 (XP 700; PB +2)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Medium Monstrosity, Unaligned\
+> AC 15 Initiative −1 (9)\
+> HP 52 (8d8 + 16)\
+> Speed 20 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 16 +3 +3 Dex 8 −1 −1 Con 15 +2 +2\
+> Int 2 −4 −4 Wis 8 −1 −1 Cha 7 −2 −2\
+> Senses Darkvision 60 ft.; Passive Perception 9\
+> Languages None\
+> CR 3 (XP 700; PB +2)
+
 
 ### Actions
 
@@ -39,44 +64,11 @@ Petrifying Gaze (Recharge 4–6). Constitution Saving Throw: DC 12, each creatur
 
 Original layout: [[../../srd-5.2.1/pages/262|page 262]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` medium ` |
-| ` type ` | ` monstrosity ` |
-| ` alignment ` | ` Unaligned ` |
-| ` movement_text ` | ` 20 ft. ` |
-| ` senses_text ` | ` Darkvision 60 ft.; Passive Perception 9 ` |
-| ` languages_text ` | ` None ` |
-| ` cr_text ` | ` 3 (XP 700; PB +2) ` |
-| ` hit_points_text ` | ` 52 (8d8 + 16) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 16 ` | ` 3 ` |
-| ` Dexterity ` | ` 8 ` | ` -1 ` |
-| ` Constitution ` | ` 15 ` | ` 2 ` |
-| ` Intelligence ` | ` 2 ` | ` -4 ` |
-| ` Wisdom ` | ` 8 ` | ` -1 ` |
-| ` Charisma ` | ` 7 ` | ` -2 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 15 ` |  |
-| ` max_hp ` | ` 52 ` |  |
-| ` initiative ` | ` -1 ` |  |
-| ` speed ` | ` 20 ` | ` ft ` |
 
 ## Health
 

@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 1d9f348b-1d10-5840-b28b-6160733877bb
 splat_kind: spell
 splat_key: dnd2024:spells/invisibility
 splat_name: Invisibility
-splat_origin:
-  key: dnd2024:reference/spell/invisibility
+splat_origin: dnd2024:reference/spell/invisibility
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 143
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 143, https://www.dndbeyond.com/srd
 ---
 
 # Invisibility
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 2 |
+| School | Illusion |
+| Classes | Bard, Sorcerer, Warlock, Wizard |
+| Casting Time | Action |
+| Range |  |
+| Components | V, S, M (an eyelash in gum arabic) |
+| Duration | Concentration, up to 1 hour |
+
 
 ## Source text
 
@@ -30,37 +41,11 @@ Using a Higher-Level Spell Slot. You can target one additional creature for each
 
 Original layout: [[../../srd-5.2.1/pages/143|page 143]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 2 ` |
-| ` school ` | ` illusion ` |
-| ` classes ` | ` ["bard", "sorcerer", "warlock", "wizard"] ` |
-| ` components ` | ` ["verbal", "somatic", "material"] ` |
-| ` concentration ` | ` true ` |
-| ` duration ` | ` Concentration, up to 1 hour ` |
-| ` casting_time ` | ` Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
 
-<!-- splat:values path=splat_spell/range -->
 
-| Field | Value |
-| --- | --- |
-| ` mode ` | ` touch ` |
-
-### Material
-
-<!-- splat:values path=splat_spell/material -->
-
-| Field | Value |
-| --- | --- |
-| ` description ` | ` an eyelash in gum arabic ` |
-| ` consumed ` | ` false ` |
 
 ## Rule
 
@@ -115,3 +100,14 @@ maximum:
   value: 1
   unit: hour
 ```
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_spell_extras -->
+> 
+> ```yaml
+> material:
+>   consumed: false
+> range:
+>   mode: touch
+> ```
+

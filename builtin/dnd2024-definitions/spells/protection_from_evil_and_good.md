@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: e59c5b60-ee4d-5fd7-87bd-063b867cf8f7
 splat_kind: spell
 splat_key: dnd2024:spells/protection_from_evil_and_good
 splat_name: Protection from Evil and Good
-splat_origin:
-  key: dnd2024:reference/spell/protection_from_evil_and_good
+splat_origin: dnd2024:reference/spell/protection_from_evil_and_good
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 157
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 157, https://www.dndbeyond.com/srd
 ---
 
 # Protection from Evil and Good
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 1 |
+| School | Abjuration |
+| Classes | Cleric, Druid, Paladin, Warlock, Wizard |
+| Casting Time | Action |
+| Range |  |
+| Components | V, S, M (a flask of Holy Water worth 25+ GP, which the spell consumes) |
+| Duration | Concentration up to 10 minutes |
+
 
 ## Source text
 
@@ -28,37 +39,11 @@ Until the spell ends, one willing creature you touch is protected against creatu
 
 Original layout: [[../../srd-5.2.1/pages/157|page 157]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 1 ` |
-| ` school ` | ` abjuration ` |
-| ` classes ` | ` ["cleric", "druid", "paladin", "warlock", "wizard"] ` |
-| ` components ` | ` ["verbal", "somatic", "material"] ` |
-| ` concentration ` | ` true ` |
-| ` duration ` | ` Concentration up to 10 minutes ` |
-| ` casting_time ` | ` Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
 
-<!-- splat:values path=splat_spell/range -->
 
-| Field | Value |
-| --- | --- |
-| ` mode ` | ` touch ` |
-
-### Material
-
-<!-- splat:values path=splat_spell/material -->
-
-| Field | Value |
-| --- | --- |
-| ` description ` | ` a flask of Holy Water worth 25+ GP, which the spell consumes ` |
-| ` consumed ` | ` true ` |
 
 ## Rule
 
@@ -108,3 +93,14 @@ already_affected:
   - frightened
   ends_existing_effect: false
 ```
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_spell_extras -->
+> 
+> ```yaml
+> material:
+>   consumed: true
+> range:
+>   mode: touch
+> ```
+

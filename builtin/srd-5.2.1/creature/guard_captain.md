@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "33250cb1-bbe6-5c0d-a65d-20da94ddd5f2"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/guard_captain"
 splat_name: "Guard Captain"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [296], "executable": false}
+splat_pages:
+- 296
 ---
 
 # Guard Captain
@@ -33,3 +34,13 @@ Javelin. Melee or Ranged Attack Roll: +6, reach 5 ft. or range 30/120 ft. Hit: 1
 Longsword. Melee Attack Roll: +6, reach 5 ft. Hit: 15 (2d10 + 4) Slashing damage.
 
 Original layout: [[../pages/296|page 296]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

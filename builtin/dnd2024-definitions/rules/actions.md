@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 84a14b5e-aa13-542c-ac4c-cda3ccef4675
 splat_kind: rule
 splat_key: dnd2024:rules/actions
 splat_name: Actions
-splat_origin:
-  key: dnd2024:reference/pages/009
+splat_origin: dnd2024:reference/pages/009
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 9, 10
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 9, 10, https://www.dndbeyond.com/srd
 ---
 
 # Actions

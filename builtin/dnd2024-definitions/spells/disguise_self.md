@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: d96ef08a-2140-5fba-aba1-c9c035989f6f
 splat_kind: spell
 splat_key: dnd2024:spells/disguise_self
 splat_name: Disguise Self
-splat_origin:
-  key: dnd2024:reference/spell/disguise_self
+splat_origin: dnd2024:reference/spell/disguise_self
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 124
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 124, https://www.dndbeyond.com/srd
 ---
 
 # Disguise Self
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 1 |
+| School | Illusion |
+| Classes | Bard, Sorcerer, Wizard |
+| Casting Time | Action |
+| Range |  |
+| Components | V, S |
+| Duration | 1 hour |
+
 
 ## Source text
 
@@ -32,28 +43,9 @@ To discern that you are disguised, a creature must take the Study action to insp
 
 Original layout: [[../../srd-5.2.1/pages/124|page 124]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 1 ` |
-| ` school ` | ` illusion ` |
-| ` classes ` | ` ["bard", "sorcerer", "wizard"] ` |
-| ` components ` | ` ["verbal", "somatic"] ` |
-| ` concentration ` | ` false ` |
-| ` duration ` | ` 1 hour ` |
-| ` casting_time ` | ` Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
-
-<!-- splat:values path=splat_spell/range -->
-
-| Field | Value |
-| --- | --- |
-| ` mode ` | ` self ` |
 
 ## Rule
 
@@ -112,3 +104,12 @@ maximum:
   value: 1
   unit: hour
 ```
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_spell_extras -->
+> 
+> ```yaml
+> range:
+>   mode: self
+> ```
+

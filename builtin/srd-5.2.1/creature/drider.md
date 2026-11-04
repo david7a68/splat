@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "0daa2b5e-6047-5597-b586-7961e5bdd07b"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/drider"
 splat_name: "Drider"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [281], "executable": false}
+splat_pages:
+- 281
 ---
 
 # Drider
@@ -44,3 +45,13 @@ Poison Burst. Ranged Attack Roll: +6, range 120 ft. Hit: 13 (3d6 + 3) Poison dam
 Magic of the Spider Queen (Recharge 5–6). The drider casts Darkness, Faerie Fire, or Web, requiring no Material components and using Wisdom as the spellcasting ability (spell save DC 14).
 
 Original layout: [[../pages/281|page 281]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

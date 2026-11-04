@@ -1,35 +1,62 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 5b9a0df5-b2a4-5f4f-add9-6ec294914017
 splat_kind: creature
 splat_key: dnd2024:creatures/adult_bronze_dragon
 splat_name: Adult Bronze Dragon
-splat_origin:
-  key: dnd2024:reference/creature/adult_bronze_dragon
+splat_origin: dnd2024:reference/creature/adult_bronze_dragon
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 270, 271
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 270, 271, https://www.dndbeyond.com/srd
 ---
 
 # Adult Bronze Dragon
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Huge |
+| Type | Dragon (Metallic) |
+| Alignment | Lawful Good |
+| Armor Class | 18 |
+| Hit Points | 212 (17d12 + 102) |
+| Initiative | +10 (20) |
+| Speed | 40 ft., Fly 80 ft., Swim 40 ft. |
+| Challenge | 15 (XP 13,000, or 15,000 in lair; PB +5) |
+| Skills | Insight +7, Perception +12, Stealth +5 |
+| Senses | Blindsight 60 ft., Darkvision 120 ft.; Passive Perception 22 |
+| Languages | Common, Draconic |
+| Immunities | Lightning |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 25 | +7 | +7 |
+| Dex | 10 | +0 | +5 |
+| Con | 23 | +6 | +6 |
+| Int | 16 | +3 | +3 |
+| Wis | 15 | +2 | +7 |
+| Cha | 20 | +5 | +5 |
+
 
 ## Source text
 
 <!-- SRD page 270 -->
 
-Huge Dragon (Metallic), Lawful Good\
-AC 18 Initiative +10 (20)\
-HP 212 (17d12 + 102)\
-Speed 40 ft., Fly 80 ft., Swim 40 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 25 +7 +7 Dex 10 +0 +5 Con 23 +6 +6\
-Int 16 +3 +3 Wis 15 +2 +7 Cha 20 +5 +5\
-Skills Insight +7, Perception +12, Stealth +5\
-Immunities Lightning\
-Senses Blindsight 60 ft., Darkvision 120 ft.; Passive Perception 22\
-Languages Common, Draconic\
-CR 15 (XP 13,000, or 15,000 in lair; PB +5)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Huge Dragon (Metallic), Lawful Good\
+> AC 18 Initiative +10 (20)\
+> HP 212 (17d12 + 102)\
+> Speed 40 ft., Fly 80 ft., Swim 40 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 25 +7 +7 Dex 10 +0 +5 Con 23 +6 +6\
+> Int 16 +3 +3 Wis 15 +2 +7 Cha 20 +5 +5\
+> Skills Insight +7, Perception +12, Stealth +5\
+> Immunities Lightning\
+> Senses Blindsight 60 ft., Darkvision 120 ft.; Passive Perception 22\
+> Languages Common, Draconic\
+> CR 15 (XP 13,000, or 15,000 in lair; PB +5)
+
 
 ### Traits
 
@@ -65,49 +92,11 @@ Thunderclap. Constitution Saving Throw: DC 17, each creature in a 20-foot-radius
 
 Original layout: [[../../srd-5.2.1/pages/270|page 270]], [[../../srd-5.2.1/pages/271|page 271]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` huge ` |
-| ` type ` | ` dragon ` |
-| ` alignment ` | ` Lawful Good ` |
-| ` tags_text ` | ` (Metallic) ` |
-| ` movement_text ` | ` 40 ft., Fly 80 ft., Swim 40 ft. ` |
-| ` skills_text ` | ` Insight +7, Perception +12, Stealth +5 ` |
-| ` immunities_text ` | ` Lightning ` |
-| ` senses_text ` | ` Blindsight 60 ft., Darkvision 120 ft.; Passive Perception 22 ` |
-| ` languages_text ` | ` Common, Draconic ` |
-| ` cr_text ` | ` 15 (XP 13,000, or 15,000 in lair; PB +5) ` |
-| ` hit_points_text ` | ` 212 (17d12 + 102) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 25 ` | ` 7 ` |
-| ` Dexterity ` | ` 10 ` | ` 5 ` |
-| ` Constitution ` | ` 23 ` | ` 6 ` |
-| ` Intelligence ` | ` 16 ` | ` 3 ` |
-| ` Wisdom ` | ` 15 ` | ` 7 ` |
-| ` Charisma ` | ` 20 ` | ` 5 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 18 ` |  |
-| ` max_hp ` | ` 212 ` |  |
-| ` initiative ` | ` 10 ` |  |
-| ` speed ` | ` 40 ` | ` ft ` |
-| ` fly_speed ` | ` 80 ` | ` ft ` |
-| ` swim_speed ` | ` 40 ` | ` ft ` |
 
 ## Health
 
@@ -660,3 +649,16 @@ geometry_assumptions:
   - plane
   - form_appearance
 ```
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_stats_extras -->
+> 
+> ```yaml
+> fly_speed:
+>   unit: ft
+>   value: 80
+> swim_speed:
+>   unit: ft
+>   value: 40
+> ```
+

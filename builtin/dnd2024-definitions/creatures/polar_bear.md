@@ -1,35 +1,62 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 73aa9e60-ae93-5f97-b620-7ddc21ed2e3b
 splat_kind: creature
 splat_key: dnd2024:creatures/polar_bear
 splat_name: Polar Bear
-splat_origin:
-  key: dnd2024:reference/creature/polar_bear
+splat_origin: dnd2024:reference/creature/polar_bear
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 359
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 359, https://www.dndbeyond.com/srd
 ---
 
 # Polar Bear
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Large |
+| Type | Beast |
+| Alignment | Unaligned |
+| Armor Class | 12 |
+| Hit Points | 42 (5d10 + 15) |
+| Initiative | +2 (12) |
+| Speed | 40 ft., Swim 40 ft. |
+| Challenge | 2 (XP 450; PB +2) |
+| Skills | Perception +5, Stealth +4 |
+| Senses | Darkvision 60 ft.; Passive Perception 15 |
+| Languages | None |
+| Resistances | Cold |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 20 | +5 | +5 |
+| Dex | 14 | +2 | +2 |
+| Con | 16 | +3 | +3 |
+| Int | 2 | -4 | -4 |
+| Wis | 13 | +1 | +1 |
+| Cha | 7 | -2 | -2 |
+
 
 ## Source text
 
 <!-- SRD page 359 -->
 
-Large Beast, Unaligned\
-AC 12  Initiative +2 (12)\
-HP 42 (5d10 + 15)\
-Speed 40 ft., Swim 40 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 20 +5 +5 Dex 14 +2 +2 Con 16 +3 +3\
-Int 2 −4 −4 Wis 13 +1 +1 Cha 7 −2 −2\
-Skills Perception +5, Stealth +4\
-Resistances Cold\
-Senses Darkvision 60 ft.; Passive Perception 15\
-Languages None\
-CR 2 (XP 450; PB +2)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Large Beast, Unaligned\
+> AC 12  Initiative +2 (12)\
+> HP 42 (5d10 + 15)\
+> Speed 40 ft., Swim 40 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 20 +5 +5 Dex 14 +2 +2 Con 16 +3 +3\
+> Int 2 −4 −4 Wis 13 +1 +1 Cha 7 −2 −2\
+> Skills Perception +5, Stealth +4\
+> Resistances Cold\
+> Senses Darkvision 60 ft.; Passive Perception 15\
+> Languages None\
+> CR 2 (XP 450; PB +2)
+
 
 ### Actions
 
@@ -39,47 +66,11 @@ Rend. Melee Attack Roll: +7, reach 5 ft. Hit: 9 (1d8 + 5) Slashing damage.
 
 Original layout: [[../../srd-5.2.1/pages/359|page 359]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` large ` |
-| ` type ` | ` beast ` |
-| ` alignment ` | ` Unaligned ` |
-| ` movement_text ` | ` 40 ft., Swim 40 ft. ` |
-| ` skills_text ` | ` Perception +5, Stealth +4 ` |
-| ` resistances_text ` | ` Cold ` |
-| ` senses_text ` | ` Darkvision 60 ft.; Passive Perception 15 ` |
-| ` languages_text ` | ` None ` |
-| ` cr_text ` | ` 2 (XP 450; PB +2) ` |
-| ` hit_points_text ` | ` 42 (5d10 + 15) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 20 ` | ` 5 ` |
-| ` Dexterity ` | ` 14 ` | ` 2 ` |
-| ` Constitution ` | ` 16 ` | ` 3 ` |
-| ` Intelligence ` | ` 2 ` | ` -4 ` |
-| ` Wisdom ` | ` 13 ` | ` 1 ` |
-| ` Charisma ` | ` 7 ` | ` -2 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 12 ` |  |
-| ` max_hp ` | ` 42 ` |  |
-| ` initiative ` | ` 2 ` |  |
-| ` speed ` | ` 40 ` | ` ft ` |
-| ` swim_speed ` | ` 40 ` | ` ft ` |
 
 ## Health
 
@@ -192,3 +183,13 @@ sequence:
 | ` provider ` | ` caller ` |
 | ` required_facts ` | ` ["distance", "area_membership", "visibility", "occupancy", "movement_path"] ` |
 | ` validate_against_typed_constraints ` | ` true ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_stats_extras -->
+> 
+> ```yaml
+> swim_speed:
+>   unit: ft
+>   value: 40
+> ```
+

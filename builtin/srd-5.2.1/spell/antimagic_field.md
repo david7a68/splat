@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "4e1051f9-17c8-5ec9-8c30-4502e78d9072"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/antimagic_field"
 splat_name: "Antimagic Field"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [109], "executable": false}
+splat_pages:
+- 109
 ---
 
 # Antimagic Field
@@ -26,3 +27,13 @@ Ongoing spells, except those cast by an Artifact or a deity, are suppressed in t
 Dispel Magic has no effect on the aura, and the auras created by different Antimagic Field spells don’t nullify each other.
 
 Original layout: [[../pages/109|page 109]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

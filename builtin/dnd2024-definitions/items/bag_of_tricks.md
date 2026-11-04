@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: e0b35dea-1113-5224-abe1-792ab8accccf
 splat_kind: item
 splat_key: dnd2024:items/bag_of_tricks
 splat_name: Bag of Tricks
-splat_origin:
-  key: dnd2024:reference/magic_item/bag_of_tricks
+splat_origin: dnd2024:reference/magic_item/bag_of_tricks
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 212
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 212, https://www.dndbeyond.com/srd
 ---
 
 # Bag of Tricks
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Wondrous Item |
+| Rarity | Uncommon |
+| Attunement | No |
+
 
 ## Source text
 
@@ -57,22 +64,9 @@ Once three fuzzy objects have been pulled from the bag, the bag can’t be used 
 
 Original layout: [[../../srd-5.2.1/pages/212|page 212]].
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` wondrous_item ` |
-| ` rarity ` | ` uncommon ` |
 
-### Equipment
-
-<!-- splat:values path=splat_item/equipment -->
-
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` none ` |
 
 ## Rule
 

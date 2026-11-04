@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 2618e55d-2863-5233-8639-f3def3fded3d
 splat_kind: spell
 splat_key: dnd2024:spells/prismatic_wall
 splat_name: Prismatic Wall
-splat_origin:
-  key: dnd2024:reference/spell/prismatic_wall
+splat_origin: dnd2024:reference/spell/prismatic_wall
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 155
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 155, https://www.dndbeyond.com/srd
 ---
 
 # Prismatic Wall
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 9 |
+| School | Abjuration |
+| Classes | Bard, Wizard |
+| Casting Time | Action |
+| Range | 60 feet |
+| Components | V, S |
+| Duration | 10 minutes |
+
 
 ## Source text
 
@@ -46,28 +57,9 @@ The wall, which has AC 10, can be destroyed one layer at a time, in order from r
 
 Original layout: [[../../srd-5.2.1/pages/155|page 155]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 9 ` |
-| ` school ` | ` abjuration ` |
-| ` classes ` | ` ["bard", "wizard"] ` |
-| ` components ` | ` ["verbal", "somatic"] ` |
-| ` concentration ` | ` false ` |
-| ` duration ` | ` 10 minutes ` |
-| ` casting_time ` | ` Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
-
-<!-- splat:values path=splat_spell/range -->
-
-| Field | Value |
-| --- | --- |
-| ` feet ` | ` 60 ` |
 
 ## Rule
 

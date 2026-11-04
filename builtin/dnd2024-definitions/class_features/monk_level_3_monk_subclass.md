@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 00b433a4-b723-505f-a738-59011a9ef9ef
 splat_kind: rule
 splat_key: dnd2024:class_features/monk_level_3_monk_subclass
 splat_name: 'Level 3: Monk Subclass'
-splat_origin:
-  key: dnd2024:reference/pages/051
+splat_origin: dnd2024:reference/pages/051
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 51
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 51, https://www.dndbeyond.com/srd
 ---
 
 # Level 3: Monk Subclass

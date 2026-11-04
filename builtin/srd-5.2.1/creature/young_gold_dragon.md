@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "9f608f75-1ebb-52b2-b9da-985ee95008d7"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/young_gold_dragon"
 splat_name: "Young Gold Dragon"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [291], "executable": false}
+splat_pages:
+- 291
 ---
 
 # Young Gold Dragon
@@ -39,3 +40,13 @@ Fire Breath (Recharge 5–6). Dexterity Saving Throw: DC 17, each creature in a 
 Weakening Breath. Strength Saving Throw: DC 17, each creature that isn’t currently affected by this breath in a 30-foot Cone. Failure: The target has Disadvantage on Strength-based D20 Tests and subtracts 3 (1d6) from its damage rolls. It repeats the save at the end of each of its turns, ending the effect on itself on a success. After 1 minute, it succeeds automatically.
 
 Original layout: [[../pages/291|page 291]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

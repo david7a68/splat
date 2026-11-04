@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 00889495-d8d4-52f0-b527-78b0157399c2
 splat_kind: rule
 splat_key: dnd2024:rules/d20_tests
 splat_name: D20 Tests
-splat_origin:
-  key: dnd2024:reference/pages/006
+splat_origin: dnd2024:reference/pages/006
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 6
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 6, https://www.dndbeyond.com/srd
 ---
 
 # D20 Tests

@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "eb9dbd5b-e6c8-5494-b671-4b140a81c446"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/giant_badger"
 splat_name: "Giant Badger"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [349], "executable": false}
+splat_pages:
+- 349
 ---
 
 # Giant Badger
@@ -29,3 +30,13 @@ CR 1/4 (XP 50; PB +2)
 Bite. Melee Attack Roll: +3, reach 5 ft. Hit: 6 (2d4 + 1) Piercing damage.
 
 Original layout: [[../pages/349|page 349]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

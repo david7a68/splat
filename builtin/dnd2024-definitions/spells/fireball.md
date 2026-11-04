@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: a0ee8b56-876b-5b45-8c3f-57d58f6f1b45
 splat_kind: spell
 splat_key: dnd2024:spells/fireball
 splat_name: Fireball
-splat_origin:
-  key: dnd2024:reference/spell/fireball
+splat_origin: dnd2024:reference/spell/fireball
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 131
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 131, https://www.dndbeyond.com/srd
 ---
 
 # Fireball
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 3 |
+| School | Evocation |
+| Classes | Sorcerer, Wizard |
+| Casting Time | Action |
+| Range | 150 feet |
+| Components | V, S, M (a ball of bat guano and sulfur) |
+| Duration | Instantaneous |
+
 
 ## Source text
 
@@ -32,37 +43,11 @@ Using a Higher-Level Spell Slot. The damage increases by 1d6 for each spell slot
 
 Original layout: [[../../srd-5.2.1/pages/131|page 131]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 3 ` |
-| ` school ` | ` evocation ` |
-| ` classes ` | ` ["sorcerer", "wizard"] ` |
-| ` components ` | ` ["verbal", "somatic", "material"] ` |
-| ` concentration ` | ` false ` |
-| ` duration ` | ` Instantaneous ` |
-| ` casting_time ` | ` Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
 
-<!-- splat:values path=splat_spell/range -->
 
-| Field | Value |
-| --- | --- |
-| ` feet ` | ` 150 ` |
-
-### Material
-
-<!-- splat:values path=splat_spell/material -->
-
-| Field | Value |
-| --- | --- |
-| ` description ` | ` a ball of bat guano and sulfur ` |
-| ` consumed ` | ` false ` |
 
 ## Rule
 
@@ -132,3 +117,12 @@ concentration: false
 maximum:
   kind: instantaneous
 ```
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_spell_extras -->
+> 
+> ```yaml
+> material:
+>   consumed: false
+> ```
+

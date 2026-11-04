@@ -1,25 +1,14 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: eea6db6d-0573-53f9-8b0f-50a625d5f69c
 splat_kind: rule
 splat_key: dnd2024:class_features/bard_level_3_bard_subclass
 splat_name: 'Level 3: Bard Subclass'
-splat_origin:
-  key: dnd2024:reference/pages/032
+splat_origin: dnd2024:reference/pages/032
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 32
-  url: https://www.dndbeyond.com/srd
-splat_reading:
-  title: Bard Subclass
-  summary: 'Choose a Bard subclass. Your subclass grants additional features as you gain Bard levels.
+- SRD 5.2.1, pp. 32, https://www.dndbeyond.com/srd
 
 
-    You gain all features from your chosen subclass whose required level is equal to or below your Bard
-    level.'
-  related_heading: Subclasses
-  related:
-    dnd2024:subclasses/bard_college_of_lore: College of Lore
 ---
 
 # Level 3: Bard Subclass
@@ -68,3 +57,18 @@ You gain a Bard subclass of your choice. The College of Lore subclass is detaile
 | --- | --- |
 | ` class ` | ` bard ` |
 | ` minimum_level ` | ` 3 ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reading -->
+> 
+> ```yaml
+> title: Bard Subclass
+> summary: |-
+>   Choose a Bard subclass. Your subclass grants additional features as you gain Bard levels.
+> 
+>   You gain all features from your chosen subclass whose required level is equal to or below your Bard level.
+> related_heading: Subclasses
+> related:
+>   dnd2024:subclasses/bard_college_of_lore: College of Lore
+> ```
+

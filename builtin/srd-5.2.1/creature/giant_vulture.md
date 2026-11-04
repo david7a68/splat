@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "07e0ebb0-4deb-52e9-8c37-f5b060fe835e"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/giant_vulture"
 splat_name: "Giant Vulture"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [354], "executable": false}
+splat_pages:
+- 354
 ---
 
 # Giant Vulture
@@ -33,3 +34,13 @@ Pack Tactics. The vulture has Advantage on an attack roll against a creature if 
 Gouge. Melee Attack Roll: +4, reach 5 ft. Hit: 9 (2d6 + 2) Piercing damage, and the target has the Poisoned condition until the end of its next turn.
 
 Original layout: [[../pages/354|page 354]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

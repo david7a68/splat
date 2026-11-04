@@ -477,18 +477,10 @@ impl CampaignContent {
             self.message = None;
         }
         self.repair_section(ui, campaigns, &active);
-        let notice_path = self
-            .snapshot
-            .as_ref()
-            .map(|s| active.path.join(&s.document.path));
-        if self.layouts.has_action() && !self.layouts.current(notice_path.as_deref()) {
-            self.message = None;
-        }
         if self.layouts.show_conversion(
             ui,
             self.run_open
                 .then_some("Close the run before converting files."),
-            notice_path.as_deref(),
         ) {
             self.reload(ui.ctx(), campaigns, active.clone());
         }
@@ -534,7 +526,7 @@ impl CampaignContent {
             }
         }
         if let Some(message) = &self.message
-            && !self.layouts.current(notice_path.as_deref())
+            && !self.layouts.current()
         {
             design::message(ui, Tone::Success, message);
         }
@@ -670,7 +662,40 @@ impl CampaignContent {
 
     fn repair_section(&mut self, ui: &mut egui::Ui, campaigns: &Campaigns, active: &Campaign) {
         let mut repaired = false;
+        let old: Vec<_> = self
+            .repairs
+            .iter()
+            .filter(|(path, _, draft)| {
+                Entry::parse(path, draft)
+                    .err()
+                    .is_some_and(|error| crate::formats_ui::is_old(&error))
+            })
+            .map(|(path, _, _)| path.clone())
+            .collect();
+        if !old.is_empty() {
+            let message = if old.len() == 1 {
+                crate::formats_ui::old_message(&old[0])
+            } else {
+                format!("{} files use the old layout.", old.len())
+            };
+            if design::locked(
+                ui,
+                self.run_open
+                    .then_some("Close the run before converting files."),
+                |ui| design::message_with_action(ui, Tone::Warning, &message, "Convert files…"),
+            ) {
+                self.layouts.scan_paths(
+                    campaigns,
+                    &old.iter()
+                        .map(|path| active.path.join(path))
+                        .collect::<Vec<_>>(),
+                );
+            }
+        }
         for (path, baseline, draft) in &mut self.repairs {
+            if old.contains(path) {
+                continue;
+            }
             let (problem, error_line) = repair_problem(path, draft);
             let problem = problem
                 .as_deref()
@@ -844,8 +869,25 @@ impl CampaignContent {
             let dirty = document.selections != self.saved_selections || document.baseline.is_none();
             let repair_text = self
                 .repairs
-                .first()
-                .map(|(path, _, _)| format!("Fix {path} first."));
+                .iter()
+                .find(|(path, _, draft)| {
+                    !Entry::parse(path, draft)
+                        .err()
+                        .is_some_and(|error| crate::formats_ui::is_old(&error))
+                })
+                .map(|(path, _, _)| format!("Fix {path} first."))
+                .or_else(|| {
+                    closure.old_layout.iter().next().map(|id| {
+                        format!(
+                            "Convert {} first.",
+                            catalogue.unreadable[id]
+                                .path
+                                .file_name()
+                                .unwrap_or_default()
+                                .to_string_lossy()
+                        )
+                    })
+                });
             let repair = repair_text.as_deref();
             let save_key = dirty
                 && repair.is_none()
@@ -923,6 +965,24 @@ impl CampaignContent {
                     .blocked(blocked)
                     .show(ui)
                     .clicked();
+                    if !closure.old_layout.is_empty()
+                        && Action::quiet("Convert files…")
+                            .blocked(
+                                self.run_open
+                                    .then_some("Close the run before converting files."),
+                            )
+                            .show(ui)
+                            .clicked()
+                    {
+                        self.layouts.scan_paths(
+                            campaigns,
+                            &closure
+                                .old_layout
+                                .iter()
+                                .map(|id| catalogue.unreadable[id].path.clone())
+                                .collect::<Vec<_>>(),
+                        );
+                    }
                     if reason_fits {
                         design::blocked_reason(ui, repair);
                     } else {
@@ -942,15 +1002,8 @@ impl CampaignContent {
                         selection.name = Some(module.name.clone());
                     }
                 }
-                let before_layout = document.text.clone();
                 match document.save() {
                     Ok(()) => {
-                        self.layouts.remember_conversion(
-                            &active.path,
-                            &document.path,
-                            &before_layout,
-                            &document.text,
-                        );
                         self.saved_selections = document.selections.clone();
                         self.reconcile.checked_at = None;
                         self.message = Some("Campaign selections saved.".into());
@@ -967,11 +1020,7 @@ impl CampaignContent {
                 });
             });
         }
-        let notice_path = active.path.join(&document.path);
-        if self.layouts.show_saved(ui, Some(&notice_path)) {
-            self.message = None;
-            self.refresh_pending = true;
-        }
+
         for module in campaigns.modules() {
             if let Some(problem) = catalogue.manifest_problems.get(&module.id) {
                 ui.horizontal_wrapped(|ui| {
@@ -1103,15 +1152,8 @@ impl CampaignContent {
                 } else {
                     let after = document.selections.clone();
                     document.selections = removed.before.clone();
-                    let before_layout = document.text.clone();
                     match document.save() {
                         Ok(()) => {
-                            self.layouts.remember_conversion(
-                                &active.path,
-                                &document.path,
-                                &before_layout,
-                                &document.text,
-                            );
                             self.saved_selections = document.selections.clone();
                             self.removed_package = None;
                             self.reconcile.checked_at = None;
@@ -1128,15 +1170,21 @@ impl CampaignContent {
             .errors
             .iter()
             .filter(|error| {
-                !catalogue.manifest_problems.iter().any(|(id, problem)| {
-                    error.contains(problem)
-                        || catalogue
-                            .entries
-                            .get(id)
-                            .is_some_and(|entry| error.contains(&entry.entry.path))
-                })
+                !crate::formats_ui::is_old(error)
+                    && !catalogue.manifest_problems.iter().any(|(id, problem)| {
+                        error.contains(problem)
+                            || catalogue
+                                .entries
+                                .get(id)
+                                .is_some_and(|entry| error.contains(&entry.entry.path))
+                    })
             })
-            .chain(closure.errors.iter())
+            .chain(closure.errors.iter().filter(|error| {
+                !closure
+                    .old_layout
+                    .iter()
+                    .any(|id| catalogue.unreadable[id].word == **error)
+            }))
             .collect();
         let missing_package = document.selections.iter().any(|selection| {
             catalogue
@@ -1333,15 +1381,8 @@ impl CampaignContent {
             let before = document.selections.clone();
             let users = selection.campaign_users(catalogue);
             document.selections.remove(i);
-            let before_layout = document.text.clone();
             match document.save() {
                 Ok(()) => {
-                    self.layouts.remember_conversion(
-                        &active.path,
-                        &document.path,
-                        &before_layout,
-                        &document.text,
-                    );
                     self.saved_selections = document.selections.clone();
                     self.removed_package = Some(RemovedPackage {
                         campaign: active.id,
@@ -1467,7 +1508,7 @@ impl CampaignContent {
                                             )
                                         } else {
                                             format!(
-                                                "{} · {}",
+                                                "{}{}",
                                                 if partial {
                                                     design::count(count, "selected", "selected")
                                                 } else if enabled {
@@ -1475,7 +1516,14 @@ impl CampaignContent {
                                                 } else {
                                                     "None".into()
                                                 },
-                                                design::count(total, "entry", "entries"),
+                                                if total == 0 {
+                                                    String::new()
+                                                } else {
+                                                    format!(
+                                                        " · {}",
+                                                        design::count(total, "entry", "entries")
+                                                    )
+                                                },
                                             )
                                         },
                                     )
@@ -1810,36 +1858,6 @@ impl CampaignContent {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn i19_h1_campaign_selection_save_has_one_named_undo_and_restores_old_bytes() {
-        let dir = tempfile::tempdir().unwrap();
-        let campaign = campaign(dir.path());
-        let path = dir.path().join("Campaign.md");
-        let old = format!(
-            "---\nsplat_schema: 1\nsplat_id: {}\nsplat_kind: campaign\nsplat_name: Test campaign\nsplat_namespace: test_campaign\nsplat_campaign: {{}}\nsplat_packages: [{{name: Book, package: {{id: {}}}, selection: {{mode: all}}}}]\n---\n",
-            campaign.id,
-            Uuid::new_v4()
-        );
-        fs::write(&path, &old).unwrap();
-        let mut document = CampaignDocument::load(&campaign).unwrap();
-        assert_eq!(document.selections.len(), 1);
-        document.selections.clear();
-        document.save().unwrap();
-        assert!(
-            CampaignDocument::load(&campaign)
-                .unwrap()
-                .selections
-                .is_empty()
-        );
-        let mut layouts = crate::formats_ui::State::default();
-        layouts.remember_conversion(dir.path(), "Campaign.md", &old, &document.text);
-        let labels = crate::formats_ui::test_notice_labels(&mut layouts, &path);
-        assert!(labels.iter().any(|s| s == "Undo selections"), "{labels:?}");
-        assert!(!labels.iter().any(|s| s == "Undo"));
-        layouts.undo().unwrap();
-        assert_eq!(fs::read_to_string(&path).unwrap(), old);
-    }
 
     #[test]
     fn folder_recovery_requires_exactly_one_matching_identity() {

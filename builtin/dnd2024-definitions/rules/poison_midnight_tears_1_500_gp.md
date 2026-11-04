@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 650e5703-4479-5566-947b-0c3fb2b83fbf
 splat_kind: rule
 splat_key: dnd2024:rules/poison_midnight_tears_1_500_gp
 splat_name: Midnight Tears (1,500 GP)
-splat_origin:
-  key: dnd2024:reference/pages/197
+splat_origin: dnd2024:reference/pages/197
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 197, 198
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 197, 198, https://www.dndbeyond.com/srd
 ---
 
 # Midnight Tears (1,500 GP)

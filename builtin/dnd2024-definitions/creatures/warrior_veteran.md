@@ -1,35 +1,62 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 5677cfbd-fc93-53ed-bd55-361eacb4d4b0
 splat_kind: creature
 splat_key: dnd2024:creatures/warrior_veteran
 splat_name: Warrior Veteran
-splat_origin:
-  key: dnd2024:reference/creature/warrior_veteran
+splat_origin: dnd2024:reference/creature/warrior_veteran
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 337
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 337, https://www.dndbeyond.com/srd
 ---
 
 # Warrior Veteran
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Medium or Small |
+| Type | Humanoid |
+| Alignment | Neutral |
+| Armor Class | 17 |
+| Hit Points | 65 (10d8 + 20) |
+| Initiative | +3 (13) |
+| Speed | 30 ft. |
+| Challenge | 3 (XP 700; PB +2) |
+| Skills | Athletics +5, Perception +2 |
+| Senses | Passive Perception 12 |
+| Languages | Common plus one other language |
+| Gear | Greatsword, Heavy Crossbow, Splint Armor |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 16 | +3 | +3 |
+| Dex | 13 | +1 | +1 |
+| Con | 14 | +2 | +2 |
+| Int | 10 | +0 | +0 |
+| Wis | 11 | +0 | +0 |
+| Cha | 10 | +0 | +0 |
+
 
 ## Source text
 
 <!-- SRD page 337 -->
 
 Medium or Small Humanoid, Neutral\
-AC 17 Initiative +3 (13)\
-HP 65 (10d8 + 20)\
-Speed 30 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 16 +3 +3 Dex 13 +1 +1 Con 14 +2 +2\
-Int 10 +0 +0 Wis 11 +0 +0 Cha 10 +0 +0\
-Skills Athletics +5, Perception +2\
-Gear Greatsword, Heavy Crossbow, Splint Armor\
-Senses Passive Perception 12\
-Languages Common plus one other language\
-CR 3 (XP 700; PB +2)
+> [!quote]- Printed stat block (not read; edit the table above)
+> AC 17 Initiative +3 (13)\
+> HP 65 (10d8 + 20)\
+> Speed 30 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 16 +3 +3 Dex 13 +1 +1 Con 14 +2 +2\
+> Int 10 +0 +0 Wis 11 +0 +0 Cha 10 +0 +0\
+> Skills Athletics +5, Perception +2\
+> Gear Greatsword, Heavy Crossbow, Splint Armor\
+> Senses Passive Perception 12\
+> Languages Common plus one other language\
+> CR 3 (XP 700; PB +2)
+
 
 ### Actions
 
@@ -45,47 +72,11 @@ Parry. Trigger: The warrior is hit by a melee attack roll while holding a weapon
 
 Original layout: [[../../srd-5.2.1/pages/337|page 337]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` medium ` |
-| ` type ` | ` humanoid ` |
-| ` alignment ` | ` Neutral ` |
-| ` size_options_text ` | ` Medium or Small ` |
-| ` movement_text ` | ` 30 ft. ` |
-| ` skills_text ` | ` Athletics +5, Perception +2 ` |
-| ` gear_text ` | ` Greatsword, Heavy Crossbow, Splint Armor ` |
-| ` senses_text ` | ` Passive Perception 12 ` |
-| ` languages_text ` | ` Common plus one other language ` |
-| ` cr_text ` | ` 3 (XP 700; PB +2) ` |
-| ` hit_points_text ` | ` 65 (10d8 + 20) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 16 ` | ` 3 ` |
-| ` Dexterity ` | ` 13 ` | ` 1 ` |
-| ` Constitution ` | ` 14 ` | ` 2 ` |
-| ` Intelligence ` | ` 10 ` | ` 0 ` |
-| ` Wisdom ` | ` 11 ` | ` 0 ` |
-| ` Charisma ` | ` 10 ` | ` 0 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 17 ` |  |
-| ` max_hp ` | ` 65 ` |  |
-| ` initiative ` | ` 3 ` |  |
-| ` speed ` | ` 30 ` | ` ft ` |
 
 ## Health
 

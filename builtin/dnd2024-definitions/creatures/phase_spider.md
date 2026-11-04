@@ -1,34 +1,60 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: a44921eb-156c-59ad-88f3-8372efa9b185
 splat_kind: creature
 splat_key: dnd2024:creatures/phase_spider
 splat_name: Phase Spider
-splat_origin:
-  key: dnd2024:reference/creature/phase_spider
+splat_origin: dnd2024:reference/creature/phase_spider
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 313, 314
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 313, 314, https://www.dndbeyond.com/srd
 ---
 
 # Phase Spider
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Large |
+| Type | Monstrosity |
+| Alignment | Unaligned |
+| Armor Class | 14 |
+| Hit Points | 45 (7d10 + 7) |
+| Initiative | +3 (13) |
+| Speed | 30 ft., Climb 30 ft. |
+| Challenge | 3 (XP 700; PB +2) |
+| Skills | Stealth +7 |
+| Senses | Darkvision 60 ft.; Passive Perception 10 |
+| Languages | None |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 15 | +2 | +2 |
+| Dex | 16 | +3 | +3 |
+| Con | 12 | +1 | +1 |
+| Int | 6 | -2 | -2 |
+| Wis | 10 | +0 | +0 |
+| Cha | 6 | -2 | -2 |
+
 
 ## Source text
 
 <!-- SRD page 313 -->
 
-Large Monstrosity, Unaligned\
-AC 14 Initiative +3 (13)\
-HP 45 (7d10 + 7)\
-Speed 30 ft., Climb 30 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 15 +2 +2 Dex 16 +3 +3 Con 12 +1 +1\
-Int 6 −2 −2 Wis 10 +0 +0 Cha 6 −2 −2\
-Skills Stealth +7\
-Senses Darkvision 60 ft.; Passive Perception 10\
-Languages None\
-CR 3 (XP 700; PB +2)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Large Monstrosity, Unaligned\
+> AC 14 Initiative +3 (13)\
+> HP 45 (7d10 + 7)\
+> Speed 30 ft., Climb 30 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 15 +2 +2 Dex 16 +3 +3 Con 12 +1 +1\
+> Int 6 −2 −2 Wis 10 +0 +0 Cha 6 −2 −2\
+> Skills Stealth +7\
+> Senses Darkvision 60 ft.; Passive Perception 10\
+> Languages None\
+> CR 3 (XP 700; PB +2)
+
 
 <!-- SRD page 314 -->
 
@@ -52,46 +78,11 @@ Ethereal Jaunt. The spider teleports from the Material Plane to the Ethereal Pla
 
 Original layout: [[../../srd-5.2.1/pages/313|page 313]], [[../../srd-5.2.1/pages/314|page 314]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` large ` |
-| ` type ` | ` monstrosity ` |
-| ` alignment ` | ` Unaligned ` |
-| ` movement_text ` | ` 30 ft., Climb 30 ft. ` |
-| ` skills_text ` | ` Stealth +7 ` |
-| ` senses_text ` | ` Darkvision 60 ft.; Passive Perception 10 ` |
-| ` languages_text ` | ` None ` |
-| ` cr_text ` | ` 3 (XP 700; PB +2) ` |
-| ` hit_points_text ` | ` 45 (7d10 + 7) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 15 ` | ` 2 ` |
-| ` Dexterity ` | ` 16 ` | ` 3 ` |
-| ` Constitution ` | ` 12 ` | ` 1 ` |
-| ` Intelligence ` | ` 6 ` | ` -2 ` |
-| ` Wisdom ` | ` 10 ` | ` 0 ` |
-| ` Charisma ` | ` 6 ` | ` -2 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 14 ` |  |
-| ` max_hp ` | ` 45 ` |  |
-| ` initiative ` | ` 3 ` |  |
-| ` speed ` | ` 30 ` | ` ft ` |
-| ` climb_speed ` | ` 30 ` | ` ft ` |
 
 ## Health
 
@@ -302,3 +293,13 @@ geometry_assumptions:
   - plane
   - form_appearance
 ```
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_stats_extras -->
+> 
+> ```yaml
+> climb_speed:
+>   unit: ft
+>   value: 30
+> ```
+

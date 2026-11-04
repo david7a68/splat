@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "0108d6dd-f138-5ab7-9d24-d10543b3706b"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/swarm_of_piranhas"
 splat_name: "Swarm of Piranhas"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [362], "executable": false}
+splat_pages:
+- 362
 ---
 
 # Swarm of Piranhas
@@ -35,3 +36,13 @@ Water Breathing. The swarm can breathe only underwater.
 Bites. Melee Attack Roll: +5 (with Advantage if the target doesn’t have all its Hit Points), reach 5 ft. Hit: 8 (2d4 + 3) Piercing damage, or 5 (1d4 + 3) Piercing damage if the swarm is Bloodied.
 
 Original layout: [[../pages/362|page 362]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

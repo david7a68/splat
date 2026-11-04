@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "0585abcb-273c-552f-9f31-3b5d38f1ef14"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/freedom_of_movement"
 splat_name: "Freedom of Movement"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [134], "executable": false}
+splat_pages:
+- 134
 ---
 
 # Freedom of Movement
@@ -24,3 +25,13 @@ In addition, the target can spend 5 feet of movement to automatically escape fro
 Using a Higher-Level Spell Slot. You can target one additional creature for each spell slot level above 4.
 
 Original layout: [[../pages/134|page 134]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

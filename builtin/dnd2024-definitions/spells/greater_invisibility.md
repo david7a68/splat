@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: b557d649-7130-5904-ad90-1d256cce72cb
 splat_kind: spell
 splat_key: dnd2024:spells/greater_invisibility
 splat_name: Greater Invisibility
-splat_origin:
-  key: dnd2024:reference/spell/greater_invisibility
+splat_origin: dnd2024:reference/spell/greater_invisibility
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 137
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 137, https://www.dndbeyond.com/srd
 ---
 
 # Greater Invisibility
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 4 |
+| School | Illusion |
+| Classes | Bard, Sorcerer, Wizard |
+| Casting Time | Action |
+| Range |  |
+| Components | V, S |
+| Duration | Concentration, up to 1 minute |
+
 
 ## Source text
 
@@ -28,28 +39,9 @@ A creature you touch has the Invisible condition until the spell ends.
 
 Original layout: [[../../srd-5.2.1/pages/137|page 137]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 4 ` |
-| ` school ` | ` illusion ` |
-| ` classes ` | ` ["bard", "sorcerer", "wizard"] ` |
-| ` components ` | ` ["verbal", "somatic"] ` |
-| ` concentration ` | ` true ` |
-| ` duration ` | ` Concentration, up to 1 minute ` |
-| ` casting_time ` | ` Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
-
-<!-- splat:values path=splat_spell/range -->
-
-| Field | Value |
-| --- | --- |
-| ` mode ` | ` touch ` |
 
 ## Rule
 
@@ -81,3 +73,12 @@ Original layout: [[../../srd-5.2.1/pages/137|page 137]].
 | --- | --- |
 | ` name ` | ` invisible ` |
 | ` duration ` | ` spell ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_spell_extras -->
+> 
+> ```yaml
+> range:
+>   mode: touch
+> ```
+

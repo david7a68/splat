@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 2d7b69b7-853d-50ad-bef8-d3a89824522b
 splat_kind: item
 splat_key: dnd2024:items/figurine_of_wondrous_power
 splat_name: Figurine of Wondrous Power
-splat_origin:
-  key: dnd2024:reference/magic_item/figurine_of_wondrous_power
+splat_origin: dnd2024:reference/magic_item/figurine_of_wondrous_power
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 221, 222
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 221, 222, https://www.dndbeyond.com/srd
 ---
 
 # Figurine of Wondrous Power
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Wondrous Item |
+| Rarity | Rarity Varies |
+| Attunement | No |
+
 
 ## Source text
 
@@ -69,22 +76,9 @@ Silver Raven (Uncommon). This silver statuette of a raven can become a Raven for
 
 Original layout: [[../../srd-5.2.1/pages/221|page 221]], [[../../srd-5.2.1/pages/222|page 222]].
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` wondrous_item ` |
-| ` rarity ` | ` rarity_varies ` |
 
-### Equipment
-
-<!-- splat:values path=splat_item/equipment -->
-
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` none ` |
 
 ## Rule
 

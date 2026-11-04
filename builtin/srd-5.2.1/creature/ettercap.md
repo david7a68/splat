@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "76c25fa3-983d-58f1-a180-78ac791e6a36"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/ettercap"
 splat_name: "Ettercap"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [284], "executable": false}
+splat_pages:
+- 284
 ---
 
 # Ettercap
@@ -44,3 +45,13 @@ Web Strand (Recharge 5–6). Dexterity Saving Throw: DC 12, one Large or smaller
 Reel. The ettercap pulls one creature within 30 feet of itself that is Restrained by its Web Strand up to 25 feet straight toward itself.
 
 Original layout: [[../pages/284|page 284]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 59d55d3b-0a95-5744-9560-181a239903a3
 splat_kind: spell
 splat_key: dnd2024:spells/divine_word
 splat_name: Divine Word
-splat_origin:
-  key: dnd2024:reference/spell/divine_word
+splat_origin: dnd2024:reference/spell/divine_word
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 125
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 125, https://www.dndbeyond.com/srd
 ---
 
 # Divine Word
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 7 |
+| School | Evocation |
+| Classes | Cleric |
+| Casting Time | Bonus Action |
+| Range | 30 feet |
+| Components | V |
+| Duration | Instantaneous |
+
 
 ## Source text
 
@@ -37,28 +48,9 @@ You utter a word imbued with power from the Upper Planes. Each creature of your 
 
 Original layout: [[../../srd-5.2.1/pages/125|page 125]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 7 ` |
-| ` school ` | ` evocation ` |
-| ` classes ` | ` ["cleric"] ` |
-| ` components ` | ` ["verbal"] ` |
-| ` concentration ` | ` false ` |
-| ` duration ` | ` Instantaneous ` |
-| ` casting_time ` | ` Bonus Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
-
-<!-- splat:values path=splat_spell/range -->
-
-| Field | Value |
-| --- | --- |
-| ` feet ` | ` 30 ` |
 
 ## Rule
 

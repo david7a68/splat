@@ -1,34 +1,60 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: cf88db2d-0998-5e7a-b360-41fc7b993a4e
 splat_kind: creature
 splat_key: dnd2024:creatures/zombie
 splat_name: Zombie
-splat_origin:
-  key: dnd2024:reference/creature/zombie
+splat_origin: dnd2024:reference/creature/zombie
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 343, 344
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 343, 344, https://www.dndbeyond.com/srd
 ---
 
 # Zombie
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Medium |
+| Type | Undead |
+| Alignment | Neutral Evil |
+| Armor Class | 8 |
+| Hit Points | 15 (2d8 + 6) |
+| Initiative | -2 (8) |
+| Speed | 20 ft. |
+| Challenge | 1/4 (XP 50; PB +2) |
+| Senses | Darkvision 60 ft.; Passive Perception 8 |
+| Languages | Understands Common plus one other language but can’t speak |
+| Immunities | Poison; Exhaustion, Poisoned |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 13 | +1 | +1 |
+| Dex | 6 | -2 | -2 |
+| Con | 16 | +3 | +3 |
+| Int | 3 | -4 | -4 |
+| Wis | 6 | -2 | +0 |
+| Cha | 5 | -3 | -3 |
+
 
 ## Source text
 
 <!-- SRD page 343 -->
 
-Medium Undead, Neutral Evil\
-AC 8   Initiative −2 (8)\
-HP 15 (2d8 + 6)\
-Speed 20 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 13 +1 +1 Dex 6 −2 −2 Con 16 +3 +3\
-Int 3 −4 −4 Wis 6 −2 +0 Cha 5 −3 −3\
-Immunities Poison; Exhaustion, Poisoned\
-Senses Darkvision 60 ft.; Passive Perception 8\
-Languages Understands Common plus one other language but can’t speak\
-CR 1/4 (XP 50; PB +2)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Medium Undead, Neutral Evil\
+> AC 8   Initiative −2 (8)\
+> HP 15 (2d8 + 6)\
+> Speed 20 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 13 +1 +1 Dex 6 −2 −2 Con 16 +3 +3\
+> Int 3 −4 −4 Wis 6 −2 +0 Cha 5 −3 −3\
+> Immunities Poison; Exhaustion, Poisoned\
+> Senses Darkvision 60 ft.; Passive Perception 8\
+> Languages Understands Common plus one other language but can’t speak\
+> CR 1/4 (XP 50; PB +2)
+
 
 ### Traits
 
@@ -42,45 +68,11 @@ Slam. Melee Attack Roll: +3, reach 5 ft. Hit: 5 (1d8 + 1) Bludgeoning damage.
 
 Original layout: [[../../srd-5.2.1/pages/343|page 343]], [[../../srd-5.2.1/pages/344|page 344]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` medium ` |
-| ` type ` | ` undead ` |
-| ` alignment ` | ` Neutral Evil ` |
-| ` movement_text ` | ` 20 ft. ` |
-| ` immunities_text ` | ` Poison; Exhaustion, Poisoned ` |
-| ` senses_text ` | ` Darkvision 60 ft.; Passive Perception 8 ` |
-| ` languages_text ` | ` Understands Common plus one other language but can’t speak ` |
-| ` cr_text ` | ` 1/4 (XP 50; PB +2) ` |
-| ` hit_points_text ` | ` 15 (2d8 + 6) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 13 ` | ` 1 ` |
-| ` Dexterity ` | ` 6 ` | ` -2 ` |
-| ` Constitution ` | ` 16 ` | ` 3 ` |
-| ` Intelligence ` | ` 3 ` | ` -4 ` |
-| ` Wisdom ` | ` 6 ` | ` 0 ` |
-| ` Charisma ` | ` 5 ` | ` -3 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 8 ` |  |
-| ` max_hp ` | ` 15 ` |  |
-| ` initiative ` | ` -2 ` |  |
-| ` speed ` | ` 20 ` | ` ft ` |
 
 ## Health
 

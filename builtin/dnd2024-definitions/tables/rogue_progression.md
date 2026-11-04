@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: ace29b26-c1ca-5c14-b3f1-327e2642ecd2
 splat_kind: rule
 splat_key: dnd2024:tables/rogue_progression
 splat_name: Rogue Progression
-splat_origin:
-  key: dnd2024:reference/pages/062
+splat_origin: dnd2024:reference/pages/062
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 62
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 62, https://www.dndbeyond.com/srd
 ---
 
 # Rogue Progression

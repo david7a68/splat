@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 8d552b00-bc66-5976-a196-42d2616cf6cb
 splat_kind: rule
 splat_key: dnd2024:rules/parts_of_a_stat_block_skills
 splat_name: Skills
-splat_origin:
-  key: dnd2024:reference/pages/255
+splat_origin: dnd2024:reference/pages/255
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 255
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 255, https://www.dndbeyond.com/srd
 ---
 
 # Skills

@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 200e5608-4d85-5036-b8e6-c0b00009f9ce
 splat_kind: rule
 splat_key: dnd2024:class_features/evoker_level_14_overchannel
 splat_name: 'Level 14: Overchannel'
-splat_origin:
-  key: dnd2024:reference/pages/082
+splat_origin: dnd2024:reference/pages/082
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 82
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 82, https://www.dndbeyond.com/srd
 ---
 
 # Level 14: Overchannel

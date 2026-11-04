@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "cca3fed1-0249-5111-9757-fa05084e864a"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/magic_item/marvelous_pigments"
 splat_name: "Marvelous Pigments"
-splat_reference: {"source": "SRD 5.2.1", "category": "magic_item", "pages": [230], "executable": false}
+splat_pages:
+- 230
 ---
 
 # Marvelous Pigments
@@ -24,3 +25,13 @@ No object created by a pot of pigment can have a value greater than 25 GP, and t
 If you paint a form of energy such as fire or lightning, the energy dissipates as soon as you complete the painting, doing no harm.
 
 Original layout: [[../pages/230|page 230]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: magic_item
+> executable: false
+> ```
+

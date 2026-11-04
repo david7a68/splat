@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: d6cc876e-c146-5ef9-a1f6-ad5d4ec5e569
 splat_kind: item
 splat_key: dnd2024:items/ring_of_spell_storing
 splat_name: Ring of Spell Storing
-splat_origin:
-  key: dnd2024:reference/magic_item/ring_of_spell_storing
+splat_origin: dnd2024:reference/magic_item/ring_of_spell_storing
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 239
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 239, https://www.dndbeyond.com/srd
 ---
 
 # Ring of Spell Storing
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Ring |
+| Rarity | Rare |
+| Attunement | Yes |
+
 
 ## Source text
 
@@ -28,22 +35,9 @@ While wearing this ring, you can cast any spell stored in it. The spell uses the
 
 Original layout: [[../../srd-5.2.1/pages/239|page 239]].
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` ring ` |
-| ` rarity ` | ` rare ` |
 
-### Equipment
-
-<!-- splat:values path=splat_item/equipment -->
-
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` required ` |
 
 ## Rule
 

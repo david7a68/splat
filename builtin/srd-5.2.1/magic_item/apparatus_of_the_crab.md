@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "327eb160-4e2f-5f61-bdee-170f502f5fa7"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/magic_item/apparatus_of_the_crab"
 splat_name: "Apparatus of the Crab"
-splat_reference: {"source": "SRD 5.2.1", "category": "magic_item", "pages": [210], "executable": false}
+splat_pages:
+- 210
 ---
 
 # Apparatus of the Crab
@@ -37,3 +38,13 @@ A creature in the compartment can take a Utilize action to move as many as two o
 | 10 | The rear hatch unseals and opens. | The rear hatch closes and seals. |
 
 Original layout: [[../pages/210|page 210]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: magic_item
+> executable: false
+> ```
+

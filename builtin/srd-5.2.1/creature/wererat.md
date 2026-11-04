@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "965d537f-0989-5972-a0b9-7a36cd26ea14"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/wererat"
 splat_name: "Wererat"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [338], "executable": false}
+splat_pages:
+- 338
 ---
 
 # Wererat
@@ -39,3 +40,13 @@ Hand Crossbow (Humanoid or Hybrid Form Only). Ranged Attack Roll: +5, range 30/1
 Shape-Shift. The wererat shape-shifts into a Medium rat-humanoid hybrid or a Small rat, or it returns to its true humanoid form. Its game statistics, other than its size, are the same in each form. Any equipment it is wearing or carrying isn’t transformed.
 
 Original layout: [[../pages/338|page 338]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

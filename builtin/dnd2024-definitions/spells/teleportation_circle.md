@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 6965e670-1196-540c-89e2-18dc4b69b893
 splat_kind: spell
 splat_key: dnd2024:spells/teleportation_circle
 splat_name: Teleportation Circle
-splat_origin:
-  key: dnd2024:reference/spell/teleportation_circle
+splat_origin: dnd2024:reference/spell/teleportation_circle
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 168, 169
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 168, 169, https://www.dndbeyond.com/srd
 ---
 
 # Teleportation Circle
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 5 |
+| School | Conjuration |
+| Classes | Bard, Sorcerer, Warlock, Wizard |
+| Casting Time | 1 minute |
+| Range | 10 feet |
+| Components | V, M (rare inks worth 50+ GP, which the spell consumes) |
+| Duration | 1 round |
+
 
 ## Source text
 
@@ -36,37 +47,11 @@ You can create a permanent teleportation circle by casting this spell in the sam
 
 Original layout: [[../../srd-5.2.1/pages/168|page 168]], [[../../srd-5.2.1/pages/169|page 169]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 5 ` |
-| ` school ` | ` conjuration ` |
-| ` classes ` | ` ["bard", "sorcerer", "warlock", "wizard"] ` |
-| ` components ` | ` ["verbal", "material"] ` |
-| ` concentration ` | ` false ` |
-| ` duration ` | ` 1 round ` |
-| ` casting_time ` | ` 1 minute ` |
-| ` ritual ` | ` false ` |
 
-### Range
 
-<!-- splat:values path=splat_spell/range -->
 
-| Field | Value |
-| --- | --- |
-| ` feet ` | ` 10 ` |
-
-### Material
-
-<!-- splat:values path=splat_spell/material -->
-
-| Field | Value |
-| --- | --- |
-| ` description ` | ` rare inks worth 50+ GP, which the spell consumes ` |
-| ` consumed ` | ` true ` |
 
 ## Rule
 
@@ -158,3 +143,12 @@ sigil_sequences: unique_per_circle
 | ` source ` | ` supplied_world_geometry ` |
 | ` unknown_facts ` | ` require_resolution ` |
 | ` infer_unprovided_geometry ` | ` false ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_spell_extras -->
+> 
+> ```yaml
+> material:
+>   consumed: true
+> ```
+

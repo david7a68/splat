@@ -82,6 +82,8 @@ fn made_up_entry(name: &str, hp: i64, ac: Option<i64>) -> Entry {
         stats.insert("armor_class".into(), stat(ac));
     }
     let mut fields = Mapping::new();
+    fields.insert("splat_schema".into(), 2.into());
+    fields.insert("splat_creature".into(), Value::Mapping(Mapping::new()));
     fields.insert("splat_stats".into(), Value::Mapping(stats));
     Entry {
         path: "Made up in this fight".into(),

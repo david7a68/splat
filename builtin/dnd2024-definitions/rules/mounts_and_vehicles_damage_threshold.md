@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 0f27f279-f32f-5eea-8c1d-292d9f6b9101
 splat_kind: rule
 splat_key: dnd2024:rules/mounts_and_vehicles_damage_threshold
 splat_name: Damage Threshold
-splat_origin:
-  key: dnd2024:reference/pages/101
+splat_origin: dnd2024:reference/pages/101
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 101
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 101, https://www.dndbeyond.com/srd
 ---
 
 # Damage Threshold

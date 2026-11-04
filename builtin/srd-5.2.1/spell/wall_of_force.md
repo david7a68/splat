@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "d034c183-9ee4-505f-9af0-289473314bcc"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/wall_of_force"
 splat_name: "Wall of Force"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [172], "executable": false}
+splat_pages:
+- 172
 ---
 
 # Wall of Force
@@ -22,3 +23,13 @@ An Invisible wall of force springs into existence at a point you choose within r
 Nothing can physically pass through the wall. It is immune to all damage and can’t be dispelled by Dispel Magic. A Disintegrate spell destroys the wall instantly, however. The wall also extends into the Ethereal Plane and blocks ethereal travel through the wall.
 
 Original layout: [[../pages/172|page 172]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

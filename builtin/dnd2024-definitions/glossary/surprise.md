@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: a59eca66-9256-5433-90af-8fd98647cfe5
 splat_kind: rule
 splat_key: dnd2024:glossary/surprise
 splat_name: Surprise
-splat_origin:
-  key: dnd2024:reference/glossary/surprise
+splat_origin: dnd2024:reference/glossary/surprise
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 189
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 189, https://www.dndbeyond.com/srd
 ---
 
 # Surprise

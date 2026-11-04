@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 8ad9c718-ec25-51ed-ac7a-e385f2a232e5
 splat_kind: rule
 splat_key: dnd2024:glossary/illusions
 splat_name: Illusions
-splat_origin:
-  key: dnd2024:reference/glossary/illusions
+splat_origin: dnd2024:reference/glossary/illusions
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 183
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 183, https://www.dndbeyond.com/srd
 ---
 
 # Illusions

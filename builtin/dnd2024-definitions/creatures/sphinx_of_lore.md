@@ -1,36 +1,64 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: ae18da0f-a055-5ce5-be8f-dffb5019d6c9
 splat_kind: creature
 splat_key: dnd2024:creatures/sphinx_of_lore
 splat_name: Sphinx of Lore
-splat_origin:
-  key: dnd2024:reference/creature/sphinx_of_lore
+splat_origin: dnd2024:reference/creature/sphinx_of_lore
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 327, 328
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 327, 328, https://www.dndbeyond.com/srd
 ---
 
 # Sphinx of Lore
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Large |
+| Type | Celestial |
+| Alignment | Lawful Neutral |
+| Armor Class | 17 |
+| Hit Points | 170 (20d10 + 60) |
+| Initiative | +10 (20) |
+| Speed | 40 ft., Fly 60 ft. |
+| Challenge | 11 (XP 7,200, or 8,400 in lair; PB +4) |
+| Skills | Arcana +12, History +12, Perception +8, Religion +12 |
+| Senses | Truesight 120 ft.; Passive Perception 18 |
+| Languages | Celestial, Common |
+| Resistances | Necrotic, Radiant |
+| Immunities | Psychic; Charmed, Frightened |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 18 | +4 | +4 |
+| Dex | 15 | +2 | +2 |
+| Con | 16 | +3 | +3 |
+| Int | 18 | +4 | +4 |
+| Wis | 18 | +4 | +4 |
+| Cha | 18 | +4 | +4 |
+
 
 ## Source text
 
 <!-- SRD page 327 -->
 
-Large Celestial, Lawful Neutral\
-AC 17 Initiative +10 (20)\
-HP 170 (20d10 + 60)\
-Speed 40 ft., Fly 60 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 18 +4 +4 Dex 15 +2 +2 Con 16 +3 +3\
-Int 18 +4 +4 Wis 18 +4 +4 Cha 18 +4 +4\
-Skills Arcana +12, History +12, Perception +8, Religion +12\
-Resistances Necrotic, Radiant\
-Immunities Psychic; Charmed, Frightened\
-Senses Truesight 120 ft.; Passive Perception 18\
-Languages Celestial, Common\
-CR 11 (XP 7,200, or 8,400 in lair; PB +4)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Large Celestial, Lawful Neutral\
+> AC 17 Initiative +10 (20)\
+> HP 170 (20d10 + 60)\
+> Speed 40 ft., Fly 60 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 18 +4 +4 Dex 15 +2 +2 Con 16 +3 +3\
+> Int 18 +4 +4 Wis 18 +4 +4 Cha 18 +4 +4\
+> Skills Arcana +12, History +12, Perception +8, Religion +12\
+> Resistances Necrotic, Radiant\
+> Immunities Psychic; Charmed, Frightened\
+> Senses Truesight 120 ft.; Passive Perception 18\
+> Languages Celestial, Common\
+> CR 11 (XP 7,200, or 8,400 in lair; PB +4)
+
 
 ### Traits
 
@@ -63,48 +91,11 @@ Weight of Years. Constitution Saving Throw: DC 16, one creature the sphinx can s
 
 Original layout: [[../../srd-5.2.1/pages/327|page 327]], [[../../srd-5.2.1/pages/328|page 328]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` large ` |
-| ` type ` | ` celestial ` |
-| ` alignment ` | ` Lawful Neutral ` |
-| ` movement_text ` | ` 40 ft., Fly 60 ft. ` |
-| ` skills_text ` | ` Arcana +12, History +12, Perception +8, Religion +12 ` |
-| ` resistances_text ` | ` Necrotic, Radiant ` |
-| ` immunities_text ` | ` Psychic; Charmed, Frightened ` |
-| ` senses_text ` | ` Truesight 120 ft.; Passive Perception 18 ` |
-| ` languages_text ` | ` Celestial, Common ` |
-| ` cr_text ` | ` 11 (XP 7,200, or 8,400 in lair; PB +4) ` |
-| ` hit_points_text ` | ` 170 (20d10 + 60) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 18 ` | ` 4 ` |
-| ` Dexterity ` | ` 15 ` | ` 2 ` |
-| ` Constitution ` | ` 16 ` | ` 3 ` |
-| ` Intelligence ` | ` 18 ` | ` 4 ` |
-| ` Wisdom ` | ` 18 ` | ` 4 ` |
-| ` Charisma ` | ` 18 ` | ` 4 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 17 ` |  |
-| ` max_hp ` | ` 170 ` |  |
-| ` initiative ` | ` 10 ` |  |
-| ` speed ` | ` 40 ` | ` ft ` |
-| ` fly_speed ` | ` 60 ` | ` ft ` |
 
 ## Health
 
@@ -477,3 +468,13 @@ geometry_assumptions:
   - plane
   - form_appearance
 ```
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_stats_extras -->
+> 
+> ```yaml
+> fly_speed:
+>   unit: ft
+>   value: 60
+> ```
+

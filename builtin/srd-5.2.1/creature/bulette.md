@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "e3cc9b64-cd56-5cb1-a0ce-36010ca50d46"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/bulette"
 splat_name: "Bulette"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [272], "executable": false}
+splat_pages:
+- 272
 ---
 
 # Bulette
@@ -36,3 +37,13 @@ Deadly Leap. The bulette spends 5 feet of movement to jump to a space within 15 
 Leap. The bulette jumps up to 30 feet by spending 10 feet of movement.
 
 Original layout: [[../pages/272|page 272]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

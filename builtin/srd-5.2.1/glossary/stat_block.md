@@ -1,10 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "f32ab0af-c390-5bc3-b7f6-00959f640077"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/glossary/stat_block"
 splat_name: "Stat Block"
-splat_reference: {"source": "SRD 5.2.1", "category": "glossary", "pages": [188, 189], "executable": false}
+splat_pages:
+- 188
+- 189
 ---
 
 # Stat Block
@@ -56,3 +58,13 @@ Saving Throw Effect Notation. If an effect forces a saving throw, the effect’s
 Damage Notation. A stat block usually provides both a static number and a die expression for each instance of damage. For example, an attack might deal 4 (1d4 + 2) damage on a hit. The GM determines whether you use the static number or the die expression in parentheses; you don’t use both.
 
 Original layout: [[../pages/188|page 188]], [[../pages/189|page 189]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: glossary
+> executable: false
+> ```
+

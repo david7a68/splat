@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 4e28e57f-bfd5-5688-afe1-58d7a4414d03
 splat_kind: rule
 splat_key: dnd2024:rules/create_your_character_step_3_ability_scores
 splat_name: 'Step 3: Ability Scores'
-splat_origin:
-  key: dnd2024:reference/pages/020
+splat_origin: dnd2024:reference/pages/020
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 20
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 20, https://www.dndbeyond.com/srd
 ---
 
 # Step 3: Ability Scores

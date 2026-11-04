@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 1ce5ee88-00e0-5c6b-ac9c-36b851c8227b
 splat_kind: spell
 splat_key: dnd2024:spells/slow
 splat_name: Slow
-splat_origin:
-  key: dnd2024:reference/spell/slow
+splat_origin: dnd2024:reference/spell/slow
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 163
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 163, https://www.dndbeyond.com/srd
 ---
 
 # Slow
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 3 |
+| School | Transmutation |
+| Classes | Bard, Sorcerer, Wizard |
+| Casting Time | Action |
+| Range | 120 feet |
+| Components | V, S, M (a drop of molasses) |
+| Duration | Concentration, up to 1 minute |
+
 
 ## Source text
 
@@ -32,37 +43,11 @@ An affected target repeats the save at the end of each of its turns, ending the 
 
 Original layout: [[../../srd-5.2.1/pages/163|page 163]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 3 ` |
-| ` school ` | ` transmutation ` |
-| ` classes ` | ` ["bard", "sorcerer", "wizard"] ` |
-| ` components ` | ` ["verbal", "somatic", "material"] ` |
-| ` concentration ` | ` true ` |
-| ` duration ` | ` Concentration, up to 1 minute ` |
-| ` casting_time ` | ` Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
 
-<!-- splat:values path=splat_spell/range -->
 
-| Field | Value |
-| --- | --- |
-| ` feet ` | ` 120 ` |
-
-### Material
-
-<!-- splat:values path=splat_spell/material -->
-
-| Field | Value |
-| --- | --- |
-| ` description ` | ` a drop of molasses ` |
-| ` consumed ` | ` false ` |
 
 ## Rule
 
@@ -137,3 +122,12 @@ somatic_spell_failure_percent: 25
 | ` event ` | ` turn.end ` |
 | ` ability ` | ` wisdom ` |
 | ` success ` | ` end_spell_on_self ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_spell_extras -->
+> 
+> ```yaml
+> material:
+>   consumed: false
+> ```
+

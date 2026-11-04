@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "9b8e1315-308a-5385-b31f-291dd47bf0ea"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/glossary/petrified_condition"
 splat_name: "Petrified [Condition]"
-splat_reference: {"source": "SRD 5.2.1", "category": "glossary", "pages": [186], "executable": false}
+splat_pages:
+- 186
 ---
 
 # Petrified [Condition]
@@ -28,3 +29,13 @@ Resist Damage. You have Resistance to all damage.
 Poison Immunity. You have Immunity to the Poisoned condition.
 
 Original layout: [[../pages/186|page 186]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: glossary
+> executable: false
+> ```
+

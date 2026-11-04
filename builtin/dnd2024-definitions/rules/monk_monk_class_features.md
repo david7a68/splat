@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 71d76934-1fc8-50be-a15c-cca568917292
 splat_kind: rule
 splat_key: dnd2024:rules/monk_monk_class_features
 splat_name: Monk Class Features
-splat_origin:
-  key: dnd2024:reference/pages/049
+splat_origin: dnd2024:reference/pages/049
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 49, 50
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 49, 50, https://www.dndbeyond.com/srd
 ---
 
 # Monk Class Features

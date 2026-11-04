@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "2e9dcb77-68c9-53e0-a5d2-64073827ac3d"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/tiger"
 splat_name: "Tiger"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [363], "executable": false}
+splat_pages:
+- 363
 ---
 
 # Tiger
@@ -32,3 +33,13 @@ Rend. Melee Attack Roll: +5, reach 5 ft. Hit: 10 (2d6 + 3) Slashing damage. If t
 Nimble Escape. The tiger takes the Disengage or Hide action.
 
 Original layout: [[../pages/363|page 363]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

@@ -1,10 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "8287fc71-669e-5966-8c5b-9624772a94e8"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/commune_with_nature"
 splat_name: "Commune with Nature"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [116, 117], "executable": false}
+splat_pages:
+- 116
+- 117
 ---
 
 # Commune with Nature
@@ -36,3 +38,13 @@ Choose three of the following facts; you learn those facts as they pertain to th
 For example, you could determine the location of a powerful monster in the area, the locations of bodies of water, and the locations of any towns.
 
 Original layout: [[../pages/116|page 116]], [[../pages/117|page 117]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

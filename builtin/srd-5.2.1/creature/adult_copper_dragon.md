@@ -1,10 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "0c36666f-e8e3-5252-ac32-cad10b1002d9"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/adult_copper_dragon"
 splat_name: "Adult Copper Dragon"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [276, 277], "executable": false}
+splat_pages:
+- 276
+- 277
 ---
 
 # Adult Copper Dragon
@@ -57,3 +59,13 @@ Mind Jolt. The dragon uses Spellcasting to cast Mind Spike (level 4 version). Th
 Pounce. The dragon moves up to half its Speed, and it makes one Rend attack.
 
 Original layout: [[../pages/276|page 276]], [[../pages/277|page 277]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

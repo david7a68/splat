@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "038ece1a-9cfe-522f-9d23-95d309151c83"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/weretiger"
 splat_name: "Weretiger"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [339], "executable": false}
+splat_pages:
+- 339
 ---
 
 # Weretiger
@@ -41,3 +42,13 @@ Prowl (Tiger or Hybrid Form Only). The weretiger moves up to its Speed without p
 Shape-Shift. The weretiger shape-shifts into a Large tiger-humanoid hybrid or a Large tiger, or it returns to its true humanoid form. Its game statistics, other than its size, are the same in each form. Any equipment it is wearing or carrying isn’t transformed.
 
 Original layout: [[../pages/339|page 339]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

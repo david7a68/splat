@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: bd3f526f-3cbb-5518-9533-1c3215a5fe64
 splat_kind: item
 splat_key: dnd2024:items/rope_of_climbing
 splat_name: Rope of Climbing
-splat_origin:
-  key: dnd2024:reference/magic_item/rope_of_climbing
+splat_origin: dnd2024:reference/magic_item/rope_of_climbing
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 242
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 242, https://www.dndbeyond.com/srd
 ---
 
 # Rope of Climbing
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Wondrous Item |
+| Rarity | Uncommon |
+| Attunement | No |
+
 
 ## Source text
 
@@ -28,22 +35,9 @@ The rope has AC 20, HP 20, and Immunity to Poison and Psychic damage. It regains
 
 Original layout: [[../../srd-5.2.1/pages/242|page 242]].
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` wondrous_item ` |
-| ` rarity ` | ` uncommon ` |
 
-### Equipment
-
-<!-- splat:values path=splat_item/equipment -->
-
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` none ` |
 
 ## Rule
 

@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 7e17aeb6-7f20-5e76-96a2-9d5f6c0e9fd1
 splat_kind: spell
 splat_key: dnd2024:spells/wish
 splat_name: Wish
-splat_origin:
-  key: dnd2024:reference/spell/wish
+splat_origin: dnd2024:reference/spell/wish
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 175
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 175, https://www.dndbeyond.com/srd
 ---
 
 # Wish
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 9 |
+| School | Conjuration |
+| Classes | Sorcerer, Wizard |
+| Casting Time | Action |
+| Range |  |
+| Components | V |
+| Duration | Instantaneous |
+
 
 ## Source text
 
@@ -48,28 +59,9 @@ The stress of casting Wish to produce any effect other than duplicating another 
 
 Original layout: [[../../srd-5.2.1/pages/175|page 175]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 9 ` |
-| ` school ` | ` conjuration ` |
-| ` classes ` | ` ["sorcerer", "wizard"] ` |
-| ` components ` | ` ["verbal"] ` |
-| ` concentration ` | ` false ` |
-| ` duration ` | ` Instantaneous ` |
-| ` casting_time ` | ` Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
-
-<!-- splat:values path=splat_spell/range -->
-
-| Field | Value |
-| --- | --- |
-| ` mode ` | ` self ` |
 
 ## Rule
 
@@ -196,3 +188,12 @@ strength:
   rest_light_activity_day_recovery_reduction_days: 2
 permanent_loss_of_wish_percent: 33
 ```
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_spell_extras -->
+> 
+> ```yaml
+> range:
+>   mode: self
+> ```
+

@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "7273391c-4074-5dc2-9273-0496fd6bb08a"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/bane"
 splat_name: "Bane"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [112], "executable": false}
+splat_pages:
+- 112
 ---
 
 # Bane
@@ -22,3 +23,13 @@ Up to three creatures of your choice that you can see within range must each mak
 Using a Higher-Level Spell Slot. You can target one additional creature for each spell slot level above 1.
 
 Original layout: [[../pages/112|page 112]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

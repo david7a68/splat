@@ -29,7 +29,6 @@ pub struct Campaigns {
     added: Option<String>,
     /// The DM asked to go on to Encounters, from that message.
     pub wants_encounters: bool,
-    layouts: crate::formats_ui::State,
 }
 
 /// The rail's campaign selector, with a name on two lines.
@@ -44,7 +43,6 @@ impl Default for Campaigns {
             manifest_errors: Default::default(),
             held_manifests: Default::default(),
             campaign_copy: None,
-            layouts: Default::default(),
             writable: false,
             editing: None,
             focus_name: false,
@@ -311,7 +309,6 @@ impl Campaigns {
             manifest_errors: Default::default(),
             held_manifests: Default::default(),
             campaign_copy: None,
-            layouts: Default::default(),
             writable: true,
             editing: None,
             focus_name: false,
@@ -420,25 +417,7 @@ impl Campaigns {
                 changes.push(CampaignDocument::metadata_change(campaign, previous)?);
             }
         }
-        let layouts: Vec<_> = changes
-            .iter()
-            .filter_map(|change| {
-                Some((
-                    change.path.clone(),
-                    String::from_utf8(change.before.clone()?).ok()?,
-                    String::from_utf8(change.after.clone()?).ok()?,
-                ))
-            })
-            .collect();
         store.save_with(&data, changes)?;
-        for (path, before, after) in layouts {
-            if let (Some(root), Some(name)) =
-                (path.parent(), path.file_name().and_then(|s| s.to_str()))
-            {
-                self.layouts
-                    .remember_conversion(root, name, &before, &after);
-            }
-        }
         self.data = data;
         for campaign in &self.data.campaigns {
             if let Ok(document) = CampaignDocument::load(campaign) {
@@ -692,9 +671,6 @@ impl Campaigns {
         dndbeyond: &mut crate::dndbeyond::DndBeyond,
         blocked: Option<&str>,
     ) {
-        if self.layouts.show_any(ui) {
-            self.reload();
-        }
         let c = colors();
         let Some(campaign) = self.active_campaign() else {
             ui.label(
@@ -835,9 +811,6 @@ impl Campaigns {
         dndbeyond: &mut crate::dndbeyond::DndBeyond,
         blocked: Option<&str>,
     ) {
-        if self.layouts.show_any(ui) {
-            self.reload();
-        }
         let c = colors();
         ui.set_max_width(ui.available_width().min(design::LIST_MEASURE));
         self.remove_dialog(ui.ctx());
@@ -1446,7 +1419,6 @@ mod tests {
             manifest_errors: Default::default(),
             held_manifests: Default::default(),
             campaign_copy: None,
-            layouts: Default::default(),
             writable: true,
             editing: None,
             focus_name: false,

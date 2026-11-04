@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 912ffe59-b1cb-519d-b18a-62f944818fab
 splat_kind: spell
 splat_key: dnd2024:spells/modify_memory
 splat_name: Modify Memory
-splat_origin:
-  key: dnd2024:reference/spell/modify_memory
+splat_origin: dnd2024:reference/spell/modify_memory
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 150
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 150, https://www.dndbeyond.com/srd
 ---
 
 # Modify Memory
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 5 |
+| School | Enchantment |
+| Classes | Bard, Wizard |
+| Casting Time | Action |
+| Range | 30 feet |
+| Components | V, S |
+| Duration | Concentration, up to 1 minute |
+
 
 ## Source text
 
@@ -36,28 +47,9 @@ Using a Higher-Level Spell Slot. You can alter the target’s memories of an eve
 
 Original layout: [[../../srd-5.2.1/pages/150|page 150]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 5 ` |
-| ` school ` | ` enchantment ` |
-| ` classes ` | ` ["bard", "wizard"] ` |
-| ` components ` | ` ["verbal", "somatic"] ` |
-| ` concentration ` | ` true ` |
-| ` duration ` | ` Concentration, up to 1 minute ` |
-| ` casting_time ` | ` Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
-
-<!-- splat:values path=splat_spell/range -->
-
-| Field | Value |
-| --- | --- |
-| ` feet ` | ` 30 ` |
 
 ## Rule
 

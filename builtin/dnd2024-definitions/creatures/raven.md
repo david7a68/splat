@@ -1,34 +1,60 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: f7c24eb6-393e-592b-9df3-307b98d00712
 splat_kind: creature
 splat_key: dnd2024:creatures/raven
 splat_name: Raven
-splat_origin:
-  key: dnd2024:reference/creature/raven
+splat_origin: dnd2024:reference/creature/raven
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 359
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 359, https://www.dndbeyond.com/srd
 ---
 
 # Raven
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Tiny |
+| Type | Beast |
+| Alignment | Unaligned |
+| Armor Class | 12 |
+| Hit Points | 2 (1d4) |
+| Initiative | +2 (12) |
+| Speed | 10 ft., Fly 50 ft. |
+| Challenge | 0 (XP 10; PB +2) |
+| Skills | Perception +3 |
+| Senses | Passive Perception 13 |
+| Languages | None |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 2 | -4 | -4 |
+| Dex | 14 | +2 | +2 |
+| Con | 10 | +0 | +0 |
+| Int | 5 | -3 | -3 |
+| Wis | 13 | +1 | +1 |
+| Cha | 6 | -2 | -2 |
+
 
 ## Source text
 
 <!-- SRD page 359 -->
 
-Tiny Beast, Unaligned\
-AC 12  Initiative +2 (12)\
-HP 2 (1d4)\
-Speed 10 ft., Fly 50 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 2 −4 −4 Dex 14 +2 +2 Con 10 +0 +0\
-Int  5 −3 −3 Wis 13 +1 +1 Cha 6 −2 −2\
-Skills Perception +3\
-Senses Passive Perception 13\
-Languages None\
-CR 0 (XP 10; PB +2)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Tiny Beast, Unaligned\
+> AC 12  Initiative +2 (12)\
+> HP 2 (1d4)\
+> Speed 10 ft., Fly 50 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 2 −4 −4 Dex 14 +2 +2 Con 10 +0 +0\
+> Int  5 −3 −3 Wis 13 +1 +1 Cha 6 −2 −2\
+> Skills Perception +3\
+> Senses Passive Perception 13\
+> Languages None\
+> CR 0 (XP 10; PB +2)
+
 
 ### Traits
 
@@ -40,46 +66,11 @@ Beak. Melee Attack Roll: +4, reach 5 ft. Hit: 1 Piercing damage.
 
 Original layout: [[../../srd-5.2.1/pages/359|page 359]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` tiny ` |
-| ` type ` | ` beast ` |
-| ` alignment ` | ` Unaligned ` |
-| ` movement_text ` | ` 10 ft., Fly 50 ft. ` |
-| ` skills_text ` | ` Perception +3 ` |
-| ` senses_text ` | ` Passive Perception 13 ` |
-| ` languages_text ` | ` None ` |
-| ` cr_text ` | ` 0 (XP 10; PB +2) ` |
-| ` hit_points_text ` | ` 2 (1d4) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 2 ` | ` -4 ` |
-| ` Dexterity ` | ` 14 ` | ` 2 ` |
-| ` Constitution ` | ` 10 ` | ` 0 ` |
-| ` Intelligence ` | ` 5 ` | ` -3 ` |
-| ` Wisdom ` | ` 13 ` | ` 1 ` |
-| ` Charisma ` | ` 6 ` | ` -2 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 12 ` |  |
-| ` max_hp ` | ` 2 ` |  |
-| ` initiative ` | ` 2 ` |  |
-| ` speed ` | ` 10 ` | ` ft ` |
-| ` fly_speed ` | ` 50 ` | ` ft ` |
 
 ## Health
 
@@ -191,3 +182,13 @@ geometry:
 unlisted_success_branch: no_effect
 unlisted_duration: until_removed_by_applicable_rule
 ```
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_stats_extras -->
+> 
+> ```yaml
+> fly_speed:
+>   unit: ft
+>   value: 50
+> ```
+

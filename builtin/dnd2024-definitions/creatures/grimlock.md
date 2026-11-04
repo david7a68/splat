@@ -1,34 +1,60 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 217f9689-bdcd-5867-9c0c-ed4a5b5c3313
 splat_kind: creature
 splat_key: dnd2024:creatures/grimlock
 splat_name: Grimlock
-splat_origin:
-  key: dnd2024:reference/creature/grimlock
+splat_origin: dnd2024:reference/creature/grimlock
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 296
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 296, https://www.dndbeyond.com/srd
 ---
 
 # Grimlock
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Medium |
+| Type | Aberration |
+| Alignment | Neutral Evil |
+| Armor Class | 11 |
+| Hit Points | 11 (2d8 + 2) |
+| Initiative | +1 (11) |
+| Speed | 30 ft., Climb 30 ft. |
+| Challenge | 1/4 (XP 50; PB +2) |
+| Skills | Athletics +5, Perception +3, Stealth +5 |
+| Senses | Blindsight 30 ft.; Passive Perception 13 |
+| Languages | None |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 16 | +3 | +3 |
+| Dex | 12 | +1 | +1 |
+| Con | 12 | +1 | +1 |
+| Int | 9 | -1 | -1 |
+| Wis | 8 | -1 | -1 |
+| Cha | 6 | -2 | -2 |
+
 
 ## Source text
 
 <!-- SRD page 296 -->
 
-Medium Aberration, Neutral Evil\
-AC 11 Initiative +1 (11)\
-HP 11 (2d8 + 2)\
-Speed 30 ft., Climb 30 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 16 +3 +3 Dex 12 +1 +1 Con 12 +1 +1\
-Int 9 −1 −1 Wis 8 −1 −1 Cha 6 −2 −2\
-Skills Athletics +5, Perception +3, Stealth +5\
-Senses Blindsight 30 ft.; Passive Perception 13\
-Languages None\
-CR 1/4 (XP 50; PB +2)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Medium Aberration, Neutral Evil\
+> AC 11 Initiative +1 (11)\
+> HP 11 (2d8 + 2)\
+> Speed 30 ft., Climb 30 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 16 +3 +3 Dex 12 +1 +1 Con 12 +1 +1\
+> Int 9 −1 −1 Wis 8 −1 −1 Cha 6 −2 −2\
+> Skills Athletics +5, Perception +3, Stealth +5\
+> Senses Blindsight 30 ft.; Passive Perception 13\
+> Languages None\
+> CR 1/4 (XP 50; PB +2)
+
 
 ### Actions
 
@@ -36,46 +62,11 @@ Bone Cudgel. Melee Attack Roll: +5, reach 5 ft. Hit: 6 (1d6 + 3) Bludgeoning dam
 
 Original layout: [[../../srd-5.2.1/pages/296|page 296]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` medium ` |
-| ` type ` | ` aberration ` |
-| ` alignment ` | ` Neutral Evil ` |
-| ` movement_text ` | ` 30 ft., Climb 30 ft. ` |
-| ` skills_text ` | ` Athletics +5, Perception +3, Stealth +5 ` |
-| ` senses_text ` | ` Blindsight 30 ft.; Passive Perception 13 ` |
-| ` languages_text ` | ` None ` |
-| ` cr_text ` | ` 1/4 (XP 50; PB +2) ` |
-| ` hit_points_text ` | ` 11 (2d8 + 2) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 16 ` | ` 3 ` |
-| ` Dexterity ` | ` 12 ` | ` 1 ` |
-| ` Constitution ` | ` 12 ` | ` 1 ` |
-| ` Intelligence ` | ` 9 ` | ` -1 ` |
-| ` Wisdom ` | ` 8 ` | ` -1 ` |
-| ` Charisma ` | ` 6 ` | ` -2 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 11 ` |  |
-| ` max_hp ` | ` 11 ` |  |
-| ` initiative ` | ` 1 ` |  |
-| ` speed ` | ` 30 ` | ` ft ` |
-| ` climb_speed ` | ` 30 ` | ` ft ` |
 
 ## Health
 
@@ -216,3 +207,13 @@ geometry_assumptions:
   - plane
   - form_appearance
 ```
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_stats_extras -->
+> 
+> ```yaml
+> climb_speed:
+>   unit: ft
+>   value: 30
+> ```
+

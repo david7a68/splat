@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "324b82a2-8095-5a86-9eb3-68d9da674002"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/magic_item/rod_of_absorption"
 splat_name: "Rod of Absorption"
-splat_reference: {"source": "SRD 5.2.1", "category": "magic_item", "pages": [241], "executable": false}
+splat_pages:
+- 241
 ---
 
 # Rod of Absorption
@@ -22,3 +23,13 @@ If you are a spellcaster holding the rod, you can convert energy stored in it in
 A newly found rod typically has 1d10 levels of spell energy stored in it. A rod that can no longer absorb spell energy and has no energy remaining becomes nonmagical.
 
 Original layout: [[../pages/241|page 241]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: magic_item
+> executable: false
+> ```
+

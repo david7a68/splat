@@ -1,34 +1,60 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 2ffcad9b-b09c-5269-97ed-5a5993a212fe
 splat_kind: creature
 splat_key: dnd2024:creatures/giant_crocodile
 splat_name: Giant Crocodile
-splat_origin:
-  key: dnd2024:reference/creature/giant_crocodile
+splat_origin: dnd2024:reference/creature/giant_crocodile
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 350
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 350, https://www.dndbeyond.com/srd
 ---
 
 # Giant Crocodile
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Huge |
+| Type | Beast |
+| Alignment | Unaligned |
+| Armor Class | 14 |
+| Hit Points | 85 (9d12 + 27) |
+| Initiative | -1 (9) |
+| Speed | 30 ft., Swim 50 ft. |
+| Challenge | 5 (XP 1,800; PB +3) |
+| Skills | Stealth +5 |
+| Senses | Passive Perception 10 |
+| Languages | None |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 21 | +5 | +5 |
+| Dex | 9 | -1 | -1 |
+| Con | 17 | +3 | +3 |
+| Int | 2 | -4 | -4 |
+| Wis | 10 | +0 | +0 |
+| Cha | 7 | -2 | -2 |
+
 
 ## Source text
 
 <!-- SRD page 350 -->
 
-Huge Beast, Unaligned\
-AC 14  Initiative −1 (9)\
-HP 85 (9d12 + 27)\
-Speed 30 ft., Swim 50 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 21 +5 +5 Dex 9 −1 −1 Con 17 +3 +3\
-Int 2 −4 −4 Wis 10 +0 +0 Cha 7 −2 −2\
-Skills Stealth +5\
-Senses Passive Perception 10\
-Languages None\
-CR 5 (XP 1,800; PB +3)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Huge Beast, Unaligned\
+> AC 14  Initiative −1 (9)\
+> HP 85 (9d12 + 27)\
+> Speed 30 ft., Swim 50 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 21 +5 +5 Dex 9 −1 −1 Con 17 +3 +3\
+> Int 2 −4 −4 Wis 10 +0 +0 Cha 7 −2 −2\
+> Skills Stealth +5\
+> Senses Passive Perception 10\
+> Languages None\
+> CR 5 (XP 1,800; PB +3)
+
 
 ### Traits
 
@@ -44,46 +70,11 @@ Tail. Melee Attack Roll: +8, reach 10 ft. Hit: 18 (3d8 + 5) Bludgeoning damage. 
 
 Original layout: [[../../srd-5.2.1/pages/350|page 350]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` huge ` |
-| ` type ` | ` beast ` |
-| ` alignment ` | ` Unaligned ` |
-| ` movement_text ` | ` 30 ft., Swim 50 ft. ` |
-| ` skills_text ` | ` Stealth +5 ` |
-| ` senses_text ` | ` Passive Perception 10 ` |
-| ` languages_text ` | ` None ` |
-| ` cr_text ` | ` 5 (XP 1,800; PB +3) ` |
-| ` hit_points_text ` | ` 85 (9d12 + 27) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 21 ` | ` 5 ` |
-| ` Dexterity ` | ` 9 ` | ` -1 ` |
-| ` Constitution ` | ` 17 ` | ` 3 ` |
-| ` Intelligence ` | ` 2 ` | ` -4 ` |
-| ` Wisdom ` | ` 10 ` | ` 0 ` |
-| ` Charisma ` | ` 7 ` | ` -2 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 14 ` |  |
-| ` max_hp ` | ` 85 ` |  |
-| ` initiative ` | ` -1 ` |  |
-| ` speed ` | ` 30 ` | ` ft ` |
-| ` swim_speed ` | ` 50 ` | ` ft ` |
 
 ## Health
 
@@ -269,3 +260,13 @@ columns:
 | ` provider ` | ` caller ` |
 | ` required_facts ` | ` ["distance", "area_membership", "visibility", "occupancy", "movement_path"] ` |
 | ` validate_against_typed_constraints ` | ` true ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_stats_extras -->
+> 
+> ```yaml
+> swim_speed:
+>   unit: ft
+>   value: 50
+> ```
+

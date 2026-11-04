@@ -1,10 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "23afcddd-e256-54f8-904a-ae54056ac01e"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/plesiosaurus"
 splat_name: "Plesiosaurus"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [358, 359], "executable": false}
+splat_pages:
+- 358
+- 359
 ---
 
 # Plesiosaurus
@@ -34,3 +36,13 @@ Hold Breath. The plesiosaurus can hold its breath for 1 hour.
 Bite. Melee Attack Roll: +6, reach 10 ft. Hit: 11 (2d6 + 4) Piercing damage.
 
 Original layout: [[../pages/358|page 358]], [[../pages/359|page 359]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

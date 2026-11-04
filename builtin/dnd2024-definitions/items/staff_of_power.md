@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: f07a4ba2-2fb0-59dc-a460-dd85f85e57aa
 splat_kind: item
 splat_key: dnd2024:items/staff_of_power
 splat_name: Staff of Power
-splat_origin:
-  key: dnd2024:reference/magic_item/staff_of_power
+splat_origin: dnd2024:reference/magic_item/staff_of_power
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 245, 246
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 245, 246, https://www.dndbeyond.com/srd
 ---
 
 # Staff of Power
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Staff |
+| Rarity | Very Rare |
+| Attunement | Yes |
+
 
 ## Source text
 
@@ -44,23 +51,9 @@ Retributive Strike. You can take a Magic action to break the staff over your kne
 
 Original layout: [[../../srd-5.2.1/pages/245|page 245]], [[../../srd-5.2.1/pages/246|page 246]].
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` staff ` |
-| ` rarity ` | ` very_rare ` |
 
-### Equipment
-
-<!-- splat:values path=splat_item/equipment -->
-
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` required ` |
-| ` attunement_requirement_text ` | ` a Sorcerer, Warlock, or Wizard ` |
 
 ## Rule
 
@@ -398,3 +391,12 @@ other_creatures:
 | --- | --- |
 | ` 0 ` | ` dnd2024:rules/magic_item_categories_staffs ` |
 | ` 1 ` | ` dnd2024:rules/activating_a_magic_item_spells_cast_from_items ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_item_extras -->
+> 
+> ```yaml
+> equipment:
+>   attunement_requirement_text: a Sorcerer, Warlock, or Wizard
+> ```
+

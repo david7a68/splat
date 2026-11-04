@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 9473225a-5ed8-52cb-9bad-96498ac5c047
 splat_kind: spell
 splat_key: dnd2024:spells/true_polymorph
 splat_name: True Polymorph
-splat_origin:
-  key: dnd2024:reference/spell/true_polymorph
+splat_origin: dnd2024:reference/spell/true_polymorph
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 170
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 170, https://www.dndbeyond.com/srd
 ---
 
 # True Polymorph
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 9 |
+| School | Transmutation |
+| Classes | Bard, Warlock, Wizard |
+| Casting Time | Action |
+| Range | 30 feet |
+| Components | V, S, M (a drop of mercury, a dollop of gum arabic, and a wisp of smoke) |
+| Duration | Concentration, up to 1 hour |
+
 
 ## Source text
 
@@ -44,37 +55,11 @@ Creature into Object. If you turn a creature into an object, it transforms along
 
 Original layout: [[../../srd-5.2.1/pages/170|page 170]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 9 ` |
-| ` school ` | ` transmutation ` |
-| ` classes ` | ` ["bard", "warlock", "wizard"] ` |
-| ` components ` | ` ["verbal", "somatic", "material"] ` |
-| ` concentration ` | ` true ` |
-| ` duration ` | ` Concentration, up to 1 hour ` |
-| ` casting_time ` | ` Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
 
-<!-- splat:values path=splat_spell/range -->
 
-| Field | Value |
-| --- | --- |
-| ` feet ` | ` 30 ` |
-
-### Material
-
-<!-- splat:values path=splat_spell/material -->
-
-| Field | Value |
-| --- | --- |
-| ` description ` | ` a drop of mercury, a dollop of gum arabic, and a wisp of smoke ` |
-| ` consumed ` | ` false ` |
 
 ## Rule
 
@@ -225,3 +210,12 @@ after_reversion:
 | --- | --- |
 | ` exactly_one ` | ` ["target_creature", "target_object"] ` |
 | ` must_match_selected_mode ` | ` true ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_spell_extras -->
+> 
+> ```yaml
+> material:
+>   consumed: false
+> ```
+

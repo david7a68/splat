@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "2ed50781-ccc2-5817-a33d-42d44bf040fe"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/ogre_zombie"
 splat_name: "Ogre Zombie"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [344], "executable": false}
+splat_pages:
+- 344
 ---
 
 # Ogre Zombie
@@ -32,3 +33,13 @@ Undead Fortitude. If damage reduces the zombie to 0 Hit Points, it makes a Const
 Slam. Melee Attack Roll: +6, reach 5 ft. Hit: 13 (2d8 + 4) Bludgeoning damage.
 
 Original layout: [[../pages/344|page 344]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

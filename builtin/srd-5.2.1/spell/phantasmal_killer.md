@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "e6d98308-a80f-5ddb-8f3b-dce17e89cd79"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/phantasmal_killer"
 splat_name: "Phantasmal Killer"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [152], "executable": false}
+splat_pages:
+- 152
 ---
 
 # Phantasmal Killer
@@ -24,3 +25,13 @@ For the duration, the target makes a Wisdom saving throw at the end of each of i
 Using a Higher-Level Spell Slot. The damage increases by 1d10 for each spell slot level above 4.
 
 Original layout: [[../pages/152|page 152]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

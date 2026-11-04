@@ -1,10 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "638bc7ce-ba73-5bc8-b1e9-fe306da43264"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/bearded_devil"
 splat_name: "Bearded Devil"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [262, 263], "executable": false}
+splat_pages:
+- 262
+- 263
 ---
 
 # Bearded Devil
@@ -39,3 +41,13 @@ Beard. Melee Attack Roll: +5, reach 5 ft. Hit: 7 (1d8 + 3) Piercing damage, and 
 Infernal Glaive. Melee Attack Roll: +5, reach 10 ft. Hit: 8 (1d10 + 3) Slashing damage. If the target is a creature and doesn’t already have an infernal wound, it is subjected to the following effect. Constitution Saving Throw: DC 12. Failure: The target receives an infernal wound. While wounded, the target loses 5 (1d10) Hit Points at the start of each of its turns. The wound closes after 1 minute, after a spell restores Hit Points to the target, or after the target or a creature within 5 feet of it takes an action to stanch the wound, doing so by succeeding on a DC 12 Wisdom (Medicine) check.
 
 Original layout: [[../pages/262|page 262]], [[../pages/263|page 263]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

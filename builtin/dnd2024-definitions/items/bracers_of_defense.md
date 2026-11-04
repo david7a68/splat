@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 7fb74bcd-4799-55b3-9662-b3a9c42e6975
 splat_kind: item
 splat_key: dnd2024:items/bracers_of_defense
 splat_name: Bracers of Defense
-splat_origin:
-  key: dnd2024:reference/magic_item/bracers_of_defense
+splat_origin: dnd2024:reference/magic_item/bracers_of_defense
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 214
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 214, https://www.dndbeyond.com/srd
 ---
 
 # Bracers of Defense
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Wondrous Item |
+| Rarity | Rare |
+| Attunement | Yes |
+
 
 ## Source text
 
@@ -24,22 +31,9 @@ While wearing these bracers, you gain a +2 bonus to Armor Class if you are weari
 
 Original layout: [[../../srd-5.2.1/pages/214|page 214]].
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` wondrous_item ` |
-| ` rarity ` | ` rare ` |
 
-### Equipment
-
-<!-- splat:values path=splat_item/equipment -->
-
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` required ` |
 
 ## Rule
 

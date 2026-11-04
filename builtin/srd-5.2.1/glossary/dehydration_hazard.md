@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "5911a8d2-d846-5bfd-8775-39bd8171db43"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/glossary/dehydration_hazard"
 splat_name: "Dehydration [Hazard]"
-splat_reference: {"source": "SRD 5.2.1", "category": "glossary", "pages": [181], "executable": false}
+splat_pages:
+- 181
 ---
 
 # Dehydration [Hazard]
@@ -22,3 +23,13 @@ A creature requires an amount of water per day based on its size, as shown in th
 | Medium | 1 gallon | Gargantuan | 64 gallons |
 
 Original layout: [[../pages/181|page 181]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: glossary
+> executable: false
+> ```
+

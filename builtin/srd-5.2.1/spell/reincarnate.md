@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "1ea8ddde-9f7a-5f45-8c2a-cbdf8bf71431"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/reincarnate"
 splat_name: "Reincarnate"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [158], "executable": false}
+splat_pages:
+- 158
 ---
 
 # Reincarnate
@@ -30,3 +31,13 @@ You touch a dead Humanoid or a piece of one. If the creature has been dead no lo
 The reincarnated creature makes any choices that a species’ description offers, and the creature recalls its former life. It retains the capabilities it had in its original form, except it loses the traits of its previous species and gains the traits of its new one.
 
 Original layout: [[../pages/158|page 158]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

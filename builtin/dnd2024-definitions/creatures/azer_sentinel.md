@@ -1,34 +1,60 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 03f09722-b0fb-58dd-b1ec-e2e30de53d62
 splat_kind: creature
 splat_key: dnd2024:creatures/azer_sentinel
 splat_name: Azer Sentinel
-splat_origin:
-  key: dnd2024:reference/creature/azer_sentinel
+splat_origin: dnd2024:reference/creature/azer_sentinel
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 261
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 261, https://www.dndbeyond.com/srd
 ---
 
 # Azer Sentinel
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Medium |
+| Type | Elemental |
+| Alignment | Lawful Neutral |
+| Armor Class | 17 |
+| Hit Points | 39 (6d8 + 12) |
+| Initiative | +1 (11) |
+| Speed | 30 ft. |
+| Challenge | 2 (XP 450; PB +2) |
+| Senses | Passive Perception 11 |
+| Languages | Primordial (Ignan) |
+| Immunities | Fire, Poison; Poisoned |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 17 | +3 | +3 |
+| Dex | 12 | +1 | +1 |
+| Con | 15 | +2 | +4 |
+| Int | 12 | +1 | +1 |
+| Wis | 13 | +1 | +1 |
+| Cha | 10 | +0 | +0 |
+
 
 ## Source text
 
 <!-- SRD page 261 -->
 
-Medium Elemental, Lawful Neutral\
-AC 17 Initiative +1 (11)\
-HP 39 (6d8 + 12)\
-Speed 30 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 17 +3 +3 Dex 12 +1 +1 Con 15 +2 +4\
-Int 12 +1 +1 Wis 13 +1 +1 Cha 10 +0 +0\
-Immunities Fire, Poison; Poisoned\
-Senses Passive Perception 11\
-Languages Primordial (Ignan)\
-CR 2 (XP 450; PB +2)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Medium Elemental, Lawful Neutral\
+> AC 17 Initiative +1 (11)\
+> HP 39 (6d8 + 12)\
+> Speed 30 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 17 +3 +3 Dex 12 +1 +1 Con 15 +2 +4\
+> Int 12 +1 +1 Wis 13 +1 +1 Cha 10 +0 +0\
+> Immunities Fire, Poison; Poisoned\
+> Senses Passive Perception 11\
+> Languages Primordial (Ignan)\
+> CR 2 (XP 450; PB +2)
+
 
 ### Traits
 
@@ -42,45 +68,11 @@ Burning Hammer. Melee Attack Roll: +5, reach 5 ft. Hit: 8 (1d10 + 3) Bludgeoning
 
 Original layout: [[../../srd-5.2.1/pages/261|page 261]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` medium ` |
-| ` type ` | ` elemental ` |
-| ` alignment ` | ` Lawful Neutral ` |
-| ` movement_text ` | ` 30 ft. ` |
-| ` immunities_text ` | ` Fire, Poison; Poisoned ` |
-| ` senses_text ` | ` Passive Perception 11 ` |
-| ` languages_text ` | ` Primordial (Ignan) ` |
-| ` cr_text ` | ` 2 (XP 450; PB +2) ` |
-| ` hit_points_text ` | ` 39 (6d8 + 12) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 17 ` | ` 3 ` |
-| ` Dexterity ` | ` 12 ` | ` 1 ` |
-| ` Constitution ` | ` 15 ` | ` 4 ` |
-| ` Intelligence ` | ` 12 ` | ` 1 ` |
-| ` Wisdom ` | ` 13 ` | ` 1 ` |
-| ` Charisma ` | ` 10 ` | ` 0 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 17 ` |  |
-| ` max_hp ` | ` 39 ` |  |
-| ` initiative ` | ` 1 ` |  |
-| ` speed ` | ` 30 ` | ` ft ` |
 
 ## Health
 

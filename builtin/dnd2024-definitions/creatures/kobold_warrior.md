@@ -1,34 +1,60 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 8ceed437-0cda-5a4c-8c01-dd70cebae23e
 splat_kind: creature
 splat_key: dnd2024:creatures/kobold_warrior
 splat_name: Kobold Warrior
-splat_origin:
-  key: dnd2024:reference/creature/kobold_warrior
+splat_origin: dnd2024:reference/creature/kobold_warrior
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 302
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 302, https://www.dndbeyond.com/srd
 ---
 
 # Kobold Warrior
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Small |
+| Type | Dragon |
+| Alignment | Neutral |
+| Armor Class | 14 |
+| Hit Points | 7 (3d6 - 3) |
+| Initiative | +2 (12) |
+| Speed | 30 ft. |
+| Challenge | 1/8 (XP 25; PB +2) |
+| Senses | Darkvision 60 ft.; Passive Perception 8 |
+| Languages | Common, Draconic |
+| Gear | Daggers (3) |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 7 | -2 | -2 |
+| Dex | 15 | +2 | +2 |
+| Con | 9 | -1 | -1 |
+| Int | 8 | -1 | -1 |
+| Wis | 7 | -2 | -2 |
+| Cha | 8 | -1 | -1 |
+
 
 ## Source text
 
 <!-- SRD page 302 -->
 
-Small Dragon, Neutral\
-AC 14 Initiative +2 (12)\
-HP 7 (3d6 − 3)\
-Speed 30 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 7 −2 −2 Dex 15 +2 +2 Con 9 −1 −1\
-Int 8 −1 −1 Wis 7 −2 −2 Cha 8 −1 −1\
-Gear Daggers (3)\
-Senses Darkvision 60 ft.; Passive Perception 8\
-Languages Common, Draconic\
-CR 1/8 (XP 25; PB +2)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Small Dragon, Neutral\
+> AC 14 Initiative +2 (12)\
+> HP 7 (3d6 − 3)\
+> Speed 30 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 7 −2 −2 Dex 15 +2 +2 Con 9 −1 −1\
+> Int 8 −1 −1 Wis 7 −2 −2 Cha 8 −1 −1\
+> Gear Daggers (3)\
+> Senses Darkvision 60 ft.; Passive Perception 8\
+> Languages Common, Draconic\
+> CR 1/8 (XP 25; PB +2)
+
 
 ### Traits
 
@@ -42,45 +68,11 @@ Dagger. Melee or Ranged Attack Roll: +4, reach 5 ft. or range 20/60 ft. Hit: 4 (
 
 Original layout: [[../../srd-5.2.1/pages/302|page 302]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` small ` |
-| ` type ` | ` dragon ` |
-| ` alignment ` | ` Neutral ` |
-| ` movement_text ` | ` 30 ft. ` |
-| ` gear_text ` | ` Daggers (3) ` |
-| ` senses_text ` | ` Darkvision 60 ft.; Passive Perception 8 ` |
-| ` languages_text ` | ` Common, Draconic ` |
-| ` cr_text ` | ` 1/8 (XP 25; PB +2) ` |
-| ` hit_points_text ` | ` 7 (3d6 - 3) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 7 ` | ` -2 ` |
-| ` Dexterity ` | ` 15 ` | ` 2 ` |
-| ` Constitution ` | ` 9 ` | ` -1 ` |
-| ` Intelligence ` | ` 8 ` | ` -1 ` |
-| ` Wisdom ` | ` 7 ` | ` -2 ` |
-| ` Charisma ` | ` 8 ` | ` -1 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 14 ` |  |
-| ` max_hp ` | ` 7 ` |  |
-| ` initiative ` | ` 2 ` |  |
-| ` speed ` | ` 30 ` | ` ft ` |
 
 ## Health
 

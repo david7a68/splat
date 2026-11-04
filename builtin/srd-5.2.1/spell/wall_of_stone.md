@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "3a06bd8e-d8e7-538d-a8e9-1d73a158b046"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/wall_of_stone"
 splat_name: "Wall of Stone"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [173], "executable": false}
+splat_pages:
+- 173
 ---
 
 # Wall of Stone
@@ -30,3 +31,13 @@ The wall is an object made of stone that can be damaged and thus breached. Each 
 If you maintain your Concentration on this spell for its full duration, the wall becomes permanent and can’t be dispelled. Otherwise, the wall disappears when the spell ends.
 
 Original layout: [[../pages/173|page 173]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

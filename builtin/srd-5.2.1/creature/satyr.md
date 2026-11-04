@@ -1,10 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "f5da0a47-3904-55da-a877-4a794655aae8"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/satyr"
 splat_name: "Satyr"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [321, 322], "executable": false}
+splat_pages:
+- 321
+- 322
 ---
 
 # Satyr
@@ -36,3 +38,13 @@ Hooves. Melee Attack Roll: +5, reach 5 ft. Hit: 5 (1d4 + 3) Bludgeoning damage. 
 Mockery. Wisdom Saving Throw: DC 12, one creature the satyr can see within 90 feet. Failure: 5 (1d6 + 2) Psychic damage.
 
 Original layout: [[../pages/321|page 321]], [[../pages/322|page 322]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 1c902810-86c2-5b9c-a873-5706d7ebec05
 splat_kind: rule
 splat_key: dnd2024:class_features/bard_level_7_countercharm
 splat_name: 'Level 7: Countercharm'
-splat_origin:
-  key: dnd2024:reference/pages/033
+splat_origin: dnd2024:reference/pages/033
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 33
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 33, https://www.dndbeyond.com/srd
 ---
 
 # Level 7: Countercharm

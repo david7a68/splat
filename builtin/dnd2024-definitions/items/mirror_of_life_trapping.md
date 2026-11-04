@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 30a92d9d-5865-5439-9f5c-d270d95eeef9
 splat_kind: item
 splat_key: dnd2024:items/mirror_of_life_trapping
 splat_name: Mirror of Life Trapping
-splat_origin:
-  key: dnd2024:reference/magic_item/mirror_of_life_trapping
+splat_origin: dnd2024:reference/magic_item/mirror_of_life_trapping
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 230
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 230, https://www.dndbeyond.com/srd
 ---
 
 # Mirror of Life Trapping
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Wondrous Item |
+| Rarity | Very Rare |
+| Attunement | No |
+
 
 ## Source text
 
@@ -38,22 +45,9 @@ Placing the mirror inside an extradimensional space created by a Bag of Holding,
 
 Original layout: [[../../srd-5.2.1/pages/230|page 230]].
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` wondrous_item ` |
-| ` rarity ` | ` very_rare ` |
 
-### Equipment
-
-<!-- splat:values path=splat_item/equipment -->
-
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` none ` |
 
 ## Rule
 

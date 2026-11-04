@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 74a70df4-dd74-55d0-bd7f-1efc59873ae8
 splat_kind: spell
 splat_key: dnd2024:spells/dominate_person
 splat_name: Dominate Person
-splat_origin:
-  key: dnd2024:reference/spell/dominate_person
+splat_origin: dnd2024:reference/spell/dominate_person
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 126
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 126, https://www.dndbeyond.com/srd
 ---
 
 # Dominate Person
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 5 |
+| School | Enchantment |
+| Classes | Bard, Sorcerer, Wizard |
+| Casting Time | Action |
+| Range | 60 feet |
+| Components | V, S |
+| Duration | Concentration, up to 1 minute |
+
 
 ## Source text
 
@@ -34,28 +45,9 @@ Using a Higher-Level Spell Slot. Your Concentration can last longer with a spell
 
 Original layout: [[../../srd-5.2.1/pages/126|page 126]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 5 ` |
-| ` school ` | ` enchantment ` |
-| ` classes ` | ` ["bard", "sorcerer", "wizard"] ` |
-| ` components ` | ` ["verbal", "somatic"] ` |
-| ` concentration ` | ` true ` |
-| ` duration ` | ` Concentration, up to 1 minute ` |
-| ` casting_time ` | ` Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
-
-<!-- splat:values path=splat_spell/range -->
-
-| Field | Value |
-| --- | --- |
-| ` feet ` | ` 60 ` |
 
 ## Rule
 

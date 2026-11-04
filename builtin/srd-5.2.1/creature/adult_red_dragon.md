@@ -1,10 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "f9611d93-c4f2-5c2d-aa30-35e4ee2b44c4"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/adult_red_dragon"
 splat_name: "Adult Red Dragon"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [318, 319], "executable": false}
+splat_pages:
+- 318
+- 319
 ---
 
 # Adult Red Dragon
@@ -54,3 +56,13 @@ Fiery Rays. The dragon uses Spellcasting to cast Scorching Ray. The dragon canâ€
 Pounce. The dragon moves up to half its Speed, and it makes one Rend attack.
 
 Original layout: [[../pages/318|page 318]], [[../pages/319|page 319]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

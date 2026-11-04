@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 27e4fbaf-5e7c-5c22-99b0-3bcd2ba57d77
 splat_kind: rule
 splat_key: dnd2024:rules/damage_and_healing_death_saving_throws
 splat_name: Death Saving Throws
-splat_origin:
-  key: dnd2024:reference/pages/017
+splat_origin: dnd2024:reference/pages/017
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 17, 18
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 17, 18, https://www.dndbeyond.com/srd
 ---
 
 # Death Saving Throws

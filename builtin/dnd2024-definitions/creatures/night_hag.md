@@ -1,36 +1,64 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: f62865d4-766c-54c4-a3a5-db801da34f80
 splat_kind: creature
 splat_key: dnd2024:creatures/night_hag
 splat_name: Night Hag
-splat_origin:
-  key: dnd2024:reference/creature/night_hag
+splat_origin: dnd2024:reference/creature/night_hag
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 311
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 311, https://www.dndbeyond.com/srd
 ---
 
 # Night Hag
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Medium |
+| Type | Fiend |
+| Alignment | Neutral Evil |
+| Armor Class | 17 |
+| Hit Points | 112 (15d8 + 45) |
+| Initiative | +5 (15) |
+| Speed | 30 ft. |
+| Challenge | 5 (XP 1,800; PB +3) |
+| Skills | Deception +6, Insight +5, Perception +5, Stealth +5 |
+| Senses | Darkvision 120 ft.; Passive Perception 15 |
+| Languages | Abyssal, Common, Infernal, Primordial |
+| Resistances | Cold, Fire |
+| Immunities | Charmed |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 18 | +4 | +4 |
+| Dex | 15 | +2 | +2 |
+| Con | 16 | +3 | +3 |
+| Int | 16 | +3 | +3 |
+| Wis | 14 | +2 | +2 |
+| Cha | 16 | +3 | +3 |
+
 
 ## Source text
 
 <!-- SRD page 311 -->
 
-Medium Fiend, Neutral Evil\
-AC 17 Initiative +5 (15)\
-HP 112 (15d8 + 45)\
-Speed 30 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 18 +4 +4 Dex 15 +2 +2 Con 16 +3 +3\
-Int 16 +3 +3 Wis 14 +2 +2 Cha 16 +3 +3\
-Skills Deception +6, Insight +5, Perception +5, Stealth +5\
-Resistances Cold, Fire\
-Immunities Charmed\
-Senses Darkvision 120 ft.; Passive Perception 15\
-Languages Abyssal, Common, Infernal, Primordial\
-CR 5 (XP 1,800; PB +3)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Medium Fiend, Neutral Evil\
+> AC 17 Initiative +5 (15)\
+> HP 112 (15d8 + 45)\
+> Speed 30 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 18 +4 +4 Dex 15 +2 +2 Con 16 +3 +3\
+> Int 16 +3 +3 Wis 14 +2 +2 Cha 16 +3 +3\
+> Skills Deception +6, Insight +5, Perception +5, Stealth +5\
+> Resistances Cold, Fire\
+> Immunities Charmed\
+> Senses Darkvision 120 ft.; Passive Perception 15\
+> Languages Abyssal, Common, Infernal, Primordial\
+> CR 5 (XP 1,800; PB +3)
+
 
 ### Traits
 
@@ -63,47 +91,11 @@ Shape-Shift. The hag shape-shifts into a Small or Medium Humanoid, or it returns
 
 Original layout: [[../../srd-5.2.1/pages/311|page 311]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` medium ` |
-| ` type ` | ` fiend ` |
-| ` alignment ` | ` Neutral Evil ` |
-| ` movement_text ` | ` 30 ft. ` |
-| ` skills_text ` | ` Deception +6, Insight +5, Perception +5, Stealth +5 ` |
-| ` resistances_text ` | ` Cold, Fire ` |
-| ` immunities_text ` | ` Charmed ` |
-| ` senses_text ` | ` Darkvision 120 ft.; Passive Perception 15 ` |
-| ` languages_text ` | ` Abyssal, Common, Infernal, Primordial ` |
-| ` cr_text ` | ` 5 (XP 1,800; PB +3) ` |
-| ` hit_points_text ` | ` 112 (15d8 + 45) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 18 ` | ` 4 ` |
-| ` Dexterity ` | ` 15 ` | ` 2 ` |
-| ` Constitution ` | ` 16 ` | ` 3 ` |
-| ` Intelligence ` | ` 16 ` | ` 3 ` |
-| ` Wisdom ` | ` 14 ` | ` 2 ` |
-| ` Charisma ` | ` 16 ` | ` 3 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 17 ` |  |
-| ` max_hp ` | ` 112 ` |  |
-| ` initiative ` | ` 5 ` |  |
-| ` speed ` | ` 30 ` | ` ft ` |
 
 ## Health
 

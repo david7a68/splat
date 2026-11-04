@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 09fe0a5d-af15-5b04-8c16-627584d991bf
 splat_kind: item
 splat_key: dnd2024:items/periapt_of_proof_against_poison
 splat_name: Periapt of Proof against Poison
-splat_origin:
-  key: dnd2024:reference/magic_item/periapt_of_proof_against_poison
+splat_origin: dnd2024:reference/magic_item/periapt_of_proof_against_poison
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 234
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 234, https://www.dndbeyond.com/srd
 ---
 
 # Periapt of Proof against Poison
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Wondrous Item |
+| Rarity | Rare |
+| Attunement | Yes |
+
 
 ## Source text
 
@@ -24,22 +31,9 @@ This delicate silver chain has a brilliant-cut black gem pendant. While you wear
 
 Original layout: [[../../srd-5.2.1/pages/234|page 234]].
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` wondrous_item ` |
-| ` rarity ` | ` rare ` |
 
-### Equipment
-
-<!-- splat:values path=splat_item/equipment -->
-
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` required ` |
 
 ## Rule
 

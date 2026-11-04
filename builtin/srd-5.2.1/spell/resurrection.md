@@ -1,10 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "f9e93205-9a61-51af-8416-742b228d9d11"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/resurrection"
 splat_name: "Resurrection"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [158, 159], "executable": false}
+splat_pages:
+- 158
+- 159
 ---
 
 # Resurrection
@@ -28,3 +30,13 @@ Coming back from the dead is an ordeal. The target takes a −4 penalty to D20 T
 Casting this spell to revive a creature that has been dead for 365 days or longer taxes you. Until you finish a Long Rest, you can’t cast spells again, and you have Disadvantage on D20 Tests.
 
 Original layout: [[../pages/158|page 158]], [[../pages/159|page 159]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

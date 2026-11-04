@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: d70a4d55-a86b-50ec-822f-6a1be159df0b
 splat_kind: item
 splat_key: dnd2024:items/rod_of_absorption
 splat_name: Rod of Absorption
-splat_origin:
-  key: dnd2024:reference/magic_item/rod_of_absorption
+splat_origin: dnd2024:reference/magic_item/rod_of_absorption
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 241
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 241, https://www.dndbeyond.com/srd
 ---
 
 # Rod of Absorption
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Rod |
+| Rarity | Very Rare |
+| Attunement | Yes |
+
 
 ## Source text
 
@@ -30,22 +37,9 @@ A newly found rod typically has 1d10 levels of spell energy stored in it. A rod 
 
 Original layout: [[../../srd-5.2.1/pages/241|page 241]].
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` rod ` |
-| ` rarity ` | ` very_rare ` |
 
-### Equipment
-
-<!-- splat:values path=splat_item/equipment -->
-
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` required ` |
 
 ## Rule
 

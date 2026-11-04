@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "116a71ea-6217-5b39-98f3-d88797ead32f"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/ettin"
 splat_name: "Ettin"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [284], "executable": false}
+splat_pages:
+- 284
 ---
 
 # Ettin
@@ -34,3 +35,13 @@ Battleaxe. Melee Attack Roll: +7, reach 5 ft. Hit: 14 (2d8 + 5) Slashing damage.
 Morningstar. Melee Attack Roll: +7, reach 5 ft. Hit: 14 (2d8 + 5) Piercing damage, and the target has Disadvantage on the next attack roll it makes before the end of its next turn.
 
 Original layout: [[../pages/284|page 284]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

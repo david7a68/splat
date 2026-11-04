@@ -1,35 +1,62 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 883a37d4-0528-5c57-a94c-cf5f8e56eb9d
 splat_kind: creature
 splat_key: dnd2024:creatures/badger
 splat_name: Badger
-splat_origin:
-  key: dnd2024:reference/creature/badger
+splat_origin: dnd2024:reference/creature/badger
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 345
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 345, https://www.dndbeyond.com/srd
 ---
 
 # Badger
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Tiny |
+| Type | Beast |
+| Alignment | Unaligned |
+| Armor Class | 11 |
+| Hit Points | 5 (1d4 + 3) |
+| Initiative | +0 (10) |
+| Speed | 20 ft., Burrow 5 ft. |
+| Challenge | 0 (XP 10; PB +2) |
+| Skills | Perception +3 |
+| Senses | Darkvision 30 ft.; Passive Perception 13 |
+| Languages | None |
+| Resistances | Poison |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 10 | +0 | +0 |
+| Dex | 11 | +0 | +0 |
+| Con | 16 | +3 | +3 |
+| Int | 2 | -4 | -4 |
+| Wis | 12 | +1 | +1 |
+| Cha | 5 | -3 | -3 |
+
 
 ## Source text
 
 <!-- SRD page 345 -->
 
-Tiny Beast, Unaligned\
-AC 11  Initiative +0 (10)\
-HP 5 (1d4 + 3)\
-Speed 20 ft., Burrow 5 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 10 +0 +0 Dex 11 +0 +0 Con 16 +3 +3\
-Int 2 −4 −4 Wis 12 +1 +1 Cha 5 −3 −3\
-Skills Perception +3\
-Resistances Poison\
-Senses Darkvision 30 ft.; Passive Perception 13\
-Languages None\
-CR 0 (XP 10; PB +2)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Tiny Beast, Unaligned\
+> AC 11  Initiative +0 (10)\
+> HP 5 (1d4 + 3)\
+> Speed 20 ft., Burrow 5 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 10 +0 +0 Dex 11 +0 +0 Con 16 +3 +3\
+> Int 2 −4 −4 Wis 12 +1 +1 Cha 5 −3 −3\
+> Skills Perception +3\
+> Resistances Poison\
+> Senses Darkvision 30 ft.; Passive Perception 13\
+> Languages None\
+> CR 0 (XP 10; PB +2)
+
 
 ### Actions
 
@@ -37,47 +64,11 @@ Bite. Melee Attack Roll: +2, reach 5 ft. Hit: 1 Piercing damage.
 
 Original layout: [[../../srd-5.2.1/pages/345|page 345]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` tiny ` |
-| ` type ` | ` beast ` |
-| ` alignment ` | ` Unaligned ` |
-| ` movement_text ` | ` 20 ft., Burrow 5 ft. ` |
-| ` skills_text ` | ` Perception +3 ` |
-| ` resistances_text ` | ` Poison ` |
-| ` senses_text ` | ` Darkvision 30 ft.; Passive Perception 13 ` |
-| ` languages_text ` | ` None ` |
-| ` cr_text ` | ` 0 (XP 10; PB +2) ` |
-| ` hit_points_text ` | ` 5 (1d4 + 3) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 10 ` | ` 0 ` |
-| ` Dexterity ` | ` 11 ` | ` 0 ` |
-| ` Constitution ` | ` 16 ` | ` 3 ` |
-| ` Intelligence ` | ` 2 ` | ` -4 ` |
-| ` Wisdom ` | ` 12 ` | ` 1 ` |
-| ` Charisma ` | ` 5 ` | ` -3 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 11 ` |  |
-| ` max_hp ` | ` 5 ` |  |
-| ` initiative ` | ` 0 ` |  |
-| ` speed ` | ` 20 ` | ` ft ` |
-| ` burrow_speed ` | ` 5 ` | ` ft ` |
 
 ## Health
 
@@ -181,3 +172,13 @@ geometry:
 unlisted_success_branch: no_effect
 unlisted_duration: until_removed_by_applicable_rule
 ```
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_stats_extras -->
+> 
+> ```yaml
+> burrow_speed:
+>   unit: ft
+>   value: 5
+> ```
+

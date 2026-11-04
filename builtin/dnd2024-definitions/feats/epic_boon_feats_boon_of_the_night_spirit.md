@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 1fa8b1b5-a6b8-58bc-976d-d30efb2a87f0
 splat_kind: rule
 splat_key: dnd2024:feats/epic_boon_feats_boon_of_the_night_spirit
 splat_name: Boon of the Night Spirit
-splat_origin:
-  key: dnd2024:reference/pages/088
+splat_origin: dnd2024:reference/pages/088
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 88
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 88, https://www.dndbeyond.com/srd
 ---
 
 # Boon of the Night Spirit

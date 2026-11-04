@@ -1,35 +1,62 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 7a50a965-93f4-58ea-b359-afca41a8f7e5
 splat_kind: creature
 splat_key: dnd2024:creatures/minotaur_skeleton
 splat_name: Minotaur Skeleton
-splat_origin:
-  key: dnd2024:reference/creature/minotaur_skeleton
+splat_origin: dnd2024:reference/creature/minotaur_skeleton
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 326
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 326, https://www.dndbeyond.com/srd
 ---
 
 # Minotaur Skeleton
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Large |
+| Type | Undead |
+| Alignment | Lawful Evil |
+| Armor Class | 12 |
+| Hit Points | 45 (6d10 + 12) |
+| Initiative | +0 (10) |
+| Speed | 40 ft. |
+| Challenge | 2 (XP 450; PB +2) |
+| Senses | Darkvision 60 ft.; Passive Perception 9 |
+| Languages | Understands Abyssal but can’t speak |
+| Immunities | Poison; Exhaustion, Poisoned |
+| Vulnerabilities | Bludgeoning |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 18 | +4 | +4 |
+| Dex | 11 | +0 | +0 |
+| Con | 15 | +2 | +2 |
+| Int | 6 | -2 | -2 |
+| Wis | 8 | -1 | -1 |
+| Cha | 5 | -3 | -3 |
+
 
 ## Source text
 
 <!-- SRD page 326 -->
 
-Large Undead, Lawful Evil\
-AC 12 Initiative +0 (10)\
-HP 45 (6d10 + 12)\
-Speed 40 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 18 +4 +4 Dex 11 +0 +0 Con 15 +2 +2\
-Int 6 −2 −2 Wis 8 −1 −1 Cha 5 −3 −3\
-Vulnerabilities Bludgeoning\
-Immunities Poison; Exhaustion, Poisoned\
-Senses Darkvision 60 ft.; Passive Perception 9\
-Languages Understands Abyssal but can’t speak\
-CR 2 (XP 450; PB +2)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Large Undead, Lawful Evil\
+> AC 12 Initiative +0 (10)\
+> HP 45 (6d10 + 12)\
+> Speed 40 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 18 +4 +4 Dex 11 +0 +0 Con 15 +2 +2\
+> Int 6 −2 −2 Wis 8 −1 −1 Cha 5 −3 −3\
+> Vulnerabilities Bludgeoning\
+> Immunities Poison; Exhaustion, Poisoned\
+> Senses Darkvision 60 ft.; Passive Perception 9\
+> Languages Understands Abyssal but can’t speak\
+> CR 2 (XP 450; PB +2)
+
 
 ### Actions
 
@@ -39,46 +66,11 @@ Slam. Melee Attack Roll: +6, reach 5 ft. Hit: 15 (2d10 + 4) Bludgeoning damage.
 
 Original layout: [[../../srd-5.2.1/pages/326|page 326]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` large ` |
-| ` type ` | ` undead ` |
-| ` alignment ` | ` Lawful Evil ` |
-| ` movement_text ` | ` 40 ft. ` |
-| ` vulnerabilities_text ` | ` Bludgeoning ` |
-| ` immunities_text ` | ` Poison; Exhaustion, Poisoned ` |
-| ` senses_text ` | ` Darkvision 60 ft.; Passive Perception 9 ` |
-| ` languages_text ` | ` Understands Abyssal but can’t speak ` |
-| ` cr_text ` | ` 2 (XP 450; PB +2) ` |
-| ` hit_points_text ` | ` 45 (6d10 + 12) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 18 ` | ` 4 ` |
-| ` Dexterity ` | ` 11 ` | ` 0 ` |
-| ` Constitution ` | ` 15 ` | ` 2 ` |
-| ` Intelligence ` | ` 6 ` | ` -2 ` |
-| ` Wisdom ` | ` 8 ` | ` -1 ` |
-| ` Charisma ` | ` 5 ` | ` -3 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 12 ` |  |
-| ` max_hp ` | ` 45 ` |  |
-| ` initiative ` | ` 0 ` |  |
-| ` speed ` | ` 40 ` | ` ft ` |
 
 ## Health
 

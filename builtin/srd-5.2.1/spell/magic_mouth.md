@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "e983cc8d-6cfb-5fa4-a53f-eb02a6dfdaba"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/magic_mouth"
 splat_name: "Magic Mouth"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [146], "executable": false}
+splat_pages:
+- 146
 ---
 
 # Magic Mouth
@@ -24,3 +25,13 @@ When that trigger occurs, a magical mouth appears on the object and recites the 
 The trigger can be as general or as detailed as you like, though it must be based on visual or audible conditions that occur within 30 feet of the object. For example, you could instruct the mouth to speak when any creature moves within 30 feet of the object or when a silver bell rings within 30 feet of it.
 
 Original layout: [[../pages/146|page 146]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

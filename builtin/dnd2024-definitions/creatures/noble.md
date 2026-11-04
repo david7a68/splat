@@ -1,35 +1,62 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 1abbab35-5152-58ae-b0dd-6fe0694d1179
 splat_kind: creature
 splat_key: dnd2024:creatures/noble
 splat_name: Noble
-splat_origin:
-  key: dnd2024:reference/creature/noble
+splat_origin: dnd2024:reference/creature/noble
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 312
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 312, https://www.dndbeyond.com/srd
 ---
 
 # Noble
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Medium or Small |
+| Type | Humanoid |
+| Alignment | Neutral |
+| Armor Class | 15 |
+| Hit Points | 9 (2d8) |
+| Initiative | +1 (11) |
+| Speed | 30 ft. |
+| Challenge | 1/8 (XP 25; PB +2) |
+| Skills | Deception +5, Insight +4, Persuasion +5 |
+| Senses | Passive Perception 12 |
+| Languages | Common plus two other languages |
+| Gear | Breastplate, Rapier |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 11 | +0 | +0 |
+| Dex | 12 | +1 | +1 |
+| Con | 11 | +0 | +0 |
+| Int | 12 | +1 | +1 |
+| Wis | 14 | +2 | +2 |
+| Cha | 16 | +3 | +3 |
+
 
 ## Source text
 
 <!-- SRD page 312 -->
 
 Medium or Small Humanoid, Neutral\
-AC 15 Initiative +1 (11)\
-HP 9 (2d8)\
-Speed 30 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 11 +0 +0 Dex 12 +1 +1 Con 11 +0 +0\
-Int 12 +1 +1 Wis 14 +2 +2 Cha 16 +3 +3\
-Skills Deception +5, Insight +4, Persuasion +5\
-Gear Breastplate, Rapier\
-Senses Passive Perception 12\
-Languages Common plus two other languages\
-CR 1/8 (XP 25; PB +2)
+> [!quote]- Printed stat block (not read; edit the table above)
+> AC 15 Initiative +1 (11)\
+> HP 9 (2d8)\
+> Speed 30 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 11 +0 +0 Dex 12 +1 +1 Con 11 +0 +0\
+> Int 12 +1 +1 Wis 14 +2 +2 Cha 16 +3 +3\
+> Skills Deception +5, Insight +4, Persuasion +5\
+> Gear Breastplate, Rapier\
+> Senses Passive Perception 12\
+> Languages Common plus two other languages\
+> CR 1/8 (XP 25; PB +2)
+
 
 ### Actions
 
@@ -41,47 +68,11 @@ Parry. Trigger: The noble is hit by a melee attack roll while holding a weapon. 
 
 Original layout: [[../../srd-5.2.1/pages/312|page 312]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` medium ` |
-| ` type ` | ` humanoid ` |
-| ` alignment ` | ` Neutral ` |
-| ` size_options_text ` | ` Medium or Small ` |
-| ` movement_text ` | ` 30 ft. ` |
-| ` skills_text ` | ` Deception +5, Insight +4, Persuasion +5 ` |
-| ` gear_text ` | ` Breastplate, Rapier ` |
-| ` senses_text ` | ` Passive Perception 12 ` |
-| ` languages_text ` | ` Common plus two other languages ` |
-| ` cr_text ` | ` 1/8 (XP 25; PB +2) ` |
-| ` hit_points_text ` | ` 9 (2d8) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 11 ` | ` 0 ` |
-| ` Dexterity ` | ` 12 ` | ` 1 ` |
-| ` Constitution ` | ` 11 ` | ` 0 ` |
-| ` Intelligence ` | ` 12 ` | ` 1 ` |
-| ` Wisdom ` | ` 14 ` | ` 2 ` |
-| ` Charisma ` | ` 16 ` | ` 3 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 15 ` |  |
-| ` max_hp ` | ` 9 ` |  |
-| ` initiative ` | ` 1 ` |  |
-| ` speed ` | ` 30 ` | ` ft ` |
 
 ## Health
 

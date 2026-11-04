@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "2b5b6b88-cca6-5394-bc4d-b9b34825cbc3"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/fire_storm"
 splat_name: "Fire Storm"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [132], "executable": false}
+splat_pages:
+- 132
 ---
 
 # Fire Storm
@@ -22,3 +23,13 @@ A storm of fire appears within range. The area of the storm consists of up to te
 Flammable objects in the area that aren’t being worn or carried start burning.
 
 Original layout: [[../pages/132|page 132]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

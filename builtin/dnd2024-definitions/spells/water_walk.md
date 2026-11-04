@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: ae4dc889-df0f-5d43-b166-eff1b6d007a8
 splat_kind: spell
 splat_key: dnd2024:spells/water_walk
 splat_name: Water Walk
-splat_origin:
-  key: dnd2024:reference/spell/water_walk
+splat_origin: dnd2024:reference/spell/water_walk
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 173, 174
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 173, 174, https://www.dndbeyond.com/srd
 ---
 
 # Water Walk
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 3 |
+| School | Transmutation |
+| Classes | Cleric, Druid, Ranger, Sorcerer |
+| Casting Time | Action or Ritual |
+| Range | 30 feet |
+| Components | V, S, M (a piece of cork) |
+| Duration | 1 hour |
+
 
 ## Source text
 
@@ -32,37 +43,11 @@ An affected target must take a Bonus Action to pass from the liquid’s surface 
 
 Original layout: [[../../srd-5.2.1/pages/173|page 173]], [[../../srd-5.2.1/pages/174|page 174]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 3 ` |
-| ` school ` | ` transmutation ` |
-| ` classes ` | ` ["cleric", "druid", "ranger", "sorcerer"] ` |
-| ` components ` | ` ["verbal", "somatic", "material"] ` |
-| ` concentration ` | ` false ` |
-| ` duration ` | ` 1 hour ` |
-| ` casting_time ` | ` Action or Ritual ` |
-| ` ritual ` | ` true ` |
 
-### Range
 
-<!-- splat:values path=splat_spell/range -->
 
-| Field | Value |
-| --- | --- |
-| ` feet ` | ` 30 ` |
-
-### Material
-
-<!-- splat:values path=splat_spell/material -->
-
-| Field | Value |
-| --- | --- |
-| ` description ` | ` a piece of cork ` |
-| ` consumed ` | ` false ` |
 
 ## Rule
 
@@ -134,3 +119,12 @@ Original layout: [[../../srd-5.2.1/pages/173|page 173]], [[../../srd-5.2.1/pages
 | ` source ` | ` supplied_world_geometry ` |
 | ` unknown_facts ` | ` require_resolution ` |
 | ` infer_unprovided_geometry ` | ` false ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_spell_extras -->
+> 
+> ```yaml
+> material:
+>   consumed: false
+> ```
+

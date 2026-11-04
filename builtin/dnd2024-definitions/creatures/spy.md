@@ -1,35 +1,62 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 553b6a42-8669-5cbc-87d0-f0d3f7c9e6ed
 splat_kind: creature
 splat_key: dnd2024:creatures/spy
 splat_name: Spy
-splat_origin:
-  key: dnd2024:reference/creature/spy
+splat_origin: dnd2024:reference/creature/spy
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 329
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 329, https://www.dndbeyond.com/srd
 ---
 
 # Spy
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Medium or Small |
+| Type | Humanoid |
+| Alignment | Neutral |
+| Armor Class | 12 |
+| Hit Points | 27 (6d8) |
+| Initiative | +4 (14) |
+| Speed | 30 ft., Climb 30 ft. |
+| Challenge | 1 (XP 200; PB +2) |
+| Skills | Deception +5, Insight +4, Investigation +5, Perception +6, Sleight of Hand +4, Stealth +6 |
+| Senses | Passive Perception 16 |
+| Languages | Common plus one other language |
+| Gear | Hand Crossbow, Shortsword, Thieves’ Tools |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 10 | +0 | +0 |
+| Dex | 15 | +2 | +2 |
+| Con | 10 | +0 | +0 |
+| Int | 12 | +1 | +1 |
+| Wis | 14 | +2 | +2 |
+| Cha | 16 | +3 | +3 |
+
 
 ## Source text
 
 <!-- SRD page 329 -->
 
 Medium or Small Humanoid, Neutral\
-AC 12 Initiative +4 (14)\
-HP 27 (6d8)\
-Speed 30 ft., Climb 30 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 10 +0 +0 Dex 15 +2 +2 Con 10 +0 +0\
-Int 12 +1 +1 Wis 14 +2 +2 Cha 16 +3 +3\
-Skills Deception +5, Insight +4, Investigation +5, Perception +6, Sleight of Hand +4, Stealth +6\
-Gear Hand Crossbow, Shortsword, Thieves’ Tools\
-Senses Passive Perception 16\
-Languages Common plus one other language\
-CR 1 (XP 200; PB +2)
+> [!quote]- Printed stat block (not read; edit the table above)
+> AC 12 Initiative +4 (14)\
+> HP 27 (6d8)\
+> Speed 30 ft., Climb 30 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 10 +0 +0 Dex 15 +2 +2 Con 10 +0 +0\
+> Int 12 +1 +1 Wis 14 +2 +2 Cha 16 +3 +3\
+> Skills Deception +5, Insight +4, Investigation +5, Perception +6, Sleight of Hand +4, Stealth +6\
+> Gear Hand Crossbow, Shortsword, Thieves’ Tools\
+> Senses Passive Perception 16\
+> Languages Common plus one other language\
+> CR 1 (XP 200; PB +2)
+
 
 ### Actions
 
@@ -43,48 +70,11 @@ Cunning Action. The spy takes the Dash, Disengage, or Hide action.
 
 Original layout: [[../../srd-5.2.1/pages/329|page 329]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` medium ` |
-| ` type ` | ` humanoid ` |
-| ` alignment ` | ` Neutral ` |
-| ` size_options_text ` | ` Medium or Small ` |
-| ` movement_text ` | ` 30 ft., Climb 30 ft. ` |
-| ` skills_text ` | ` Deception +5, Insight +4, Investigation +5, Perception +6, Sleight of Hand +4, Stealth +6 ` |
-| ` gear_text ` | ` Hand Crossbow, Shortsword, Thieves’ Tools ` |
-| ` senses_text ` | ` Passive Perception 16 ` |
-| ` languages_text ` | ` Common plus one other language ` |
-| ` cr_text ` | ` 1 (XP 200; PB +2) ` |
-| ` hit_points_text ` | ` 27 (6d8) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 10 ` | ` 0 ` |
-| ` Dexterity ` | ` 15 ` | ` 2 ` |
-| ` Constitution ` | ` 10 ` | ` 0 ` |
-| ` Intelligence ` | ` 12 ` | ` 1 ` |
-| ` Wisdom ` | ` 14 ` | ` 2 ` |
-| ` Charisma ` | ` 16 ` | ` 3 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 12 ` |  |
-| ` max_hp ` | ` 27 ` |  |
-| ` initiative ` | ` 4 ` |  |
-| ` speed ` | ` 30 ` | ` ft ` |
-| ` climb_speed ` | ` 30 ` | ` ft ` |
 
 ## Health
 
@@ -300,3 +290,13 @@ geometry_assumptions:
   - plane
   - form_appearance
 ```
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_stats_extras -->
+> 
+> ```yaml
+> climb_speed:
+>   unit: ft
+>   value: 30
+> ```
+

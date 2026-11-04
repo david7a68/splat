@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "3121d89a-ced3-5efa-9c02-0ee1fd6aac51"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/prismatic_wall"
 splat_name: "Prismatic Wall"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [155], "executable": false}
+splat_pages:
+- 155
 ---
 
 # Prismatic Wall
@@ -38,3 +39,13 @@ The wall, which has AC 10, can be destroyed one layer at a time, in order from r
 | 7 | Violet. Failed Save: The target has the Blinded condition and makes a Wisdom saving throw at the start of your next turn. On a successful save, the condition ends. On a failed save, the condition ends, and the creature teleports to another plane of existence (GM’s choice). Additional Effects: This layer is destroyed by Dispel Magic. |
 
 Original layout: [[../pages/155|page 155]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

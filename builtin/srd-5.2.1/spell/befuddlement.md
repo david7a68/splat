@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "8b3c29b8-4b97-5adb-84e9-cc25db11fe50"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/befuddlement"
 splat_name: "Befuddlement"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [112], "executable": false}
+splat_pages:
+- 112
 ---
 
 # Befuddlement
@@ -24,3 +25,13 @@ On a failed save, the target takes 10d12 Psychic damage and can’t cast spells 
 On a successful save, the target takes half as much damage only.
 
 Original layout: [[../pages/112|page 112]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

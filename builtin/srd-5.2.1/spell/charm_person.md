@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "a8aff3a3-3e53-5c17-b3e2-e7ebeba9ce25"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/charm_person"
 splat_name: "Charm Person"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [115], "executable": false}
+splat_pages:
+- 115
 ---
 
 # Charm Person
@@ -22,3 +23,13 @@ One Humanoid you can see within range makes a Wisdom saving throw. It does so wi
 Using a Higher-Level Spell Slot. You can target one additional creature for each spell slot level above 1.
 
 Original layout: [[../pages/115|page 115]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

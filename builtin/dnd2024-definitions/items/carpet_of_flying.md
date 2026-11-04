@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 8867b69e-fad0-5895-9ac4-1a490d43be74
 splat_kind: item
 splat_key: dnd2024:items/carpet_of_flying
 splat_name: Carpet of Flying
-splat_origin:
-  key: dnd2024:reference/magic_item/carpet_of_flying
+splat_origin: dnd2024:reference/magic_item/carpet_of_flying
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 215
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 215, https://www.dndbeyond.com/srd
 ---
 
 # Carpet of Flying
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Wondrous Item |
+| Rarity | Very Rare |
+| Attunement | No |
+
 
 ## Source text
 
@@ -33,22 +40,9 @@ Four sizes of Carpet of Flying exist. The GM chooses the size of a given carpet 
 
 Original layout: [[../../srd-5.2.1/pages/215|page 215]].
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` wondrous_item ` |
-| ` rarity ` | ` very_rare ` |
 
-### Equipment
-
-<!-- splat:values path=splat_item/equipment -->
-
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` none ` |
 
 ## Rule
 

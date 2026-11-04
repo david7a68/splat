@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "a658988d-abae-5b7a-8863-d30a04236962"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/glossary/grappling"
 splat_name: "Grappling"
-splat_reference: {"source": "SRD 5.2.1", "category": "glossary", "pages": [182], "executable": false}
+splat_pages:
+- 182
 ---
 
 # Grappling
@@ -20,3 +21,13 @@ One Grapple per Hand. A creature must have a hand free to grapple another creatu
 Ending a Grapple. A Grappled creature can use its action to make a Strength (Athletics) or Dexterity (Acrobatics) check against the grapple’s escape DC, ending the condition on itself on a success. The condition also ends if the grappler has the Incapacitated condition or if the distance between the Grappled target and the grappler exceeds the grapple’s range. In addition, the grappler can release the target at any time (no action required).
 
 Original layout: [[../pages/182|page 182]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: glossary
+> executable: false
+> ```
+

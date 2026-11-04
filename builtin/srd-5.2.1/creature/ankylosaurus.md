@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "93047be0-c678-5a87-afc8-a0459fda53a7"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/ankylosaurus"
 splat_name: "Ankylosaurus"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [344], "executable": false}
+splat_pages:
+- 344
 ---
 
 # Ankylosaurus
@@ -29,3 +30,13 @@ Multiattack. The ankylosaurus makes two Tail attacks.
 Tail. Melee Attack Roll: +6, reach 10 ft. Hit: 9 (1d10 + 4) Bludgeoning damage. If the target is a Huge or smaller creature, it has the Prone condition.
 
 Original layout: [[../pages/344|page 344]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

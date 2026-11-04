@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 0c178b9c-6074-5e7b-aaff-f370eb1331f1
 splat_kind: rule
 splat_key: dnd2024:rules/gaining_spells_preparing_spells
 splat_name: Preparing Spells
-splat_origin:
-  key: dnd2024:reference/pages/104
+splat_origin: dnd2024:reference/pages/104
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 104
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 104, https://www.dndbeyond.com/srd
 ---
 
 # Preparing Spells

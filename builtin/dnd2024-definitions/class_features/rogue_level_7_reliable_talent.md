@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 6c1c08de-c6cc-5b75-a110-5cd4f15ea2e2
 splat_kind: rule
 splat_key: dnd2024:class_features/rogue_level_7_reliable_talent
 splat_name: 'Level 7: Reliable Talent'
-splat_origin:
-  key: dnd2024:reference/pages/063
+splat_origin: dnd2024:reference/pages/063
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 63
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 63, https://www.dndbeyond.com/srd
 ---
 
 # Level 7: Reliable Talent

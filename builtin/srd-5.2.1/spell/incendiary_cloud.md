@@ -1,10 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "9c40feb7-09ab-5235-8e4d-e20ec9d1a6bc"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/incendiary_cloud"
 splat_name: "Incendiary Cloud"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [142, 143], "executable": false}
+splat_pages:
+- 142
+- 143
 ---
 
 # Incendiary Cloud
@@ -26,3 +28,13 @@ When the cloud appears, each creature in it makes a Dexterity saving throw, taki
 The cloud moves 10 feet away from you in a direction you choose at the start of each of your turns.
 
 Original layout: [[../pages/142|page 142]], [[../pages/143|page 143]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

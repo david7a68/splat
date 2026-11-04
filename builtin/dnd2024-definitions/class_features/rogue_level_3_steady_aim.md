@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: bc135be7-382d-5214-94a8-11e493bc924d
 splat_kind: rule
 splat_key: dnd2024:class_features/rogue_level_3_steady_aim
 splat_name: 'Level 3: Steady Aim'
-splat_origin:
-  key: dnd2024:reference/pages/062
+splat_origin: dnd2024:reference/pages/062
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 62
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 62, https://www.dndbeyond.com/srd
 ---
 
 # Level 3: Steady Aim

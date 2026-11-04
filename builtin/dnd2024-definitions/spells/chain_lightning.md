@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: f2b3e04b-6619-5597-a715-8a7219204e35
 splat_kind: spell
 splat_key: dnd2024:spells/chain_lightning
 splat_name: Chain Lightning
-splat_origin:
-  key: dnd2024:reference/spell/chain_lightning
+splat_origin: dnd2024:reference/spell/chain_lightning
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 114
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 114, https://www.dndbeyond.com/srd
 ---
 
 # Chain Lightning
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 6 |
+| School | Evocation |
+| Classes | Sorcerer, Wizard |
+| Casting Time | Action |
+| Range | 150 feet |
+| Components | V, S, M (three silver pins) |
+| Duration | Instantaneous |
+
 
 ## Source text
 
@@ -32,37 +43,11 @@ Using a Higher-Level Spell Slot. One additional bolt leaps from the first target
 
 Original layout: [[../../srd-5.2.1/pages/114|page 114]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 6 ` |
-| ` school ` | ` evocation ` |
-| ` classes ` | ` ["sorcerer", "wizard"] ` |
-| ` components ` | ` ["verbal", "somatic", "material"] ` |
-| ` concentration ` | ` false ` |
-| ` duration ` | ` Instantaneous ` |
-| ` casting_time ` | ` Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
 
-<!-- splat:values path=splat_spell/range -->
 
-| Field | Value |
-| --- | --- |
-| ` feet ` | ` 150 ` |
-
-### Material
-
-<!-- splat:values path=splat_spell/material -->
-
-| Field | Value |
-| --- | --- |
-| ` description ` | ` three silver pins ` |
-| ` consumed ` | ` false ` |
 
 ## Rule
 
@@ -128,3 +113,12 @@ success:
     numerator: 1
     denominator: 2
 ```
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_spell_extras -->
+> 
+> ```yaml
+> material:
+>   consumed: false
+> ```
+

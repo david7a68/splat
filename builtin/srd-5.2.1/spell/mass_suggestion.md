@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "4f6267ac-0d97-5aed-b11a-42c6a7468551"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/mass_suggestion"
 splat_name: "Mass Suggestion"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [148], "executable": false}
+splat_pages:
+- 148
 ---
 
 # Mass Suggestion
@@ -24,3 +25,13 @@ Each target must succeed on a Wisdom saving throw or have the Charmed condition 
 Using a Higher-Level Spell Slot. The duration is longer with a spell slot of level 7 (10 days), 8 (30 days), or 9 (366 days).
 
 Original layout: [[../pages/148|page 148]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

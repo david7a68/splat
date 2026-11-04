@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 046fba86-2d45-5ef1-9c04-dc66e7ec1760
 splat_kind: item
 splat_key: dnd2024:items/helm_of_teleportation
 splat_name: Helm of Teleportation
-splat_origin:
-  key: dnd2024:reference/magic_item/helm_of_teleportation
+splat_origin: dnd2024:reference/magic_item/helm_of_teleportation
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 226
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 226, https://www.dndbeyond.com/srd
 ---
 
 # Helm of Teleportation
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Wondrous Item |
+| Rarity | Rare |
+| Attunement | Yes |
+
 
 ## Source text
 
@@ -24,22 +31,9 @@ This helm has 3 charges. While wearing it, you can expend 1 charge to cast Telep
 
 Original layout: [[../../srd-5.2.1/pages/226|page 226]].
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` wondrous_item ` |
-| ` rarity ` | ` rare ` |
 
-### Equipment
-
-<!-- splat:values path=splat_item/equipment -->
-
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` required ` |
 
 ## Rule
 

@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: f1a6257f-6147-50ed-9212-ee1a407bf2f1
 splat_kind: item
 splat_key: dnd2024:items/handy_haversack
 splat_name: Handy Haversack
-splat_origin:
-  key: dnd2024:reference/magic_item/handy_haversack
+splat_origin: dnd2024:reference/magic_item/handy_haversack
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 224
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 224, https://www.dndbeyond.com/srd
 ---
 
 # Handy Haversack
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Wondrous Item |
+| Rarity | Rare |
+| Attunement | No |
+
 
 ## Source text
 
@@ -32,22 +39,9 @@ Placing the haversack inside an extradimensional space created by a Bag of Holdi
 
 Original layout: [[../../srd-5.2.1/pages/224|page 224]].
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` wondrous_item ` |
-| ` rarity ` | ` rare ` |
 
-### Equipment
-
-<!-- splat:values path=splat_item/equipment -->
-
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` none ` |
 
 ## Rule
 

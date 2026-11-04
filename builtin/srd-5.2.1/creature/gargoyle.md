@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "66b93ec0-fc9b-5528-9d32-85c191d912f6"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/gargoyle"
 splat_name: "Gargoyle"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [286], "executable": false}
+splat_pages:
+- 286
 ---
 
 # Gargoyle
@@ -35,3 +36,13 @@ Multiattack. The gargoyle makes two Claw attacks.
 Claw. Melee Attack Roll: +4, reach 5 ft. Hit: 7 (2d4 + 2) Slashing damage.
 
 Original layout: [[../pages/286|page 286]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: a6b1254d-f8a5-55fb-a778-d8b0d1e04488
 splat_kind: spell
 splat_key: dnd2024:spells/mirage_arcane
 splat_name: Mirage Arcane
-splat_origin:
-  key: dnd2024:reference/spell/mirage_arcane
+splat_origin: dnd2024:reference/spell/mirage_arcane
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 149, 150
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 149, 150, https://www.dndbeyond.com/srd
 ---
 
 # Mirage Arcane
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 7 |
+| School | Illusion |
+| Classes | Bard, Druid, Wizard |
+| Casting Time | 10 minutes |
+| Range |  |
+| Components | V, S |
+| Duration | 10 days |
+
 
 ## Source text
 
@@ -36,28 +47,9 @@ Creatures with Truesight can see through the illusion to the terrain’s true fo
 
 Original layout: [[../../srd-5.2.1/pages/149|page 149]], [[../../srd-5.2.1/pages/150|page 150]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 7 ` |
-| ` school ` | ` illusion ` |
-| ` classes ` | ` ["bard", "druid", "wizard"] ` |
-| ` components ` | ` ["verbal", "somatic"] ` |
-| ` concentration ` | ` false ` |
-| ` duration ` | ` 10 days ` |
-| ` casting_time ` | ` 10 minutes ` |
-| ` ritual ` | ` false ` |
 
-### Range
-
-<!-- splat:values path=splat_spell/range -->
-
-| Field | Value |
-| --- | --- |
-| ` mode ` | ` sight ` |
 
 ## Rule
 
@@ -147,3 +139,12 @@ Original layout: [[../../srd-5.2.1/pages/149|page 149]], [[../../srd-5.2.1/pages
 | ` source ` | ` supplied_world_geometry ` |
 | ` unknown_facts ` | ` require_resolution ` |
 | ` infer_unprovided_geometry ` | ` false ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_spell_extras -->
+> 
+> ```yaml
+> range:
+>   mode: sight
+> ```
+

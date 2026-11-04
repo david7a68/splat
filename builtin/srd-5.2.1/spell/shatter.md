@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "af2e9725-0713-5667-b1ea-5c2c42edfef3"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/shatter"
 splat_name: "Shatter"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [161], "executable": false}
+splat_pages:
+- 161
 ---
 
 # Shatter
@@ -24,3 +25,13 @@ A nonmagical object that isn’t being worn or carried also takes the damage if 
 Using a Higher-Level Spell Slot. The damage increases by 1d8 for each spell slot level above 2.
 
 Original layout: [[../pages/161|page 161]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

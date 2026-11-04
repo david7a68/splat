@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "06e74af4-2f59-5912-9610-e1796265372e"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/unseen_servant"
 splat_name: "Unseen Servant"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [171], "executable": false}
+splat_pages:
+- 171
 ---
 
 # Unseen Servant
@@ -24,3 +25,13 @@ Once on each of your turns as a Bonus Action, you can mentally command the serva
 If you command the servant to perform a task that would move it more than 60 feet away from you, the spell ends.
 
 Original layout: [[../pages/171|page 171]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

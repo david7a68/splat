@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 49386059-2b85-5599-93b5-5dd5bbf41c46
 splat_kind: rule
 splat_key: dnd2024:feats/epic_boon_feats_boon_of_dimensional_travel
 splat_name: Boon of Dimensional Travel
-splat_origin:
-  key: dnd2024:reference/pages/088
+splat_origin: dnd2024:reference/pages/088
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 88
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 88, https://www.dndbeyond.com/srd
 ---
 
 # Boon of Dimensional Travel

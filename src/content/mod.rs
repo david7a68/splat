@@ -8,6 +8,9 @@ use std::path::Path;
 use std::sync::Arc;
 use uuid::Uuid;
 
+/// Action shown for a retired on-disk layout. Loading never changes the file.
+pub const OLD_LAYOUT: &str = "Old layout: Splat no longer reads this file. Use Convert files.";
+
 /// A note's line that makes the table below it rollable. It holds no entry data.
 pub const ROLLS_MARKER: &str = "<!-- splat:rolls ";
 
@@ -29,6 +32,7 @@ mod reading;
 pub use reading::Reading;
 pub mod formats;
 pub mod layout;
+pub mod legacy;
 pub mod list_formats;
 mod markdown;
 mod shared;
@@ -39,9 +43,12 @@ mod table_mapping;
 #[cfg(test)]
 mod formats_tests;
 #[cfg(test)]
+mod retirement_tests;
+#[cfg(test)]
 mod tests;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(try_from = "EntryWire")]
 pub struct Entry {
     pub path: String,
     pub id: Uuid,
@@ -57,6 +64,47 @@ pub struct Entry {
     pub inventory_containers: Vec<String>,
     #[serde(default)]
     pub flags: Vec<layout::Flag>,
+}
+
+// Saved runs contain parsed entry copies. They obey the same schema boundary as notes.
+#[derive(Deserialize)]
+struct EntryWire {
+    path: String,
+    id: Uuid,
+    key: Option<String>,
+    name: String,
+    kind: String,
+    fields: Fields,
+    body: String,
+    inventory: Vec<InventoryRow>,
+    inventory_containers: Vec<String>,
+    #[serde(default)]
+    flags: Vec<layout::Flag>,
+}
+impl TryFrom<EntryWire> for Entry {
+    type Error = String;
+    fn try_from(wire: EntryWire) -> Result<Self, String> {
+        match wire.fields.get("splat_schema").and_then(Value::as_u64) {
+            Some(2) => {}
+            Some(1) => return Err(OLD_LAYOUT.into()),
+            _ => return Err("Unsupported content schema; expected 2".into()),
+        }
+        let entry = Self {
+            path: wire.path,
+            id: wire.id,
+            key: wire.key,
+            name: wire.name,
+            kind: wire.kind,
+            fields: wire.fields,
+            body: wire.body,
+            body_line: 1,
+            inventory: wire.inventory,
+            inventory_containers: wire.inventory_containers,
+            flags: wire.flags,
+        };
+        entry.validate_shape()?;
+        Ok(entry)
+    }
 }
 
 /// Parsed fields are read repeatedly by independent catalogues and app views.
@@ -178,7 +226,11 @@ impl Entry {
         let Value::Mapping(mut fields) = value else {
             return Err("Frontmatter must be a mapping".into());
         };
-        let schema = formats::schema(&fields)?;
+        match fields.get("splat_schema").and_then(Value::as_u64) {
+            Some(2) => {}
+            Some(1) => return Err(OLD_LAYOUT.into()),
+            _ => return Err("Unsupported content schema; expected 2".into()),
+        }
         let id =
             Uuid::parse_str(string(&fields, "splat_id")?).map_err(|_| "Invalid splat_id UUID")?;
         let name = string(&fields, "splat_name")?.to_owned();
@@ -219,20 +271,16 @@ impl Entry {
             None => None,
         };
         let body = rest.get(end + 5..).unwrap_or("").to_owned();
-        let tables = schema == 2
-            && stat_blocks::owns(
-                &kind,
-                fields.contains_key("splat_character") || body.contains("path=splat_payload"),
-            );
+        let tables = stat_blocks::owns(
+            &kind,
+            fields.contains_key("splat_character") || body.contains("path=splat_payload"),
+        );
         if tables {
             markdown::read(&stat_blocks::without_legacy(&body, &kind), &mut fields)?;
         } else {
             markdown::read(&body, &mut fields)?;
         }
-        if schema == 1 && kind == "creature" && !fields.contains_key("splat_character") {
-            stat_blocks::read_legacy_identity(&body, &mut fields);
-        }
-        let flags = formats::read(schema, &text, &mut fields);
+        let flags = formats::read(&text, &mut fields);
         if kind == "creature" && !fields.contains_key("splat_character") {
             stat_blocks::complete_challenge_fields(&mut fields);
         }
@@ -297,18 +345,6 @@ impl Entry {
             } else if !value.is_mapping() {
                 return Err(format!("{name} must be a mapping"));
             }
-        }
-        if self.kind == "encounter_group" && formats::schema(&self.fields)? == 1 {
-            encounter_group::EncounterGroup::of(self)?;
-        }
-        if self.kind == "world"
-            && formats::schema(&self.fields)? == 1
-            && field(&self.fields, "splat_world")
-                .and_then(|world| world.get("type"))
-                .and_then(Value::as_str)
-                .is_none_or(|kind| kind.trim().is_empty())
-        {
-            return Err("splat_world needs a type, such as npc or location".into());
         }
         if self.kind == "encounter"
             && let Some(roster) = field(&self.fields, "splat_encounter")
@@ -1151,6 +1187,13 @@ pub fn patch_fields(
 }
 
 pub fn read_directory(root: &Path) -> Result<(Vec<Entry>, Vec<Diagnostic>), String> {
+    read_directory_using(root, Entry::parse)
+}
+
+fn read_directory_using(
+    root: &Path,
+    parse: fn(&str, &str) -> Result<Entry, String>,
+) -> Result<(Vec<Entry>, Vec<Diagnostic>), String> {
     fn walk(
         root: &Path,
         current: &Path,
@@ -1268,7 +1311,7 @@ pub fn read_directory(root: &Path) -> Result<(Vec<Entry>, Vec<Diagnostic>), Stri
     let parsed: Vec<_> = files
         .par_iter()
         .map(|(path, text)| {
-            Entry::parse(path, text).map_err(|message| Diagnostic {
+            parse(path, text).map_err(|message| Diagnostic {
                 path: path.clone(),
                 message,
             })

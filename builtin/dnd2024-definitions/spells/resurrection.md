@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: edf1ef04-81a2-55ba-98f0-e742a7834c1f
 splat_kind: spell
 splat_key: dnd2024:spells/resurrection
 splat_name: Resurrection
-splat_origin:
-  key: dnd2024:reference/spell/resurrection
+splat_origin: dnd2024:reference/spell/resurrection
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 158, 159
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 158, 159, https://www.dndbeyond.com/srd
 ---
 
 # Resurrection
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 7 |
+| School | Necromancy |
+| Classes | Bard, Cleric |
+| Casting Time | 1 hour |
+| Range |  |
+| Components | V, S, M (a diamond worth 1,000+ GP, which the spell consumes) |
+| Duration | Instantaneous |
+
 
 ## Source text
 
@@ -36,37 +47,11 @@ Casting this spell to revive a creature that has been dead for 365 days or longe
 
 Original layout: [[../../srd-5.2.1/pages/158|page 158]], [[../../srd-5.2.1/pages/159|page 159]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 7 ` |
-| ` school ` | ` necromancy ` |
-| ` classes ` | ` ["bard", "cleric"] ` |
-| ` components ` | ` ["verbal", "somatic", "material"] ` |
-| ` concentration ` | ` false ` |
-| ` duration ` | ` Instantaneous ` |
-| ` casting_time ` | ` 1 hour ` |
-| ` ritual ` | ` false ` |
 
-### Range
 
-<!-- splat:values path=splat_spell/range -->
 
-| Field | Value |
-| --- | --- |
-| ` mode ` | ` touch ` |
-
-### Material
-
-<!-- splat:values path=splat_spell/material -->
-
-| Field | Value |
-| --- | --- |
-| ` description ` | ` a diamond worth 1,000+ GP, which the spell consumes ` |
-| ` consumed ` | ` true ` |
 
 ## Rule
 
@@ -125,3 +110,14 @@ recovery:
 | ` prohibit ` | ` cast_spells ` |
 | ` disadvantage ` | ` d20_tests ` |
 | ` until ` | ` caster_long_rest_completed ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_spell_extras -->
+> 
+> ```yaml
+> material:
+>   consumed: true
+> range:
+>   mode: touch
+> ```
+

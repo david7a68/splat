@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 6e0d3e4e-ef3d-50f9-a877-dd7560d45c5a
 splat_kind: rule
 splat_key: dnd2024:rules/warlock_as_a_multiclass_character
 splat_name: As a Multiclass Character
-splat_origin:
-  key: dnd2024:reference/pages/070
+splat_origin: dnd2024:reference/pages/070
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 70
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 70, https://www.dndbeyond.com/srd
 ---
 
 # As a Multiclass Character

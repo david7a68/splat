@@ -1,34 +1,60 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 5df7adb8-5218-5c6f-b1ff-7232ef3527bc
 splat_kind: creature
 splat_key: dnd2024:creatures/tiger
 splat_name: Tiger
-splat_origin:
-  key: dnd2024:reference/creature/tiger
+splat_origin: dnd2024:reference/creature/tiger
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 363
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 363, https://www.dndbeyond.com/srd
 ---
 
 # Tiger
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Large |
+| Type | Beast |
+| Alignment | Unaligned |
+| Armor Class | 13 |
+| Hit Points | 30 (4d10 + 8) |
+| Initiative | +3 (13) |
+| Speed | 40 ft. |
+| Challenge | 1 (XP 200; PB +2) |
+| Skills | Perception +3, Stealth +7 |
+| Senses | Darkvision 60 ft.; Passive Perception 13 |
+| Languages | None |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 17 | +3 | +3 |
+| Dex | 16 | +3 | +3 |
+| Con | 14 | +2 | +2 |
+| Int | 3 | -4 | -4 |
+| Wis | 12 | +1 | +1 |
+| Cha | 8 | -1 | -1 |
+
 
 ## Source text
 
 <!-- SRD page 363 -->
 
-Large Beast, Unaligned\
-AC 13  Initiative +3 (13)\
-HP 30 (4d10 + 8)\
-Speed 40 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 17 +3 +3 Dex 16 +3 +3 Con 14 +2 +2\
-Int 3 −4 −4 Wis 12 +1 +1 Cha 8 −1 −1\
-Skills Perception +3, Stealth +7\
-Senses Darkvision 60 ft.; Passive Perception 13\
-Languages None\
-CR 1 (XP 200; PB +2)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Large Beast, Unaligned\
+> AC 13  Initiative +3 (13)\
+> HP 30 (4d10 + 8)\
+> Speed 40 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 17 +3 +3 Dex 16 +3 +3 Con 14 +2 +2\
+> Int 3 −4 −4 Wis 12 +1 +1 Cha 8 −1 −1\
+> Skills Perception +3, Stealth +7\
+> Senses Darkvision 60 ft.; Passive Perception 13\
+> Languages None\
+> CR 1 (XP 200; PB +2)
+
 
 ### Actions
 
@@ -40,45 +66,11 @@ Nimble Escape. The tiger takes the Disengage or Hide action.
 
 Original layout: [[../../srd-5.2.1/pages/363|page 363]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` large ` |
-| ` type ` | ` beast ` |
-| ` alignment ` | ` Unaligned ` |
-| ` movement_text ` | ` 40 ft. ` |
-| ` skills_text ` | ` Perception +3, Stealth +7 ` |
-| ` senses_text ` | ` Darkvision 60 ft.; Passive Perception 13 ` |
-| ` languages_text ` | ` None ` |
-| ` cr_text ` | ` 1 (XP 200; PB +2) ` |
-| ` hit_points_text ` | ` 30 (4d10 + 8) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 17 ` | ` 3 ` |
-| ` Dexterity ` | ` 16 ` | ` 3 ` |
-| ` Constitution ` | ` 14 ` | ` 2 ` |
-| ` Intelligence ` | ` 3 ` | ` -4 ` |
-| ` Wisdom ` | ` 12 ` | ` 1 ` |
-| ` Charisma ` | ` 8 ` | ` -1 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 13 ` |  |
-| ` max_hp ` | ` 30 ` |  |
-| ` initiative ` | ` 3 ` |  |
-| ` speed ` | ` 40 ` | ` ft ` |
 
 ## Health
 

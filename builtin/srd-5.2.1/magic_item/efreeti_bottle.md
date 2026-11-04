@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "1722cb38-5538-56b1-a75b-c89cc45e25ed"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/magic_item/efreeti_bottle"
 splat_name: "Efreeti Bottle"
-splat_reference: {"source": "SRD 5.2.1", "category": "magic_item", "pages": [220], "executable": false}
+splat_pages:
+- 220
 ---
 
 # Efreeti Bottle
@@ -24,3 +25,13 @@ The first time the bottle is opened, the GM rolls on the following table to dete
 | 10 | The efreeti understands your languages and can cast Wish once for you. It disappears when it grants the wish or after 1 hour, and the bottle loses its magic. |
 
 Original layout: [[../pages/220|page 220]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: magic_item
+> executable: false
+> ```
+

@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 8d21c974-b51d-560a-8d82-c9d24c4dd0a8
 splat_kind: rule
 splat_key: dnd2024:rules/combat_mounted_combat
 splat_name: Mounted Combat
-splat_origin:
-  key: dnd2024:reference/pages/015
+splat_origin: dnd2024:reference/pages/015
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 15
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 15, https://www.dndbeyond.com/srd
 ---
 
 # Mounted Combat

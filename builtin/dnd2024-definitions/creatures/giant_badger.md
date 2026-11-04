@@ -1,35 +1,62 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 3bc35e96-47b1-52f6-8872-2790bffce358
 splat_kind: creature
 splat_key: dnd2024:creatures/giant_badger
 splat_name: Giant Badger
-splat_origin:
-  key: dnd2024:reference/creature/giant_badger
+splat_origin: dnd2024:reference/creature/giant_badger
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 349
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 349, https://www.dndbeyond.com/srd
 ---
 
 # Giant Badger
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Medium |
+| Type | Beast |
+| Alignment | Unaligned |
+| Armor Class | 13 |
+| Hit Points | 15 (2d8 + 6) |
+| Initiative | +0 (10) |
+| Speed | 30 ft., Burrow 10 ft. |
+| Challenge | 1/4 (XP 50; PB +2) |
+| Skills | Perception +3 |
+| Senses | Darkvision 60 ft.; Passive Perception 13 |
+| Languages | None |
+| Resistances | Poison |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 13 | +1 | +1 |
+| Dex | 10 | +0 | +0 |
+| Con | 17 | +3 | +3 |
+| Int | 2 | -4 | -4 |
+| Wis | 12 | +1 | +1 |
+| Cha | 5 | -3 | -3 |
+
 
 ## Source text
 
 <!-- SRD page 349 -->
 
-Medium Beast, Unaligned\
-AC 13  Initiative +0 (10)\
-HP 15 (2d8 + 6)\
-Speed 30 ft., Burrow 10 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 13 +1 +1 Dex 10 +0 +0 Con 17 +3 +3\
-Int 2 −4 −4 Wis 12 +1 +1 Cha 5 −3 −3\
-Skills Perception +3\
-Resistances Poison\
-Senses Darkvision 60 ft.; Passive Perception 13\
-Languages None\
-CR 1/4 (XP 50; PB +2)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Medium Beast, Unaligned\
+> AC 13  Initiative +0 (10)\
+> HP 15 (2d8 + 6)\
+> Speed 30 ft., Burrow 10 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 13 +1 +1 Dex 10 +0 +0 Con 17 +3 +3\
+> Int 2 −4 −4 Wis 12 +1 +1 Cha 5 −3 −3\
+> Skills Perception +3\
+> Resistances Poison\
+> Senses Darkvision 60 ft.; Passive Perception 13\
+> Languages None\
+> CR 1/4 (XP 50; PB +2)
+
 
 ### Actions
 
@@ -37,47 +64,11 @@ Bite. Melee Attack Roll: +3, reach 5 ft. Hit: 6 (2d4 + 1) Piercing damage.
 
 Original layout: [[../../srd-5.2.1/pages/349|page 349]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` medium ` |
-| ` type ` | ` beast ` |
-| ` alignment ` | ` Unaligned ` |
-| ` movement_text ` | ` 30 ft., Burrow 10 ft. ` |
-| ` skills_text ` | ` Perception +3 ` |
-| ` resistances_text ` | ` Poison ` |
-| ` senses_text ` | ` Darkvision 60 ft.; Passive Perception 13 ` |
-| ` languages_text ` | ` None ` |
-| ` cr_text ` | ` 1/4 (XP 50; PB +2) ` |
-| ` hit_points_text ` | ` 15 (2d8 + 6) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 13 ` | ` 1 ` |
-| ` Dexterity ` | ` 10 ` | ` 0 ` |
-| ` Constitution ` | ` 17 ` | ` 3 ` |
-| ` Intelligence ` | ` 2 ` | ` -4 ` |
-| ` Wisdom ` | ` 12 ` | ` 1 ` |
-| ` Charisma ` | ` 5 ` | ` -3 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 13 ` |  |
-| ` max_hp ` | ` 15 ` |  |
-| ` initiative ` | ` 0 ` |  |
-| ` speed ` | ` 30 ` | ` ft ` |
-| ` burrow_speed ` | ` 10 ` | ` ft ` |
 
 ## Health
 
@@ -177,3 +168,13 @@ hit:
 | ` provider ` | ` caller ` |
 | ` required_facts ` | ` ["distance", "area_membership", "visibility", "occupancy", "movement_path"] ` |
 | ` validate_against_typed_constraints ` | ` true ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_stats_extras -->
+> 
+> ```yaml
+> burrow_speed:
+>   unit: ft
+>   value: 10
+> ```
+

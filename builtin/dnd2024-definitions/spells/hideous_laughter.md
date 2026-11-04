@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 0b5651a1-6a64-5e9f-89f9-f603fd79b44a
 splat_kind: spell
 splat_key: dnd2024:spells/hideous_laughter
 splat_name: Hideous Laughter
-splat_origin:
-  key: dnd2024:reference/spell/hideous_laughter
+splat_origin: dnd2024:reference/spell/hideous_laughter
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 140
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 140, https://www.dndbeyond.com/srd
 ---
 
 # Hideous Laughter
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 1 |
+| School | Enchantment |
+| Classes | Bard, Warlock, Wizard |
+| Casting Time | Action |
+| Range | 30 feet |
+| Components | V, S, M (a tart and a feather) |
+| Duration | Concentration, up to 1 minute |
+
 
 ## Source text
 
@@ -32,37 +43,11 @@ Using a Higher-Level Spell Slot. You can target one additional creature for each
 
 Original layout: [[../../srd-5.2.1/pages/140|page 140]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 1 ` |
-| ` school ` | ` enchantment ` |
-| ` classes ` | ` ["bard", "warlock", "wizard"] ` |
-| ` components ` | ` ["verbal", "somatic", "material"] ` |
-| ` concentration ` | ` true ` |
-| ` duration ` | ` Concentration, up to 1 minute ` |
-| ` casting_time ` | ` Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
 
-<!-- splat:values path=splat_spell/range -->
 
-| Field | Value |
-| --- | --- |
-| ` feet ` | ` 30 ` |
-
-### Material
-
-<!-- splat:values path=splat_spell/material -->
-
-| Field | Value |
-| --- | --- |
-| ` description ` | ` a tart and a feather ` |
-| ` consumed ` | ` false ` |
 
 ## Rule
 
@@ -125,3 +110,12 @@ success:
 | ` events ` | ` ["target_turn_end", "target_takes_damage"] ` |
 | ` advantage_if ` | ` triggered_by_damage ` |
 | ` success ` | ` end_spell ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_spell_extras -->
+> 
+> ```yaml
+> material:
+>   consumed: false
+> ```
+

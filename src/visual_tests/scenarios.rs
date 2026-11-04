@@ -258,36 +258,15 @@ pub mod library_author {
             saved,
             "Ctrl+S saves a dirty note, as artifacts/ui-review.md says".into(),
         );
-        d.observe_both(
-            "H1 Library save",
-            "One named Undo stays beside the Library save",
-            |d| {
-                d.has("Undo save")
-                    && d.nodes()
-                        .iter()
-                        .filter(|node| node.in_view() && node.name.starts_with("Undo"))
-                        .count()
-                        == 1
-            },
-        );
-        d.state("saved-with-ctrl-s", Sizes::All);
-        d.goal("save with the keyboard");
-
-        let on_disk = d.root.join(NOTE_FILE);
-        d.click("Undo save");
-        d.expect(UNSAVED_NOTE);
-        assert!(d.editor_text().unwrap().contains(DRAFT_WORDS));
+        d.expect("Saved");
         assert!(
-            !std::fs::read_to_string(&on_disk)
+            std::fs::read_to_string(d.root.join(NOTE_FILE))
                 .unwrap()
                 .contains(DRAFT_WORDS)
         );
-        d.state("undo-save-keeps-unsaved-draft", Sizes::All);
-        d.click(DISCARD);
-        d.expect(UNDO_DISCARD);
-        d.click(UNDO_DISCARD);
-        assert!(d.editor_text().unwrap().contains(DRAFT_WORDS));
-        d.click(SAVE);
+        d.expect_same("A normal save keeps the editor layout; the save word and typed sentence are the only changes.");
+        d.state("saved-with-ctrl-s", Sizes::All);
+        d.goal("save with the keyboard");
 
         // External change: the draft stays, and each way out is a control that works.
         d.begin_task();
@@ -305,11 +284,6 @@ pub mod library_author {
                 && !d.has(SHOW_DISK)
                 && d.visible_text("YOUR DRAFT"),
             "An external change keeps the draft's words, and offers overwrite, reload and the disk version",
-        );
-        d.observe_both(
-            "H1 Library conflict",
-            "A disk conflict clears the saved-layout notice and Undo save",
-            |d| !d.visible_text("saved in the new layout.") && !d.has("Undo save"),
         );
         d.state("save-conflict", Sizes::All);
         d.goal("handle a failed save");
@@ -776,7 +750,7 @@ pub mod campaign_content {
 
         std::fs::write(
             d.root.join(BROKEN_NOTE),
-            "---\nsplat_schema: 1\nsplat_id: [\n---\n",
+            "---\nsplat_schema: 2\nsplat_id: [\n---\n",
         )
         .expect("write an invalid note");
         go_campaign(d);
@@ -6053,19 +6027,14 @@ pub mod session_recording {
         d.click(NAV_SESSIONS);
         d.click_containing("Add to timeline: Rest at the mill");
         d.expect("On the timeline");
-        d.observe_both(
-            "H1 recording add",
-            "The recording row owns one Undo and names Timeline.md",
-            |d| {
-                d.visible_text("Timeline.md now uses the new layout.")
-                    && d.has("Undo add")
-                    && d.nodes()
-                        .iter()
-                        .filter(|node| node.in_view() && node.name.starts_with("Undo"))
-                        .count()
-                        == 1
-            },
-        );
+        d.observe_both("H1 recording add", "The recording row owns one Undo", |d| {
+            d.has("Undo add")
+                && d.nodes()
+                    .iter()
+                    .filter(|node| node.in_view() && node.name.starts_with("Undo"))
+                    .count()
+                    == 1
+        });
         d.state("marker-added", Sizes::All);
         d.observe(
             "T11.7",
@@ -7798,10 +7767,10 @@ pub mod npc_in_encounter {
             .unwrap()
             .entry
             .id;
-        let text = format!(
+        let text = splat::content::formats::convert("Rook.md", &format!(
             "---\nsplat_schema: 1\nsplat_id: {}\nsplat_kind: world\nsplat_name: Rook Ambry\nsplat_world:\n  type: npc\n  creature: {{id: {guard}}}\n---\n",
             uuid::Uuid::new_v4()
-        );
+        )).unwrap();
         std::fs::create_dir_all(campaign.path.join("NPCs")).unwrap();
         crate::library::write_note(&campaign.path, "NPCs/Rook Ambry.md", None, &text).unwrap();
         go_encounters(d);
@@ -7934,7 +7903,7 @@ pub mod share_to_package {
             .find(|entry| entry.name == "Captain Varra")
             .unwrap();
         let text = crate::library::note_text("Watch Orders", "rule", None);
-        let text = crate::content_workspace::patch_fields(
+        let text = splat::content::formats::patch_model(
             &text,
             &[(
                 "splat_requires",

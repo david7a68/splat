@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 2335a66c-5d9e-568f-bcc0-994e8ea396d0
 splat_kind: item
 splat_key: dnd2024:items/ring_of_three_wishes
 splat_name: Ring of Three Wishes
-splat_origin:
-  key: dnd2024:reference/magic_item/ring_of_three_wishes
+splat_origin: dnd2024:reference/magic_item/ring_of_three_wishes
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 239
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 239, https://www.dndbeyond.com/srd
 ---
 
 # Ring of Three Wishes
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Ring |
+| Rarity | Legendary |
+| Attunement | No |
+
 
 ## Source text
 
@@ -24,22 +31,9 @@ While wearing this ring, you can expend 1 of its 3 charges to cast Wish from it.
 
 Original layout: [[../../srd-5.2.1/pages/239|page 239]].
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` ring ` |
-| ` rarity ` | ` legendary ` |
 
-### Equipment
-
-<!-- splat:values path=splat_item/equipment -->
-
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` none ` |
 
 ## Rule
 

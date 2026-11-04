@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "68224839-de13-51e4-b752-e733b4ff5f53"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/giant_toad"
 splat_name: "Giant Toad"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [354], "executable": false}
+splat_pages:
+- 354
 ---
 
 # Giant Toad
@@ -35,3 +36,13 @@ Bite. Melee Attack Roll: +4, reach 5 ft. Hit: 5 (1d6 + 2) Piercing damage plus 5
 Swallow. The toad swallows a Medium or smaller target it is grappling. While swallowed, the target isn’t Grappled but has the Blinded and Restrained conditions, and it has Total Cover against attacks and other effects outside the toad. In addition, the target takes 10 (3d6) Acid damage at the end of each of the toad’s turns. The toad can have only one target swallowed at a time, and it can’t use Bite while it has a swallowed target. If the toad dies, a swallowed creature is no longer Restrained and can escape from the corpse using 5 feet of movement, exiting with the Prone condition.
 
 Original layout: [[../pages/354|page 354]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

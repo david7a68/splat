@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "283a4c43-9de8-5dce-9d5c-4d000fc2b7cc"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/bugbear_stalker"
 splat_name: "Bugbear Stalker"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [271], "executable": false}
+splat_pages:
+- 271
 ---
 
 # Bugbear Stalker
@@ -41,3 +42,13 @@ Morningstar. Melee Attack Roll: +5 (with Advantage if the target is Grappled by 
 Quick Grapple. Dexterity Saving Throw: DC 13, one Medium or smaller creature the bugbear can see within 10 feet. Failure: The target has the Grappled condition (escape DC 13).
 
 Original layout: [[../pages/271|page 271]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

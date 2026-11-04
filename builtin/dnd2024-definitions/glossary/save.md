@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 93a1c35a-23b1-5787-be7d-13ae180b0dd1
 splat_kind: rule
 splat_key: dnd2024:glossary/save
 splat_name: Save
-splat_origin:
-  key: dnd2024:reference/glossary/save
+splat_origin: dnd2024:reference/glossary/save
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 187
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 187, https://www.dndbeyond.com/srd
 ---
 
 # Save

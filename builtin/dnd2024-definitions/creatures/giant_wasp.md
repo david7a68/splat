@@ -1,33 +1,58 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 31472007-19a6-5177-82fe-878e11e1740f
 splat_kind: creature
 splat_key: dnd2024:creatures/giant_wasp
 splat_name: Giant Wasp
-splat_origin:
-  key: dnd2024:reference/creature/giant_wasp
+splat_origin: dnd2024:reference/creature/giant_wasp
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 354, 355
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 354, 355, https://www.dndbeyond.com/srd
 ---
 
 # Giant Wasp
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Medium |
+| Type | Beast |
+| Alignment | Unaligned |
+| Armor Class | 13 |
+| Hit Points | 22 (5d8) |
+| Initiative | +2 (12) |
+| Speed | 10 ft., Fly 50 ft. |
+| Challenge | 1/2 (XP 100; PB +2) |
+| Senses | Passive Perception 10 |
+| Languages | None |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 10 | +0 | +0 |
+| Dex | 14 | +2 | +2 |
+| Con | 10 | +0 | +0 |
+| Int | 1 | -5 | -5 |
+| Wis | 10 | +0 | +0 |
+| Cha | 3 | -4 | -4 |
+
 
 ## Source text
 
 <!-- SRD page 354 -->
 
-Medium Beast, Unaligned\
-AC 13  Initiative +2 (12)\
-HP 22 (5d8)\
-Speed 10 ft., Fly 50 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 10 +0 +0 Dex 14 +2 +2 Con 10 +0 +0\
-Int 1 −5 −5 Wis 10 +0 +0 Cha 3 −4 −4\
-Senses Passive Perception 10\
-Languages None\
-CR 1/2 (XP 100; PB +2)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Medium Beast, Unaligned\
+> AC 13  Initiative +2 (12)\
+> HP 22 (5d8)\
+> Speed 10 ft., Fly 50 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 10 +0 +0 Dex 14 +2 +2 Con 10 +0 +0\
+> Int 1 −5 −5 Wis 10 +0 +0 Cha 3 −4 −4\
+> Senses Passive Perception 10\
+> Languages None\
+> CR 1/2 (XP 100; PB +2)
+
 
 <!-- SRD page 355 -->
 
@@ -41,45 +66,11 @@ Sting. Melee Attack Roll: +4, reach 5 ft. Hit: 5 (1d6 + 2) Piercing damage plus 
 
 Original layout: [[../../srd-5.2.1/pages/354|page 354]], [[../../srd-5.2.1/pages/355|page 355]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` medium ` |
-| ` type ` | ` beast ` |
-| ` alignment ` | ` Unaligned ` |
-| ` movement_text ` | ` 10 ft., Fly 50 ft. ` |
-| ` senses_text ` | ` Passive Perception 10 ` |
-| ` languages_text ` | ` None ` |
-| ` cr_text ` | ` 1/2 (XP 100; PB +2) ` |
-| ` hit_points_text ` | ` 22 (5d8) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 10 ` | ` 0 ` |
-| ` Dexterity ` | ` 14 ` | ` 2 ` |
-| ` Constitution ` | ` 10 ` | ` 0 ` |
-| ` Intelligence ` | ` 1 ` | ` -5 ` |
-| ` Wisdom ` | ` 10 ` | ` 0 ` |
-| ` Charisma ` | ` 3 ` | ` -4 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 13 ` |  |
-| ` max_hp ` | ` 22 ` |  |
-| ` initiative ` | ` 2 ` |  |
-| ` speed ` | ` 10 ` | ` ft ` |
-| ` fly_speed ` | ` 50 ` | ` ft ` |
 
 ## Health
 
@@ -220,3 +211,13 @@ geometry_assumptions:
   - plane
   - form_appearance
 ```
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_stats_extras -->
+> 
+> ```yaml
+> fly_speed:
+>   unit: ft
+>   value: 50
+> ```
+

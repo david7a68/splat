@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "2b3d45d6-3978-514d-aca7-61e458e06f02"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/swarm_of_ravens"
 splat_name: "Swarm of Ravens"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [362], "executable": false}
+splat_pages:
+- 362
 ---
 
 # Swarm of Ravens
@@ -36,3 +37,13 @@ Beaks. Melee Attack Roll: +4, reach 5 ft. Hit: 5 (1d6 + 2) Piercing damage, or 2
 Cacophony (Recharge 6). Wisdom Saving Throw: DC 10, one creature in the swarm’s space. Failure: The target has the Deafened condition until the start of the swarm’s next turn. While Deafened, the target also has Disadvantage on ability checks and attack rolls.
 
 Original layout: [[../pages/362|page 362]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

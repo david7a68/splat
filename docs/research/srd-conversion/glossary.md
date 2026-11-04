@@ -3,7 +3,7 @@ format: 1
 source: SRD 5.2.1
 definitions:
   dnd2024:glossary/ability_check:
-    source_sha256: d454758d3928c846aad57bd648e6149a9e5afa9ce608742e9e3c443e81e24b01
+    source_sha256: fa99356ed047671a24df3ade83d7b39fa39a46453c9b1c9466e48c0fb716c57b
     disposition: specified
     fields:
       splat_rule:
@@ -39,7 +39,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 176; builtin/srd-5.2.1/glossary/ability_check.md
   dnd2024:glossary/ability_score_and_modifier:
-    source_sha256: ccf63b312c8ff8dc27bdd53c166466e7c3cd7b7c91eab374975261ea3695b004
+    source_sha256: 955629953247ce620f501330b37ccafaa59ca9c692646d9c700c6c066272e9d8
     disposition: specified
     fields:
       splat_rule:
@@ -69,7 +69,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 176; builtin/srd-5.2.1/glossary/ability_score_and_modifier.md
   dnd2024:glossary/action:
-    source_sha256: 372ed8e77309a2bc9f93c47358947ef317bc897a2f45aa3e3b61c6969adc55bc
+    source_sha256: 4cd800fb70347d48d12b2907718d0606cb035ae6c8ed69c71abc449b6ba80041
     disposition: specified
     fields:
       splat_rule:
@@ -111,7 +111,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 176; builtin/srd-5.2.1/glossary/action.md
   dnd2024:glossary/advantage:
-    source_sha256: 896a872e141dce120ec01899bb26ef047b324c2b783525ceeba8a075d15c4c6a
+    source_sha256: 7ed18e103f3853125922490fae743da064bf665c079e566fa4e8288f44d20d69
     disposition: specified
     fields:
       splat_rule:
@@ -149,14 +149,14 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 176; builtin/srd-5.2.1/glossary/advantage.md
   dnd2024:glossary/adventure:
-    source_sha256: 9c64a573dff9069fda2bac1c0765cbe56016f792b7c4a3e0434b45871f3d1292
+    source_sha256: ca4fe87bc18e46803a21419882c092d2a046674e9a8f1be3b611f922b4597a42
     disposition: informational
     fields: {}
     requires: []
     citations:
     - SRD 5.2.1 pp. 176; builtin/srd-5.2.1/glossary/adventure.md
   dnd2024:glossary/alignment:
-    source_sha256: e779f409f9389f2bc699c372e30df4999feb99e4566162d0685be3a3c5730bf8
+    source_sha256: 96b2ddea5b15aec0cacbd44cc3a799ae2489148a1722c9855e3776cf5f32af45
     disposition: specified
     fields:
       splat_rule:
@@ -189,7 +189,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 176; builtin/srd-5.2.1/glossary/alignment.md
   dnd2024:glossary/ally:
-    source_sha256: 80ff871ac60e811ae6c64a1725db00306b16ee76dbba5e3124c223bc4b1c9554
+    source_sha256: cbcfc2896436c19a3240ca3fe22be37f791c5c478335fa5fff33994bfbc5f27e
     disposition: specified
     fields:
       splat_rule:
@@ -224,7 +224,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 176; builtin/srd-5.2.1/glossary/ally.md
   dnd2024:glossary/area_of_effect:
-    source_sha256: 9650a5fa856cf12161e499c28260a18fb4aa3312db555cac19b12f26ac2a7055
+    source_sha256: 2cff4adf7ddbdca98021cea84e21bac18a67e9d7f0bae610a9bdee6ef9439c07
     disposition: specified
     fields:
       splat_rule:
@@ -271,7 +271,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 177; builtin/srd-5.2.1/glossary/area_of_effect.md
   dnd2024:glossary/armor_class:
-    source_sha256: 80b442493f912d85b0fa4b3472d3bcfae4ace74771097a416a882782f6768616
+    source_sha256: cbea842053ef48fdc7e21f7e09f32af128b7bc98d2ec42fba3196fb32c0e760c
     disposition: specified
     fields:
       splat_rule:
@@ -305,7 +305,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 177; builtin/srd-5.2.1/glossary/armor_class.md
   dnd2024:glossary/armor_training:
-    source_sha256: 28995b4bb44238bba3e2e46176ddeede241e48e0255bd805f31515140f338feb
+    source_sha256: f2614bc1429a01ed78f07352f5b44b66b3d2a3e1a50550460830c98dba488948
     disposition: specified
     fields:
       splat_rule:
@@ -348,7 +348,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 177; builtin/srd-5.2.1/glossary/armor_training.md
   dnd2024:glossary/attack_action:
-    source_sha256: 3cbefc9142f5b358f0bb91862c9ba8e91ebf71ec559fff3f51858afee1b105c4
+    source_sha256: dc2ec93416127de9e1cab11b4e7e93179b94cd8cc5f765e5c6187f67ab0e2541
     disposition: specified
     fields:
       splat_rule:
@@ -412,7 +412,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 177; builtin/srd-5.2.1/glossary/attack_action.md
   dnd2024:glossary/attack_roll:
-    source_sha256: 0bba4d2e73a76f80d0824ca5d40b5cd3ada7af94801e056297d6cc75d542affa
+    source_sha256: c64e4e1a9b83571949597eed7af3abdae97cdc916d878b25340bccb2f8c0cd88
     disposition: specified
     fields:
       splat_rule:
@@ -442,7 +442,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 177; builtin/srd-5.2.1/glossary/attack_roll.md
   dnd2024:glossary/attitude:
-    source_sha256: b9b4fc8dd85e53a41303c6547fcb63a9030310372cae8d4ab2b7900d7411b9e7
+    source_sha256: 999ad916454b76ecc0fe4ff59b5e966e2416304c831e79a975088977d19a2415
     disposition: specified
     fields:
       splat_rule:
@@ -471,7 +471,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 177; builtin/srd-5.2.1/glossary/attitude.md
   dnd2024:glossary/attunement:
-    source_sha256: 33488ee5ab707eec5b9bde46fc999c7f3f793d0218c2f1e0f9e7cc460ab6289b
+    source_sha256: ad35d382353e53a04ef21677d60bc88a74f88887f61f91707e2a0f1fb4a34a75
     disposition: specified
     fields:
       splat_rule:
@@ -499,7 +499,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 177; builtin/srd-5.2.1/glossary/attunement.md
   dnd2024:glossary/blinded_condition:
-    source_sha256: 17dcd9c9da1141f3e929f365a17310a2e0c050946421096e030a2629969e1f7a
+    source_sha256: 7e115e1b6e7d695d242d5f811a127743c527f1e073ac34da52f70ba83e742975
     disposition: specified
     fields:
       splat_rule:
@@ -533,7 +533,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 177; builtin/srd-5.2.1/glossary/blinded_condition.md
   dnd2024:glossary/blindsight:
-    source_sha256: f645de72da7c10c73d06629ae005b1064de7bbbebf1eeb2a3d386fe0930d8695
+    source_sha256: decf8dad4f665ef326519425939e0b094a49183fdeebda44966a379b12fd0f5f
     disposition: specified
     fields:
       splat_rule:
@@ -565,7 +565,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 177; builtin/srd-5.2.1/glossary/blindsight.md
   dnd2024:glossary/bloodied:
-    source_sha256: f79d51ec3ad677a74d5e95857e67af09b1dbe8bf814f0a813a44514b55072500
+    source_sha256: 88bc142c7ad1e377f230e3ca3cec0f6d9f617d8400377fdf0a7e28c88523e9d7
     disposition: specified
     fields:
       splat_rule:
@@ -595,7 +595,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 177; builtin/srd-5.2.1/glossary/bloodied.md
   dnd2024:glossary/bonus_action:
-    source_sha256: d2121c27d8bdc04ce42404313090db2eb70b12bf52fb0a8279c288a5c316f1a9
+    source_sha256: 0eb2d6370176ad02396148f3d9cf73ac0a26c7ef080652284037fa8cd77e20ef
     disposition: specified
     fields:
       splat_rule:
@@ -625,7 +625,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 177; builtin/srd-5.2.1/glossary/bonus_action.md
   dnd2024:glossary/breaking_objects:
-    source_sha256: b7537562ee32250148e27a8a3c531a7bbee523c11c70ab6a87766a19333ef3fb
+    source_sha256: a40662a4ea00320220c627b44620044d77694b47c73fceba295e3a4a338a8eac
     disposition: specified
     fields:
       splat_rule:
@@ -758,7 +758,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 177, 178; builtin/srd-5.2.1/glossary/breaking_objects.md
   dnd2024:glossary/bright_light:
-    source_sha256: 41f0281e4398a39857dd5ba5279f0eb24f080000621736ae411acd366ff1772c
+    source_sha256: f17af6d918f0a7ab83afb459739293328e91bef0750b0c87fc51b02bacb0b83a
     disposition: specified
     fields:
       splat_rule:
@@ -780,7 +780,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 178; builtin/srd-5.2.1/glossary/bright_light.md
   dnd2024:glossary/burning_hazard:
-    source_sha256: 6e6198c3cc210decca2f66bf4897c1a8418d8c2c4c895ad25072de9441c33f14
+    source_sha256: 7e2b93a344b32e9a73bafaab9a21bada84cdd56c1d1d7b1839dd23de0cd7ec73
     disposition: specified
     fields:
       splat_rule:
@@ -828,7 +828,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 178; builtin/srd-5.2.1/glossary/burning_hazard.md
   dnd2024:glossary/burrow_speed:
-    source_sha256: 2cc4e419138d24b46c09bcac6eaab03db104b266b385fbf9bd46da966c544c91
+    source_sha256: a5ed4a250e48ac7195b67a3357f340291c8e6a769c0aacce44ea0bcf4a4c0dce
     disposition: specified
     fields:
       splat_rule:
@@ -862,14 +862,14 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 178; builtin/srd-5.2.1/glossary/burrow_speed.md
   dnd2024:glossary/campaign:
-    source_sha256: 9ddc2a8e9b421278a7fb7c624e3b1b95d89fdbeac534e27589ca675a4f4abf44
+    source_sha256: 1e34272dbc819b3642d3581794b51464cf3ef7fbe93f0b33552cf75436623a0d
     disposition: informational
     fields: {}
     requires: []
     citations:
     - SRD 5.2.1 pp. 178; builtin/srd-5.2.1/glossary/campaign.md
   dnd2024:glossary/cantrip:
-    source_sha256: 36bc27d308d64de7ae861bc730d031085557de293b2156061a2d67dbfcc2e358
+    source_sha256: c5165558a7f426f5abbbca8a4bda63a1cce8749221367800e90750a8834c1c14
     disposition: specified
     fields:
       splat_rule:
@@ -894,7 +894,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 178; builtin/srd-5.2.1/glossary/cantrip.md
   dnd2024:glossary/carrying_capacity:
-    source_sha256: 3d07c4e253841538e9c053487f48e1c564bea1e1efbe831af616656fb6ce0be1
+    source_sha256: f1fffebbf3565eb743ed8a81f47932427853582187da4e306a873578b241ab75
     disposition: specified
     fields:
       splat_rule:
@@ -940,7 +940,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 178; builtin/srd-5.2.1/glossary/carrying_capacity.md
   dnd2024:glossary/challenge_rating:
-    source_sha256: cc0c11ee7c0ec528ed1af21026054048a99ceb37480245fee04fe6104acac1b3
+    source_sha256: 98809824128f1786c273d4180b33a91ee7087d676c8dafd59ca303cb59490619
     disposition: specified
     fields:
       splat_rule:
@@ -971,14 +971,14 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 178; builtin/srd-5.2.1/glossary/challenge_rating.md
   dnd2024:glossary/character_sheet:
-    source_sha256: 80fd642fa5ace1dfea95f7fde1f17ea6bc4ef40dd6b15e9c26416e3ee50084fa
+    source_sha256: c690fc7673f580a47188a5f218a16ebce3ad218ae4904a2327cf9ee505cac816
     disposition: informational
     fields: {}
     requires: []
     citations:
     - SRD 5.2.1 pp. 178; builtin/srd-5.2.1/glossary/character_sheet.md
   dnd2024:glossary/charmed_condition:
-    source_sha256: cece6b27f7f0b6eca611083a408ff8f55b5d6e0e914f53d25a421f88f962035d
+    source_sha256: 6fbfd1c480c1b88e68861e63ca6c6a3c0f2f214f491bb801e1e2aa6fe2fbd31b
     disposition: specified
     fields:
       splat_rule:
@@ -1012,7 +1012,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 178; builtin/srd-5.2.1/glossary/charmed_condition.md
   dnd2024:glossary/climb_speed:
-    source_sha256: 0ec438a9fc566d36668ad7500216e00dc36f2502e075c4283af9cd0dc1742f5c
+    source_sha256: a0847713257bb642e015e9e57167f493595c0049f654b0a34286d40ecaa2c809
     disposition: specified
     fields:
       splat_rule:
@@ -1037,7 +1037,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 179; builtin/srd-5.2.1/glossary/climb_speed.md
   dnd2024:glossary/climbing:
-    source_sha256: 437edfd3c8b48bac0133f06d33cc247e947cd640e906cb7f420a4aa6026ccb9d
+    source_sha256: b5266117e9ba1d969c0f90aec315dad0332f4230d97921da4e7d0d480551e0a0
     disposition: specified
     fields:
       splat_rule:
@@ -1086,7 +1086,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 178, 179; builtin/srd-5.2.1/glossary/climbing.md
   dnd2024:glossary/concentration:
-    source_sha256: 46a6661ed1de803944f8e221f230962487e42dd1032267f03f65035915ee9048
+    source_sha256: 662623284a9edd7dc71f37091ba65978a67c59e4cc25b04f43d744feec61dfcd
     disposition: specified
     fields:
       splat_rule:
@@ -1151,7 +1151,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 179; builtin/srd-5.2.1/glossary/concentration.md
   dnd2024:glossary/condition:
-    source_sha256: bd5d47d4347befaba923ededb6e8bcadf99d8caaacd6015ca23d87e5be2ec0b0
+    source_sha256: e47620e834d8a97c8ffd465239407526be258de3feba04a491002ab2d9adff8b
     disposition: specified
     fields:
       splat_rule:
@@ -1194,7 +1194,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 179; builtin/srd-5.2.1/glossary/condition.md
   dnd2024:glossary/cone_area_of_effect:
-    source_sha256: 673748ab4c1f548f56b8bf737f15aa122766a7cb8a6de29ebf8e5557786d714b
+    source_sha256: 71b2172d036bfd1e4ce389b783a61383f452bfa4953ecbd0d407f0540b1f577b
     disposition: specified
     fields:
       splat_rule:
@@ -1240,7 +1240,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 179; builtin/srd-5.2.1/glossary/cone_area_of_effect.md
   dnd2024:glossary/cover:
-    source_sha256: c6cf5ade8bb0e10ecf9ad9be2ce27def18364a960262e0514fc5f682e7fc24f0
+    source_sha256: 7c3ab23e6b63d0449700ae6aa4c1f740c0049bb2f648708802c1963ca0df3a1d
     disposition: specified
     fields:
       splat_rule:
@@ -1277,7 +1277,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 179; builtin/srd-5.2.1/glossary/cover.md
   dnd2024:glossary/crawling:
-    source_sha256: e923817b8306ba40693412498f1894198abb6dd27fed3d223c3af4d3c92105fd
+    source_sha256: c1bcb47c54da41124e6bdaaa0eb75430a2e768965f2584aebe264970847b12c7
     disposition: specified
     fields:
       splat_rule:
@@ -1304,14 +1304,14 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 179; builtin/srd-5.2.1/glossary/crawling.md
   dnd2024:glossary/creature:
-    source_sha256: 8b199d89cc2e86a8c377a2c99749200eb2552767b6f0057a600c7f4da538136d
+    source_sha256: cfac6ca232414ef81c09f72c0848571132c46f471c18ab384d2a271950121c7f
     disposition: informational
     fields: {}
     requires: []
     citations:
     - SRD 5.2.1 pp. 179; builtin/srd-5.2.1/glossary/creature.md
   dnd2024:glossary/creature_type:
-    source_sha256: 0193fe8d8b3f97fa58f406d234775a40cf638dd025644a2edd5f962f70bc6053
+    source_sha256: b567f8fadf2d32c32edd57959c931eded9ba55c622339aa59988af70acb708f2
     disposition: specified
     fields:
       splat_rule:
@@ -1352,7 +1352,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 179; builtin/srd-5.2.1/glossary/creature_type.md
   dnd2024:glossary/critical_hit:
-    source_sha256: 97b84bbd1080fc36fd1d5646daf45539568c02d32882c05178237a9dbc55c3c3
+    source_sha256: 2a3e8644d33f461812490abc45ac5421eb53c6f16b55caf46018228cf3bdbf3a
     disposition: specified
     fields:
       splat_rule:
@@ -1385,7 +1385,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 179; builtin/srd-5.2.1/glossary/critical_hit.md
   dnd2024:glossary/cube_area_of_effect:
-    source_sha256: 8fc072ccd3db4179c9d9c3bd14fe48308053a817579c3a3165dd9d7e89c80b0e
+    source_sha256: 14cf3a8848c8bd7f7e30895579155e17561fd37922c121f17b251e005ca2a9bf
     disposition: specified
     fields:
       splat_rule:
@@ -1427,7 +1427,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 179; builtin/srd-5.2.1/glossary/cube_area_of_effect.md
   dnd2024:glossary/curses:
-    source_sha256: 4766d9a8d6547adf0e167fd31ec21f9892fd64df452b9934eb53cb27a22d8128
+    source_sha256: 26e17afabe84448e6dff9b83338a57f9293cfdbbfddb9beb251814e54b3bddb2
     disposition: specified
     fields:
       splat_rule:
@@ -1463,7 +1463,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 179; builtin/srd-5.2.1/glossary/curses.md
   dnd2024:glossary/cylinder_area_of_effect:
-    source_sha256: 18ebdb799a3df97e4e0d064d15a3cdecabbf9c1bacf0a2015934648f948a3849
+    source_sha256: 8b4441427e2a992cfb9fd6f0fdfb8d513c425967c0842fc15f3590b6c9f60b8d
     disposition: specified
     fields:
       splat_rule:
@@ -1506,7 +1506,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 180; builtin/srd-5.2.1/glossary/cylinder_area_of_effect.md
   dnd2024:glossary/d20_test:
-    source_sha256: 8dcb7b9d20cc1264cc689dee5368ef6cbdc5095ab19fa6213bb9f6aa90c5a342
+    source_sha256: 3b209e986a1277140e1a5fd84aa0969542970a51571bfc1cd6d4917878ab2ba7
     disposition: specified
     fields:
       splat_rule:
@@ -1540,7 +1540,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 180; builtin/srd-5.2.1/glossary/d20_test.md
   dnd2024:glossary/damage:
-    source_sha256: c797fe3292e57fd53edbf7761a0efa0eeffe2845fc767cd2c87d745688fa0d62
+    source_sha256: d2e93bd8c69d34b9a33d61da1fda1a2b2fc377d35e56fb74748ebe6960801979
     disposition: specified
     fields:
       splat_rule:
@@ -1571,7 +1571,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 180; builtin/srd-5.2.1/glossary/damage.md
   dnd2024:glossary/damage_roll:
-    source_sha256: 942e230142da3aefa6c5e53e18180bd0d64dd1cd5e4c34a619f48277c8d96a5a
+    source_sha256: 51f66069039814331c6d13935c65de8f87c2fff171c745bf8e74b225da8cd03a
     disposition: specified
     fields:
       splat_rule:
@@ -1601,7 +1601,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 180; builtin/srd-5.2.1/glossary/damage_roll.md
   dnd2024:glossary/damage_threshold:
-    source_sha256: 68373d9e01b1c0074fae12cc9379f28955f564dc3d95796344fb7435e648dd13
+    source_sha256: 69e079b4d9e0b47a3e347bea3e653b160647679bc999e7760bf19de22447c3bf
     disposition: specified
     fields:
       splat_rule:
@@ -1636,7 +1636,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 180; builtin/srd-5.2.1/glossary/damage_threshold.md
   dnd2024:glossary/damage_types:
-    source_sha256: b38efaccf3ceee411478a7de9fbd51cdfadf8c15fe7873acf78a264c4aff2608
+    source_sha256: b1e45a59decf78e63f3060af1386cbde4b8acde446b49209d828b33d5407197c
     disposition: specified
     fields:
       splat_rule:
@@ -1713,7 +1713,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 180; builtin/srd-5.2.1/glossary/damage_types.md
   dnd2024:glossary/darkness:
-    source_sha256: 8c8eb17d985b4a844c138d78d1ad6051e6004ae415410aa6cdeaaf12de85c2f3
+    source_sha256: 36a6a553a20ddd686d4d8fc6357102e575aca5fe0a145f2345566ca43c0cbe5e
     disposition: specified
     fields:
       splat_rule:
@@ -1736,7 +1736,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 180; builtin/srd-5.2.1/glossary/darkness.md
   dnd2024:glossary/darkvision:
-    source_sha256: d2abb9c89da5449fb84b503ab7242484e562469d4b13af4610a6479587ac351a
+    source_sha256: fbeba4e4d69d31a37a4e0ff8779d4ad2746a88f3f92d8dacf03200d2a42247a0
     disposition: specified
     fields:
       splat_rule:
@@ -1766,7 +1766,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 180; builtin/srd-5.2.1/glossary/darkvision.md
   dnd2024:glossary/dash_action:
-    source_sha256: 5e06e0114f71f1b1346a43fce161c328f96dfe3fb398a0981520fbdf418f26d4
+    source_sha256: 462d6ef6638b908cdf5c203e662bac037c37519ee503d922403ded22483a6a7d
     disposition: specified
     fields:
       splat_rule:
@@ -1798,7 +1798,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 180; builtin/srd-5.2.1/glossary/dash_action.md
   dnd2024:glossary/dead:
-    source_sha256: 969d1dd08379851ab0f8b25c7a017c8a319bb4c18864ffd748c347a0b510e6dc
+    source_sha256: 88f1ac9ec1b9c54d7947763cd68b5cc52c2417fced404b790c76f3bbc03ab2be
     disposition: specified
     fields:
       splat_rule:
@@ -1854,7 +1854,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 180; builtin/srd-5.2.1/glossary/dead.md
   dnd2024:glossary/deafened_condition:
-    source_sha256: 760d98e765ef15032e77bd34b67f4352881ab625b61caae0fd1784d34ecab7a9
+    source_sha256: 76ee58d789013c1355dde4bdc44fae380984abf3f1bcdd1cd731f963389f4e97
     disposition: specified
     fields:
       splat_rule:
@@ -1884,7 +1884,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 181; builtin/srd-5.2.1/glossary/deafened_condition.md
   dnd2024:glossary/death_saving_throw:
-    source_sha256: 088b02d4fbee4f586ef5e0f7c57405263f90d6d5e0528cdc2b0f9735f5b608d7
+    source_sha256: 25abab64e3cc6bfcb0fae16431d42b403297d526bb8caf2b27179730f081317e
     disposition: specified
     fields:
       splat_rule:
@@ -1913,7 +1913,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 181; builtin/srd-5.2.1/glossary/death_saving_throw.md
   dnd2024:glossary/dehydration_hazard:
-    source_sha256: 3a822cb6203feb7a6ba9c650dd871c65067c12d4ddacd8bc9df350841ae18cde
+    source_sha256: 320316bcfc74a2880bdafa626e98d17f7e6f63e399a0452c76e2c4118cfa3ad2
     disposition: specified
     fields:
       splat_rule:
@@ -1962,7 +1962,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 181; builtin/srd-5.2.1/glossary/dehydration_hazard.md
   dnd2024:glossary/difficult_terrain:
-    source_sha256: c262525ea7266a57eca463d81eed83e83004121c7cb74d4304c91f8250e6303e
+    source_sha256: a51be1d3d8cb03c4b73dda390f1799ca23b81624286f0b19ef0b921b39bf7796
     disposition: specified
     fields:
       splat_rule:
@@ -2008,7 +2008,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 181; builtin/srd-5.2.1/glossary/difficult_terrain.md
   dnd2024:glossary/difficulty_class:
-    source_sha256: fb7f616f45a09993db7bec7f7ba30081ccc73c324fcb5bafafac8f4252012df0
+    source_sha256: a9fe720c7d5c5f5f233e5f430167399737fcf0a64f771ad478df906a4e98bae3
     disposition: specified
     fields:
       splat_rule:
@@ -2033,7 +2033,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 181; builtin/srd-5.2.1/glossary/difficulty_class.md
   dnd2024:glossary/dim_light:
-    source_sha256: bbb9ba696f68098c7f89c426bf9886ae748e98e1f081f14344c6eb96dd9c1f57
+    source_sha256: b68185f19a186d672af652600989956bcb4a85ce9382705d6dbb74af42b0c57e
     disposition: specified
     fields:
       splat_rule:
@@ -2056,7 +2056,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 181; builtin/srd-5.2.1/glossary/dim_light.md
   dnd2024:glossary/disadvantage:
-    source_sha256: b2a33c3781029d22f0f53bb0e59a9c02846a370d69b23aa0fcfc7dd251a03275
+    source_sha256: 070e4c0d99c2c5087915ace2efb09b5772c516aa7a9dc256cdba3e12ce66f33d
     disposition: specified
     fields:
       splat_rule:
@@ -2094,7 +2094,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 181; builtin/srd-5.2.1/glossary/disadvantage.md
   dnd2024:glossary/disengage_action:
-    source_sha256: a6f09110e29d3c16e7455cd2101a776b5aacb68fcf221119502480b608be8852
+    source_sha256: ce2f434e18a8e92e55fad7ecc305804d6ca8a1e259164a323e93d0c691eaf0d5
     disposition: specified
     fields:
       splat_rule:
@@ -2122,7 +2122,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 181; builtin/srd-5.2.1/glossary/disengage_action.md
   dnd2024:glossary/dodge_action:
-    source_sha256: 2b65dec7fbd1bb8b7c5a48380b2f1fc435c41e59cd88806d51ef182c4adf9817
+    source_sha256: 124bf2343033129fd7037fca69b382c78e26bc066611dc78a3754c14c1683ae8
     disposition: specified
     fields:
       splat_rule:
@@ -2161,7 +2161,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 181; builtin/srd-5.2.1/glossary/dodge_action.md
   dnd2024:glossary/emanation_area_of_effect:
-    source_sha256: 67d33eef635df651b879ac7681e6864f2c19e958391544f68be2dbceada861c8
+    source_sha256: 5029804616f9dc81dbe159c475846de39e050bc09b1a0d17869a4e119a91a4cd
     disposition: specified
     fields:
       splat_rule:
@@ -2210,14 +2210,14 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 181; builtin/srd-5.2.1/glossary/emanation_area_of_effect.md
   dnd2024:glossary/encounter:
-    source_sha256: 1b928f2c6a1b303eb1a6b9ce11e8a3d41a94018e9f0cc5db4e67c9f1595c5d0c
+    source_sha256: 2c4273c42b77b7a007dd4f163b13977bb38699a923099cd8a4040021fd1d83a2
     disposition: informational
     fields: {}
     requires: []
     citations:
     - SRD 5.2.1 pp. 181; builtin/srd-5.2.1/glossary/encounter.md
   dnd2024:glossary/enemy:
-    source_sha256: 00d57319d25a63a00b52c1a64966307ca6bcd9d7945c4313c6721bf1430b0f3b
+    source_sha256: e5b989c2fbdefce4dfc1c9a30e46a36a55f07ae715828f556fcc074e16fd52b7
     disposition: specified
     fields:
       splat_rule:
@@ -2251,7 +2251,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 181; builtin/srd-5.2.1/glossary/enemy.md
   dnd2024:glossary/exhaustion_condition:
-    source_sha256: a66493fa857fab2741a780008d3ba95e6abc07e9c634d44b19d0658a36565687
+    source_sha256: aeaf9c0cf994826102f2571bab9b3945e5e3ab77971809ce59bf4810c2cfd61a
     disposition: specified
     fields:
       splat_rule:
@@ -2298,7 +2298,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 181; builtin/srd-5.2.1/glossary/exhaustion_condition.md
   dnd2024:glossary/experience_points:
-    source_sha256: 7227ecc9415c9831a68de1538d4bb278bb6f65d7c5db098efdebd9c024361949
+    source_sha256: d62530ad0ca64705c4630f2888ef8cde84ab605d6ea0519668dbf03449074b1c
     disposition: specified
     fields:
       splat_rule:
@@ -2332,7 +2332,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 182; builtin/srd-5.2.1/glossary/experience_points.md
   dnd2024:glossary/expertise:
-    source_sha256: fdc8f060b724be4b69eb03ba3f870e50f201b465fb7556a1ce3bec09fe430f08
+    source_sha256: d05a1b73053fe97fbcd1b52c9d17634a72ea8f0432aad652d4ee363688a861bb
     disposition: specified
     fields:
       splat_rule:
@@ -2366,7 +2366,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 182; builtin/srd-5.2.1/glossary/expertise.md
   dnd2024:glossary/falling_hazard:
-    source_sha256: dff59fd575acc80843d188c4f7a4e0bfb8928feedbc9a1e40a79d384ea269bf7
+    source_sha256: 6ba067436f7139fad830ee3506ece7254125d6d3e59d48246b108d9cbfdfebed
     disposition: specified
     fields:
       splat_rule:
@@ -2432,7 +2432,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 182; builtin/srd-5.2.1/glossary/falling_hazard.md
   dnd2024:glossary/fly_speed:
-    source_sha256: 0e9fa8727aa2512b31247982ea9e68dffc5906289dc95d35fc4c3ab41aa0d9f9
+    source_sha256: 270e6342c93c9543aa61e584e7e17059f02a40cae4d0f69360f900d7bf5d470d
     disposition: specified
     fields:
       splat_rule:
@@ -2461,7 +2461,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 182; builtin/srd-5.2.1/glossary/fly_speed.md
   dnd2024:glossary/flying:
-    source_sha256: 67c586c051c94a1a153f5b1a2442d6af474a4506b584157c639ae7ff76d27bdc
+    source_sha256: 3bbf5f5520f8687d23c832f34543534b5909441c75ab747b391ef8945e6f0bda
     disposition: specified
     fields:
       splat_rule:
@@ -2490,7 +2490,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 182; builtin/srd-5.2.1/glossary/flying.md
   dnd2024:glossary/friendly_attitude:
-    source_sha256: 672358daf4a84ea5083cff49488335dc0015b7822a49c1c47b942f84d971d573
+    source_sha256: 56aae3937f126bcf05793f5c51a984cfcf6a0642296cf445582f6c443310f8ac
     disposition: specified
     fields:
       splat_rule:
@@ -2516,7 +2516,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 182; builtin/srd-5.2.1/glossary/friendly_attitude.md
   dnd2024:glossary/frightened_condition:
-    source_sha256: 45f0f76363c298d106cfa83589abe23d6d7cbe0c345fd0a094ff18b445d6ea5e
+    source_sha256: 4829309ccd3632e66c50199c77bd122dbd1e9b0d7a549ef064e9bfde705e6d83
     disposition: specified
     fields:
       splat_rule:
@@ -2549,7 +2549,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 182; builtin/srd-5.2.1/glossary/frightened_condition.md
   dnd2024:glossary/grappled_condition:
-    source_sha256: 4928ca79335c2e6f4e4d5e4bb83f0ccf48e00263c6c94d0a132aa140c44772e6
+    source_sha256: f688e0016ec9f5e765995692e1634aeddf75f5d7ce4b9d4bd5693a7f403660bc
     disposition: specified
     fields:
       splat_rule:
@@ -2589,7 +2589,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 182; builtin/srd-5.2.1/glossary/grappled_condition.md
   dnd2024:glossary/grappling:
-    source_sha256: b69f0dbca73a8aeb4e8f50d33a5c732ca5564fc09f9ad3c6f862f023a1da19a3
+    source_sha256: e842d8e862f56d587d4ddcd766ce32578ecd291dd7aa5a4d3e34930630c34064
     disposition: specified
     fields:
       splat_rule:
@@ -2649,14 +2649,14 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 182; builtin/srd-5.2.1/glossary/grappling.md
   dnd2024:glossary/hazard:
-    source_sha256: 170808bb6ed915c4cd23dabb7c6fc6649a99a633f883be7ee8bdbd727bf77717
+    source_sha256: fedb58c7e11a6294860404740da5cb151246cb5a9befc696578cf53a5eaa1554
     disposition: informational
     fields: {}
     requires: []
     citations:
     - SRD 5.2.1 pp. 182; builtin/srd-5.2.1/glossary/hazard.md
   dnd2024:glossary/healing:
-    source_sha256: 207a2f3fb3a7f3d50869bc47729f52c13c4c274129b79f756b747ed38600479a
+    source_sha256: b9fbd7e9b38060b4331277c0c243a765e1121418127da6934c9392b688e6e877
     disposition: specified
     fields:
       splat_rule:
@@ -2683,7 +2683,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 182; builtin/srd-5.2.1/glossary/healing.md
   dnd2024:glossary/heavily_obscured:
-    source_sha256: a072d2eaaa11f8cd2dee115d29fdaf434c93c60ed27cfe3444ce942bfeca6552
+    source_sha256: bb89d7001ea12e7a99ecbbd98b5d08ee6a7cf9a6458a81037ceca295e86ec7f7
     disposition: specified
     fields:
       splat_rule:
@@ -2708,7 +2708,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 182; builtin/srd-5.2.1/glossary/heavily_obscured.md
   dnd2024:glossary/help_action:
-    source_sha256: 362af06341f33db90099b53a7ec1938d88b76013d4155b0795a14126ea7287bd
+    source_sha256: 9eef828c9de0852f955fabba3a5ee5e554b19557aa68c400890a34fde766df7a
     disposition: specified
     fields:
       splat_rule:
@@ -2762,7 +2762,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 182, 183; builtin/srd-5.2.1/glossary/help_action.md
   dnd2024:glossary/heroic_inspiration:
-    source_sha256: 1c3d78c6a87b44a5cda74b9a8fa23ffbc3077db9b0897fd06f072a69c909d6da
+    source_sha256: 8d40f963b76e9bb7def25ca99f02f4e8b7e56dde1533497f55d176810aa542a0
     disposition: specified
     fields:
       splat_rule:
@@ -2804,7 +2804,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 183; builtin/srd-5.2.1/glossary/heroic_inspiration.md
   dnd2024:glossary/hide_action:
-    source_sha256: 5c7e389d4e0e37676a04637b372b885a18243c2653a94fdd37e6be26d45696a6
+    source_sha256: a45cb67e06677319ef7425984cd0d1baaacdd40d8afef7e72a4d28c1c5e8510c
     disposition: specified
     fields:
       splat_rule:
@@ -2864,7 +2864,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 183; builtin/srd-5.2.1/glossary/hide_action.md
   dnd2024:glossary/high_jump:
-    source_sha256: 952787502ec9f5a42ddd1db8276eaf220710aa0a06e5643a5246d71e27e5b09d
+    source_sha256: 9bc5f1673fe0068066b009455c85b1c8e61093edaa619e9cccd406e5a7255954
     disposition: specified
     fields:
       splat_rule:
@@ -2914,7 +2914,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 183; builtin/srd-5.2.1/glossary/high_jump.md
   dnd2024:glossary/hit_point_dice:
-    source_sha256: f9ada18f1f823ebc575c3df88ef3e3b183f9a64ab9bd7c7416e1e5ebbd47bed9
+    source_sha256: 2c578d7324957c7653861389f4eb293e741ed83b5a8c961bd8bec5e7c271579c
     disposition: specified
     fields:
       splat_rule:
@@ -2941,7 +2941,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 183; builtin/srd-5.2.1/glossary/hit_point_dice.md
   dnd2024:glossary/hit_points:
-    source_sha256: 9a8873da8583d1bbb47a3bb414f47450a093b2659c722c51b3ad96bc500ab8bc
+    source_sha256: f37826e79d03ba8bdad9903ffb27f1177df82b45a6ed7304de92642616e0c607
     disposition: specified
     fields:
       splat_rule:
@@ -2972,7 +2972,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 183; builtin/srd-5.2.1/glossary/hit_points.md
   dnd2024:glossary/hostile_attitude:
-    source_sha256: c72d4bd71b4b3b3c1c4fa1a1cb08c35d159661fa27db40870a1b1cd438588a8a
+    source_sha256: bbb3c99ccf138873d5677a066f226e8371045ea232ec7e75238f75f2009191cd
     disposition: specified
     fields:
       splat_rule:
@@ -2998,7 +2998,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 183; builtin/srd-5.2.1/glossary/hostile_attitude.md
   dnd2024:glossary/hover:
-    source_sha256: e9ace69721b54b56a0bf560ea4fc2bdc5df6e1c8428f519b5a1173c38c89e2a3
+    source_sha256: c088906aff22ac59925111aabd0a444b75911c193121710e5190524969f93244
     disposition: specified
     fields:
       splat_rule:
@@ -3031,7 +3031,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 183; builtin/srd-5.2.1/glossary/hover.md
   dnd2024:glossary/illusions:
-    source_sha256: 84fb0fcd38aa9078c79d9644554a1b6b6bebaea39ae297f76064d6a884aaab16
+    source_sha256: fb75d84cff4622d895ba60115da8b834406ad654eb447aef6758d22f08b00513
     disposition: specified
     fields:
       splat_rule:
@@ -3066,7 +3066,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 183; builtin/srd-5.2.1/glossary/illusions.md
   dnd2024:glossary/immunity:
-    source_sha256: f7de58ba41b40c1e119ca76b71a53dc8f2c6ba178a6decabc7c5bd4e8a37d1d9
+    source_sha256: bbb56ad5ebfd04aaf830e699e80ed58afb61ebcaa53f5629bf961abc4d38d9ef
     disposition: specified
     fields:
       splat_rule:
@@ -3098,7 +3098,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 183; builtin/srd-5.2.1/glossary/immunity.md
   dnd2024:glossary/improvised_weapons:
-    source_sha256: 824e36a7a5bee48725c7ec50dddbb8c979594092feadf468ecd0494b0ff11613
+    source_sha256: ce7230d02ca8e81eca7314fe7bd5fc6c6fa1ff96c898b1afe66afa928a703919
     disposition: specified
     fields:
       splat_rule:
@@ -3152,7 +3152,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 183; builtin/srd-5.2.1/glossary/improvised_weapons.md
   dnd2024:glossary/incapacitated_condition:
-    source_sha256: 090d59a1417b1cb5b5427d100837522e5a9d4a48d19e0e5248e2432e3a8877cf
+    source_sha256: 4f8be409c29d3a8135ec0122b26b27b11b183645ab2b2bfba1f5f3a5e7e617ff
     disposition: specified
     fields:
       splat_rule:
@@ -3189,7 +3189,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 184; builtin/srd-5.2.1/glossary/incapacitated_condition.md
   dnd2024:glossary/indifferent_attitude:
-    source_sha256: a43f943a1be19dfbd5b76f608a9755c7153f09e9915fe5326a9757b000045082
+    source_sha256: 8ca75566f23730fe0a515c744724c43566503631667237474bbe07ad75b1eed1
     disposition: specified
     fields:
       splat_rule:
@@ -3215,7 +3215,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 184; builtin/srd-5.2.1/glossary/indifferent_attitude.md
   dnd2024:glossary/influence_action:
-    source_sha256: 5dff7c156574c1c1834a14b028336d9757fd974419db7e1993a11ad5439ca02d
+    source_sha256: dd498caa2071ae377db562fb5a756f2b9f0632b0417c8a5ff8039b70f1be5d4f
     disposition: specified
     fields:
       splat_rule:
@@ -3319,7 +3319,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 184; builtin/srd-5.2.1/glossary/influence_action.md
   dnd2024:glossary/initiative:
-    source_sha256: 0ccd759a6a863ab2c619d2f6491c165b2f4e5ca09cee0f5d59aa7e65112f271c
+    source_sha256: 90beec3c8c0f6c49fd70394f0546251ea865d1c5b798fe94b898d88cd266c897
     disposition: specified
     fields:
       splat_rule:
@@ -3361,7 +3361,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 184; builtin/srd-5.2.1/glossary/initiative.md
   dnd2024:glossary/invisible_condition:
-    source_sha256: b0bb513002633703f6ad780f9644ef3ae0a012ec5a7510eb4b4f0a5e57b56cca
+    source_sha256: 966770ea7077c94c26d5d4258537a067d58a133f8f0edd8ac8f88ab759055f39
     disposition: specified
     fields:
       splat_rule:
@@ -3401,7 +3401,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 184; builtin/srd-5.2.1/glossary/invisible_condition.md
   dnd2024:glossary/jumping:
-    source_sha256: aedd0a8899676f83d1cbed8fde25940cd4fe1834f3bba7957a63508560442f32
+    source_sha256: 6fab9d0b7eaf340646ac06317362a58b4ddd5dcd4ab006c182088665965df77b
     disposition: specified
     fields:
       splat_rule:
@@ -3430,7 +3430,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 184; builtin/srd-5.2.1/glossary/jumping.md
   dnd2024:glossary/knocking_out_a_creature:
-    source_sha256: 668ac040834390a0dfba4bb40139b5e1180d43b5f1bd72c3a830c562ba75644b
+    source_sha256: f0ae3847351073d8804df5c618bebf13fb7eb63d79b951d4cf67af400f280f62
     disposition: specified
     fields:
       splat_rule:
@@ -3481,7 +3481,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 184; builtin/srd-5.2.1/glossary/knocking_out_a_creature.md
   dnd2024:glossary/lightly_obscured:
-    source_sha256: 922e0bbbe6e66e4f38dce4ca8450ae703210b3cb77c370b771ec72039ed9515e
+    source_sha256: 78d046a29a9d61c1d755d1bbc5976ba61d1fae8765a50759a02e4cd958d815ca
     disposition: specified
     fields:
       splat_rule:
@@ -3511,7 +3511,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 184; builtin/srd-5.2.1/glossary/lightly_obscured.md
   dnd2024:glossary/line_area_of_effect:
-    source_sha256: 24af98872a15ffb185d86742e81ba2c1e197c09d4e47d4ab6ad2bddec32381b8
+    source_sha256: e955b5cbe88415a20e7d5bf34747393bc42484df1ddcbf2769090def0380ddfe
     disposition: specified
     fields:
       splat_rule:
@@ -3555,7 +3555,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 184; builtin/srd-5.2.1/glossary/line_area_of_effect.md
   dnd2024:glossary/long_jump:
-    source_sha256: 658733a50ff0e97a9df668efd3730bcfe16d87e5e9dff59f78c0e35d94c434be
+    source_sha256: d304f5d62ffa72f598e97ff68655986733796b660d3952f945e78741aa673f85
     disposition: specified
     fields:
       splat_rule:
@@ -3618,7 +3618,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 184, 185; builtin/srd-5.2.1/glossary/long_jump.md
   dnd2024:glossary/long_rest:
-    source_sha256: 505a5fcb199b5c188b2f77ab1c54e1e92a2ef6cae51fa5aba2f066b055f9334e
+    source_sha256: 4e4e0abc65c3f01876ff8eae6a5615b6ff336eee4c5b10eafa0bbceb31df057f
     disposition: specified
     fields:
       splat_rule:
@@ -3688,7 +3688,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 185; builtin/srd-5.2.1/glossary/long_rest.md
   dnd2024:glossary/magic_action:
-    source_sha256: 24fef25fbb4317ec9ef751f066828493742251b517720c58095d05c3f64e55cd
+    source_sha256: 549cde5bcf69b36101b83e7b8a2bf04cc02202703b465887d7ae746e2d830fc0
     disposition: specified
     fields:
       splat_rule:
@@ -3730,7 +3730,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 185; builtin/srd-5.2.1/glossary/magic_action.md
   dnd2024:glossary/magical_effect:
-    source_sha256: 9f306add578bedbb41581eaff3e2de69079bc0eac722cdc9753cdd4368686886
+    source_sha256: 687cc17af15ba22430db2b0ec060268817253490bcaf27e60c177a4ba53e7151
     disposition: specified
     fields:
       splat_rule:
@@ -3755,7 +3755,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 185; builtin/srd-5.2.1/glossary/magical_effect.md
   dnd2024:glossary/malnutrition_hazard:
-    source_sha256: e9336509b2a7b8097516388d635fc701e649bebc9d3c00853f56afbab61ab1bf
+    source_sha256: 8c37143c4f54247a4ac6aa678c20b81bf9ef93ba8c01f755679e77881d11e8e4
     disposition: specified
     fields:
       splat_rule:
@@ -3809,21 +3809,21 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 185; builtin/srd-5.2.1/glossary/malnutrition_hazard.md
   dnd2024:glossary/monster:
-    source_sha256: 2d972f10b44694c5d994900bce582c1cc6a85c509fdb6fa1e0f6f7b0d0f6ce2f
+    source_sha256: 858bc4e95402ccbd60987da7bcae09acf166475c18ea9fe2fc1cae72346ba3c6
     disposition: informational
     fields: {}
     requires: []
     citations:
     - SRD 5.2.1 pp. 185; builtin/srd-5.2.1/glossary/monster.md
   dnd2024:glossary/nonplayer_character:
-    source_sha256: a8aadbfbc61f90ce64b17aa20cb5a5374b3eb8db8bf93c9157ddb3e4e2e7085f
+    source_sha256: 79768b78fd5ec544e2c333bf5c108a8730fb4a9684ec7969a5ee8e66bd9112ca
     disposition: informational
     fields: {}
     requires: []
     citations:
     - SRD 5.2.1 pp. 185; builtin/srd-5.2.1/glossary/nonplayer_character.md
   dnd2024:glossary/object:
-    source_sha256: 4a3981ec53d454c98e2ad5c18179d326b4f322f34d1e5bc711973ea97d7513d1
+    source_sha256: 107504409b1f984a51a2cb3f4268fb6820f66306a304b7dd120c9f8b2b81af21
     disposition: specified
     fields:
       splat_rule:
@@ -3848,7 +3848,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 185; builtin/srd-5.2.1/glossary/object.md
   dnd2024:glossary/occupied_space:
-    source_sha256: 59c4c90d9e765c5d38e1cb5f1252d161697915eaa4fd30596f26ff3b2b736796
+    source_sha256: 132f8a1e1138f7021be185e655ff572989dc80ba5299706fd19e567333692d54
     disposition: specified
     fields:
       splat_rule:
@@ -3874,7 +3874,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 185; builtin/srd-5.2.1/glossary/occupied_space.md
   dnd2024:glossary/opportunity_attacks:
-    source_sha256: 72300e5f266afff5ae696bcca9a2a2d1c9eef54ba47fe6d1e675e549ab984fdc
+    source_sha256: 34b8597db2c9099605e0c1e9687c18b052eda46adcdfba06870096ad1edf05ea
     disposition: specified
     fields:
       splat_rule:
@@ -3918,7 +3918,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 185; builtin/srd-5.2.1/glossary/opportunity_attacks.md
   dnd2024:glossary/paralyzed_condition:
-    source_sha256: d03ef4c524eb81bbdc5f6281bfd23075b30bd0436a2e1f83f971c346269b15b6
+    source_sha256: 2d0ef77b7b49a42f0e3c206f772fee99ef2b16e5812ea228481ca0962226effc
     disposition: specified
     fields:
       splat_rule:
@@ -3957,7 +3957,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 186; builtin/srd-5.2.1/glossary/paralyzed_condition.md
   dnd2024:glossary/passive_perception:
-    source_sha256: b835a4588ddf2e5c7a33db9fc87fa8651033ecc80f3668ea9c072a64e2474590
+    source_sha256: a826528d78f7f7660a657004949e7c998dd37b0274dde2e4af19892d0dd81647
     disposition: specified
     fields:
       splat_rule:
@@ -3994,7 +3994,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 186; builtin/srd-5.2.1/glossary/passive_perception.md
   dnd2024:glossary/per_day:
-    source_sha256: 77a852950e9eab71032d6958106b1645b463406a79f72e6393fca5df8ac8365c
+    source_sha256: 41066a956aafce5c95a24a880dac1ce0717013f08ea0a7f50f8f548d2433e2b0
     disposition: specified
     fields:
       splat_rule:
@@ -4023,7 +4023,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 186; builtin/srd-5.2.1/glossary/per_day.md
   dnd2024:glossary/petrified_condition:
-    source_sha256: c2c3c4d40b947c0c45a7d82b27453c0b20ea056dda6a19af2df41aadc46557c1
+    source_sha256: 81235bdd13d9d7b5a766f72f12c8f05b377c2a60db2efbf637028b1591af9ff8
     disposition: specified
     fields:
       splat_rule:
@@ -4073,14 +4073,14 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 186; builtin/srd-5.2.1/glossary/petrified_condition.md
   dnd2024:glossary/player_character:
-    source_sha256: 9a44183b3877d3a335155e5688cc157489b3eba0da76051e7600a66028829c73
+    source_sha256: 4667174d8cc265c61f0cb3ec6d7f9dc1b95082bd1f8b2d5189253f3e891a9c2a
     disposition: informational
     fields: {}
     requires: []
     citations:
     - SRD 5.2.1 pp. 186; builtin/srd-5.2.1/glossary/player_character.md
   dnd2024:glossary/poisoned_condition:
-    source_sha256: 3eac66c2e8d6180e9ff0f58c6e7f05e8c18ab1d077f677fcedc7f7a0b587f2f6
+    source_sha256: b7bd4f0c0355022554c9f1098256154598de133a8f66a25398335d4db40f14d2
     disposition: specified
     fields:
       splat_rule:
@@ -4108,7 +4108,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 186; builtin/srd-5.2.1/glossary/poisoned_condition.md
   dnd2024:glossary/possession:
-    source_sha256: 739a9a972273b15e2911ab3398b69b2c2a16fde6169243842406d2a28815364f
+    source_sha256: 4327a8caa069369042bd3e7c53e4da5bfd2effe596d66aa0bebdb80d5ad95e47
     disposition: specified
     fields:
       splat_rule:
@@ -4142,7 +4142,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 186; builtin/srd-5.2.1/glossary/possession.md
   dnd2024:glossary/proficiency:
-    source_sha256: dd1fdeee715e9f62e06a61aae0a0e728a168f32de366f0f4db085cc46460a0c6
+    source_sha256: 1916a99d10a2a7544870e409672f337d097ff532fde15d799b7487e87d8b04a7
     disposition: specified
     fields:
       splat_rule:
@@ -4176,7 +4176,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 186; builtin/srd-5.2.1/glossary/proficiency.md
   dnd2024:glossary/prone_condition:
-    source_sha256: f8f0eeb7c0e133dd553607a8124dca37052a2dd292c75cfbb99515e4b8c0b844
+    source_sha256: 67efb408de5d976d08072ccfbb11f231143d854545028d507cdc13a8d902dc1e
     disposition: specified
     fields:
       splat_rule:
@@ -4226,7 +4226,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 186; builtin/srd-5.2.1/glossary/prone_condition.md
   dnd2024:glossary/reach:
-    source_sha256: 9fc5368ebd593d260bf08d5cd83f3e62c57b7fe620a534e59d636e61f8ead00a
+    source_sha256: 8bd75e6db38f8a04e1a5cc99ce5e28eb0166a74526f7a80a1075bd2fe864e6b2
     disposition: specified
     fields:
       splat_rule:
@@ -4250,7 +4250,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 186; builtin/srd-5.2.1/glossary/reach.md
   dnd2024:glossary/reaction:
-    source_sha256: b4c18be2701287dc0273d6495b2a698e921e3b5d30eec052f4b28ab154e9ab8e
+    source_sha256: 2913d47849424dbc5c2f7aa27792e38e2c5ba0037474670d15e22245d289d759
     disposition: specified
     fields:
       splat_rule:
@@ -4287,7 +4287,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 186; builtin/srd-5.2.1/glossary/reaction.md
   dnd2024:glossary/ready_action:
-    source_sha256: 5dcdd49536e936cd63d00a718c807a865f2930ce96ae3f8b68cb191f2b871769
+    source_sha256: dbd0ef5b8bd651769728f7b39b949c97d41914dcfbc1e67f9898f9f79809dbe2
     disposition: specified
     fields:
       splat_rule:
@@ -4348,7 +4348,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 186, 187; builtin/srd-5.2.1/glossary/ready_action.md
   dnd2024:glossary/resistance:
-    source_sha256: 0c245ca31ddf7996031c5e9c0712b5448fa0dd3d32997e2cf9f68142ff662dbf
+    source_sha256: 4ee20788a39ea4345c92c113a80c5b096d47d4ab0bfe3b637ec51d0723f495ca
     disposition: specified
     fields:
       splat_rule:
@@ -4375,7 +4375,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 187; builtin/srd-5.2.1/glossary/resistance.md
   dnd2024:glossary/restrained_condition:
-    source_sha256: 199e113a3500ff67773cc75e1bafb4f84d8af4ab55e7cd81ff800f71548a98b8
+    source_sha256: 4b90918a764a41330f301350347358607849795b0e57d5dac0aa529ef8843fde
     disposition: specified
     fields:
       splat_rule:
@@ -4408,7 +4408,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 187; builtin/srd-5.2.1/glossary/restrained_condition.md
   dnd2024:glossary/ritual:
-    source_sha256: 5af6ae5176d45fa10027980eaae9351411482aa092c52cf295af31626c7e5ac1
+    source_sha256: 4308b07209e699af38ad243cc023cc72c972c5f6fbd034bf3e3b99d79ba91623
     disposition: specified
     fields:
       splat_rule:
@@ -4440,7 +4440,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 187; builtin/srd-5.2.1/glossary/ritual.md
   dnd2024:glossary/round_down:
-    source_sha256: 966120acb6d8996ef8f3c9501a68a0b0e10955abd122b2bf5ab32dc8a09a6c8e
+    source_sha256: 5b12abbcd5de6b0385124b1075ad05c761c65c56cbf704626438dc5eb588cdc9
     disposition: specified
     fields:
       splat_rule:
@@ -4470,14 +4470,14 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 187; builtin/srd-5.2.1/glossary/round_down.md
   dnd2024:glossary/save:
-    source_sha256: d1119bdd743c54fec43510cb3744823b8e811881b87a51a9d3da3adb7ec4d6c5
+    source_sha256: a89de607388b8c1598d5a2b137a9cc55f23c64bc2b216a74a838383350485ff9
     disposition: informational
     fields: {}
     requires: []
     citations:
     - SRD 5.2.1 pp. 187; builtin/srd-5.2.1/glossary/save.md
   dnd2024:glossary/saving_throw:
-    source_sha256: f21ea60c2f069ef19d2cd700ee84ca8dc29ca9c5ad5c6cd0fa081d231186dc03
+    source_sha256: 978ffcce87b7db85415c391320fa20166e6de4ed67e2faf10b812b8bd450026d
     disposition: specified
     fields:
       splat_rule:
@@ -4509,7 +4509,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 187; builtin/srd-5.2.1/glossary/saving_throw.md
   dnd2024:glossary/search_action:
-    source_sha256: 766e9b2c8387dea9f364eac07904ed839df92d5f8bf3f869285c1beb2e06ecae
+    source_sha256: a955135f094a95cdc513a828fcf0a8f0208a66d323ad36356f50bbe8c7d97b59
     disposition: specified
     fields:
       splat_rule:
@@ -4547,7 +4547,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 187; builtin/srd-5.2.1/glossary/search_action.md
   dnd2024:glossary/shape_shifting:
-    source_sha256: 0df94767c534196578b99309f4d2b1c044296600c107b3701c35a6c7ef0bc61f
+    source_sha256: c1c9eaea457d6f55d754c0f3df0d0e02865154eb3a5505e1bba59e4259b66aeb
     disposition: specified
     fields:
       splat_rule:
@@ -4582,7 +4582,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 187; builtin/srd-5.2.1/glossary/shape_shifting.md
   dnd2024:glossary/short_rest:
-    source_sha256: df68d1031b1ccc594679d06d4489ea26d046a6e57d1749537abe6373ce74c6a9
+    source_sha256: 840fa907fc376bd30d42c5c00f0501337290b70fbfc4b7da7a397ef67d7c6db0
     disposition: specified
     fields:
       splat_rule:
@@ -4646,7 +4646,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 187; builtin/srd-5.2.1/glossary/short_rest.md
   dnd2024:glossary/simultaneous_effects:
-    source_sha256: 28a4ec8b94f35701167ee201353f4b00949e2df057eaf3f7291b6c3c04d871ef
+    source_sha256: 3409536fa1a029576fbf77eefca1587112e9fb7541a8dc94cd1bcb8e274e6680
     disposition: specified
     fields:
       splat_rule:
@@ -4677,7 +4677,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 187; builtin/srd-5.2.1/glossary/simultaneous_effects.md
   dnd2024:glossary/size:
-    source_sha256: 2a54caef9eb964bca8544397b1b40236399c8650a032099b5fdf02c647be2b63
+    source_sha256: 1173718e264f3abb700eeb380845672c17f3a50e2494b4909ad0dee3861b0adb
     disposition: specified
     fields:
       splat_rule:
@@ -4712,7 +4712,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 188; builtin/srd-5.2.1/glossary/size.md
   dnd2024:glossary/skill:
-    source_sha256: 6ea9444a312aeacc2885072d678b2a71796877194517ba11cbb90396f9b57d44
+    source_sha256: ec2fff76987d62c3d07d2e7fe1cbcba8c19f1300e703053665c3bb983637606f
     disposition: specified
     fields:
       splat_rule:
@@ -4740,7 +4740,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 188; builtin/srd-5.2.1/glossary/skill.md
   dnd2024:glossary/speed:
-    source_sha256: 03c50a8b9b769ee8ecef061b3ac5c962cd9f941e69c9d2e8a7c6c5c52479f854
+    source_sha256: 149dddf08db6b7346acd4a0de6c9d9e42301d0e821371a0357a74b0a8962199a
     disposition: specified
     fields:
       splat_rule:
@@ -4793,14 +4793,14 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 188; builtin/srd-5.2.1/glossary/speed.md
   dnd2024:glossary/spell:
-    source_sha256: c78ef9d21f570407aa18bddd9334e663503bb982ad7d5f7cd281fd7ab7a7196d
+    source_sha256: 87b6fd4e7d2dde0da041b051f1d6f987475aa72bf8d3d763168f6bdfe72b19b7
     disposition: informational
     fields: {}
     requires: []
     citations:
     - SRD 5.2.1 pp. 188; builtin/srd-5.2.1/glossary/spell.md
   dnd2024:glossary/spell_attack:
-    source_sha256: dc3f8508413d44f245fda3632db935b41e0e8394f820d987b80742c95fd56bec
+    source_sha256: ce8e48e0351699f160f0bae3cc30bbd9947d5fa53eab7c2911243e5b665865b1
     disposition: specified
     fields:
       splat_rule:
@@ -4826,7 +4826,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 188; builtin/srd-5.2.1/glossary/spell_attack.md
   dnd2024:glossary/spellcasting_focus:
-    source_sha256: 5662c745a19c8a4f925084e5a4eb8d6ec5d43137b411bf0b2b6863a01420c8f9
+    source_sha256: a0a857233cd742566071dba320949c15b540ef7ebe567fcb34ea04dda2359d2c
     disposition: specified
     fields:
       splat_rule:
@@ -4857,7 +4857,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 188; builtin/srd-5.2.1/glossary/spellcasting_focus.md
   dnd2024:glossary/sphere_area_of_effect:
-    source_sha256: 32a09751c71fb92abd08be37df0494efb86b71fb6ee9632fa352ceaf26d82b17
+    source_sha256: d7c7f60ecff3b5e5fc2eae1799b5c28b422bc856fe487023f0da1a0555bc921c
     disposition: specified
     fields:
       splat_rule:
@@ -4895,7 +4895,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 188; builtin/srd-5.2.1/glossary/sphere_area_of_effect.md
   dnd2024:glossary/stable:
-    source_sha256: ed0820bb4cc5c499fad98cd20de0a12df8405b71e83565ca402cb798ae8fa8aa
+    source_sha256: eb5b462041bb30e429716381226e5cf40d0bd75b027ab8f5c3bdc39b95b2021d
     disposition: specified
     fields:
       splat_rule:
@@ -4920,7 +4920,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 188; builtin/srd-5.2.1/glossary/stable.md
   dnd2024:glossary/stat_block:
-    source_sha256: 55ac0aa288b85e2b18c6ed3fc5029f50eb11cc6c79f4557a4c62f59bc0c518e9
+    source_sha256: 76e6f94813d153963785505a9d6555179800bedf17f18133fff1a77ca2879ae7
     disposition: specified
     fields:
       splat_rule:
@@ -5005,7 +5005,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 188, 189; builtin/srd-5.2.1/glossary/stat_block.md
   dnd2024:glossary/study_action:
-    source_sha256: 84cbb8e3ac008796b72398329051e39d9aac56ece0100ad968227eec41d871a6
+    source_sha256: eef04398dda445a67d7853a507cc5f9c734875e81067c3d0f0cf1fd465dc9e9e
     disposition: specified
     fields:
       splat_rule:
@@ -5091,7 +5091,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 189; builtin/srd-5.2.1/glossary/study_action.md
   dnd2024:glossary/stunned_condition:
-    source_sha256: 2db74dc8b940b36e810a17179cbc3a28bfcfcef799c99989bdedc13eab9afe08
+    source_sha256: a240045c9ae11accd32a6776700f40fe3e0e4609c87852930d90dd0dfc7f6741
     disposition: specified
     fields:
       splat_rule:
@@ -5127,7 +5127,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 189; builtin/srd-5.2.1/glossary/stunned_condition.md
   dnd2024:glossary/suffocation_hazard:
-    source_sha256: 16f871ce51e58b42c0147532c7bbb505de5fc8be7d21e0e67b563ad1ebaa054e
+    source_sha256: b8669eeece2ec5f36469baf763fa607be558e02d9390bb641b93f09e26e7e9c9
     disposition: specified
     fields:
       splat_rule:
@@ -5174,7 +5174,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 189; builtin/srd-5.2.1/glossary/suffocation_hazard.md
   dnd2024:glossary/surprise:
-    source_sha256: db013e70c91d7363359ece0d58726ec41f5f39adfbcaf303112300d87bf7f14d
+    source_sha256: 8904555c4d1973b50c3088d7ba8e2a647732bff28a1db11b8977688ff5159a6d
     disposition: specified
     fields:
       splat_rule:
@@ -5199,7 +5199,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 189; builtin/srd-5.2.1/glossary/surprise.md
   dnd2024:glossary/swim_speed:
-    source_sha256: c70b24cca5cef7679a8ea2bb88f149a08e86c1a38bd816f26932a5db87661941
+    source_sha256: 077371c509b78fa2573a96d49cd030931f09c3333014736b6cb3a035aa122b3c
     disposition: specified
     fields:
       splat_rule:
@@ -5224,7 +5224,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 189; builtin/srd-5.2.1/glossary/swim_speed.md
   dnd2024:glossary/swimming:
-    source_sha256: dbdf50c19be64bf4a670e10b9a59fb689d8679f733051c2cb35e7264cdd88d95
+    source_sha256: 8b6a9ca0c7e84e9e70978cb48121bf4460aa95e858b3d2a8904be5c38f360a2b
     disposition: specified
     fields:
       splat_rule:
@@ -5272,7 +5272,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 189; builtin/srd-5.2.1/glossary/swimming.md
   dnd2024:glossary/target:
-    source_sha256: d4f8c2124978936fc905d373204108082c61953d3291efe0a295e674f6bb9537
+    source_sha256: 491c31c40ea5621b1e4ffdb2fd048408b93a3a183e6dd1d9983f894d8a795a28
     disposition: specified
     fields:
       splat_rule:
@@ -5302,7 +5302,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 190; builtin/srd-5.2.1/glossary/target.md
   dnd2024:glossary/telepathy:
-    source_sha256: 03c9bf01526f827ae96fed7406c5bd2f8ec2b289816d6520bf4c86c655b54461
+    source_sha256: 0fffce87b8688f3c3922c6549a4cf1d802987193d2d2674d9fc0be3359ffec8f
     disposition: specified
     fields:
       splat_rule:
@@ -5355,7 +5355,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 190; builtin/srd-5.2.1/glossary/telepathy.md
   dnd2024:glossary/teleportation:
-    source_sha256: 94719490aef522c4f00fe4da69205e77d85aa754379f4a72de851f6ae0114783
+    source_sha256: 075853fb258551ece6b4c0bc0670fe2d92678d1d1d9a7b0bc53d471961fef114
     disposition: specified
     fields:
       splat_rule:
@@ -5404,7 +5404,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 190; builtin/srd-5.2.1/glossary/teleportation.md
   dnd2024:glossary/temporary_hit_points:
-    source_sha256: 08c706e3e0f0bf1a0b6fda88797af172900a8ca0cc89b592c976f84f60847f0a
+    source_sha256: 68d3cd101991ed31a511ed269c39368d1c919b81b7b56a99a5127bf12ac2570f
     disposition: specified
     fields:
       splat_rule:
@@ -5438,7 +5438,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 190; builtin/srd-5.2.1/glossary/temporary_hit_points.md
   dnd2024:glossary/tremorsense:
-    source_sha256: c7ca44ced04458b5277ff7e95901e6d54c0cf0cb355c9c96c86db37a69adf338
+    source_sha256: 27a8e14dd5607b76c576c180737713d3cbe34cc730f96b2cec8848e29a66034d
     disposition: specified
     fields:
       splat_rule:
@@ -5477,7 +5477,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 190; builtin/srd-5.2.1/glossary/tremorsense.md
   dnd2024:glossary/truesight:
-    source_sha256: 03ee5f46dfb07b8c02bbda833a6701dc92d6aba0bec10d8675dfb7d1d1fd7e21
+    source_sha256: aeb8eac76b8d6945b91e0861c6407d23f10a809bfbeb892d2e9528ee2b75b23d
     disposition: specified
     fields:
       splat_rule:
@@ -5521,7 +5521,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 190; builtin/srd-5.2.1/glossary/truesight.md
   dnd2024:glossary/unarmed_strike:
-    source_sha256: 52217f40f8c22688f3321850b0c5497e4419fd5307af115727dde87e4ef88929
+    source_sha256: 811ca5f9d97fe87ddced379af3ce02471245923e83c07440857ed50d74b5a7e9
     disposition: specified
     fields:
       splat_rule:
@@ -5621,7 +5621,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 190; builtin/srd-5.2.1/glossary/unarmed_strike.md
   dnd2024:glossary/unconscious_condition:
-    source_sha256: 6af1414a5f0f66bc9db217f32308ef3c01e3f71231a66ebcfc00e7b503e4897f
+    source_sha256: bd36c02e42af5a2c568edd96a0feff7256e0cf79c73b724c05fbc742e18de2a0
     disposition: specified
     fields:
       splat_rule:
@@ -5664,7 +5664,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 191; builtin/srd-5.2.1/glossary/unconscious_condition.md
   dnd2024:glossary/unoccupied_space:
-    source_sha256: 86168bd1bc9b45130049d47bdf7f94c73c6c8965f666d1970bb7cfe1395a1f39
+    source_sha256: 099150ba379c62032c45648f42b11621b63e86fd1e4a676f4722323b76d668e9
     disposition: specified
     fields:
       splat_rule:
@@ -5690,7 +5690,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 191; builtin/srd-5.2.1/glossary/unoccupied_space.md
   dnd2024:glossary/utilize_action:
-    source_sha256: 00fcbec67d7b7392c51c50c7e11bbf91c5b704f445817caf6e615d6c811c4db0
+    source_sha256: f36cfb74ba13b09104f69e02011df61aec604ffe9b3da7e4fdac807a23423364
     disposition: specified
     fields:
       splat_rule:
@@ -5718,7 +5718,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 191; builtin/srd-5.2.1/glossary/utilize_action.md
   dnd2024:glossary/vulnerability:
-    source_sha256: 157154c8537b35e75afc3d4736ec5154258ffc83b07109f0598a7f64045cc83b
+    source_sha256: f63ac1ea3771bee015b8e920b722ae473be46393147362c05c8d2ea8fa2d75be
     disposition: specified
     fields:
       splat_rule:
@@ -5744,7 +5744,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 191; builtin/srd-5.2.1/glossary/vulnerability.md
   dnd2024:glossary/weapon:
-    source_sha256: bece61ae4a6b3751dba4acc62af7e562a785e9beb835cceaef28c1c3d57a4778
+    source_sha256: cf45a03735227bb29b87586f89f1f5615400a0b1c6fe7895b933c89b7dddb07a
     disposition: specified
     fields:
       splat_rule:
@@ -5769,7 +5769,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 191; builtin/srd-5.2.1/glossary/weapon.md
   dnd2024:glossary/weapon_attack:
-    source_sha256: b8a1f96e79c5d7a59cdb44c5d36b44a0713fdaf6b23834d91e7e738c9e1e31eb
+    source_sha256: 7bfb1f2041ba8b27fb69b9e3b6db68ed27a9482b620244a480f8c77d02311729
     disposition: specified
     fields:
       splat_rule:

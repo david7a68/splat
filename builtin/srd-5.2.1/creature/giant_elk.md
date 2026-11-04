@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "8a013836-6722-56c8-8d52-f1e0a66bc522"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/giant_elk"
 splat_name: "Giant Elk"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [351], "executable": false}
+splat_pages:
+- 351
 ---
 
 # Giant Elk
@@ -29,3 +30,13 @@ CR 2 (XP 450; PB +2)
 Ram. Melee Attack Roll: +6, reach 10 ft. Hit: 11 (2d6 + 4) Bludgeoning damage plus 5 (2d4) Radiant damage. If the target is a Huge or smaller creature and the elk moved 20+ feet straight toward it immediately before the hit, the target takes an extra 5 (2d4) Bludgeoning damage and has the Prone condition.
 
 Original layout: [[../pages/351|page 351]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

@@ -1,10 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "0480e332-4e7d-5e6e-97db-70b932bda82e"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/swarm_of_venomous_snakes"
 splat_name: "Swarm of Venomous Snakes"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [362, 363], "executable": false}
+splat_pages:
+- 362
+- 363
 ---
 
 # Swarm of Venomous Snakes
@@ -35,3 +37,13 @@ Swarm. The swarm can occupy another creature’s space and vice versa, and the s
 Bites. Melee Attack Roll: +6, reach 5 ft. Hit: 8 (1d8 + 4) Piercing damage—or 6 (1d4 + 4) Piercing damage if the swarm is Bloodied—plus 10 (3d6) Poison damage.
 
 Original layout: [[../pages/362|page 362]], [[../pages/363|page 363]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

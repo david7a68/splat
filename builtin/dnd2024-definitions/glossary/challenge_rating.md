@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 8bb25829-19e0-542a-95b9-e6e909c45197
 splat_kind: rule
 splat_key: dnd2024:glossary/challenge_rating
 splat_name: Challenge Rating
-splat_origin:
-  key: dnd2024:reference/glossary/challenge_rating
+splat_origin: dnd2024:reference/glossary/challenge_rating
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 178
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 178, https://www.dndbeyond.com/srd
 ---
 
 # Challenge Rating

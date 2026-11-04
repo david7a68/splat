@@ -250,7 +250,7 @@ fn structured_value(ui: &mut egui::Ui, value: &serde_yaml_ng::Value) {
 }
 
 fn spell_facts(spell: &serde_yaml_ng::Value) -> Vec<(String, String)> {
-    // Use the table's printed values for both layouts, including text ranges and
+    // Use the table's printed values, including text ranges and
     // component codes. A reader must not expose the model's internal shapes.
     let mut spell = spell.clone();
     if let Some(range) = spell
@@ -467,9 +467,9 @@ mod tests {
                 "splat_item: {category: wondrous_item, rarity: uncommon}",
             ),
         ] {
-            let old = format!(
+            let old = splat::content::formats::convert("Fixture.md", &format!(
                 "---\nsplat_schema: 1\nsplat_id: 00000000-0000-0000-0000-000000000001\nsplat_kind: {kind}\nsplat_name: Rook\n{fields}\n---\n\n# Rook\n\nKeep this effect.\n"
-            );
+            )).expect("schema-2 fixture");
             let converted = splat::content::formats::convert("Rook.md", &old).unwrap();
             let entry = Entry::parse("Rook.md", &converted).unwrap();
             let ctx = egui::Context::default();

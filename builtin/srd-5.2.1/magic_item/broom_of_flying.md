@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "2a4594e5-d4aa-58f3-aa4e-43d38d18b93b"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/magic_item/broom_of_flying"
 splat_name: "Broom of Flying"
-splat_reference: {"source": "SRD 5.2.1", "category": "magic_item", "pages": [214], "executable": false}
+splat_pages:
+- 214
 ---
 
 # Broom of Flying
@@ -18,3 +19,13 @@ This wooden broom functions like a mundane broom until you stand astride it and 
 As a Magic action, you can send the broom to travel alone to a destination within 1 mile of you if you name the location and are familiar with it. The broom comes back to you when you take a Magic action and use a command word if the broom is still within 1 mile of you.
 
 Original layout: [[../pages/214|page 214]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: magic_item
+> executable: false
+> ```
+

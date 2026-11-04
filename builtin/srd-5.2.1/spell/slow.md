@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "42bc6e32-47b1-5507-8c4b-e6dcb3635759"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/slow"
 splat_name: "Slow"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [163], "executable": false}
+splat_pages:
+- 163
 ---
 
 # Slow
@@ -24,3 +25,13 @@ An affected target’s Speed is halved, it takes a −2 penalty to AC and Dexter
 An affected target repeats the save at the end of each of its turns, ending the spell on itself on a success.
 
 Original layout: [[../pages/163|page 163]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

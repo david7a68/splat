@@ -1,10 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "b207ac5c-ae3c-59ac-9c9e-5d9471e2e3c5"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/wraith"
 splat_name: "Wraith"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [342, 343], "executable": false}
+splat_pages:
+- 342
+- 343
 ---
 
 # Wraith
@@ -39,3 +41,13 @@ Life Drain. Melee Attack Roll: +6, reach 5 ft. Hit: 21 (4d8 + 3) Necrotic damage
 Create Specter. The wraith targets a Humanoid corpse within 10 feet of itself that has been dead for no longer than 1 minute. The target’s spirit rises as a Specter in the space of its corpse or in the nearest unoccupied space. The specter is under the wraith’s control. The wraith can have no more than seven specters under its control at a time.
 
 Original layout: [[../pages/342|page 342]], [[../pages/343|page 343]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

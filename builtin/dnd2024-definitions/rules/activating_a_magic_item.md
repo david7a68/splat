@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 38fb70ea-cb99-5c05-b5a9-2d497b879ba8
 splat_kind: rule
 splat_key: dnd2024:rules/activating_a_magic_item
 splat_name: Activating a Magic Item
-splat_origin:
-  key: dnd2024:reference/pages/206
+splat_origin: dnd2024:reference/pages/206
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 206
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 206, https://www.dndbeyond.com/srd
 ---
 
 # Activating a Magic Item

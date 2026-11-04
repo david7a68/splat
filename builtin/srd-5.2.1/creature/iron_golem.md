@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "2eaa8004-972d-539e-bf20-b1e1aca09248"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/iron_golem"
 splat_name: "Iron Golem"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [302], "executable": false}
+splat_pages:
+- 302
 ---
 
 # Iron Golem
@@ -42,3 +43,13 @@ Fiery Bolt. Ranged Attack Roll: +10, range 120 ft. Hit: 36 (8d8) Fire damage.
 Poison Breath (Recharge 6). Constitution Saving Throw: DC 18, each creature in a 60-foot Cone. Failure: 55 (10d10) Poison damage. Success: Half damage.
 
 Original layout: [[../pages/302|page 302]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "e186b1c2-88cc-5c27-b4ce-a66adcae1ab2"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/glossary/malnutrition_hazard"
 splat_name: "Malnutrition [Hazard]"
-splat_reference: {"source": "SRD 5.2.1", "category": "glossary", "pages": [185], "executable": false}
+splat_pages:
+- 185
 ---
 
 # Malnutrition [Hazard]
@@ -24,3 +25,13 @@ Exhaustion caused by malnutrition can’t be removed until the creature eats the
 | Medium | 1 pound | Gargantuan | 64 pounds |
 
 Original layout: [[../pages/185|page 185]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: glossary
+> executable: false
+> ```
+

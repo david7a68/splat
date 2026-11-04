@@ -1,35 +1,62 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 4dfa9536-a6f6-54e9-88fb-c0bf824be2f3
 splat_kind: creature
 splat_key: dnd2024:creatures/clay_golem
 splat_name: Clay Golem
-splat_origin:
-  key: dnd2024:reference/creature/clay_golem
+splat_origin: dnd2024:reference/creature/clay_golem
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 274
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 274, https://www.dndbeyond.com/srd
 ---
 
 # Clay Golem
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Large |
+| Type | Construct |
+| Alignment | Unaligned |
+| Armor Class | 14 |
+| Hit Points | 123 (13d10 + 52) |
+| Initiative | +3 (13) |
+| Speed | 30 ft. |
+| Challenge | 9 (XP 5,000; PB +4) |
+| Senses | Darkvision 60 ft.; Passive Perception 9 |
+| Languages | Common plus one other language |
+| Resistances | Bludgeoning, Piercing, Slashing |
+| Immunities | Acid, Poison, Psychic; Charmed, Exhaustion, Frightened, Paralyzed, Petrified, Poisoned |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 20 | +5 | +5 |
+| Dex | 9 | -1 | -1 |
+| Con | 18 | +4 | +4 |
+| Int | 3 | -4 | -4 |
+| Wis | 8 | -1 | -1 |
+| Cha | 1 | -5 | -5 |
+
 
 ## Source text
 
 <!-- SRD page 274 -->
 
-Large Construct, Unaligned\
-AC 14 Initiative +3 (13)\
-HP 123 (13d10 + 52)\
-Speed 30 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 20 +5 +5 Dex 9 −1 −1 Con 18 +4 +4\
-Int 3 −4 −4 Wis 8 −1 −1 Cha 1 −5 −5\
-Resistances Bludgeoning, Piercing, Slashing\
-Immunities Acid, Poison, Psychic; Charmed, Exhaustion, Frightened, Paralyzed, Petrified, Poisoned\
-Senses Darkvision 60 ft.; Passive Perception 9\
-Languages Common plus one other language\
-CR 9 (XP 5,000; PB +4)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Large Construct, Unaligned\
+> AC 14 Initiative +3 (13)\
+> HP 123 (13d10 + 52)\
+> Speed 30 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 20 +5 +5 Dex 9 −1 −1 Con 18 +4 +4\
+> Int 3 −4 −4 Wis 8 −1 −1 Cha 1 −5 −5\
+> Resistances Bludgeoning, Piercing, Slashing\
+> Immunities Acid, Poison, Psychic; Charmed, Exhaustion, Frightened, Paralyzed, Petrified, Poisoned\
+> Senses Darkvision 60 ft.; Passive Perception 9\
+> Languages Common plus one other language\
+> CR 9 (XP 5,000; PB +4)
+
 
 ### Traits
 
@@ -53,46 +80,11 @@ Hasten (Recharge 5–6). The golem takes the Dash and Disengage actions.
 
 Original layout: [[../../srd-5.2.1/pages/274|page 274]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` large ` |
-| ` type ` | ` construct ` |
-| ` alignment ` | ` Unaligned ` |
-| ` movement_text ` | ` 30 ft. ` |
-| ` resistances_text ` | ` Bludgeoning, Piercing, Slashing ` |
-| ` immunities_text ` | ` Acid, Poison, Psychic; Charmed, Exhaustion, Frightened, Paralyzed, Petrified, Poisoned ` |
-| ` senses_text ` | ` Darkvision 60 ft.; Passive Perception 9 ` |
-| ` languages_text ` | ` Common plus one other language ` |
-| ` cr_text ` | ` 9 (XP 5,000; PB +4) ` |
-| ` hit_points_text ` | ` 123 (13d10 + 52) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 20 ` | ` 5 ` |
-| ` Dexterity ` | ` 9 ` | ` -1 ` |
-| ` Constitution ` | ` 18 ` | ` 4 ` |
-| ` Intelligence ` | ` 3 ` | ` -4 ` |
-| ` Wisdom ` | ` 8 ` | ` -1 ` |
-| ` Charisma ` | ` 1 ` | ` -5 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 14 ` |  |
-| ` max_hp ` | ` 123 ` |  |
-| ` initiative ` | ` 3 ` |  |
-| ` speed ` | ` 30 ` | ` ft ` |
 
 ## Health
 

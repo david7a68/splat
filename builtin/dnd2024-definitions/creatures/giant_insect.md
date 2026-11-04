@@ -1,33 +1,60 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 1e20ad87-337a-5f20-bd89-a170439e60fc
 splat_kind: creature
 splat_key: dnd2024:creatures/giant_insect
 splat_name: Giant Insect
-splat_origin:
-  key: dnd2024:reference/creature/giant_insect
+splat_origin: dnd2024:reference/creature/giant_insect
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 136
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 136, https://www.dndbeyond.com/srd
 ---
 
 # Giant Insect
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Large |
+| Type | Beast |
+| Alignment | Unaligned |
+| Armor Class | 11 + the spell’s level |
+| Hit Points | 30 + 10 for each spell level above 4 |
+| Initiative |  |
+| Speed | 40 ft., Climb 40 ft., Fly 40 ft. (Wasp only) |
+| Challenge | None (XP 0; PB equals your Proficiency Bonus) |
+| Senses | Darkvision 60 ft.; Passive Perception 12 |
+| Languages | Understands the languages you know |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 17 | +3 | +3 |
+| Dex | 13 | +1 | +1 |
+| Con | 15 | +2 | +2 |
+| Int | 4 | -3 | -3 |
+| Wis | 14 | +2 | +2 |
+| Cha | 3 | -4 | -4 |
+
+%% splat shape=hp_text,ac_text %%
+
 
 ## Source text
 
 <!-- SRD page 136 -->
 
-Large Beast, Unaligned\
-AC 11 + the spell’s level\
-HP 30 + 10 for each spell level above 4\
-Speed 40 ft., Climb 40 ft., Fly 40 ft. (Wasp only)\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 17 +3 +3 Dex 13 +1 +1 Con 15 +2 +2\
-Int 4 −3 −3 Wis 14 +2 +2 Cha 3 −4 −4\
-Senses Darkvision 60 ft.; Passive Perception 12\
-Languages Understands the languages you know\
-CR None (XP 0; PB equals your Proficiency Bonus)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Large Beast, Unaligned\
+> AC 11 + the spell’s level\
+> HP 30 + 10 for each spell level above 4\
+> Speed 40 ft., Climb 40 ft., Fly 40 ft. (Wasp only)\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 17 +3 +3 Dex 13 +1 +1 Con 15 +2 +2\
+> Int 4 −3 −3 Wis 14 +2 +2 Cha 3 −4 −4\
+> Senses Darkvision 60 ft.; Passive Perception 12\
+> Languages Understands the languages you know\
+> CR None (XP 0; PB equals your Proficiency Bonus)
+
 
 ### Traits
 
@@ -47,44 +74,11 @@ Venomous Spew (Centipede Only). Constitution Saving Throw: Your spell save DC, o
 
 Original layout: [[../../srd-5.2.1/pages/136|page 136]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` large ` |
-| ` type ` | ` beast ` |
-| ` alignment ` | ` Unaligned ` |
-| ` movement_text ` | ` 40 ft., Climb 40 ft., Fly 40 ft. (Wasp only) ` |
-| ` senses_text ` | ` Darkvision 60 ft.; Passive Perception 12 ` |
-| ` languages_text ` | ` Understands the languages you know ` |
-| ` cr_text ` | ` None (XP 0; PB equals your Proficiency Bonus) ` |
-| ` hit_points_text ` | ` 30 + 10 for each spell level above 4 ` |
-| ` armor_class_text ` | ` 11 + the spell’s level ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 17 ` | ` 3 ` |
-| ` Dexterity ` | ` 13 ` | ` 1 ` |
-| ` Constitution ` | ` 15 ` | ` 2 ` |
-| ` Intelligence ` | ` 4 ` | ` -3 ` |
-| ` Wisdom ` | ` 14 ` | ` 2 ` |
-| ` Charisma ` | ` 3 ` | ` -4 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` speed ` | ` 40 ` | ` ft ` |
-| ` climb_speed ` | ` 40 ` | ` ft ` |
-| ` fly_speed ` | ` 40 ` | ` ft ` |
 
 ## Health
 
@@ -380,3 +374,16 @@ geometry_assumptions:
   - plane
   - form_appearance
 ```
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_stats_extras -->
+> 
+> ```yaml
+> fly_speed:
+>   unit: ft
+>   value: 40
+> climb_speed:
+>   unit: ft
+>   value: 40
+> ```
+

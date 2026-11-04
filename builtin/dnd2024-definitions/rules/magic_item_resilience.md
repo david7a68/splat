@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: a60ce9cd-15e0-5c4f-8ef5-3bff5d68721f
 splat_kind: rule
 splat_key: dnd2024:rules/magic_item_resilience
 splat_name: Magic Item Resilience
-splat_origin:
-  key: dnd2024:reference/pages/206
+splat_origin: dnd2024:reference/pages/206
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 206
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 206, https://www.dndbeyond.com/srd
 ---
 
 # Magic Item Resilience

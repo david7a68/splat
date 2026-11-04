@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "ac12a2df-59f9-5fcb-bbe1-3891cee3bf0b"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/quasit"
 splat_name: "Quasit"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [317], "executable": false}
+splat_pages:
+- 317
 ---
 
 # Quasit
@@ -40,3 +41,13 @@ Scare (1/Day). Wisdom Saving Throw: DC 10, one creature within 20 feet. Failure:
 Shape-Shift. The quasit shape-shifts to resemble a bat (Speed 10 ft., Fly 40 ft.), a centipede (40 ft., Climb 40 ft.), or a toad (40 ft., Swim 40 ft.), or it returns to its true form. Its game statistics are the same in each form, except for its Speed. Any equipment it is wearing or carrying isn’t transformed.
 
 Original layout: [[../pages/317|page 317]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

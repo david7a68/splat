@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: f796a67c-326b-504d-aa54-dab654fef250
 splat_kind: spell
 splat_key: dnd2024:spells/spike_growth
 splat_name: Spike Growth
-splat_origin:
-  key: dnd2024:reference/spell/spike_growth
+splat_origin: dnd2024:reference/spell/spike_growth
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 164
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 164, https://www.dndbeyond.com/srd
 ---
 
 # Spike Growth
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 2 |
+| School | Transmutation |
+| Classes | Druid, Ranger |
+| Casting Time | Action |
+| Range | 150 feet |
+| Components | V, S, M (seven thorns) |
+| Duration | Concentration, up to 10 minutes |
+
 
 ## Source text
 
@@ -30,37 +41,11 @@ The transformation of the ground is camouflaged to look natural. Any creature th
 
 Original layout: [[../../srd-5.2.1/pages/164|page 164]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 2 ` |
-| ` school ` | ` transmutation ` |
-| ` classes ` | ` ["druid", "ranger"] ` |
-| ` components ` | ` ["verbal", "somatic", "material"] ` |
-| ` concentration ` | ` true ` |
-| ` duration ` | ` Concentration, up to 10 minutes ` |
-| ` casting_time ` | ` Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
 
-<!-- splat:values path=splat_spell/range -->
 
-| Field | Value |
-| --- | --- |
-| ` feet ` | ` 150 ` |
-
-### Material
-
-<!-- splat:values path=splat_spell/material -->
-
-| Field | Value |
-| --- | --- |
-| ` description ` | ` seven thorns ` |
-| ` consumed ` | ` false ` |
 
 ## Rule
 
@@ -143,3 +128,12 @@ success: recognize_hazard
 | ` source ` | ` supplied_world_geometry ` |
 | ` unknown_facts ` | ` require_resolution ` |
 | ` infer_unprovided_geometry ` | ` false ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_spell_extras -->
+> 
+> ```yaml
+> material:
+>   consumed: false
+> ```
+

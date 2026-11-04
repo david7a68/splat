@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "a5f2b9e3-d264-53c2-a6e7-dc0c20140a2a"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/giant_crab"
 splat_name: "Giant Crab"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [350], "executable": false}
+splat_pages:
+- 350
 ---
 
 # Giant Crab
@@ -32,3 +33,13 @@ Amphibious. The crab can breathe air and water.
 Claw. Melee Attack Roll: +3, reach 5 ft. Hit: 4 (1d6 + 1) Bludgeoning damage. If the target is a Medium or smaller creature, it has the Grappled condition (escape DC 11) from one of two claws.
 
 Original layout: [[../pages/350|page 350]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

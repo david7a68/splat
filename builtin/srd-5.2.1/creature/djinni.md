@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "683c923f-ddbe-56ec-8c8a-2e907967bd5f"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/djinni"
 splat_name: "Djinni"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [280], "executable": false}
+splat_pages:
+- 280
 ---
 
 # Djinni
@@ -50,3 +51,13 @@ At Will: Detect Evil and Good, Detect Magic\
 1/Day Each: Creation, Gaseous Form, Invisibility, Major Image, Plane Shift
 
 Original layout: [[../pages/280|page 280]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

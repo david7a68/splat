@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: a30dff02-a8b5-5c52-8344-5a0969e1d098
 splat_kind: spell
 splat_key: dnd2024:spells/forcecage
 splat_name: Forcecage
-splat_origin:
-  key: dnd2024:reference/spell/forcecage
+splat_origin: dnd2024:reference/spell/forcecage
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 134
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 134, https://www.dndbeyond.com/srd
 ---
 
 # Forcecage
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 7 |
+| School | Evocation |
+| Classes | Bard, Warlock, Wizard |
+| Casting Time | Action |
+| Range | 100 feet |
+| Components | V, S, M (ruby dust worth 1,500+ GP, which the spell consumes) |
+| Duration | Concentration, up to 1 hour |
+
 
 ## Source text
 
@@ -36,37 +47,11 @@ This spell can’t be dispelled by Dispel Magic.
 
 Original layout: [[../../srd-5.2.1/pages/134|page 134]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 7 ` |
-| ` school ` | ` evocation ` |
-| ` classes ` | ` ["bard", "warlock", "wizard"] ` |
-| ` components ` | ` ["verbal", "somatic", "material"] ` |
-| ` concentration ` | ` true ` |
-| ` duration ` | ` Concentration, up to 1 hour ` |
-| ` casting_time ` | ` Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
 
-<!-- splat:values path=splat_spell/range -->
 
-| Field | Value |
-| --- | --- |
-| ` feet ` | ` 100 ` |
-
-### Material
-
-<!-- splat:values path=splat_spell/material -->
-
-| Field | Value |
-| --- | --- |
-| ` description ` | ` ruby dust worth 1,500+ GP, which the spell consumes ` |
-| ` consumed ` | ` true ` |
 
 ## Rule
 
@@ -142,3 +127,12 @@ teleport_or_interplanar:
       exit_allowed: true
 ethereal: blocked
 ```
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_spell_extras -->
+> 
+> ```yaml
+> material:
+>   consumed: true
+> ```
+

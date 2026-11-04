@@ -1,10 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "6bd0df7f-6619-5a2e-ab01-169dcef28f1f"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/imp"
 splat_name: "Imp"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [300, 301], "executable": false}
+splat_pages:
+- 300
+- 301
 ---
 
 # Imp
@@ -40,3 +42,13 @@ Invisibility. The imp casts Invisibility on itself, requiring no spell component
 Shape-Shift. The imp shape-shifts to resemble a rat (Speed 20 ft.), a raven (20 ft., Fly 60 ft.), or a spider (20 ft., Climb 20 ft.), or it returns to its true form. Its game statistics are the same in each form, except for its Speed. Any equipment it is wearing or carrying isn’t transformed.
 
 Original layout: [[../pages/300|page 300]], [[../pages/301|page 301]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

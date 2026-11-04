@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: ae563e1d-69bc-597d-86fb-9bd7183e2e1a
 splat_kind: spell
 splat_key: dnd2024:spells/spirit_guardians
 splat_name: Spirit Guardians
-splat_origin:
-  key: dnd2024:reference/spell/spirit_guardians
+splat_origin: dnd2024:reference/spell/spirit_guardians
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 164, 165
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 164, 165, https://www.dndbeyond.com/srd
 ---
 
 # Spirit Guardians
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 3 |
+| School | Conjuration |
+| Classes | Cleric |
+| Casting Time | Action |
+| Range |  |
+| Components | V, S, M (a prayer scroll) |
+| Duration | Concentration, up to 10 minutes |
+
 
 ## Source text
 
@@ -34,37 +45,11 @@ Using a Higher-Level Spell Slot. The damage increases by 1d8 for each spell slot
 
 Original layout: [[../../srd-5.2.1/pages/164|page 164]], [[../../srd-5.2.1/pages/165|page 165]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 3 ` |
-| ` school ` | ` conjuration ` |
-| ` classes ` | ` ["cleric"] ` |
-| ` components ` | ` ["verbal", "somatic", "material"] ` |
-| ` concentration ` | ` true ` |
-| ` duration ` | ` Concentration, up to 10 minutes ` |
-| ` casting_time ` | ` Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
 
-<!-- splat:values path=splat_spell/range -->
 
-| Field | Value |
-| --- | --- |
-| ` mode ` | ` self ` |
-
-### Material
-
-<!-- splat:values path=splat_spell/material -->
-
-| Field | Value |
-| --- | --- |
-| ` description ` | ` a prayer scroll ` |
-| ` consumed ` | ` false ` |
 
 ## Rule
 
@@ -164,3 +149,14 @@ success:
 | ` per_slot_above ` | ` 3 ` |
 | ` damage_dice ` | ` 1 ` |
 | ` sides ` | ` 8 ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_spell_extras -->
+> 
+> ```yaml
+> material:
+>   consumed: false
+> range:
+>   mode: self
+> ```
+

@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 9119be78-3637-5b22-a703-f1ddd9209758
 splat_kind: spell
 splat_key: dnd2024:spells/illusory_script
 splat_name: Illusory Script
-splat_origin:
-  key: dnd2024:reference/spell/illusory_script
+splat_origin: dnd2024:reference/spell/illusory_script
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 142
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 142, https://www.dndbeyond.com/srd
 ---
 
 # Illusory Script
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 1 |
+| School | Illusion |
+| Classes | Bard, Warlock, Wizard |
+| Casting Time | 1 minute or Ritual |
+| Range |  |
+| Components | S, M (ink worth 10+ GP, which the spell consumes) |
+| Duration | 10 days |
+
 
 ## Source text
 
@@ -32,37 +43,11 @@ A creature that has Truesight can read the hidden message.
 
 Original layout: [[../../srd-5.2.1/pages/142|page 142]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 1 ` |
-| ` school ` | ` illusion ` |
-| ` classes ` | ` ["bard", "warlock", "wizard"] ` |
-| ` components ` | ` ["somatic", "material"] ` |
-| ` concentration ` | ` false ` |
-| ` duration ` | ` 10 days ` |
-| ` casting_time ` | ` 1 minute or Ritual ` |
-| ` ritual ` | ` true ` |
 
-### Range
 
-<!-- splat:values path=splat_spell/range -->
 
-| Field | Value |
-| --- | --- |
-| ` mode ` | ` touch ` |
-
-### Material
-
-<!-- splat:values path=splat_spell/material -->
-
-| Field | Value |
-| --- | --- |
-| ` description ` | ` ink worth 10+ GP, which the spell consumes ` |
-| ` consumed ` | ` true ` |
 
 ## Rule
 
@@ -159,3 +144,14 @@ language:
 | Field | Value |
 | --- | --- |
 | ` remove ` | ` ["original_script", "illusion"] ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_spell_extras -->
+> 
+> ```yaml
+> material:
+>   consumed: true
+> range:
+>   mode: touch
+> ```
+

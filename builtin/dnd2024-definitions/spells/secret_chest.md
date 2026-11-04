@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: cba41089-70d8-5b5e-98e6-a90af7674f72
 splat_kind: spell
 splat_key: dnd2024:spells/secret_chest
 splat_name: Secret Chest
-splat_origin:
-  key: dnd2024:reference/spell/secret_chest
+splat_origin: dnd2024:reference/spell/secret_chest
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 160
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 160, https://www.dndbeyond.com/srd
 ---
 
 # Secret Chest
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 4 |
+| School | Conjuration |
+| Classes | Wizard |
+| Casting Time | Action |
+| Range |  |
+| Components | V, S, M (a chest, 3 feet by 2 feet by 2 feet, constructed from rare materials worth 5,000+ GP, and a Tiny replica of the chest made from the same materials worth 50+ GP) |
+| Duration | Until dispelled |
+
 
 ## Source text
 
@@ -32,37 +43,11 @@ After 60 days, there is a cumulative 5 percent chance at the end of each day tha
 
 Original layout: [[../../srd-5.2.1/pages/160|page 160]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 4 ` |
-| ` school ` | ` conjuration ` |
-| ` classes ` | ` ["wizard"] ` |
-| ` components ` | ` ["verbal", "somatic", "material"] ` |
-| ` concentration ` | ` false ` |
-| ` duration ` | ` Until dispelled ` |
-| ` casting_time ` | ` Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
 
-<!-- splat:values path=splat_spell/range -->
 
-| Field | Value |
-| --- | --- |
-| ` mode ` | ` touch ` |
-
-### Material
-
-<!-- splat:values path=splat_spell/material -->
-
-| Field | Value |
-| --- | --- |
-| ` description ` | ` a chest, 3 feet by 2 feet by 2 feet, constructed from rare materials worth 5,000+ GP, and a Tiny replica of the chest made from the same materials worth 50+ GP ` |
-| ` consumed ` | ` false ` |
 
 ## Rule
 
@@ -155,3 +140,14 @@ destination:
 | --- | --- |
 | ` chest_remains_ethereal ` | ` true ` |
 | ` recoverable_by_search ` | ` true ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_spell_extras -->
+> 
+> ```yaml
+> material:
+>   consumed: false
+> range:
+>   mode: touch
+> ```
+

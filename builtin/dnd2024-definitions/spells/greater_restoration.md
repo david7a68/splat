@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 55c81461-36e7-5f03-97ce-b861b2cdc156
 splat_kind: spell
 splat_key: dnd2024:spells/greater_restoration
 splat_name: Greater Restoration
-splat_origin:
-  key: dnd2024:reference/spell/greater_restoration
+splat_origin: dnd2024:reference/spell/greater_restoration
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 137
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 137, https://www.dndbeyond.com/srd
 ---
 
 # Greater Restoration
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 5 |
+| School | Abjuration |
+| Classes | Bard, Cleric, Druid, Paladin, Ranger |
+| Casting Time | Action |
+| Range |  |
+| Components | V, S, M (diamond dust worth 100+ GP, which the spell consumes) |
+| Duration | Instantaneous |
+
 
 ## Source text
 
@@ -38,37 +49,11 @@ You touch a creature and magically remove one of the following effects from it:
 
 Original layout: [[../../srd-5.2.1/pages/137|page 137]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 5 ` |
-| ` school ` | ` abjuration ` |
-| ` classes ` | ` ["bard", "cleric", "druid", "paladin", "ranger"] ` |
-| ` components ` | ` ["verbal", "somatic", "material"] ` |
-| ` concentration ` | ` false ` |
-| ` duration ` | ` Instantaneous ` |
-| ` casting_time ` | ` Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
 
-<!-- splat:values path=splat_spell/range -->
 
-| Field | Value |
-| --- | --- |
-| ` mode ` | ` touch ` |
-
-### Material
-
-<!-- splat:values path=splat_spell/material -->
-
-| Field | Value |
-| --- | --- |
-| ` description ` | ` diamond dust worth 100+ GP, which the spell consumes ` |
-| ` consumed ` | ` true ` |
 
 ## Rule
 
@@ -153,3 +138,14 @@ concentration: false
 maximum:
   kind: instantaneous
 ```
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_spell_extras -->
+> 
+> ```yaml
+> material:
+>   consumed: true
+> range:
+>   mode: touch
+> ```
+

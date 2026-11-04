@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "284e2287-06b5-59aa-acb4-a3f7abe59680"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/priest_acolyte"
 splat_name: "Priest Acolyte"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [316], "executable": false}
+splat_pages:
+- 316
 ---
 
 # Priest Acolyte
@@ -39,3 +40,13 @@ At Will: Light, Thaumaturgy
 Divine Aid (1/Day). The priest casts Bless, Healing Word, or Sanctuary, using the same spellcasting ability as Spellcasting.
 
 Original layout: [[../pages/316|page 316]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

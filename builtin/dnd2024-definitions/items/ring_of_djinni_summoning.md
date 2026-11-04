@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: e25bf248-a0a4-5827-99b4-6f30e12406ec
 splat_kind: item
 splat_key: dnd2024:items/ring_of_djinni_summoning
 splat_name: Ring of Djinni Summoning
-splat_origin:
-  key: dnd2024:reference/magic_item/ring_of_djinni_summoning
+splat_origin: dnd2024:reference/magic_item/ring_of_djinni_summoning
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 237
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 237, https://www.dndbeyond.com/srd
 ---
 
 # Ring of Djinni Summoning
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Ring |
+| Rarity | Legendary |
+| Attunement | Yes |
+
 
 ## Source text
 
@@ -30,22 +37,9 @@ Rings of Djinni Summoning are often created by the djinn they summon and given t
 
 Original layout: [[../../srd-5.2.1/pages/237|page 237]].
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` ring ` |
-| ` rarity ` | ` legendary ` |
 
-### Equipment
-
-<!-- splat:values path=splat_item/equipment -->
-
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` required ` |
 
 ## Rule
 

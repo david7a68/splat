@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: d75517f9-42e5-5267-9737-8008c218e36c
 splat_kind: rule
 splat_key: dnd2024:rules/casting_spells_using_a_higher_level_spell_slot
 splat_name: Using a Higher-Level Spell Slot
-splat_origin:
-  key: dnd2024:reference/pages/104
+splat_origin: dnd2024:reference/pages/104
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 104, 105
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 104, 105, https://www.dndbeyond.com/srd
 ---
 
 # Using a Higher-Level Spell Slot

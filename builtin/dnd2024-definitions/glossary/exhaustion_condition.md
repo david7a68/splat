@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: a80aaf92-6a84-5d6f-9321-47b7aed615a0
 splat_kind: rule
 splat_key: dnd2024:glossary/exhaustion_condition
 splat_name: Exhaustion [Condition]
-splat_origin:
-  key: dnd2024:reference/glossary/exhaustion_condition
+splat_origin: dnd2024:reference/glossary/exhaustion_condition
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 181
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 181, https://www.dndbeyond.com/srd
 ---
 
 # Exhaustion [Condition]

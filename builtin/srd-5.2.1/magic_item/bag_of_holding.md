@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "66a1ec50-9858-544b-8246-b568eb6c5049"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/magic_item/bag_of_holding"
 splat_name: "Bag of Holding"
-splat_reference: {"source": "SRD 5.2.1", "category": "magic_item", "pages": [212], "executable": false}
+splat_pages:
+- 212
 ---
 
 # Bag of Holding
@@ -20,3 +21,13 @@ If the bag is overloaded, pierced, or torn, it is destroyed, and its contents ar
 Placing a Bag of Holding inside an extradimensional space created by a Handy Haversack, Portable Hole, or similar item instantly destroys both items and opens a gate to the Astral Plane. The gate originates where the one item was placed inside the other. Any creature within a 10-foot-radius Sphere centered on the gate is sucked through it to a random location on the Astral Plane. The gate then closes. The gate is one-way and can’t be reopened.
 
 Original layout: [[../pages/212|page 212]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: magic_item
+> executable: false
+> ```
+

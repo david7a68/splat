@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: c569bfa9-d21c-5911-a569-55d35d089f17
 splat_kind: rule
 splat_key: dnd2024:glossary/experience_points
 splat_name: Experience Points
-splat_origin:
-  key: dnd2024:reference/glossary/experience_points
+splat_origin: dnd2024:reference/glossary/experience_points
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 182
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 182, https://www.dndbeyond.com/srd
 ---
 
 # Experience Points

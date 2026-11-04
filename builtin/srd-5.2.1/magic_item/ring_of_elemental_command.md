@@ -1,10 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "3e4a60bc-b1bf-548c-a68f-32b3225b3318"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/magic_item/ring_of_elemental_command"
 splat_name: "Ring of Elemental Command"
-splat_reference: {"source": "SRD 5.2.1", "category": "magic_item", "pages": [237, 238], "executable": false}
+splat_pages:
+- 237
+- 238
 ---
 
 # Ring of Elemental Command
@@ -41,3 +43,13 @@ Spellcasting. The ring has 5 charges and regains 1d4 + 1 expended charges daily 
 | Water | Create or Destroy Water (1 charge), Ice Storm (2 charges), Tsunami (5 charges), Wall of Ice (3 charges), Water Walk (2 charges) |
 
 Original layout: [[../pages/237|page 237]], [[../pages/238|page 238]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: magic_item
+> executable: false
+> ```
+

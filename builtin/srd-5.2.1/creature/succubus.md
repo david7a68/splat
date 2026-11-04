@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "f7306562-61e1-5633-88c3-99104c579f4b"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/succubus"
 splat_name: "Succubus"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [331], "executable": false}
+splat_pages:
+- 331
 ---
 
 # Succubus
@@ -43,3 +44,13 @@ Draining Kiss. Constitution Saving Throw: DC 15, one creature Charmed by the suc
 Shape-Shift. The succubus shape-shifts into a Medium or Small Humanoid, or it returns to its true form. Its game statistics are the same in each form, except its Fly Speed is available only in its true form. Any equipment it is wearing or carrying isn’t transformed.
 
 Original layout: [[../pages/331|page 331]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "29f3498b-db2d-5f5a-946f-dce34d155f6d"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/elephant"
 splat_name: "Elephant"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [348], "executable": false}
+splat_pages:
+- 348
 ---
 
 # Elephant
@@ -33,3 +34,13 @@ Gore. Melee Attack Roll: +8, reach 5 ft. Hit: 15 (2d8 + 6) Piercing damage. If t
 Trample. Dexterity Saving Throw: DC 16, one creature within 5 feet that has the Prone condition. Failure: 17 (2d10 + 6) Bludgeoning damage. Success: Half damage.
 
 Original layout: [[../pages/348|page 348]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

@@ -1,37 +1,66 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 753c9e67-77c6-5e3d-882a-c7e898292576
 splat_kind: creature
 splat_key: dnd2024:creatures/shadow
 splat_name: Shadow
-splat_origin:
-  key: dnd2024:reference/creature/shadow
+splat_origin: dnd2024:reference/creature/shadow
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 322, 323
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 322, 323, https://www.dndbeyond.com/srd
 ---
 
 # Shadow
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Medium |
+| Type | Undead |
+| Alignment | Chaotic Evil |
+| Armor Class | 12 |
+| Hit Points | 27 (5d8 + 5) |
+| Initiative | +2 (12) |
+| Speed | 40 ft. |
+| Challenge | 1/2 (XP 100; PB +2) |
+| Skills | Stealth +6 |
+| Senses | Darkvision 60 ft.; Passive Perception 10 |
+| Languages | None |
+| Resistances | Acid, Cold, Fire, Lightning, Thunder |
+| Immunities | Necrotic, Poison; Exhaustion, Frightened, Grappled, Paralyzed, Petrified, Poisoned, Prone, Restrained, Unconscious |
+| Vulnerabilities | Radiant |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 6 | -2 | -2 |
+| Dex | 14 | +2 | +2 |
+| Con | 13 | +1 | +1 |
+| Int | 6 | -2 | -2 |
+| Wis | 10 | +0 | +0 |
+| Cha | 8 | -1 | -1 |
+
 
 ## Source text
 
 <!-- SRD page 322 -->
 
-Medium Undead, Chaotic Evil\
-AC 12  Initiative +2 (12)\
-HP 27 (5d8 + 5)\
-Speed 40 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 6 −2 −2 Dex 14 +2 +2 Con 13 +1 +1\
-Int 6 −2 −2 Wis 10 +0 +0 Cha 8 −1 −1\
-Skills Stealth +6\
-Vulnerabilities Radiant\
-Resistances Acid, Cold, Fire, Lightning, Thunder\
-Immunities Necrotic, Poison; Exhaustion, Frightened, Grappled, Paralyzed, Petrified, Poisoned, Prone, Restrained, Unconscious\
-Senses Darkvision 60 ft.; Passive Perception 10\
-Languages None\
-CR 1/2 (XP 100; PB +2)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Medium Undead, Chaotic Evil\
+> AC 12  Initiative +2 (12)\
+> HP 27 (5d8 + 5)\
+> Speed 40 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 6 −2 −2 Dex 14 +2 +2 Con 13 +1 +1\
+> Int 6 −2 −2 Wis 10 +0 +0 Cha 8 −1 −1\
+> Skills Stealth +6\
+> Vulnerabilities Radiant\
+> Resistances Acid, Cold, Fire, Lightning, Thunder\
+> Immunities Necrotic, Poison; Exhaustion, Frightened, Grappled, Paralyzed, Petrified, Poisoned, Prone, Restrained, Unconscious\
+> Senses Darkvision 60 ft.; Passive Perception 10\
+> Languages None\
+> CR 1/2 (XP 100; PB +2)
+
 
 ### Traits
 
@@ -51,48 +80,11 @@ Shadow Stealth. While in Dim Light or Darkness, the shadow takes the Hide action
 
 Original layout: [[../../srd-5.2.1/pages/322|page 322]], [[../../srd-5.2.1/pages/323|page 323]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` medium ` |
-| ` type ` | ` undead ` |
-| ` alignment ` | ` Chaotic Evil ` |
-| ` movement_text ` | ` 40 ft. ` |
-| ` skills_text ` | ` Stealth +6 ` |
-| ` resistances_text ` | ` Acid, Cold, Fire, Lightning, Thunder ` |
-| ` vulnerabilities_text ` | ` Radiant ` |
-| ` immunities_text ` | ` Necrotic, Poison; Exhaustion, Frightened, Grappled, Paralyzed, Petrified, Poisoned, Prone, Restrained, Unconscious ` |
-| ` senses_text ` | ` Darkvision 60 ft.; Passive Perception 10 ` |
-| ` languages_text ` | ` None ` |
-| ` cr_text ` | ` 1/2 (XP 100; PB +2) ` |
-| ` hit_points_text ` | ` 27 (5d8 + 5) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 6 ` | ` -2 ` |
-| ` Dexterity ` | ` 14 ` | ` 2 ` |
-| ` Constitution ` | ` 13 ` | ` 1 ` |
-| ` Intelligence ` | ` 6 ` | ` -2 ` |
-| ` Wisdom ` | ` 10 ` | ` 0 ` |
-| ` Charisma ` | ` 8 ` | ` -1 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 12 ` |  |
-| ` max_hp ` | ` 27 ` |  |
-| ` initiative ` | ` 2 ` |  |
-| ` speed ` | ` 40 ` | ` ft ` |
 
 ## Health
 

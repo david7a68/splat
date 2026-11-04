@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: b72b7339-8954-5e4e-acee-5e8da4331a86
 splat_kind: item
 splat_key: dnd2024:items/immovable_rod
 splat_name: Immovable Rod
-splat_origin:
-  key: dnd2024:reference/magic_item/immovable_rod
+splat_origin: dnd2024:reference/magic_item/immovable_rod
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 227
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 227, https://www.dndbeyond.com/srd
 ---
 
 # Immovable Rod
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Rod |
+| Rarity | Uncommon |
+| Attunement | No |
+
 
 ## Source text
 
@@ -24,22 +31,9 @@ This iron rod has a button on one end. You can take a Utilize action to press th
 
 Original layout: [[../../srd-5.2.1/pages/227|page 227]].
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` rod ` |
-| ` rarity ` | ` uncommon ` |
 
-### Equipment
-
-<!-- splat:values path=splat_item/equipment -->
-
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` none ` |
 
 ## Rule
 

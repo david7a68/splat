@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 9a897644-e7f1-55d2-b419-de6018343271
 splat_kind: rule
 splat_key: dnd2024:glossary/spell_attack
 splat_name: Spell Attack
-splat_origin:
-  key: dnd2024:reference/glossary/spell_attack
+splat_origin: dnd2024:reference/glossary/spell_attack
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 188
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 188, https://www.dndbeyond.com/srd
 ---
 
 # Spell Attack

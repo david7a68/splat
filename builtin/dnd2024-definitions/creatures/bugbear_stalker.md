@@ -1,35 +1,62 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: b0db3fcd-7eeb-57af-8bfc-24f15e948cb0
 splat_kind: creature
 splat_key: dnd2024:creatures/bugbear_stalker
 splat_name: Bugbear Stalker
-splat_origin:
-  key: dnd2024:reference/creature/bugbear_stalker
+splat_origin: dnd2024:reference/creature/bugbear_stalker
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 271
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 271, https://www.dndbeyond.com/srd
 ---
 
 # Bugbear Stalker
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Medium |
+| Type | Fey (Goblinoid) |
+| Alignment | Chaotic Evil |
+| Armor Class | 15 |
+| Hit Points | 65 (10d8 + 20) |
+| Initiative | +2 (12) |
+| Speed | 30 ft. |
+| Challenge | 3 (XP 700; PB +2) |
+| Skills | Stealth +6, Survival +3 |
+| Senses | Darkvision 60 ft.; Passive Perception 11 |
+| Languages | Common, Goblin |
+| Gear | Chain Shirt, Javelins (6), Morningstar |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 17 | +3 | +3 |
+| Dex | 14 | +2 | +2 |
+| Con | 14 | +2 | +4 |
+| Int | 11 | +0 | +0 |
+| Wis | 12 | +1 | +3 |
+| Cha | 11 | +0 | +0 |
+
 
 ## Source text
 
 <!-- SRD page 271 -->
 
-Medium Fey (Goblinoid), Chaotic Evil\
-AC 15 Initiative +2 (12)\
-HP 65 (10d8 + 20)\
-Speed 30 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 17 +3 +3 Dex 14 +2 +2 Con 14 +2 +4\
-Int 11 +0 +0 Wis 12 +1 +3 Cha 11 +0 +0\
-Skills Stealth +6, Survival +3\
-Gear Chain Shirt, Javelins (6), Morningstar\
-Senses Darkvision 60 ft.; Passive Perception 11\
-Languages Common, Goblin\
-CR 3 (XP 700; PB +2)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Medium Fey (Goblinoid), Chaotic Evil\
+> AC 15 Initiative +2 (12)\
+> HP 65 (10d8 + 20)\
+> Speed 30 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 17 +3 +3 Dex 14 +2 +2 Con 14 +2 +4\
+> Int 11 +0 +0 Wis 12 +1 +3 Cha 11 +0 +0\
+> Skills Stealth +6, Survival +3\
+> Gear Chain Shirt, Javelins (6), Morningstar\
+> Senses Darkvision 60 ft.; Passive Perception 11\
+> Languages Common, Goblin\
+> CR 3 (XP 700; PB +2)
+
 
 ### Traits
 
@@ -49,47 +76,11 @@ Quick Grapple. Dexterity Saving Throw: DC 13, one Medium or smaller creature the
 
 Original layout: [[../../srd-5.2.1/pages/271|page 271]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` medium ` |
-| ` type ` | ` fey ` |
-| ` alignment ` | ` Chaotic Evil ` |
-| ` tags_text ` | ` (Goblinoid) ` |
-| ` movement_text ` | ` 30 ft. ` |
-| ` skills_text ` | ` Stealth +6, Survival +3 ` |
-| ` gear_text ` | ` Chain Shirt, Javelins (6), Morningstar ` |
-| ` senses_text ` | ` Darkvision 60 ft.; Passive Perception 11 ` |
-| ` languages_text ` | ` Common, Goblin ` |
-| ` cr_text ` | ` 3 (XP 700; PB +2) ` |
-| ` hit_points_text ` | ` 65 (10d8 + 20) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 17 ` | ` 3 ` |
-| ` Dexterity ` | ` 14 ` | ` 2 ` |
-| ` Constitution ` | ` 14 ` | ` 4 ` |
-| ` Intelligence ` | ` 11 ` | ` 0 ` |
-| ` Wisdom ` | ` 12 ` | ` 3 ` |
-| ` Charisma ` | ` 11 ` | ` 0 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 15 ` |  |
-| ` max_hp ` | ` 65 ` |  |
-| ` initiative ` | ` 2 ` |  |
-| ` speed ` | ` 30 ` | ` ft ` |
 
 ## Health
 

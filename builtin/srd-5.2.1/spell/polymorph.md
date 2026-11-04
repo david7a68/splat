@@ -1,10 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "9b2736c4-b9ec-5caf-93f8-eaa69bce588d"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/polymorph"
 splat_name: "Polymorph"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [153, 154], "executable": false}
+splat_pages:
+- 153
+- 154
 ---
 
 # Polymorph
@@ -28,3 +30,13 @@ The target is limited in the actions it can perform by the anatomy of its new fo
 The target’s gear melds into the new form. The creature can’t use or otherwise benefit from any of that equipment.
 
 Original layout: [[../pages/153|page 153]], [[../pages/154|page 154]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

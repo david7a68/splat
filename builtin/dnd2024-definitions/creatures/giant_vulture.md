@@ -1,35 +1,62 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 69ba782f-9f7c-5021-b5c8-352cd3785c31
 splat_kind: creature
 splat_key: dnd2024:creatures/giant_vulture
 splat_name: Giant Vulture
-splat_origin:
-  key: dnd2024:reference/creature/giant_vulture
+splat_origin: dnd2024:reference/creature/giant_vulture
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 354
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 354, https://www.dndbeyond.com/srd
 ---
 
 # Giant Vulture
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Large |
+| Type | Monstrosity |
+| Alignment | Neutral Evil |
+| Armor Class | 10 |
+| Hit Points | 25 (3d10 + 9) |
+| Initiative | +0 (10) |
+| Speed | 10 ft., Fly 60 ft. |
+| Challenge | 1 (XP 200; PB +2) |
+| Skills | Perception +3 |
+| Senses | Darkvision 60 ft.; Passive Perception 13 |
+| Languages | Understands Common but can’t speak |
+| Resistances | Necrotic |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 15 | +2 | +2 |
+| Dex | 10 | +0 | +0 |
+| Con | 16 | +3 | +3 |
+| Int | 6 | -2 | -2 |
+| Wis | 12 | +1 | +1 |
+| Cha | 7 | -2 | -2 |
+
 
 ## Source text
 
 <!-- SRD page 354 -->
 
-Large Monstrosity, Neutral Evil\
-AC 10 Initiative +0 (10)\
-HP 25 (3d10 + 9)\
-Speed 10 ft., Fly 60 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 15 +2 +2 Dex 10 +0 +0 Con 16 +3 +3\
-Int 6 −2 −2 Wis 12 +1 +1 Cha 7 −2 −2\
-Skills Perception +3\
-Resistances Necrotic\
-Senses Darkvision 60 ft.; Passive Perception 13\
-Languages Understands Common but can’t speak\
-CR 1 (XP 200; PB +2)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Large Monstrosity, Neutral Evil\
+> AC 10 Initiative +0 (10)\
+> HP 25 (3d10 + 9)\
+> Speed 10 ft., Fly 60 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 15 +2 +2 Dex 10 +0 +0 Con 16 +3 +3\
+> Int 6 −2 −2 Wis 12 +1 +1 Cha 7 −2 −2\
+> Skills Perception +3\
+> Resistances Necrotic\
+> Senses Darkvision 60 ft.; Passive Perception 13\
+> Languages Understands Common but can’t speak\
+> CR 1 (XP 200; PB +2)
+
 
 ### Traits
 
@@ -41,47 +68,11 @@ Gouge. Melee Attack Roll: +4, reach 5 ft. Hit: 9 (2d6 + 2) Piercing damage, and 
 
 Original layout: [[../../srd-5.2.1/pages/354|page 354]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` large ` |
-| ` type ` | ` monstrosity ` |
-| ` alignment ` | ` Neutral Evil ` |
-| ` movement_text ` | ` 10 ft., Fly 60 ft. ` |
-| ` skills_text ` | ` Perception +3 ` |
-| ` resistances_text ` | ` Necrotic ` |
-| ` senses_text ` | ` Darkvision 60 ft.; Passive Perception 13 ` |
-| ` languages_text ` | ` Understands Common but can’t speak ` |
-| ` cr_text ` | ` 1 (XP 200; PB +2) ` |
-| ` hit_points_text ` | ` 25 (3d10 + 9) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 15 ` | ` 2 ` |
-| ` Dexterity ` | ` 10 ` | ` 0 ` |
-| ` Constitution ` | ` 16 ` | ` 3 ` |
-| ` Intelligence ` | ` 6 ` | ` -2 ` |
-| ` Wisdom ` | ` 12 ` | ` 1 ` |
-| ` Charisma ` | ` 7 ` | ` -2 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 10 ` |  |
-| ` max_hp ` | ` 25 ` |  |
-| ` initiative ` | ` 0 ` |  |
-| ` speed ` | ` 10 ` | ` ft ` |
-| ` fly_speed ` | ` 60 ` | ` ft ` |
 
 ## Health
 
@@ -205,3 +196,13 @@ geometry:
 unlisted_success_branch: no_effect
 unlisted_duration: until_removed_by_applicable_rule
 ```
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_stats_extras -->
+> 
+> ```yaml
+> fly_speed:
+>   unit: ft
+>   value: 60
+> ```
+

@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: d533b3c2-46d0-5370-b015-b543d0fa3e9e
 splat_kind: spell
 splat_key: dnd2024:spells/starry_wisp
 splat_name: Starry Wisp
-splat_origin:
-  key: dnd2024:reference/spell/starry_wisp
+splat_origin: dnd2024:reference/spell/starry_wisp
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 165
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 165, https://www.dndbeyond.com/srd
 ---
 
 # Starry Wisp
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | Cantrip |
+| School | Evocation |
+| Classes | Bard, Druid |
+| Casting Time | Action |
+| Range | 60 feet |
+| Components | V, S |
+| Duration | Instantaneous |
+
 
 ## Source text
 
@@ -30,28 +41,9 @@ Cantrip Upgrade. The damage increases by 1d8 when you reach levels 5 (2d8), 11 (
 
 Original layout: [[../../srd-5.2.1/pages/165|page 165]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 0 ` |
-| ` school ` | ` evocation ` |
-| ` classes ` | ` ["bard", "druid"] ` |
-| ` components ` | ` ["verbal", "somatic"] ` |
-| ` concentration ` | ` false ` |
-| ` duration ` | ` Instantaneous ` |
-| ` casting_time ` | ` Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
-
-<!-- splat:values path=splat_spell/range -->
-
-| Field | Value |
-| --- | --- |
-| ` feet ` | ` 60 ` |
 
 ## Rule
 

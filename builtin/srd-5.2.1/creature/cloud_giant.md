@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "c921f77f-e226-5f76-b034-1a48bb19b15d"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/cloud_giant"
 splat_name: "Cloud Giant"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [275], "executable": false}
+splat_pages:
+- 275
 ---
 
 # Cloud Giant
@@ -41,3 +42,13 @@ At Will: Detect Magic, Fog Cloud, Light\
 Misty Step. The giant casts the Misty Step spell, using the same spellcasting ability as Spellcasting.
 
 Original layout: [[../pages/275|page 275]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

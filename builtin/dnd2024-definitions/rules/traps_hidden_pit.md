@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: db6c7e4a-fec4-5e35-92da-3ba0bfc1d570
 splat_kind: rule
 splat_key: dnd2024:rules/traps_hidden_pit
 splat_name: Hidden Pit
-splat_origin:
-  key: dnd2024:reference/pages/200
+splat_origin: dnd2024:reference/pages/200
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 200
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 200, https://www.dndbeyond.com/srd
 ---
 
 # Hidden Pit

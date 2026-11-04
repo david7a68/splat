@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "c62df51e-2967-5a2f-9e55-04712190ebc8"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/magic_item/staff_of_the_python"
 splat_name: "Staff of the Python"
-splat_reference: {"source": "SRD 5.2.1", "category": "magic_item", "pages": [247], "executable": false}
+splat_pages:
+- 247
 ---
 
 # Staff of the Python
@@ -20,3 +21,13 @@ On your turn, you can mentally command the snake (no action required) if it is w
 As a Bonus Action, you can command the snake to revert to staff form in its current space, and you can’t use the staff’s property again for 1 hour. If the snake is reduced to 0 Hit Points, it dies and reverts to its staff form; the staff then shatters and is destroyed. If the snake reverts to staff form before losing all its Hit Points, it regains all of them.
 
 Original layout: [[../pages/247|page 247]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: magic_item
+> executable: false
+> ```
+

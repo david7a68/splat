@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 35080ca0-59f9-53a4-999d-fc4b8976915a
 splat_kind: rule
 splat_key: dnd2024:glossary/breaking_objects
 splat_name: Breaking Objects
-splat_origin:
-  key: dnd2024:reference/glossary/breaking_objects
+splat_origin: dnd2024:reference/glossary/breaking_objects
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 177, 178
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 177, 178, https://www.dndbeyond.com/srd
 ---
 
 # Breaking Objects

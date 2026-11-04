@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "d32c98ac-7e77-5495-8a7a-a1eed7cd504e"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/polar_bear"
 splat_name: "Polar Bear"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [359], "executable": false}
+splat_pages:
+- 359
 ---
 
 # Polar Bear
@@ -31,3 +32,13 @@ Multiattack. The bear makes two Rend attacks.
 Rend. Melee Attack Roll: +7, reach 5 ft. Hit: 9 (1d8 + 5) Slashing damage.
 
 Original layout: [[../pages/359|page 359]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

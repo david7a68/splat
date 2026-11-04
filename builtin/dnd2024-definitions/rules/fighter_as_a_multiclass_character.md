@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 54be02d7-b7b5-5e60-850c-892a8d7bca02
 splat_kind: rule
 splat_key: dnd2024:rules/fighter_as_a_multiclass_character
 splat_name: As a Multiclass Character
-splat_origin:
-  key: dnd2024:reference/pages/047
+splat_origin: dnd2024:reference/pages/047
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 47
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 47, https://www.dndbeyond.com/srd
 ---
 
 # As a Multiclass Character

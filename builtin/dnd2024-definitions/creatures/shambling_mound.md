@@ -1,36 +1,64 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 7c7d3bae-a1a3-5189-a524-3966385eced8
 splat_kind: creature
 splat_key: dnd2024:creatures/shambling_mound
 splat_name: Shambling Mound
-splat_origin:
-  key: dnd2024:reference/creature/shambling_mound
+splat_origin: dnd2024:reference/creature/shambling_mound
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 323
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 323, https://www.dndbeyond.com/srd
 ---
 
 # Shambling Mound
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Large |
+| Type | Plant |
+| Alignment | Unaligned |
+| Armor Class | 15 |
+| Hit Points | 110 (13d10 + 39) |
+| Initiative | -1 (9) |
+| Speed | 30 ft., Swim 20 ft. |
+| Challenge | 5 (XP 1,800; PB +3) |
+| Skills | Stealth +3 |
+| Senses | Blindsight 60 ft.; Passive Perception 10 |
+| Languages | None |
+| Resistances | Cold, Fire |
+| Immunities | Lightning; Deafened, Exhaustion |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 18 | +4 | +4 |
+| Dex | 8 | -1 | -1 |
+| Con | 16 | +3 | +3 |
+| Int | 5 | -3 | -3 |
+| Wis | 10 | +0 | +0 |
+| Cha | 5 | -3 | -3 |
+
 
 ## Source text
 
 <!-- SRD page 323 -->
 
-Large Plant, Unaligned\
-AC 15  Initiative −1 (9)\
-HP 110 (13d10 + 39)\
-Speed 30 ft., Swim 20 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 18 +4 +4 Dex 8 −1 −1 Con 16 +3 +3\
-Int 5 −3 −3 Wis 10 +0 +0 Cha 5 −3 −3\
-Skills Stealth +3\
-Resistances Cold, Fire\
-Immunities Lightning; Deafened, Exhaustion\
-Senses Blindsight 60 ft.; Passive Perception 10\
-Languages None\
-CR 5 (XP 1,800; PB +3)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Large Plant, Unaligned\
+> AC 15  Initiative −1 (9)\
+> HP 110 (13d10 + 39)\
+> Speed 30 ft., Swim 20 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 18 +4 +4 Dex 8 −1 −1 Con 16 +3 +3\
+> Int 5 −3 −3 Wis 10 +0 +0 Cha 5 −3 −3\
+> Skills Stealth +3\
+> Resistances Cold, Fire\
+> Immunities Lightning; Deafened, Exhaustion\
+> Senses Blindsight 60 ft.; Passive Perception 10\
+> Languages None\
+> CR 5 (XP 1,800; PB +3)
+
 
 ### Traits
 
@@ -46,48 +74,11 @@ Engulf. Strength Saving Throw: DC 15, one Medium or smaller creature within 5 fe
 
 Original layout: [[../../srd-5.2.1/pages/323|page 323]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` large ` |
-| ` type ` | ` plant ` |
-| ` alignment ` | ` Unaligned ` |
-| ` movement_text ` | ` 30 ft., Swim 20 ft. ` |
-| ` skills_text ` | ` Stealth +3 ` |
-| ` resistances_text ` | ` Cold, Fire ` |
-| ` immunities_text ` | ` Lightning; Deafened, Exhaustion ` |
-| ` senses_text ` | ` Blindsight 60 ft.; Passive Perception 10 ` |
-| ` languages_text ` | ` None ` |
-| ` cr_text ` | ` 5 (XP 1,800; PB +3) ` |
-| ` hit_points_text ` | ` 110 (13d10 + 39) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 18 ` | ` 4 ` |
-| ` Dexterity ` | ` 8 ` | ` -1 ` |
-| ` Constitution ` | ` 16 ` | ` 3 ` |
-| ` Intelligence ` | ` 5 ` | ` -3 ` |
-| ` Wisdom ` | ` 10 ` | ` 0 ` |
-| ` Charisma ` | ` 5 ` | ` -3 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 15 ` |  |
-| ` max_hp ` | ` 110 ` |  |
-| ` initiative ` | ` -1 ` |  |
-| ` speed ` | ` 30 ` | ` ft ` |
-| ` swim_speed ` | ` 20 ` | ` ft ` |
 
 ## Health
 
@@ -306,3 +297,13 @@ geometry:
 unlisted_success_branch: no_effect
 unlisted_duration: until_removed_by_applicable_rule
 ```
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_stats_extras -->
+> 
+> ```yaml
+> swim_speed:
+>   unit: ft
+>   value: 20
+> ```
+

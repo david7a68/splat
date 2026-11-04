@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: f3338f4c-1dec-5b81-a8b6-adebe4a319a9
 splat_kind: item
 splat_key: dnd2024:items/wand_of_the_war_mage_1_2_or_3
 splat_name: Wand of the War Mage, +1, +2, or +3
-splat_origin:
-  key: dnd2024:reference/magic_item/wand_of_the_war_mage_1_2_or_3
+splat_origin: dnd2024:reference/magic_item/wand_of_the_war_mage_1_2_or_3
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 251
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 251, https://www.dndbeyond.com/srd
 ---
 
 # Wand of the War Mage, +1, +2, or +3
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Wand |
+| Rarity | Varies |
+| Attunement | No |
+
 
 ## Source text
 
@@ -24,22 +31,9 @@ While holding this wand, you gain a bonus to spell attack rolls determined by th
 
 Original layout: [[../../srd-5.2.1/pages/251|page 251]].
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` wand ` |
-| ` rarity ` | ` varies ` |
 
-### Equipment
-
-<!-- splat:values path=splat_item/equipment -->
-
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` none ` |
 
 ## Rule
 

@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "496185fe-8142-5b94-aac2-a80eb915edad"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/sea_hag"
 splat_name: "Sea Hag"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [322], "executable": false}
+splat_pages:
+- 322
 ---
 
 # Sea Hag
@@ -39,3 +40,13 @@ Death Glare (Recharge 5–6). Wisdom Saving Throw: DC 11, one Frightened creatur
 Illusory Appearance. The hag casts Disguise Self, using Constitution as the spellcasting ability (spell save DC 13). The spell’s duration is 24 hours.
 
 Original layout: [[../pages/322|page 322]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 25fed2c9-1bb0-556c-a7a6-58c3d2b8fe78
 splat_kind: spell
 splat_key: dnd2024:spells/meld_into_stone
 splat_name: Meld into Stone
-splat_origin:
-  key: dnd2024:reference/spell/meld_into_stone
+splat_origin: dnd2024:reference/spell/meld_into_stone
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 148
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 148, https://www.dndbeyond.com/srd
 ---
 
 # Meld into Stone
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 3 |
+| School | Transmutation |
+| Classes | Cleric, Druid, Ranger |
+| Casting Time | Action or Ritual |
+| Range |  |
+| Components | V, S |
+| Duration | 8 hours |
+
 
 ## Source text
 
@@ -32,28 +43,9 @@ Minor physical damage to the stone doesn’t harm you, but its partial destructi
 
 Original layout: [[../../srd-5.2.1/pages/148|page 148]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 3 ` |
-| ` school ` | ` transmutation ` |
-| ` classes ` | ` ["cleric", "druid", "ranger"] ` |
-| ` components ` | ` ["verbal", "somatic"] ` |
-| ` concentration ` | ` false ` |
-| ` duration ` | ` 8 hours ` |
-| ` casting_time ` | ` Action or Ritual ` |
-| ` ritual ` | ` true ` |
 
-### Range
-
-<!-- splat:values path=splat_spell/range -->
-
-| Field | Value |
-| --- | --- |
-| ` mode ` | ` touch ` |
 
 ## Rule
 
@@ -130,3 +122,12 @@ complete_destruction_or_transmutation:
 | --- | --- |
 | ` destination ` | ` nearest_unoccupied_to_entry ` |
 | ` condition ` | ` prone ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_spell_extras -->
+> 
+> ```yaml
+> range:
+>   mode: touch
+> ```
+

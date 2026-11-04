@@ -1,35 +1,62 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: bd94d4ab-8881-5488-a5b9-c44a1b8d2c62
 splat_kind: creature
 splat_key: dnd2024:creatures/goblin_warrior
 splat_name: Goblin Warrior
-splat_origin:
-  key: dnd2024:reference/creature/goblin_warrior
+splat_origin: dnd2024:reference/creature/goblin_warrior
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 290
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 290, https://www.dndbeyond.com/srd
 ---
 
 # Goblin Warrior
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Small |
+| Type | Fey (Goblinoid) |
+| Alignment | Chaotic Neutral |
+| Armor Class | 15 |
+| Hit Points | 10 (3d6) |
+| Initiative | +2 (12) |
+| Speed | 30 ft. |
+| Challenge | 1/4 (XP 50; PB +2) |
+| Skills | Stealth +6 |
+| Senses | Darkvision 60 ft.; Passive Perception 9 |
+| Languages | Common, Goblin |
+| Gear | Leather Armor, Scimitar, Shield, Shortbow |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 8 | -1 | -1 |
+| Dex | 15 | +2 | +2 |
+| Con | 10 | +0 | +0 |
+| Int | 10 | +0 | +0 |
+| Wis | 8 | -1 | -1 |
+| Cha | 8 | -1 | -1 |
+
 
 ## Source text
 
 <!-- SRD page 290 -->
 
-Small Fey (Goblinoid), Chaotic Neutral\
-AC 15 Initiative +2 (12)\
-HP 10 (3d6)\
-Speed 30 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 8 −1 −1 Dex 15 +2 +2 Con 10 +0 +0\
-Int 10 +0 +0 Wis 8 −1 −1 Cha 8 −1 −1\
-Skills Stealth +6\
-Gear Leather Armor, Scimitar, Shield, Shortbow\
-Senses Darkvision 60 ft.; Passive Perception 9\
-Languages Common, Goblin\
-CR 1/4 (XP 50; PB +2)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Small Fey (Goblinoid), Chaotic Neutral\
+> AC 15 Initiative +2 (12)\
+> HP 10 (3d6)\
+> Speed 30 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 8 −1 −1 Dex 15 +2 +2 Con 10 +0 +0\
+> Int 10 +0 +0 Wis 8 −1 −1 Cha 8 −1 −1\
+> Skills Stealth +6\
+> Gear Leather Armor, Scimitar, Shield, Shortbow\
+> Senses Darkvision 60 ft.; Passive Perception 9\
+> Languages Common, Goblin\
+> CR 1/4 (XP 50; PB +2)
+
 
 ### Actions
 
@@ -43,47 +70,11 @@ Nimble Escape. The goblin takes the Disengage or Hide action.
 
 Original layout: [[../../srd-5.2.1/pages/290|page 290]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` small ` |
-| ` type ` | ` fey ` |
-| ` alignment ` | ` Chaotic Neutral ` |
-| ` tags_text ` | ` (Goblinoid) ` |
-| ` movement_text ` | ` 30 ft. ` |
-| ` skills_text ` | ` Stealth +6 ` |
-| ` gear_text ` | ` Leather Armor, Scimitar, Shield, Shortbow ` |
-| ` senses_text ` | ` Darkvision 60 ft.; Passive Perception 9 ` |
-| ` languages_text ` | ` Common, Goblin ` |
-| ` cr_text ` | ` 1/4 (XP 50; PB +2) ` |
-| ` hit_points_text ` | ` 10 (3d6) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 8 ` | ` -1 ` |
-| ` Dexterity ` | ` 15 ` | ` 2 ` |
-| ` Constitution ` | ` 10 ` | ` 0 ` |
-| ` Intelligence ` | ` 10 ` | ` 0 ` |
-| ` Wisdom ` | ` 8 ` | ` -1 ` |
-| ` Charisma ` | ` 8 ` | ` -1 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 15 ` |  |
-| ` max_hp ` | ` 10 ` |  |
-| ` initiative ` | ` 2 ` |  |
-| ` speed ` | ` 30 ` | ` ft ` |
 
 ## Health
 

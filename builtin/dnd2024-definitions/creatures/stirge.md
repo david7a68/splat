@@ -1,33 +1,58 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 27b3cb24-91c4-5726-baa2-73389c952cf6
 splat_kind: creature
 splat_key: dnd2024:creatures/stirge
 splat_name: Stirge
-splat_origin:
-  key: dnd2024:reference/creature/stirge
+splat_origin: dnd2024:reference/creature/stirge
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 329, 330
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 329, 330, https://www.dndbeyond.com/srd
 ---
 
 # Stirge
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Tiny |
+| Type | Monstrosity |
+| Alignment | Unaligned |
+| Armor Class | 13 |
+| Hit Points | 5 (2d4) |
+| Initiative | +3 (13) |
+| Speed | 10 ft., Fly 40 ft. |
+| Challenge | 1/8 (XP 25; PB +2) |
+| Senses | Darkvision 60 ft.; Passive Perception 9 |
+| Languages | None |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 4 | -3 | -3 |
+| Dex | 16 | +3 | +3 |
+| Con | 11 | +0 | +0 |
+| Int | 2 | -4 | -4 |
+| Wis | 8 | -1 | -1 |
+| Cha | 6 | -2 | -2 |
+
 
 ## Source text
 
 <!-- SRD page 329 -->
 
-Tiny Monstrosity, Unaligned\
-AC 13 Initiative +3 (13)\
-HP 5 (2d4)\
-Speed 10 ft., Fly 40 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 4 −3 −3 Dex 16 +3 +3 Con 11 +0 +0\
-Int 2 −4 −4 Wis 8 −1 −1 Cha 6 −2 −2\
-Senses Darkvision 60 ft.; Passive Perception 9\
-Languages None\
-CR 1/8 (XP 25; PB +2)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Tiny Monstrosity, Unaligned\
+> AC 13 Initiative +3 (13)\
+> HP 5 (2d4)\
+> Speed 10 ft., Fly 40 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 4 −3 −3 Dex 16 +3 +3 Con 11 +0 +0\
+> Int 2 −4 −4 Wis 8 −1 −1 Cha 6 −2 −2\
+> Senses Darkvision 60 ft.; Passive Perception 9\
+> Languages None\
+> CR 1/8 (XP 25; PB +2)
+
 
 <!-- SRD page 330 -->
 
@@ -39,45 +64,11 @@ The stirge can detach itself by spending 5 feet of its movement. The target or a
 
 Original layout: [[../../srd-5.2.1/pages/329|page 329]], [[../../srd-5.2.1/pages/330|page 330]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` tiny ` |
-| ` type ` | ` monstrosity ` |
-| ` alignment ` | ` Unaligned ` |
-| ` movement_text ` | ` 10 ft., Fly 40 ft. ` |
-| ` senses_text ` | ` Darkvision 60 ft.; Passive Perception 9 ` |
-| ` languages_text ` | ` None ` |
-| ` cr_text ` | ` 1/8 (XP 25; PB +2) ` |
-| ` hit_points_text ` | ` 5 (2d4) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 4 ` | ` -3 ` |
-| ` Dexterity ` | ` 16 ` | ` 3 ` |
-| ` Constitution ` | ` 11 ` | ` 0 ` |
-| ` Intelligence ` | ` 2 ` | ` -4 ` |
-| ` Wisdom ` | ` 8 ` | ` -1 ` |
-| ` Charisma ` | ` 6 ` | ` -2 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 13 ` |  |
-| ` max_hp ` | ` 5 ` |  |
-| ` initiative ` | ` 3 ` |  |
-| ` speed ` | ` 10 ` | ` ft ` |
-| ` fly_speed ` | ` 40 ` | ` ft ` |
 
 ## Health
 
@@ -186,3 +177,13 @@ geometry:
 unlisted_success_branch: no_effect
 unlisted_duration: until_removed_by_applicable_rule
 ```
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_stats_extras -->
+> 
+> ```yaml
+> fly_speed:
+>   unit: ft
+>   value: 40
+> ```
+

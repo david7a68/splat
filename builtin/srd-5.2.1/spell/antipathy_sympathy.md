@@ -1,10 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "b9c96b39-424e-5bb4-8cb2-81951c3eed4a"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/antipathy_sympathy"
 splat_name: "Antipathy/Sympathy"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [109, 110], "executable": false}
+splat_pages:
+- 109
+- 110
 ---
 
 # Antipathy/Sympathy
@@ -28,3 +30,13 @@ Sympathy. The creature has the Charmed condition. The Charmed creature must use 
 Ending the Effect. If the Frightened or Charmed creature ends its turn more than 120 feet away from the target, the creature makes a Wisdom saving throw. On a successful save, the creature is no longer affected by the target. A creature that successfully saves against this effect is immune to it for 1 minute, after which it can be affected again.
 
 Original layout: [[../pages/109|page 109]], [[../pages/110|page 110]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

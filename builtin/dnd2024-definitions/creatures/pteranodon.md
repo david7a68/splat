@@ -1,34 +1,60 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 7220231a-57f4-5b70-8d4f-2e4bd68482ab
 splat_kind: creature
 splat_key: dnd2024:creatures/pteranodon
 splat_name: Pteranodon
-splat_origin:
-  key: dnd2024:reference/creature/pteranodon
+splat_origin: dnd2024:reference/creature/pteranodon
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 359
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 359, https://www.dndbeyond.com/srd
 ---
 
 # Pteranodon
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Medium |
+| Type | Beast (Dinosaur) |
+| Alignment | Unaligned |
+| Armor Class | 13 |
+| Hit Points | 13 (3d8) |
+| Initiative | +2 (12) |
+| Speed | 10 ft., Fly 60 ft. |
+| Challenge | 1/4 (XP 50; PB +2) |
+| Skills | Perception +1 |
+| Senses | Passive Perception 11 |
+| Languages | None |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 12 | +1 | +1 |
+| Dex | 15 | +2 | +2 |
+| Con | 10 | +0 | +0 |
+| Int | 2 | -4 | -4 |
+| Wis | 9 | -1 | -1 |
+| Cha | 5 | -3 | -3 |
+
 
 ## Source text
 
 <!-- SRD page 359 -->
 
-Medium Beast (Dinosaur), Unaligned\
-AC 13  Initiative +2 (12)\
-HP 13 (3d8)\
-Speed 10 ft., Fly 60 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 12 +1 +1 Dex 15 +2 +2 Con 10 +0 +0\
-Int 2 −4 −4 Wis 9 −1 −1 Cha  5 −3 −3\
-Skills Perception +1\
-Senses Passive Perception 11\
-Languages None\
-CR 1/4 (XP 50; PB +2)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Medium Beast (Dinosaur), Unaligned\
+> AC 13  Initiative +2 (12)\
+> HP 13 (3d8)\
+> Speed 10 ft., Fly 60 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 12 +1 +1 Dex 15 +2 +2 Con 10 +0 +0\
+> Int 2 −4 −4 Wis 9 −1 −1 Cha  5 −3 −3\
+> Skills Perception +1\
+> Senses Passive Perception 11\
+> Languages None\
+> CR 1/4 (XP 50; PB +2)
+
 
 ### Traits
 
@@ -40,47 +66,11 @@ Bite. Melee Attack Roll: +4, reach 5 ft. Hit: 6 (1d8 + 2) Piercing damage.
 
 Original layout: [[../../srd-5.2.1/pages/359|page 359]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` medium ` |
-| ` type ` | ` beast ` |
-| ` alignment ` | ` Unaligned ` |
-| ` tags_text ` | ` (Dinosaur) ` |
-| ` movement_text ` | ` 10 ft., Fly 60 ft. ` |
-| ` skills_text ` | ` Perception +1 ` |
-| ` senses_text ` | ` Passive Perception 11 ` |
-| ` languages_text ` | ` None ` |
-| ` cr_text ` | ` 1/4 (XP 50; PB +2) ` |
-| ` hit_points_text ` | ` 13 (3d8) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 12 ` | ` 1 ` |
-| ` Dexterity ` | ` 15 ` | ` 2 ` |
-| ` Constitution ` | ` 10 ` | ` 0 ` |
-| ` Intelligence ` | ` 2 ` | ` -4 ` |
-| ` Wisdom ` | ` 9 ` | ` -1 ` |
-| ` Charisma ` | ` 5 ` | ` -3 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 13 ` |  |
-| ` max_hp ` | ` 13 ` |  |
-| ` initiative ` | ` 2 ` |  |
-| ` speed ` | ` 10 ` | ` ft ` |
-| ` fly_speed ` | ` 60 ` | ` ft ` |
 
 ## Health
 
@@ -221,3 +211,13 @@ geometry_assumptions:
   - plane
   - form_appearance
 ```
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_stats_extras -->
+> 
+> ```yaml
+> fly_speed:
+>   unit: ft
+>   value: 60
+> ```
+

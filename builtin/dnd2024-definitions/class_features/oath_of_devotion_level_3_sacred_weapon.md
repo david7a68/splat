@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: d2f84f14-27ba-52fa-a151-bf2c2d7a2c31
 splat_kind: rule
 splat_key: dnd2024:class_features/oath_of_devotion_level_3_sacred_weapon
 splat_name: 'Level 3: Sacred Weapon'
-splat_origin:
-  key: dnd2024:reference/pages/056
+splat_origin: dnd2024:reference/pages/056
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 56
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 56, https://www.dndbeyond.com/srd
 ---
 
 # Level 3: Sacred Weapon

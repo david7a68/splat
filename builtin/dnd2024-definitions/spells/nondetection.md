@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: c6f8f1d2-2402-5e8f-b38a-f42e141b139f
 splat_kind: spell
 splat_key: dnd2024:spells/nondetection
 splat_name: Nondetection
-splat_origin:
-  key: dnd2024:reference/spell/nondetection
+splat_origin: dnd2024:reference/spell/nondetection
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 151
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 151, https://www.dndbeyond.com/srd
 ---
 
 # Nondetection
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 3 |
+| School | Abjuration |
+| Classes | Bard, Ranger, Wizard |
+| Casting Time | Action |
+| Range |  |
+| Components | V, S, M (a pinch of diamond dust worth 25+ GP, which the spell consumes) |
+| Duration | 8 hours |
+
 
 ## Source text
 
@@ -28,37 +39,11 @@ For the duration, you hide a target that you touch from Divination spells. The t
 
 Original layout: [[../../srd-5.2.1/pages/151|page 151]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 3 ` |
-| ` school ` | ` abjuration ` |
-| ` classes ` | ` ["bard", "ranger", "wizard"] ` |
-| ` components ` | ` ["verbal", "somatic", "material"] ` |
-| ` concentration ` | ` false ` |
-| ` duration ` | ` 8 hours ` |
-| ` casting_time ` | ` Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
 
-<!-- splat:values path=splat_spell/range -->
 
-| Field | Value |
-| --- | --- |
-| ` mode ` | ` touch ` |
-
-### Material
-
-<!-- splat:values path=splat_spell/material -->
-
-| Field | Value |
-| --- | --- |
-| ` description ` | ` a pinch of diamond dust worth 25+ GP, which the spell consumes ` |
-| ` consumed ` | ` true ` |
 
 ## Rule
 
@@ -119,3 +104,14 @@ columns:
 | ` duration ` | ` spell_duration ` |
 | ` cannot_be_targeted_by_spell_school ` | ` divination ` |
 | ` cannot_be_perceived_through ` | ` magical_scrying_sensors ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_spell_extras -->
+> 
+> ```yaml
+> material:
+>   consumed: true
+> range:
+>   mode: touch
+> ```
+

@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "b3e7c876-572d-5108-8839-a2e1d1104d6b"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/scorching_ray"
 splat_name: "Scorching Ray"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [159], "executable": false}
+splat_pages:
+- 159
 ---
 
 # Scorching Ray
@@ -22,3 +23,13 @@ You hurl three fiery rays. You can hurl them at one target within range or at se
 Using a Higher-Level Spell Slot. You create one additional ray for each spell slot level above 2.
 
 Original layout: [[../pages/159|page 159]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

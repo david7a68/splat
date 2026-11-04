@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "8574fd5f-d66b-5a57-87f7-19c6029754a6"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/magic_item/scarab_of_protection"
 splat_name: "Scarab of Protection"
-splat_reference: {"source": "SRD 5.2.1", "category": "magic_item", "pages": [243], "executable": false}
+splat_pages:
+- 243
 ---
 
 # Scarab of Protection
@@ -22,3 +23,13 @@ Preservation. The scarab has 12 charges. If you fail a saving throw against a Ne
 Spell Resistance. You have Advantage on saving throws against spells.
 
 Original layout: [[../pages/243|page 243]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: magic_item
+> executable: false
+> ```
+

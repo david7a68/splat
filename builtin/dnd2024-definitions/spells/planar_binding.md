@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: ed4eb4d9-23b3-5629-942a-66ce2d688863
 splat_kind: spell
 splat_key: dnd2024:spells/planar_binding
 splat_name: Planar Binding
-splat_origin:
-  key: dnd2024:reference/spell/planar_binding
+splat_origin: dnd2024:reference/spell/planar_binding
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 152, 153
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 152, 153, https://www.dndbeyond.com/srd
 ---
 
 # Planar Binding
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 5 |
+| School | Abjuration |
+| Classes | Bard, Cleric, Druid, Warlock, Wizard |
+| Casting Time | 1 hour |
+| Range | 60 feet |
+| Components | V, S, M (a jewel worth 1,000+ GP, which the spell consumes) |
+| Duration | 24 hours |
+
 
 ## Source text
 
@@ -34,37 +45,11 @@ Using a Higher-Level Spell Slot. The duration increases with a spell slot of lev
 
 Original layout: [[../../srd-5.2.1/pages/152|page 152]], [[../../srd-5.2.1/pages/153|page 153]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 5 ` |
-| ` school ` | ` abjuration ` |
-| ` classes ` | ` ["bard", "cleric", "druid", "warlock", "wizard"] ` |
-| ` components ` | ` ["verbal", "somatic", "material"] ` |
-| ` concentration ` | ` false ` |
-| ` duration ` | ` 24 hours ` |
-| ` casting_time ` | ` 1 hour ` |
-| ` ritual ` | ` false ` |
 
-### Range
 
-<!-- splat:values path=splat_spell/range -->
 
-| Field | Value |
-| --- | --- |
-| ` feet ` | ` 60 ` |
-
-### Material
-
-<!-- splat:values path=splat_spell/material -->
-
-| Field | Value |
-| --- | --- |
-| ` description ` | ` a jewel worth 1,000+ GP, which the spell consumes ` |
-| ` consumed ` | ` true ` |
 
 ## Rule
 
@@ -140,3 +125,12 @@ maximum:
   value: 24
   unit: hour
 ```
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_spell_extras -->
+> 
+> ```yaml
+> material:
+>   consumed: true
+> ```
+

@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: eac6529b-e8f1-5510-b331-9b08d6893970
 splat_kind: item
 splat_key: dnd2024:items/cape_of_the_mountebank
 splat_name: Cape of the Mountebank
-splat_origin:
-  key: dnd2024:reference/magic_item/cape_of_the_mountebank
+splat_origin: dnd2024:reference/magic_item/cape_of_the_mountebank
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 215
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 215, https://www.dndbeyond.com/srd
 ---
 
 # Cape of the Mountebank
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Wondrous Item |
+| Rarity | Rare |
+| Attunement | No |
+
 
 ## Source text
 
@@ -26,22 +33,9 @@ When you teleport with that spell, you leave behind a cloud of smoke. The space 
 
 Original layout: [[../../srd-5.2.1/pages/215|page 215]].
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` wondrous_item ` |
-| ` rarity ` | ` rare ` |
 
-### Equipment
-
-<!-- splat:values path=splat_item/equipment -->
-
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` none ` |
 
 ## Rule
 

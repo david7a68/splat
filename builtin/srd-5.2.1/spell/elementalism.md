@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "fcff17b0-9d84-5fdd-834a-c3799f96c929"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/elementalism"
 splat_name: "Elementalism"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [127], "executable": false}
+splat_pages:
+- 127
 ---
 
 # Elementalism
@@ -30,3 +31,13 @@ Beckon Water. You create a spray of cool mist that lightly dampens creatures and
 Sculpt Element. You cause dirt, sand, fire, smoke, mist, or water that can fit in a 1-foot Cube to assume a crude shape (such as that of a creature) for 1 hour.
 
 Original layout: [[../pages/127|page 127]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

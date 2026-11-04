@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 472db4e4-8f7b-5d50-8859-1b319d5e070b
 splat_kind: item
 splat_key: dnd2024:items/hat_of_many_spells
 splat_name: Hat of Many Spells
-splat_origin:
-  key: dnd2024:reference/magic_item/hat_of_many_spells
+splat_origin: dnd2024:reference/magic_item/hat_of_many_spells
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 224, 225
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 224, 225, https://www.dndbeyond.com/srd
 ---
 
 # Hat of Many Spells
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Wondrous Item |
+| Rarity | Very Rare |
+| Attunement | Yes |
+
 
 ## Source text
 
@@ -49,23 +56,9 @@ Any spell you cast from the hat uses your spell save DC and spell attack bonus.
 
 Original layout: [[../../srd-5.2.1/pages/224|page 224]], [[../../srd-5.2.1/pages/225|page 225]].
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` wondrous_item ` |
-| ` rarity ` | ` very_rare ` |
 
-### Equipment
-
-<!-- splat:values path=splat_item/equipment -->
-
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` required ` |
-| ` attunement_requirement_text ` | ` a Wizard ` |
 
 ## Rule
 
@@ -487,3 +480,12 @@ failure:
 | --- | --- |
 | ` 0 ` | ` dnd2024:rules/magic_item_categories_wondrous_items ` |
 | ` 1 ` | ` dnd2024:rules/activating_a_magic_item_spells_cast_from_items ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_item_extras -->
+> 
+> ```yaml
+> equipment:
+>   attunement_requirement_text: a Wizard
+> ```
+

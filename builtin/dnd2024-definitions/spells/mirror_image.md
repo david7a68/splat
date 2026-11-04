@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: c53c534a-c02f-5da4-a876-46a1d9d6b4b7
 splat_kind: spell
 splat_key: dnd2024:spells/mirror_image
 splat_name: Mirror Image
-splat_origin:
-  key: dnd2024:reference/spell/mirror_image
+splat_origin: dnd2024:reference/spell/mirror_image
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 150
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 150, https://www.dndbeyond.com/srd
 ---
 
 # Mirror Image
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 2 |
+| School | Illusion |
+| Classes | Bard, Sorcerer, Warlock, Wizard |
+| Casting Time | Action |
+| Range |  |
+| Components | V, S |
+| Duration | 1 minute |
+
 
 ## Source text
 
@@ -32,28 +43,9 @@ A creature is unaffected by this spell if it has the Blinded condition, Blindsig
 
 Original layout: [[../../srd-5.2.1/pages/150|page 150]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 2 ` |
-| ` school ` | ` illusion ` |
-| ` classes ` | ` ["bard", "sorcerer", "warlock", "wizard"] ` |
-| ` components ` | ` ["verbal", "somatic"] ` |
-| ` concentration ` | ` false ` |
-| ` duration ` | ` 1 minute ` |
-| ` casting_time ` | ` Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
-
-<!-- splat:values path=splat_spell/range -->
-
-| Field | Value |
-| --- | --- |
-| ` mode ` | ` self ` |
 
 ## Rule
 
@@ -113,3 +105,12 @@ destroy_hit_duplicate: true
 | Field | Value |
 | --- | --- |
 | ` any ` | ` ["blinded", "blindsight", "truesight"] ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_spell_extras -->
+> 
+> ```yaml
+> range:
+>   mode: self
+> ```
+

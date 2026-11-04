@@ -1,35 +1,62 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: a022e1fe-c390-5c20-90fe-93dfddfb57be
 splat_kind: creature
 splat_key: dnd2024:creatures/gorgon
 splat_name: Gorgon
-splat_origin:
-  key: dnd2024:reference/creature/gorgon
+splat_origin: dnd2024:reference/creature/gorgon
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 292, 293
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 292, 293, https://www.dndbeyond.com/srd
 ---
 
 # Gorgon
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Large |
+| Type | Construct |
+| Alignment | Unaligned |
+| Armor Class | 19 |
+| Hit Points | 114 (12d10 + 48) |
+| Initiative | +0 (10) |
+| Speed | 40 ft. |
+| Challenge | 5 (XP 1,800; PB +3) |
+| Skills | Perception +7 |
+| Senses | Darkvision 60 ft.; Passive Perception 17 |
+| Languages | None |
+| Immunities | Exhaustion, Petrified |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 20 | +5 | +5 |
+| Dex | 11 | +0 | +0 |
+| Con | 18 | +4 | +4 |
+| Int | 2 | -4 | -4 |
+| Wis | 12 | +1 | +1 |
+| Cha | 7 | -2 | -2 |
+
 
 ## Source text
 
 <!-- SRD page 292 -->
 
-Large Construct, Unaligned\
-AC 19 Initiative +0 (10)\
-HP 114 (12d10 + 48)\
-Speed 40 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 20 +5 +5 Dex 11 +0 +0 Con 18 +4 +4\
-Int 2 −4 −4 Wis 12 +1 +1 Cha 7 −2 −2\
-Skills Perception +7\
-Immunities Exhaustion, Petrified\
-Senses Darkvision 60 ft.; Passive Perception 17\
-Languages None\
-CR 5 (XP 1,800; PB +3)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Large Construct, Unaligned\
+> AC 19 Initiative +0 (10)\
+> HP 114 (12d10 + 48)\
+> Speed 40 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 20 +5 +5 Dex 11 +0 +0 Con 18 +4 +4\
+> Int 2 −4 −4 Wis 12 +1 +1 Cha 7 −2 −2\
+> Skills Perception +7\
+> Immunities Exhaustion, Petrified\
+> Senses Darkvision 60 ft.; Passive Perception 17\
+> Languages None\
+> CR 5 (XP 1,800; PB +3)
+
 
 <!-- SRD page 293 -->
 
@@ -45,46 +72,11 @@ Trample. Dexterity Saving Throw: DC 16, one creature within 5 feet that has the 
 
 Original layout: [[../../srd-5.2.1/pages/292|page 292]], [[../../srd-5.2.1/pages/293|page 293]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` large ` |
-| ` type ` | ` construct ` |
-| ` alignment ` | ` Unaligned ` |
-| ` movement_text ` | ` 40 ft. ` |
-| ` skills_text ` | ` Perception +7 ` |
-| ` immunities_text ` | ` Exhaustion, Petrified ` |
-| ` senses_text ` | ` Darkvision 60 ft.; Passive Perception 17 ` |
-| ` languages_text ` | ` None ` |
-| ` cr_text ` | ` 5 (XP 1,800; PB +3) ` |
-| ` hit_points_text ` | ` 114 (12d10 + 48) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 20 ` | ` 5 ` |
-| ` Dexterity ` | ` 11 ` | ` 0 ` |
-| ` Constitution ` | ` 18 ` | ` 4 ` |
-| ` Intelligence ` | ` 2 ` | ` -4 ` |
-| ` Wisdom ` | ` 12 ` | ` 1 ` |
-| ` Charisma ` | ` 7 ` | ` -2 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 19 ` |  |
-| ` max_hp ` | ` 114 ` |  |
-| ` initiative ` | ` 0 ` |  |
-| ` speed ` | ` 40 ` | ` ft ` |
 
 ## Health
 

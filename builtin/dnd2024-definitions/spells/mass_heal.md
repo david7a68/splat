@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 8afc8feb-d590-59b8-bf92-05c5842b3fff
 splat_kind: spell
 splat_key: dnd2024:spells/mass_heal
 splat_name: Mass Heal
-splat_origin:
-  key: dnd2024:reference/spell/mass_heal
+splat_origin: dnd2024:reference/spell/mass_heal
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 147
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 147, https://www.dndbeyond.com/srd
 ---
 
 # Mass Heal
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 9 |
+| School | Abjuration |
+| Classes | Cleric |
+| Casting Time | Action |
+| Range | 60 feet |
+| Components | V, S |
+| Duration | Instantaneous |
+
 
 ## Source text
 
@@ -28,28 +39,9 @@ A flood of healing energy flows from you into creatures around you. You restore 
 
 Original layout: [[../../srd-5.2.1/pages/147|page 147]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 9 ` |
-| ` school ` | ` abjuration ` |
-| ` classes ` | ` ["cleric"] ` |
-| ` components ` | ` ["verbal", "somatic"] ` |
-| ` concentration ` | ` false ` |
-| ` duration ` | ` Instantaneous ` |
-| ` casting_time ` | ` Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
-
-<!-- splat:values path=splat_spell/range -->
-
-| Field | Value |
-| --- | --- |
-| ` feet ` | ` 60 ` |
 
 ## Rule
 

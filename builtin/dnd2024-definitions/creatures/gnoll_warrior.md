@@ -1,33 +1,58 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 4bf3d8ad-b9ff-5916-b2ee-391305fdf40e
 splat_kind: creature
 splat_key: dnd2024:creatures/gnoll_warrior
 splat_name: Gnoll Warrior
-splat_origin:
-  key: dnd2024:reference/creature/gnoll_warrior
+splat_origin: dnd2024:reference/creature/gnoll_warrior
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 289
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 289, https://www.dndbeyond.com/srd
 ---
 
 # Gnoll Warrior
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Medium |
+| Type | Fiend |
+| Alignment | Chaotic Evil |
+| Armor Class | 15 |
+| Hit Points | 27 (6d8) |
+| Initiative | +1 (11) |
+| Speed | 30 ft. |
+| Challenge | 1/2 (XP 100; PB +2) |
+| Senses | Darkvision 60 ft.; Passive Perception 10 |
+| Languages | Gnoll |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 14 | +2 | +2 |
+| Dex | 12 | +1 | +1 |
+| Con | 11 | +0 | +0 |
+| Int | 6 | -2 | -2 |
+| Wis | 10 | +0 | +0 |
+| Cha | 7 | -2 | -2 |
+
 
 ## Source text
 
 <!-- SRD page 289 -->
 
-Medium Fiend, Chaotic Evil\
-AC 15 Initiative +1 (11)\
-HP 27 (6d8)\
-Speed 30 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 14 +2 +2 Dex 12 +1 +1 Con 11 +0 +0\
-Int 6 −2 −2 Wis 10 +0 +0 Cha 7 −2 −2\
-Senses Darkvision 60 ft.; Passive Perception 10\
-Languages Gnoll\
-CR 1/2 (XP 100; PB +2)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Medium Fiend, Chaotic Evil\
+> AC 15 Initiative +1 (11)\
+> HP 27 (6d8)\
+> Speed 30 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 14 +2 +2 Dex 12 +1 +1 Con 11 +0 +0\
+> Int 6 −2 −2 Wis 10 +0 +0 Cha 7 −2 −2\
+> Senses Darkvision 60 ft.; Passive Perception 10\
+> Languages Gnoll\
+> CR 1/2 (XP 100; PB +2)
+
 
 ### Actions
 
@@ -41,44 +66,11 @@ Rampage (1/Day). Immediately after dealing damage to a creature that is already 
 
 Original layout: [[../../srd-5.2.1/pages/289|page 289]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` medium ` |
-| ` type ` | ` fiend ` |
-| ` alignment ` | ` Chaotic Evil ` |
-| ` movement_text ` | ` 30 ft. ` |
-| ` senses_text ` | ` Darkvision 60 ft.; Passive Perception 10 ` |
-| ` languages_text ` | ` Gnoll ` |
-| ` cr_text ` | ` 1/2 (XP 100; PB +2) ` |
-| ` hit_points_text ` | ` 27 (6d8) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 14 ` | ` 2 ` |
-| ` Dexterity ` | ` 12 ` | ` 1 ` |
-| ` Constitution ` | ` 11 ` | ` 0 ` |
-| ` Intelligence ` | ` 6 ` | ` -2 ` |
-| ` Wisdom ` | ` 10 ` | ` 0 ` |
-| ` Charisma ` | ` 7 ` | ` -2 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 15 ` |  |
-| ` max_hp ` | ` 27 ` |  |
-| ` initiative ` | ` 1 ` |  |
-| ` speed ` | ` 30 ` | ` ft ` |
 
 ## Health
 

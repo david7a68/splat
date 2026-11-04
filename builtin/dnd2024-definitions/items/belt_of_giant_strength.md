@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: ad24d43b-f077-5484-a9d1-04d040dd4afd
 splat_kind: item
 splat_key: dnd2024:items/belt_of_giant_strength
 splat_name: Belt of Giant Strength
-splat_origin:
-  key: dnd2024:reference/magic_item/belt_of_giant_strength
+splat_origin: dnd2024:reference/magic_item/belt_of_giant_strength
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 213
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 213, https://www.dndbeyond.com/srd
 ---
 
 # Belt of Giant Strength
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Wondrous Item |
+| Rarity | Rarity Varies |
+| Attunement | Yes |
+
 
 ## Source text
 
@@ -32,22 +39,9 @@ While wearing this belt, your Strength changes to a score granted by the belt. T
 
 Original layout: [[../../srd-5.2.1/pages/213|page 213]].
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` wondrous_item ` |
-| ` rarity ` | ` rarity_varies ` |
 
-### Equipment
-
-<!-- splat:values path=splat_item/equipment -->
-
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` required ` |
 
 ## Rule
 

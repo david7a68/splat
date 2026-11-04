@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 6f298547-ba5a-5ff4-ab6f-7ddf3ce6e04a
 splat_kind: rule
 splat_key: dnd2024:rules/social_interaction_ability_checks
 splat_name: Ability Checks
-splat_origin:
-  key: dnd2024:reference/pages/011
+splat_origin: dnd2024:reference/pages/011
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 11
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 11, https://www.dndbeyond.com/srd
 ---
 
 # Ability Checks

@@ -1,10 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "c7d7b38a-f6ea-5297-a16b-18cdfc157034"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/prismatic_spray"
 splat_name: "Prismatic Spray"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [154, 155], "executable": false}
+splat_pages:
+- 154
+- 155
 ---
 
 # Prismatic Spray
@@ -38,3 +40,13 @@ Eight rays of light flash from you in a 60-foot Cone. Each creature in the Cone 
 | 8 | Special. The target is struck by two rays. Roll twice, rerolling any 8. |
 
 Original layout: [[../pages/154|page 154]], [[../pages/155|page 155]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

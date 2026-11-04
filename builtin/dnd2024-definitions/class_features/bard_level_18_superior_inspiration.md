@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 87d3c1df-8044-53c0-86ec-b1cec9303f8f
 splat_kind: rule
 splat_key: dnd2024:class_features/bard_level_18_superior_inspiration
 splat_name: 'Level 18: Superior Inspiration'
-splat_origin:
-  key: dnd2024:reference/pages/033
+splat_origin: dnd2024:reference/pages/033
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 33
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 33, https://www.dndbeyond.com/srd
 ---
 
 # Level 18: Superior Inspiration

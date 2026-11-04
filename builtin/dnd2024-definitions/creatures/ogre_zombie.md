@@ -1,34 +1,60 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 7a6ad303-6841-5a1d-ae28-fe80b260ced7
 splat_kind: creature
 splat_key: dnd2024:creatures/ogre_zombie
 splat_name: Ogre Zombie
-splat_origin:
-  key: dnd2024:reference/creature/ogre_zombie
+splat_origin: dnd2024:reference/creature/ogre_zombie
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 344
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 344, https://www.dndbeyond.com/srd
 ---
 
 # Ogre Zombie
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Large |
+| Type | Undead |
+| Alignment | Neutral Evil |
+| Armor Class | 8 |
+| Hit Points | 85 (9d10 + 36) |
+| Initiative | -2 (8) |
+| Speed | 30 ft. |
+| Challenge | 2 (XP 450; PB +2) |
+| Senses | Darkvision 60 ft.; Passive Perception 8 |
+| Languages | Understands Common and Giant but can’t speak |
+| Immunities | Poison; Exhaustion, Poisoned |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 19 | +4 | +4 |
+| Dex | 6 | -2 | -2 |
+| Con | 18 | +4 | +4 |
+| Int | 3 | -4 | -4 |
+| Wis | 6 | -2 | +0 |
+| Cha | 5 | -3 | -3 |
+
 
 ## Source text
 
 <!-- SRD page 344 -->
 
-Large Undead, Neutral Evil\
-AC 8 Initiative −2 (8)\
-HP 85 (9d10 + 36)\
-Speed 30 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 19 +4 +4 Dex 6 −2 −2 Con 18 +4 +4\
-Int 3 −4 −4 Wis 6 −2 +0 Cha 5 −3 −3\
-Immunities Poison; Exhaustion, Poisoned\
-Senses Darkvision 60 ft.; Passive Perception 8\
-Languages Understands Common and Giant but can’t speak\
-CR 2 (XP 450; PB +2)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Large Undead, Neutral Evil\
+> AC 8 Initiative −2 (8)\
+> HP 85 (9d10 + 36)\
+> Speed 30 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 19 +4 +4 Dex 6 −2 −2 Con 18 +4 +4\
+> Int 3 −4 −4 Wis 6 −2 +0 Cha 5 −3 −3\
+> Immunities Poison; Exhaustion, Poisoned\
+> Senses Darkvision 60 ft.; Passive Perception 8\
+> Languages Understands Common and Giant but can’t speak\
+> CR 2 (XP 450; PB +2)
+
 
 ### Traits
 
@@ -40,45 +66,11 @@ Slam. Melee Attack Roll: +6, reach 5 ft. Hit: 13 (2d8 + 4) Bludgeoning damage.
 
 Original layout: [[../../srd-5.2.1/pages/344|page 344]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` large ` |
-| ` type ` | ` undead ` |
-| ` alignment ` | ` Neutral Evil ` |
-| ` movement_text ` | ` 30 ft. ` |
-| ` immunities_text ` | ` Poison; Exhaustion, Poisoned ` |
-| ` senses_text ` | ` Darkvision 60 ft.; Passive Perception 8 ` |
-| ` languages_text ` | ` Understands Common and Giant but can’t speak ` |
-| ` cr_text ` | ` 2 (XP 450; PB +2) ` |
-| ` hit_points_text ` | ` 85 (9d10 + 36) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 19 ` | ` 4 ` |
-| ` Dexterity ` | ` 6 ` | ` -2 ` |
-| ` Constitution ` | ` 18 ` | ` 4 ` |
-| ` Intelligence ` | ` 3 ` | ` -4 ` |
-| ` Wisdom ` | ` 6 ` | ` 0 ` |
-| ` Charisma ` | ` 5 ` | ` -3 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 8 ` |  |
-| ` max_hp ` | ` 85 ` |  |
-| ` initiative ` | ` -2 ` |  |
-| ` speed ` | ` 30 ` | ` ft ` |
 
 ## Health
 

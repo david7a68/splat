@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 323e3e17-d106-5b63-80c4-13a44c6f983b
 splat_kind: spell
 splat_key: dnd2024:spells/mass_healing_word
 splat_name: Mass Healing Word
-splat_origin:
-  key: dnd2024:reference/spell/mass_healing_word
+splat_origin: dnd2024:reference/spell/mass_healing_word
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 148
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 148, https://www.dndbeyond.com/srd
 ---
 
 # Mass Healing Word
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 3 |
+| School | Abjuration |
+| Classes | Bard, Cleric |
+| Casting Time | Bonus Action |
+| Range | 60 feet |
+| Components | V |
+| Duration | Instantaneous |
+
 
 ## Source text
 
@@ -30,28 +41,9 @@ Using a Higher-Level Spell Slot. The healing increases by 1d4 for each spell slo
 
 Original layout: [[../../srd-5.2.1/pages/148|page 148]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 3 ` |
-| ` school ` | ` abjuration ` |
-| ` classes ` | ` ["bard", "cleric"] ` |
-| ` components ` | ` ["verbal"] ` |
-| ` concentration ` | ` false ` |
-| ` duration ` | ` Instantaneous ` |
-| ` casting_time ` | ` Bonus Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
-
-<!-- splat:values path=splat_spell/range -->
-
-| Field | Value |
-| --- | --- |
-| ` feet ` | ` 60 ` |
 
 ## Rule
 

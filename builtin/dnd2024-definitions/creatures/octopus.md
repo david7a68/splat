@@ -1,34 +1,60 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: e63a0a68-c054-5130-8733-4d0df87a3799
 splat_kind: creature
 splat_key: dnd2024:creatures/octopus
 splat_name: Octopus
-splat_origin:
-  key: dnd2024:reference/creature/octopus
+splat_origin: dnd2024:reference/creature/octopus
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 357, 358
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 357, 358, https://www.dndbeyond.com/srd
 ---
 
 # Octopus
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Small |
+| Type | Beast |
+| Alignment | Unaligned |
+| Armor Class | 12 |
+| Hit Points | 3 (1d6) |
+| Initiative | +2 (12) |
+| Speed | 5 ft., Swim 30 ft. |
+| Challenge | 0 (XP 10; PB +2) |
+| Skills | Perception +2, Stealth +6 |
+| Senses | Darkvision 30 ft.; Passive Perception 12 |
+| Languages | None |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 4 | -3 | -3 |
+| Dex | 15 | +2 | +2 |
+| Con | 11 | +0 | +0 |
+| Int | 3 | -4 | -4 |
+| Wis | 10 | +0 | +0 |
+| Cha | 4 | -3 | -3 |
+
 
 ## Source text
 
 <!-- SRD page 357 -->
 
-Small Beast, Unaligned\
-AC 12  Initiative +2 (12)\
-HP 3 (1d6)\
-Speed 5 ft., Swim 30 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str  4 −3 −3 Dex 15 +2 +2 Con 11 +0 +0\
-Int 3 −4 −4 Wis 10 +0 +0 Cha  4 −3 −3\
-Skills Perception +2, Stealth +6\
-Senses Darkvision 30 ft.; Passive Perception 12\
-Languages None\
-CR 0 (XP 10; PB +2)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Small Beast, Unaligned\
+> AC 12  Initiative +2 (12)\
+> HP 3 (1d6)\
+> Speed 5 ft., Swim 30 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str  4 −3 −3 Dex 15 +2 +2 Con 11 +0 +0\
+> Int 3 −4 −4 Wis 10 +0 +0 Cha  4 −3 −3\
+> Skills Perception +2, Stealth +6\
+> Senses Darkvision 30 ft.; Passive Perception 12\
+> Languages None\
+> CR 0 (XP 10; PB +2)
+
 
 <!-- SRD page 358 -->
 
@@ -48,46 +74,11 @@ Ink Cloud (1/Day). Trigger: A creature ends its turn within 5 feet of the octopu
 
 Original layout: [[../../srd-5.2.1/pages/357|page 357]], [[../../srd-5.2.1/pages/358|page 358]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` small ` |
-| ` type ` | ` beast ` |
-| ` alignment ` | ` Unaligned ` |
-| ` movement_text ` | ` 5 ft., Swim 30 ft. ` |
-| ` skills_text ` | ` Perception +2, Stealth +6 ` |
-| ` senses_text ` | ` Darkvision 30 ft.; Passive Perception 12 ` |
-| ` languages_text ` | ` None ` |
-| ` cr_text ` | ` 0 (XP 10; PB +2) ` |
-| ` hit_points_text ` | ` 3 (1d6) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 4 ` | ` -3 ` |
-| ` Dexterity ` | ` 15 ` | ` 2 ` |
-| ` Constitution ` | ` 11 ` | ` 0 ` |
-| ` Intelligence ` | ` 3 ` | ` -4 ` |
-| ` Wisdom ` | ` 10 ` | ` 0 ` |
-| ` Charisma ` | ` 4 ` | ` -3 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 12 ` |  |
-| ` max_hp ` | ` 3 ` |  |
-| ` initiative ` | ` 2 ` |  |
-| ` speed ` | ` 5 ` | ` ft ` |
-| ` swim_speed ` | ` 30 ` | ` ft ` |
 
 ## Health
 
@@ -240,3 +231,13 @@ geometry:
 unlisted_success_branch: no_effect
 unlisted_duration: until_removed_by_applicable_rule
 ```
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_stats_extras -->
+> 
+> ```yaml
+> swim_speed:
+>   unit: ft
+>   value: 30
+> ```
+

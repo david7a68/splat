@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: e96d0346-2e14-54db-8a74-6b9a0e43bbac
 splat_kind: rule
 splat_key: dnd2024:rules/d20_tests_proficiency_bonus_2
 splat_name: Proficiency Bonus
-splat_origin:
-  key: dnd2024:reference/pages/007
+splat_origin: dnd2024:reference/pages/007
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 7
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 7, https://www.dndbeyond.com/srd
 ---
 
 # Proficiency Bonus

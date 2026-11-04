@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "37014774-bb0e-572d-b798-6923d0717bde"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/awakened_tree"
 splat_name: "Awakened Tree"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [260], "executable": false}
+splat_pages:
+- 260
 ---
 
 # Awakened Tree
@@ -29,3 +30,13 @@ CR 2 (XP 450; PB +2)
 Slam. Melee Attack Roll: +6, reach 10 ft. Hit: 14 (3d6 + 4) Bludgeoning damage.
 
 Original layout: [[../pages/260|page 260]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

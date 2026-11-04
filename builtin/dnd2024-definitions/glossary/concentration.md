@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 82c65dea-f963-5882-8a3b-20ec4be53d74
 splat_kind: rule
 splat_key: dnd2024:glossary/concentration
 splat_name: Concentration
-splat_origin:
-  key: dnd2024:reference/glossary/concentration
+splat_origin: dnd2024:reference/glossary/concentration
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 179
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 179, https://www.dndbeyond.com/srd
 ---
 
 # Concentration

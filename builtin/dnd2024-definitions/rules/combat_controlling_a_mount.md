@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 7b6124b3-cd72-59c6-a5f0-323f4dd69247
 splat_kind: rule
 splat_key: dnd2024:rules/combat_controlling_a_mount
 splat_name: Controlling a Mount
-splat_origin:
-  key: dnd2024:reference/pages/016
+splat_origin: dnd2024:reference/pages/016
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 16
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 16, https://www.dndbeyond.com/srd
 ---
 
 # Controlling a Mount

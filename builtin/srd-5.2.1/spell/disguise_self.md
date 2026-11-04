@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "5900d80f-982e-53f3-857f-c81528344c01"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/disguise_self"
 splat_name: "Disguise Self"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [124], "executable": false}
+splat_pages:
+- 124
 ---
 
 # Disguise Self
@@ -24,3 +25,13 @@ The changes wrought by this spell fail to hold up to physical inspection. For ex
 To discern that you are disguised, a creature must take the Study action to inspect your appearance and succeed on an Intelligence (Investigation) check against your spell save DC.
 
 Original layout: [[../pages/124|page 124]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

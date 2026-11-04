@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 32c37571-8edf-547c-9f68-8cfcfe0c36d2
 splat_kind: rule
 splat_key: dnd2024:rules/d20_tests_ability_modifier_3
 splat_name: Ability Modifier
-splat_origin:
-  key: dnd2024:reference/pages/007
+splat_origin: dnd2024:reference/pages/007
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 7
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 7, https://www.dndbeyond.com/srd
 ---
 
 # Ability Modifier

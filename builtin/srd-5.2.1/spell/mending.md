@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "94494908-9944-568b-b599-ae55bcf31a8a"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/mending"
 splat_name: "Mending"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [148], "executable": false}
+splat_pages:
+- 148
 ---
 
 # Mending
@@ -22,3 +23,13 @@ This spell repairs a single break or tear in an object you touch, such as a brok
 This spell can physically repair a magic item, but it can’t restore magic to such an object.
 
 Original layout: [[../pages/148|page 148]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

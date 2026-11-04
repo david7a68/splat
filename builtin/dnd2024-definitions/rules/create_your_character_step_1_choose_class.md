@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 480440e0-e1f4-55de-8648-7cc15ece079c
 splat_kind: rule
 splat_key: dnd2024:rules/create_your_character_step_1_choose_class
 splat_name: 'Step 1: Choose Class'
-splat_origin:
-  key: dnd2024:reference/pages/019
+splat_origin: dnd2024:reference/pages/019
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 19
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 19, https://www.dndbeyond.com/srd
 ---
 
 # Step 1: Choose Class

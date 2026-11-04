@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "4f99e20b-3309-57c0-93db-4c29797781f0"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/heroes_feast"
 splat_name: "Heroes’ Feast"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [140], "executable": false}
+splat_pages:
+- 140
 ---
 
 # Heroes’ Feast
@@ -22,3 +23,13 @@ You conjure a feast that appears on a surface in an unoccupied 10-foot Cube next
 A creature that partakes gains several benefits, which last for 24 hours. The creature has Resistance to Poison damage, and it has Immunity to the Frightened and Poisoned conditions. Its Hit Point maximum also increases by 2d10, and it gains the same number of Hit Points.
 
 Original layout: [[../pages/140|page 140]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "68190a46-8427-5dde-9151-e309b147c188"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/phantom_steed"
 splat_name: "Phantom Steed"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [152], "executable": false}
+splat_pages:
+- 152
 ---
 
 # Phantom Steed
@@ -22,3 +23,13 @@ A Large, quasi-real, horselike creature appears on the ground in an unoccupied s
 For the duration, you or a creature you choose can ride the steed. The steed uses the Riding Horse stat block (see “Monsters”), except it has a Speed of 100 feet and can travel 13 miles in an hour. When the spell ends, the steed gradually fades, giving the rider 1 minute to dismount. The spell ends early if the steed takes any damage.
 
 Original layout: [[../pages/152|page 152]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

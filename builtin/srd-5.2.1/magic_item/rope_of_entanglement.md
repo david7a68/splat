@@ -1,10 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "e64f6ff0-2c12-5ee7-90d6-d783b7c90df1"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/magic_item/rope_of_entanglement"
 splat_name: "Rope of Entanglement"
-splat_reference: {"source": "SRD 5.2.1", "category": "magic_item", "pages": [242, 243], "executable": false}
+splat_pages:
+- 242
+- 243
 ---
 
 # Rope of Entanglement
@@ -22,3 +24,13 @@ A target Restrained by the rope can take an action to make its choice of a DC 15
 The rope has AC 20, HP 20, and Immunity to Poison and Psychic damage. It regains 1 Hit Point every 5 minutes as long as it has at least 1 Hit Point. If the rope drops to 0 Hit Points, it is destroyed.
 
 Original layout: [[../pages/242|page 242]], [[../pages/243|page 243]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: magic_item
+> executable: false
+> ```
+

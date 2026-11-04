@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 488c2274-8013-558e-ba89-c7f90a86abda
 splat_kind: rule
 splat_key: dnd2024:class_features/barbarian_level_18_indomitable_might
 splat_name: 'Level 18: Indomitable Might'
-splat_origin:
-  key: dnd2024:reference/pages/030
+splat_origin: dnd2024:reference/pages/030
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 30
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 30, https://www.dndbeyond.com/srd
 ---
 
 # Level 18: Indomitable Might

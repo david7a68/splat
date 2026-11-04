@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 6cf285ec-2c46-540a-b012-b95e9af50229
 splat_kind: rule
 splat_key: dnd2024:feats/epic_boon_feats_boon_of_fate
 splat_name: Boon of Fate
-splat_origin:
-  key: dnd2024:reference/pages/088
+splat_origin: dnd2024:reference/pages/088
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 88
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 88, https://www.dndbeyond.com/srd
 ---
 
 # Boon of Fate

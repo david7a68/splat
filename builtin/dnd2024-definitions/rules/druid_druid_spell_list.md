@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: b53a8df2-866d-53f8-a999-eceaeac7369c
 splat_kind: rule
 splat_key: dnd2024:rules/druid_druid_spell_list
 splat_name: Druid Spell List
-splat_origin:
-  key: dnd2024:reference/pages/044
+splat_origin: dnd2024:reference/pages/044
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 44, 45
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 44, 45, https://www.dndbeyond.com/srd
 ---
 
 # Druid Spell List

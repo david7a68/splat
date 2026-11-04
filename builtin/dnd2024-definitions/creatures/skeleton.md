@@ -1,36 +1,64 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 717bc686-4fb8-5665-b30a-c6a2b4a22fa4
 splat_kind: creature
 splat_key: dnd2024:creatures/skeleton
 splat_name: Skeleton
-splat_origin:
-  key: dnd2024:reference/creature/skeleton
+splat_origin: dnd2024:reference/creature/skeleton
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 325, 326
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 325, 326, https://www.dndbeyond.com/srd
 ---
 
 # Skeleton
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Medium |
+| Type | Undead |
+| Alignment | Lawful Evil |
+| Armor Class | 14 |
+| Hit Points | 13 (2d8 + 4) |
+| Initiative | +3 (13) |
+| Speed | 30 ft. |
+| Challenge | 1/4 (XP 50; PB +2) |
+| Senses | Darkvision 60 ft.; Passive Perception 9 |
+| Languages | Understands Common plus one other language but can’t speak |
+| Gear | Shortbow, Shortsword |
+| Immunities | Poison; Exhaustion, Poisoned |
+| Vulnerabilities | Bludgeoning |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 10 | +0 | +0 |
+| Dex | 16 | +3 | +3 |
+| Con | 15 | +2 | +2 |
+| Int | 6 | -2 | -2 |
+| Wis | 8 | -1 | -1 |
+| Cha | 5 | -3 | -3 |
+
 
 ## Source text
 
 <!-- SRD page 325 -->
 
-Medium Undead, Lawful Evil\
-AC 14  Initiative +3 (13)\
-HP 13 (2d8 + 4)\
-Speed 30 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 10 +0 +0 Dex 16 +3 +3 Con 15 +2 +2\
-Int 6 −2 −2 Wis 8 −1 −1 Cha 5 −3 −3\
-Vulnerabilities Bludgeoning\
-Immunities Poison; Exhaustion, Poisoned\
-Gear Shortbow, Shortsword\
-Senses Darkvision 60 ft.; Passive Perception 9\
-Languages Understands Common plus one other language but can’t speak\
-CR 1/4 (XP 50; PB +2)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Medium Undead, Lawful Evil\
+> AC 14  Initiative +3 (13)\
+> HP 13 (2d8 + 4)\
+> Speed 30 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 10 +0 +0 Dex 16 +3 +3 Con 15 +2 +2\
+> Int 6 −2 −2 Wis 8 −1 −1 Cha 5 −3 −3\
+> Vulnerabilities Bludgeoning\
+> Immunities Poison; Exhaustion, Poisoned\
+> Gear Shortbow, Shortsword\
+> Senses Darkvision 60 ft.; Passive Perception 9\
+> Languages Understands Common plus one other language but can’t speak\
+> CR 1/4 (XP 50; PB +2)
+
 
 <!-- SRD page 326 -->
 
@@ -42,47 +70,11 @@ Shortbow. Ranged Attack Roll: +5, range 80/320 ft. Hit: 6 (1d6 + 3) Piercing dam
 
 Original layout: [[../../srd-5.2.1/pages/325|page 325]], [[../../srd-5.2.1/pages/326|page 326]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` medium ` |
-| ` type ` | ` undead ` |
-| ` alignment ` | ` Lawful Evil ` |
-| ` movement_text ` | ` 30 ft. ` |
-| ` vulnerabilities_text ` | ` Bludgeoning ` |
-| ` immunities_text ` | ` Poison; Exhaustion, Poisoned ` |
-| ` gear_text ` | ` Shortbow, Shortsword ` |
-| ` senses_text ` | ` Darkvision 60 ft.; Passive Perception 9 ` |
-| ` languages_text ` | ` Understands Common plus one other language but can’t speak ` |
-| ` cr_text ` | ` 1/4 (XP 50; PB +2) ` |
-| ` hit_points_text ` | ` 13 (2d8 + 4) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 10 ` | ` 0 ` |
-| ` Dexterity ` | ` 16 ` | ` 3 ` |
-| ` Constitution ` | ` 15 ` | ` 2 ` |
-| ` Intelligence ` | ` 6 ` | ` -2 ` |
-| ` Wisdom ` | ` 8 ` | ` -1 ` |
-| ` Charisma ` | ` 5 ` | ` -3 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 14 ` |  |
-| ` max_hp ` | ` 13 ` |  |
-| ` initiative ` | ` 3 ` |  |
-| ` speed ` | ` 30 ` | ` ft ` |
 
 ## Health
 

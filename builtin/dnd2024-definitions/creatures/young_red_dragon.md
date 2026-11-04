@@ -1,35 +1,62 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 968ba029-f6ed-5e58-94a3-afa191c0535e
 splat_kind: creature
 splat_key: dnd2024:creatures/young_red_dragon
 splat_name: Young Red Dragon
-splat_origin:
-  key: dnd2024:reference/creature/young_red_dragon
+splat_origin: dnd2024:reference/creature/young_red_dragon
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 318
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 318, https://www.dndbeyond.com/srd
 ---
 
 # Young Red Dragon
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Large |
+| Type | Dragon (Chromatic) |
+| Alignment | Chaotic Evil |
+| Armor Class | 18 |
+| Hit Points | 178 (17d10 + 85) |
+| Initiative | +4 (14) |
+| Speed | 40 ft., Climb 40 ft., Fly 80 ft. |
+| Challenge | 10 (XP 5,900; PB +4) |
+| Skills | Perception +8, Stealth +4 |
+| Senses | Blindsight 30 ft., Darkvision 120 ft.; Passive Perception 18 |
+| Languages | Common, Draconic |
+| Immunities | Fire |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 23 | +6 | +6 |
+| Dex | 10 | +0 | +4 |
+| Con | 21 | +5 | +5 |
+| Int | 14 | +2 | +2 |
+| Wis | 11 | +0 | +4 |
+| Cha | 19 | +4 | +4 |
+
 
 ## Source text
 
 <!-- SRD page 318 -->
 
-Large Dragon (Chromatic), Chaotic Evil\
-AC 18 Initiative +4 (14)\
-HP 178 (17d10 + 85)\
-Speed 40 ft., Climb 40 ft., Fly 80 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 23 +6 +6 Dex 10 +0 +4 Con 21 +5 +5\
-Int 14 +2 +2 Wis 11 +0 +4 Cha 19 +4 +4\
-Skills Perception +8, Stealth +4\
-Immunities Fire\
-Senses Blindsight 30 ft., Darkvision 120 ft.; Passive Perception 18\
-Languages Common, Draconic\
-CR 10 (XP 5,900; PB +4)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Large Dragon (Chromatic), Chaotic Evil\
+> AC 18 Initiative +4 (14)\
+> HP 178 (17d10 + 85)\
+> Speed 40 ft., Climb 40 ft., Fly 80 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 23 +6 +6 Dex 10 +0 +4 Con 21 +5 +5\
+> Int 14 +2 +2 Wis 11 +0 +4 Cha 19 +4 +4\
+> Skills Perception +8, Stealth +4\
+> Immunities Fire\
+> Senses Blindsight 30 ft., Darkvision 120 ft.; Passive Perception 18\
+> Languages Common, Draconic\
+> CR 10 (XP 5,900; PB +4)
+
 
 ### Actions
 
@@ -41,49 +68,11 @@ Fire Breath (Recharge 5–6). Dexterity Saving Throw: DC 17, each creature in a 
 
 Original layout: [[../../srd-5.2.1/pages/318|page 318]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` large ` |
-| ` type ` | ` dragon ` |
-| ` alignment ` | ` Chaotic Evil ` |
-| ` tags_text ` | ` (Chromatic) ` |
-| ` movement_text ` | ` 40 ft., Climb 40 ft., Fly 80 ft. ` |
-| ` skills_text ` | ` Perception +8, Stealth +4 ` |
-| ` immunities_text ` | ` Fire ` |
-| ` senses_text ` | ` Blindsight 30 ft., Darkvision 120 ft.; Passive Perception 18 ` |
-| ` languages_text ` | ` Common, Draconic ` |
-| ` cr_text ` | ` 10 (XP 5,900; PB +4) ` |
-| ` hit_points_text ` | ` 178 (17d10 + 85) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 23 ` | ` 6 ` |
-| ` Dexterity ` | ` 10 ` | ` 4 ` |
-| ` Constitution ` | ` 21 ` | ` 5 ` |
-| ` Intelligence ` | ` 14 ` | ` 2 ` |
-| ` Wisdom ` | ` 11 ` | ` 4 ` |
-| ` Charisma ` | ` 19 ` | ` 4 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 18 ` |  |
-| ` max_hp ` | ` 178 ` |  |
-| ` initiative ` | ` 4 ` |  |
-| ` speed ` | ` 40 ` | ` ft ` |
-| ` climb_speed ` | ` 40 ` | ` ft ` |
-| ` fly_speed ` | ` 80 ` | ` ft ` |
 
 ## Health
 
@@ -270,3 +259,16 @@ sequence:
 | ` provider ` | ` caller ` |
 | ` required_facts ` | ` ["distance", "area_membership", "visibility", "occupancy", "movement_path"] ` |
 | ` validate_against_typed_constraints ` | ` true ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_stats_extras -->
+> 
+> ```yaml
+> fly_speed:
+>   unit: ft
+>   value: 80
+> climb_speed:
+>   unit: ft
+>   value: 40
+> ```
+

@@ -1,34 +1,60 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: a2dd7d7d-f61c-5fa6-a5d9-253d6a4e52de
 splat_kind: creature
 splat_key: dnd2024:creatures/stone_golem
 splat_name: Stone Golem
-splat_origin:
-  key: dnd2024:reference/creature/stone_golem
+splat_origin: dnd2024:reference/creature/stone_golem
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 330
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 330, https://www.dndbeyond.com/srd
 ---
 
 # Stone Golem
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Large |
+| Type | Construct |
+| Alignment | Unaligned |
+| Armor Class | 18 |
+| Hit Points | 220 (21d10 + 105) |
+| Initiative | +3 (13) |
+| Speed | 30 ft. |
+| Challenge | 10 (XP 5,900; PB +4) |
+| Senses | Darkvision 120 ft.; Passive Perception 10 |
+| Languages | Understands Common plus two other languages but can’t speak |
+| Immunities | Poison, Psychic; Charmed, Exhaustion, Frightened, Paralyzed, Petrified, Poisoned |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 22 | +6 | +6 |
+| Dex | 9 | -1 | -1 |
+| Con | 20 | +5 | +5 |
+| Int | 3 | -4 | -4 |
+| Wis | 11 | +0 | +0 |
+| Cha | 1 | -5 | -5 |
+
 
 ## Source text
 
 <!-- SRD page 330 -->
 
-Large Construct, Unaligned\
-AC 18 Initiative +3 (13)\
-HP 220 (21d10 + 105)\
-Speed 30 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 22 +6 +6 Dex 9 −1 −1 Con 20 +5 +5\
-Int 3 −4 −4 Wis 11 +0 +0 Cha 1 −5 −5\
-Immunities Poison, Psychic; Charmed, Exhaustion, Frightened, Paralyzed, Petrified, Poisoned\
-Senses Darkvision 120 ft.; Passive Perception 10\
-Languages Understands Common plus two other languages but can’t speak\
-CR 10 (XP 5,900; PB +4)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Large Construct, Unaligned\
+> AC 18 Initiative +3 (13)\
+> HP 220 (21d10 + 105)\
+> Speed 30 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 22 +6 +6 Dex 9 −1 −1 Con 20 +5 +5\
+> Int 3 −4 −4 Wis 11 +0 +0 Cha 1 −5 −5\
+> Immunities Poison, Psychic; Charmed, Exhaustion, Frightened, Paralyzed, Petrified, Poisoned\
+> Senses Darkvision 120 ft.; Passive Perception 10\
+> Languages Understands Common plus two other languages but can’t speak\
+> CR 10 (XP 5,900; PB +4)
+
 
 ### Traits
 
@@ -50,45 +76,11 @@ Slow (Recharge 5–6). The golem casts the Slow spell, requiring no spell compon
 
 Original layout: [[../../srd-5.2.1/pages/330|page 330]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` large ` |
-| ` type ` | ` construct ` |
-| ` alignment ` | ` Unaligned ` |
-| ` movement_text ` | ` 30 ft. ` |
-| ` immunities_text ` | ` Poison, Psychic; Charmed, Exhaustion, Frightened, Paralyzed, Petrified, Poisoned ` |
-| ` senses_text ` | ` Darkvision 120 ft.; Passive Perception 10 ` |
-| ` languages_text ` | ` Understands Common plus two other languages but can’t speak ` |
-| ` cr_text ` | ` 10 (XP 5,900; PB +4) ` |
-| ` hit_points_text ` | ` 220 (21d10 + 105) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 22 ` | ` 6 ` |
-| ` Dexterity ` | ` 9 ` | ` -1 ` |
-| ` Constitution ` | ` 20 ` | ` 5 ` |
-| ` Intelligence ` | ` 3 ` | ` -4 ` |
-| ` Wisdom ` | ` 11 ` | ` 0 ` |
-| ` Charisma ` | ` 1 ` | ` -5 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 18 ` |  |
-| ` max_hp ` | ` 220 ` |  |
-| ` initiative ` | ` 3 ` |  |
-| ` speed ` | ` 30 ` | ` ft ` |
 
 ## Health
 

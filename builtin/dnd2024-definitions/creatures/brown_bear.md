@@ -1,34 +1,60 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 22aec2de-4165-572c-a211-b153c046c532
 splat_kind: creature
 splat_key: dnd2024:creatures/brown_bear
 splat_name: Brown Bear
-splat_origin:
-  key: dnd2024:reference/creature/brown_bear
+splat_origin: dnd2024:reference/creature/brown_bear
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 346
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 346, https://www.dndbeyond.com/srd
 ---
 
 # Brown Bear
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Large |
+| Type | Beast |
+| Alignment | Unaligned |
+| Armor Class | 11 |
+| Hit Points | 22 (3d10 + 6) |
+| Initiative | +1 (11) |
+| Speed | 40 ft., Climb 30 ft. |
+| Challenge | 1 (XP 200; PB +2) |
+| Skills | Perception +3 |
+| Senses | Darkvision 60 ft.; Passive Perception 13 |
+| Languages | None |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 17 | +3 | +3 |
+| Dex | 12 | +1 | +1 |
+| Con | 15 | +2 | +2 |
+| Int | 2 | -4 | -4 |
+| Wis | 13 | +1 | +1 |
+| Cha | 7 | -2 | -2 |
+
 
 ## Source text
 
 <!-- SRD page 346 -->
 
-Large Beast, Unaligned\
-AC 11 Initiative +1 (11)\
-HP 22 (3d10 + 6)\
-Speed 40 ft., Climb 30 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 17 +3 +3 Dex 12 +1 +1 Con 15 +2 +2\
-Int 2 −4 −4 Wis 13 +1 +1 Cha 7 −2 −2\
-Skills Perception +3\
-Senses Darkvision 60 ft.; Passive Perception 13\
-Languages None\
-CR 1 (XP 200; PB +2)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Large Beast, Unaligned\
+> AC 11 Initiative +1 (11)\
+> HP 22 (3d10 + 6)\
+> Speed 40 ft., Climb 30 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 17 +3 +3 Dex 12 +1 +1 Con 15 +2 +2\
+> Int 2 −4 −4 Wis 13 +1 +1 Cha 7 −2 −2\
+> Skills Perception +3\
+> Senses Darkvision 60 ft.; Passive Perception 13\
+> Languages None\
+> CR 1 (XP 200; PB +2)
+
 
 ### Actions
 
@@ -40,46 +66,11 @@ Claw. Melee Attack Roll: +5, reach 5 ft. Hit: 5 (1d4 + 3) Slashing damage. If th
 
 Original layout: [[../../srd-5.2.1/pages/346|page 346]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` large ` |
-| ` type ` | ` beast ` |
-| ` alignment ` | ` Unaligned ` |
-| ` movement_text ` | ` 40 ft., Climb 30 ft. ` |
-| ` skills_text ` | ` Perception +3 ` |
-| ` senses_text ` | ` Darkvision 60 ft.; Passive Perception 13 ` |
-| ` languages_text ` | ` None ` |
-| ` cr_text ` | ` 1 (XP 200; PB +2) ` |
-| ` hit_points_text ` | ` 22 (3d10 + 6) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 17 ` | ` 3 ` |
-| ` Dexterity ` | ` 12 ` | ` 1 ` |
-| ` Constitution ` | ` 15 ` | ` 2 ` |
-| ` Intelligence ` | ` 2 ` | ` -4 ` |
-| ` Wisdom ` | ` 13 ` | ` 1 ` |
-| ` Charisma ` | ` 7 ` | ` -2 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 11 ` |  |
-| ` max_hp ` | ` 22 ` |  |
-| ` initiative ` | ` 1 ` |  |
-| ` speed ` | ` 40 ` | ` ft ` |
-| ` climb_speed ` | ` 30 ` | ` ft ` |
 
 ## Health
 
@@ -242,3 +233,13 @@ columns:
 | ` provider ` | ` caller ` |
 | ` required_facts ` | ` ["distance", "area_membership", "visibility", "occupancy", "movement_path"] ` |
 | ` validate_against_typed_constraints ` | ` true ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_stats_extras -->
+> 
+> ```yaml
+> climb_speed:
+>   unit: ft
+>   value: 30
+> ```
+

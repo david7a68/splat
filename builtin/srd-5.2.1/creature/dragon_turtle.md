@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "bec2edb8-b036-5c85-9a28-df632feff6bd"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/dragon_turtle"
 splat_name: "Dragon Turtle"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [281], "executable": false}
+splat_pages:
+- 281
 ---
 
 # Dragon Turtle
@@ -38,3 +39,13 @@ Tail. Melee Attack Roll: +13, reach 15 ft. Hit: 18 (2d10 + 7) Bludgeoning damage
 Steam Breath (Recharge 5–6). Constitution Saving Throw: DC 19, each creature in a 60-foot Cone. Failure: 56 (16d6) Fire damage. Success: Half damage. Failure or Success: Being underwater doesn’t grant Resistance to this Fire damage.
 
 Original layout: [[../pages/281|page 281]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

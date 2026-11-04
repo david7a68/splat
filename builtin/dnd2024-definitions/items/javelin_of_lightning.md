@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: ecdd6fe2-79ad-5b35-9058-b2174a47ca71
 splat_kind: item
 splat_key: dnd2024:items/javelin_of_lightning
 splat_name: Javelin of Lightning
-splat_origin:
-  key: dnd2024:reference/magic_item/javelin_of_lightning
+splat_origin: dnd2024:reference/magic_item/javelin_of_lightning
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 228
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 228, https://www.dndbeyond.com/srd
 ---
 
 # Javelin of Lightning
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Weapon |
+| Rarity | Uncommon |
+| Attunement | No |
+
 
 ## Source text
 
@@ -26,22 +33,9 @@ Lightning Bolt. When you throw this weapon at a target no farther than 120 feet 
 
 Original layout: [[../../srd-5.2.1/pages/228|page 228]].
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` weapon ` |
-| ` rarity ` | ` uncommon ` |
 
-### Equipment
-
-<!-- splat:values path=splat_item/equipment -->
-
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` none ` |
 
 ## Rule
 

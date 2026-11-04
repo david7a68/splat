@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "eb1f897f-bb11-55e9-a4de-f8e2a902a747"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/weird"
 splat_name: "Weird"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [174], "executable": false}
+splat_pages:
+- 174
 ---
 
 # Weird
@@ -22,3 +23,13 @@ You try to create illusory terrors in others’ minds. Each creature of your cho
 A Frightened target makes a Wisdom saving throw at the end of each of its turns. On a failed save, it takes 5d10 Psychic damage. On a successful save, the spell ends on that target.
 
 Original layout: [[../pages/174|page 174]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

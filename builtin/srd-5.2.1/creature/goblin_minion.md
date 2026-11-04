@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "4c95839a-4b94-5658-8944-9c9022fae5d8"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/goblin_minion"
 splat_name: "Goblin Minion"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [290], "executable": false}
+splat_pages:
+- 290
 ---
 
 # Goblin Minion
@@ -33,3 +34,13 @@ Dagger. Melee or Ranged Attack Roll: +4, reach 5 ft. or range 20/60 ft. Hit: 4 (
 Nimble Escape. The goblin takes the Disengage or Hide action.
 
 Original layout: [[../pages/290|page 290]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

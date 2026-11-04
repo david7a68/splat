@@ -1,36 +1,64 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: d84e740e-9522-58e4-b9d1-ecf40f3f5485
 splat_kind: creature
 splat_key: dnd2024:creatures/marilith
 splat_name: Marilith
-splat_origin:
-  key: dnd2024:reference/creature/marilith
+splat_origin: dnd2024:reference/creature/marilith
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 306
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 306, https://www.dndbeyond.com/srd
 ---
 
 # Marilith
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Large |
+| Type | Fiend (Demon) |
+| Alignment | Chaotic Evil |
+| Armor Class | 16 |
+| Hit Points | 220 (21d10 + 105) |
+| Initiative | +10 (20) |
+| Speed | 40 ft., Climb 40 ft. |
+| Challenge | 16 (XP 15,000; PB +5) |
+| Skills | Perception +8 |
+| Senses | Truesight 120 ft.; Passive Perception 18 |
+| Languages | Abyssal; telepathy 120 ft. |
+| Resistances | Cold, Fire, Lightning |
+| Immunities | Poison; Poisoned |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 18 | +4 | +9 |
+| Dex | 20 | +5 | +5 |
+| Con | 20 | +5 | +10 |
+| Int | 18 | +4 | +4 |
+| Wis | 16 | +3 | +8 |
+| Cha | 20 | +5 | +10 |
+
 
 ## Source text
 
 <!-- SRD page 306 -->
 
-Large Fiend (Demon), Chaotic Evil\
-AC 16 Initiative +10 (20)\
-HP 220 (21d10 + 105)\
-Speed 40 ft., Climb 40 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 18 +4 +9 Dex 20 +5 +5 Con 20 +5 +10\
-Int 18 +4 +4 Wis 16 +3 +8 Cha 20 +5 +10\
-Skills Perception +8\
-Resistances Cold, Fire, Lightning\
-Immunities Poison; Poisoned\
-Senses Truesight 120 ft.; Passive Perception 18\
-Languages Abyssal; telepathy 120 ft.\
-CR 16 (XP 15,000; PB +5)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Large Fiend (Demon), Chaotic Evil\
+> AC 16 Initiative +10 (20)\
+> HP 220 (21d10 + 105)\
+> Speed 40 ft., Climb 40 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 18 +4 +9 Dex 20 +5 +5 Con 20 +5 +10\
+> Int 18 +4 +4 Wis 16 +3 +8 Cha 20 +5 +10\
+> Skills Perception +8\
+> Resistances Cold, Fire, Lightning\
+> Immunities Poison; Poisoned\
+> Senses Truesight 120 ft.; Passive Perception 18\
+> Languages Abyssal; telepathy 120 ft.\
+> CR 16 (XP 15,000; PB +5)
+
 
 ### Traits
 
@@ -58,49 +86,11 @@ Parry. Trigger: The marilith is hit by a melee attack roll while holding a weapo
 
 Original layout: [[../../srd-5.2.1/pages/306|page 306]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` large ` |
-| ` type ` | ` fiend ` |
-| ` alignment ` | ` Chaotic Evil ` |
-| ` tags_text ` | ` (Demon) ` |
-| ` movement_text ` | ` 40 ft., Climb 40 ft. ` |
-| ` skills_text ` | ` Perception +8 ` |
-| ` resistances_text ` | ` Cold, Fire, Lightning ` |
-| ` immunities_text ` | ` Poison; Poisoned ` |
-| ` senses_text ` | ` Truesight 120 ft.; Passive Perception 18 ` |
-| ` languages_text ` | ` Abyssal; telepathy 120 ft. ` |
-| ` cr_text ` | ` 16 (XP 15,000; PB +5) ` |
-| ` hit_points_text ` | ` 220 (21d10 + 105) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 18 ` | ` 9 ` |
-| ` Dexterity ` | ` 20 ` | ` 5 ` |
-| ` Constitution ` | ` 20 ` | ` 10 ` |
-| ` Intelligence ` | ` 18 ` | ` 4 ` |
-| ` Wisdom ` | ` 16 ` | ` 8 ` |
-| ` Charisma ` | ` 20 ` | ` 10 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 16 ` |  |
-| ` max_hp ` | ` 220 ` |  |
-| ` initiative ` | ` 10 ` |  |
-| ` speed ` | ` 40 ` | ` ft ` |
-| ` climb_speed ` | ` 40 ` | ` ft ` |
 
 ## Health
 
@@ -379,3 +369,13 @@ other_components: spell_definition_unless_waived
 | ` provider ` | ` caller ` |
 | ` required_facts ` | ` ["distance", "area_membership", "visibility", "occupancy", "movement_path"] ` |
 | ` validate_against_typed_constraints ` | ` true ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_stats_extras -->
+> 
+> ```yaml
+> climb_speed:
+>   unit: ft
+>   value: 40
+> ```
+

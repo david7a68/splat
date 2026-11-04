@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: b42094da-a7f0-5ca4-9f72-a1d9357cd344
 splat_kind: item
 splat_key: dnd2024:equipment/priest_s_pack_33_gp
 splat_name: Priest’s Pack (33 GP)
-splat_origin:
-  key: dnd2024:reference/pages/099
+splat_origin: dnd2024:reference/pages/099
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 99
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 99, https://www.dndbeyond.com/srd
 ---
 
 # Priest’s Pack (33 GP)
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Adventuring Gear |
+| Rarity |  |
+| Attunement | No |
+
 
 ## Source text
 
@@ -20,39 +27,13 @@ splat_sources:
 
 A Priest’s Pack contains the following items: Backpack, Blanket, Holy Water, Lamp, 7 days of Rations, Robe, and Tinderbox.
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` adventuring_gear ` |
 
-### Equipment
 
-<!-- splat:values path=splat_item/equipment -->
 
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` none ` |
 
-### Price
 
-<!-- splat:values path=splat_item/price -->
-
-| Field | Value |
-| --- | --- |
-| ` value ` | ` 33 ` |
-| ` unit ` | ` gp ` |
-
-### Mass
-
-<!-- splat:values path=splat_item/mass -->
-
-| Field | Value |
-| --- | --- |
-| ` value ` | ` 29.0 ` |
-| ` unit ` | ` lb ` |
 
 ## Rule
 
@@ -115,3 +96,16 @@ columns:
 | --- | --- |
 | ` value ` | ` 29.0 ` |
 | ` unit ` | ` lb ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_item_extras -->
+> 
+> ```yaml
+> price:
+>   unit: gp
+>   value: 33
+> mass:
+>   unit: lb
+>   value: 29.0
+> ```
+

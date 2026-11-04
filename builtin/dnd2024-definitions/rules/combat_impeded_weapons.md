@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 63c848ff-ddfe-5e35-9e68-d069146287ac
 splat_kind: rule
 splat_key: dnd2024:rules/combat_impeded_weapons
 splat_name: Impeded Weapons
-splat_origin:
-  key: dnd2024:reference/pages/016
+splat_origin: dnd2024:reference/pages/016
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 16
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 16, https://www.dndbeyond.com/srd
 ---
 
 # Impeded Weapons

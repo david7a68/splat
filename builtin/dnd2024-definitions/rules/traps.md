@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 69c028fc-744b-5345-a8d2-05ec8bad84ec
 splat_kind: rule
 splat_key: dnd2024:rules/traps
 splat_name: Traps
-splat_origin:
-  key: dnd2024:reference/pages/199
+splat_origin: dnd2024:reference/pages/199
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 199
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 199, https://www.dndbeyond.com/srd
 ---
 
 # Traps

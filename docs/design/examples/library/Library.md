@@ -1,5 +1,5 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 7b31c6e4-47af-41c6-8b8d-42f1bac31229
 splat_kind: package
 splat_key: "my_homebrew:library"

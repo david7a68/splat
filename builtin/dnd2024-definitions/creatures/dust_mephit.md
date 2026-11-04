@@ -1,36 +1,64 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 5ecfe2e4-926f-5058-acd9-438360874d52
 splat_kind: creature
 splat_key: dnd2024:creatures/dust_mephit
 splat_name: Dust Mephit
-splat_origin:
-  key: dnd2024:reference/creature/dust_mephit
+splat_origin: dnd2024:reference/creature/dust_mephit
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 307
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 307, https://www.dndbeyond.com/srd
 ---
 
 # Dust Mephit
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Small |
+| Type | Elemental |
+| Alignment | Neutral Evil |
+| Armor Class | 12 |
+| Hit Points | 17 (5d6) |
+| Initiative | +2 (12) |
+| Speed | 30 ft., Fly 30 ft. |
+| Challenge | 1/2 (XP 100; PB +2) |
+| Skills | Perception +2, Stealth +4 |
+| Senses | Darkvision 60 ft.; Passive Perception 12 |
+| Languages | Primordial (Auran, Terran) |
+| Immunities | Poison; Exhaustion, Poisoned |
+| Vulnerabilities | Fire |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 5 | -3 | -3 |
+| Dex | 14 | +2 | +2 |
+| Con | 10 | +0 | +0 |
+| Int | 9 | -1 | -1 |
+| Wis | 11 | +0 | +0 |
+| Cha | 10 | +0 | +0 |
+
 
 ## Source text
 
 <!-- SRD page 307 -->
 
-Small Elemental, Neutral Evil\
-AC 12 Initiative +2 (12)\
-HP 17 (5d6)\
-Speed 30 ft., Fly 30 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 5 −3 −3 Dex 14 +2 +2 Con 10 +0 +0\
-Int 9 −1 −1 Wis 11 +0 +0 Cha 10 +0 +0\
-Skills Perception +2, Stealth +4\
-Vulnerabilities Fire\
-Immunities Poison; Exhaustion, Poisoned\
-Senses Darkvision 60 ft.; Passive Perception 12\
-Languages Primordial (Auran, Terran)\
-CR 1/2 (XP 100; PB +2)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Small Elemental, Neutral Evil\
+> AC 12 Initiative +2 (12)\
+> HP 17 (5d6)\
+> Speed 30 ft., Fly 30 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 5 −3 −3 Dex 14 +2 +2 Con 10 +0 +0\
+> Int 9 −1 −1 Wis 11 +0 +0 Cha 10 +0 +0\
+> Skills Perception +2, Stealth +4\
+> Vulnerabilities Fire\
+> Immunities Poison; Exhaustion, Poisoned\
+> Senses Darkvision 60 ft.; Passive Perception 12\
+> Languages Primordial (Auran, Terran)\
+> CR 1/2 (XP 100; PB +2)
+
 
 ### Traits
 
@@ -46,48 +74,11 @@ Sleep (1/Day). The mephit casts the Sleep spell, requiring no spell components a
 
 Original layout: [[../../srd-5.2.1/pages/307|page 307]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` small ` |
-| ` type ` | ` elemental ` |
-| ` alignment ` | ` Neutral Evil ` |
-| ` movement_text ` | ` 30 ft., Fly 30 ft. ` |
-| ` skills_text ` | ` Perception +2, Stealth +4 ` |
-| ` vulnerabilities_text ` | ` Fire ` |
-| ` immunities_text ` | ` Poison; Exhaustion, Poisoned ` |
-| ` senses_text ` | ` Darkvision 60 ft.; Passive Perception 12 ` |
-| ` languages_text ` | ` Primordial (Auran, Terran) ` |
-| ` cr_text ` | ` 1/2 (XP 100; PB +2) ` |
-| ` hit_points_text ` | ` 17 (5d6) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 5 ` | ` -3 ` |
-| ` Dexterity ` | ` 14 ` | ` 2 ` |
-| ` Constitution ` | ` 10 ` | ` 0 ` |
-| ` Intelligence ` | ` 9 ` | ` -1 ` |
-| ` Wisdom ` | ` 11 ` | ` 0 ` |
-| ` Charisma ` | ` 10 ` | ` 0 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 12 ` |  |
-| ` max_hp ` | ` 17 ` |  |
-| ` initiative ` | ` 2 ` |  |
-| ` speed ` | ` 30 ` | ` ft ` |
-| ` fly_speed ` | ` 30 ` | ` ft ` |
 
 ## Health
 
@@ -298,3 +289,13 @@ other_components: spell_definition_unless_waived
 | ` provider ` | ` caller ` |
 | ` required_facts ` | ` ["distance", "area_membership", "visibility", "occupancy", "movement_path"] ` |
 | ` validate_against_typed_constraints ` | ` true ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_stats_extras -->
+> 
+> ```yaml
+> fly_speed:
+>   unit: ft
+>   value: 30
+> ```
+

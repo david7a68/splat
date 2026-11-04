@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: f9b2dd51-e21e-5589-ba8f-6e6fb4a551f4
 splat_kind: rule
 splat_key: dnd2024:rules/warlock_fiendish_vigor
 splat_name: Fiendish Vigor
-splat_origin:
-  key: dnd2024:reference/pages/073
+splat_origin: dnd2024:reference/pages/073
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 73
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 73, https://www.dndbeyond.com/srd
 ---
 
 # Fiendish Vigor

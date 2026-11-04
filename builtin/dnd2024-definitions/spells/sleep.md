@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: aecb4178-b2fb-5b41-9610-a5ad9a398f94
 splat_kind: spell
 splat_key: dnd2024:spells/sleep
 splat_name: Sleep
-splat_origin:
-  key: dnd2024:reference/spell/sleep
+splat_origin: dnd2024:reference/spell/sleep
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 163
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 163, https://www.dndbeyond.com/srd
 ---
 
 # Sleep
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 1 |
+| School | Enchantment |
+| Classes | Bard, Sorcerer, Wizard |
+| Casting Time | Action |
+| Range | 60 feet |
+| Components | V, S, M (a pinch of sand or rose petals) |
+| Duration | Concentration, up to 1 minute |
+
 
 ## Source text
 
@@ -30,37 +41,11 @@ Creatures that don’t sleep, such as elves, or that have Immunity to the Exhaus
 
 Original layout: [[../../srd-5.2.1/pages/163|page 163]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 1 ` |
-| ` school ` | ` enchantment ` |
-| ` classes ` | ` ["bard", "sorcerer", "wizard"] ` |
-| ` components ` | ` ["verbal", "somatic", "material"] ` |
-| ` concentration ` | ` true ` |
-| ` duration ` | ` Concentration, up to 1 minute ` |
-| ` casting_time ` | ` Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
 
-<!-- splat:values path=splat_spell/range -->
 
-| Field | Value |
-| --- | --- |
-| ` feet ` | ` 60 ` |
-
-### Material
-
-<!-- splat:values path=splat_spell/material -->
-
-| Field | Value |
-| --- | --- |
-| ` description ` | ` a pinch of sand or rose petals ` |
-| ` consumed ` | ` false ` |
 
 ## Rule
 
@@ -134,3 +119,12 @@ success:
     cost: action
     activity: shake_awake
 ```
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_spell_extras -->
+> 
+> ```yaml
+> material:
+>   consumed: false
+> ```
+

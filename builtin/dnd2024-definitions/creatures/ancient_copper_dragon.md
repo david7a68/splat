@@ -1,35 +1,62 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 4f924e40-6e9d-500c-b56a-b90483966022
 splat_kind: creature
 splat_key: dnd2024:creatures/ancient_copper_dragon
 splat_name: Ancient Copper Dragon
-splat_origin:
-  key: dnd2024:reference/creature/ancient_copper_dragon
+splat_origin: dnd2024:reference/creature/ancient_copper_dragon
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 277
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 277, https://www.dndbeyond.com/srd
 ---
 
 # Ancient Copper Dragon
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Gargantuan |
+| Type | Dragon (Metallic) |
+| Alignment | Chaotic Good |
+| Armor Class | 21 |
+| Hit Points | 367 (21d20 + 147) |
+| Initiative | +15 (25) |
+| Speed | 40 ft., Climb 40 ft., Fly 80 ft. |
+| Challenge | 21 (XP 33,000, or 41,000 in lair; PB +7) |
+| Skills | Deception +13, Perception +17, Stealth +8 |
+| Senses | Blindsight 60 ft., Darkvision 120 ft.; Passive Perception 27 |
+| Languages | Common, Draconic |
+| Immunities | Acid |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 27 | +8 | +8 |
+| Dex | 12 | +1 | +8 |
+| Con | 25 | +7 | +7 |
+| Int | 20 | +5 | +5 |
+| Wis | 17 | +3 | +10 |
+| Cha | 22 | +6 | +6 |
+
 
 ## Source text
 
 <!-- SRD page 277 -->
 
-Gargantuan Dragon (Metallic), Chaotic Good\
-AC 21 Initiative +15 (25)\
-HP 367 (21d20 + 147)\
-Speed 40 ft., Climb 40 ft., Fly 80 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 27 +8 +8 Dex 12 +1 +8 Con 25 +7 +7\
-Int 20 +5 +5 Wis 17 +3 +10 Cha 22 +6 +6\
-Skills Deception +13, Perception +17, Stealth +8\
-Immunities Acid\
-Senses Blindsight 60 ft., Darkvision 120 ft.; Passive Perception 27\
-Languages Common, Draconic\
-CR 21 (XP 33,000, or 41,000 in lair; PB +7)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Gargantuan Dragon (Metallic), Chaotic Good\
+> AC 21 Initiative +15 (25)\
+> HP 367 (21d20 + 147)\
+> Speed 40 ft., Climb 40 ft., Fly 80 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 27 +8 +8 Dex 12 +1 +8 Con 25 +7 +7\
+> Int 20 +5 +5 Wis 17 +3 +10 Cha 22 +6 +6\
+> Skills Deception +13, Perception +17, Stealth +8\
+> Immunities Acid\
+> Senses Blindsight 60 ft., Darkvision 120 ft.; Passive Perception 27\
+> Languages Common, Draconic\
+> CR 21 (XP 33,000, or 41,000 in lair; PB +7)
+
 
 ### Traits
 
@@ -63,49 +90,11 @@ Pounce. The dragon moves up to half its Speed, and it makes one Rend attack.
 
 Original layout: [[../../srd-5.2.1/pages/277|page 277]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` gargantuan ` |
-| ` type ` | ` dragon ` |
-| ` alignment ` | ` Chaotic Good ` |
-| ` tags_text ` | ` (Metallic) ` |
-| ` movement_text ` | ` 40 ft., Climb 40 ft., Fly 80 ft. ` |
-| ` skills_text ` | ` Deception +13, Perception +17, Stealth +8 ` |
-| ` immunities_text ` | ` Acid ` |
-| ` senses_text ` | ` Blindsight 60 ft., Darkvision 120 ft.; Passive Perception 27 ` |
-| ` languages_text ` | ` Common, Draconic ` |
-| ` cr_text ` | ` 21 (XP 33,000, or 41,000 in lair; PB +7) ` |
-| ` hit_points_text ` | ` 367 (21d20 + 147) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 27 ` | ` 8 ` |
-| ` Dexterity ` | ` 12 ` | ` 8 ` |
-| ` Constitution ` | ` 25 ` | ` 7 ` |
-| ` Intelligence ` | ` 20 ` | ` 5 ` |
-| ` Wisdom ` | ` 17 ` | ` 10 ` |
-| ` Charisma ` | ` 22 ` | ` 6 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 21 ` |  |
-| ` max_hp ` | ` 367 ` |  |
-| ` initiative ` | ` 15 ` |  |
-| ` speed ` | ` 40 ` | ` ft ` |
-| ` climb_speed ` | ` 40 ` | ` ft ` |
-| ` fly_speed ` | ` 80 ` | ` ft ` |
 
 ## Health
 
@@ -537,3 +526,16 @@ other_components: spell_definition_unless_waived
 | ` provider ` | ` caller ` |
 | ` required_facts ` | ` ["distance", "area_membership", "visibility", "occupancy", "movement_path"] ` |
 | ` validate_against_typed_constraints ` | ` true ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_stats_extras -->
+> 
+> ```yaml
+> fly_speed:
+>   unit: ft
+>   value: 80
+> climb_speed:
+>   unit: ft
+>   value: 40
+> ```
+

@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "e4375356-a4a4-5888-9b89-97981c97921d"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/specter"
 splat_name: "Specter"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [327], "executable": false}
+splat_pages:
+- 327
 ---
 
 # Specter
@@ -35,3 +36,13 @@ Sunlight Sensitivity. While in sunlight, the specter has Disadvantage on ability
 Life Drain. Melee Attack Roll: +4, reach 5 ft. Hit: 7 (2d6) Necrotic damage. If the target is a creature, its Hit Point maximum decreases by an amount equal to the damage taken.
 
 Original layout: [[../pages/327|page 327]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

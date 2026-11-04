@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 1080cfe9-ff7f-51a3-8f7b-128ae97ccd80
 splat_kind: item
 splat_key: dnd2024:items/horseshoes_of_a_zephyr
 splat_name: Horseshoes of a Zephyr
-splat_origin:
-  key: dnd2024:reference/magic_item/horseshoes_of_a_zephyr
+splat_origin: dnd2024:reference/magic_item/horseshoes_of_a_zephyr
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 226
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 226, https://www.dndbeyond.com/srd
 ---
 
 # Horseshoes of a Zephyr
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Wondrous Item |
+| Rarity | Very Rare |
+| Attunement | No |
+
 
 ## Source text
 
@@ -26,22 +33,9 @@ While all four shoes are affixed to the hooves of a horse or similar creature, t
 
 Original layout: [[../../srd-5.2.1/pages/226|page 226]].
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` wondrous_item ` |
-| ` rarity ` | ` very_rare ` |
 
-### Equipment
-
-<!-- splat:values path=splat_item/equipment -->
-
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` none ` |
 
 ## Rule
 

@@ -1,10 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "0ba85990-47a7-567a-a2b4-1d8a2a98dbe2"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/storm_giant"
 splat_name: "Storm Giant"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [330, 331], "executable": false}
+splat_pages:
+- 330
+- 331
 ---
 
 # Storm Giant
@@ -47,3 +49,13 @@ At Will: Detect Magic, Light\
 1/Day: Control Weather
 
 Original layout: [[../pages/330|page 330]], [[../pages/331|page 331]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

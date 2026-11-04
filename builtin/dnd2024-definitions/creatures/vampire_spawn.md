@@ -1,35 +1,62 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 7d62036e-996d-516f-b89d-a8f1762641c4
 splat_kind: creature
 splat_key: dnd2024:creatures/vampire_spawn
 splat_name: Vampire Spawn
-splat_origin:
-  key: dnd2024:reference/creature/vampire_spawn
+splat_origin: dnd2024:reference/creature/vampire_spawn
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 334, 335
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 334, 335, https://www.dndbeyond.com/srd
 ---
 
 # Vampire Spawn
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Medium or Small |
+| Type | Undead |
+| Alignment | Neutral Evil |
+| Armor Class | 16 |
+| Hit Points | 90 (12d8 + 36) |
+| Initiative | +3 (13) |
+| Speed | 30 ft. |
+| Challenge | 5 (XP 1,800; PB +3) |
+| Skills | Perception +3, Stealth +6 |
+| Senses | Darkvision 60 ft.; Passive Perception 13 |
+| Languages | Common plus one other language |
+| Resistances | Necrotic |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 16 | +3 | +3 |
+| Dex | 16 | +3 | +6 |
+| Con | 16 | +3 | +3 |
+| Int | 11 | +0 | +0 |
+| Wis | 10 | +0 | +3 |
+| Cha | 12 | +1 | +1 |
+
 
 ## Source text
 
 <!-- SRD page 334 -->
 
 Medium or Small Undead, Neutral Evil\
-AC 16 Initiative +3 (13)\
-HP 90 (12d8 + 36)\
-Speed 30 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 16 +3 +3 Dex 16 +3 +6 Con 16 +3 +3\
-Int 11 +0 +0 Wis 10 +0 +3 Cha 12 +1 +1\
-Skills Perception +3, Stealth +6\
-Resistances Necrotic\
-Senses Darkvision 60 ft.; Passive Perception 13\
-Languages Common plus one other language\
-CR 5 (XP 1,800; PB +3)
+> [!quote]- Printed stat block (not read; edit the table above)
+> AC 16 Initiative +3 (13)\
+> HP 90 (12d8 + 36)\
+> Speed 30 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 16 +3 +3 Dex 16 +3 +6 Con 16 +3 +3\
+> Int 11 +0 +0 Wis 10 +0 +3 Cha 12 +1 +1\
+> Skills Perception +3, Stealth +6\
+> Resistances Necrotic\
+> Senses Darkvision 60 ft.; Passive Perception 13\
+> Languages Common plus one other language\
+> CR 5 (XP 1,800; PB +3)
+
 
 <!-- SRD page 335 -->
 
@@ -61,47 +88,11 @@ Deathless Agility. The vampire takes the Dash or Disengage action.
 
 Original layout: [[../../srd-5.2.1/pages/334|page 334]], [[../../srd-5.2.1/pages/335|page 335]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` medium ` |
-| ` type ` | ` undead ` |
-| ` alignment ` | ` Neutral Evil ` |
-| ` size_options_text ` | ` Medium or Small ` |
-| ` movement_text ` | ` 30 ft. ` |
-| ` skills_text ` | ` Perception +3, Stealth +6 ` |
-| ` resistances_text ` | ` Necrotic ` |
-| ` senses_text ` | ` Darkvision 60 ft.; Passive Perception 13 ` |
-| ` languages_text ` | ` Common plus one other language ` |
-| ` cr_text ` | ` 5 (XP 1,800; PB +3) ` |
-| ` hit_points_text ` | ` 90 (12d8 + 36) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 16 ` | ` 3 ` |
-| ` Dexterity ` | ` 16 ` | ` 6 ` |
-| ` Constitution ` | ` 16 ` | ` 3 ` |
-| ` Intelligence ` | ` 11 ` | ` 0 ` |
-| ` Wisdom ` | ` 10 ` | ` 3 ` |
-| ` Charisma ` | ` 12 ` | ` 1 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 16 ` |  |
-| ` max_hp ` | ` 90 ` |  |
-| ` initiative ` | ` 3 ` |  |
-| ` speed ` | ` 30 ` | ` ft ` |
 
 ## Health
 

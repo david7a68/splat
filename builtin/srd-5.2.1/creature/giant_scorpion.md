@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "41d571b1-4899-58a6-a33b-44282b91fe52"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/giant_scorpion"
 splat_name: "Giant Scorpion"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [353], "executable": false}
+splat_pages:
+- 353
 ---
 
 # Giant Scorpion
@@ -31,3 +32,13 @@ Claw. Melee Attack Roll: +5, reach 5 ft. Hit: 6 (1d6 + 3) Bludgeoning damage. If
 Sting. Melee Attack Roll: +5, reach 5 ft. Hit: 7 (1d8 + 3) Piercing damage plus 11 (2d10) Poison damage.
 
 Original layout: [[../pages/353|page 353]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

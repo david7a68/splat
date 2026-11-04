@@ -1,10 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "2b85b9c2-435b-51ee-ba8b-15feb67f1fa7"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/rakshasa"
 splat_name: "Rakshasa"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [317, 318], "executable": false}
+splat_pages:
+- 317
+- 318
 ---
 
 # Rakshasa
@@ -47,3 +49,13 @@ At Will: Detect Magic, Detect Thoughts, Disguise Self, Mage Hand, Minor Illusion
 1/Day Each: Fly, Invisibility, Major Image, Plane Shift
 
 Original layout: [[../pages/317|page 317]], [[../pages/318|page 318]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

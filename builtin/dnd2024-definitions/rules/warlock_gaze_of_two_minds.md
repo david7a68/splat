@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 681c6d78-669a-52f2-9a64-72e6f5ce979c
 splat_kind: rule
 splat_key: dnd2024:rules/warlock_gaze_of_two_minds
 splat_name: Gaze of Two Minds
-splat_origin:
-  key: dnd2024:reference/pages/073
+splat_origin: dnd2024:reference/pages/073
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 73
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 73, https://www.dndbeyond.com/srd
 ---
 
 # Gaze of Two Minds

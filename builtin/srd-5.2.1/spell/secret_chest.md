@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "bdae0e1d-f6d7-54a1-b276-b464108caec7"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/secret_chest"
 splat_name: "Secret Chest"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [160], "executable": false}
+splat_pages:
+- 160
 ---
 
 # Secret Chest
@@ -24,3 +25,13 @@ While the chest remains on the Ethereal Plane, you can take a Magic action and t
 After 60 days, there is a cumulative 5 percent chance at the end of each day that the spell ends. The spell also ends if you cast this spell again or if the Tiny replica chest is destroyed. If the spell ends and the larger chest is on the Ethereal Plane, the chest remains there for you or someone else to find.
 
 Original layout: [[../pages/160|page 160]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 51b5ed68-3c2c-5058-bcfe-8df2339c6679
 splat_kind: spell
 splat_key: dnd2024:spells/major_image
 splat_name: Major Image
-splat_origin:
-  key: dnd2024:reference/spell/major_image
+splat_origin: dnd2024:reference/spell/major_image
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 147
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 147, https://www.dndbeyond.com/srd
 ---
 
 # Major Image
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 3 |
+| School | Illusion |
+| Classes | Bard, Sorcerer, Warlock, Wizard |
+| Casting Time | Action |
+| Range | 120 feet |
+| Components | V, S, M (a bit of fleece) |
+| Duration | Concentration, up to 10 minutes |
+
 
 ## Source text
 
@@ -34,37 +45,11 @@ Using a Higher-Level Spell Slot. The spell lasts until dispelled, without requir
 
 Original layout: [[../../srd-5.2.1/pages/147|page 147]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 3 ` |
-| ` school ` | ` illusion ` |
-| ` classes ` | ` ["bard", "sorcerer", "warlock", "wizard"] ` |
-| ` components ` | ` ["verbal", "somatic", "material"] ` |
-| ` concentration ` | ` true ` |
-| ` duration ` | ` Concentration, up to 10 minutes ` |
-| ` casting_time ` | ` Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
 
-<!-- splat:values path=splat_spell/range -->
 
-| Field | Value |
-| --- | --- |
-| ` feet ` | ` 120 ` |
-
-### Material
-
-<!-- splat:values path=splat_spell/material -->
-
-| Field | Value |
-| --- | --- |
-| ` description ` | ` a bit of fleece ` |
-| ` consumed ` | ` false ` |
 
 ## Rule
 
@@ -144,3 +129,12 @@ on_discern:
   until: dispelled
   concentration: false
 ```
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_spell_extras -->
+> 
+> ```yaml
+> material:
+>   consumed: false
+> ```
+

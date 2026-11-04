@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "a4b5df22-0dbb-5b31-99a0-f9c2ed160c12"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/entangle"
 splat_name: "Entangle"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [128], "executable": false}
+splat_pages:
+- 128
 ---
 
 # Entangle
@@ -22,3 +23,13 @@ Grasping plants sprout from the ground in a 20-foot square within range. For the
 Each creature (other than you) in the area when you cast the spell must succeed on a Strength saving throw or have the Restrained condition until the spell ends. A Restrained creature can take an action to make a Strength (Athletics) check against your spell save DC. On a success, it frees itself from the grasping plants and is no longer Restrained by them.
 
 Original layout: [[../pages/128|page 128]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

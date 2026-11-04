@@ -1440,7 +1440,25 @@ impl Lookup {
             });
             return;
         };
-        if !index.broken_world.is_empty() {
+        let (old, broken): (Vec<_>, Vec<_>) = index
+            .broken_world
+            .iter()
+            .partition(|(_, problem)| crate::formats_ui::is_old(problem));
+        if !old.is_empty() {
+            let message = if old.len() == 1 {
+                crate::formats_ui::old_message(&old[0].0)
+            } else {
+                format!("{} files use the old layout.", old.len())
+            };
+            crate::formats_ui::old_notice(
+                ui,
+                &message,
+                old.iter()
+                    .map(|(path, _)| std::path::PathBuf::from(path))
+                    .collect(),
+            );
+        }
+        if !broken.is_empty() {
             ui.horizontal_wrapped(|ui| {
                 design::status(
                     ui,
@@ -1448,13 +1466,13 @@ impl Lookup {
                         icon: icons::WARN,
                         word: &format!(
                             "{} cannot be read",
-                            design::count(index.broken_world.len(), "note", "notes")
+                            design::count(broken.len(), "note", "notes")
                         ),
                         color: colors().result.warning,
                     },
                 );
                 if design::link(ui, "Show").clicked() {
-                    self.open_world_repair = Some(index.broken_world[0].0.clone());
+                    self.open_world_repair = Some(broken[0].0.clone());
                 }
             });
         }
@@ -1944,7 +1962,7 @@ mod tests {
             dndbeyond_campaign_id: None,
             dndbeyond_campaign_name: None,
         };
-        let before = crate::content_workspace::patch_fields(
+        let before = splat::content::formats::patch_model(
             &crate::library::note_text("Rook", "world", None),
             &[(
                 "splat_world",
@@ -2095,9 +2113,9 @@ mod tests {
     }
 
     fn entry_note(id: Uuid, name: &str, world: &str) -> String {
-        format!(
+        splat::content::formats::convert("Fixture.md", &format!(
             "---\nsplat_schema: 1\nsplat_id: {id}\nsplat_kind: world\nsplat_name: {name}\nsplat_world:\n{world}\n---\n"
-        )
+        )).expect("schema-2 fixture")
     }
 
     #[test]

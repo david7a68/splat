@@ -1,34 +1,60 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: d0494afe-effc-54d5-8b6b-4d9ef95ba0df
 splat_kind: creature
 splat_key: dnd2024:creatures/satyr
 splat_name: Satyr
-splat_origin:
-  key: dnd2024:reference/creature/satyr
+splat_origin: dnd2024:reference/creature/satyr
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 321, 322
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 321, 322, https://www.dndbeyond.com/srd
 ---
 
 # Satyr
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Medium |
+| Type | Fey |
+| Alignment | Chaotic Neutral |
+| Armor Class | 13 |
+| Hit Points | 31 (7d8) |
+| Initiative | +3 (13) |
+| Speed | 40 ft. |
+| Challenge | 1/2 (XP 100; PB +2) |
+| Skills | Perception +2, Performance +6, Stealth +5 |
+| Senses | Passive Perception 12 |
+| Languages | Common, Elvish, Sylvan |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 12 | +1 | +1 |
+| Dex | 16 | +3 | +3 |
+| Con | 11 | +0 | +0 |
+| Int | 12 | +1 | +1 |
+| Wis | 10 | +0 | +0 |
+| Cha | 14 | +2 | +2 |
+
 
 ## Source text
 
 <!-- SRD page 321 -->
 
-Medium Fey, Chaotic Neutral\
-AC 13 Initiative +3 (13)\
-HP 31 (7d8)\
-Speed 40 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 12 +1 +1 Dex 16 +3 +3 Con 11 +0 +0\
-Int 12 +1 +1 Wis 10 +0 +0 Cha 14 +2 +2\
-Skills Perception +2, Performance +6, Stealth +5\
-Senses Passive Perception 12\
-Languages Common, Elvish, Sylvan\
-CR 1/2 (XP 100; PB +2)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Medium Fey, Chaotic Neutral\
+> AC 13 Initiative +3 (13)\
+> HP 31 (7d8)\
+> Speed 40 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 12 +1 +1 Dex 16 +3 +3 Con 11 +0 +0\
+> Int 12 +1 +1 Wis 10 +0 +0 Cha 14 +2 +2\
+> Skills Perception +2, Performance +6, Stealth +5\
+> Senses Passive Perception 12\
+> Languages Common, Elvish, Sylvan\
+> CR 1/2 (XP 100; PB +2)
+
 
 <!-- SRD page 322 -->
 
@@ -44,45 +70,11 @@ Mockery. Wisdom Saving Throw: DC 12, one creature the satyr can see within 90 fe
 
 Original layout: [[../../srd-5.2.1/pages/321|page 321]], [[../../srd-5.2.1/pages/322|page 322]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` medium ` |
-| ` type ` | ` fey ` |
-| ` alignment ` | ` Chaotic Neutral ` |
-| ` movement_text ` | ` 40 ft. ` |
-| ` skills_text ` | ` Perception +2, Performance +6, Stealth +5 ` |
-| ` senses_text ` | ` Passive Perception 12 ` |
-| ` languages_text ` | ` Common, Elvish, Sylvan ` |
-| ` cr_text ` | ` 1/2 (XP 100; PB +2) ` |
-| ` hit_points_text ` | ` 31 (7d8) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 12 ` | ` 1 ` |
-| ` Dexterity ` | ` 16 ` | ` 3 ` |
-| ` Constitution ` | ` 11 ` | ` 0 ` |
-| ` Intelligence ` | ` 12 ` | ` 1 ` |
-| ` Wisdom ` | ` 10 ` | ` 0 ` |
-| ` Charisma ` | ` 14 ` | ` 2 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 13 ` |  |
-| ` max_hp ` | ` 31 ` |  |
-| ` initiative ` | ` 3 ` |  |
-| ` speed ` | ` 40 ` | ` ft ` |
 
 ## Health
 

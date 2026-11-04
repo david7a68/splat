@@ -1,10 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "64d5bdc5-9ed2-50b0-9030-1117b3ed6402"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/knock"
 splat_name: "Knock"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [143, 144], "executable": false}
+splat_pages:
+- 143
+- 144
 ---
 
 # Knock
@@ -28,3 +30,13 @@ If the target is held shut by Arcane Lock, that spell is suppressed for 10 minut
 When you cast the spell, a loud knock, audible up to 300 feet away, emanates from the target.
 
 Original layout: [[../pages/143|page 143]], [[../pages/144|page 144]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

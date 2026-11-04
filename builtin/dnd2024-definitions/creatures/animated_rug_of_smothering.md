@@ -1,34 +1,60 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: e95b1f68-6031-5ca5-8a44-c1e6784bb620
 splat_kind: creature
 splat_key: dnd2024:creatures/animated_rug_of_smothering
 splat_name: Animated Rug of Smothering
-splat_origin:
-  key: dnd2024:reference/creature/animated_rug_of_smothering
+splat_origin: dnd2024:reference/creature/animated_rug_of_smothering
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 259
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 259, https://www.dndbeyond.com/srd
 ---
 
 # Animated Rug of Smothering
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Large |
+| Type | Construct |
+| Alignment | Unaligned |
+| Armor Class | 12 |
+| Hit Points | 27 (5d10) |
+| Initiative | +4 (14) |
+| Speed | 10 ft. |
+| Challenge | 2 (XP 450; PB +2) |
+| Senses | Blindsight 60 ft.; Passive Perception 6 |
+| Languages | None |
+| Immunities | Poison, Psychic; Charmed, Deafened, Exhaustion, Frightened, Paralyzed, Petrified, Poisoned |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 17 | +3 | +3 |
+| Dex | 14 | +2 | +2 |
+| Con | 10 | +0 | +0 |
+| Int | 1 | -5 | -5 |
+| Wis | 3 | -4 | -4 |
+| Cha | 1 | -5 | -5 |
+
 
 ## Source text
 
 <!-- SRD page 259 -->
 
-Large Construct, Unaligned\
-AC 12 Initiative +4 (14)\
-HP 27 (5d10)\
-Speed 10 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 17 +3 +3 Dex 14 +2 +2 Con 10 +0 +0\
-Int 1 −5 −5 Wis 3 −4 −4 Cha 1 −5 −5\
-Immunities Poison, Psychic; Charmed, Deafened, Exhaustion, Frightened, Paralyzed, Petrified, Poisoned\
-Senses Blindsight 60 ft.; Passive Perception 6\
-Languages None\
-CR 2 (XP 450; PB +2)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Large Construct, Unaligned\
+> AC 12 Initiative +4 (14)\
+> HP 27 (5d10)\
+> Speed 10 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 17 +3 +3 Dex 14 +2 +2 Con 10 +0 +0\
+> Int 1 −5 −5 Wis 3 −4 −4 Cha 1 −5 −5\
+> Immunities Poison, Psychic; Charmed, Deafened, Exhaustion, Frightened, Paralyzed, Petrified, Poisoned\
+> Senses Blindsight 60 ft.; Passive Perception 6\
+> Languages None\
+> CR 2 (XP 450; PB +2)
+
 
 ### Actions
 
@@ -38,45 +64,11 @@ While grappling the target, the rug can’t take this action, the rug halves the
 
 Original layout: [[../../srd-5.2.1/pages/259|page 259]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` large ` |
-| ` type ` | ` construct ` |
-| ` alignment ` | ` Unaligned ` |
-| ` movement_text ` | ` 10 ft. ` |
-| ` immunities_text ` | ` Poison, Psychic; Charmed, Deafened, Exhaustion, Frightened, Paralyzed, Petrified, Poisoned ` |
-| ` senses_text ` | ` Blindsight 60 ft.; Passive Perception 6 ` |
-| ` languages_text ` | ` None ` |
-| ` cr_text ` | ` 2 (XP 450; PB +2) ` |
-| ` hit_points_text ` | ` 27 (5d10) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 17 ` | ` 3 ` |
-| ` Dexterity ` | ` 14 ` | ` 2 ` |
-| ` Constitution ` | ` 10 ` | ` 0 ` |
-| ` Intelligence ` | ` 1 ` | ` -5 ` |
-| ` Wisdom ` | ` 3 ` | ` -4 ` |
-| ` Charisma ` | ` 1 ` | ` -5 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 12 ` |  |
-| ` max_hp ` | ` 27 ` |  |
-| ` initiative ` | ` 4 ` |  |
-| ` speed ` | ` 10 ` | ` ft ` |
 
 ## Health
 

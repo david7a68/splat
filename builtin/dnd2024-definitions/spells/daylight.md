@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: a42e0a5b-0341-5b22-b5e1-000d11d47c62
 splat_kind: spell
 splat_key: dnd2024:spells/daylight
 splat_name: Daylight
-splat_origin:
-  key: dnd2024:reference/spell/daylight
+splat_origin: dnd2024:reference/spell/daylight
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 122
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 122, https://www.dndbeyond.com/srd
 ---
 
 # Daylight
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 3 |
+| School | Evocation |
+| Classes | Cleric, Druid, Paladin, Ranger, Sorcerer |
+| Casting Time | Action |
+| Range | 60 feet |
+| Components | V, S |
+| Duration | 1 hour |
+
 
 ## Source text
 
@@ -32,28 +43,9 @@ If any of this spell’s area overlaps with an area of Darkness created by a spe
 
 Original layout: [[../../srd-5.2.1/pages/122|page 122]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 3 ` |
-| ` school ` | ` evocation ` |
-| ` classes ` | ` ["cleric", "druid", "paladin", "ranger", "sorcerer"] ` |
-| ` components ` | ` ["verbal", "somatic"] ` |
-| ` concentration ` | ` false ` |
-| ` duration ` | ` 1 hour ` |
-| ` casting_time ` | ` Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
-
-<!-- splat:values path=splat_spell/range -->
-
-| Field | Value |
-| --- | --- |
-| ` feet ` | ` 60 ` |
 
 ## Rule
 

@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "60038fed-3f96-5c6c-ac93-0a70ff980166"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/calm_emotions"
 splat_name: "Calm Emotions"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [114], "executable": false}
+splat_pages:
+- 114
 ---
 
 # Calm Emotions
@@ -24,3 +25,13 @@ Each Humanoid in a 20-foot-radius Sphere centered on a point you choose within r
 •  The creature becomes Indifferent about creatures of your choice that it’s Hostile toward. This indifference ends if the target takes damage or witnesses its allies taking damage. When the spell ends, the creature’s attitude returns to normal.
 
 Original layout: [[../pages/114|page 114]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

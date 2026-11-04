@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: b80a91c5-1e35-50d3-bbba-51b10ce494d2
 splat_kind: spell
 splat_key: dnd2024:spells/shillelagh
 splat_name: Shillelagh
-splat_origin:
-  key: dnd2024:reference/spell/shillelagh
+splat_origin: dnd2024:reference/spell/shillelagh
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 162
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 162, https://www.dndbeyond.com/srd
 ---
 
 # Shillelagh
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | Cantrip |
+| School | Transmutation |
+| Classes | Druid |
+| Casting Time | Bonus Action |
+| Range |  |
+| Components | V, S, M (mistletoe) |
+| Duration | 1 minute |
+
 
 ## Source text
 
@@ -32,37 +43,11 @@ Cantrip Upgrade. The damage die changes when you reach levels 5 (d10), 11 (d12),
 
 Original layout: [[../../srd-5.2.1/pages/162|page 162]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 0 ` |
-| ` school ` | ` transmutation ` |
-| ` classes ` | ` ["druid"] ` |
-| ` components ` | ` ["verbal", "somatic", "material"] ` |
-| ` concentration ` | ` false ` |
-| ` duration ` | ` 1 minute ` |
-| ` casting_time ` | ` Bonus Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
 
-<!-- splat:values path=splat_spell/range -->
 
-| Field | Value |
-| --- | --- |
-| ` mode ` | ` self ` |
-
-### Material
-
-<!-- splat:values path=splat_spell/material -->
-
-| Field | Value |
-| --- | --- |
-| ` description ` | ` mistletoe ` |
-| ` consumed ` | ` false ` |
 
 ## Rule
 
@@ -126,3 +111,14 @@ damage_type_choice:
 | Field | Value |
 | --- | --- |
 | ` events ` | ` ["caster.recasts_same_spell", "caster.lets_go_of_weapon"] ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_spell_extras -->
+> 
+> ```yaml
+> material:
+>   consumed: false
+> range:
+>   mode: self
+> ```
+

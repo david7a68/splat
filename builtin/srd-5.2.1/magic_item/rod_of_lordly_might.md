@@ -1,10 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "a22f9d51-2e34-513c-a629-762a07e5f772"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/magic_item/rod_of_lordly_might"
 splat_name: "Rod of Lordly Might"
-splat_reference: {"source": "SRD 5.2.1", "category": "magic_item", "pages": [241, 242], "executable": false}
+splat_pages:
+- 241
+- 242
 ---
 
 # Rod of Lordly Might
@@ -38,3 +40,13 @@ Paralyze. When you hit a creature with a melee attack using the rod, you can for
 Terrify. While holding the rod, you can take a Magic action to force each creature you can see within 30 feet of yourself to make a DC 17 Wisdom saving throw. On a failed save, a target has the Frightened condition for 1 minute. A Frightened target repeats the save at the end of each of its turns, ending the effect on itself on a success. Once used, this property can’t be used again until the next dawn.
 
 Original layout: [[../pages/241|page 241]], [[../pages/242|page 242]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: magic_item
+> executable: false
+> ```
+

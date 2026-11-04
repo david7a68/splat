@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: b89c1b71-68a2-5dae-b127-22e491d91252
 splat_kind: spell
 splat_key: dnd2024:spells/forbiddance
 splat_name: Forbiddance
-splat_origin:
-  key: dnd2024:reference/spell/forbiddance
+splat_origin: dnd2024:reference/spell/forbiddance
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 133
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 133, https://www.dndbeyond.com/srd
 ---
 
 # Forbiddance
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 6 |
+| School | Abjuration |
+| Classes | Cleric |
+| Casting Time | 10 minutes or Ritual |
+| Range |  |
+| Components | V, S, M (ruby dust worth 1,000+ GP) |
+| Duration | 1 day |
+
 
 ## Source text
 
@@ -34,37 +45,11 @@ The spell’s area can’t overlap with the area of another Forbiddance spell. I
 
 Original layout: [[../../srd-5.2.1/pages/133|page 133]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 6 ` |
-| ` school ` | ` abjuration ` |
-| ` classes ` | ` ["cleric"] ` |
-| ` components ` | ` ["verbal", "somatic", "material"] ` |
-| ` concentration ` | ` false ` |
-| ` duration ` | ` 1 day ` |
-| ` casting_time ` | ` 10 minutes or Ritual ` |
-| ` ritual ` | ` true ` |
 
-### Range
 
-<!-- splat:values path=splat_spell/range -->
 
-| Field | Value |
-| --- | --- |
-| ` mode ` | ` touch ` |
-
-### Material
-
-<!-- splat:values path=splat_spell/material -->
-
-| Field | Value |
-| --- | --- |
-| ` description ` | ` ruby dust worth 1,000+ GP ` |
-| ` consumed ` | ` false ` |
 
 ## Rule
 
@@ -146,3 +131,14 @@ maximum:
   value: 1
   unit: day
 ```
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_spell_extras -->
+> 
+> ```yaml
+> material:
+>   consumed: false
+> range:
+>   mode: touch
+> ```
+

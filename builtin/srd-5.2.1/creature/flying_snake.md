@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "77c6e175-8910-5c1b-8c79-8f9ebb150df1"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/flying_snake"
 splat_name: "Flying Snake"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [348], "executable": false}
+splat_pages:
+- 348
 ---
 
 # Flying Snake
@@ -31,3 +32,13 @@ Flyby. The snake doesn’t provoke an Opportunity Attack when it flies out of an
 Bite. Melee Attack Roll: +4, reach 5 ft. Hit: 1 Piercing damage plus 5 (2d4) Poison damage.
 
 Original layout: [[../pages/348|page 348]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

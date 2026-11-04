@@ -1,35 +1,64 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 57bf9535-1847-5e11-b533-93abe71c4e10
 splat_kind: creature
 splat_key: dnd2024:creatures/wereboar
 splat_name: Wereboar
-splat_origin:
-  key: dnd2024:reference/creature/wereboar
+splat_origin: dnd2024:reference/creature/wereboar
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 338
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 338, https://www.dndbeyond.com/srd
 ---
 
 # Wereboar
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Medium or Small |
+| Type | Monstrosity (Lycanthrope) |
+| Alignment | Neutral Evil |
+| Armor Class | 15 |
+| Hit Points | 97 (15d8 + 30) |
+| Initiative | +2 (12) |
+| Speed | 30 ft., 40 ft. (boar form only) |
+| Challenge | 4 (XP 1,100; PB +2) |
+| Skills | Perception +2 |
+| Senses | Passive Perception 12 |
+| Languages | Common (can’t speak in boar form) |
+| Gear | Javelins (6) |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 17 | +3 | +3 |
+| Dex | 10 | +0 | +0 |
+| Con | 15 | +2 | +2 |
+| Int | 10 | +0 | +0 |
+| Wis | 11 | +0 | +0 |
+| Cha | 8 | -1 | -1 |
+
+%% splat shape=speed_max %%
+
 
 ## Source text
 
 <!-- SRD page 338 -->
 
 Medium or Small Monstrosity (Lycanthrope), Neutral Evil\
-AC 15 Initiative +2 (12)\
-HP 97 (15d8 + 30)\
-Speed 30 ft., 40 ft. (boar form only)\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 17 +3 +3 Dex 10 +0 +0 Con 15 +2 +2\
-Int 10 +0 +0 Wis 11 +0 +0 Cha 8 −1 −1\
-Skills Perception +2\
-Gear Javelins (6)\
-Senses Passive Perception 12\
-Languages Common (can’t speak in boar form)\
-CR 4 (XP 1,100; PB +2)
+> [!quote]- Printed stat block (not read; edit the table above)
+> AC 15 Initiative +2 (12)\
+> HP 97 (15d8 + 30)\
+> Speed 30 ft., 40 ft. (boar form only)\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 17 +3 +3 Dex 10 +0 +0 Con 15 +2 +2\
+> Int 10 +0 +0 Wis 11 +0 +0 Cha 8 −1 −1\
+> Skills Perception +2\
+> Gear Javelins (6)\
+> Senses Passive Perception 12\
+> Languages Common (can’t speak in boar form)\
+> CR 4 (XP 1,100; PB +2)
+
 
 ### Actions
 
@@ -47,48 +76,11 @@ Shape-Shift. The wereboar shape-shifts into a Medium boar-humanoid hybrid or a S
 
 Original layout: [[../../srd-5.2.1/pages/338|page 338]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` medium ` |
-| ` type ` | ` monstrosity ` |
-| ` alignment ` | ` Neutral Evil ` |
-| ` size_options_text ` | ` Medium or Small ` |
-| ` tags_text ` | ` (Lycanthrope) ` |
-| ` movement_text ` | ` 30 ft., 40 ft. (boar form only) ` |
-| ` skills_text ` | ` Perception +2 ` |
-| ` gear_text ` | ` Javelins (6) ` |
-| ` senses_text ` | ` Passive Perception 12 ` |
-| ` languages_text ` | ` Common (can’t speak in boar form) ` |
-| ` cr_text ` | ` 4 (XP 1,100; PB +2) ` |
-| ` hit_points_text ` | ` 97 (15d8 + 30) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 17 ` | ` 3 ` |
-| ` Dexterity ` | ` 10 ` | ` 0 ` |
-| ` Constitution ` | ` 15 ` | ` 2 ` |
-| ` Intelligence ` | ` 10 ` | ` 0 ` |
-| ` Wisdom ` | ` 11 ` | ` 0 ` |
-| ` Charisma ` | ` 8 ` | ` -1 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 15 ` |  |
-| ` max_hp ` | ` 97 ` |  |
-| ` initiative ` | ` 2 ` |  |
-| ` speed ` | ` 40 ` | ` ft ` |
 
 ## Health
 

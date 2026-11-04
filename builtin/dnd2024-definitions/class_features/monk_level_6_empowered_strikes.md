@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 581fcd42-654d-51b2-9fa8-e5e5624a67cc
 splat_kind: rule
 splat_key: dnd2024:class_features/monk_level_6_empowered_strikes
 splat_name: 'Level 6: Empowered Strikes'
-splat_origin:
-  key: dnd2024:reference/pages/051
+splat_origin: dnd2024:reference/pages/051
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 51
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 51, https://www.dndbeyond.com/srd
 ---
 
 # Level 6: Empowered Strikes

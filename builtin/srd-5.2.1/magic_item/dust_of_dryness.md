@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "f0b18a5d-3331-5769-8573-cda7d3cbbbff"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/magic_item/dust_of_dryness"
 splat_name: "Dust of Dryness"
-splat_reference: {"source": "SRD 5.2.1", "category": "magic_item", "pages": [219], "executable": false}
+splat_pages:
+- 219
 ---
 
 # Dust of Dryness
@@ -18,3 +19,13 @@ This small packet contains 1d6 + 4 pinches of dust. As a Utilize action, you can
 As a Utilize action, you can sprinkle a pinch of the dust on an Elemental within 5 feet of yourself that is composed mostly of water (such as a Water Elemental). Such a creature exposed to a pinch of the dust makes a DC 13 Constitution saving throw, taking 10d6 Necrotic damage on a failed save or half as much damage on a successful one.
 
 Original layout: [[../pages/219|page 219]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: magic_item
+> executable: false
+> ```
+

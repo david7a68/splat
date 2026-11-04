@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: e49dd73b-6cc4-5e8c-9ab2-6abfa3cfdd17
 splat_kind: rule
 splat_key: dnd2024:rules/d20_tests_interactions_with_rerolls
 splat_name: Interactions with Rerolls
-splat_origin:
-  key: dnd2024:reference/pages/008
+splat_origin: dnd2024:reference/pages/008
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 8
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 8, https://www.dndbeyond.com/srd
 ---
 
 # Interactions with Rerolls

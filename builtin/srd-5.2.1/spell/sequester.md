@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "5bfcb6e4-9305-50b1-909e-a6306e814858"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/sequester"
 splat_name: "Sequester"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [161], "executable": false}
+splat_pages:
+- 161
 ---
 
 # Sequester
@@ -24,3 +25,13 @@ If the target is a creature, it enters a state of suspended animation; it has th
 You can set a condition for the spell to end early. The condition can be anything you choose, but it must occur or be visible within 1 mile of the target. Examples include “after 1,000 years” or “when the tarrasque awakens.” This spell also ends if the target takes any damage.
 
 Original layout: [[../pages/161|page 161]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

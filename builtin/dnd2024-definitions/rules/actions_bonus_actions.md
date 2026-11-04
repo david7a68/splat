@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: ba5b915c-9d78-54d3-9457-816e3aee8ffb
 splat_kind: rule
 splat_key: dnd2024:rules/actions_bonus_actions
 splat_name: Bonus Actions
-splat_origin:
-  key: dnd2024:reference/pages/010
+splat_origin: dnd2024:reference/pages/010
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 10
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 10, https://www.dndbeyond.com/srd
 ---
 
 # Bonus Actions

@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: e9833cc4-c7a6-5188-a882-956c6797a70a
 splat_kind: item
 splat_key: dnd2024:items/staff_of_frost
 splat_name: Staff of Frost
-splat_origin:
-  key: dnd2024:reference/magic_item/staff_of_frost
+splat_origin: dnd2024:reference/magic_item/staff_of_frost
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 245
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 245, https://www.dndbeyond.com/srd
 ---
 
 # Staff of Frost
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Staff |
+| Rarity | Very Rare |
+| Attunement | Yes |
+
 
 ## Source text
 
@@ -33,23 +40,9 @@ Regaining Charges. The staff regains 1d6 + 4 expended charges daily at dawn. If 
 
 Original layout: [[../../srd-5.2.1/pages/245|page 245]].
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` staff ` |
-| ` rarity ` | ` very_rare ` |
 
-### Equipment
-
-<!-- splat:values path=splat_item/equipment -->
-
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` required ` |
-| ` attunement_requirement_text ` | ` a Druid, Sorcerer, Warlock, or Wizard ` |
 
 ## Rule
 
@@ -123,3 +116,12 @@ columns:
 | [Ice Storm](<../spells/ice_storm.md> "dnd2024:spells/ice_storm") | ` 4 ` | ` user.spell_save_dc ` |
 | [Fog Cloud](<../spells/fog_cloud.md> "dnd2024:spells/fog_cloud") | ` 1 ` | ` user.spell_save_dc ` |
 | [Wall of Ice](<../spells/wall_of_ice.md> "dnd2024:spells/wall_of_ice") | ` 4 ` | ` user.spell_save_dc ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_item_extras -->
+> 
+> ```yaml
+> equipment:
+>   attunement_requirement_text: a Druid, Sorcerer, Warlock, or Wizard
+> ```
+

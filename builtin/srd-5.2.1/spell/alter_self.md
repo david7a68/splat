@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "0a4be6e9-d8f1-5e07-beeb-1919c36ab713"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/alter_self"
 splat_name: "Alter Self"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [107], "executable": false}
+splat_pages:
+- 107
 ---
 
 # Alter Self
@@ -26,3 +27,13 @@ Change Appearance. You alter your appearance. You decide what you look like, inc
 Natural Weapons. You grow claws (Slashing), fangs (Piercing), horns (Piercing), or hooves (Bludgeoning). When you use your Unarmed Strike to deal damage with that new growth, it deals 1d6 damage of the type in parentheses instead of dealing the normal damage for your Unarmed Strike, and you use your spellcasting ability modifier for the attack and damage rolls rather than using Strength.
 
 Original layout: [[../pages/107|page 107]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

@@ -1,33 +1,58 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 433c4671-5681-5c3f-9a38-f7eca923b6d5
 splat_kind: creature
 splat_key: dnd2024:creatures/otyugh
 splat_name: Otyugh
-splat_origin:
-  key: dnd2024:reference/creature/otyugh
+splat_origin: dnd2024:reference/creature/otyugh
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 313
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 313, https://www.dndbeyond.com/srd
 ---
 
 # Otyugh
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Large |
+| Type | Aberration |
+| Alignment | Neutral |
+| Armor Class | 14 |
+| Hit Points | 104 (11d10 + 44) |
+| Initiative | +0 (10) |
+| Speed | 30 ft. |
+| Challenge | 5 (XP 1,800; PB +3) |
+| Senses | Darkvision 120 ft.; Passive Perception 11 |
+| Languages | Otyugh; telepathy 120 ft. (doesn’t allow the receiving creature to respond telepathically) |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 16 | +3 | +3 |
+| Dex | 11 | +0 | +0 |
+| Con | 19 | +4 | +7 |
+| Int | 6 | -2 | -2 |
+| Wis | 13 | +1 | +1 |
+| Cha | 6 | -2 | -2 |
+
 
 ## Source text
 
 <!-- SRD page 313 -->
 
-Large Aberration, Neutral\
-AC 14 Initiative +0 (10)\
-HP 104 (11d10 + 44)\
-Speed 30 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 16 +3 +3 Dex 11 +0 +0 Con 19 +4 +7\
-Int 6 −2 −2 Wis 13 +1 +1 Cha 6 −2 −2\
-Senses Darkvision 120 ft.; Passive Perception 11\
-Languages Otyugh; telepathy 120 ft. (doesn’t allow the receiving creature to respond telepathically)\
-CR 5 (XP 1,800; PB +3)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Large Aberration, Neutral\
+> AC 14 Initiative +0 (10)\
+> HP 104 (11d10 + 44)\
+> Speed 30 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 16 +3 +3 Dex 11 +0 +0 Con 19 +4 +7\
+> Int 6 −2 −2 Wis 13 +1 +1 Cha 6 −2 −2\
+> Senses Darkvision 120 ft.; Passive Perception 11\
+> Languages Otyugh; telepathy 120 ft. (doesn’t allow the receiving creature to respond telepathically)\
+> CR 5 (XP 1,800; PB +3)
+
 
 ### Actions
 
@@ -41,44 +66,11 @@ Tentacle Slam. Constitution Saving Throw: DC 14, each creature Grappled by the o
 
 Original layout: [[../../srd-5.2.1/pages/313|page 313]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` large ` |
-| ` type ` | ` aberration ` |
-| ` alignment ` | ` Neutral ` |
-| ` movement_text ` | ` 30 ft. ` |
-| ` senses_text ` | ` Darkvision 120 ft.; Passive Perception 11 ` |
-| ` languages_text ` | ` Otyugh; telepathy 120 ft. (doesn’t allow the receiving creature to respond telepathically) ` |
-| ` cr_text ` | ` 5 (XP 1,800; PB +3) ` |
-| ` hit_points_text ` | ` 104 (11d10 + 44) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 16 ` | ` 3 ` |
-| ` Dexterity ` | ` 11 ` | ` 0 ` |
-| ` Constitution ` | ` 19 ` | ` 7 ` |
-| ` Intelligence ` | ` 6 ` | ` -2 ` |
-| ` Wisdom ` | ` 13 ` | ` 1 ` |
-| ` Charisma ` | ` 6 ` | ` -2 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 14 ` |  |
-| ` max_hp ` | ` 104 ` |  |
-| ` initiative ` | ` 0 ` |  |
-| ` speed ` | ` 30 ` | ` ft ` |
 
 ## Health
 

@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "af093915-7802-5143-87bc-d0cdbf89b358"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/goblin_warrior"
 splat_name: "Goblin Warrior"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [290], "executable": false}
+splat_pages:
+- 290
 ---
 
 # Goblin Warrior
@@ -35,3 +36,13 @@ Shortbow. Ranged Attack Roll: +4, range 80/320 ft. Hit: 5 (1d6 + 2) Piercing dam
 Nimble Escape. The goblin takes the Disengage or Hide action.
 
 Original layout: [[../pages/290|page 290]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

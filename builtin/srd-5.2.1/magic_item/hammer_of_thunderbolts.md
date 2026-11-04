@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "a2aa5b86-99d0-5801-8eee-e41ffba33ab5"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/magic_item/hammer_of_thunderbolts"
 splat_name: "Hammer of Thunderbolts"
-splat_reference: {"source": "SRD 5.2.1", "category": "magic_item", "pages": [224], "executable": false}
+splat_pages:
+- 224
 ---
 
 # Hammer of Thunderbolts
@@ -24,3 +25,13 @@ Giants’ Bane. When you roll a 20 on the d20 for an attack roll made with this 
 Might of Giants. The Strength score bestowed by your Belt of Giant Strength or Gauntlets of Ogre Power increases by 4, to a maximum of 30.
 
 Original layout: [[../pages/224|page 224]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: magic_item
+> executable: false
+> ```
+

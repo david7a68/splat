@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "bfef7cb9-b21f-5ba2-8f0a-bcbe5944db1e"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/gate"
 splat_name: "Gate"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [135], "executable": false}
+splat_pages:
+- 135
 ---
 
 # Gate
@@ -26,3 +27,13 @@ Deities and other planar rulers can prevent portals created by this spell from o
 When you cast this spell, you can speak the name of a specific creature (a pseudonym, title, or nickname doesn’t work). If that creature is on a plane other than the one you are on, the portal opens next to the named creature and transports it to the nearest unoccupied space on your side of the portal. You gain no special power over the creature, and it is free to act as the GM deems appropriate. It might leave, attack you, or help you.
 
 Original layout: [[../pages/135|page 135]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

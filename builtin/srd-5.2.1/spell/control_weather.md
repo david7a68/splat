@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "94b457c1-2ea9-5123-bd1b-7518017388f5"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/control_weather"
 splat_name: "Control Weather"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [120], "executable": false}
+splat_pages:
+- 120
 ---
 
 # Control Weather
@@ -45,3 +46,13 @@ When you change the weather conditions, find a current condition on the followin
 | 6 | Freezing |  |  |
 
 Original layout: [[../pages/120|page 120]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

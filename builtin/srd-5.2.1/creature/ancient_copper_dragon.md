@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "cd45ea0d-a96d-5a4b-9318-a3a42554948c"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/ancient_copper_dragon"
 splat_name: "Ancient Copper Dragon"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [277], "executable": false}
+splat_pages:
+- 277
 ---
 
 # Ancient Copper Dragon
@@ -55,3 +56,13 @@ Mind Jolt. The dragon uses Spellcasting to cast Mind Spike (level 5 version). Th
 Pounce. The dragon moves up to half its Speed, and it makes one Rend attack.
 
 Original layout: [[../pages/277|page 277]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

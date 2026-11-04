@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: e12db40f-cc6c-5bad-8299-f6c5898caf0e
 splat_kind: spell
 splat_key: dnd2024:spells/alter_self
 splat_name: Alter Self
-splat_origin:
-  key: dnd2024:reference/spell/alter_self
+splat_origin: dnd2024:reference/spell/alter_self
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 107
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 107, https://www.dndbeyond.com/srd
 ---
 
 # Alter Self
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 2 |
+| School | Transmutation |
+| Classes | Sorcerer, Wizard |
+| Casting Time | Action |
+| Range |  |
+| Components | V, S |
+| Duration | Concentration, up to 1 hour |
+
 
 ## Source text
 
@@ -34,28 +45,9 @@ Natural Weapons. You grow claws (Slashing), fangs (Piercing), horns (Piercing), 
 
 Original layout: [[../../srd-5.2.1/pages/107|page 107]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 2 ` |
-| ` school ` | ` transmutation ` |
-| ` classes ` | ` ["sorcerer", "wizard"] ` |
-| ` components ` | ` ["verbal", "somatic"] ` |
-| ` concentration ` | ` true ` |
-| ` duration ` | ` Concentration, up to 1 hour ` |
-| ` casting_time ` | ` Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
-
-<!-- splat:values path=splat_spell/range -->
-
-| Field | Value |
-| --- | --- |
-| ` mode ` | ` self ` |
 
 ## Rule
 
@@ -130,3 +122,12 @@ natural_weapons:
   attack_ability: spellcasting
   damage_ability: spellcasting
 ```
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_spell_extras -->
+> 
+> ```yaml
+> range:
+>   mode: self
+> ```
+

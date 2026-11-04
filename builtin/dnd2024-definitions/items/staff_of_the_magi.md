@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: df0a375f-b01d-5b65-bd59-107144faadb7
 splat_kind: item
 splat_key: dnd2024:items/staff_of_the_magi
 splat_name: Staff of the Magi
-splat_origin:
-  key: dnd2024:reference/magic_item/staff_of_the_magi
+splat_origin: dnd2024:reference/magic_item/staff_of_the_magi
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 246, 247
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 246, 247, https://www.dndbeyond.com/srd
 ---
 
 # Staff of the Magi
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Staff |
+| Rarity | Legendary |
+| Attunement | Yes |
+
 
 ## Source text
 
@@ -59,23 +66,9 @@ Retributive Strike. You can take a Magic action to break the staff over your kne
 
 Original layout: [[../../srd-5.2.1/pages/246|page 246]], [[../../srd-5.2.1/pages/247|page 247]].
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` staff ` |
-| ` rarity ` | ` legendary ` |
 
-### Equipment
-
-<!-- splat:values path=splat_item/equipment -->
-
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` required ` |
-| ` attunement_requirement_text ` | ` a Sorcerer, Warlock, or Wizard ` |
 
 ## Rule
 
@@ -530,3 +523,12 @@ other_creatures:
 | --- | --- |
 | ` 0 ` | ` dnd2024:rules/magic_item_categories_staffs ` |
 | ` 1 ` | ` dnd2024:rules/activating_a_magic_item_spells_cast_from_items ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_item_extras -->
+> 
+> ```yaml
+> equipment:
+>   attunement_requirement_text: a Sorcerer, Warlock, or Wizard
+> ```
+

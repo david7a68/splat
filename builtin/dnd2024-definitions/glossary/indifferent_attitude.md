@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: fbc694a7-6350-50c4-a3af-b304ca05661a
 splat_kind: rule
 splat_key: dnd2024:glossary/indifferent_attitude
 splat_name: Indifferent [Attitude]
-splat_origin:
-  key: dnd2024:reference/glossary/indifferent_attitude
+splat_origin: dnd2024:reference/glossary/indifferent_attitude
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 184
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 184, https://www.dndbeyond.com/srd
 ---
 
 # Indifferent [Attitude]

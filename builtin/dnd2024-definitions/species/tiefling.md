@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: e6cc51d9-7cce-5e2c-a239-042f26305acb
 splat_kind: rule_group
 splat_key: dnd2024:species/tiefling
 splat_name: Tiefling
-splat_origin:
-  key: dnd2024:reference/pages/086
+splat_origin: dnd2024:reference/pages/086
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 86
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 86, https://www.dndbeyond.com/srd
 ---
 
 # Tiefling

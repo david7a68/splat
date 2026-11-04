@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: e77448e7-9e61-56e0-b936-83bf1fe2f395
 splat_kind: item
 splat_key: dnd2024:items/mace_of_smiting
 splat_name: Mace of Smiting
-splat_origin:
-  key: dnd2024:reference/magic_item/mace_of_smiting
+splat_origin: dnd2024:reference/magic_item/mace_of_smiting
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 229
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 229, https://www.dndbeyond.com/srd
 ---
 
 # Mace of Smiting
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Weapon |
+| Rarity | Rare |
+| Attunement | No |
+
 
 ## Source text
 
@@ -26,22 +33,9 @@ When you roll a 20 on an attack roll made with this weapon, the target takes an 
 
 Original layout: [[../../srd-5.2.1/pages/229|page 229]].
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` weapon ` |
-| ` rarity ` | ` rare ` |
 
-### Equipment
-
-<!-- splat:values path=splat_item/equipment -->
-
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` none ` |
 
 ## Rule
 

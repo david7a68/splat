@@ -1,35 +1,62 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: a3cdd71e-c01d-5b58-8196-b24aaa70472a
 splat_kind: creature
 splat_key: dnd2024:creatures/goblin_boss
 splat_name: Goblin Boss
-splat_origin:
-  key: dnd2024:reference/creature/goblin_boss
+splat_origin: dnd2024:reference/creature/goblin_boss
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 290
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 290, https://www.dndbeyond.com/srd
 ---
 
 # Goblin Boss
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Small |
+| Type | Fey (Goblinoid) |
+| Alignment | Chaotic Neutral |
+| Armor Class | 17 |
+| Hit Points | 21 (6d6) |
+| Initiative | +2 (12) |
+| Speed | 30 ft. |
+| Challenge | 1 (XP 200; PB +2) |
+| Skills | Stealth +6 |
+| Senses | Darkvision 60 ft.; Passive Perception 9 |
+| Languages | Common, Goblin |
+| Gear | Chain Shirt, Scimitar, Shield, Shortbow |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 10 | +0 | +0 |
+| Dex | 15 | +2 | +2 |
+| Con | 10 | +0 | +0 |
+| Int | 10 | +0 | +0 |
+| Wis | 8 | -1 | -1 |
+| Cha | 10 | +0 | +0 |
+
 
 ## Source text
 
 <!-- SRD page 290 -->
 
-Small Fey (Goblinoid), Chaotic Neutral\
-AC 17 Initiative +2 (12)\
-HP 21 (6d6)\
-Speed 30 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 10 +0 +0 Dex 15 +2 +2 Con 10 +0 +0\
-Int 10 +0 +0 Wis 8 −1 −1 Cha 10 +0 +0\
-Skills Stealth +6\
-Gear Chain Shirt, Scimitar, Shield, Shortbow\
-Senses Darkvision 60 ft.; Passive Perception 9\
-Languages Common, Goblin\
-CR 1 (XP 200; PB +2)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Small Fey (Goblinoid), Chaotic Neutral\
+> AC 17 Initiative +2 (12)\
+> HP 21 (6d6)\
+> Speed 30 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 10 +0 +0 Dex 15 +2 +2 Con 10 +0 +0\
+> Int 10 +0 +0 Wis 8 −1 −1 Cha 10 +0 +0\
+> Skills Stealth +6\
+> Gear Chain Shirt, Scimitar, Shield, Shortbow\
+> Senses Darkvision 60 ft.; Passive Perception 9\
+> Languages Common, Goblin\
+> CR 1 (XP 200; PB +2)
+
 
 ### Actions
 
@@ -49,47 +76,11 @@ Redirect Attack. Trigger: A creature the goblin can see makes an attack roll aga
 
 Original layout: [[../../srd-5.2.1/pages/290|page 290]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` small ` |
-| ` type ` | ` fey ` |
-| ` alignment ` | ` Chaotic Neutral ` |
-| ` tags_text ` | ` (Goblinoid) ` |
-| ` movement_text ` | ` 30 ft. ` |
-| ` skills_text ` | ` Stealth +6 ` |
-| ` gear_text ` | ` Chain Shirt, Scimitar, Shield, Shortbow ` |
-| ` senses_text ` | ` Darkvision 60 ft.; Passive Perception 9 ` |
-| ` languages_text ` | ` Common, Goblin ` |
-| ` cr_text ` | ` 1 (XP 200; PB +2) ` |
-| ` hit_points_text ` | ` 21 (6d6) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 10 ` | ` 0 ` |
-| ` Dexterity ` | ` 15 ` | ` 2 ` |
-| ` Constitution ` | ` 10 ` | ` 0 ` |
-| ` Intelligence ` | ` 10 ` | ` 0 ` |
-| ` Wisdom ` | ` 8 ` | ` -1 ` |
-| ` Charisma ` | ` 10 ` | ` 0 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 17 ` |  |
-| ` max_hp ` | ` 21 ` |  |
-| ` initiative ` | ` 2 ` |  |
-| ` speed ` | ` 30 ` | ` ft ` |
 
 ## Health
 

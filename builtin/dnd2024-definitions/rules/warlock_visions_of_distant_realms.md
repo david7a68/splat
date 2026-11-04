@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 78a1d483-6af6-51d4-907e-9e994fc248ce
 splat_kind: rule
 splat_key: dnd2024:rules/warlock_visions_of_distant_realms
 splat_name: Visions of Distant Realms
-splat_origin:
-  key: dnd2024:reference/pages/074
+splat_origin: dnd2024:reference/pages/074
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 74
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 74, https://www.dndbeyond.com/srd
 ---
 
 # Visions of Distant Realms

@@ -1,10 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "67edf19a-6d67-5696-b220-a76af14d1dfc"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/mummy_lord"
 splat_name: "Mummy Lord"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [309, 310], "executable": false}
+splat_pages:
+- 309
+- 310
 ---
 
 # Mummy Lord
@@ -65,3 +67,13 @@ Glare. The mummy uses Dreadful Glare. The mummy can’t take this action again u
 Necrotic Strike. The mummy makes one Rotting Fist or Channel Negative Energy attack.
 
 Original layout: [[../pages/309|page 309]], [[../pages/310|page 310]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

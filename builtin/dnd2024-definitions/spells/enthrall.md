@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: c2287311-87b0-59ab-a189-62d6d78e671a
 splat_kind: spell
 splat_key: dnd2024:spells/enthrall
 splat_name: Enthrall
-splat_origin:
-  key: dnd2024:reference/spell/enthrall
+splat_origin: dnd2024:reference/spell/enthrall
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 128
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 128, https://www.dndbeyond.com/srd
 ---
 
 # Enthrall
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 2 |
+| School | Enchantment |
+| Classes | Bard, Warlock |
+| Casting Time | Action |
+| Range | 60 feet |
+| Components | V, S |
+| Duration | Concentration, up to 1 minute |
+
 
 ## Source text
 
@@ -28,28 +39,9 @@ You weave a distracting string of words, causing creatures of your choice that y
 
 Original layout: [[../../srd-5.2.1/pages/128|page 128]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 2 ` |
-| ` school ` | ` enchantment ` |
-| ` classes ` | ` ["bard", "warlock"] ` |
-| ` components ` | ` ["verbal", "somatic"] ` |
-| ` concentration ` | ` true ` |
-| ` duration ` | ` Concentration, up to 1 minute ` |
-| ` casting_time ` | ` Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
-
-<!-- splat:values path=splat_spell/range -->
-
-| Field | Value |
-| --- | --- |
-| ` feet ` | ` 60 ` |
 
 ## Rule
 

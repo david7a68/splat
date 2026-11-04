@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: f8a6cb55-7317-5890-9e47-339778a5c94b
 splat_kind: spell
 splat_key: dnd2024:spells/shield_of_faith
 splat_name: Shield of Faith
-splat_origin:
-  key: dnd2024:reference/spell/shield_of_faith
+splat_origin: dnd2024:reference/spell/shield_of_faith
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 162
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 162, https://www.dndbeyond.com/srd
 ---
 
 # Shield of Faith
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 1 |
+| School | Abjuration |
+| Classes | Cleric, Paladin |
+| Casting Time | Bonus Action |
+| Range | 60 feet |
+| Components | V, S, M (a prayer scroll) |
+| Duration | Concentration, up to 10 minutes |
+
 
 ## Source text
 
@@ -28,37 +39,11 @@ A shimmering field surrounds a creature of your choice within range, granting it
 
 Original layout: [[../../srd-5.2.1/pages/162|page 162]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 1 ` |
-| ` school ` | ` abjuration ` |
-| ` classes ` | ` ["cleric", "paladin"] ` |
-| ` components ` | ` ["verbal", "somatic", "material"] ` |
-| ` concentration ` | ` true ` |
-| ` duration ` | ` Concentration, up to 10 minutes ` |
-| ` casting_time ` | ` Bonus Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
 
-<!-- splat:values path=splat_spell/range -->
 
-| Field | Value |
-| --- | --- |
-| ` feet ` | ` 60 ` |
-
-### Material
-
-<!-- splat:values path=splat_spell/material -->
-
-| Field | Value |
-| --- | --- |
-| ` description ` | ` a prayer scroll ` |
-| ` consumed ` | ` false ` |
 
 ## Rule
 
@@ -98,3 +83,12 @@ Original layout: [[../../srd-5.2.1/pages/162|page 162]].
 | --- | --- |
 | ` stat ` | ` armor_class ` |
 | ` add ` | ` 2 ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_spell_extras -->
+> 
+> ```yaml
+> material:
+>   consumed: false
+> ```
+

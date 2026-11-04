@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 0ecbedb2-9cb8-518b-927c-f760d9df468f
 splat_kind: rule
 splat_key: dnd2024:rules/parts_of_a_stat_block_size
 splat_name: Size
-splat_origin:
-  key: dnd2024:reference/pages/254
+splat_origin: dnd2024:reference/pages/254
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 254
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 254, https://www.dndbeyond.com/srd
 ---
 
 # Size

@@ -15,7 +15,7 @@ TARGETS = [*Path('docs/research/srd-conversion').glob('*.md'), *Path('scripts/sr
 
 
 def words(text):
-    text = text.split('---\n', 2)[-1]
+    text = text.split('---\n', 2)[-1].split('\n> [!note]- Splat data')[0]
     text = re.sub(r'<!--.*?-->', ' ', text, flags=re.S)
     text = re.sub(r'-\\?\n', '', text)
     text = re.sub(r"[\\|*#’'—–−-]", ' ', text).lower()
@@ -32,10 +32,10 @@ def main():
             continue
         before, after = hashlib.sha256(old).hexdigest(), hashlib.sha256(new).hexdigest()
         mapping[before] = after
-        if sorted(words(old.decode())) != sorted(words(new.decode())):
+        if words(old.decode()) != words(new.decode()):
             changed.append(str(path))
     if changed:
-        print('Word content changed (review the specs for these):', *changed, sep='\n  ')
+        raise ValueError('Word content changed (review the specs): '+', '.join(changed))
     replaced = 0
     for target in TARGETS:
         text = target.read_text()

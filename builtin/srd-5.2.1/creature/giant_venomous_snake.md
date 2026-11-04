@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "5cad6990-0e4e-5c36-9454-f19260d816f3"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/giant_venomous_snake"
 splat_name: "Giant Venomous Snake"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [354], "executable": false}
+splat_pages:
+- 354
 ---
 
 # Giant Venomous Snake
@@ -28,3 +29,13 @@ CR 1/4 (XP 50; PB +2)
 Bite. Melee Attack Roll: +6, reach 10 ft. Hit: 6 (1d4 + 4) Piercing damage plus 4 (1d8) Poison damage.
 
 Original layout: [[../pages/354|page 354]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

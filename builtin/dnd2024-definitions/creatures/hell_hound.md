@@ -1,35 +1,62 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 953cf25b-fffe-5ccd-a448-d996e6ebb148
 splat_kind: creature
 splat_key: dnd2024:creatures/hell_hound
 splat_name: Hell Hound
-splat_origin:
-  key: dnd2024:reference/creature/hell_hound
+splat_origin: dnd2024:reference/creature/hell_hound
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 297
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 297, https://www.dndbeyond.com/srd
 ---
 
 # Hell Hound
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Medium |
+| Type | Fiend |
+| Alignment | Lawful Evil |
+| Armor Class | 15 |
+| Hit Points | 58 (9d8 + 18) |
+| Initiative | +1 (11) |
+| Speed | 50 ft. |
+| Challenge | 3 (XP 700; PB +2) |
+| Skills | Perception +5 |
+| Senses | Darkvision 60 ft.; Passive Perception 15 |
+| Languages | Understands Infernal but can’t speak |
+| Immunities | Fire |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 17 | +3 | +3 |
+| Dex | 12 | +1 | +1 |
+| Con | 14 | +2 | +2 |
+| Int | 6 | -2 | -2 |
+| Wis | 13 | +1 | +1 |
+| Cha | 6 | -2 | -2 |
+
 
 ## Source text
 
 <!-- SRD page 297 -->
 
-Medium Fiend, Lawful Evil\
-AC 15 Initiative +1 (11)\
-HP 58 (9d8 + 18)\
-Speed 50 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 17 +3 +3 Dex 12 +1 +1 Con 14 +2 +2\
-Int 6 −2 −2 Wis 13 +1 +1 Cha 6 −2 −2\
-Skills Perception +5\
-Immunities Fire\
-Senses Darkvision 60 ft.; Passive Perception 15\
-Languages Understands Infernal but can’t speak\
-CR 3 (XP 700; PB +2)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Medium Fiend, Lawful Evil\
+> AC 15 Initiative +1 (11)\
+> HP 58 (9d8 + 18)\
+> Speed 50 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 17 +3 +3 Dex 12 +1 +1 Con 14 +2 +2\
+> Int 6 −2 −2 Wis 13 +1 +1 Cha 6 −2 −2\
+> Skills Perception +5\
+> Immunities Fire\
+> Senses Darkvision 60 ft.; Passive Perception 15\
+> Languages Understands Infernal but can’t speak\
+> CR 3 (XP 700; PB +2)
+
 
 ### Traits
 
@@ -45,46 +72,11 @@ Fire Breath (Recharge 5–6). Dexterity Saving Throw: DC 12, each creature in a 
 
 Original layout: [[../../srd-5.2.1/pages/297|page 297]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` medium ` |
-| ` type ` | ` fiend ` |
-| ` alignment ` | ` Lawful Evil ` |
-| ` movement_text ` | ` 50 ft. ` |
-| ` skills_text ` | ` Perception +5 ` |
-| ` immunities_text ` | ` Fire ` |
-| ` senses_text ` | ` Darkvision 60 ft.; Passive Perception 15 ` |
-| ` languages_text ` | ` Understands Infernal but can’t speak ` |
-| ` cr_text ` | ` 3 (XP 700; PB +2) ` |
-| ` hit_points_text ` | ` 58 (9d8 + 18) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 17 ` | ` 3 ` |
-| ` Dexterity ` | ` 12 ` | ` 1 ` |
-| ` Constitution ` | ` 14 ` | ` 2 ` |
-| ` Intelligence ` | ` 6 ` | ` -2 ` |
-| ` Wisdom ` | ` 13 ` | ` 1 ` |
-| ` Charisma ` | ` 6 ` | ` -2 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 15 ` |  |
-| ` max_hp ` | ` 58 ` |  |
-| ` initiative ` | ` 1 ` |  |
-| ` speed ` | ` 50 ` | ` ft ` |
 
 ## Health
 

@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 4df2c733-0a44-549c-8f55-e4f5870390ad
 splat_kind: rule
 splat_key: dnd2024:rules/bard_as_a_level_1_character
 splat_name: As a Level 1 Character
-splat_origin:
-  key: dnd2024:reference/pages/031
+splat_origin: dnd2024:reference/pages/031
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 31
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 31, https://www.dndbeyond.com/srd
 ---
 
 # As a Level 1 Character

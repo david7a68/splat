@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 1459f9af-b62b-502a-a285-1112785c55ab
 splat_kind: rule
 splat_key: dnd2024:class_features/monk_level_18_superior_defense
 splat_name: 'Level 18: Superior Defense'
-splat_origin:
-  key: dnd2024:reference/pages/052
+splat_origin: dnd2024:reference/pages/052
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 52
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 52, https://www.dndbeyond.com/srd
 ---
 
 # Level 18: Superior Defense

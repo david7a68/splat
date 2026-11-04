@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "b5273850-6a59-50d4-8706-5f2f4d7cd1cf"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/glossary/expertise"
 splat_name: "Expertise"
-splat_reference: {"source": "SRD 5.2.1", "category": "glossary", "pages": [182], "executable": false}
+splat_pages:
+- 182
 ---
 
 # Expertise
@@ -18,3 +19,13 @@ If you gain Expertise, you gain it in one skill in which you have proficiency. Y
 See also “Playing the Game” (“Proficiency”).
 
 Original layout: [[../pages/182|page 182]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: glossary
+> executable: false
+> ```
+

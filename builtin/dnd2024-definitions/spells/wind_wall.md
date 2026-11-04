@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 051910fb-59e0-55da-9b69-21b335f12d31
 splat_kind: spell
 splat_key: dnd2024:spells/wind_wall
 splat_name: Wind Wall
-splat_origin:
-  key: dnd2024:reference/spell/wind_wall
+splat_origin: dnd2024:reference/spell/wind_wall
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 174
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 174, https://www.dndbeyond.com/srd
 ---
 
 # Wind Wall
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 3 |
+| School | Evocation |
+| Classes | Druid, Ranger |
+| Casting Time | Action |
+| Range | 120 feet |
+| Components | V, S, M (a fan and a feather) |
+| Duration | Concentration, up to 1 minute |
+
 
 ## Source text
 
@@ -32,37 +43,11 @@ The strong wind keeps fog, smoke, and other gases at bay. Small or smaller flyin
 
 Original layout: [[../../srd-5.2.1/pages/174|page 174]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 3 ` |
-| ` school ` | ` evocation ` |
-| ` classes ` | ` ["druid", "ranger"] ` |
-| ` components ` | ` ["verbal", "somatic", "material"] ` |
-| ` concentration ` | ` true ` |
-| ` duration ` | ` Concentration, up to 1 minute ` |
-| ` casting_time ` | ` Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
 
-<!-- splat:values path=splat_spell/range -->
 
-| Field | Value |
-| --- | --- |
-| ` feet ` | ` 120 ` |
-
-### Material
-
-<!-- splat:values path=splat_spell/material -->
-
-| Field | Value |
-| --- | --- |
-| ` description ` | ` a fan and a feather ` |
-| ` consumed ` | ` false ` |
 
 ## Rule
 
@@ -161,3 +146,12 @@ exceptions_unaffected:
 | ` source ` | ` supplied_world_geometry ` |
 | ` unknown_facts ` | ` require_resolution ` |
 | ` infer_unprovided_geometry ` | ` false ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_spell_extras -->
+> 
+> ```yaml
+> material:
+>   consumed: false
+> ```
+

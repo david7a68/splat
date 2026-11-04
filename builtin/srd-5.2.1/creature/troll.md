@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "cf9a32e9-110e-53cf-8411-e9f509a06528"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/troll"
 splat_name: "Troll"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [333], "executable": false}
+splat_pages:
+- 333
 ---
 
 # Troll
@@ -40,3 +41,13 @@ Rend. Melee Attack Roll: +7, reach 10 ft. Hit: 11 (2d6 + 4) Slashing damage.
 Charge. The troll moves up to half its Speed straight toward an enemy it can see.
 
 Original layout: [[../pages/333|page 333]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

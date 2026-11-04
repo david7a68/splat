@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "fcb8f518-6f9c-5aee-a4f9-8bacffbc6436"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/shapechange"
 splat_name: "Shapechange"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [161], "executable": false}
+splat_pages:
+- 161
 ---
 
 # Shapechange
@@ -26,3 +27,13 @@ Your game statistics are replaced by the stat block of the chosen form, but you 
 Upon shape-shifting, you determine whether your equipment drops to the ground or changes in size and shape to fit the new form while you’re in it.
 
 Original layout: [[../pages/161|page 161]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

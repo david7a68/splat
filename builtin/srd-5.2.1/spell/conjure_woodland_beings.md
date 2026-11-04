@@ -1,10 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "ef262da2-969c-5f29-8f5c-dc3ed5a13710"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/conjure_woodland_beings"
 splat_name: "Conjure Woodland Beings"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [118, 119], "executable": false}
+splat_pages:
+- 118
+- 119
 ---
 
 # Conjure Woodland Beings
@@ -26,3 +28,13 @@ In addition, you can take the Disengage action as a Bonus Action for the spellâ€
 Using a Higher-Level Spell Slot. The damage increases by 1d8 for each spell slot level above 4.
 
 Original layout: [[../pages/118|page 118]], [[../pages/119|page 119]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

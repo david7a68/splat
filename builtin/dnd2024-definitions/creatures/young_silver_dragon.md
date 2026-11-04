@@ -1,35 +1,62 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 461b291f-a76e-5371-97d7-09bcfdf5fbf5
 splat_kind: creature
 splat_key: dnd2024:creatures/young_silver_dragon
 splat_name: Young Silver Dragon
-splat_origin:
-  key: dnd2024:reference/creature/young_silver_dragon
+splat_origin: dnd2024:reference/creature/young_silver_dragon
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 324
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 324, https://www.dndbeyond.com/srd
 ---
 
 # Young Silver Dragon
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Large |
+| Type | Dragon (Metallic) |
+| Alignment | Lawful Good |
+| Armor Class | 18 |
+| Hit Points | 168 (16d10 + 80) |
+| Initiative | +4 (14) |
+| Speed | 40 ft., Fly 80 ft. |
+| Challenge | 9 (XP 5,000; PB +4) |
+| Skills | History +6, Perception +8, Stealth +4 |
+| Senses | Blindsight 30 ft., Darkvision 120 ft.; Passive Perception 18 |
+| Languages | Common, Draconic |
+| Immunities | Cold |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 23 | +6 | +6 |
+| Dex | 10 | +0 | +4 |
+| Con | 21 | +5 | +5 |
+| Int | 14 | +2 | +2 |
+| Wis | 11 | +0 | +4 |
+| Cha | 19 | +4 | +4 |
+
 
 ## Source text
 
 <!-- SRD page 324 -->
 
-Large Dragon (Metallic), Lawful Good\
-AC 18 Initiative +4 (14)\
-HP 168 (16d10 + 80)\
-Speed 40 ft., Fly 80 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 23 +6 +6 Dex 10 +0 +4 Con 21 +5 +5\
-Int 14 +2 +2 Wis 11 +0 +4 Cha 19 +4 +4\
-Skills History +6, Perception +8, Stealth +4\
-Immunities Cold\
-Senses Blindsight 30 ft., Darkvision 120 ft.; Passive Perception 18\
-Languages Common, Draconic\
-CR 9 (XP 5,000; PB +4)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Large Dragon (Metallic), Lawful Good\
+> AC 18 Initiative +4 (14)\
+> HP 168 (16d10 + 80)\
+> Speed 40 ft., Fly 80 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 23 +6 +6 Dex 10 +0 +4 Con 21 +5 +5\
+> Int 14 +2 +2 Wis 11 +0 +4 Cha 19 +4 +4\
+> Skills History +6, Perception +8, Stealth +4\
+> Immunities Cold\
+> Senses Blindsight 30 ft., Darkvision 120 ft.; Passive Perception 18\
+> Languages Common, Draconic\
+> CR 9 (XP 5,000; PB +4)
+
 
 ### Actions
 
@@ -43,48 +70,11 @@ Paralyzing Breath. Constitution Saving Throw: DC 17, each creature in a 30-foot 
 
 Original layout: [[../../srd-5.2.1/pages/324|page 324]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` large ` |
-| ` type ` | ` dragon ` |
-| ` alignment ` | ` Lawful Good ` |
-| ` tags_text ` | ` (Metallic) ` |
-| ` movement_text ` | ` 40 ft., Fly 80 ft. ` |
-| ` skills_text ` | ` History +6, Perception +8, Stealth +4 ` |
-| ` immunities_text ` | ` Cold ` |
-| ` senses_text ` | ` Blindsight 30 ft., Darkvision 120 ft.; Passive Perception 18 ` |
-| ` languages_text ` | ` Common, Draconic ` |
-| ` cr_text ` | ` 9 (XP 5,000; PB +4) ` |
-| ` hit_points_text ` | ` 168 (16d10 + 80) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 23 ` | ` 6 ` |
-| ` Dexterity ` | ` 10 ` | ` 4 ` |
-| ` Constitution ` | ` 21 ` | ` 5 ` |
-| ` Intelligence ` | ` 14 ` | ` 2 ` |
-| ` Wisdom ` | ` 11 ` | ` 4 ` |
-| ` Charisma ` | ` 19 ` | ` 4 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 18 ` |  |
-| ` max_hp ` | ` 168 ` |  |
-| ` initiative ` | ` 4 ` |  |
-| ` speed ` | ` 40 ` | ` ft ` |
-| ` fly_speed ` | ` 80 ` | ` ft ` |
 
 ## Health
 
@@ -299,3 +289,13 @@ geometry:
 unlisted_success_branch: no_effect
 unlisted_duration: until_removed_by_applicable_rule
 ```
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_stats_extras -->
+> 
+> ```yaml
+> fly_speed:
+>   unit: ft
+>   value: 80
+> ```
+

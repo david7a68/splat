@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "f987b8c2-fe59-56d4-b07b-674bc1b1297a"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/brown_bear"
 splat_name: "Brown Bear"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [346], "executable": false}
+splat_pages:
+- 346
 ---
 
 # Brown Bear
@@ -32,3 +33,13 @@ Bite. Melee Attack Roll: +5, reach 5 ft. Hit: 7 (1d8 + 3) Piercing damage.
 Claw. Melee Attack Roll: +5, reach 5 ft. Hit: 5 (1d4 + 3) Slashing damage. If the target is a Large or smaller creature, it has the Prone condition.
 
 Original layout: [[../pages/346|page 346]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "0085266f-2ef6-559c-9fd2-f6cd38124446"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/adult_green_dragon"
 splat_name: "Adult Green Dragon"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [294], "executable": false}
+splat_pages:
+- 294
 ---
 
 # Adult Green Dragon
@@ -54,3 +55,13 @@ Noxious Miasma. Constitution Saving Throw: DC 17, each creature in a 20-foot-rad
 Pounce. The dragon moves up to half its Speed, and it makes one Rend attack.
 
 Original layout: [[../pages/294|page 294]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

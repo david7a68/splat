@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "15488ab0-d945-5632-bc4a-91a565f335e1"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/swarm_of_rats"
 splat_name: "Swarm of Rats"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [362], "executable": false}
+splat_pages:
+- 362
 ---
 
 # Swarm of Rats
@@ -33,3 +34,13 @@ Swarm. The swarm can occupy another creature’s space and vice versa, and the s
 Bites. Melee Attack Roll: +2, reach 5 ft. Hit: 5 (2d4) Piercing damage, or 2 (1d4) Piercing damage if the swarm is Bloodied.
 
 Original layout: [[../pages/362|page 362]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

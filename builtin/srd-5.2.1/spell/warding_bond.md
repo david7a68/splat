@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "673e8c94-6ba6-5c31-a421-634ae23ea31d"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/warding_bond"
 splat_name: "Warding Bond"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [173], "executable": false}
+splat_pages:
+- 173
 ---
 
 # Warding Bond
@@ -22,3 +23,13 @@ You touch another creature that is willing and create a mystic connection betwee
 The spell ends if you drop to 0 Hit Points or if you and the target become separated by more than 60 feet. It also ends if the spell is cast again on either of the connected creatures.
 
 Original layout: [[../pages/173|page 173]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

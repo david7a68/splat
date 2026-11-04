@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "8be5d0e4-744e-53ac-85f1-e6e98016eb5e"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/speak_with_plants"
 splat_name: "Speak with Plants"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [164], "executable": false}
+splat_pages:
+- 164
 ---
 
 # Speak with Plants
@@ -26,3 +27,13 @@ The spell doesn’t enable plants to uproot themselves and move about, but they 
 If a Plant creature is in the area, you can communicate with it as if you shared a common language.
 
 Original layout: [[../pages/164|page 164]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

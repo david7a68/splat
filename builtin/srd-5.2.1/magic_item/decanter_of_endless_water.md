@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "c47eaa46-df18-575f-bc81-f6faa60798ca"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/magic_item/decanter_of_endless_water"
 splat_name: "Decanter of Endless Water"
-splat_reference: {"source": "SRD 5.2.1", "category": "magic_item", "pages": [217], "executable": false}
+splat_pages:
+- 217
 ---
 
 # Decanter of Endless Water
@@ -24,3 +25,13 @@ Fountain. The decanter produces 5 gallons of water.
 Geyser. The decanter produces 30 gallons of water that gushes forth in a Line 30 feet long and 1 foot wide. If you’re holding the decanter, you can aim the geyser in one direction (no action required). One creature of your choice in the Line must succeed on a DC 13 Strength saving throw or take 1d4 Bludgeoning damage and have the Prone condition. Instead of a creature, you can target one object in the Line that isn’t being worn or carried and that weighs no more than 200 pounds. The object is knocked over by the geyser.
 
 Original layout: [[../pages/217|page 217]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: magic_item
+> executable: false
+> ```
+

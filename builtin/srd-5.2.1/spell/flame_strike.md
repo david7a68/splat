@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "adaab34b-96db-5db0-a895-6d1a84e19398"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/flame_strike"
 splat_name: "Flame Strike"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [132], "executable": false}
+splat_pages:
+- 132
 ---
 
 # Flame Strike
@@ -22,3 +23,13 @@ A vertical column of brilliant fire roars down from above. Each creature in a 10
 Using a Higher-Level Spell Slot. The Fire damage and the Radiant damage increase by 1d6 for each spell slot level above 5.
 
 Original layout: [[../pages/132|page 132]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

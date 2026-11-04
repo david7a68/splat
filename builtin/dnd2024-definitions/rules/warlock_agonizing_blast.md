@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 5ce9cc9b-4f04-5b0e-b199-bd01003a003d
 splat_kind: rule
 splat_key: dnd2024:rules/warlock_agonizing_blast
 splat_name: Agonizing Blast
-splat_origin:
-  key: dnd2024:reference/pages/072
+splat_origin: dnd2024:reference/pages/072
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 72
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 72, https://www.dndbeyond.com/srd
 ---
 
 # Agonizing Blast

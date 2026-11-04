@@ -1,34 +1,60 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 294e6c1c-6e74-574f-a834-775f3ca30093
 splat_kind: creature
 splat_key: dnd2024:creatures/iron_golem
 splat_name: Iron Golem
-splat_origin:
-  key: dnd2024:reference/creature/iron_golem
+splat_origin: dnd2024:reference/creature/iron_golem
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 302
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 302, https://www.dndbeyond.com/srd
 ---
 
 # Iron Golem
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Large |
+| Type | Construct |
+| Alignment | Unaligned |
+| Armor Class | 20 |
+| Hit Points | 252 (24d10 + 120) |
+| Initiative | +9 (19) |
+| Speed | 30 ft. |
+| Challenge | 16 (XP 15,000; PB +5) |
+| Senses | Darkvision 120 ft.; Passive Perception 10 |
+| Languages | Understands Common plus two other languages but can’t speak |
+| Immunities | Fire, Poison, Psychic; Charmed, Exhaustion, Frightened, Paralyzed, Petrified, Poisoned |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 24 | +7 | +7 |
+| Dex | 9 | -1 | -1 |
+| Con | 20 | +5 | +5 |
+| Int | 3 | -4 | -4 |
+| Wis | 11 | +0 | +0 |
+| Cha | 1 | -5 | -5 |
+
 
 ## Source text
 
 <!-- SRD page 302 -->
 
-Large Construct, Unaligned\
-AC 20 Initiative +9 (19)\
-HP 252 (24d10 + 120)\
-Speed 30 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 24 +7 +7 Dex 9 −1 −1 Con 20 +5 +5\
-Int 3 −4 −4 Wis  11 +0 +0 Cha  1 −5 −5\
-Immunities Fire, Poison, Psychic; Charmed, Exhaustion, Frightened, Paralyzed, Petrified, Poisoned\
-Senses Darkvision 120 ft.; Passive Perception 10\
-Languages Understands Common plus two other languages but can’t speak\
-CR 16 (XP 15,000; PB +5)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Large Construct, Unaligned\
+> AC 20 Initiative +9 (19)\
+> HP 252 (24d10 + 120)\
+> Speed 30 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 24 +7 +7 Dex 9 −1 −1 Con 20 +5 +5\
+> Int 3 −4 −4 Wis  11 +0 +0 Cha  1 −5 −5\
+> Immunities Fire, Poison, Psychic; Charmed, Exhaustion, Frightened, Paralyzed, Petrified, Poisoned\
+> Senses Darkvision 120 ft.; Passive Perception 10\
+> Languages Understands Common plus two other languages but can’t speak\
+> CR 16 (XP 15,000; PB +5)
+
 
 ### Traits
 
@@ -50,45 +76,11 @@ Poison Breath (Recharge 6). Constitution Saving Throw: DC 18, each creature in a
 
 Original layout: [[../../srd-5.2.1/pages/302|page 302]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` large ` |
-| ` type ` | ` construct ` |
-| ` alignment ` | ` Unaligned ` |
-| ` movement_text ` | ` 30 ft. ` |
-| ` immunities_text ` | ` Fire, Poison, Psychic; Charmed, Exhaustion, Frightened, Paralyzed, Petrified, Poisoned ` |
-| ` senses_text ` | ` Darkvision 120 ft.; Passive Perception 10 ` |
-| ` languages_text ` | ` Understands Common plus two other languages but can’t speak ` |
-| ` cr_text ` | ` 16 (XP 15,000; PB +5) ` |
-| ` hit_points_text ` | ` 252 (24d10 + 120) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 24 ` | ` 7 ` |
-| ` Dexterity ` | ` 9 ` | ` -1 ` |
-| ` Constitution ` | ` 20 ` | ` 5 ` |
-| ` Intelligence ` | ` 3 ` | ` -4 ` |
-| ` Wisdom ` | ` 11 ` | ` 0 ` |
-| ` Charisma ` | ` 1 ` | ` -5 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 20 ` |  |
-| ` max_hp ` | ` 252 ` |  |
-| ` initiative ` | ` 9 ` |  |
-| ` speed ` | ` 30 ` | ` ft ` |
 
 ## Health
 

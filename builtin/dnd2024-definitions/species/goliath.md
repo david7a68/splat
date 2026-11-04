@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: cc9295b7-2cc8-5569-94a7-85b4c7002d17
 splat_kind: rule_group
 splat_key: dnd2024:species/goliath
 splat_name: Goliath
-splat_origin:
-  key: dnd2024:reference/pages/085
+splat_origin: dnd2024:reference/pages/085
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 85, 86
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 85, 86, https://www.dndbeyond.com/srd
 ---
 
 # Goliath

@@ -1,10 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "2430e11f-7272-50cf-8d0f-adcf64b260f4"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/phantasmal_force"
 splat_name: "Phantasmal Force"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [151, 152], "executable": false}
+splat_pages:
+- 151
+- 152
 ---
 
 # Phantasmal Force
@@ -28,3 +30,13 @@ While affected by the spell, the target treats the phantasm as if it were real a
 An affected target can even take damage from the illusion if the phantasm represents a dangerous creature or hazard. On each of your turns, such a phantasm can deal 2d8 Psychic damage to the target if it is in the phantasm’s area or within 5 feet of the phantasm. The target perceives the damage as a type appropriate to the illusion.
 
 Original layout: [[../pages/151|page 151]], [[../pages/152|page 152]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

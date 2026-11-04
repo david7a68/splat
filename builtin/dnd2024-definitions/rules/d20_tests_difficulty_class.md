@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 3d42e922-7a23-57de-82c0-8a9e62741a01
 splat_kind: rule
 splat_key: dnd2024:rules/d20_tests_difficulty_class
 splat_name: Difficulty Class
-splat_origin:
-  key: dnd2024:reference/pages/006
+splat_origin: dnd2024:reference/pages/006
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 6
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 6, https://www.dndbeyond.com/srd
 ---
 
 # Difficulty Class

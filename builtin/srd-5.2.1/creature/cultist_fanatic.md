@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "ccb291b0-f554-5e8e-af63-b5afbddb2f7a"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/cultist_fanatic"
 splat_name: "Cultist Fanatic"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [278], "executable": false}
+splat_pages:
+- 278
 ---
 
 # Cultist Fanatic
@@ -39,3 +40,13 @@ At Will: Light, Thaumaturgy\
 Spiritual Weapon (2/Day). The cultist casts the Spiritual Weapon spell, using the same spellcasting ability as Spellcasting.
 
 Original layout: [[../pages/278|page 278]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

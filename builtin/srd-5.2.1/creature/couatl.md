@@ -1,10 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "01d1c3ac-89e5-576e-bc0a-6217e35bba71"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/couatl"
 splat_name: "Couatl"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [277, 278], "executable": false}
+splat_pages:
+- 277
+- 278
 ---
 
 # Couatl
@@ -47,3 +49,13 @@ At Will: Detect Evil and Good, Detect Magic, Detect Thoughts, Shapechange (Beast
 Divine Aid (2/Day). The couatl casts Bless, Lesser Restoration, or Sanctuary, requiring no spell components and using the same spellcasting ability as Spellcasting.
 
 Original layout: [[../pages/277|page 277]], [[../pages/278|page 278]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

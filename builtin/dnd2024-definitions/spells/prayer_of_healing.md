@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 38054dda-f99e-5a3d-9ae7-627cfeba4b88
 splat_kind: spell
 splat_key: dnd2024:spells/prayer_of_healing
 splat_name: Prayer of Healing
-splat_origin:
-  key: dnd2024:reference/spell/prayer_of_healing
+splat_origin: dnd2024:reference/spell/prayer_of_healing
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 154
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 154, https://www.dndbeyond.com/srd
 ---
 
 # Prayer of Healing
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 2 |
+| School | Abjuration |
+| Classes | Cleric, Paladin |
+| Casting Time | 10 minutes |
+| Range | 30 feet |
+| Components | V |
+| Duration | Instantaneous |
+
 
 ## Source text
 
@@ -30,28 +41,9 @@ Using a Higher-Level Spell Slot. The healing increases by 1d8 for each spell slo
 
 Original layout: [[../../srd-5.2.1/pages/154|page 154]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 2 ` |
-| ` school ` | ` abjuration ` |
-| ` classes ` | ` ["cleric", "paladin"] ` |
-| ` components ` | ` ["verbal"] ` |
-| ` concentration ` | ` false ` |
-| ` duration ` | ` Instantaneous ` |
-| ` casting_time ` | ` 10 minutes ` |
-| ` ritual ` | ` false ` |
 
-### Range
-
-<!-- splat:values path=splat_spell/range -->
-
-| Field | Value |
-| --- | --- |
-| ` feet ` | ` 30 ` |
 
 ## Rule
 

@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: aee61ca4-d6e7-5870-9535-bfa3fdbf2dd2
 splat_kind: item
 splat_key: dnd2024:items/wand_of_fireballs
 splat_name: Wand of Fireballs
-splat_origin:
-  key: dnd2024:reference/magic_item/wand_of_fireballs
+splat_origin: dnd2024:reference/magic_item/wand_of_fireballs
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 250, 251
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 250, 251, https://www.dndbeyond.com/srd
 ---
 
 # Wand of Fireballs
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Wand |
+| Rarity | Rare |
+| Attunement | Yes |
+
 
 ## Source text
 
@@ -28,25 +35,9 @@ Regaining Charges. The wand regains 1d6 + 1 expended charges daily at dawn. If y
 
 Original layout: [[../../srd-5.2.1/pages/250|page 250]], [[../../srd-5.2.1/pages/251|page 251]].
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` wand ` |
-| ` rarity ` | ` rare ` |
-| ` stackable ` | ` false ` |
 
-### Equipment
-
-<!-- splat:values path=splat_item/equipment -->
-
-| Field | Value |
-| --- | --- |
-| ` allowed ` | ` ["carried", "wielded"] ` |
-| ` attunement ` | ` required ` |
-| ` attunement_requirement ` | ` spellcaster ` |
 
 ## Rule
 
@@ -123,3 +114,16 @@ last_charge:
 | Field | Value |
 | --- | --- |
 | ` add ` | ` [2, "charges_spent"] ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_item_extras -->
+> 
+> ```yaml
+> stackable: false
+> equipment:
+>   allowed:
+>   - carried
+>   - wielded
+>   attunement_requirement: spellcaster
+> ```
+

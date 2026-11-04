@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "1ad15db7-b6ba-5e03-b38b-64360fe0fbf7"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/creation"
 splat_name: "Creation"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [121], "executable": false}
+splat_pages:
+- 121
 ---
 
 # Creation
@@ -34,3 +35,13 @@ The spell’s duration depends on the object’s material, as shown in the Mater
 Using a Higher-Level Spell Slot. The Cube increases by 5 feet for each spell slot level above 5.
 
 Original layout: [[../pages/121|page 121]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

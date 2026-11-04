@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: e965e3c8-ce7d-571b-b556-2cc1d733703e
 splat_kind: item
 splat_key: dnd2024:items/vicious_weapon
 splat_name: Vicious Weapon
-splat_origin:
-  key: dnd2024:reference/magic_item/vicious_weapon
+splat_origin: dnd2024:reference/magic_item/vicious_weapon
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 250
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 250, https://www.dndbeyond.com/srd
 ---
 
 # Vicious Weapon
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Weapon |
+| Rarity | Rare |
+| Attunement | No |
+
 
 ## Source text
 
@@ -24,22 +31,9 @@ This magic weapon deals an extra 2d6 damage to any creature it hits. This extra 
 
 Original layout: [[../../srd-5.2.1/pages/250|page 250]].
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` weapon ` |
-| ` rarity ` | ` rare ` |
 
-### Equipment
-
-<!-- splat:values path=splat_item/equipment -->
-
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` none ` |
 
 ## Rule
 

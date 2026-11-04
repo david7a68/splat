@@ -1,33 +1,58 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 92183bf8-0664-5742-938f-992b30280a12
 splat_kind: creature
 splat_key: dnd2024:creatures/giant_boar
 splat_name: Giant Boar
-splat_origin:
-  key: dnd2024:reference/creature/giant_boar
+splat_origin: dnd2024:reference/creature/giant_boar
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 349
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 349, https://www.dndbeyond.com/srd
 ---
 
 # Giant Boar
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Large |
+| Type | Beast |
+| Alignment | Unaligned |
+| Armor Class | 13 |
+| Hit Points | 42 (5d10 + 15) |
+| Initiative | +0 (10) |
+| Speed | 40 ft. |
+| Challenge | 2 (XP 450; PB +2) |
+| Senses | Passive Perception 8 |
+| Languages | None |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 17 | +3 | +5 |
+| Dex | 10 | +0 | +0 |
+| Con | 16 | +3 | +3 |
+| Int | 2 | -4 | -4 |
+| Wis | 7 | -2 | -2 |
+| Cha | 5 | -3 | -3 |
+
 
 ## Source text
 
 <!-- SRD page 349 -->
 
-Large Beast, Unaligned\
-AC 13  Initiative +0 (10)\
-HP 42 (5d10 + 15)\
-Speed 40 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 17 +3 +5 Dex 10 +0 +0 Con 16 +3 +3\
-Int 2 −4 −4 Wis 7 −2 −2 Cha 5 −3 −3\
-Senses Passive Perception 8\
-Languages None\
-CR 2 (XP 450; PB +2)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Large Beast, Unaligned\
+> AC 13  Initiative +0 (10)\
+> HP 42 (5d10 + 15)\
+> Speed 40 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 17 +3 +5 Dex 10 +0 +0 Con 16 +3 +3\
+> Int 2 −4 −4 Wis 7 −2 −2 Cha 5 −3 −3\
+> Senses Passive Perception 8\
+> Languages None\
+> CR 2 (XP 450; PB +2)
+
 
 ### Traits
 
@@ -39,44 +64,11 @@ Gore. Melee Attack Roll: +5, reach 5 ft. Hit: 10 (2d6 + 3) Piercing damage. If t
 
 Original layout: [[../../srd-5.2.1/pages/349|page 349]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` large ` |
-| ` type ` | ` beast ` |
-| ` alignment ` | ` Unaligned ` |
-| ` movement_text ` | ` 40 ft. ` |
-| ` senses_text ` | ` Passive Perception 8 ` |
-| ` languages_text ` | ` None ` |
-| ` cr_text ` | ` 2 (XP 450; PB +2) ` |
-| ` hit_points_text ` | ` 42 (5d10 + 15) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 17 ` | ` 5 ` |
-| ` Dexterity ` | ` 10 ` | ` 0 ` |
-| ` Constitution ` | ` 16 ` | ` 3 ` |
-| ` Intelligence ` | ` 2 ` | ` -4 ` |
-| ` Wisdom ` | ` 7 ` | ` -2 ` |
-| ` Charisma ` | ` 5 ` | ` -3 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 13 ` |  |
-| ` max_hp ` | ` 42 ` |  |
-| ` initiative ` | ` 0 ` |  |
-| ` speed ` | ` 40 ` | ` ft ` |
 
 ## Health
 

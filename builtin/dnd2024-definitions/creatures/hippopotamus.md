@@ -1,34 +1,60 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 73df5740-aae0-5764-9992-52fca234c83a
 splat_kind: creature
 splat_key: dnd2024:creatures/hippopotamus
 splat_name: Hippopotamus
-splat_origin:
-  key: dnd2024:reference/creature/hippopotamus
+splat_origin: dnd2024:reference/creature/hippopotamus
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 355, 356
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 355, 356, https://www.dndbeyond.com/srd
 ---
 
 # Hippopotamus
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Large |
+| Type | Beast |
+| Alignment | Unaligned |
+| Armor Class | 14 |
+| Hit Points | 82 (11d10 + 22) |
+| Initiative | -2 (8) |
+| Speed | 30 ft., Swim 30 ft. |
+| Challenge | 4 (XP 1,100; PB +2) |
+| Skills | Perception +3 |
+| Senses | Passive Perception 13 |
+| Languages | None |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 21 | +5 | +7 |
+| Dex | 7 | -2 | -2 |
+| Con | 15 | +2 | +2 |
+| Int | 2 | -4 | -4 |
+| Wis | 12 | +1 | +1 |
+| Cha | 4 | -3 | -3 |
+
 
 ## Source text
 
 <!-- SRD page 355 -->
 
-Large Beast, Unaligned\
-AC 14  Initiative −2 (8)\
-HP 82 (11d10 + 22)\
-Speed 30 ft., Swim 30 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 21 +5 +7 Dex 7 −2 −2 Con 15 +2 +2\
-Int 2 −4 −4 Wis 12 +1 +1 Cha 4 −3 −3\
-Skills Perception +3\
-Senses Passive Perception 13\
-Languages None\
-CR 4 (XP 1,100; PB +2)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Large Beast, Unaligned\
+> AC 14  Initiative −2 (8)\
+> HP 82 (11d10 + 22)\
+> Speed 30 ft., Swim 30 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 21 +5 +7 Dex 7 −2 −2 Con 15 +2 +2\
+> Int 2 −4 −4 Wis 12 +1 +1 Cha 4 −3 −3\
+> Skills Perception +3\
+> Senses Passive Perception 13\
+> Languages None\
+> CR 4 (XP 1,100; PB +2)
+
 
 ### Traits
 
@@ -44,46 +70,11 @@ Bite. Melee Attack Roll: +7, reach 5 ft. Hit: 16 (2d10 + 5) Piercing damage.
 
 Original layout: [[../../srd-5.2.1/pages/355|page 355]], [[../../srd-5.2.1/pages/356|page 356]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` large ` |
-| ` type ` | ` beast ` |
-| ` alignment ` | ` Unaligned ` |
-| ` movement_text ` | ` 30 ft., Swim 30 ft. ` |
-| ` skills_text ` | ` Perception +3 ` |
-| ` senses_text ` | ` Passive Perception 13 ` |
-| ` languages_text ` | ` None ` |
-| ` cr_text ` | ` 4 (XP 1,100; PB +2) ` |
-| ` hit_points_text ` | ` 82 (11d10 + 22) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 21 ` | ` 7 ` |
-| ` Dexterity ` | ` 7 ` | ` -2 ` |
-| ` Constitution ` | ` 15 ` | ` 2 ` |
-| ` Intelligence ` | ` 2 ` | ` -4 ` |
-| ` Wisdom ` | ` 12 ` | ` 1 ` |
-| ` Charisma ` | ` 4 ` | ` -3 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 14 ` |  |
-| ` max_hp ` | ` 82 ` |  |
-| ` initiative ` | ` -2 ` |  |
-| ` speed ` | ` 30 ` | ` ft ` |
-| ` swim_speed ` | ` 30 ` | ` ft ` |
 
 ## Health
 
@@ -205,3 +196,13 @@ geometry:
 unlisted_success_branch: no_effect
 unlisted_duration: until_removed_by_applicable_rule
 ```
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_stats_extras -->
+> 
+> ```yaml
+> swim_speed:
+>   unit: ft
+>   value: 30
+> ```
+

@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: ce55eb66-205d-561f-b66d-52bc60dae093
 splat_kind: spell
 splat_key: dnd2024:spells/reverse_gravity
 splat_name: Reverse Gravity
-splat_origin:
-  key: dnd2024:reference/spell/reverse_gravity
+splat_origin: dnd2024:reference/spell/reverse_gravity
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 159
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 159, https://www.dndbeyond.com/srd
 ---
 
 # Reverse Gravity
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 7 |
+| School | Transmutation |
+| Classes | Druid, Sorcerer, Wizard |
+| Casting Time | Action |
+| Range | 100 feet |
+| Components | V, S, M (a lodestone and iron filings) |
+| Duration | Concentration, up to 1 minute |
+
 
 ## Source text
 
@@ -30,37 +41,11 @@ If a ceiling or an anchored object is encountered in this upward fall, creatures
 
 Original layout: [[../../srd-5.2.1/pages/159|page 159]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 7 ` |
-| ` school ` | ` transmutation ` |
-| ` classes ` | ` ["druid", "sorcerer", "wizard"] ` |
-| ` components ` | ` ["verbal", "somatic", "material"] ` |
-| ` concentration ` | ` true ` |
-| ` duration ` | ` Concentration, up to 1 minute ` |
-| ` casting_time ` | ` Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
 
-<!-- splat:values path=splat_spell/range -->
 
-| Field | Value |
-| --- | --- |
-| ` feet ` | ` 100 ` |
-
-### Material
-
-<!-- splat:values path=splat_spell/material -->
-
-| Field | Value |
-| --- | --- |
-| ` description ` | ` a lodestone and iron filings ` |
-| ` consumed ` | ` false ` |
 
 ## Rule
 
@@ -145,3 +130,12 @@ success: grab_fixed_object_and_avoid_upward_fall
 | ` source ` | ` supplied_world_geometry ` |
 | ` unknown_facts ` | ` require_resolution ` |
 | ` infer_unprovided_geometry ` | ` false ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_spell_extras -->
+> 
+> ```yaml
+> material:
+>   consumed: false
+> ```
+

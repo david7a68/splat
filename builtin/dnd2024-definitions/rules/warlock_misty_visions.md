@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 3ee1085a-5278-5c47-840b-2ad360958a83
 splat_kind: rule
 splat_key: dnd2024:rules/warlock_misty_visions
 splat_name: Misty Visions
-splat_origin:
-  key: dnd2024:reference/pages/074
+splat_origin: dnd2024:reference/pages/074
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 74
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 74, https://www.dndbeyond.com/srd
 ---
 
 # Misty Visions

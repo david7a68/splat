@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "4f0e502f-777e-5b85-b371-b3f029eda38a"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/irresistible_dance"
 splat_name: "Irresistible Dance"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [143], "executable": false}
+splat_pages:
+- 143
 ---
 
 # Irresistible Dance
@@ -22,3 +23,13 @@ One creature that you can see within range must make a Wisdom saving throw. On a
 On a failed save, the target has the Charmed condition for the duration. While Charmed, the target dances comically, must use all its movement to dance in place, and has Disadvantage on Dexterity saving throws and attack rolls, and other creatures have Advantage on attack rolls against it. On each of its turns, the target can take an action to collect itself and repeat the save, ending the spell on itself on a success.
 
 Original layout: [[../pages/143|page 143]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

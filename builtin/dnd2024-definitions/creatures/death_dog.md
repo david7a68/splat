@@ -1,35 +1,62 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 58b4c331-4c93-59f2-91fc-df243d8d664c
 splat_kind: creature
 splat_key: dnd2024:creatures/death_dog
 splat_name: Death Dog
-splat_origin:
-  key: dnd2024:reference/creature/death_dog
+splat_origin: dnd2024:reference/creature/death_dog
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 279
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 279, https://www.dndbeyond.com/srd
 ---
 
 # Death Dog
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Medium |
+| Type | Monstrosity |
+| Alignment | Neutral Evil |
+| Armor Class | 12 |
+| Hit Points | 39 (6d8 + 12) |
+| Initiative | +2 (12) |
+| Speed | 40 ft. |
+| Challenge | 1 (XP 200; PB +2) |
+| Skills | Perception +5, Stealth +4 |
+| Senses | Darkvision 120 ft.; Passive Perception 15 |
+| Languages | None |
+| Immunities | Blinded, Charmed, Deafened, Frightened, Stunned, Unconscious |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 15 | +2 | +2 |
+| Dex | 14 | +2 | +2 |
+| Con | 14 | +2 | +2 |
+| Int | 3 | -4 | -4 |
+| Wis | 13 | +1 | +1 |
+| Cha | 6 | -2 | -2 |
+
 
 ## Source text
 
 <!-- SRD page 279 -->
 
-Medium Monstrosity, Neutral Evil\
-AC 12 Initiative +2 (12)\
-HP 39 (6d8 + 12)\
-Speed 40 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 15 +2 +2 Dex 14 +2 +2 Con 14 +2 +2\
-Int 3 −4 −4 Wis 13 +1 +1 Cha 6 −2 −2\
-Skills Perception +5, Stealth +4\
-Immunities Blinded, Charmed, Deafened, Frightened, Stunned, Unconscious\
-Senses Darkvision 120 ft.; Passive Perception 15\
-Languages None\
-CR 1 (XP 200; PB +2)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Medium Monstrosity, Neutral Evil\
+> AC 12 Initiative +2 (12)\
+> HP 39 (6d8 + 12)\
+> Speed 40 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 15 +2 +2 Dex 14 +2 +2 Con 14 +2 +2\
+> Int 3 −4 −4 Wis 13 +1 +1 Cha 6 −2 −2\
+> Skills Perception +5, Stealth +4\
+> Immunities Blinded, Charmed, Deafened, Frightened, Stunned, Unconscious\
+> Senses Darkvision 120 ft.; Passive Perception 15\
+> Languages None\
+> CR 1 (XP 200; PB +2)
+
 
 ### Actions
 
@@ -39,46 +66,11 @@ Bite. Melee Attack Roll: +4, reach 5 ft. Hit: 4 (1d4 + 2) Piercing damage. If th
 
 Original layout: [[../../srd-5.2.1/pages/279|page 279]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` medium ` |
-| ` type ` | ` monstrosity ` |
-| ` alignment ` | ` Neutral Evil ` |
-| ` movement_text ` | ` 40 ft. ` |
-| ` skills_text ` | ` Perception +5, Stealth +4 ` |
-| ` immunities_text ` | ` Blinded, Charmed, Deafened, Frightened, Stunned, Unconscious ` |
-| ` senses_text ` | ` Darkvision 120 ft.; Passive Perception 15 ` |
-| ` languages_text ` | ` None ` |
-| ` cr_text ` | ` 1 (XP 200; PB +2) ` |
-| ` hit_points_text ` | ` 39 (6d8 + 12) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 15 ` | ` 2 ` |
-| ` Dexterity ` | ` 14 ` | ` 2 ` |
-| ` Constitution ` | ` 14 ` | ` 2 ` |
-| ` Intelligence ` | ` 3 ` | ` -4 ` |
-| ` Wisdom ` | ` 13 ` | ` 1 ` |
-| ` Charisma ` | ` 6 ` | ` -2 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 12 ` |  |
-| ` max_hp ` | ` 39 ` |  |
-| ` initiative ` | ` 2 ` |  |
-| ` speed ` | ` 40 ` | ` ft ` |
 
 ## Health
 

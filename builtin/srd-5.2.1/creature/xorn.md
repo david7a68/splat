@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "f9d3d088-764c-59be-ad0e-3c574fb20d35"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/xorn"
 splat_name: "Xorn"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [343], "executable": false}
+splat_pages:
+- 343
 ---
 
 # Xorn
@@ -43,3 +44,13 @@ Claw. Melee Attack Roll: +6, reach 5 ft. Hit: 8 (1d10 + 3) Slashing damage.
 Charge. The xorn moves up to its Speed or Burrow Speed straight toward an enemy it can sense.
 
 Original layout: [[../pages/343|page 343]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

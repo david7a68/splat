@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "58433df1-e0b9-5d60-8cf5-c1acf5a53f14"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/glossary/area_of_effect"
 splat_name: "Area of Effect"
-splat_reference: {"source": "SRD 5.2.1", "category": "glossary", "pages": [177], "executable": false}
+splat_pages:
+- 177
 ---
 
 # Area of Effect
@@ -23,3 +24,13 @@ An area of effect has a point of origin, a location from which the effect’s en
 If the creator of an area of effect places it at an unseen point and an obstruction—such as a wall— is between the creator and that point, the point of origin comes into being on the near side of the obstruction.
 
 Original layout: [[../pages/177|page 177]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: glossary
+> executable: false
+> ```
+

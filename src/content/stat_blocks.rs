@@ -317,11 +317,11 @@ pub fn read_tables(kind: &str, source: &str, fields: &mut Mapping, flags: &mut V
         }
         parsed.insert((*root).into(), Value::Mapping(Mapping::new()));
     }
-    if let Some(table) = table {
+    if let Some(ref table) = table {
         match kind {
-            "creature" => creature(&table, source, &mut parsed, flags),
-            "spell" => spell(&table, &mut parsed, flags),
-            _ => item(&table, &mut parsed, flags),
+            "creature" => creature(table, source, &mut parsed, flags),
+            "spell" => spell(table, &mut parsed, flags),
+            _ => item(table, &mut parsed, flags),
         }
     } else {
         flags.push(Flag {
@@ -333,10 +333,62 @@ pub fn read_tables(kind: &str, source: &str, fields: &mut Mapping, flags: &mut V
         });
     }
     for shape in metadata(source, kind, "shape") {
+        if shape.split(',').any(|s| s == "size_literal")
+            && let Some(creature) = parsed
+                .get_mut("splat_creature")
+                .and_then(Value::as_mapping_mut)
+            && let Some(raw) = creature
+                .remove("size_options_text")
+                .and_then(|v| v.as_str().map(str::to_owned))
+        {
+            creature.insert("size".into(), raw.to_lowercase().into());
+        }
+        if shape.split(',').any(|s| s == "type_literal")
+            && let Some(creature) = parsed
+                .get_mut("splat_creature")
+                .and_then(Value::as_mapping_mut)
+            && let Some(raw) = table
+                .as_ref()
+                .and_then(|t| read(t, &["Type"], &mut Vec::new()))
+        {
+            creature.remove("type_options_text");
+            creature.remove("tags_text");
+            creature.insert("type".into(), raw.into());
+            for (row, key) in [
+                ("Type Tags", "tags_text"),
+                ("Type Options", "type_options_text"),
+            ] {
+                if let Some(raw) = table
+                    .as_ref()
+                    .and_then(|t| read(t, &[row], &mut Vec::new()))
+                {
+                    creature.insert(key.into(), raw.into());
+                }
+            }
+        }
+        if shape.split(',').any(|s| s == "rarity_text")
+            && let Some(item) = parsed.get_mut("splat_item").and_then(Value::as_mapping_mut)
+            && let Some(raw) = table
+                .as_ref()
+                .and_then(|t| read(t, &["Rarity"], &mut Vec::new()))
+        {
+            item.insert("rarity".into(), raw.to_lowercase().replace(' ', "_").into());
+            if let Some(row) = table.as_ref().and_then(|t| t.row("Rarity")) {
+                flags.retain(|f| f.line != row[0].line || !f.message.starts_with("Rarity "));
+            }
+        }
         if let Some(spell) = parsed
             .get_mut("splat_spell")
             .and_then(Value::as_mapping_mut)
         {
+            if shape.split(',').any(|s| s == "range_text")
+                && let Some(raw) = table
+                    .as_ref()
+                    .and_then(|t| read(t, &["Range"], &mut Vec::new()))
+            {
+                spell.remove("range");
+                spell.insert("range_text".into(), raw.into());
+            }
             if shape.split(',').any(|s| s == "casting_time")
                 && let Some(raw) = spell
                     .remove("casting_time")
@@ -447,7 +499,7 @@ const IDENTITY: &[(&str, &str, &[&str])] = &[
     ),
 ];
 
-fn identity_value(key: &str, raw: &str) -> Option<Mapping> {
+pub(super) fn identity_value(key: &str, raw: &str) -> Option<Mapping> {
     let (_, _, allowed) = IDENTITY.iter().find(|(_, k, _)| *k == key)?;
     let lower = raw.to_lowercase();
     let valid = if key == "size" {
@@ -486,66 +538,6 @@ fn identity_value(key: &str, raw: &str) -> Option<Mapping> {
         creature.insert(key.into(), lower.into());
     }
     Some(creature)
-}
-
-/// Legacy printed identity supplies only properties missing from its YAML model.
-pub fn read_legacy_identity(body: &str, fields: &mut Mapping) {
-    let source = Document::new(body)
-        .section_at_level("Source text", Some(pulldown_cmark::HeadingLevel::H2))
-        .map(|s| &body[s.range()])
-        .unwrap_or(body);
-    for (event, range) in Parser::new_ext(source, Options::ENABLE_TABLES).into_offset_iter() {
-        if !matches!(event, Event::Start(Tag::Paragraph)) {
-            continue;
-        }
-        let line = source[range]
-            .lines()
-            .next()
-            .unwrap_or("")
-            .trim()
-            .trim_end_matches('\\')
-            .trim()
-            .trim_matches('*');
-        let mut depth = 0_i32;
-        let mut comma = None;
-        for (at, ch) in line.char_indices() {
-            match ch {
-                '(' => depth += 1,
-                ')' => depth -= 1,
-                ',' if depth == 0 => comma = Some(at),
-                _ => {}
-            }
-        }
-        if depth != 0 {
-            continue;
-        }
-        let (identity, alignment) = comma.map_or((line, None), |at| {
-            (&line[..at], Some(line[at + 1..].trim()))
-        });
-        let Some((size, kind)) = identity.split_once(' ') else {
-            continue;
-        };
-        let Some(mut printed) = identity_value("size", size) else {
-            continue;
-        };
-        let Some(kind) = identity_value("type", kind) else {
-            continue;
-        };
-        printed.extend(kind);
-        if let Some(alignment) = alignment.filter(|s| !s.is_empty()) {
-            printed.insert("alignment".into(), alignment.into());
-        }
-        if let Some(creature) = fields
-            .entry(Value::from("splat_creature"))
-            .or_insert_with(|| Value::Mapping(Mapping::new()))
-            .as_mapping_mut()
-        {
-            for (key, value) in printed {
-                creature.entry(key).or_insert(value);
-            }
-        }
-        break;
-    }
 }
 
 fn speed(raw: &str) -> Result<(i64, &str), String> {
@@ -683,6 +675,29 @@ fn creature(table: &Table, source: &str, fields: &mut Mapping, flags: &mut Vec<F
         (&["Initiative"][..], "initiative", ""),
     ] {
         let raw = read(table, names, flags);
+        if let Some(expression) = raw.as_deref().and_then(|raw| raw.strip_prefix("= ")) {
+            match serde_yaml_ng::from_str::<Value>(expression) {
+                Ok(expression) if expression.is_mapping() => {
+                    stats.insert(
+                        key.into(),
+                        Value::Mapping([("derive".into(), expression)].into_iter().collect()),
+                    );
+                }
+                _ => flags.push(Flag {
+                    line: table.row(names[0]).map_or(1, |row| row[0].line),
+                    message: format!("{} formula not read", names[0]),
+                }),
+            }
+            continue;
+        }
+        if metadata(source, "creature", "shape").iter().any(|s| {
+            s.split(',').any(|s| {
+                (key == "max_hp" && s == "hp_text") || (key == "armor_class" && s == "ac_text")
+            })
+        }) {
+            text(&mut creature, prose, raw);
+            continue;
+        }
         if let Some((n, raw)) = checked(raw, names[0], table, flags, |s| {
             let n = number(s, key == "initiative")?;
             if key != "initiative" && n < 0 {
@@ -699,6 +714,30 @@ fn creature(table: &Table, source: &str, fields: &mut Mapping, flags: &mut Vec<F
     let raw = read(table, &["Speed"], flags);
     if let Some(raw) = checked(raw, "Speed", table, flags, |s| {
         let (n, tail) = speed(s)?;
+        if metadata(source, "creature", "shape")
+            .iter()
+            .any(|s| s.split(',').any(|s| s == "speed_text"))
+        {
+            return Ok(s.to_owned());
+        }
+        let n = if metadata(source, "creature", "shape")
+            .iter()
+            .any(|s| s.split(',').any(|s| s == "speed_max"))
+        {
+            s.split(',')
+                .filter_map(|part| {
+                    speed(
+                        part.trim()
+                            .trim_start_matches(|c: char| !c.is_ascii_digit()),
+                    )
+                    .ok()
+                    .map(|(n, _)| n)
+                })
+                .max()
+                .unwrap_or(n)
+        } else {
+            n
+        };
         stat(&mut stats, "speed", n);
         stats
             .get_mut("speed")
@@ -706,11 +745,18 @@ fn creature(table: &Table, source: &str, fields: &mut Mapping, flags: &mut Vec<F
             .as_mapping_mut()
             .unwrap()
             .insert("unit".into(), "ft".into());
-        Ok(if s.parse::<i64>().is_ok() {
-            n.to_string()
-        } else {
-            format!("{n} ft.{tail}")
-        })
+        Ok(
+            if metadata(source, "creature", "shape")
+                .iter()
+                .any(|s| s.split(',').any(|s| s == "speed_max"))
+            {
+                s.to_owned()
+            } else if s.parse::<i64>().is_ok() {
+                n.to_string()
+            } else {
+                format!("{n} ft.{tail}")
+            },
+        )
     }) && raw.parse::<i64>().is_err()
     {
         creature.insert("movement_text".into(), raw.into());
@@ -732,6 +778,7 @@ fn creature(table: &Table, source: &str, fields: &mut Mapping, flags: &mut Vec<F
             let line = table.row("Challenge").or_else(|| table.row("CR")).unwrap()[0].line;
             if let Some(printed) = printed_xp(&raw)
                 && printed != xp
+                && !metadata(source, "creature", "reward").contains(&"printed")
                 // CR 0 can award either 0 or 10 XP in the books.
                 && !(cr == "0" && printed == 0)
             {
@@ -868,6 +915,9 @@ fn spell(table: &Table, fields: &mut Mapping, flags: &mut Vec<Flag>) {
             map.insert("range_text".into(), raw.into());
         }
     }
+    if let Some(raw) = read(table, &["Range Text"], flags) {
+        map.insert("range_text".into(), raw.into());
+    }
     let raw = read(table, &["Components"], flags);
     if let Some((components, material)) = checked(raw, "Components", table, flags, |s| {
         let (head, material) = s.split_once('(').map_or((s, None), |(head, tail)| {
@@ -906,6 +956,18 @@ fn spell(table: &Table, fields: &mut Mapping, flags: &mut Vec<Flag>) {
         map.entry(Value::from("concentration"))
             .or_insert(false.into());
         map.insert("duration".into(), raw.into());
+    }
+    for (row, key) in [("Ritual", "ritual"), ("Concentration", "concentration")] {
+        let raw = read(table, &[row], flags);
+        if let Some(value) = checked(raw, row, table, flags, |s| {
+            match s.to_ascii_lowercase().as_str() {
+                "yes" | "true" => Ok(true),
+                "no" | "false" => Ok(false),
+                _ => Err("needs Yes or No".into()),
+            }
+        }) {
+            map.insert(key.into(), value.into());
+        }
     }
     fields.insert("splat_spell".into(), map.into());
 }
@@ -1033,6 +1095,12 @@ fn title_words(raw: String) -> String {
         .join(" ")
 }
 
+fn literal_type(fields: &Mapping) -> bool {
+    let raw = string(fields, "splat_creature", "type");
+    identity_value("type", &raw)
+        .is_some_and(|m| m.get("type").and_then(Value::as_str) != Some(raw.as_str()))
+}
+
 pub fn render(fields: &Mapping, kind: &str) -> String {
     let mut rows: Vec<(&str, String)> = Vec::new();
     match kind {
@@ -1047,6 +1115,8 @@ pub fn render(fields: &Mapping, kind: &str) -> String {
                         .and_then(Value::as_str)
                         .map(str::to_owned)
                         .unwrap_or_else(|| printed_identity(string(fields, "splat_creature", key)))
+                } else if name == "Type" && literal_type(fields) {
+                    string(fields, "splat_creature", "type")
                 } else if name == "Type" {
                     let mut value = val(fields, "splat_creature", "type_options_text")
                         .and_then(Value::as_str)
@@ -1065,23 +1135,43 @@ pub fn render(fields: &Mapping, kind: &str) -> String {
                     rows.push((name, value));
                 }
             }
+            if literal_type(fields) {
+                for (row, key) in [
+                    ("Type Tags", "tags_text"),
+                    ("Type Options", "type_options_text"),
+                ] {
+                    if let Some(raw) = val(fields, "splat_creature", key).and_then(Value::as_str) {
+                        rows.push((row, raw.into()));
+                    }
+                }
+            }
             for (name, key, prose) in [
                 ("Armor Class", "armor_class", "armor_class_text"),
                 ("Hit Points", "max_hp", "hit_points_text"),
                 ("Initiative", "initiative", ""),
                 ("Speed", "speed", "movement_text"),
             ] {
-                let value = numeric(fields, key).map_or_else(String::new, |n| {
-                    let printed = string(fields, "splat_creature", prose);
-                    if !printed.is_empty() {
-                        printed
-                    } else if key == "initiative" {
-                        n.checked_add(10)
-                            .map_or_else(|| signed(n), |passive| format!("{n:+} ({passive})"))
-                    } else {
-                        n.to_string()
-                    }
-                });
+                let value = numeric(fields, key).map_or_else(
+                    || {
+                        val(fields, "splat_stats", key)
+                            .and_then(|s| s.get("derive"))
+                            .map(|expression| {
+                                format!("= {}", serde_json::to_string(expression).expect("formula"))
+                            })
+                            .unwrap_or_else(|| string(fields, "splat_creature", prose))
+                    },
+                    |n| {
+                        let printed = string(fields, "splat_creature", prose);
+                        if !printed.is_empty() {
+                            printed
+                        } else if key == "initiative" {
+                            n.checked_add(10)
+                                .map_or_else(|| signed(n), |passive| format!("{n:+} ({passive})"))
+                        } else {
+                            n.to_string()
+                        }
+                    },
+                );
                 rows.push((name, value));
             }
             rows.push(("Challenge", string(fields, "splat_creature", "cr_text")));
@@ -1185,6 +1275,19 @@ pub fn render(fields: &Mapping, kind: &str) -> String {
                     }
                 };
                 rows.push((name, value));
+            }
+            for (name, key) in [("Ritual", "ritual"), ("Concentration", "concentration")] {
+                if let Some(value) = val(fields, "splat_spell", key).and_then(Value::as_bool) {
+                    rows.push((name, if value { "Yes" } else { "No" }.into()));
+                }
+            }
+            if val(fields, "splat_spell", "range")
+                .and_then(|v| v.get("feet"))
+                .and_then(Value::as_u64)
+                .is_some()
+                && let Some(raw) = val(fields, "splat_spell", "range_text").and_then(Value::as_str)
+            {
+                rows.push(("Range Text", raw.into()));
             }
         }
         _ => {
@@ -1312,6 +1415,64 @@ fn remove_optional(fields: &mut Mapping, path: &str) {
 pub fn conversion(fields: &Mapping, kind: &str) -> Result<(String, Vec<(String, Value)>), String> {
     let mut rendered = render(fields, kind);
     let mut shapes = Vec::new();
+    if literal_type(fields) {
+        shapes.push("type_literal");
+    }
+    if val(fields, "splat_item", "rarity")
+        .and_then(Value::as_str)
+        .is_some_and(|raw| {
+            ![
+                "common",
+                "uncommon",
+                "rare",
+                "very_rare",
+                "legendary",
+                "artifact",
+                "varies",
+                "rarity_varies",
+                "same",
+            ]
+            .contains(&raw)
+        })
+    {
+        shapes.push("rarity_text");
+    }
+    if string(fields, "splat_creature", "size").contains(' ')
+        && val(fields, "splat_creature", "size_options_text").is_none()
+    {
+        shapes.push("size_literal");
+    }
+    if val(fields, "splat_spell", "range_text").is_some()
+        && val(fields, "splat_spell", "range")
+            .and_then(|v| v.get("feet"))
+            .and_then(Value::as_u64)
+            .is_none()
+    {
+        shapes.push("range_text");
+    }
+
+    if kind == "creature" {
+        if numeric(fields, "max_hp").is_none()
+            && val(fields, "splat_creature", "hit_points_text").is_some()
+        {
+            shapes.push("hp_text");
+        }
+        if numeric(fields, "armor_class").is_none()
+            && val(fields, "splat_creature", "armor_class_text").is_some()
+        {
+            shapes.push("ac_text");
+        }
+        let movement = string(fields, "splat_creature", "movement_text");
+        if numeric(fields, "speed").is_none() && !movement.is_empty() {
+            shapes.push("speed_text");
+        }
+
+        if numeric(fields, "speed")
+            .is_some_and(|n| speed(&movement).is_ok_and(|(first, _)| n != first))
+        {
+            shapes.push("speed_max");
+        }
+    }
     if val(fields, "splat_spell", "casting_time").is_some_and(Value::is_mapping) {
         shapes.push("casting_time");
     }
@@ -1352,14 +1513,19 @@ pub fn conversion(fields: &Mapping, kind: &str) -> Result<(String, Vec<(String, 
             .cloned()
             .unwrap_or_default();
         if let Some(map) = parsed.get(*root).and_then(Value::as_mapping) {
-            subtract(&mut extra, map)?;
+            subtract(&mut extra, map, root)?;
         }
         let mut invalid = Vec::new();
         let mut checked = extra.clone();
         reject_owned(&mut checked, root, &mut invalid);
         if !invalid.is_empty() {
             return Err(format!(
-                "Review unsupported {root} values before converting"
+                "Review unsupported {root} values before converting: {}",
+                invalid
+                    .iter()
+                    .map(|f| f.message.as_str())
+                    .collect::<Vec<_>>()
+                    .join(", ")
             ));
         }
         if !extra.is_empty() {
@@ -1369,18 +1535,25 @@ pub fn conversion(fields: &Mapping, kind: &str) -> Result<(String, Vec<(String, 
     Ok((rendered, extras))
 }
 
-fn subtract(extra: &mut Mapping, printed: &Mapping) -> Result<(), String> {
+fn subtract(extra: &mut Mapping, printed: &Mapping, path: &str) -> Result<(), String> {
     for (key, value) in printed {
         if let Some(old) = extra.get_mut(key) {
             if let (Some(old), Some(new)) = (old.as_mapping_mut(), value.as_mapping()) {
-                subtract(old, new)?;
+                subtract(
+                    old,
+                    new,
+                    &format!("{path}/{}", key.as_str().unwrap_or("field")),
+                )?;
                 if old.is_empty() {
                     extra.remove(key);
                 }
             } else if old == value {
                 extra.remove(key);
             } else {
-                return Err("The printed stats and saved stats disagree.".into());
+                return Err(format!(
+                    "The printed stats and saved stats disagree: {path}/{}",
+                    key.as_str().unwrap_or("field")
+                ));
             }
         }
     }
@@ -1584,6 +1757,23 @@ pub fn patch(text: &str, changes: &[(&str, Option<Value>)]) -> Result<String, St
                     )?;
                 }
             }
+        }
+    }
+    let (_, old_extras) = conversion(&entry.fields, kind)?;
+    let (_, new_extras) = conversion(&expected, kind)?;
+    for root in roots(kind) {
+        let key = format!("{root}_extras");
+        let empty = Value::Mapping(Mapping::new());
+        let before = old_extras
+            .iter()
+            .find(|(k, _)| k == &key)
+            .map_or(&empty, |(_, v)| v);
+        let desired = new_extras
+            .iter()
+            .find(|(k, _)| k == &key)
+            .map_or(&empty, |(_, v)| v);
+        if desired != before {
+            after = super::formats::patch_fence(&after, &key, desired)?;
         }
     }
     let checked = Entry::parse("note.md", &after)?;
@@ -1835,6 +2025,11 @@ pub fn reading_body(entry: &Entry, body: &str) -> String {
     };
     for head in heads {
         if let Some(table) = stat_section.table(head) {
+            let extra_rows: &[&str] = match kind {
+                "spell" => &["Ritual", "Concentration", "Range Text"],
+                "creature" => &["Type Tags", "Type Options"],
+                _ => &[],
+            };
             let known = |name: &str| {
                 (if kind == "spell" {
                     SPELL_ROWS
@@ -1844,6 +2039,7 @@ pub fn reading_body(entry: &Entry, body: &str) -> String {
                     CREATURE_ROWS
                 })
                 .iter()
+                .chain(extra_rows.iter())
                 .chain(["HP", "AC", "CR"].iter())
                 .chain(DETAILS.iter().map(|(name, _)| name))
                 .any(|n| layout::label(n) == layout::label(name))

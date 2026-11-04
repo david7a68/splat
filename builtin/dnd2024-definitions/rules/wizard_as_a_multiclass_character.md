@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: dc625776-3147-5cd3-98e7-20bf3e5cde4e
 splat_kind: rule
 splat_key: dnd2024:rules/wizard_as_a_multiclass_character
 splat_name: As a Multiclass Character
-splat_origin:
-  key: dnd2024:reference/pages/077
+splat_origin: dnd2024:reference/pages/077
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 77
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 77, https://www.dndbeyond.com/srd
 ---
 
 # As a Multiclass Character

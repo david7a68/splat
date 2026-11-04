@@ -1,10 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "e916d962-b311-5377-a2e0-215604a0848a"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/magic_item/staff_of_thunder_and_lightning"
 splat_name: "Staff of Thunder and Lightning"
-splat_reference: {"source": "SRD 5.2.1", "category": "magic_item", "pages": [247, 248], "executable": false}
+splat_pages:
+- 247
+- 248
 ---
 
 # Staff of Thunder and Lightning
@@ -28,3 +30,13 @@ Lightning Strike. You can take a Magic action to cause a bolt of lightning to le
 Thunderclap. You can take a Magic action to cause the staff to produce a thunderclap audible out to 600 feet. Every creature within a 60-foot Emanation originating from you makes a DC 17 Constitution saving throw. On a failed save, a creature takes 2d6 Thunder damage and has the Deafened condition for 1 minute. On a successful save, a creature takes half as much damage only.
 
 Original layout: [[../pages/247|page 247]], [[../pages/248|page 248]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: magic_item
+> executable: false
+> ```
+

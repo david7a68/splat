@@ -1,34 +1,60 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 08ef1af3-e4b0-5309-a741-163066ff99df
 splat_kind: creature
 splat_key: dnd2024:creatures/darkmantle
 splat_name: Darkmantle
-splat_origin:
-  key: dnd2024:reference/creature/darkmantle
+splat_origin: dnd2024:reference/creature/darkmantle
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 278, 279
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 278, 279, https://www.dndbeyond.com/srd
 ---
 
 # Darkmantle
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Small |
+| Type | Aberration |
+| Alignment | Unaligned |
+| Armor Class | 11 |
+| Hit Points | 22 (5d6 + 5) |
+| Initiative | +3 (13) |
+| Speed | 10 ft., Fly 30 ft. |
+| Challenge | 1/2 (XP 100; PB +2) |
+| Skills | Stealth +3 |
+| Senses | Blindsight 60 ft.; Passive Perception 10 |
+| Languages | None |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 16 | +3 | +3 |
+| Dex | 12 | +1 | +1 |
+| Con | 13 | +1 | +1 |
+| Int | 2 | -4 | -4 |
+| Wis | 10 | +0 | +0 |
+| Cha | 5 | -3 | -3 |
+
 
 ## Source text
 
 <!-- SRD page 278 -->
 
-Small Aberration, Unaligned\
-AC 11 Initiative +3 (13)\
-HP 22 (5d6 + 5)\
-Speed 10 ft., Fly 30 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 16 +3 +3 Dex 12 +1 +1 Con 13 +1 +1\
-Int 2 −4 −4 Wis 10 +0 +0 Cha 5 −3 −3\
-Skills Stealth +3\
-Senses Blindsight 60 ft.; Passive Perception 10\
-Languages None\
-CR 1/2 (XP 100; PB +2)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Small Aberration, Unaligned\
+> AC 11 Initiative +3 (13)\
+> HP 22 (5d6 + 5)\
+> Speed 10 ft., Fly 30 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 16 +3 +3 Dex 12 +1 +1 Con 13 +1 +1\
+> Int 2 −4 −4 Wis 10 +0 +0 Cha 5 −3 −3\
+> Skills Stealth +3\
+> Senses Blindsight 60 ft.; Passive Perception 10\
+> Languages None\
+> CR 1/2 (XP 100; PB +2)
+
 
 <!-- SRD page 279 -->
 
@@ -44,46 +70,11 @@ Darkness Aura (1/Day). Magical Darkness fills a 15-foot Emanation originating fr
 
 Original layout: [[../../srd-5.2.1/pages/278|page 278]], [[../../srd-5.2.1/pages/279|page 279]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` small ` |
-| ` type ` | ` aberration ` |
-| ` alignment ` | ` Unaligned ` |
-| ` movement_text ` | ` 10 ft., Fly 30 ft. ` |
-| ` skills_text ` | ` Stealth +3 ` |
-| ` senses_text ` | ` Blindsight 60 ft.; Passive Perception 10 ` |
-| ` languages_text ` | ` None ` |
-| ` cr_text ` | ` 1/2 (XP 100; PB +2) ` |
-| ` hit_points_text ` | ` 22 (5d6 + 5) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 16 ` | ` 3 ` |
-| ` Dexterity ` | ` 12 ` | ` 1 ` |
-| ` Constitution ` | ` 13 ` | ` 1 ` |
-| ` Intelligence ` | ` 2 ` | ` -4 ` |
-| ` Wisdom ` | ` 10 ` | ` 0 ` |
-| ` Charisma ` | ` 5 ` | ` -3 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 11 ` |  |
-| ` max_hp ` | ` 22 ` |  |
-| ` initiative ` | ` 3 ` |  |
-| ` speed ` | ` 10 ` | ` ft ` |
-| ` fly_speed ` | ` 30 ` | ` ft ` |
 
 ## Health
 
@@ -230,3 +221,13 @@ geometry:
 unlisted_success_branch: no_effect
 unlisted_duration: until_removed_by_applicable_rule
 ```
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_stats_extras -->
+> 
+> ```yaml
+> fly_speed:
+>   unit: ft
+>   value: 30
+> ```
+

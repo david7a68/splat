@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 8be02c9d-0f00-5118-bd24-e510f38d46d6
 splat_kind: item
 splat_key: dnd2024:items/nine_lives_stealer
 splat_name: Nine Lives Stealer
-splat_origin:
-  key: dnd2024:reference/magic_item/nine_lives_stealer
+splat_origin: dnd2024:reference/magic_item/nine_lives_stealer
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 233
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 233, https://www.dndbeyond.com/srd
 ---
 
 # Nine Lives Stealer
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Weapon |
+| Rarity | Very Rare |
+| Attunement | Yes |
+
 
 ## Source text
 
@@ -26,22 +33,9 @@ Life Stealing. The weapon has 1d8 + 1 charges. When you attack a creature that h
 
 Original layout: [[../../srd-5.2.1/pages/233|page 233]].
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` weapon ` |
-| ` rarity ` | ` very_rare ` |
 
-### Equipment
-
-<!-- splat:values path=splat_item/equipment -->
-
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` required ` |
 
 ## Rule
 

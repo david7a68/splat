@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 8de80790-d19b-520d-8f3a-3e6c7a91eba8
 splat_kind: spell
 splat_key: dnd2024:spells/faithful_hound
 splat_name: Faithful Hound
-splat_origin:
-  key: dnd2024:reference/spell/faithful_hound
+splat_origin: dnd2024:reference/spell/faithful_hound
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 129
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 129, https://www.dndbeyond.com/srd
 ---
 
 # Faithful Hound
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 4 |
+| School | Conjuration |
+| Classes | Wizard |
+| Casting Time | Action |
+| Range | 30 feet |
+| Components | V, S, M (a silver whistle) |
+| Duration | 8 hours |
+
 
 ## Source text
 
@@ -34,37 +45,11 @@ On your later turns, you can take a Magic action to move the hound up to 30 feet
 
 Original layout: [[../../srd-5.2.1/pages/129|page 129]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 4 ` |
-| ` school ` | ` conjuration ` |
-| ` classes ` | ` ["wizard"] ` |
-| ` components ` | ` ["verbal", "somatic", "material"] ` |
-| ` concentration ` | ` false ` |
-| ` duration ` | ` 8 hours ` |
-| ` casting_time ` | ` Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
 
-<!-- splat:values path=splat_spell/range -->
 
-| Field | Value |
-| --- | --- |
-| ` feet ` | ` 30 ` |
-
-### Material
-
-<!-- splat:values path=splat_spell/material -->
-
-| Field | Value |
-| --- | --- |
-| ` description ` | ` a silver whistle ` |
-| ` consumed ` | ` false ` |
 
 ## Rule
 
@@ -148,3 +133,12 @@ maximum:
   value: 8
   unit: hour
 ```
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_spell_extras -->
+> 
+> ```yaml
+> material:
+>   consumed: false
+> ```
+

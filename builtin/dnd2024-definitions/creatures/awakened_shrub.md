@@ -1,35 +1,62 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 5afec75c-7981-5ce1-b7f7-3469de75b409
 splat_kind: creature
 splat_key: dnd2024:creatures/awakened_shrub
 splat_name: Awakened Shrub
-splat_origin:
-  key: dnd2024:reference/creature/awakened_shrub
+splat_origin: dnd2024:reference/creature/awakened_shrub
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 260
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 260, https://www.dndbeyond.com/srd
 ---
 
 # Awakened Shrub
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Small |
+| Type | Plant |
+| Alignment | Neutral |
+| Armor Class | 9 |
+| Hit Points | 10 (3d6) |
+| Initiative | -1 (9) |
+| Speed | 20 ft. |
+| Challenge | 0 (XP 10; PB +2) |
+| Senses | Passive Perception 10 |
+| Languages | Common plus one other language |
+| Resistances | Piercing |
+| Vulnerabilities | Fire |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 3 | -4 | -4 |
+| Dex | 8 | -1 | -1 |
+| Con | 11 | +0 | +0 |
+| Int | 10 | +0 | +0 |
+| Wis | 10 | +0 | +0 |
+| Cha | 6 | -2 | -2 |
+
 
 ## Source text
 
 <!-- SRD page 260 -->
 
-Small Plant, Neutral\
-AC 9 Initiative −1 (9)\
-HP 10 (3d6)\
-Speed 20 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 3 −4 −4 Dex 8 −1 −1 Con 11 +0 +0\
-Int 10 +0 +0 Wis 10 +0 +0 Cha 6 −2 −2\
-Vulnerabilities Fire\
-Resistances Piercing\
-Senses Passive Perception 10\
-Languages Common plus one other language\
-CR 0 (XP 10; PB +2)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Small Plant, Neutral\
+> AC 9 Initiative −1 (9)\
+> HP 10 (3d6)\
+> Speed 20 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 3 −4 −4 Dex 8 −1 −1 Con 11 +0 +0\
+> Int 10 +0 +0 Wis 10 +0 +0 Cha 6 −2 −2\
+> Vulnerabilities Fire\
+> Resistances Piercing\
+> Senses Passive Perception 10\
+> Languages Common plus one other language\
+> CR 0 (XP 10; PB +2)
+
 
 ### Actions
 
@@ -37,46 +64,11 @@ Rake. Melee Attack Roll: +1, reach 5 ft. Hit: 1 Slashing damage.
 
 Original layout: [[../../srd-5.2.1/pages/260|page 260]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` small ` |
-| ` type ` | ` plant ` |
-| ` alignment ` | ` Neutral ` |
-| ` movement_text ` | ` 20 ft. ` |
-| ` resistances_text ` | ` Piercing ` |
-| ` vulnerabilities_text ` | ` Fire ` |
-| ` senses_text ` | ` Passive Perception 10 ` |
-| ` languages_text ` | ` Common plus one other language ` |
-| ` cr_text ` | ` 0 (XP 10; PB +2) ` |
-| ` hit_points_text ` | ` 10 (3d6) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 3 ` | ` -4 ` |
-| ` Dexterity ` | ` 8 ` | ` -1 ` |
-| ` Constitution ` | ` 11 ` | ` 0 ` |
-| ` Intelligence ` | ` 10 ` | ` 0 ` |
-| ` Wisdom ` | ` 10 ` | ` 0 ` |
-| ` Charisma ` | ` 6 ` | ` -2 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 9 ` |  |
-| ` max_hp ` | ` 10 ` |  |
-| ` initiative ` | ` -1 ` |  |
-| ` speed ` | ` 20 ` | ` ft ` |
 
 ## Health
 

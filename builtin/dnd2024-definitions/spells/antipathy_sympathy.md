@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: eb5016a9-6e24-5df0-8b55-1fde1a9b0d32
 splat_kind: spell
 splat_key: dnd2024:spells/antipathy_sympathy
 splat_name: Antipathy/Sympathy
-splat_origin:
-  key: dnd2024:reference/spell/antipathy_sympathy
+splat_origin: dnd2024:reference/spell/antipathy_sympathy
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 109, 110
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 109, 110, https://www.dndbeyond.com/srd
 ---
 
 # Antipathy/Sympathy
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 8 |
+| School | Enchantment |
+| Classes | Bard, Druid, Wizard |
+| Casting Time | 1 hour |
+| Range | 60 feet |
+| Components | V, S, M (a mix of vinegar and honey) |
+| Duration | 10 days |
+
 
 ## Source text
 
@@ -36,37 +47,11 @@ Ending the Effect. If the Frightened or Charmed creature ends its turn more than
 
 Original layout: [[../../srd-5.2.1/pages/109|page 109]], [[../../srd-5.2.1/pages/110|page 110]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 8 ` |
-| ` school ` | ` enchantment ` |
-| ` classes ` | ` ["bard", "druid", "wizard"] ` |
-| ` components ` | ` ["verbal", "somatic", "material"] ` |
-| ` concentration ` | ` false ` |
-| ` duration ` | ` 10 days ` |
-| ` casting_time ` | ` 1 hour ` |
-| ` ritual ` | ` false ` |
 
-### Range
 
-<!-- splat:values path=splat_spell/range -->
 
-| Field | Value |
-| --- | --- |
-| ` feet ` | ` 60 ` |
-
-### Material
-
-<!-- splat:values path=splat_spell/material -->
-
-| Field | Value |
-| --- | --- |
-| ` description ` | ` a mix of vinegar and honey ` |
-| ` consumed ` | ` false ` |
 
 ## Rule
 
@@ -173,3 +158,12 @@ sympathy:
 | ` chooser ` | ` caster ` |
 | ` options ` | ` ["antipathy", "sympathy"] ` |
 | ` at ` | ` cast ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_spell_extras -->
+> 
+> ```yaml
+> material:
+>   consumed: false
+> ```
+

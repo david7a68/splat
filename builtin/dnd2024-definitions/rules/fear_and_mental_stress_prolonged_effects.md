@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: ae96b156-df76-5e73-9bcb-fef056e1f8fe
 splat_kind: rule
 splat_key: dnd2024:rules/fear_and_mental_stress_prolonged_effects
 splat_name: Prolonged Effects
-splat_origin:
-  key: dnd2024:reference/pages/196
+splat_origin: dnd2024:reference/pages/196
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 196
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 196, https://www.dndbeyond.com/srd
 ---
 
 # Prolonged Effects

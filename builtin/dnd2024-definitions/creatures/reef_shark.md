@@ -1,34 +1,60 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 642cf218-adec-5322-a5c7-2c40ca2cee34
 splat_kind: creature
 splat_key: dnd2024:creatures/reef_shark
 splat_name: Reef Shark
-splat_origin:
-  key: dnd2024:reference/creature/reef_shark
+splat_origin: dnd2024:reference/creature/reef_shark
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 360
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 360, https://www.dndbeyond.com/srd
 ---
 
 # Reef Shark
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Medium |
+| Type | Beast |
+| Alignment | Unaligned |
+| Armor Class | 12 |
+| Hit Points | 22 (4d8 + 4) |
+| Initiative | +2 (12) |
+| Speed | 5 ft., Swim 30 ft. |
+| Challenge | 1/2 (XP 100; PB +2) |
+| Skills | Perception +2 |
+| Senses | Blindsight 30 ft.; Passive Perception 12 |
+| Languages | None |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 14 | +2 | +2 |
+| Dex | 15 | +2 | +2 |
+| Con | 13 | +1 | +1 |
+| Int | 1 | -5 | -5 |
+| Wis | 10 | +0 | +0 |
+| Cha | 4 | -3 | -3 |
+
 
 ## Source text
 
 <!-- SRD page 360 -->
 
-Medium Beast, Unaligned\
-AC 12  Initiative +2 (12)\
-HP 22 (4d8 + 4)\
-Speed 5 ft., Swim 30 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str  14 +2 +2 Dex 15 +2 +2 Con 13 +1 +1\
-Int 1 −5 −5 Wis 10 +0 +0 Cha  4 −3 −3\
-Skills Perception +2\
-Senses Blindsight 30 ft.; Passive Perception 12\
-Languages None\
-CR 1/2 (XP 100; PB +2)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Medium Beast, Unaligned\
+> AC 12  Initiative +2 (12)\
+> HP 22 (4d8 + 4)\
+> Speed 5 ft., Swim 30 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str  14 +2 +2 Dex 15 +2 +2 Con 13 +1 +1\
+> Int 1 −5 −5 Wis 10 +0 +0 Cha  4 −3 −3\
+> Skills Perception +2\
+> Senses Blindsight 30 ft.; Passive Perception 12\
+> Languages None\
+> CR 1/2 (XP 100; PB +2)
+
 
 ### Traits
 
@@ -42,46 +68,11 @@ Bite. Melee Attack Roll: +4, reach 5 ft. Hit: 7 (2d4 + 2) Piercing damage.
 
 Original layout: [[../../srd-5.2.1/pages/360|page 360]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` medium ` |
-| ` type ` | ` beast ` |
-| ` alignment ` | ` Unaligned ` |
-| ` movement_text ` | ` 5 ft., Swim 30 ft. ` |
-| ` skills_text ` | ` Perception +2 ` |
-| ` senses_text ` | ` Blindsight 30 ft.; Passive Perception 12 ` |
-| ` languages_text ` | ` None ` |
-| ` cr_text ` | ` 1/2 (XP 100; PB +2) ` |
-| ` hit_points_text ` | ` 22 (4d8 + 4) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 14 ` | ` 2 ` |
-| ` Dexterity ` | ` 15 ` | ` 2 ` |
-| ` Constitution ` | ` 13 ` | ` 1 ` |
-| ` Intelligence ` | ` 1 ` | ` -5 ` |
-| ` Wisdom ` | ` 10 ` | ` 0 ` |
-| ` Charisma ` | ` 4 ` | ` -3 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 12 ` |  |
-| ` max_hp ` | ` 22 ` |  |
-| ` initiative ` | ` 2 ` |  |
-| ` speed ` | ` 5 ` | ` ft ` |
-| ` swim_speed ` | ` 30 ` | ` ft ` |
 
 ## Health
 
@@ -207,3 +198,13 @@ hit:
 | ` provider ` | ` caller ` |
 | ` required_facts ` | ` ["distance", "area_membership", "visibility", "occupancy", "movement_path"] ` |
 | ` validate_against_typed_constraints ` | ` true ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_stats_extras -->
+> 
+> ```yaml
+> swim_speed:
+>   unit: ft
+>   value: 30
+> ```
+

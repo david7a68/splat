@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "7a1c096a-4ae8-51c2-a98b-8fdeff177325"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/stone_golem"
 splat_name: "Stone Golem"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [330], "executable": false}
+splat_pages:
+- 330
 ---
 
 # Stone Golem
@@ -42,3 +43,13 @@ Force Bolt. Ranged Attack Roll: +9, range 120 ft. Hit: 22 (4d10) Force damage.
 Slow (Recharge 5–6). The golem casts the Slow spell, requiring no spell components and using Constitution as the spellcasting ability (spell save DC 17).
 
 Original layout: [[../pages/330|page 330]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

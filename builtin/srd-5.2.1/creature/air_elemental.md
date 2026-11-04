@@ -1,10 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "b969e905-1ad3-5a0d-afd2-dd88574e441b"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/air_elemental"
 splat_name: "Air Elemental"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [258, 259], "executable": false}
+splat_pages:
+- 258
+- 259
 ---
 
 # Air Elemental
@@ -39,3 +41,13 @@ Thunderous Slam. Melee Attack Roll: +8, reach 10 ft. Hit: 14 (2d8 + 5) Thunder d
 Whirlwind (Recharge 4–6). Strength Saving Throw: DC 13, one Medium or smaller creature in the elemental’s space. Failure: 24 (4d10 + 2) Thunder damage, and the target is pushed up to 20 feet straight away from the elemental and has the Prone condition. Success: Half damage only.
 
 Original layout: [[../pages/258|page 258]], [[../pages/259|page 259]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

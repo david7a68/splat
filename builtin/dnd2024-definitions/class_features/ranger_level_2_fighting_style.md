@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 04c58699-471e-574d-a658-a0587f19a46e
 splat_kind: rule
 splat_key: dnd2024:class_features/ranger_level_2_fighting_style
 splat_name: 'Level 2: Fighting Style'
-splat_origin:
-  key: dnd2024:reference/pages/059
+splat_origin: dnd2024:reference/pages/059
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 59
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 59, https://www.dndbeyond.com/srd
 ---
 
 # Level 2: Fighting Style

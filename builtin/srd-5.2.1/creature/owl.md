@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "1c75278e-574e-5a00-b246-a14498ca8133"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/owl"
 splat_name: "Owl"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [358], "executable": false}
+splat_pages:
+- 358
 ---
 
 # Owl
@@ -32,3 +33,13 @@ Flyby. The owl doesn’t provoke an Opportunity Attack when it flies out of an e
 Talons. Melee Attack Roll: +3, reach 5 ft. Hit: 1 Slashing damage.
 
 Original layout: [[../pages/358|page 358]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

@@ -1,34 +1,60 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 4ab35862-e512-5bcd-8355-32675ab13c81
 splat_kind: creature
 splat_key: dnd2024:creatures/tyrannosaurus_rex
 splat_name: Tyrannosaurus Rex
-splat_origin:
-  key: dnd2024:reference/creature/tyrannosaurus_rex
+splat_origin: dnd2024:reference/creature/tyrannosaurus_rex
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 363
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 363, https://www.dndbeyond.com/srd
 ---
 
 # Tyrannosaurus Rex
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Huge |
+| Type | Beast (Dinosaur) |
+| Alignment | Unaligned |
+| Armor Class | 13 |
+| Hit Points | 136 (13d12 + 52) |
+| Initiative | +3 (13) |
+| Speed | 50 ft. |
+| Challenge | 8 (XP 3,900; PB +3) |
+| Skills | Perception +4 |
+| Senses | Passive Perception 14 |
+| Languages | None |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 25 | +7 | +10 |
+| Dex | 10 | +0 | +0 |
+| Con | 19 | +4 | +4 |
+| Int | 2 | -4 | -4 |
+| Wis | 12 | +1 | +4 |
+| Cha | 9 | -1 | -1 |
+
 
 ## Source text
 
 <!-- SRD page 363 -->
 
-Huge Beast (Dinosaur), Unaligned\
-AC 13 Initiative +3 (13)\
-HP 136 (13d12 + 52)\
-Speed 50 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str  25 +7 +10 Dex 10 +0 +0 Con 19 +4 +4\
-Int 2 −4 −4 Wis 12 +1 +4 Cha 9 −1 −1\
-Skills Perception +4\
-Senses Passive Perception 14\
-Languages None\
-CR 8 (XP 3,900; PB +3)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Huge Beast (Dinosaur), Unaligned\
+> AC 13 Initiative +3 (13)\
+> HP 136 (13d12 + 52)\
+> Speed 50 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str  25 +7 +10 Dex 10 +0 +0 Con 19 +4 +4\
+> Int 2 −4 −4 Wis 12 +1 +4 Cha 9 −1 −1\
+> Skills Perception +4\
+> Senses Passive Perception 14\
+> Languages None\
+> CR 8 (XP 3,900; PB +3)
+
 
 ### Actions
 
@@ -40,46 +66,11 @@ Tail. Melee Attack Roll: +10, reach 15 ft. Hit: 25 (4d8 + 7) Bludgeoning damage.
 
 Original layout: [[../../srd-5.2.1/pages/363|page 363]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` huge ` |
-| ` type ` | ` beast ` |
-| ` alignment ` | ` Unaligned ` |
-| ` tags_text ` | ` (Dinosaur) ` |
-| ` movement_text ` | ` 50 ft. ` |
-| ` skills_text ` | ` Perception +4 ` |
-| ` senses_text ` | ` Passive Perception 14 ` |
-| ` languages_text ` | ` None ` |
-| ` cr_text ` | ` 8 (XP 3,900; PB +3) ` |
-| ` hit_points_text ` | ` 136 (13d12 + 52) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 25 ` | ` 10 ` |
-| ` Dexterity ` | ` 10 ` | ` 0 ` |
-| ` Constitution ` | ` 19 ` | ` 4 ` |
-| ` Intelligence ` | ` 2 ` | ` -4 ` |
-| ` Wisdom ` | ` 12 ` | ` 4 ` |
-| ` Charisma ` | ` 9 ` | ` -1 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 13 ` |  |
-| ` max_hp ` | ` 136 ` |  |
-| ` initiative ` | ` 3 ` |  |
-| ` speed ` | ` 50 ` | ` ft ` |
 
 ## Health
 

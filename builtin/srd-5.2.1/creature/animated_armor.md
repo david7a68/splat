@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "f6af3aa9-75d3-5e47-b1c9-ac6879e4d5ba"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/animated_armor"
 splat_name: "Animated Armor"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [259], "executable": false}
+splat_pages:
+- 259
 ---
 
 # Animated Armor
@@ -30,3 +31,13 @@ Multiattack. The armor makes two Slam attacks.
 Slam. Melee Attack Roll: +4, reach 5 ft. Hit: 5 (1d6 + 2) Bludgeoning damage.
 
 Original layout: [[../pages/259|page 259]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

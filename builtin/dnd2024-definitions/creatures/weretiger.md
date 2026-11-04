@@ -1,35 +1,64 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 0da660ab-67e1-52d2-a3f6-5656c40c6fd8
 splat_kind: creature
 splat_key: dnd2024:creatures/weretiger
 splat_name: Weretiger
-splat_origin:
-  key: dnd2024:reference/creature/weretiger
+splat_origin: dnd2024:reference/creature/weretiger
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 339
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 339, https://www.dndbeyond.com/srd
 ---
 
 # Weretiger
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Medium or Small |
+| Type | Monstrosity (Lycanthrope) |
+| Alignment | Neutral |
+| Armor Class | 12 |
+| Hit Points | 120 (16d8 + 48) |
+| Initiative | +2 (12) |
+| Speed | 30 ft., 40 ft. (tiger form only) |
+| Challenge | 4 (XP 1,100; PB +2) |
+| Skills | Perception +5, Stealth +4 |
+| Senses | Darkvision 60 ft.; Passive Perception 15 |
+| Languages | Common (can’t speak in tiger form) |
+| Gear | Longbow |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 17 | +3 | +3 |
+| Dex | 15 | +2 | +2 |
+| Con | 16 | +3 | +3 |
+| Int | 10 | +0 | +0 |
+| Wis | 13 | +1 | +1 |
+| Cha | 11 | +0 | +0 |
+
+%% splat shape=speed_max %%
+
 
 ## Source text
 
 <!-- SRD page 339 -->
 
 Medium or Small Monstrosity (Lycanthrope), Neutral\
-AC 12 Initiative +2 (12)\
-HP 120 (16d8 + 48)\
-Speed 30 ft., 40 ft. (tiger form only)\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 17 +3 +3 Dex 15 +2 +2 Con 16 +3 +3\
-Int 10 +0 +0 Wis 13 +1 +1 Cha 11 +0 +0\
-Skills Perception +5, Stealth +4\
-Gear Longbow\
-Senses Darkvision 60 ft.; Passive Perception 15\
-Languages Common (can’t speak in tiger form)\
-CR 4 (XP 1,100; PB +2)
+> [!quote]- Printed stat block (not read; edit the table above)
+> AC 12 Initiative +2 (12)\
+> HP 120 (16d8 + 48)\
+> Speed 30 ft., 40 ft. (tiger form only)\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 17 +3 +3 Dex 15 +2 +2 Con 16 +3 +3\
+> Int 10 +0 +0 Wis 13 +1 +1 Cha 11 +0 +0\
+> Skills Perception +5, Stealth +4\
+> Gear Longbow\
+> Senses Darkvision 60 ft.; Passive Perception 15\
+> Languages Common (can’t speak in tiger form)\
+> CR 4 (XP 1,100; PB +2)
+
 
 ### Actions
 
@@ -49,48 +78,11 @@ Shape-Shift. The weretiger shape-shifts into a Large tiger-humanoid hybrid or a 
 
 Original layout: [[../../srd-5.2.1/pages/339|page 339]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` medium ` |
-| ` type ` | ` monstrosity ` |
-| ` alignment ` | ` Neutral ` |
-| ` size_options_text ` | ` Medium or Small ` |
-| ` tags_text ` | ` (Lycanthrope) ` |
-| ` movement_text ` | ` 30 ft., 40 ft. (tiger form only) ` |
-| ` skills_text ` | ` Perception +5, Stealth +4 ` |
-| ` gear_text ` | ` Longbow ` |
-| ` senses_text ` | ` Darkvision 60 ft.; Passive Perception 15 ` |
-| ` languages_text ` | ` Common (can’t speak in tiger form) ` |
-| ` cr_text ` | ` 4 (XP 1,100; PB +2) ` |
-| ` hit_points_text ` | ` 120 (16d8 + 48) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 17 ` | ` 3 ` |
-| ` Dexterity ` | ` 15 ` | ` 2 ` |
-| ` Constitution ` | ` 16 ` | ` 3 ` |
-| ` Intelligence ` | ` 10 ` | ` 0 ` |
-| ` Wisdom ` | ` 13 ` | ` 1 ` |
-| ` Charisma ` | ` 11 ` | ` 0 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 12 ` |  |
-| ` max_hp ` | ` 120 ` |  |
-| ` initiative ` | ` 2 ` |  |
-| ` speed ` | ` 40 ` | ` ft ` |
 
 ## Health
 

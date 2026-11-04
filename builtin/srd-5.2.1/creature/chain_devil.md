@@ -1,10 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "5b74353a-6182-5f60-aae5-cd900bb95382"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/chain_devil"
 splat_name: "Chain Devil"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [272, 273], "executable": false}
+splat_pages:
+- 272
+- 273
 ---
 
 # Chain Devil
@@ -45,3 +47,13 @@ Conjure Infernal Chain. The devil conjures a fiery chain to bind a creature. Dex
 Unnerving Gaze. Trigger: A creature the devil can see starts its turn within 30 feet of the devil and can see the devil. Response—Wisdom Saving Throw: DC 15, the triggering creature. Failure: The target has the Frightened condition until the end of its turn. Success: The target is immune to this devil’s Unnerving Gaze for 24 hours.
 
 Original layout: [[../pages/272|page 272]], [[../pages/273|page 273]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

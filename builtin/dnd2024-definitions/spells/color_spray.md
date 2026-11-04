@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 732c6263-2133-5754-a5da-900b6d33f302
 splat_kind: spell
 splat_key: dnd2024:spells/color_spray
 splat_name: Color Spray
-splat_origin:
-  key: dnd2024:reference/spell/color_spray
+splat_origin: dnd2024:reference/spell/color_spray
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 116
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 116, https://www.dndbeyond.com/srd
 ---
 
 # Color Spray
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 1 |
+| School | Illusion |
+| Classes | Bard, Sorcerer, Wizard |
+| Casting Time | Action |
+| Range |  |
+| Components | V, S, M (a pinch of colorful sand) |
+| Duration | Instantaneous |
+
 
 ## Source text
 
@@ -28,37 +39,11 @@ You launch a dazzling array of flashing, colorful light. Each creature in a 15-f
 
 Original layout: [[../../srd-5.2.1/pages/116|page 116]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 1 ` |
-| ` school ` | ` illusion ` |
-| ` classes ` | ` ["bard", "sorcerer", "wizard"] ` |
-| ` components ` | ` ["verbal", "somatic", "material"] ` |
-| ` concentration ` | ` false ` |
-| ` duration ` | ` Instantaneous ` |
-| ` casting_time ` | ` Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
 
-<!-- splat:values path=splat_spell/range -->
 
-| Field | Value |
-| --- | --- |
-| ` mode ` | ` self ` |
-
-### Material
-
-<!-- splat:values path=splat_spell/material -->
-
-| Field | Value |
-| --- | --- |
-| ` description ` | ` a pinch of colorful sand ` |
-| ` consumed ` | ` false ` |
 
 ## Rule
 
@@ -130,3 +115,14 @@ until:
 | ` source ` | ` supplied_world_geometry ` |
 | ` unknown_facts ` | ` require_resolution ` |
 | ` infer_unprovided_geometry ` | ` false ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_spell_extras -->
+> 
+> ```yaml
+> material:
+>   consumed: false
+> range:
+>   mode: self
+> ```
+

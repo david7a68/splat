@@ -1,35 +1,62 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 50fc4fa1-a370-5a94-8557-2cabebc8e410
 splat_kind: creature
 splat_key: dnd2024:creatures/ancient_white_dragon
 splat_name: Ancient White Dragon
-splat_origin:
-  key: dnd2024:reference/creature/ancient_white_dragon
+splat_origin: dnd2024:reference/creature/ancient_white_dragon
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 341
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 341, https://www.dndbeyond.com/srd
 ---
 
 # Ancient White Dragon
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Gargantuan |
+| Type | Dragon (Chromatic) |
+| Alignment | Chaotic Evil |
+| Armor Class | 20 |
+| Hit Points | 333 (18d20 + 144) |
+| Initiative | +12 (22) |
+| Speed | 40 ft., Burrow 40 ft., Fly 80 ft., Swim 40 ft. |
+| Challenge | 20 (XP 25,000, or 33,000 in lair; PB +6) |
+| Skills | Perception +13, Stealth +6 |
+| Senses | Blindsight 60 ft., Darkvision 120 ft.; Passive Perception 23 |
+| Languages | Common, Draconic |
+| Immunities | Cold |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 26 | +8 | +8 |
+| Dex | 10 | +0 | +6 |
+| Con | 26 | +8 | +8 |
+| Int | 10 | +0 | +0 |
+| Wis | 13 | +1 | +7 |
+| Cha | 18 | +4 | +4 |
+
 
 ## Source text
 
 <!-- SRD page 341 -->
 
-Gargantuan Dragon (Chromatic), Chaotic Evil\
-AC 20 Initiative +12 (22)\
-HP 333 (18d20 + 144)\
-Speed 40 ft., Burrow 40 ft., Fly 80 ft., Swim 40 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 26 +8 +8 Dex 10 +0 +6 Con 26 +8 +8\
-Int 10 +0 +0 Wis 13 +1 +7 Cha 18 +4 +4\
-Skills Perception +13, Stealth +6\
-Immunities Cold\
-Senses Blindsight 60 ft., Darkvision 120 ft.; Passive Perception 23\
-Languages Common, Draconic\
-CR 20 (XP 25,000, or 33,000 in lair; PB +6)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Gargantuan Dragon (Chromatic), Chaotic Evil\
+> AC 20 Initiative +12 (22)\
+> HP 333 (18d20 + 144)\
+> Speed 40 ft., Burrow 40 ft., Fly 80 ft., Swim 40 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 26 +8 +8 Dex 10 +0 +6 Con 26 +8 +8\
+> Int 10 +0 +0 Wis 13 +1 +7 Cha 18 +4 +4\
+> Skills Perception +13, Stealth +6\
+> Immunities Cold\
+> Senses Blindsight 60 ft., Darkvision 120 ft.; Passive Perception 23\
+> Languages Common, Draconic\
+> CR 20 (XP 25,000, or 33,000 in lair; PB +6)
+
 
 ### Traits
 
@@ -57,50 +84,11 @@ Pounce. The dragon moves up to half its Speed, and it makes one Rend attack.
 
 Original layout: [[../../srd-5.2.1/pages/341|page 341]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` gargantuan ` |
-| ` type ` | ` dragon ` |
-| ` alignment ` | ` Chaotic Evil ` |
-| ` tags_text ` | ` (Chromatic) ` |
-| ` movement_text ` | ` 40 ft., Burrow 40 ft., Fly 80 ft., Swim 40 ft. ` |
-| ` skills_text ` | ` Perception +13, Stealth +6 ` |
-| ` immunities_text ` | ` Cold ` |
-| ` senses_text ` | ` Blindsight 60 ft., Darkvision 120 ft.; Passive Perception 23 ` |
-| ` languages_text ` | ` Common, Draconic ` |
-| ` cr_text ` | ` 20 (XP 25,000, or 33,000 in lair; PB +6) ` |
-| ` hit_points_text ` | ` 333 (18d20 + 144) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 26 ` | ` 8 ` |
-| ` Dexterity ` | ` 10 ` | ` 6 ` |
-| ` Constitution ` | ` 26 ` | ` 8 ` |
-| ` Intelligence ` | ` 10 ` | ` 0 ` |
-| ` Wisdom ` | ` 13 ` | ` 7 ` |
-| ` Charisma ` | ` 18 ` | ` 4 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 20 ` |  |
-| ` max_hp ` | ` 333 ` |  |
-| ` initiative ` | ` 12 ` |  |
-| ` speed ` | ` 40 ` | ` ft ` |
-| ` burrow_speed ` | ` 40 ` | ` ft ` |
-| ` fly_speed ` | ` 80 ` | ` ft ` |
-| ` swim_speed ` | ` 40 ` | ` ft ` |
 
 ## Health
 
@@ -444,3 +432,19 @@ geometry_assumptions:
   - plane
   - form_appearance
 ```
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_stats_extras -->
+> 
+> ```yaml
+> fly_speed:
+>   unit: ft
+>   value: 80
+> burrow_speed:
+>   unit: ft
+>   value: 40
+> swim_speed:
+>   unit: ft
+>   value: 40
+> ```
+

@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 5f47ae82-dfc2-5688-9344-bdeb2186d47b
 splat_kind: rule
 splat_key: dnd2024:rules/casting_spells_longer_casting_times
 splat_name: Longer Casting Times
-splat_origin:
-  key: dnd2024:reference/pages/105
+splat_origin: dnd2024:reference/pages/105
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 105
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 105, https://www.dndbeyond.com/srd
 ---
 
 # Longer Casting Times

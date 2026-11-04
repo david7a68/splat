@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "f79d1867-7ed2-53ce-8027-b6a7b321d078"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/goodberry"
 splat_name: "Goodberry"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [137], "executable": false}
+splat_pages:
+- 137
 ---
 
 # Goodberry
@@ -22,3 +23,13 @@ Ten berries appear in your hand and are infused with magic for the duration. A c
 Uneaten berries disappear when the spell ends.
 
 Original layout: [[../pages/137|page 137]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

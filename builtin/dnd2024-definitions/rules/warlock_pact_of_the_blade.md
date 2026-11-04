@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: e483c744-8b02-5b76-b952-e1203c8eb034
 splat_kind: rule
 splat_key: dnd2024:rules/warlock_pact_of_the_blade
 splat_name: Pact of the Blade
-splat_origin:
-  key: dnd2024:reference/pages/074
+splat_origin: dnd2024:reference/pages/074
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 74
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 74, https://www.dndbeyond.com/srd
 ---
 
 # Pact of the Blade

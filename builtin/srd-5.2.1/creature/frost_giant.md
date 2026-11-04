@@ -1,10 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "ad7ee015-54ad-5e60-91d6-9e5727a0c6f8"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/frost_giant"
 splat_name: "Frost Giant"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [285, 286], "executable": false}
+splat_pages:
+- 285
+- 286
 ---
 
 # Frost Giant
@@ -39,3 +41,13 @@ Great Bow. Ranged Attack Roll: +9, range 150/600 ft. Hit: 17 (2d10 + 6) Piercing
 War Cry (Recharge 5–6). The giant or one creature of its choice that can see or hear it gains 16 (2d10 + 5) Temporary Hit Points and has Advantage on attack rolls until the start of the giant’s next turn.
 
 Original layout: [[../pages/285|page 285]], [[../pages/286|page 286]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

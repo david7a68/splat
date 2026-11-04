@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 96a6cef6-b93e-5400-99a8-9947e4688b71
 splat_kind: rule
 splat_key: dnd2024:class_features/hunter_level_11_superior_hunter_s_prey
 splat_name: 'Level 11: Superior Hunter’s Prey'
-splat_origin:
-  key: dnd2024:reference/pages/061
+splat_origin: dnd2024:reference/pages/061
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 61
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 61, https://www.dndbeyond.com/srd
 ---
 
 # Level 11: Superior Hunter’s Prey

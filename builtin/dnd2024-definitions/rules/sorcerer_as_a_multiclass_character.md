@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: e2fe0d85-6fe9-5261-952f-2805d876fb5e
 splat_kind: rule
 splat_key: dnd2024:rules/sorcerer_as_a_multiclass_character
 splat_name: As a Multiclass Character
-splat_origin:
-  key: dnd2024:reference/pages/064
+splat_origin: dnd2024:reference/pages/064
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 64
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 64, https://www.dndbeyond.com/srd
 ---
 
 # As a Multiclass Character

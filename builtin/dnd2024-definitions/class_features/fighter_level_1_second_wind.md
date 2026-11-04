@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: fafc4274-e260-5db6-8ba8-9f6932139a27
 splat_kind: rule
 splat_key: dnd2024:class_features/fighter_level_1_second_wind
 splat_name: 'Level 1: Second Wind'
-splat_origin:
-  key: dnd2024:reference/pages/048
+splat_origin: dnd2024:reference/pages/048
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 48
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 48, https://www.dndbeyond.com/srd
 ---
 
 # Level 1: Second Wind

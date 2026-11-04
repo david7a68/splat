@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "65bfe886-d59b-55e2-983d-ec9e6cbf99a4"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/magic_item/luck_blade"
 splat_name: "Luck Blade"
-splat_reference: {"source": "SRD 5.2.1", "category": "magic_item", "pages": [229], "executable": false}
+splat_pages:
+- 229
 ---
 
 # Luck Blade
@@ -20,3 +21,13 @@ Luck. If the weapon is on your person, you can call on its luck (no action requi
 Wish. The weapon has 1d3 charges. While holding it, you can expend 1 charge and cast Wish from it. Once used, this property can’t be used again until the next dawn. The weapon loses this property if it has no charges.
 
 Original layout: [[../pages/229|page 229]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: magic_item
+> executable: false
+> ```
+

@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 03285678-23b9-549a-b63d-4683f772e315
 splat_kind: item
 splat_key: dnd2024:items/feather_token
 splat_name: Feather Token
-splat_origin:
-  key: dnd2024:reference/magic_item/feather_token
+splat_origin: dnd2024:reference/magic_item/feather_token
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 221
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 221, https://www.dndbeyond.com/srd
 ---
 
 # Feather Token
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Wondrous Item |
+| Rarity | Rarity Varies |
+| Attunement | No |
+
 
 ## Source text
 
@@ -49,22 +56,9 @@ As a Bonus Action, you can direct the whip to fly up to 20 feet and repeat the a
 
 Original layout: [[../../srd-5.2.1/pages/221|page 221]].
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` wondrous_item ` |
-| ` rarity ` | ` rarity_varies ` |
 
-### Equipment
-
-<!-- splat:values path=splat_item/equipment -->
-
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` none ` |
 
 ## Rule
 

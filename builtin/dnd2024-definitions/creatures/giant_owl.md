@@ -1,35 +1,62 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: d7f4119e-2381-5843-a7a9-5a90087a19fe
 splat_kind: creature
 splat_key: dnd2024:creatures/giant_owl
 splat_name: Giant Owl
-splat_origin:
-  key: dnd2024:reference/creature/giant_owl
+splat_origin: dnd2024:reference/creature/giant_owl
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 352
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 352, https://www.dndbeyond.com/srd
 ---
 
 # Giant Owl
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Large |
+| Type | Celestial |
+| Alignment | Neutral |
+| Armor Class | 12 |
+| Hit Points | 19 (3d10 + 3) |
+| Initiative | +2 (12) |
+| Speed | 5 ft., Fly 60 ft. |
+| Challenge | 1/4 (XP 50; PB +2) |
+| Skills | Perception +6, Stealth +6 |
+| Senses | Darkvision 120 ft.; Passive Perception 16 |
+| Languages | Celestial; understands Common, Elvish, and Sylvan but can’t speak them |
+| Resistances | Necrotic, Radiant |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 13 | +1 | +1 |
+| Dex | 15 | +2 | +2 |
+| Con | 12 | +1 | +1 |
+| Int | 10 | +0 | +0 |
+| Wis | 14 | +2 | +4 |
+| Cha | 10 | +0 | +0 |
+
 
 ## Source text
 
 <!-- SRD page 352 -->
 
-Large Celestial, Neutral\
-AC 12 Initiative +2 (12)\
-HP 19 (3d10 + 3)\
-Speed 5 ft., Fly 60 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 13 +1 +1 Dex 15 +2 +2 Con 12 +1 +1\
-Int 10 +0 +0 Wis 14 +2 +4 Cha 10 +0 +0\
-Skills Perception +6, Stealth +6\
-Resistances Necrotic, Radiant\
-Senses Darkvision 120 ft.; Passive Perception 16\
-Languages Celestial; understands Common, Elvish, and Sylvan but can’t speak them\
-CR 1/4 (XP 50; PB +2)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Large Celestial, Neutral\
+> AC 12 Initiative +2 (12)\
+> HP 19 (3d10 + 3)\
+> Speed 5 ft., Fly 60 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 13 +1 +1 Dex 15 +2 +2 Con 12 +1 +1\
+> Int 10 +0 +0 Wis 14 +2 +4 Cha 10 +0 +0\
+> Skills Perception +6, Stealth +6\
+> Resistances Necrotic, Radiant\
+> Senses Darkvision 120 ft.; Passive Perception 16\
+> Languages Celestial; understands Common, Elvish, and Sylvan but can’t speak them\
+> CR 1/4 (XP 50; PB +2)
+
 
 ### Traits
 
@@ -46,47 +73,11 @@ At Will: Detect Evil and Good, Detect Magic\
 
 Original layout: [[../../srd-5.2.1/pages/352|page 352]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` large ` |
-| ` type ` | ` celestial ` |
-| ` alignment ` | ` Neutral ` |
-| ` movement_text ` | ` 5 ft., Fly 60 ft. ` |
-| ` skills_text ` | ` Perception +6, Stealth +6 ` |
-| ` resistances_text ` | ` Necrotic, Radiant ` |
-| ` senses_text ` | ` Darkvision 120 ft.; Passive Perception 16 ` |
-| ` languages_text ` | ` Celestial; understands Common, Elvish, and Sylvan but can’t speak them ` |
-| ` cr_text ` | ` 1/4 (XP 50; PB +2) ` |
-| ` hit_points_text ` | ` 19 (3d10 + 3) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 13 ` | ` 1 ` |
-| ` Dexterity ` | ` 15 ` | ` 2 ` |
-| ` Constitution ` | ` 12 ` | ` 1 ` |
-| ` Intelligence ` | ` 10 ` | ` 0 ` |
-| ` Wisdom ` | ` 14 ` | ` 4 ` |
-| ` Charisma ` | ` 10 ` | ` 0 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 12 ` |  |
-| ` max_hp ` | ` 19 ` |  |
-| ` initiative ` | ` 2 ` |  |
-| ` speed ` | ` 5 ` | ` ft ` |
-| ` fly_speed ` | ` 60 ` | ` ft ` |
 
 ## Health
 
@@ -271,3 +262,13 @@ geometry_assumptions:
   - plane
   - form_appearance
 ```
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_stats_extras -->
+> 
+> ```yaml
+> fly_speed:
+>   unit: ft
+>   value: 60
+> ```
+

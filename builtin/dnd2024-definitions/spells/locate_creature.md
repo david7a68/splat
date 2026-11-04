@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 94e81453-9723-5b08-a541-f6f5bfd8074b
 splat_kind: spell
 splat_key: dnd2024:spells/locate_creature
 splat_name: Locate Creature
-splat_origin:
-  key: dnd2024:reference/spell/locate_creature
+splat_origin: dnd2024:reference/spell/locate_creature
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 145
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 145, https://www.dndbeyond.com/srd
 ---
 
 # Locate Creature
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 4 |
+| School | Divination |
+| Classes | Bard, Cleric, Druid, Paladin, Ranger, Wizard |
+| Casting Time | Action |
+| Range |  |
+| Components | V, S, M (fur from a bloodhound) |
+| Duration | Concentration, up to 1 hour |
+
 
 ## Source text
 
@@ -32,37 +43,11 @@ This spell can’t locate a creature if any thickness of lead blocks a direct pa
 
 Original layout: [[../../srd-5.2.1/pages/145|page 145]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 4 ` |
-| ` school ` | ` divination ` |
-| ` classes ` | ` ["bard", "cleric", "druid", "paladin", "ranger", "wizard"] ` |
-| ` components ` | ` ["verbal", "somatic", "material"] ` |
-| ` concentration ` | ` true ` |
-| ` duration ` | ` Concentration, up to 1 hour ` |
-| ` casting_time ` | ` Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
 
-<!-- splat:values path=splat_spell/range -->
 
-| Field | Value |
-| --- | --- |
-| ` mode ` | ` self ` |
-
-### Material
-
-<!-- splat:values path=splat_spell/material -->
-
-| Field | Value |
-| --- | --- |
-| ` description ` | ` fur from a bloodhound ` |
-| ` consumed ` | ` false ` |
 
 ## Rule
 
@@ -133,3 +118,14 @@ qualifying_prior_sighting:
 | ` source ` | ` supplied_world_geometry ` |
 | ` unknown_facts ` | ` require_resolution ` |
 | ` infer_unprovided_geometry ` | ` false ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_spell_extras -->
+> 
+> ```yaml
+> material:
+>   consumed: false
+> range:
+>   mode: self
+> ```
+

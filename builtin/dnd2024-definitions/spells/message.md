@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: a118c863-9c91-5fb9-8fcb-36511d325bb3
 splat_kind: spell
 splat_key: dnd2024:spells/message
 splat_name: Message
-splat_origin:
-  key: dnd2024:reference/spell/message
+splat_origin: dnd2024:reference/spell/message
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 148, 149
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 148, 149, https://www.dndbeyond.com/srd
 ---
 
 # Message
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | Cantrip |
+| School | Transmutation |
+| Classes | Bard, Druid, Sorcerer, Wizard |
+| Casting Time | Action |
+| Range | 120 feet |
+| Components | S, M (a copper wire) |
+| Duration | 1 round |
+
 
 ## Source text
 
@@ -32,37 +43,11 @@ You can cast this spell through solid objects if you are familiar with the targe
 
 Original layout: [[../../srd-5.2.1/pages/148|page 148]], [[../../srd-5.2.1/pages/149|page 149]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 0 ` |
-| ` school ` | ` transmutation ` |
-| ` classes ` | ` ["bard", "druid", "sorcerer", "wizard"] ` |
-| ` components ` | ` ["somatic", "material"] ` |
-| ` concentration ` | ` false ` |
-| ` duration ` | ` 1 round ` |
-| ` casting_time ` | ` Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
 
-<!-- splat:values path=splat_spell/range -->
 
-| Field | Value |
-| --- | --- |
-| ` feet ` | ` 120 ` |
-
-### Material
-
-<!-- splat:values path=splat_spell/material -->
-
-| Field | Value |
-| --- | --- |
-| ` description ` | ` a copper wire ` |
-| ` consumed ` | ` false ` |
 
 ## Rule
 
@@ -145,3 +130,12 @@ columns:
 | ` row_1 ` | ` Magical silence ` |  |  |  |  |
 | ` row_2 ` |  | ` ["stone", "metal", "wood"] ` | ` 1 ` |  |  |
 | ` row_3 ` |  |  |  | ` Lead ` | true |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_spell_extras -->
+> 
+> ```yaml
+> material:
+>   consumed: false
+> ```
+

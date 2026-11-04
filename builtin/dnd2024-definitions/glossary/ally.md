@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 8b7bc468-6474-58f7-81fb-da94f040c7d7
 splat_kind: rule
 splat_key: dnd2024:glossary/ally
 splat_name: Ally
-splat_origin:
-  key: dnd2024:reference/glossary/ally
+splat_origin: dnd2024:reference/glossary/ally
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 176
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 176, https://www.dndbeyond.com/srd
 ---
 
 # Ally

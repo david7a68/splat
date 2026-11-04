@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 7556bf31-64d6-5732-89a5-292ea63b46a7
 splat_kind: rule
 splat_key: dnd2024:glossary/climbing
 splat_name: Climbing
-splat_origin:
-  key: dnd2024:reference/glossary/climbing
+splat_origin: dnd2024:reference/glossary/climbing
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 178, 179
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 178, 179, https://www.dndbeyond.com/srd
 ---
 
 # Climbing

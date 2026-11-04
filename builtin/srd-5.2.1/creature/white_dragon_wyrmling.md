@@ -1,10 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "7f153736-c3a2-5e40-9a60-ac4b73285797"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/white_dragon_wyrmling"
 splat_name: "White Dragon Wyrmling"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [339, 340], "executable": false}
+splat_pages:
+- 339
+- 340
 ---
 
 # White Dragon Wyrmling
@@ -39,3 +41,13 @@ Rend. Melee Attack Roll: +4, reach 5 ft. Hit: 6 (1d8 + 2) Slashing damage plus 2
 Cold Breath (Recharge 5–6). Constitution Saving Throw: DC 12, each creature in a 15-foot Cone. Failure: 22 (5d8) Cold damage. Success: Half damage.
 
 Original layout: [[../pages/339|page 339]], [[../pages/340|page 340]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

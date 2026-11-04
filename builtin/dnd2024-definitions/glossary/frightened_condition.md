@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 648d48b0-27a5-58ed-bd03-9a3d9b258460
 splat_kind: rule
 splat_key: dnd2024:glossary/frightened_condition
 splat_name: Frightened [Condition]
-splat_origin:
-  key: dnd2024:reference/glossary/frightened_condition
+splat_origin: dnd2024:reference/glossary/frightened_condition
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 182
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 182, https://www.dndbeyond.com/srd
 ---
 
 # Frightened [Condition]

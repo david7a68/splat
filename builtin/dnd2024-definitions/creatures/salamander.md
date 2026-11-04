@@ -1,35 +1,62 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 13ac50b5-5032-5657-ba21-e3ceef91c9b6
 splat_kind: creature
 splat_key: dnd2024:creatures/salamander
 splat_name: Salamander
-splat_origin:
-  key: dnd2024:reference/creature/salamander
+splat_origin: dnd2024:reference/creature/salamander
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 321
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 321, https://www.dndbeyond.com/srd
 ---
 
 # Salamander
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Large |
+| Type | Elemental |
+| Alignment | Neutral Evil |
+| Armor Class | 15 |
+| Hit Points | 90 (12d10 + 24) |
+| Initiative | +2 (12) |
+| Speed | 30 ft., Climb 30 ft. |
+| Challenge | 5 (XP 1,800; PB +3) |
+| Senses | Darkvision 60 ft.; Passive Perception 10 |
+| Languages | Primordial (Ignan) |
+| Immunities | Fire |
+| Vulnerabilities | Cold |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 18 | +4 | +4 |
+| Dex | 14 | +2 | +2 |
+| Con | 15 | +2 | +2 |
+| Int | 11 | +0 | +0 |
+| Wis | 10 | +0 | +0 |
+| Cha | 12 | +1 | +1 |
+
 
 ## Source text
 
 <!-- SRD page 321 -->
 
-Large Elemental, Neutral Evil\
-AC 15  Initiative +2 (12)\
-HP 90 (12d10 + 24)\
-Speed 30 ft., Climb 30 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 18 +4 +4 Dex 14 +2 +2 Con 15 +2 +2\
-Int 11 +0 +0 Wis 10 +0 +0 Cha 12 +1 +1\
-Vulnerabilities Cold\
-Immunities Fire\
-Senses Darkvision 60 ft.; Passive Perception 10\
-Languages Primordial (Ignan)\
-CR 5 (XP 1,800; PB +3)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Large Elemental, Neutral Evil\
+> AC 15  Initiative +2 (12)\
+> HP 90 (12d10 + 24)\
+> Speed 30 ft., Climb 30 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 18 +4 +4 Dex 14 +2 +2 Con 15 +2 +2\
+> Int 11 +0 +0 Wis 10 +0 +0 Cha 12 +1 +1\
+> Vulnerabilities Cold\
+> Immunities Fire\
+> Senses Darkvision 60 ft.; Passive Perception 10\
+> Languages Primordial (Ignan)\
+> CR 5 (XP 1,800; PB +3)
+
 
 ### Traits
 
@@ -45,47 +72,11 @@ Constrict. Strength Saving Throw: DC 15, one Large or smaller creature the salam
 
 Original layout: [[../../srd-5.2.1/pages/321|page 321]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` large ` |
-| ` type ` | ` elemental ` |
-| ` alignment ` | ` Neutral Evil ` |
-| ` movement_text ` | ` 30 ft., Climb 30 ft. ` |
-| ` vulnerabilities_text ` | ` Cold ` |
-| ` immunities_text ` | ` Fire ` |
-| ` senses_text ` | ` Darkvision 60 ft.; Passive Perception 10 ` |
-| ` languages_text ` | ` Primordial (Ignan) ` |
-| ` cr_text ` | ` 5 (XP 1,800; PB +3) ` |
-| ` hit_points_text ` | ` 90 (12d10 + 24) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 18 ` | ` 4 ` |
-| ` Dexterity ` | ` 14 ` | ` 2 ` |
-| ` Constitution ` | ` 15 ` | ` 2 ` |
-| ` Intelligence ` | ` 11 ` | ` 0 ` |
-| ` Wisdom ` | ` 10 ` | ` 0 ` |
-| ` Charisma ` | ` 12 ` | ` 1 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 15 ` |  |
-| ` max_hp ` | ` 90 ` |  |
-| ` initiative ` | ` 2 ` |  |
-| ` speed ` | ` 30 ` | ` ft ` |
-| ` climb_speed ` | ` 30 ` | ` ft ` |
 
 ## Health
 
@@ -287,3 +278,13 @@ replace_attack:
 | ` provider ` | ` caller ` |
 | ` required_facts ` | ` ["distance", "area_membership", "visibility", "occupancy", "movement_path"] ` |
 | ` validate_against_typed_constraints ` | ` true ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_stats_extras -->
+> 
+> ```yaml
+> climb_speed:
+>   unit: ft
+>   value: 30
+> ```
+

@@ -1,34 +1,60 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 7be357ec-e71b-54e7-974a-3d8acad27110
 splat_kind: creature
 splat_key: dnd2024:creatures/animated_flying_sword
 splat_name: Animated Flying Sword
-splat_origin:
-  key: dnd2024:reference/creature/animated_flying_sword
+splat_origin: dnd2024:reference/creature/animated_flying_sword
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 259
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 259, https://www.dndbeyond.com/srd
 ---
 
 # Animated Flying Sword
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Small |
+| Type | Construct |
+| Alignment | Unaligned |
+| Armor Class | 17 |
+| Hit Points | 14 (4d6) |
+| Initiative | +4 (14) |
+| Speed | 5 ft., Fly 50 ft. (hover) |
+| Challenge | 1/4 (XP 50; PB +2) |
+| Senses | Blindsight 60 ft.; Passive Perception 7 |
+| Languages | None |
+| Immunities | Poison, Psychic; Charmed, Deafened, Exhaustion, Frightened, Paralyzed, Petrified, Poisoned |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 12 | +1 | +1 |
+| Dex | 15 | +2 | +4 |
+| Con | 11 | +0 | +0 |
+| Int | 1 | -5 | -5 |
+| Wis | 5 | -3 | -3 |
+| Cha | 1 | -5 | -5 |
+
 
 ## Source text
 
 <!-- SRD page 259 -->
 
-Small Construct, Unaligned\
-AC 17 Initiative +4 (14)\
-HP 14 (4d6)\
-Speed 5 ft., Fly 50 ft. (hover)\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 12 +1 +1 Dex 15 +2 +4 Con 11 +0 +0\
-Int 1 −5 −5 Wis 5 −3 −3 Cha 1 −5 −5\
-Immunities Poison, Psychic; Charmed, Deafened, Exhaustion, Frightened, Paralyzed, Petrified, Poisoned\
-Senses Blindsight 60 ft.; Passive Perception 7\
-Languages None\
-CR 1/4 (XP 50; PB +2)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Small Construct, Unaligned\
+> AC 17 Initiative +4 (14)\
+> HP 14 (4d6)\
+> Speed 5 ft., Fly 50 ft. (hover)\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 12 +1 +1 Dex 15 +2 +4 Con 11 +0 +0\
+> Int 1 −5 −5 Wis 5 −3 −3 Cha 1 −5 −5\
+> Immunities Poison, Psychic; Charmed, Deafened, Exhaustion, Frightened, Paralyzed, Petrified, Poisoned\
+> Senses Blindsight 60 ft.; Passive Perception 7\
+> Languages None\
+> CR 1/4 (XP 50; PB +2)
+
 
 ### Actions
 
@@ -36,46 +62,11 @@ Slash. Melee Attack Roll: +4, reach 5 ft. Hit: 6 (1d8 + 2) Slashing damage.
 
 Original layout: [[../../srd-5.2.1/pages/259|page 259]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` small ` |
-| ` type ` | ` construct ` |
-| ` alignment ` | ` Unaligned ` |
-| ` movement_text ` | ` 5 ft., Fly 50 ft. (hover) ` |
-| ` immunities_text ` | ` Poison, Psychic; Charmed, Deafened, Exhaustion, Frightened, Paralyzed, Petrified, Poisoned ` |
-| ` senses_text ` | ` Blindsight 60 ft.; Passive Perception 7 ` |
-| ` languages_text ` | ` None ` |
-| ` cr_text ` | ` 1/4 (XP 50; PB +2) ` |
-| ` hit_points_text ` | ` 14 (4d6) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 12 ` | ` 1 ` |
-| ` Dexterity ` | ` 15 ` | ` 4 ` |
-| ` Constitution ` | ` 11 ` | ` 0 ` |
-| ` Intelligence ` | ` 1 ` | ` -5 ` |
-| ` Wisdom ` | ` 5 ` | ` -3 ` |
-| ` Charisma ` | ` 1 ` | ` -5 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 17 ` |  |
-| ` max_hp ` | ` 14 ` |  |
-| ` initiative ` | ` 4 ` |  |
-| ` speed ` | ` 5 ` | ` ft ` |
-| ` fly_speed ` | ` 50 ` | ` ft ` |
 
 ## Health
 
@@ -174,3 +165,13 @@ geometry:
 unlisted_success_branch: no_effect
 unlisted_duration: until_removed_by_applicable_rule
 ```
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_stats_extras -->
+> 
+> ```yaml
+> fly_speed:
+>   unit: ft
+>   value: 50
+> ```
+

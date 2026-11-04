@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 9d7ca33f-dea6-55d9-bc68-5e8e1725f3cb
 splat_kind: rule
 splat_key: dnd2024:rules/traps_poisoned_needle
 splat_name: Poisoned Needle
-splat_origin:
-  key: dnd2024:reference/pages/200
+splat_origin: dnd2024:reference/pages/200
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 200, 201
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 200, 201, https://www.dndbeyond.com/srd
 ---
 
 # Poisoned Needle

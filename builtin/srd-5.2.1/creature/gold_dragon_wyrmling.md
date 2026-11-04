@@ -1,10 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "11710915-376e-5d39-a787-9a79c6301664"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/gold_dragon_wyrmling"
 splat_name: "Gold Dragon Wyrmling"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [290, 291], "executable": false}
+splat_pages:
+- 290
+- 291
 ---
 
 # Gold Dragon Wyrmling
@@ -41,3 +43,13 @@ Fire Breath (Recharge 5–6). Dexterity Saving Throw: DC 13, each creature in a 
 Weakening Breath. Strength Saving Throw: DC 13, each creature that isn’t currently affected by this breath in a 15-foot Cone. Failure: The target has Disadvantage on Strength-based D20 Tests and subtracts 2 (1d4) from its damage rolls. It repeats the save at the end of each of its turns, ending the effect on itself on a success. After 1 minute, it succeeds automatically.
 
 Original layout: [[../pages/290|page 290]], [[../pages/291|page 291]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

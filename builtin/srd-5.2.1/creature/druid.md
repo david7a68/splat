@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "4e63dec4-9941-5ebc-aa99-3bd08dc4d388"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/druid"
 splat_name: "Druid"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [282], "executable": false}
+splat_pages:
+- 282
 ---
 
 # Druid
@@ -39,3 +40,13 @@ At Will: Druidcraft, Speak with Animals\
 1/Day Each: Animal Messenger, Longstrider, Moonbeam
 
 Original layout: [[../pages/282|page 282]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

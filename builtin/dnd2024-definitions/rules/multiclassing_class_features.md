@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 1459cd0d-5d5e-5fc9-bdcc-531985823a54
 splat_kind: rule
 splat_key: dnd2024:rules/multiclassing_class_features
 splat_name: Class Features
-splat_origin:
-  key: dnd2024:reference/pages/025
+splat_origin: dnd2024:reference/pages/025
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 25
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 25, https://www.dndbeyond.com/srd
 ---
 
 # Class Features

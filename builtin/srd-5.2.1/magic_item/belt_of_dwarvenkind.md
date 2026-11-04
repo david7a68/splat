@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "9ba2c9ff-e875-5f76-a8e5-a128f709432c"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/magic_item/belt_of_dwarvenkind"
 splat_name: "Belt of Dwarvenkind"
-splat_reference: {"source": "SRD 5.2.1", "category": "magic_item", "pages": [213], "executable": false}
+splat_pages:
+- 213
 ---
 
 # Belt of Dwarvenkind
@@ -30,3 +31,13 @@ Darkvision. You have Darkvision with a range of 60 feet.
 Resilience. You have Resistance to Poison damage. You also have Advantage on saving throws you make to avoid or end the Poisoned condition.
 
 Original layout: [[../pages/213|page 213]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: magic_item
+> executable: false
+> ```
+

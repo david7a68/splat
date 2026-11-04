@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: aaa8e706-f954-5859-ab92-5180b3438853
 splat_kind: rule
 splat_key: dnd2024:rules/create_your_character_the_nine_alignments
 splat_name: The Nine Alignments
-splat_origin:
-  key: dnd2024:reference/pages/021
+splat_origin: dnd2024:reference/pages/021
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 21, 22
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 21, 22, https://www.dndbeyond.com/srd
 ---
 
 # The Nine Alignments

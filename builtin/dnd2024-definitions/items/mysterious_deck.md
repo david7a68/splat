@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 80a0edcd-f177-556d-8e91-2a915babd4d5
 splat_kind: item
 splat_key: dnd2024:items/mysterious_deck
 splat_name: Mysterious Deck
-splat_origin:
-  key: dnd2024:reference/magic_item/mysterious_deck
+splat_origin: dnd2024:reference/magic_item/mysterious_deck
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 231, 232
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 231, 232, https://www.dndbeyond.com/srd
 ---
 
 # Mysterious Deck
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Wondrous Item |
+| Rarity | Legendary |
+| Attunement | No |
+
 
 ## Source text
 
@@ -130,22 +137,9 @@ Reaping Scythe. Melee Attack Roll: Automatic hit, reach 5 ft. Hit: 7 (1d8 + 3) S
 
 Original layout: [[../../srd-5.2.1/pages/231|page 231]], [[../../srd-5.2.1/pages/232|page 232]].
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` wondrous_item ` |
-| ` rarity ` | ` legendary ` |
 
-### Equipment
-
-<!-- splat:values path=splat_item/equipment -->
-
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` none ` |
 
 ## Rule
 

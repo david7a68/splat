@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "4d0f518f-4777-50ff-8aa7-cbcd0862fbdb"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/cultist"
 splat_name: "Cultist"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [278], "executable": false}
+splat_pages:
+- 278
 ---
 
 # Cultist
@@ -29,3 +30,13 @@ CR 1/8 (XP 25; PB +2)
 Ritual Sickle. Melee Attack Roll: +3, reach 5 ft. Hit: 3 (1d4 + 1) Slashing damage plus 1 Necrotic damage.
 
 Original layout: [[../pages/278|page 278]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

@@ -1,10 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "4e71a3fd-d4bf-5ba0-a458-4672182d98ef"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/magic_circle"
 splat_name: "Magic Circle"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [145, 146], "executable": false}
+splat_pages:
+- 145
+- 146
 ---
 
 # Magic Circle
@@ -34,3 +36,13 @@ Each time you cast this spell, you can cause its magic to operate in the reverse
 Using a Higher-Level Spell Slot. The duration increases by 1 hour for each spell slot level above 3.
 
 Original layout: [[../pages/145|page 145]], [[../pages/146|page 146]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

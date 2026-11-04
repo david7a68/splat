@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 59ec6b04-1e2e-5008-b0d9-b9324dd93e0e
 splat_kind: rule
 splat_key: dnd2024:rules/mounts_and_vehicles_ship_repair
 splat_name: Ship Repair
-splat_origin:
-  key: dnd2024:reference/pages/101
+splat_origin: dnd2024:reference/pages/101
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 101
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 101, https://www.dndbeyond.com/srd
 ---
 
 # Ship Repair

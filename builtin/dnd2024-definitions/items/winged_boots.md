@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: f910f9d1-71dd-568c-894a-d4fea2b45e0a
 splat_kind: item
 splat_key: dnd2024:items/winged_boots
 splat_name: Winged Boots
-splat_origin:
-  key: dnd2024:reference/magic_item/winged_boots
+splat_origin: dnd2024:reference/magic_item/winged_boots
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 253
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 253, https://www.dndbeyond.com/srd
 ---
 
 # Winged Boots
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Wondrous Item |
+| Rarity | Uncommon |
+| Attunement | Yes |
+
 
 ## Source text
 
@@ -24,22 +31,9 @@ These boots have 4 charges and regain 1d4 expended charges daily at dawn. While 
 
 Original layout: [[../../srd-5.2.1/pages/253|page 253]].
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` wondrous_item ` |
-| ` rarity ` | ` uncommon ` |
 
-### Equipment
-
-<!-- splat:values path=splat_item/equipment -->
-
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` required ` |
 
 ## Rule
 

@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 8ea683ac-bc3b-50bb-9d17-b1c4a8f8c7c0
 splat_kind: item
 splat_key: dnd2024:items/iron_flask
 splat_name: Iron Flask
-splat_origin:
-  key: dnd2024:reference/magic_item/iron_flask
+splat_origin: dnd2024:reference/magic_item/iron_flask
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 228
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 228, https://www.dndbeyond.com/srd
 ---
 
 # Iron Flask
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Wondrous Item |
+| Rarity | Legendary |
+| Attunement | No |
+
 
 ## Source text
 
@@ -26,22 +33,9 @@ You can take a Magic action to remove the flask’s stopper and release the crea
 
 Original layout: [[../../srd-5.2.1/pages/228|page 228]].
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` wondrous_item ` |
-| ` rarity ` | ` legendary ` |
 
-### Equipment
-
-<!-- splat:values path=splat_item/equipment -->
-
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` none ` |
 
 ## Rule
 

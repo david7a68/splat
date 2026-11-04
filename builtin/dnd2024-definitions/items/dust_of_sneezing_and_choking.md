@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: e8dc8a9c-9430-5531-ae03-9cc6200909a3
 splat_kind: item
 splat_key: dnd2024:items/dust_of_sneezing_and_choking
 splat_name: Dust of Sneezing and Choking
-splat_origin:
-  key: dnd2024:reference/magic_item/dust_of_sneezing_and_choking
+splat_origin: dnd2024:reference/magic_item/dust_of_sneezing_and_choking
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 219
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 219, https://www.dndbeyond.com/srd
 ---
 
 # Dust of Sneezing and Choking
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Wondrous Item |
+| Rarity | Uncommon |
+| Attunement | No |
+
 
 ## Source text
 
@@ -28,22 +35,9 @@ On a failed save, a creature begins sneezing uncontrollably; it has the Incapaci
 
 Original layout: [[../../srd-5.2.1/pages/219|page 219]].
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` wondrous_item ` |
-| ` rarity ` | ` uncommon ` |
 
-### Equipment
-
-<!-- splat:values path=splat_item/equipment -->
-
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` none ` |
 
 ## Rule
 

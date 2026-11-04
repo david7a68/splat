@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: d4d92c86-e144-5aef-9818-a7fbaf320588
 splat_kind: rule
 splat_key: dnd2024:rules/magical_contagions_2
 splat_name: Magical Contagions
-splat_origin:
-  key: dnd2024:reference/pages/194
+splat_origin: dnd2024:reference/pages/194
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 194
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 194, https://www.dndbeyond.com/srd
 ---
 
 # Magical Contagions

@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "1f0699d9-4fa5-5497-9f38-1b90117eec1b"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/magic_item/ring_of_spell_storing"
 splat_name: "Ring of Spell Storing"
-splat_reference: {"source": "SRD 5.2.1", "category": "magic_item", "pages": [239], "executable": false}
+splat_pages:
+- 239
 ---
 
 # Ring of Spell Storing
@@ -20,3 +21,13 @@ Any creature can cast a spell of level 1 through 5 into the ring by touching the
 While wearing this ring, you can cast any spell stored in it. The spell uses the slot level, spell save DC, spell attack bonus, and spellcasting ability of the original caster but is otherwise treated as if you cast the spell. The spell cast from the ring is no longer stored in it, freeing up space.
 
 Original layout: [[../pages/239|page 239]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: magic_item
+> executable: false
+> ```
+

@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 12d4ee93-4ac1-51e8-ae82-b2f07e20f448
 splat_kind: rule
 splat_key: dnd2024:class_features/fiend_patron_level_3_fiend_spells
 splat_name: 'Level 3: Fiend Spells'
-splat_origin:
-  key: dnd2024:reference/pages/076
+splat_origin: dnd2024:reference/pages/076
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 76
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 76, https://www.dndbeyond.com/srd
 ---
 
 # Level 3: Fiend Spells

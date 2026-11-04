@@ -1,34 +1,60 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 5bc78e7c-531a-5d0e-8cb9-d4be2e2b6056
 splat_kind: creature
 splat_key: dnd2024:creatures/giant_constrictor_snake
 splat_name: Giant Constrictor Snake
-splat_origin:
-  key: dnd2024:reference/creature/giant_constrictor_snake
+splat_origin: dnd2024:reference/creature/giant_constrictor_snake
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 350
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 350, https://www.dndbeyond.com/srd
 ---
 
 # Giant Constrictor Snake
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Huge |
+| Type | Beast |
+| Alignment | Unaligned |
+| Armor Class | 12 |
+| Hit Points | 60 (8d12 + 8) |
+| Initiative | +2 (12) |
+| Speed | 30 ft., Swim 30 ft. |
+| Challenge | 2 (XP 450; PB +2) |
+| Skills | Perception +2 |
+| Senses | Blindsight 10 ft.; Passive Perception 12 |
+| Languages | None |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 19 | +4 | +4 |
+| Dex | 14 | +2 | +2 |
+| Con | 12 | +1 | +1 |
+| Int | 1 | -5 | -5 |
+| Wis | 10 | +0 | +0 |
+| Cha | 3 | -4 | -4 |
+
 
 ## Source text
 
 <!-- SRD page 350 -->
 
-Huge Beast, Unaligned\
-AC 12  Initiative +2 (12)\
-HP 60 (8d12 + 8)\
-Speed 30 ft., Swim 30 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 19 +4 +4 Dex 14 +2 +2 Con 12 +1 +1\
-Int 1 −5 −5 Wis 10 +0 +0 Cha 3 −4 −4\
-Skills Perception +2\
-Senses Blindsight 10 ft.; Passive Perception 12\
-Languages None\
-CR 2 (XP 450; PB +2)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Huge Beast, Unaligned\
+> AC 12  Initiative +2 (12)\
+> HP 60 (8d12 + 8)\
+> Speed 30 ft., Swim 30 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 19 +4 +4 Dex 14 +2 +2 Con 12 +1 +1\
+> Int 1 −5 −5 Wis 10 +0 +0 Cha 3 −4 −4\
+> Skills Perception +2\
+> Senses Blindsight 10 ft.; Passive Perception 12\
+> Languages None\
+> CR 2 (XP 450; PB +2)
+
 
 ### Actions
 
@@ -40,46 +66,11 @@ Constrict. Strength Saving Throw: DC 14, one Large or smaller creature the snake
 
 Original layout: [[../../srd-5.2.1/pages/350|page 350]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` huge ` |
-| ` type ` | ` beast ` |
-| ` alignment ` | ` Unaligned ` |
-| ` movement_text ` | ` 30 ft., Swim 30 ft. ` |
-| ` skills_text ` | ` Perception +2 ` |
-| ` senses_text ` | ` Blindsight 10 ft.; Passive Perception 12 ` |
-| ` languages_text ` | ` None ` |
-| ` cr_text ` | ` 2 (XP 450; PB +2) ` |
-| ` hit_points_text ` | ` 60 (8d12 + 8) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 19 ` | ` 4 ` |
-| ` Dexterity ` | ` 14 ` | ` 2 ` |
-| ` Constitution ` | ` 12 ` | ` 1 ` |
-| ` Intelligence ` | ` 1 ` | ` -5 ` |
-| ` Wisdom ` | ` 10 ` | ` 0 ` |
-| ` Charisma ` | ` 3 ` | ` -4 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 12 ` |  |
-| ` max_hp ` | ` 60 ` |  |
-| ` initiative ` | ` 2 ` |  |
-| ` speed ` | ` 30 ` | ` ft ` |
-| ` swim_speed ` | ` 30 ` | ` ft ` |
 
 ## Health
 
@@ -225,3 +216,13 @@ geometry:
 unlisted_success_branch: no_effect
 unlisted_duration: until_removed_by_applicable_rule
 ```
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_stats_extras -->
+> 
+> ```yaml
+> swim_speed:
+>   unit: ft
+>   value: 30
+> ```
+

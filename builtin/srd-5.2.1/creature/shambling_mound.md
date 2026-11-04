@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "abb7aee5-d64e-52ca-9697-5b17ee0d7764"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/shambling_mound"
 splat_name: "Shambling Mound"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [323], "executable": false}
+splat_pages:
+- 323
 ---
 
 # Shambling Mound
@@ -38,3 +39,13 @@ Charged Tendril. Melee Attack Roll: +7, reach 10 ft. Hit: 7 (1d6 + 4) Bludgeonin
 Engulf. Strength Saving Throw: DC 15, one Medium or smaller creature within 5 feet. Failure: The target is pulled into the shambling mound’s space and has the Grappled condition (escape DC 14). Until the grapple ends, the target has the Blinded and Restrained conditions, and it takes 10 (3d6) Lightning damage at the start of each of its turns. When the shambling mound moves, the Grappled target moves with it, costing it no extra movement. The shambling mound can have only one creature Grappled by this action at a time.
 
 Original layout: [[../pages/323|page 323]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

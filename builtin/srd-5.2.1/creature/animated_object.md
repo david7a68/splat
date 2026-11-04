@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "eac8b1a0-1f5c-52de-a21c-3c1bd243ba24"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/animated_object"
 splat_name: "Animated Object"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [109], "executable": false}
+splat_pages:
+- 109
 ---
 
 # Animated Object
@@ -28,3 +29,13 @@ CR None (XP 0; PB equals your Proficiency Bonus)
 Slam. Melee Attack Roll: Bonus equals your spell attack modifier, reach 5 ft. Hit: Force damage equal to 1d4 + 3 (Medium or smaller), 2d6 + 3 + your spellcasting ability modifier (Large), or 2d12 + 3 + your spellcasting ability modifier (Huge).
 
 Original layout: [[../pages/109|page 109]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

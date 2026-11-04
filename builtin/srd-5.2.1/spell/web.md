@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "cdbfb4f8-61f3-59c9-974e-183bd3a4b076"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/web"
 splat_name: "Web"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [174], "executable": false}
+splat_pages:
+- 174
 ---
 
 # Web
@@ -28,3 +29,13 @@ A creature Restrained by the webs can take an action to make a Strength (Athleti
 The webs are flammable. Any 5-foot Cube of webs exposed to fire burns away in 1 round, dealing 2d4 Fire damage to any creature that starts its turn in the fire.
 
 Original layout: [[../pages/174|page 174]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 9744acff-d657-5010-9742-e6daa4d540d9
 splat_kind: spell
 splat_key: dnd2024:spells/cone_of_cold
 splat_name: Cone of Cold
-splat_origin:
-  key: dnd2024:reference/spell/cone_of_cold
+splat_origin: dnd2024:reference/spell/cone_of_cold
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 117
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 117, https://www.dndbeyond.com/srd
 ---
 
 # Cone of Cold
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 5 |
+| School | Evocation |
+| Classes | Druid, Sorcerer, Wizard |
+| Casting Time | Action |
+| Range |  |
+| Components | V, S, M (a small crystal or glass cone) |
+| Duration | Instantaneous |
+
 
 ## Source text
 
@@ -30,37 +41,11 @@ Using a Higher-Level Spell Slot. The damage increases by 1d8 for each spell slot
 
 Original layout: [[../../srd-5.2.1/pages/117|page 117]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 5 ` |
-| ` school ` | ` evocation ` |
-| ` classes ` | ` ["druid", "sorcerer", "wizard"] ` |
-| ` components ` | ` ["verbal", "somatic", "material"] ` |
-| ` concentration ` | ` false ` |
-| ` duration ` | ` Instantaneous ` |
-| ` casting_time ` | ` Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
 
-<!-- splat:values path=splat_spell/range -->
 
-| Field | Value |
-| --- | --- |
-| ` mode ` | ` self ` |
-
-### Material
-
-<!-- splat:values path=splat_spell/material -->
-
-| Field | Value |
-| --- | --- |
-| ` description ` | ` a small crystal or glass cone ` |
-| ` consumed ` | ` false ` |
 
 ## Rule
 
@@ -127,3 +112,14 @@ concentration: false
 maximum:
   kind: instantaneous
 ```
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_spell_extras -->
+> 
+> ```yaml
+> material:
+>   consumed: false
+> range:
+>   mode: self
+> ```
+

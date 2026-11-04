@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 9b83be13-c33e-586a-aeb4-2f3ba7817c6b
 splat_kind: rule
 splat_key: dnd2024:rules/crafting_nonmagical_items_tools
 splat_name: Tools
-splat_origin:
-  key: dnd2024:reference/pages/103
+splat_origin: dnd2024:reference/pages/103
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 103
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 103, https://www.dndbeyond.com/srd
 ---
 
 # Tools

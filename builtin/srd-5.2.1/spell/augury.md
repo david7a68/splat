@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "df1eb196-9b82-585f-b001-c5f609cede05"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/augury"
 splat_name: "Augury"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [111], "executable": false}
+splat_pages:
+- 111
 ---
 
 # Augury
@@ -33,3 +34,13 @@ The spell doesn’t account for circumstances, such as other spells, that might 
 If you cast the spell more than once before finishing a Long Rest, there is a cumulative 25 percent chance for each casting after the first that you get no answer.
 
 Original layout: [[../pages/111|page 111]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

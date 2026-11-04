@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "011cded1-4d4c-5ac3-93b2-46a1c4f0f83d"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/ice_devil"
 splat_name: "Ice Devil"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [300], "executable": false}
+splat_pages:
+- 300
 ---
 
 # Ice Devil
@@ -41,3 +42,13 @@ Tail. Melee Attack Roll: +10, reach 10 ft. Hit: 15 (3d6 + 5) Bludgeoning damage 
 Ice Wall (Recharge 6). The devil casts Wall of Ice (level 8 version), requiring no spell components and using Intelligence as the spellcasting ability (spell save DC 17).
 
 Original layout: [[../pages/300|page 300]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

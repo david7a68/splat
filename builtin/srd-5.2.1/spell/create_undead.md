@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "b96ff000-0f06-5bf4-8405-9f32943cb1f0"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/create_undead"
 splat_name: "Create Undead"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [121], "executable": false}
+splat_pages:
+- 121
 ---
 
 # Create Undead
@@ -26,3 +27,13 @@ The creature is under your control for 24 hours, after which it stops obeying an
 Using a Higher-Level Spell Slot. If you use a level 7 spell slot, you can animate or reassert control over four Ghouls. If you use a level 8 spell slot, you can animate or reassert control over five Ghouls or two Ghasts or Wights. If you use a level 9 spell slot, you can animate or reassert control over six Ghouls, three Ghasts or Wights, or two Mummies. See “Monsters” for these stat blocks.
 
 Original layout: [[../pages/121|page 121]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

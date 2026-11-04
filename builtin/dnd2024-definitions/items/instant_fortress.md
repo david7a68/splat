@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 23e0b3bc-2f00-5740-b0c8-97b445edede9
 splat_kind: item
 splat_key: dnd2024:items/instant_fortress
 splat_name: Instant Fortress
-splat_origin:
-  key: dnd2024:reference/magic_item/instant_fortress
+splat_origin: dnd2024:reference/magic_item/instant_fortress
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 227
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 227, https://www.dndbeyond.com/srd
 ---
 
 # Instant Fortress
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Wondrous Item |
+| Rarity | Rare |
+| Attunement | Yes |
+
 
 ## Source text
 
@@ -28,22 +35,9 @@ Magic prevents the tower from being tipped over. The roof, the door, and the wal
 
 Original layout: [[../../srd-5.2.1/pages/227|page 227]].
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` wondrous_item ` |
-| ` rarity ` | ` rare ` |
 
-### Equipment
-
-<!-- splat:values path=splat_item/equipment -->
-
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` required ` |
 
 ## Rule
 

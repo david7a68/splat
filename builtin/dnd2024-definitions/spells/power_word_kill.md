@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 1642deb2-80be-57eb-b4e0-0867bc724528
 splat_kind: spell
 splat_key: dnd2024:spells/power_word_kill
 splat_name: Power Word Kill
-splat_origin:
-  key: dnd2024:reference/spell/power_word_kill
+splat_origin: dnd2024:reference/spell/power_word_kill
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 154
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 154, https://www.dndbeyond.com/srd
 ---
 
 # Power Word Kill
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 9 |
+| School | Enchantment |
+| Classes | Bard, Sorcerer, Warlock, Wizard |
+| Casting Time | Action |
+| Range | 60 feet |
+| Components | V |
+| Duration | Instantaneous |
+
 
 ## Source text
 
@@ -28,28 +39,9 @@ You compel one creature you can see within range to die. If the target has 100 H
 
 Original layout: [[../../srd-5.2.1/pages/154|page 154]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 9 ` |
-| ` school ` | ` enchantment ` |
-| ` classes ` | ` ["bard", "sorcerer", "warlock", "wizard"] ` |
-| ` components ` | ` ["verbal"] ` |
-| ` concentration ` | ` false ` |
-| ` duration ` | ` Instantaneous ` |
-| ` casting_time ` | ` Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
-
-<!-- splat:values path=splat_spell/range -->
-
-| Field | Value |
-| --- | --- |
-| ` feet ` | ` 60 ` |
 
 ## Rule
 

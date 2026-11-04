@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 33726bf6-56aa-5b4e-adfd-4bde35115996
 splat_kind: spell
 splat_key: dnd2024:spells/heal
 splat_name: Heal
-splat_origin:
-  key: dnd2024:reference/spell/heal
+splat_origin: dnd2024:reference/spell/heal
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 139
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 139, https://www.dndbeyond.com/srd
 ---
 
 # Heal
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 6 |
+| School | Abjuration |
+| Classes | Cleric, Druid |
+| Casting Time | Action |
+| Range | 60 feet |
+| Components | V, S |
+| Duration | Instantaneous |
+
 
 ## Source text
 
@@ -30,28 +41,9 @@ Using a Higher-Level Spell Slot. The healing increases by 10 for each spell slot
 
 Original layout: [[../../srd-5.2.1/pages/139|page 139]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 6 ` |
-| ` school ` | ` abjuration ` |
-| ` classes ` | ` ["cleric", "druid"] ` |
-| ` components ` | ` ["verbal", "somatic"] ` |
-| ` concentration ` | ` false ` |
-| ` duration ` | ` Instantaneous ` |
-| ` casting_time ` | ` Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
-
-<!-- splat:values path=splat_spell/range -->
-
-| Field | Value |
-| --- | --- |
-| ` feet ` | ` 60 ` |
 
 ## Rule
 

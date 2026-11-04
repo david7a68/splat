@@ -1,35 +1,62 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 14fca385-727c-5c85-a854-f79578a20735
 splat_kind: creature
 splat_key: dnd2024:creatures/fire_elemental
 splat_name: Fire Elemental
-splat_origin:
-  key: dnd2024:reference/creature/fire_elemental
+splat_origin: dnd2024:reference/creature/fire_elemental
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 284, 285
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 284, 285, https://www.dndbeyond.com/srd
 ---
 
 # Fire Elemental
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Large |
+| Type | Elemental |
+| Alignment | Neutral |
+| Armor Class | 13 |
+| Hit Points | 93 (11d10 + 33) |
+| Initiative | +3 (13) |
+| Speed | 50 ft. |
+| Challenge | 5 (XP 1,800; PB +3) |
+| Senses | Darkvision 60 ft.; Passive Perception 10 |
+| Languages | Primordial (Ignan) |
+| Resistances | Bludgeoning, Piercing, Slashing |
+| Immunities | Fire, Poison; Exhaustion, Grappled, Paralyzed, Petrified, Poisoned, Prone, Restrained, Unconscious |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 10 | +0 | +0 |
+| Dex | 17 | +3 | +3 |
+| Con | 16 | +3 | +3 |
+| Int | 6 | -2 | -2 |
+| Wis | 10 | +0 | +0 |
+| Cha | 7 | -2 | -2 |
+
 
 ## Source text
 
 <!-- SRD page 284 -->
 
-Large Elemental, Neutral\
-AC 13 Initiative +3 (13)\
-HP 93 (11d10 + 33)\
-Speed 50 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 10 +0 +0 Dex 17 +3 +3 Con 16 +3 +3\
-Int 6 −2 −2 Wis 10 +0 +0 Cha 7 −2 −2\
-Resistances Bludgeoning, Piercing, Slashing\
-Immunities Fire, Poison; Exhaustion, Grappled, Paralyzed, Petrified, Poisoned, Prone, Restrained, Unconscious\
-Senses Darkvision 60 ft.; Passive Perception 10\
-Languages Primordial (Ignan)\
-CR 5 (XP 1,800; PB +3)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Large Elemental, Neutral\
+> AC 13 Initiative +3 (13)\
+> HP 93 (11d10 + 33)\
+> Speed 50 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 10 +0 +0 Dex 17 +3 +3 Con 16 +3 +3\
+> Int 6 −2 −2 Wis 10 +0 +0 Cha 7 −2 −2\
+> Resistances Bludgeoning, Piercing, Slashing\
+> Immunities Fire, Poison; Exhaustion, Grappled, Paralyzed, Petrified, Poisoned, Prone, Restrained, Unconscious\
+> Senses Darkvision 60 ft.; Passive Perception 10\
+> Languages Primordial (Ignan)\
+> CR 5 (XP 1,800; PB +3)
+
 
 ### Traits
 
@@ -51,46 +78,11 @@ Burn. Melee Attack Roll: +6, reach 5 ft. Hit: 10 (2d6 + 3) Fire damage. If the t
 
 Original layout: [[../../srd-5.2.1/pages/284|page 284]], [[../../srd-5.2.1/pages/285|page 285]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` large ` |
-| ` type ` | ` elemental ` |
-| ` alignment ` | ` Neutral ` |
-| ` movement_text ` | ` 50 ft. ` |
-| ` resistances_text ` | ` Bludgeoning, Piercing, Slashing ` |
-| ` immunities_text ` | ` Fire, Poison; Exhaustion, Grappled, Paralyzed, Petrified, Poisoned, Prone, Restrained, Unconscious ` |
-| ` senses_text ` | ` Darkvision 60 ft.; Passive Perception 10 ` |
-| ` languages_text ` | ` Primordial (Ignan) ` |
-| ` cr_text ` | ` 5 (XP 1,800; PB +3) ` |
-| ` hit_points_text ` | ` 93 (11d10 + 33) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 10 ` | ` 0 ` |
-| ` Dexterity ` | ` 17 ` | ` 3 ` |
-| ` Constitution ` | ` 16 ` | ` 3 ` |
-| ` Intelligence ` | ` 6 ` | ` -2 ` |
-| ` Wisdom ` | ` 10 ` | ` 0 ` |
-| ` Charisma ` | ` 7 ` | ` -2 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 13 ` |  |
-| ` max_hp ` | ` 93 ` |  |
-| ` initiative ` | ` 3 ` |  |
-| ` speed ` | ` 50 ` | ` ft ` |
 
 ## Health
 

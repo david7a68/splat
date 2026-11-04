@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 7aaa5e38-3e00-595b-93f8-40c0e540003d
 splat_kind: item
 splat_key: dnd2024:items/dust_of_disappearance
 splat_name: Dust of Disappearance
-splat_origin:
-  key: dnd2024:reference/magic_item/dust_of_disappearance
+splat_origin: dnd2024:reference/magic_item/dust_of_disappearance
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 219
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 219, https://www.dndbeyond.com/srd
 ---
 
 # Dust of Disappearance
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Wondrous Item |
+| Rarity | Uncommon |
+| Attunement | No |
+
 
 ## Source text
 
@@ -24,22 +31,9 @@ This powder resembles fine sand. There is enough of it for one use. When you tak
 
 Original layout: [[../../srd-5.2.1/pages/219|page 219]].
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` wondrous_item ` |
-| ` rarity ` | ` uncommon ` |
 
-### Equipment
-
-<!-- splat:values path=splat_item/equipment -->
-
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` none ` |
 
 ## Rule
 

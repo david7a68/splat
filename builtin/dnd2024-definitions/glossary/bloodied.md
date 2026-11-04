@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 3798113b-dd23-5a0c-bdf2-4995ce62efc7
 splat_kind: rule
 splat_key: dnd2024:glossary/bloodied
 splat_name: Bloodied
-splat_origin:
-  key: dnd2024:reference/glossary/bloodied
+splat_origin: dnd2024:reference/glossary/bloodied
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 177
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 177, https://www.dndbeyond.com/srd
 ---
 
 # Bloodied

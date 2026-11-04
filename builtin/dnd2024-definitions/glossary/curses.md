@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: ac741708-4e9f-5266-a8d4-3eb4c79342f2
 splat_kind: rule
 splat_key: dnd2024:glossary/curses
 splat_name: Curses
-splat_origin:
-  key: dnd2024:reference/glossary/curses
+splat_origin: dnd2024:reference/glossary/curses
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 179
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 179, https://www.dndbeyond.com/srd
 ---
 
 # Curses

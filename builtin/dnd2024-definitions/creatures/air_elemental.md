@@ -1,35 +1,62 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 27dce8d8-ae3a-5153-999b-db85e2a98284
 splat_kind: creature
 splat_key: dnd2024:creatures/air_elemental
 splat_name: Air Elemental
-splat_origin:
-  key: dnd2024:reference/creature/air_elemental
+splat_origin: dnd2024:reference/creature/air_elemental
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 258, 259
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 258, 259, https://www.dndbeyond.com/srd
 ---
 
 # Air Elemental
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Large |
+| Type | Elemental |
+| Alignment | Neutral |
+| Armor Class | 15 |
+| Hit Points | 90 (12d10 + 24) |
+| Initiative | +5 (15) |
+| Speed | 10 ft., Fly 90 ft. (hover) |
+| Challenge | 5 (XP 1,800; PB +3) |
+| Senses | Darkvision 60 ft.; Passive Perception 10 |
+| Languages | Primordial (Auran) |
+| Resistances | Bludgeoning, Lightning, Piercing, Slashing |
+| Immunities | Poison, Thunder; Exhaustion, Grappled, Paralyzed, Petrified, Poisoned, Prone, Restrained, Unconscious |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 14 | +2 | +2 |
+| Dex | 20 | +5 | +5 |
+| Con | 14 | +2 | +2 |
+| Int | 6 | -2 | -2 |
+| Wis | 10 | +0 | +0 |
+| Cha | 6 | -2 | -2 |
+
 
 ## Source text
 
 <!-- SRD page 258 -->
 
-Large Elemental, Neutral\
-AC 15 Initiative +5 (15)\
-HP 90 (12d10 + 24)\
-Speed 10 ft., Fly 90 ft. (hover)\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 14 +2 +2 Dex 20 +5 +5 Con 14 +2 +2\
-Int 6 −2 −2 Wis 10 +0 +0 Cha 6 −2 −2\
-Resistances Bludgeoning, Lightning, Piercing, Slashing\
-Immunities Poison, Thunder; Exhaustion, Grappled, Paralyzed, Petrified, Poisoned, Prone, Restrained, Unconscious\
-Senses Darkvision 60 ft.; Passive Perception 10\
-Languages Primordial (Auran)\
-CR 5 (XP 1,800; PB +3)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Large Elemental, Neutral\
+> AC 15 Initiative +5 (15)\
+> HP 90 (12d10 + 24)\
+> Speed 10 ft., Fly 90 ft. (hover)\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 14 +2 +2 Dex 20 +5 +5 Con 14 +2 +2\
+> Int 6 −2 −2 Wis 10 +0 +0 Cha 6 −2 −2\
+> Resistances Bludgeoning, Lightning, Piercing, Slashing\
+> Immunities Poison, Thunder; Exhaustion, Grappled, Paralyzed, Petrified, Poisoned, Prone, Restrained, Unconscious\
+> Senses Darkvision 60 ft.; Passive Perception 10\
+> Languages Primordial (Auran)\
+> CR 5 (XP 1,800; PB +3)
+
 
 ### Traits
 
@@ -47,47 +74,11 @@ Whirlwind (Recharge 4–6). Strength Saving Throw: DC 13, one Medium or smaller 
 
 Original layout: [[../../srd-5.2.1/pages/258|page 258]], [[../../srd-5.2.1/pages/259|page 259]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` large ` |
-| ` type ` | ` elemental ` |
-| ` alignment ` | ` Neutral ` |
-| ` movement_text ` | ` 10 ft., Fly 90 ft. (hover) ` |
-| ` resistances_text ` | ` Bludgeoning, Lightning, Piercing, Slashing ` |
-| ` immunities_text ` | ` Poison, Thunder; Exhaustion, Grappled, Paralyzed, Petrified, Poisoned, Prone, Restrained, Unconscious ` |
-| ` senses_text ` | ` Darkvision 60 ft.; Passive Perception 10 ` |
-| ` languages_text ` | ` Primordial (Auran) ` |
-| ` cr_text ` | ` 5 (XP 1,800; PB +3) ` |
-| ` hit_points_text ` | ` 90 (12d10 + 24) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 14 ` | ` 2 ` |
-| ` Dexterity ` | ` 20 ` | ` 5 ` |
-| ` Constitution ` | ` 14 ` | ` 2 ` |
-| ` Intelligence ` | ` 6 ` | ` -2 ` |
-| ` Wisdom ` | ` 10 ` | ` 0 ` |
-| ` Charisma ` | ` 6 ` | ` -2 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 15 ` |  |
-| ` max_hp ` | ` 90 ` |  |
-| ` initiative ` | ` 5 ` |  |
-| ` speed ` | ` 10 ` | ` ft ` |
-| ` fly_speed ` | ` 90 ` | ` ft ` |
 
 ## Health
 
@@ -252,3 +243,13 @@ sequence:
 | ` provider ` | ` caller ` |
 | ` required_facts ` | ` ["distance", "area_membership", "visibility", "occupancy", "movement_path"] ` |
 | ` validate_against_typed_constraints ` | ` true ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_stats_extras -->
+> 
+> ```yaml
+> fly_speed:
+>   unit: ft
+>   value: 90
+> ```
+

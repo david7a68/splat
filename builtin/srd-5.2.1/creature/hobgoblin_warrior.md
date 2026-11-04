@@ -1,10 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "23eb9573-2d6a-5d7b-8b4e-77e3543f16f4"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/hobgoblin_warrior"
 splat_name: "Hobgoblin Warrior"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [298, 299], "executable": false}
+splat_pages:
+- 298
+- 299
 ---
 
 # Hobgoblin Warrior
@@ -36,3 +38,13 @@ Longsword. Melee Attack Roll: +3, reach 5 ft. Hit: 12 (2d10 + 1) Slashing damage
 Longbow. Ranged Attack Roll: +3, range 150/600 ft. Hit: 5 (1d8 + 1) Piercing damage plus 7 (3d4) Poison damage.
 
 Original layout: [[../pages/298|page 298]], [[../pages/299|page 299]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

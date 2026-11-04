@@ -1,33 +1,58 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: f8b9d24b-5839-5f42-8249-f828ca119c19
 splat_kind: creature
 splat_key: dnd2024:creatures/boar
 splat_name: Boar
-splat_origin:
-  key: dnd2024:reference/creature/boar
+splat_origin: dnd2024:reference/creature/boar
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 346
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 346, https://www.dndbeyond.com/srd
 ---
 
 # Boar
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Medium |
+| Type | Beast |
+| Alignment | Unaligned |
+| Armor Class | 11 |
+| Hit Points | 13 (2d8 + 4) |
+| Initiative | +0 (10) |
+| Speed | 40 ft. |
+| Challenge | 1/4 (XP 50; PB +2) |
+| Senses | Passive Perception 9 |
+| Languages | None |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 13 | +1 | +1 |
+| Dex | 11 | +0 | +0 |
+| Con | 14 | +2 | +2 |
+| Int | 2 | -4 | -4 |
+| Wis | 9 | -1 | -1 |
+| Cha | 5 | -3 | -3 |
+
 
 ## Source text
 
 <!-- SRD page 346 -->
 
-Medium Beast, Unaligned\
-AC 11  Initiative +0 (10)\
-HP 13 (2d8 + 4)\
-Speed 40 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 13 +1 +1 Dex 11 +0 +0 Con 14 +2 +2\
-Int 2 −4 −4 Wis 9 −1 −1 Cha 5 −3 −3\
-Senses Passive Perception 9\
-Languages None\
-CR 1/4 (XP 50; PB +2)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Medium Beast, Unaligned\
+> AC 11  Initiative +0 (10)\
+> HP 13 (2d8 + 4)\
+> Speed 40 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 13 +1 +1 Dex 11 +0 +0 Con 14 +2 +2\
+> Int 2 −4 −4 Wis 9 −1 −1 Cha 5 −3 −3\
+> Senses Passive Perception 9\
+> Languages None\
+> CR 1/4 (XP 50; PB +2)
+
 
 ### Traits
 
@@ -39,44 +64,11 @@ Gore. Melee Attack Roll: +3, reach 5 ft. Hit: 4 (1d6 + 1) Piercing damage. If th
 
 Original layout: [[../../srd-5.2.1/pages/346|page 346]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` medium ` |
-| ` type ` | ` beast ` |
-| ` alignment ` | ` Unaligned ` |
-| ` movement_text ` | ` 40 ft. ` |
-| ` senses_text ` | ` Passive Perception 9 ` |
-| ` languages_text ` | ` None ` |
-| ` cr_text ` | ` 1/4 (XP 50; PB +2) ` |
-| ` hit_points_text ` | ` 13 (2d8 + 4) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 13 ` | ` 1 ` |
-| ` Dexterity ` | ` 11 ` | ` 0 ` |
-| ` Constitution ` | ` 14 ` | ` 2 ` |
-| ` Intelligence ` | ` 2 ` | ` -4 ` |
-| ` Wisdom ` | ` 9 ` | ` -1 ` |
-| ` Charisma ` | ` 5 ` | ` -3 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 11 ` |  |
-| ` max_hp ` | ` 13 ` |  |
-| ` initiative ` | ` 0 ` |  |
-| ` speed ` | ` 40 ` | ` ft ` |
 
 ## Health
 

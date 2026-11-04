@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "a4c856b0-6bfc-5602-a9c3-9d08dc378550"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/magic_item/berserker_axe"
 splat_name: "Berserker Axe"
-splat_reference: {"source": "SRD 5.2.1", "category": "magic_item", "pages": [213], "executable": false}
+splat_pages:
+- 213
 ---
 
 # Berserker Axe
@@ -22,3 +23,13 @@ Whenever another creature damages you while the weapon is in your possession, yo
 While berserk, you regard the creature nearest to you that you can see or hear as your enemy. If there are multiple possible creatures, choose one at random. On each of your turns, you must move as close to the creature as possible and take the Attack action, targeting the creature. If you’re unable to get close enough to the creature to attack it with the weapon, your turn ends after you’ve used up all your available movement. If the creature dies or can no longer be seen or heard by you, the next nearest creature that you can see or hear becomes your new target.
 
 Original layout: [[../pages/213|page 213]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: magic_item
+> executable: false
+> ```
+

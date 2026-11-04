@@ -172,28 +172,47 @@ ones they share are in `steps.rs`. Goals use the test IDs in `docs/ux-intent.md`
 
 ## Local layout
 
-World notes support `splat_schema: 1` and `2`. New notes use flat properties such as
-`splat_type`, `splat_status`, `splat_stat_block`, `splat_in`, and Obsidian `aliases`.
-Library's **Packages** menu and Campaign offer **Convert files…**. The preview lists
-each supported file before and after conversion. Changes are marked,
-and both sides scroll together from the first difference. Files changed on disk are skipped.
-One **Undo** restores the saved bytes and refuses to replace later edits.
-Library shows the old-layout file count in its header and Packages menu.
+Splat reads `splat_schema: 2` and `timeline_version: 2` only. A schema-1 file stays
+on disk and is flagged with its path: `Old layout: Splat no longer reads this file.
+Use Convert files.` Library keeps the old-layout count in its header.
 
-A save after a change in Splat converts supported old notes. Its message stays beside
-the action with one named Undo, which restores the whole change and the old layout.
-In Library, Undo save keeps the typed text as an unsaved draft. Save writes it again;
-Discard drops it, with Undo discard.
-Reading and polling do not convert files. Convert files has its own **Undo convert**.
-Convert files is unavailable during a run and skips read-only files.
-The result counts converted and skipped files. Skipped files stay in view with a
-next step. A skipped file gives the result a warning tone. Undo restores only the
-converted files. Missing comparison rows are blank with a muted hatch; screen
-readers name them `No line`.
-Its wide preview groups files by owner. Source lines do not wrap, and the two panes
-scroll together. Only the campaign is selected at first.
-Packages with `splat_generated: true` in `Package.md` keep their converter's layout,
-including when the DM saves an entry in Splat.
+Old-layout warnings offer **Convert files…**. They do not offer Repair. Campaign
+combines several old files into one count line. An unused old file does not block
+**Save selections**. The reader never shows front matter as prose.
+
+Library's **Packages** menu and Campaign offer **Convert files…**. The preview lists
+each file before and after conversion. Changes are marked, and both sides scroll
+together from the first difference. Only the campaign is selected at first.
+Generated packages (`splat_generated: true`) start unticked. You can tick them;
+their converter will overwrite these files on its next run.
+
+Conversion skips read-only files and files changed since the preview. It keeps each
+skipped path and reason in view. **Undo convert** restores the original bytes and
+refuses to replace later edits. Convert files is unavailable during a run.
+Loading, polling and ordinary saves do not convert files.
+
+The existing binary also has two commands that open no window:
+
+```sh
+devenv shell -- cargo build --locked --bin splat
+devenv shell -- ./target/debug/splat convert /path/to/folder --dry-run --verify
+devenv shell -- ./target/debug/splat convert /path/to/folder
+devenv shell -- ./target/debug/splat convert /path/to/folder --include-generated
+devenv shell -- ./target/debug/splat check /path/to/folder
+```
+
+The folder can be a vault, campaign or package. `convert` uses the same converter
+and baseline-checked writes as the dialog. It prints each converted or skipped file,
+its reason and a total. `--dry-run` writes nothing. Generated packages are skipped
+unless `--include-generated` is set. `--verify` requires `--dry-run` and compares
+the old and converted reader models in memory, with counts for each file kind.
+References use built-in content, registered packages and campaigns, and the selected
+folder. Missing identities stay unchanged and produce warnings, not skips.
+Exit status is 1 if any file is skipped.
+`check` uses the schema-2 readers, prints flagged or unreadable paths with their line
+and reason, and prints counts. Exit status is 1 if any file is flagged or unreadable.
+Invalid command arguments or a folder that cannot be opened return status 2.
+
 Creatures use a `Stat block` section with `Stat | Value` and `Ability | Score | Mod | Save`
 tables. Spells and items use a `Field | Value` table in `Spell` or `Item`.
 These tables supply the stats in schema 2. A bad cell stays in the file and gets a
@@ -201,12 +220,14 @@ line flag; its value is not set. Printed modifiers and passive initiative are ch
 Rejected vital text stays in its reader row with a warning. Conversion fills missing
 creature identity from the printed line and writes `Medium` and `Beast` in reader case.
 Stat edits keep formulas, spacing, and other text. New entries use this layout.
-If old values conflict, conversion keeps the file and asks you to review it.
-Creature edits can keep the old layout with a warning when conversion needs review.
-Timeline, campaign lists, groups and encounter rosters keep their existing layout
-until their later format phase. Character copies use their character's name once,
+Conversion writes creature tables from the saved model. Original printed stat lines
+stay unchanged inside a folded quote callout and are not read as stats. Table shape
+hints preserve legacy compound identities and text ranges; explicit spell ritual
+and concentration rows preserve both true and false values.
+Timeline uses event lists. Campaign packages use task items. Groups and encounter
+rosters use tables. Character copies use their character's name once,
 keep their identity after a rename, and put imported data in a foldable end section.
-Existing character copies keep their layout when a provider refreshes them.
+Convert an old character copy before a provider refresh.
 
 Session plans accept task items such as `- [ ] [[Bridge Ambush]]`. Empty session
 titles have no property. Obsidian's core Templates plugin also fills `{{date}}`
@@ -802,7 +823,7 @@ On window focus, Splat checks campaign notes and every registered package for di
 
 If a package creature is deleted on disk, its encounter row keeps the last known name or says **Missing creature**. **Replace…** chooses a replacement with CR, HP and AC in view. **Replace all** is on by default for rows that use the same missing entry. The change keeps their names and starting values, with one Undo. The row menu keeps **Edit** and can remove a row. The NPC **Add to run** form labels its side choice **SIDE** and uses the roster's side names.
 
-New creature entries start with speed and six ability scores in `splat_stats`. HP and AC stay unset until you enter them. Size, type, alignment and CR are fields too. Library, Lookup, encounter search and XP use one CR rule. The reader shows each vital once. If a visible AC or HP line disagrees, the editor offers to use its value for the fight, with Undo. A renamed copy also renames its first H1 when it matches the source name. If the first heading differs from the entry name, Library offers to fix that heading, with Undo. Package creation shows a **Folder** field and the destination path after you type a name. `package-file-changed`, `package-delete-entry`, `book-to-package` and `world-note-deleted` cover these disk and copy paths.
+New creature entries start with speed and six ability scores in the Stat block tables. HP and AC stay unset until you enter them. Size, type, alignment and CR are fields too. Library, Lookup, encounter search and XP use one CR rule. The reader shows each vital once. If a visible AC or HP line disagrees, the editor offers to use its value for the fight, with Undo. A renamed copy also renames its first H1 when it matches the source name. If the first heading differs from the entry name, Library offers to fix that heading, with Undo. Package creation shows a **Folder** field and the destination path after you type a name. `package-file-changed`, `package-delete-entry`, `book-to-package` and `world-note-deleted` cover these disk and copy paths.
 
 Library keeps its reader toolbar on one line. At narrow widths, **More** holds Copy and Make NPC note. Lookup supports **Alt+Left** for Back. World lists broken place and stat block links beside each note and counts affected notes in its header. Generated NPCs show their save path before **Save NPC**.
 
@@ -833,11 +854,11 @@ After **Unregister**, Library offers **Undo unregister**. Campaign keeps the las
 
 ## Obsidian file layouts
 
-Splat reads both layouts. A DM save converts an old file once, with an Undo action.
-Library and Campaign also offer **Convert files…** with a comparison before saving.
-A run never converts `Timeline.md`.
-Encounter and group disk comparisons use the file's current layout. Overwrite then
-converts the saved file and keeps the outside tags and prose shown in the draft.
+Splat reads schema 2 and Timeline version 2 only. Old-layout files are flagged
+with their path and the action **Use Convert files**. Library and Campaign offer
+**Convert files…** with a comparison, baseline-checked writes and **Undo convert**.
+Loading and saving never convert files. Encounter and group comparisons retain
+outside tags and prose.
 
 - Timeline version 2 keeps days and events in the body. Day IDs sit in `%% splat id=… %%`
   below the heading. Event IDs stay at the end of the list item.

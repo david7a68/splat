@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 281f1de3-6295-5241-b07d-3d5645a13612
 splat_kind: item
 splat_key: dnd2024:items/cloak_of_arachnida
 splat_name: Cloak of Arachnida
-splat_origin:
-  key: dnd2024:reference/magic_item/cloak_of_arachnida
+splat_origin: dnd2024:reference/magic_item/cloak_of_arachnida
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 215
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 215, https://www.dndbeyond.com/srd
 ---
 
 # Cloak of Arachnida
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Wondrous Item |
+| Rarity | Very Rare |
+| Attunement | Yes |
+
 
 ## Source text
 
@@ -32,22 +39,9 @@ Web. You can cast Web (save DC 13). The web created by the spell fills twice its
 
 Original layout: [[../../srd-5.2.1/pages/215|page 215]].
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` wondrous_item ` |
-| ` rarity ` | ` very_rare ` |
 
-### Equipment
-
-<!-- splat:values path=splat_item/equipment -->
-
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` required ` |
 
 ## Rule
 

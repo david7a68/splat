@@ -1,35 +1,62 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 98271f17-1270-51f4-8b3c-fbcafb58085c
 splat_kind: creature
 splat_key: dnd2024:creatures/wraith
 splat_name: Wraith
-splat_origin:
-  key: dnd2024:reference/creature/wraith
+splat_origin: dnd2024:reference/creature/wraith
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 342, 343
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 342, 343, https://www.dndbeyond.com/srd
 ---
 
 # Wraith
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Medium or Small |
+| Type | Undead |
+| Alignment | Neutral Evil |
+| Armor Class | 13 |
+| Hit Points | 67 (9d8 + 27) |
+| Initiative | +3 (13) |
+| Speed | 5 ft., Fly 60 ft. (hover) |
+| Challenge | 5 (XP 1,800; PB +3) |
+| Senses | Darkvision 60 ft.; Passive Perception 12 |
+| Languages | Common plus two other languages |
+| Resistances | Acid, Bludgeoning, Cold, Fire, Piercing, Slashing |
+| Immunities | Necrotic, Poison; Charmed, Exhaustion, Grappled, Paralyzed, Petrified, Poisoned, Prone, Restrained, Unconscious |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 6 | -2 | -2 |
+| Dex | 16 | +3 | +3 |
+| Con | 16 | +3 | +3 |
+| Int | 12 | +1 | +1 |
+| Wis | 14 | +2 | +2 |
+| Cha | 15 | +2 | +2 |
+
 
 ## Source text
 
 <!-- SRD page 342 -->
 
 Medium or Small Undead, Neutral Evil\
-AC 13 Initiative +3 (13)\
-HP 67 (9d8 + 27)\
-Speed 5 ft., Fly 60 ft. (hover)\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 6 −2 −2 Dex 16 +3 +3 Con 16 +3 +3\
-Int 12 +1 +1 Wis 14 +2 +2 Cha 15 +2 +2\
-Resistances Acid, Bludgeoning, Cold, Fire, Piercing, Slashing\
-Immunities Necrotic, Poison; Charmed, Exhaustion, Grappled, Paralyzed, Petrified, Poisoned, Prone, Restrained, Unconscious\
-Senses Darkvision 60 ft.; Passive Perception 12\
-Languages Common plus two other languages\
-CR 5 (XP 1,800; PB +3)
+> [!quote]- Printed stat block (not read; edit the table above)
+> AC 13 Initiative +3 (13)\
+> HP 67 (9d8 + 27)\
+> Speed 5 ft., Fly 60 ft. (hover)\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 6 −2 −2 Dex 16 +3 +3 Con 16 +3 +3\
+> Int 12 +1 +1 Wis 14 +2 +2 Cha 15 +2 +2\
+> Resistances Acid, Bludgeoning, Cold, Fire, Piercing, Slashing\
+> Immunities Necrotic, Poison; Charmed, Exhaustion, Grappled, Paralyzed, Petrified, Poisoned, Prone, Restrained, Unconscious\
+> Senses Darkvision 60 ft.; Passive Perception 12\
+> Languages Common plus two other languages\
+> CR 5 (XP 1,800; PB +3)
+
 
 <!-- SRD page 343 -->
 
@@ -47,48 +74,11 @@ Create Specter. The wraith targets a Humanoid corpse within 10 feet of itself th
 
 Original layout: [[../../srd-5.2.1/pages/342|page 342]], [[../../srd-5.2.1/pages/343|page 343]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` medium ` |
-| ` type ` | ` undead ` |
-| ` alignment ` | ` Neutral Evil ` |
-| ` size_options_text ` | ` Medium or Small ` |
-| ` movement_text ` | ` 5 ft., Fly 60 ft. (hover) ` |
-| ` resistances_text ` | ` Acid, Bludgeoning, Cold, Fire, Piercing, Slashing ` |
-| ` immunities_text ` | ` Necrotic, Poison; Charmed, Exhaustion, Grappled, Paralyzed, Petrified, Poisoned, Prone, Restrained, Unconscious ` |
-| ` senses_text ` | ` Darkvision 60 ft.; Passive Perception 12 ` |
-| ` languages_text ` | ` Common plus two other languages ` |
-| ` cr_text ` | ` 5 (XP 1,800; PB +3) ` |
-| ` hit_points_text ` | ` 67 (9d8 + 27) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 6 ` | ` -2 ` |
-| ` Dexterity ` | ` 16 ` | ` 3 ` |
-| ` Constitution ` | ` 16 ` | ` 3 ` |
-| ` Intelligence ` | ` 12 ` | ` 1 ` |
-| ` Wisdom ` | ` 14 ` | ` 2 ` |
-| ` Charisma ` | ` 15 ` | ` 2 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 13 ` |  |
-| ` max_hp ` | ` 67 ` |  |
-| ` initiative ` | ` 3 ` |  |
-| ` speed ` | ` 5 ` | ` ft ` |
-| ` fly_speed ` | ` 60 ` | ` ft ` |
 
 ## Health
 
@@ -288,3 +278,13 @@ geometry_assumptions:
   - plane
   - form_appearance
 ```
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_stats_extras -->
+> 
+> ```yaml
+> fly_speed:
+>   unit: ft
+>   value: 60
+> ```
+

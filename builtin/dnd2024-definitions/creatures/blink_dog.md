@@ -1,34 +1,60 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: ae140097-94e9-5b72-8a9b-0f19ce7ae08a
 splat_kind: creature
 splat_key: dnd2024:creatures/blink_dog
 splat_name: Blink Dog
-splat_origin:
-  key: dnd2024:reference/creature/blink_dog
+splat_origin: dnd2024:reference/creature/blink_dog
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 266
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 266, https://www.dndbeyond.com/srd
 ---
 
 # Blink Dog
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Medium |
+| Type | Fey |
+| Alignment | Lawful Good |
+| Armor Class | 13 |
+| Hit Points | 22 (4d8 + 4) |
+| Initiative | +3 (13) |
+| Speed | 40 ft. |
+| Challenge | 1/4 (XP 50; PB +2) |
+| Skills | Perception +5, Stealth +5 |
+| Senses | Darkvision 60 ft.; Passive Perception 15 |
+| Languages | Blink Dog; understands Elvish and Sylvan but can’t speak them |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 12 | +1 | +1 |
+| Dex | 17 | +3 | +3 |
+| Con | 12 | +1 | +1 |
+| Int | 10 | +0 | +0 |
+| Wis | 13 | +1 | +1 |
+| Cha | 11 | +0 | +0 |
+
 
 ## Source text
 
 <!-- SRD page 266 -->
 
-Medium Fey, Lawful Good\
-AC 13 Initiative +3 (13)\
-HP 22 (4d8 + 4)\
-Speed 40 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 12 +1 +1 Dex 17 +3 +3 Con 12 +1 +1\
-Int 10 +0 +0 Wis 13 +1 +1 Cha 11 +0 +0\
-Skills Perception +5, Stealth +5\
-Senses Darkvision 60 ft.; Passive Perception 15\
-Languages Blink Dog; understands Elvish and Sylvan but can’t speak them\
-CR 1/4 (XP 50; PB +2)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Medium Fey, Lawful Good\
+> AC 13 Initiative +3 (13)\
+> HP 22 (4d8 + 4)\
+> Speed 40 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 12 +1 +1 Dex 17 +3 +3 Con 12 +1 +1\
+> Int 10 +0 +0 Wis 13 +1 +1 Cha 11 +0 +0\
+> Skills Perception +5, Stealth +5\
+> Senses Darkvision 60 ft.; Passive Perception 15\
+> Languages Blink Dog; understands Elvish and Sylvan but can’t speak them\
+> CR 1/4 (XP 50; PB +2)
+
 
 ### Actions
 
@@ -40,45 +66,11 @@ Teleport (Recharge 4–6). The dog teleports up to 40 feet to an unoccupied spac
 
 Original layout: [[../../srd-5.2.1/pages/266|page 266]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` medium ` |
-| ` type ` | ` fey ` |
-| ` alignment ` | ` Lawful Good ` |
-| ` movement_text ` | ` 40 ft. ` |
-| ` skills_text ` | ` Perception +5, Stealth +5 ` |
-| ` senses_text ` | ` Darkvision 60 ft.; Passive Perception 15 ` |
-| ` languages_text ` | ` Blink Dog; understands Elvish and Sylvan but can’t speak them ` |
-| ` cr_text ` | ` 1/4 (XP 50; PB +2) ` |
-| ` hit_points_text ` | ` 22 (4d8 + 4) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 12 ` | ` 1 ` |
-| ` Dexterity ` | ` 17 ` | ` 3 ` |
-| ` Constitution ` | ` 12 ` | ` 1 ` |
-| ` Intelligence ` | ` 10 ` | ` 0 ` |
-| ` Wisdom ` | ` 13 ` | ` 1 ` |
-| ` Charisma ` | ` 11 ` | ` 0 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 13 ` |  |
-| ` max_hp ` | ` 22 ` |  |
-| ` initiative ` | ` 3 ` |  |
-| ` speed ` | ` 40 ` | ` ft ` |
 
 ## Health
 

@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 35365b15-7c04-50ae-ab40-9ce9e654b024
 splat_kind: rule_group
 splat_key: dnd2024:subclasses/fighter_fighter_subclass_champion
 splat_name: 'Fighter Subclass: Champion'
-splat_origin:
-  key: dnd2024:reference/pages/049
+splat_origin: dnd2024:reference/pages/049
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 49
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 49, https://www.dndbeyond.com/srd
 ---
 
 # Fighter Subclass: Champion

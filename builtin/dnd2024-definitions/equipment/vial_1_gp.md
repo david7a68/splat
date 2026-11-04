@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: c8170f64-f7da-54d3-9ccd-4c61bb75ada2
 splat_kind: item
 splat_key: dnd2024:equipment/vial_1_gp
 splat_name: Vial (1 GP)
-splat_origin:
-  key: dnd2024:reference/pages/100
+splat_origin: dnd2024:reference/pages/100
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 100
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 100, https://www.dndbeyond.com/srd
 ---
 
 # Vial (1 GP)
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Adventuring Gear |
+| Rarity |  |
+| Attunement | No |
+
 
 ## Source text
 
@@ -20,39 +27,13 @@ splat_sources:
 
 A Vial holds up to 4 ounces.
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` adventuring_gear ` |
 
-### Equipment
 
-<!-- splat:values path=splat_item/equipment -->
 
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` none ` |
 
-### Price
 
-<!-- splat:values path=splat_item/price -->
-
-| Field | Value |
-| --- | --- |
-| ` value ` | ` 1 ` |
-| ` unit ` | ` gp ` |
-
-### Mass
-
-<!-- splat:values path=splat_item/mass -->
-
-| Field | Value |
-| --- | --- |
-| ` value ` | ` 0.0 ` |
-| ` unit ` | ` lb ` |
 
 ## Rule
 
@@ -82,3 +63,16 @@ A Vial holds up to 4 ounces.
 | ` value ` | ` 0.0 ` |
 | ` unit ` | ` lb ` |
 | ` negligible ` | ` true ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_item_extras -->
+> 
+> ```yaml
+> price:
+>   unit: gp
+>   value: 1
+> mass:
+>   unit: lb
+>   value: 0.0
+> ```
+

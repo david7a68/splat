@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 9c2f102d-04c3-55ac-a045-96c02796bf7e
 splat_kind: rule
 splat_key: dnd2024:rules/travel_pace_extended_travel
 splat_name: Extended Travel
-splat_origin:
-  key: dnd2024:reference/pages/192
+splat_origin: dnd2024:reference/pages/192
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 192
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 192, https://www.dndbeyond.com/srd
 ---
 
 # Extended Travel

@@ -1,36 +1,64 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 0f3a54cb-d789-586c-8fa8-eb65317e6314
 splat_kind: creature
 splat_key: dnd2024:creatures/deva
 splat_name: Deva
-splat_origin:
-  key: dnd2024:reference/creature/deva
+splat_origin: dnd2024:reference/creature/deva
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 279
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 279, https://www.dndbeyond.com/srd
 ---
 
 # Deva
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Medium |
+| Type | Celestial (Angel) |
+| Alignment | Lawful Good |
+| Armor Class | 17 |
+| Hit Points | 229 (27d8 + 108) |
+| Initiative | +4 (14) |
+| Speed | 30 ft., Fly 90 ft. (hover) |
+| Challenge | 10 (XP 5,900; PB +4) |
+| Skills | Insight +9, Perception +9 |
+| Senses | Darkvision 120 ft.; Passive Perception 19 |
+| Languages | All; telepathy 120 ft. |
+| Resistances | Radiant |
+| Immunities | Charmed, Exhaustion, Frightened |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 18 | +4 | +4 |
+| Dex | 18 | +4 | +4 |
+| Con | 18 | +4 | +4 |
+| Int | 17 | +3 | +3 |
+| Wis | 20 | +5 | +9 |
+| Cha | 20 | +5 | +9 |
+
 
 ## Source text
 
 <!-- SRD page 279 -->
 
-Medium Celestial (Angel), Lawful Good\
-AC 17  Initiative +4 (14)\
-HP 229 (27d8 + 108)\
-Speed 30 ft., Fly 90 ft. (hover)\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 18 +4 +4 Dex 18 +4 +4 Con 18 +4 +4\
-Int 17 +3 +3 Wis 20 +5 +9 Cha 20 +5 +9\
-Skills Insight +9, Perception +9\
-Resistances Radiant\
-Immunities Charmed, Exhaustion, Frightened\
-Senses Darkvision 120 ft.; Passive Perception 19\
-Languages All; telepathy 120 ft.\
-CR 10 (XP 5,900; PB +4)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Medium Celestial (Angel), Lawful Good\
+> AC 17  Initiative +4 (14)\
+> HP 229 (27d8 + 108)\
+> Speed 30 ft., Fly 90 ft. (hover)\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 18 +4 +4 Dex 18 +4 +4 Con 18 +4 +4\
+> Int 17 +3 +3 Wis 20 +5 +9 Cha 20 +5 +9\
+> Skills Insight +9, Perception +9\
+> Resistances Radiant\
+> Immunities Charmed, Exhaustion, Frightened\
+> Senses Darkvision 120 ft.; Passive Perception 19\
+> Languages All; telepathy 120 ft.\
+> CR 10 (XP 5,900; PB +4)
+
 
 ### Traits
 
@@ -56,49 +84,11 @@ Divine Aid (2/Day). The deva casts Cure Wounds, Lesser Restoration, or Remove Cu
 
 Original layout: [[../../srd-5.2.1/pages/279|page 279]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` medium ` |
-| ` type ` | ` celestial ` |
-| ` alignment ` | ` Lawful Good ` |
-| ` tags_text ` | ` (Angel) ` |
-| ` movement_text ` | ` 30 ft., Fly 90 ft. (hover) ` |
-| ` skills_text ` | ` Insight +9, Perception +9 ` |
-| ` resistances_text ` | ` Radiant ` |
-| ` immunities_text ` | ` Charmed, Exhaustion, Frightened ` |
-| ` senses_text ` | ` Darkvision 120 ft.; Passive Perception 19 ` |
-| ` languages_text ` | ` All; telepathy 120 ft. ` |
-| ` cr_text ` | ` 10 (XP 5,900; PB +4) ` |
-| ` hit_points_text ` | ` 229 (27d8 + 108) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 18 ` | ` 4 ` |
-| ` Dexterity ` | ` 18 ` | ` 4 ` |
-| ` Constitution ` | ` 18 ` | ` 4 ` |
-| ` Intelligence ` | ` 17 ` | ` 3 ` |
-| ` Wisdom ` | ` 20 ` | ` 9 ` |
-| ` Charisma ` | ` 20 ` | ` 9 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 17 ` |  |
-| ` max_hp ` | ` 229 ` |  |
-| ` initiative ` | ` 4 ` |  |
-| ` speed ` | ` 30 ` | ` ft ` |
-| ` fly_speed ` | ` 90 ` | ` ft ` |
 
 ## Health
 
@@ -379,3 +369,13 @@ geometry:
 unlisted_success_branch: no_effect
 unlisted_duration: until_removed_by_applicable_rule
 ```
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_stats_extras -->
+> 
+> ```yaml
+> fly_speed:
+>   unit: ft
+>   value: 90
+> ```
+

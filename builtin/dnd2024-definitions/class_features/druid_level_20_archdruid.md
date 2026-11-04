@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: f0c0deaa-e5fa-524d-9813-d6bffca0b9cc
 splat_kind: rule
 splat_key: dnd2024:class_features/druid_level_20_archdruid
 splat_name: 'Level 20: Archdruid'
-splat_origin:
-  key: dnd2024:reference/pages/043
+splat_origin: dnd2024:reference/pages/043
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 43
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 43, https://www.dndbeyond.com/srd
 ---
 
 # Level 20: Archdruid

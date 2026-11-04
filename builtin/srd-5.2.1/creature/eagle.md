@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "7b0c0925-4c7c-5aac-ad13-b4ce832aaf4b"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/eagle"
 splat_name: "Eagle"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [348], "executable": false}
+splat_pages:
+- 348
 ---
 
 # Eagle
@@ -28,3 +29,13 @@ CR 0 (XP 10; PB +2)
 Talons. Melee Attack Roll: +4, reach 5 feet. Hit: 4 (1d4 + 2) Slashing damage.
 
 Original layout: [[../pages/348|page 348]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: c17989ab-620a-5a65-9901-b4f1dd984243
 splat_kind: rule
 splat_key: dnd2024:rules/casting_spells_duration
 splat_name: Duration
-splat_origin:
-  key: dnd2024:reference/pages/106
+splat_origin: dnd2024:reference/pages/106
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 106
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 106, https://www.dndbeyond.com/srd
 ---
 
 # Duration

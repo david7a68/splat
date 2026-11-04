@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 6ca2382f-1678-568e-a35c-43212eb127df
 splat_kind: rule
 splat_key: dnd2024:rules/exploration_travel_pace
 splat_name: Travel Pace
-splat_origin:
-  key: dnd2024:reference/pages/012
+splat_origin: dnd2024:reference/pages/012
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 12
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 12, https://www.dndbeyond.com/srd
 ---
 
 # Travel Pace

@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 47a973dc-d6b6-543c-833a-482239b19b4e
 splat_kind: item
 splat_key: dnd2024:items/demon_armor
 splat_name: Demon Armor
-splat_origin:
-  key: dnd2024:reference/magic_item/demon_armor
+splat_origin: dnd2024:reference/magic_item/demon_armor
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 218
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 218, https://www.dndbeyond.com/srd
 ---
 
 # Demon Armor
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Armor |
+| Rarity | Very Rare |
+| Attunement | Yes |
+
 
 ## Source text
 
@@ -26,22 +33,9 @@ Curse. Once you don this cursed armor, you can’t doff it unless you are target
 
 Original layout: [[../../srd-5.2.1/pages/218|page 218]].
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` armor ` |
-| ` rarity ` | ` very_rare ` |
 
-### Equipment
-
-<!-- splat:values path=splat_item/equipment -->
-
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` required ` |
 
 ## Rule
 

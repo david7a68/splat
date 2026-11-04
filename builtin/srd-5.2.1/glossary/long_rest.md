@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "94c63c67-c534-5a9b-8330-321f55cc3dec"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/glossary/long_rest"
 splat_name: "Long Rest"
-splat_reference: {"source": "SRD 5.2.1", "category": "glossary", "pages": [185], "executable": false}
+splat_pages:
+- 185
 ---
 
 # Long Rest
@@ -40,3 +41,13 @@ If you rested at least 1 hour before the interruption, you gain the benefits of 
 You can resume a Long Rest immediately after an interruption. If you do so, the rest requires 1 additional hour per interruption to finish.
 
 Original layout: [[../pages/185|page 185]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: glossary
+> executable: false
+> ```
+

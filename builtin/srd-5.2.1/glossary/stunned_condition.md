@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "1abc4bef-d0a5-55be-9959-2dc9c8bf1801"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/glossary/stunned_condition"
 splat_name: "Stunned [Condition]"
-splat_reference: {"source": "SRD 5.2.1", "category": "glossary", "pages": [189], "executable": false}
+splat_pages:
+- 189
 ---
 
 # Stunned [Condition]
@@ -20,3 +21,13 @@ Saving Throws Affected. You automatically fail Strength and Dexterity saving thr
 Attacks Affected. Attack rolls against you have Advantage.
 
 Original layout: [[../pages/189|page 189]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: glossary
+> executable: false
+> ```
+

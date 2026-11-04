@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: fb287f89-1aaf-52e0-8b99-fc26dab375b6
 splat_kind: item
 splat_key: dnd2024:items/pipes_of_the_sewers
 splat_name: Pipes of the Sewers
-splat_origin:
-  key: dnd2024:reference/magic_item/pipes_of_the_sewers
+splat_origin: dnd2024:reference/magic_item/pipes_of_the_sewers
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 234
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 234, https://www.dndbeyond.com/srd
 ---
 
 # Pipes of the Sewers
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Wondrous Item |
+| Rarity | Uncommon |
+| Attunement | Yes |
+
 
 ## Source text
 
@@ -28,22 +35,9 @@ Whenever a Swarm of Rats that isn’t under another creature’s control comes w
 
 Original layout: [[../../srd-5.2.1/pages/234|page 234]].
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` wondrous_item ` |
-| ` rarity ` | ` uncommon ` |
 
-### Equipment
-
-<!-- splat:values path=splat_item/equipment -->
-
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` required ` |
 
 ## Rule
 

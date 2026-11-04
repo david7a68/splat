@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 7bf9199c-6917-5437-863d-b72a4d77bffe
 splat_kind: rule
 splat_key: dnd2024:rules/gaining_spells_always_prepared_spells
 splat_name: Always-Prepared Spells
-splat_origin:
-  key: dnd2024:reference/pages/104
+splat_origin: dnd2024:reference/pages/104
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 104
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 104, https://www.dndbeyond.com/srd
 ---
 
 # Always-Prepared Spells

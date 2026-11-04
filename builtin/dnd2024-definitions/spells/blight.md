@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 6eba6cf9-5f77-5c1f-8cd1-b5408e407b95
 splat_kind: spell
 splat_key: dnd2024:spells/blight
 splat_name: Blight
-splat_origin:
-  key: dnd2024:reference/spell/blight
+splat_origin: dnd2024:reference/spell/blight
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 113
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 113, https://www.dndbeyond.com/srd
 ---
 
 # Blight
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 4 |
+| School | Necromancy |
+| Classes | Druid, Sorcerer, Warlock, Wizard |
+| Casting Time | Action |
+| Range | 30 feet |
+| Components | V, S |
+| Duration | Instantaneous |
+
 
 ## Source text
 
@@ -32,28 +43,9 @@ Using a Higher-Level Spell Slot. The damage increases by 1d8 for each spell slot
 
 Original layout: [[../../srd-5.2.1/pages/113|page 113]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 4 ` |
-| ` school ` | ` necromancy ` |
-| ` classes ` | ` ["druid", "sorcerer", "warlock", "wizard"] ` |
-| ` components ` | ` ["verbal", "somatic"] ` |
-| ` concentration ` | ` false ` |
-| ` duration ` | ` Instantaneous ` |
-| ` casting_time ` | ` Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
-
-<!-- splat:values path=splat_spell/range -->
-
-| Field | Value |
-| --- | --- |
-| ` feet ` | ` 30 ` |
 
 ## Rule
 

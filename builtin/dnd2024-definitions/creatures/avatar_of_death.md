@@ -1,34 +1,62 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 661e684a-bd4e-5a77-9411-28c2f8881c4d
 splat_kind: creature
 splat_key: dnd2024:creatures/avatar_of_death
 splat_name: Avatar of Death
-splat_origin:
-  key: dnd2024:reference/creature/avatar_of_death
+splat_origin: dnd2024:reference/creature/avatar_of_death
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 232
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 232, https://www.dndbeyond.com/srd
 ---
 
 # Avatar of Death
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Medium |
+| Type | Undead |
+| Alignment | Neutral evil |
+| Armor Class | 20 |
+| Hit Points | Half the HP maximum of its summoner |
+| Initiative | +3 (13) |
+| Speed | 60 ft., Fly 60 ft. (hover) |
+| Challenge | None (XP 0; PB equals its summoner’s) |
+| Senses | Truesight 60 ft., Passive Perception 13 |
+| Languages | All languages known to its summoner |
+| Immunities | Necrotic, Poison; Charmed, Exhaustion, Frightened, Paralyzed, Petrified, Poisoned, Unconscious |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 16 | +3 | +3 |
+| Dex | 16 | +3 | +3 |
+| Con | 16 | +3 | +3 |
+| Int | 16 | +3 | +3 |
+| Wis | 16 | +3 | +3 |
+| Cha | 16 | +3 | +3 |
+
+%% splat shape=hp_text %%
+
 
 ## Source text
 
 <!-- SRD page 232 -->
 
-Medium Undead, Neutral evil\
-AC 20  Initiative +3 (13)\
-HP Half the HP maximum of its summoner\
-Speed 60 ft., Fly 60 ft. (hover)\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 16 +3 +3 Dex 16 +3 +3 Con 16 +3 +3\
-Int 16 +3 +3 Wis 16 +3 +3 Cha 16 +3 +3\
-Immunities Necrotic, Poison; Charmed, Exhaustion, Frightened, Paralyzed, Petrified, Poisoned, Unconscious\
-Senses Truesight 60 ft., Passive Perception 13\
-Languages All languages known to its summoner\
-CR None (XP 0; PB equals its summoner’s)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Medium Undead, Neutral evil\
+> AC 20  Initiative +3 (13)\
+> HP Half the HP maximum of its summoner\
+> Speed 60 ft., Fly 60 ft. (hover)\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 16 +3 +3 Dex 16 +3 +3 Con 16 +3 +3\
+> Int 16 +3 +3 Wis 16 +3 +3 Cha 16 +3 +3\
+> Immunities Necrotic, Poison; Charmed, Exhaustion, Frightened, Paralyzed, Petrified, Poisoned, Unconscious\
+> Senses Truesight 60 ft., Passive Perception 13\
+> Languages All languages known to its summoner\
+> CR None (XP 0; PB equals its summoner’s)
+
 
 ### Traits
 
@@ -42,45 +70,11 @@ Reaping Scythe. Melee Attack Roll: Automatic hit, reach 5 ft. Hit: 7 (1d8 + 3) S
 
 Original layout: [[../../srd-5.2.1/pages/232|page 232]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` medium ` |
-| ` type ` | ` undead ` |
-| ` alignment ` | ` Neutral evil ` |
-| ` movement_text ` | ` 60 ft., Fly 60 ft. (hover) ` |
-| ` immunities_text ` | ` Necrotic, Poison; Charmed, Exhaustion, Frightened, Paralyzed, Petrified, Poisoned, Unconscious ` |
-| ` senses_text ` | ` Truesight 60 ft., Passive Perception 13 ` |
-| ` languages_text ` | ` All languages known to its summoner ` |
-| ` cr_text ` | ` None (XP 0; PB equals its summoner’s) ` |
-| ` hit_points_text ` | ` Half the HP maximum of its summoner ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 16 ` | ` 3 ` |
-| ` Dexterity ` | ` 16 ` | ` 3 ` |
-| ` Constitution ` | ` 16 ` | ` 3 ` |
-| ` Intelligence ` | ` 16 ` | ` 3 ` |
-| ` Wisdom ` | ` 16 ` | ` 3 ` |
-| ` Charisma ` | ` 16 ` | ` 3 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 20 ` |  |
-| ` initiative ` | ` 3 ` |  |
-| ` speed ` | ` 60 ` | ` ft ` |
-| ` fly_speed ` | ` 60 ` | ` ft ` |
 
 ## Health
 
@@ -264,3 +258,13 @@ geometry:
 unlisted_success_branch: no_effect
 unlisted_duration: until_removed_by_applicable_rule
 ```
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_stats_extras -->
+> 
+> ```yaml
+> fly_speed:
+>   unit: ft
+>   value: 60
+> ```
+

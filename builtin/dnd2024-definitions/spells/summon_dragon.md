@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 1189aa3b-a3c9-5830-a440-c389b56be2f6
 splat_kind: spell
 splat_key: dnd2024:spells/summon_dragon
 splat_name: Summon Dragon
-splat_origin:
-  key: dnd2024:reference/spell/summon_dragon
+splat_origin: dnd2024:reference/spell/summon_dragon
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 166
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 166, https://www.dndbeyond.com/srd
 ---
 
 # Summon Dragon
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 5 |
+| School | Conjuration |
+| Classes | Wizard |
+| Casting Time | Action |
+| Range | 60 feet |
+| Components | V, S, M (an object with the image of a dragon engraved on it worth 500+ GP) |
+| Duration | Concentration, up to 1 hour |
+
 
 ## Source text
 
@@ -59,37 +70,11 @@ Breath Weapon. Dexterity Saving Throw: DC equals your spell save DC, each creatu
 
 Original layout: [[../../srd-5.2.1/pages/166|page 166]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 5 ` |
-| ` school ` | ` conjuration ` |
-| ` classes ` | ` ["wizard"] ` |
-| ` components ` | ` ["verbal", "somatic", "material"] ` |
-| ` concentration ` | ` true ` |
-| ` duration ` | ` Concentration, up to 1 hour ` |
-| ` casting_time ` | ` Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
 
-<!-- splat:values path=splat_spell/range -->
 
-| Field | Value |
-| --- | --- |
-| ` feet ` | ` 60 ` |
-
-### Material
-
-<!-- splat:values path=splat_spell/material -->
-
-| Field | Value |
-| --- | --- |
-| ` description ` | ` an object with the image of a dragon engraved on it worth 500+ GP ` |
-| ` consumed ` | ` false ` |
 
 ## Rule
 
@@ -262,3 +247,12 @@ breath_weapon:
         numerator: 1
         denominator: 2
 ```
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_spell_extras -->
+> 
+> ```yaml
+> material:
+>   consumed: false
+> ```
+

@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 87ec9e0b-ffb6-579c-bf84-8139ff091e19
 splat_kind: rule
 splat_key: dnd2024:glossary/long_rest
 splat_name: Long Rest
-splat_origin:
-  key: dnd2024:reference/glossary/long_rest
+splat_origin: dnd2024:reference/glossary/long_rest
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 185
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 185, https://www.dndbeyond.com/srd
 ---
 
 # Long Rest

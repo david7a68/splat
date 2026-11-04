@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "5ada3587-10c6-5ce6-a4bb-90cb5114f0cc"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/giant_goat"
 splat_name: "Giant Goat"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [351], "executable": false}
+splat_pages:
+- 351
 ---
 
 # Giant Goat
@@ -28,3 +29,13 @@ CR 1/2 (XP 100; PB +2)
 Ram. Melee Attack Roll: +5, reach 5 ft. Hit: 6 (1d6 + 3) Bludgeoning damage. If the target is a Large or smaller creature and the goat moved 20+ feet straight toward it immediately before the hit, the target takes an extra 5 (2d4) Bludgeoning damage and has the Prone condition.
 
 Original layout: [[../pages/351|page 351]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

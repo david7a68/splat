@@ -1,10 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "0cd5bbc9-650b-5e3c-af1c-d4dea90e2781"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/glossary/ready_action"
 splat_name: "Ready [Action]"
-splat_reference: {"source": "SRD 5.2.1", "category": "glossary", "pages": [186, 187], "executable": false}
+splat_pages:
+- 186
+- 187
 ---
 
 # Ready [Action]
@@ -22,3 +24,13 @@ When the trigger occurs, you can either take your Reaction right after the trigg
 When you Ready a spell, you cast it as normal (expending any resources used to cast it) but hold its energy, which you release with your Reaction when the trigger occurs. To be readied, a spell must have a casting time of an action, and holding on to the spell’s magic requires Concentration, which you can maintain up to the start of your next turn. If your Concentration is broken, the spell dissipates without taking effect.
 
 Original layout: [[../pages/186|page 186]], [[../pages/187|page 187]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: glossary
+> executable: false
+> ```
+

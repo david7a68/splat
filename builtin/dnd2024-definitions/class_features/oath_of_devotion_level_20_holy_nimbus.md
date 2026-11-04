@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 071dc943-e60f-5646-9efe-315208184a24
 splat_kind: rule
 splat_key: dnd2024:class_features/oath_of_devotion_level_20_holy_nimbus
 splat_name: 'Level 20: Holy Nimbus'
-splat_origin:
-  key: dnd2024:reference/pages/057
+splat_origin: dnd2024:reference/pages/057
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 57
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 57, https://www.dndbeyond.com/srd
 ---
 
 # Level 20: Holy Nimbus

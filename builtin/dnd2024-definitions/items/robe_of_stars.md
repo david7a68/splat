@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 6e0e1b04-7b5d-545d-ba2b-5be1adbcc269
 splat_kind: item
 splat_key: dnd2024:items/robe_of_stars
 splat_name: Robe of Stars
-splat_origin:
-  key: dnd2024:reference/magic_item/robe_of_stars
+splat_origin: dnd2024:reference/magic_item/robe_of_stars
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 240
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 240, https://www.dndbeyond.com/srd
 ---
 
 # Robe of Stars
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Wondrous Item |
+| Rarity | Very Rare |
+| Attunement | Yes |
+
 
 ## Source text
 
@@ -28,22 +35,9 @@ While you wear the robe, you can take a Magic action to enter the Astral Plane a
 
 Original layout: [[../../srd-5.2.1/pages/240|page 240]].
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` wondrous_item ` |
-| ` rarity ` | ` very_rare ` |
 
-### Equipment
-
-<!-- splat:values path=splat_item/equipment -->
-
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` required ` |
 
 ## Rule
 

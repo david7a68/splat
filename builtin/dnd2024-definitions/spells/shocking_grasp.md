@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 2f42c7a2-36ab-5b1d-9a9d-968c579a6c4c
 splat_kind: spell
 splat_key: dnd2024:spells/shocking_grasp
 splat_name: Shocking Grasp
-splat_origin:
-  key: dnd2024:reference/spell/shocking_grasp
+splat_origin: dnd2024:reference/spell/shocking_grasp
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 162
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 162, https://www.dndbeyond.com/srd
 ---
 
 # Shocking Grasp
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | Cantrip |
+| School | Evocation |
+| Classes | Sorcerer, Wizard |
+| Casting Time | Action |
+| Range |  |
+| Components | V, S |
+| Duration | Instantaneous |
+
 
 ## Source text
 
@@ -30,28 +41,9 @@ Cantrip Upgrade. The damage increases by 1d8 when you reach levels 5 (2d8), 11 (
 
 Original layout: [[../../srd-5.2.1/pages/162|page 162]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 0 ` |
-| ` school ` | ` evocation ` |
-| ` classes ` | ` ["sorcerer", "wizard"] ` |
-| ` components ` | ` ["verbal", "somatic"] ` |
-| ` concentration ` | ` false ` |
-| ` duration ` | ` Instantaneous ` |
-| ` casting_time ` | ` Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
-
-<!-- splat:values path=splat_spell/range -->
-
-| Field | Value |
-| --- | --- |
-| ` mode ` | ` touch ` |
 
 ## Rule
 
@@ -137,3 +129,12 @@ columns:
 | ` row_2 ` | ` 5 ` | ` 2 ` |
 | ` row_3 ` | ` 11 ` | ` 3 ` |
 | ` row_4 ` | ` 17 ` | ` 4 ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_spell_extras -->
+> 
+> ```yaml
+> range:
+>   mode: touch
+> ```
+

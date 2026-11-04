@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "155c89f8-eb9b-5e56-9a05-5bd2678b94d7"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/hezrou"
 splat_name: "Hezrou"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [298], "executable": false}
+splat_pages:
+- 298
 ---
 
 # Hezrou
@@ -43,3 +44,13 @@ Rend. Melee Attack Roll: +7, reach 5 ft. Hit: 6 (1d4 + 4) Slashing damage plus 9
 Leap. The hezrou jumps up to 30 feet by spending 10 feet of movement.
 
 Original layout: [[../pages/298|page 298]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 40eb362b-1778-5ef8-a9ca-62e90cc1c81f
 splat_kind: item
 splat_key: dnd2024:items/adamantine_armor
 splat_name: Adamantine Armor
-splat_origin:
-  key: dnd2024:reference/magic_item/adamantine_armor
+splat_origin: dnd2024:reference/magic_item/adamantine_armor
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 209
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 209, https://www.dndbeyond.com/srd
 ---
 
 # Adamantine Armor
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Armor |
+| Rarity | Uncommon |
+| Attunement | No |
+
 
 ## Source text
 
@@ -24,22 +31,9 @@ This suit of armor is reinforced with adamantine, one of the hardest substances 
 
 Original layout: [[../../srd-5.2.1/pages/209|page 209]].
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` armor ` |
-| ` rarity ` | ` uncommon ` |
 
-### Equipment
-
-<!-- splat:values path=splat_item/equipment -->
-
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` none ` |
 
 ## Rule
 

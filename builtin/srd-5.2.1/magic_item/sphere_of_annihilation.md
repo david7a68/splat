@@ -1,10 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "29869cee-3512-5f5e-a0f1-11d4909deec3"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/magic_item/sphere_of_annihilation"
 splat_name: "Sphere of Annihilation"
-splat_reference: {"source": "SRD 5.2.1", "category": "magic_item", "pages": [244, 245], "executable": false}
+splat_pages:
+- 244
+- 245
 ---
 
 # Sphere of Annihilation
@@ -32,3 +34,13 @@ Sphere Interactions. If the sphere comes into contact with a planar portal (such
 | 86–00 | A spatial rift sends the sphere and each creature and object within 180 feet of the sphere to a random plane of existence. |
 
 Original layout: [[../pages/244|page 244]], [[../pages/245|page 245]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: magic_item
+> executable: false
+> ```
+

@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "3fe63e0a-ba68-5d27-8777-16fe1e3e8442"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/salamander"
 splat_name: "Salamander"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [321], "executable": false}
+splat_pages:
+- 321
 ---
 
 # Salamander
@@ -37,3 +38,13 @@ Flame Spear. Melee or Ranged Attack Roll: +7, reach 5 ft. or range 20/60 ft. Hit
 Constrict. Strength Saving Throw: DC 15, one Large or smaller creature the salamander can see within 10 feet. Failure: 11 (2d6 + 4) Bludgeoning damage plus 7 (2d6) Fire damage. The target has the Grappled condition (escape DC 14), and it has the Restrained condition until the grapple ends.
 
 Original layout: [[../pages/321|page 321]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

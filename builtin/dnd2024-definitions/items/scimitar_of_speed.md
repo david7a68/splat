@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 44dc08e2-2b14-5ce7-8f42-ead52582e3d2
 splat_kind: item
 splat_key: dnd2024:items/scimitar_of_speed
 splat_name: Scimitar of Speed
-splat_origin:
-  key: dnd2024:reference/magic_item/scimitar_of_speed
+splat_origin: dnd2024:reference/magic_item/scimitar_of_speed
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 243
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 243, https://www.dndbeyond.com/srd
 ---
 
 # Scimitar of Speed
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Weapon |
+| Rarity | Very Rare |
+| Attunement | Yes |
+
 
 ## Source text
 
@@ -24,22 +31,9 @@ You gain a +2 bonus to attack rolls and damage rolls made with this magic weapon
 
 Original layout: [[../../srd-5.2.1/pages/243|page 243]].
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` weapon ` |
-| ` rarity ` | ` very_rare ` |
 
-### Equipment
-
-<!-- splat:values path=splat_item/equipment -->
-
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` required ` |
 
 ## Rule
 

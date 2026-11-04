@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 852f4cfa-561d-5617-ac29-10e26082efe0
 splat_kind: item
 splat_key: dnd2024:items/gloves_of_swimming_and_climbing
 splat_name: Gloves of Swimming and Climbing
-splat_origin:
-  key: dnd2024:reference/magic_item/gloves_of_swimming_and_climbing
+splat_origin: dnd2024:reference/magic_item/gloves_of_swimming_and_climbing
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 224
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 224, https://www.dndbeyond.com/srd
 ---
 
 # Gloves of Swimming and Climbing
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Wondrous Item |
+| Rarity | Uncommon |
+| Attunement | Yes |
+
 
 ## Source text
 
@@ -24,22 +31,9 @@ While wearing these gloves, you have a Climb Speed and a Swim Speed equal to you
 
 Original layout: [[../../srd-5.2.1/pages/224|page 224]].
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` wondrous_item ` |
-| ` rarity ` | ` uncommon ` |
 
-### Equipment
-
-<!-- splat:values path=splat_item/equipment -->
-
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` required ` |
 
 ## Rule
 

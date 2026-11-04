@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 523ab00e-fd3a-59a1-a53f-1698a5d55d46
 splat_kind: item
 splat_key: dnd2024:items/rod_of_security
 splat_name: Rod of Security
-splat_origin:
-  key: dnd2024:reference/magic_item/rod_of_security
+splat_origin: dnd2024:reference/magic_item/rod_of_security
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 242
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 242, https://www.dndbeyond.com/srd
 ---
 
 # Rod of Security
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Rod |
+| Rarity | Very Rare |
+| Attunement | No |
+
 
 ## Source text
 
@@ -28,22 +35,9 @@ When the time runs out or you take a Magic action to end the effect, all visitor
 
 Original layout: [[../../srd-5.2.1/pages/242|page 242]].
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` rod ` |
-| ` rarity ` | ` very_rare ` |
 
-### Equipment
-
-<!-- splat:values path=splat_item/equipment -->
-
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` none ` |
 
 ## Rule
 

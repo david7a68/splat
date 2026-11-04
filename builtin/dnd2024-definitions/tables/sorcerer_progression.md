@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: a9d22feb-65dc-57b0-a7a3-bd4d58b61f25
 splat_kind: rule
 splat_key: dnd2024:tables/sorcerer_progression
 splat_name: Sorcerer Progression
-splat_origin:
-  key: dnd2024:reference/pages/065
+splat_origin: dnd2024:reference/pages/065
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 65
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 65, https://www.dndbeyond.com/srd
 ---
 
 # Sorcerer Progression

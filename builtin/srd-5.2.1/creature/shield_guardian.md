@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "7d1d54d3-dbae-5265-a998-0bd9fb5ef230"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/shield_guardian"
 splat_name: "Shield Guardian"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [323], "executable": false}
+splat_pages:
+- 323
 ---
 
 # Shield Guardian
@@ -42,3 +43,13 @@ Fist. Melee Attack Roll: +7, reach 10 ft. Hit: 11 (2d6 + 4) Bludgeoning damage p
 Protection. Trigger: An attack roll hits the wearer of the guardian’s amulet while the wearer is within 5 feet of the guardian. Response: The wearer gains a +5 bonus to AC, including against the triggering attack and possibly causing it to miss, until the start of the guardian’s next turn.
 
 Original layout: [[../pages/323|page 323]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

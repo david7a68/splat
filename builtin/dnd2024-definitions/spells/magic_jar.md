@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 71bcb261-5e2d-5af7-b33f-f815e804046f
 splat_kind: spell
 splat_key: dnd2024:spells/magic_jar
 splat_name: Magic Jar
-splat_origin:
-  key: dnd2024:reference/spell/magic_jar
+splat_origin: dnd2024:reference/spell/magic_jar
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 146
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 146, https://www.dndbeyond.com/srd
 ---
 
 # Magic Jar
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 6 |
+| School | Necromancy |
+| Classes | Wizard |
+| Casting Time | 1 minute |
+| Range |  |
+| Components | V, S, M (a gem, crystal, or reliquary worth 500+ GP) |
+| Duration | Until dispelled |
+
 
 ## Source text
 
@@ -40,37 +51,11 @@ When the spell ends, the container is destroyed.
 
 Original layout: [[../../srd-5.2.1/pages/146|page 146]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 6 ` |
-| ` school ` | ` necromancy ` |
-| ` classes ` | ` ["wizard"] ` |
-| ` components ` | ` ["verbal", "somatic", "material"] ` |
-| ` concentration ` | ` false ` |
-| ` duration ` | ` Until dispelled ` |
-| ` casting_time ` | ` 1 minute ` |
-| ` ritual ` | ` false ` |
 
-### Range
 
-<!-- splat:values path=splat_spell/range -->
 
-| Field | Value |
-| --- | --- |
-| ` mode ` | ` self ` |
-
-### Material
-
-<!-- splat:values path=splat_spell/material -->
-
-| Field | Value |
-| --- | --- |
-| ` description ` | ` a gem, crystal, or reliquary worth 500+ GP ` |
-| ` consumed ` | ` false ` |
 
 ## Rule
 
@@ -212,3 +197,14 @@ concentration: false
 maximum:
   kind: until_dispelled
 ```
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_spell_extras -->
+> 
+> ```yaml
+> material:
+>   consumed: false
+> range:
+>   mode: self
+> ```
+

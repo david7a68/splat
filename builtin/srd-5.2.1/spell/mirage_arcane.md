@@ -1,10 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "a2fff91f-a819-5963-9db6-1d68a2149901"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/mirage_arcane"
 splat_name: "Mirage Arcane"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [149, 150], "executable": false}
+splat_pages:
+- 149
+- 150
 ---
 
 # Mirage Arcane
@@ -28,3 +30,13 @@ The illusion includes audible, visual, tactile, and olfactory elements, so it ca
 Creatures with Truesight can see through the illusion to the terrain’s true form; however, all other elements of the illusion remain, so while the creature is aware of the illusion’s presence, the creature can still physically interact with the illusion.
 
 Original layout: [[../pages/149|page 149]], [[../pages/150|page 150]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

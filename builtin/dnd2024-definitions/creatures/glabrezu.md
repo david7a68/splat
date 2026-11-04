@@ -1,36 +1,64 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 77fa8634-4077-5e9f-970a-36508e19b9f4
 splat_kind: creature
 splat_key: dnd2024:creatures/glabrezu
 splat_name: Glabrezu
-splat_origin:
-  key: dnd2024:reference/creature/glabrezu
+splat_origin: dnd2024:reference/creature/glabrezu
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 289
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 289, https://www.dndbeyond.com/srd
 ---
 
 # Glabrezu
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Large |
+| Type | Fiend (Demon) |
+| Alignment | Chaotic Evil |
+| Armor Class | 17 |
+| Hit Points | 189 (18d10 + 90) |
+| Initiative | +6 (16) |
+| Speed | 40 ft. |
+| Challenge | 9 (XP 5,000; PB +4) |
+| Skills | Deception +7, Perception +7 |
+| Senses | Truesight 120 ft.; Passive Perception 17 |
+| Languages | Abyssal; telepathy 120 ft. |
+| Resistances | Cold, Fire, Lightning |
+| Immunities | Poison; Poisoned |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 20 | +5 | +9 |
+| Dex | 15 | +2 | +2 |
+| Con | 21 | +5 | +9 |
+| Int | 19 | +4 | +4 |
+| Wis | 17 | +3 | +7 |
+| Cha | 16 | +3 | +7 |
+
 
 ## Source text
 
 <!-- SRD page 289 -->
 
-Large Fiend (Demon), Chaotic Evil\
-AC 17 Initiative +6 (16)\
-HP 189 (18d10 + 90)\
-Speed 40 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 20 +5 +9 Dex 15 +2 +2 Con 21 +5 +9\
-Int 19 +4 +4 Wis 17 +3 +7 Cha 16 +3 +7\
-Skills Deception +7, Perception +7\
-Resistances Cold, Fire, Lightning\
-Immunities Poison; Poisoned\
-Senses Truesight 120 ft.; Passive Perception 17\
-Languages Abyssal; telepathy 120 ft.\
-CR 9 (XP 5,000; PB +4)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Large Fiend (Demon), Chaotic Evil\
+> AC 17 Initiative +6 (16)\
+> HP 189 (18d10 + 90)\
+> Speed 40 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 20 +5 +9 Dex 15 +2 +2 Con 21 +5 +9\
+> Int 19 +4 +4 Wis 17 +3 +7 Cha 16 +3 +7\
+> Skills Deception +7, Perception +7\
+> Resistances Cold, Fire, Lightning\
+> Immunities Poison; Poisoned\
+> Senses Truesight 120 ft.; Passive Perception 17\
+> Languages Abyssal; telepathy 120 ft.\
+> CR 9 (XP 5,000; PB +4)
+
 
 ### Traits
 
@@ -53,48 +81,11 @@ At Will: Darkness, Detect Magic, Dispel Magic\
 
 Original layout: [[../../srd-5.2.1/pages/289|page 289]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` large ` |
-| ` type ` | ` fiend ` |
-| ` alignment ` | ` Chaotic Evil ` |
-| ` tags_text ` | ` (Demon) ` |
-| ` movement_text ` | ` 40 ft. ` |
-| ` skills_text ` | ` Deception +7, Perception +7 ` |
-| ` resistances_text ` | ` Cold, Fire, Lightning ` |
-| ` immunities_text ` | ` Poison; Poisoned ` |
-| ` senses_text ` | ` Truesight 120 ft.; Passive Perception 17 ` |
-| ` languages_text ` | ` Abyssal; telepathy 120 ft. ` |
-| ` cr_text ` | ` 9 (XP 5,000; PB +4) ` |
-| ` hit_points_text ` | ` 189 (18d10 + 90) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 20 ` | ` 9 ` |
-| ` Dexterity ` | ` 15 ` | ` 2 ` |
-| ` Constitution ` | ` 21 ` | ` 9 ` |
-| ` Intelligence ` | ` 19 ` | ` 4 ` |
-| ` Wisdom ` | ` 17 ` | ` 7 ` |
-| ` Charisma ` | ` 16 ` | ` 7 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 17 ` |  |
-| ` max_hp ` | ` 189 ` |  |
-| ` initiative ` | ` 6 ` |  |
-| ` speed ` | ` 40 ` | ` ft ` |
 
 ## Health
 

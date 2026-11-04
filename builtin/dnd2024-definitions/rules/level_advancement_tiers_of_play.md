@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: efce0835-1818-5454-a7f0-b1f5e62e501a
 splat_kind: rule
 splat_key: dnd2024:rules/level_advancement_tiers_of_play
 splat_name: Tiers of Play
-splat_origin:
-  key: dnd2024:reference/pages/023
+splat_origin: dnd2024:reference/pages/023
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 23, 24
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 23, 24, https://www.dndbeyond.com/srd
 ---
 
 # Tiers of Play

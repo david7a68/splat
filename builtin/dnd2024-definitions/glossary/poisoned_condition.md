@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 61eafb1b-773b-5cae-99d6-17e7671b0da8
 splat_kind: rule
 splat_key: dnd2024:glossary/poisoned_condition
 splat_name: Poisoned [Condition]
-splat_origin:
-  key: dnd2024:reference/glossary/poisoned_condition
+splat_origin: dnd2024:reference/glossary/poisoned_condition
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 186
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 186, https://www.dndbeyond.com/srd
 ---
 
 # Poisoned [Condition]

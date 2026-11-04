@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 5e744cdd-c403-5296-9197-622968899bba
 splat_kind: item
 splat_key: dnd2024:items/staff_of_fire
 splat_name: Staff of Fire
-splat_origin:
-  key: dnd2024:reference/magic_item/staff_of_fire
+splat_origin: dnd2024:reference/magic_item/staff_of_fire
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 245
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 245, https://www.dndbeyond.com/srd
 ---
 
 # Staff of Fire
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Staff |
+| Rarity | Very Rare |
+| Attunement | Yes |
+
 
 ## Source text
 
@@ -33,23 +40,9 @@ Regaining Charges. The staff regains 1d6 + 4 expended charges daily at dawn. If 
 
 Original layout: [[../../srd-5.2.1/pages/245|page 245]].
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` staff ` |
-| ` rarity ` | ` very_rare ` |
 
-### Equipment
-
-<!-- splat:values path=splat_item/equipment -->
-
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` required ` |
-| ` attunement_requirement_text ` | ` a Druid, Sorcerer, Warlock, or Wizard ` |
 
 ## Rule
 
@@ -162,3 +155,12 @@ effect: destroyed
 | --- | --- |
 | ` 0 ` | ` dnd2024:rules/magic_item_categories_staffs ` |
 | ` 1 ` | ` dnd2024:rules/activating_a_magic_item_spells_cast_from_items ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_item_extras -->
+> 
+> ```yaml
+> equipment:
+>   attunement_requirement_text: a Druid, Sorcerer, Warlock, or Wizard
+> ```
+

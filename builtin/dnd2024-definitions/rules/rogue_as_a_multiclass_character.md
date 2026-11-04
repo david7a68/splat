@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: d1ea6b55-eb25-5dcb-915e-b5b8c0ffb000
 splat_kind: rule
 splat_key: dnd2024:rules/rogue_as_a_multiclass_character
 splat_name: As a Multiclass Character
-splat_origin:
-  key: dnd2024:reference/pages/061
+splat_origin: dnd2024:reference/pages/061
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 61
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 61, https://www.dndbeyond.com/srd
 ---
 
 # As a Multiclass Character

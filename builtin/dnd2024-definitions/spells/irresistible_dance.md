@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 4113a55e-6142-5b7c-96b9-b896f5ecb073
 splat_kind: spell
 splat_key: dnd2024:spells/irresistible_dance
 splat_name: Irresistible Dance
-splat_origin:
-  key: dnd2024:reference/spell/irresistible_dance
+splat_origin: dnd2024:reference/spell/irresistible_dance
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 143
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 143, https://www.dndbeyond.com/srd
 ---
 
 # Irresistible Dance
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 6 |
+| School | Enchantment |
+| Classes | Bard, Wizard |
+| Casting Time | Action |
+| Range | 30 feet |
+| Components | V |
+| Duration | Concentration, up to 1 minute |
+
 
 ## Source text
 
@@ -30,28 +41,9 @@ On a failed save, the target has the Charmed condition for the duration. While C
 
 Original layout: [[../../srd-5.2.1/pages/143|page 143]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 6 ` |
-| ` school ` | ` enchantment ` |
-| ` classes ` | ` ["bard", "wizard"] ` |
-| ` components ` | ` ["verbal"] ` |
-| ` concentration ` | ` true ` |
-| ` duration ` | ` Concentration, up to 1 minute ` |
-| ` casting_time ` | ` Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
-
-<!-- splat:values path=splat_spell/range -->
-
-| Field | Value |
-| --- | --- |
-| ` feet ` | ` 30 ` |
 
 ## Rule
 

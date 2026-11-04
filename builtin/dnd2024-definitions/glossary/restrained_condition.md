@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 838b0882-4007-50ea-b151-1b931815930f
 splat_kind: rule
 splat_key: dnd2024:glossary/restrained_condition
 splat_name: Restrained [Condition]
-splat_origin:
-  key: dnd2024:reference/glossary/restrained_condition
+splat_origin: dnd2024:reference/glossary/restrained_condition
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 187
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 187, https://www.dndbeyond.com/srd
 ---
 
 # Restrained [Condition]

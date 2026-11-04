@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: fe74f7f0-7506-55ab-ab1b-6f4b064bbd09
 splat_kind: rule_group
 splat_key: dnd2024:species/dragonborn
 splat_name: Dragonborn
-splat_origin:
-  key: dnd2024:reference/pages/084
+splat_origin: dnd2024:reference/pages/084
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 84
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 84, https://www.dndbeyond.com/srd
 ---
 
 # Dragonborn

@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "844c5de4-7ea2-58c3-8cf5-a6860930ef30"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/locate_creature"
 splat_name: "Locate Creature"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [145], "executable": false}
+splat_pages:
+- 145
 ---
 
 # Locate Creature
@@ -24,3 +25,13 @@ The spell can locate a specific creature known to you or the nearest creature of
 This spell can’t locate a creature if any thickness of lead blocks a direct path between you and the creature.
 
 Original layout: [[../pages/145|page 145]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: ae870cda-c505-58dc-a490-0803e3e55015
 splat_kind: item
 splat_key: dnd2024:equipment/other_tools_disguise_kit_25_gp
 splat_name: Disguise Kit (25 GP)
-splat_origin:
-  key: dnd2024:reference/pages/094
+splat_origin: dnd2024:reference/pages/094
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 94
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 94, https://www.dndbeyond.com/srd
 ---
 
 # Disguise Kit (25 GP)
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Adventuring Gear |
+| Rarity |  |
+| Attunement | No |
+
 
 ## Source text
 
@@ -22,39 +29,13 @@ Ability: Charisma Weight: 3 lb.\
 Utilize: Apply makeup (DC 10)\
 Craft: Costume
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` adventuring_gear ` |
 
-### Equipment
 
-<!-- splat:values path=splat_item/equipment -->
 
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` none ` |
 
-### Price
 
-<!-- splat:values path=splat_item/price -->
-
-| Field | Value |
-| --- | --- |
-| ` value ` | ` 25 ` |
-| ` unit ` | ` gp ` |
-
-### Mass
-
-<!-- splat:values path=splat_item/mass -->
-
-| Field | Value |
-| --- | --- |
-| ` value ` | ` 3 ` |
-| ` unit ` | ` lb ` |
 
 ## Rule
 
@@ -98,3 +79,16 @@ crafting_rule:
 | --- | --- |
 | ` value ` | ` 3 ` |
 | ` unit ` | ` lb ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_item_extras -->
+> 
+> ```yaml
+> price:
+>   unit: gp
+>   value: 25
+> mass:
+>   unit: lb
+>   value: 3
+> ```
+

@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 842752d3-d1b1-51bc-a8dc-9fb075f0617a
 splat_kind: item
 splat_key: dnd2024:items/sentinel_shield
 splat_name: Sentinel Shield
-splat_origin:
-  key: dnd2024:reference/magic_item/sentinel_shield
+splat_origin: dnd2024:reference/magic_item/sentinel_shield
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 243
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 243, https://www.dndbeyond.com/srd
 ---
 
 # Sentinel Shield
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Armor |
+| Rarity | Uncommon |
+| Attunement | No |
+
 
 ## Source text
 
@@ -24,22 +31,9 @@ While holding this Shield, you have Advantage on Initiative rolls and Wisdom (Pe
 
 Original layout: [[../../srd-5.2.1/pages/243|page 243]].
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` armor ` |
-| ` rarity ` | ` uncommon ` |
 
-### Equipment
-
-<!-- splat:values path=splat_item/equipment -->
-
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` none ` |
 
 ## Rule
 

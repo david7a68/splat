@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 3c3f5909-070e-53de-87dd-451f85616a4b
 splat_kind: rule
 splat_key: dnd2024:glossary/hostile_attitude
 splat_name: Hostile [Attitude]
-splat_origin:
-  key: dnd2024:reference/glossary/hostile_attitude
+splat_origin: dnd2024:reference/glossary/hostile_attitude
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 183
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 183, https://www.dndbeyond.com/srd
 ---
 
 # Hostile [Attitude]

@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "7d322225-a4d8-5f4e-8602-641143e4daa9"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/fabricate"
 splat_name: "Fabricate"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [129], "executable": false}
+splat_pages:
+- 129
 ---
 
 # Fabricate
@@ -24,3 +25,13 @@ Choose raw materials that you can see within range. You can fabricate a Large or
 Creatures and magic items can’t be created by this spell. You also can’t use it to create items that require a high degree of skill—such as weapons and armor—unless you have proficiency with the type of Artisan’s Tools used to craft such objects.
 
 Original layout: [[../pages/129|page 129]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 2453ff76-7894-510c-a00b-a82913d32f92
 splat_kind: spell
 splat_key: dnd2024:spells/fire_shield
 splat_name: Fire Shield
-splat_origin:
-  key: dnd2024:reference/spell/fire_shield
+splat_origin: dnd2024:reference/spell/fire_shield
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 132
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 132, https://www.dndbeyond.com/srd
 ---
 
 # Fire Shield
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 4 |
+| School | Evocation |
+| Classes | Druid, Sorcerer, Wizard |
+| Casting Time | Action |
+| Range |  |
+| Components | V, S, M (a bit of phosphorus or a firefly) |
+| Duration | 10 minutes |
+
 
 ## Source text
 
@@ -32,37 +43,11 @@ In addition, whenever a creature within 5 feet of you hits you with a melee atta
 
 Original layout: [[../../srd-5.2.1/pages/132|page 132]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 4 ` |
-| ` school ` | ` evocation ` |
-| ` classes ` | ` ["druid", "sorcerer", "wizard"] ` |
-| ` components ` | ` ["verbal", "somatic", "material"] ` |
-| ` concentration ` | ` false ` |
-| ` duration ` | ` 10 minutes ` |
-| ` casting_time ` | ` Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
 
-<!-- splat:values path=splat_spell/range -->
 
-| Field | Value |
-| --- | --- |
-| ` mode ` | ` self ` |
-
-### Material
-
-<!-- splat:values path=splat_spell/material -->
-
-| Field | Value |
-| --- | --- |
-| ` description ` | ` a bit of phosphorus or a firefly ` |
-| ` consumed ` | ` false ` |
 
 ## Rule
 
@@ -152,3 +137,14 @@ retaliatory_damage:
 | ` source ` | ` supplied_world_geometry ` |
 | ` unknown_facts ` | ` require_resolution ` |
 | ` infer_unprovided_geometry ` | ` false ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_spell_extras -->
+> 
+> ```yaml
+> material:
+>   consumed: false
+> range:
+>   mode: self
+> ```
+

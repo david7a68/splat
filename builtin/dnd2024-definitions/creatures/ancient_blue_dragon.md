@@ -1,35 +1,62 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: eb0c302e-d1ce-5d59-a29c-6ca17b77f484
 splat_kind: creature
 splat_key: dnd2024:creatures/ancient_blue_dragon
 splat_name: Ancient Blue Dragon
-splat_origin:
-  key: dnd2024:reference/creature/ancient_blue_dragon
+splat_origin: dnd2024:reference/creature/ancient_blue_dragon
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 267
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 267, https://www.dndbeyond.com/srd
 ---
 
 # Ancient Blue Dragon
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Gargantuan |
+| Type | Dragon (Chromatic) |
+| Alignment | Lawful Evil |
+| Armor Class | 22 |
+| Hit Points | 481 (26d20 + 208) |
+| Initiative | +14 (24) |
+| Speed | 40 ft., Burrow 40 ft., Fly 80 ft. |
+| Challenge | 23 (XP 50,000, or 62,000 in lair; PB +7) |
+| Skills | Perception +17, Stealth +7 |
+| Senses | Blindsight 60 ft., Darkvision 120 ft.; Passive Perception 27 |
+| Languages | Common, Draconic |
+| Immunities | Lightning |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 29 | +9 | +9 |
+| Dex | 10 | +0 | +7 |
+| Con | 27 | +8 | +8 |
+| Int | 18 | +4 | +4 |
+| Wis | 17 | +3 | +10 |
+| Cha | 25 | +7 | +7 |
+
 
 ## Source text
 
 <!-- SRD page 267 -->
 
-Gargantuan Dragon (Chromatic), Lawful Evil\
-AC 22 Initiative +14 (24)\
-HP 481 (26d20 + 208)\
-Speed 40 ft., Burrow 40 ft., Fly 80 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 29 +9 +9 Dex 10 +0 +7 Con 27 +8 +8\
-Int 18 +4 +4 Wis 17 +3 +10 Cha 25 +7 +7\
-Skills Perception +17, Stealth +7\
-Immunities Lightning\
-Senses Blindsight 60 ft., Darkvision 120 ft.; Passive Perception 27\
-Languages Common, Draconic\
-CR 23 (XP 50,000, or 62,000 in lair; PB +7)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Gargantuan Dragon (Chromatic), Lawful Evil\
+> AC 22 Initiative +14 (24)\
+> HP 481 (26d20 + 208)\
+> Speed 40 ft., Burrow 40 ft., Fly 80 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 29 +9 +9 Dex 10 +0 +7 Con 27 +8 +8\
+> Int 18 +4 +4 Wis 17 +3 +10 Cha 25 +7 +7\
+> Skills Perception +17, Stealth +7\
+> Immunities Lightning\
+> Senses Blindsight 60 ft., Darkvision 120 ft.; Passive Perception 27\
+> Languages Common, Draconic\
+> CR 23 (XP 50,000, or 62,000 in lair; PB +7)
+
 
 ### Traits
 
@@ -60,49 +87,11 @@ Tail Swipe. The dragon makes one Rend attack.
 
 Original layout: [[../../srd-5.2.1/pages/267|page 267]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` gargantuan ` |
-| ` type ` | ` dragon ` |
-| ` alignment ` | ` Lawful Evil ` |
-| ` tags_text ` | ` (Chromatic) ` |
-| ` movement_text ` | ` 40 ft., Burrow 40 ft., Fly 80 ft. ` |
-| ` skills_text ` | ` Perception +17, Stealth +7 ` |
-| ` immunities_text ` | ` Lightning ` |
-| ` senses_text ` | ` Blindsight 60 ft., Darkvision 120 ft.; Passive Perception 27 ` |
-| ` languages_text ` | ` Common, Draconic ` |
-| ` cr_text ` | ` 23 (XP 50,000, or 62,000 in lair; PB +7) ` |
-| ` hit_points_text ` | ` 481 (26d20 + 208) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 29 ` | ` 9 ` |
-| ` Dexterity ` | ` 10 ` | ` 7 ` |
-| ` Constitution ` | ` 27 ` | ` 8 ` |
-| ` Intelligence ` | ` 18 ` | ` 4 ` |
-| ` Wisdom ` | ` 17 ` | ` 10 ` |
-| ` Charisma ` | ` 25 ` | ` 7 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 22 ` |  |
-| ` max_hp ` | ` 481 ` |  |
-| ` initiative ` | ` 14 ` |  |
-| ` speed ` | ` 40 ` | ` ft ` |
-| ` burrow_speed ` | ` 40 ` | ` ft ` |
-| ` fly_speed ` | ` 80 ` | ` ft ` |
 
 ## Health
 
@@ -457,3 +446,16 @@ other_components: spell_definition_unless_waived
 | ` provider ` | ` caller ` |
 | ` required_facts ` | ` ["distance", "area_membership", "visibility", "occupancy", "movement_path"] ` |
 | ` validate_against_typed_constraints ` | ` true ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_stats_extras -->
+> 
+> ```yaml
+> fly_speed:
+>   unit: ft
+>   value: 80
+> burrow_speed:
+>   unit: ft
+>   value: 40
+> ```
+

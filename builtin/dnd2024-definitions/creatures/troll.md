@@ -1,34 +1,60 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 5a1e2ab8-e9aa-5c8b-ba09-8d5ccbbfc4da
 splat_kind: creature
 splat_key: dnd2024:creatures/troll
 splat_name: Troll
-splat_origin:
-  key: dnd2024:reference/creature/troll
+splat_origin: dnd2024:reference/creature/troll
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 333
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 333, https://www.dndbeyond.com/srd
 ---
 
 # Troll
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Large |
+| Type | Giant |
+| Alignment | Chaotic Evil |
+| Armor Class | 15 |
+| Hit Points | 94 (9d10 + 45) |
+| Initiative | +1 (11) |
+| Speed | 30 ft. |
+| Challenge | 5 (XP 1,800; PB +3) |
+| Skills | Perception +5 |
+| Senses | Darkvision 60 ft.; Passive Perception 15 |
+| Languages | Giant |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 18 | +4 | +4 |
+| Dex | 13 | +1 | +1 |
+| Con | 20 | +5 | +5 |
+| Int | 7 | -2 | -2 |
+| Wis | 9 | -1 | -1 |
+| Cha | 7 | -2 | -2 |
+
 
 ## Source text
 
 <!-- SRD page 333 -->
 
-Large Giant, Chaotic Evil\
-AC 15 Initiative +1 (11)\
-HP 94 (9d10 + 45)\
-Speed 30 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 18 +4 +4 Dex 13 +1 +1 Con 20 +5 +5\
-Int 7 −2 −2 Wis 9 −1 −1 Cha 7 −2 −2\
-Skills Perception +5\
-Senses Darkvision 60 ft.; Passive Perception 15\
-Languages Giant\
-CR 5 (XP 1,800; PB +3)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Large Giant, Chaotic Evil\
+> AC 15 Initiative +1 (11)\
+> HP 94 (9d10 + 45)\
+> Speed 30 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 18 +4 +4 Dex 13 +1 +1 Con 20 +5 +5\
+> Int 7 −2 −2 Wis 9 −1 −1 Cha 7 −2 −2\
+> Skills Perception +5\
+> Senses Darkvision 60 ft.; Passive Perception 15\
+> Languages Giant\
+> CR 5 (XP 1,800; PB +3)
+
 
 ### Traits
 
@@ -48,45 +74,11 @@ Charge. The troll moves up to half its Speed straight toward an enemy it can see
 
 Original layout: [[../../srd-5.2.1/pages/333|page 333]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` large ` |
-| ` type ` | ` giant ` |
-| ` alignment ` | ` Chaotic Evil ` |
-| ` movement_text ` | ` 30 ft. ` |
-| ` skills_text ` | ` Perception +5 ` |
-| ` senses_text ` | ` Darkvision 60 ft.; Passive Perception 15 ` |
-| ` languages_text ` | ` Giant ` |
-| ` cr_text ` | ` 5 (XP 1,800; PB +3) ` |
-| ` hit_points_text ` | ` 94 (9d10 + 45) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 18 ` | ` 4 ` |
-| ` Dexterity ` | ` 13 ` | ` 1 ` |
-| ` Constitution ` | ` 20 ` | ` 5 ` |
-| ` Intelligence ` | ` 7 ` | ` -2 ` |
-| ` Wisdom ` | ` 9 ` | ` -1 ` |
-| ` Charisma ` | ` 7 ` | ` -2 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 15 ` |  |
-| ` max_hp ` | ` 94 ` |  |
-| ` initiative ` | ` 1 ` |  |
-| ` speed ` | ` 30 ` | ` ft ` |
 
 ## Health
 

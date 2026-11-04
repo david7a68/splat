@@ -1,35 +1,62 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 9705a4e4-6d7c-5510-91bb-86a3686c0c3d
 splat_kind: creature
 splat_key: dnd2024:creatures/adult_gold_dragon
 splat_name: Adult Gold Dragon
-splat_origin:
-  key: dnd2024:reference/creature/adult_gold_dragon
+splat_origin: dnd2024:reference/creature/adult_gold_dragon
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 291, 292
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 291, 292, https://www.dndbeyond.com/srd
 ---
 
 # Adult Gold Dragon
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Huge |
+| Type | Dragon (Metallic) |
+| Alignment | Lawful Good |
+| Armor Class | 19 |
+| Hit Points | 243 (18d12 + 126) |
+| Initiative | +14 (24) |
+| Speed | 40 ft., Fly 80 ft., Swim 40 ft. |
+| Challenge | 17 (XP 18,000, or 20,000 in lair; PB +6) |
+| Skills | Insight +8, Perception +14, Persuasion +13, Stealth +8 |
+| Senses | Blindsight 60 ft., Darkvision 120 ft.; Passive Perception 24 |
+| Languages | Common, Draconic |
+| Immunities | Fire |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 27 | +8 | +8 |
+| Dex | 14 | +2 | +8 |
+| Con | 25 | +7 | +7 |
+| Int | 16 | +3 | +3 |
+| Wis | 15 | +2 | +8 |
+| Cha | 24 | +7 | +7 |
+
 
 ## Source text
 
 <!-- SRD page 291 -->
 
-Huge Dragon (Metallic), Lawful Good\
-AC 19 Initiative +14 (24)\
-HP 243 (18d12 + 126)\
-Speed 40 ft., Fly 80 ft., Swim 40 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 27 +8 +8 Dex 14 +2 +8 Con 25 +7 +7\
-Int 16 +3 +3 Wis 15 +2 +8 Cha 24 +7 +7\
-Skills Insight +8, Perception +14, Persuasion +13, Stealth +8\
-Immunities Fire\
-Senses Blindsight 60 ft., Darkvision 120 ft.; Passive Perception 24\
-Languages Common, Draconic\
-CR 17 (XP 18,000, or 20,000 in lair; PB +6)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Huge Dragon (Metallic), Lawful Good\
+> AC 19 Initiative +14 (24)\
+> HP 243 (18d12 + 126)\
+> Speed 40 ft., Fly 80 ft., Swim 40 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 27 +8 +8 Dex 14 +2 +8 Con 25 +7 +7\
+> Int 16 +3 +3 Wis 15 +2 +8 Cha 24 +7 +7\
+> Skills Insight +8, Perception +14, Persuasion +13, Stealth +8\
+> Immunities Fire\
+> Senses Blindsight 60 ft., Darkvision 120 ft.; Passive Perception 24\
+> Languages Common, Draconic\
+> CR 17 (XP 18,000, or 20,000 in lair; PB +6)
+
 
 ### Traits
 
@@ -67,49 +94,11 @@ Pounce. The dragon moves up to half its Speed, and it makes one Rend attack.
 
 Original layout: [[../../srd-5.2.1/pages/291|page 291]], [[../../srd-5.2.1/pages/292|page 292]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` huge ` |
-| ` type ` | ` dragon ` |
-| ` alignment ` | ` Lawful Good ` |
-| ` tags_text ` | ` (Metallic) ` |
-| ` movement_text ` | ` 40 ft., Fly 80 ft., Swim 40 ft. ` |
-| ` skills_text ` | ` Insight +8, Perception +14, Persuasion +13, Stealth +8 ` |
-| ` immunities_text ` | ` Fire ` |
-| ` senses_text ` | ` Blindsight 60 ft., Darkvision 120 ft.; Passive Perception 24 ` |
-| ` languages_text ` | ` Common, Draconic ` |
-| ` cr_text ` | ` 17 (XP 18,000, or 20,000 in lair; PB +6) ` |
-| ` hit_points_text ` | ` 243 (18d12 + 126) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 27 ` | ` 8 ` |
-| ` Dexterity ` | ` 14 ` | ` 8 ` |
-| ` Constitution ` | ` 25 ` | ` 7 ` |
-| ` Intelligence ` | ` 16 ` | ` 3 ` |
-| ` Wisdom ` | ` 15 ` | ` 8 ` |
-| ` Charisma ` | ` 24 ` | ` 7 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 19 ` |  |
-| ` max_hp ` | ` 243 ` |  |
-| ` initiative ` | ` 14 ` |  |
-| ` speed ` | ` 40 ` | ` ft ` |
-| ` fly_speed ` | ` 80 ` | ` ft ` |
-| ` swim_speed ` | ` 40 ` | ` ft ` |
 
 ## Health
 
@@ -550,3 +539,16 @@ geometry:
 unlisted_success_branch: no_effect
 unlisted_duration: until_removed_by_applicable_rule
 ```
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_stats_extras -->
+> 
+> ```yaml
+> fly_speed:
+>   unit: ft
+>   value: 80
+> swim_speed:
+>   unit: ft
+>   value: 40
+> ```
+

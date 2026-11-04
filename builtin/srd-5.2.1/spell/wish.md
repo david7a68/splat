@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "879d305e-3e86-50b6-971c-aa5334c8fd06"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/wish"
 splat_name: "Wish"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [175], "executable": false}
+splat_pages:
+- 175
 ---
 
 # Wish
@@ -40,3 +41,13 @@ Reshape Reality. You may wish for something not included in any of the other eff
 The stress of casting Wish to produce any effect other than duplicating another spell weakens you. After enduring that stress, each time you cast a spell until you finish a Long Rest, you take 1d10 Necrotic damage per level of that spell. This damage can’t be reduced or prevented in any way. In addition, your Strength score becomes 3 for 2d4 days. For each of those days that you spend resting and doing nothing more than light activity, your remaining recovery time decreases by 2 days. Finally, there is a 33 percent chance that you are unable to cast Wish ever again if you suffer this stress.
 
 Original layout: [[../pages/175|page 175]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

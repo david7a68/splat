@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "47efa6bb-77a9-5306-8003-71f8eb96cac0"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/magic_item/ammunition_of_slaying"
 splat_name: "Ammunition of Slaying"
-splat_reference: {"source": "SRD 5.2.1", "category": "magic_item", "pages": [209], "executable": false}
+splat_pages:
+- 209
 ---
 
 # Ammunition of Slaying
@@ -28,3 +29,13 @@ After dealing its extra damage to a creature, the ammunition becomes nonmagical.
 | 46–50 | Humanoids | 91–00 | Undead |
 
 Original layout: [[../pages/209|page 209]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: magic_item
+> executable: false
+> ```
+

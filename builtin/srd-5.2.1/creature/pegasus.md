@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "edff89ae-32ab-5c24-bbce-a957286edb0c"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/pegasus"
 splat_name: "Pegasus"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [313], "executable": false}
+splat_pages:
+- 313
 ---
 
 # Pegasus
@@ -28,3 +29,13 @@ CR 2 (XP 450; PB +2)
 Hooves. Melee Attack Roll: +6, reach 5 ft. Hit: 7 (1d6 + 4) Bludgeoning damage plus 5 (2d4) Radiant damage.
 
 Original layout: [[../pages/313|page 313]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

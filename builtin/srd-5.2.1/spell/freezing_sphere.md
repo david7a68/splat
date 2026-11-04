@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "d34501dc-a82c-5a49-9c67-1883d074619c"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/freezing_sphere"
 splat_name: "Freezing Sphere"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [134], "executable": false}
+splat_pages:
+- 134
 ---
 
 # Freezing Sphere
@@ -26,3 +27,13 @@ You can refrain from firing the globe after completing the spell’s casting. If
 Using a Higher-Level Spell Slot. The damage increases by 1d6 for each spell slot level above 6.
 
 Original layout: [[../pages/134|page 134]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

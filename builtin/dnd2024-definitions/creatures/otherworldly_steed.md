@@ -1,33 +1,60 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: b0baef5c-6b59-58df-8e5d-5c7da31d6d49
 splat_kind: creature
 splat_key: dnd2024:creatures/otherworldly_steed
 splat_name: Otherworldly Steed
-splat_origin:
-  key: dnd2024:reference/creature/otherworldly_steed
+splat_origin: dnd2024:reference/creature/otherworldly_steed
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 131
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 131, https://www.dndbeyond.com/srd
 ---
 
 # Otherworldly Steed
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Large |
+| Type | Celestial, Fey, or Fiend (Your Choice) |
+| Alignment | Neutral |
+| Armor Class | 10 + 1 per spell level |
+| Hit Points | 5 + 10 per spell level (the steed has a number of Hit Dice [d10s] equal to the spell’s level) |
+| Initiative |  |
+| Speed | 60 ft., Fly 60 ft. (requires level 4+ spell) |
+| Challenge | None (XP 0; PB equals your Proficiency Bonus) |
+| Senses | Passive Perception 11 |
+| Languages | Telepathy 1 mile (works only with you) |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 18 | +4 | +4 |
+| Dex | 12 | +1 | +1 |
+| Con | 14 | +2 | +2 |
+| Int | 6 | -2 | -2 |
+| Wis | 12 | +1 | +1 |
+| Cha | 8 | -1 | -1 |
+
+%% splat shape=hp_text,ac_text %%
+
 
 ## Source text
 
 <!-- SRD page 131 -->
 
-Large Celestial, Fey, or Fiend (Your Choice), Neutral\
-AC 10 + 1 per spell level\
-HP 5 + 10 per spell level (the steed has a number of Hit Dice [d10s] equal to the spell’s level)\
-Speed 60 ft., Fly 60 ft. (requires level 4+ spell)\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 18 +4 +4 Dex 12 +1 +1 Con 14 +2 +2\
-Int 6 −2 −2 Wis 12 +1 +1 Cha 8 −1 −1\
-Senses Passive Perception 11\
-Languages Telepathy 1 mile (works only with you)\
-CR None (XP 0; PB equals your Proficiency Bonus)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Large Celestial, Fey, or Fiend (Your Choice), Neutral\
+> AC 10 + 1 per spell level\
+> HP 5 + 10 per spell level (the steed has a number of Hit Dice [d10s] equal to the spell’s level)\
+> Speed 60 ft., Fly 60 ft. (requires level 4+ spell)\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 18 +4 +4 Dex 12 +1 +1 Con 14 +2 +2\
+> Int 6 −2 −2 Wis 12 +1 +1 Cha 8 −1 −1\
+> Senses Passive Perception 11\
+> Languages Telepathy 1 mile (works only with you)\
+> CR None (XP 0; PB equals your Proficiency Bonus)
+
 
 ### Traits
 
@@ -47,44 +74,11 @@ Healing Touch (Celestial Only; Recharges after a Long Rest). One creature within
 
 Original layout: [[../../srd-5.2.1/pages/131|page 131]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` large ` |
-| ` type ` | ` celestial ` |
-| ` alignment ` | ` Neutral ` |
-| ` type_options_text ` | ` Celestial, Fey, or Fiend (Your Choice) ` |
-| ` movement_text ` | ` 60 ft., Fly 60 ft. (requires level 4+ spell) ` |
-| ` senses_text ` | ` Passive Perception 11 ` |
-| ` languages_text ` | ` Telepathy 1 mile (works only with you) ` |
-| ` cr_text ` | ` None (XP 0; PB equals your Proficiency Bonus) ` |
-| ` hit_points_text ` | ` 5 + 10 per spell level (the steed has a number of Hit Dice [d10s] equal to the spell’s level) ` |
-| ` armor_class_text ` | ` 10 + 1 per spell level ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 18 ` | ` 4 ` |
-| ` Dexterity ` | ` 12 ` | ` 1 ` |
-| ` Constitution ` | ` 14 ` | ` 2 ` |
-| ` Intelligence ` | ` 6 ` | ` -2 ` |
-| ` Wisdom ` | ` 12 ` | ` 1 ` |
-| ` Charisma ` | ` 8 ` | ` -1 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` speed ` | ` 60 ` | ` ft ` |
-| ` fly_speed ` | ` 60 ` | ` ft ` |
 
 ## Health
 
@@ -399,3 +393,13 @@ geometry_assumptions:
   - plane
   - form_appearance
 ```
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_stats_extras -->
+> 
+> ```yaml
+> fly_speed:
+>   unit: ft
+>   value: 60
+> ```
+

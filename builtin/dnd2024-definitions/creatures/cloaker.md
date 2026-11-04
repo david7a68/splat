@@ -1,35 +1,62 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 445df1a9-08f5-5544-9b84-d2fa512baa74
 splat_kind: creature
 splat_key: dnd2024:creatures/cloaker
 splat_name: Cloaker
-splat_origin:
-  key: dnd2024:reference/creature/cloaker
+splat_origin: dnd2024:reference/creature/cloaker
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 274
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 274, https://www.dndbeyond.com/srd
 ---
 
 # Cloaker
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Large |
+| Type | Aberration |
+| Alignment | Chaotic Neutral |
+| Armor Class | 14 |
+| Hit Points | 91 (14d10 + 14) |
+| Initiative | +5 (15) |
+| Speed | 10 ft., Fly 40 ft. |
+| Challenge | 8 (XP 3,900; PB +3) |
+| Skills | Stealth +5 |
+| Senses | Darkvision 120 ft.; Passive Perception 12 |
+| Languages | Deep Speech, Undercommon |
+| Immunities | Frightened |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 17 | +3 | +3 |
+| Dex | 15 | +2 | +2 |
+| Con | 12 | +1 | +1 |
+| Int | 13 | +1 | +1 |
+| Wis | 14 | +2 | +2 |
+| Cha | 7 | -2 | -2 |
+
 
 ## Source text
 
 <!-- SRD page 274 -->
 
-Large Aberration, Chaotic Neutral\
-AC 14 Initiative +5 (15)\
-HP 91 (14d10 + 14)\
-Speed 10 ft., Fly 40 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 17 +3 +3 Dex 15 +2 +2 Con 12 +1 +1\
-Int 13 +1 +1 Wis 14 +2 +2 Cha 7 −2 −2\
-Skills Stealth +5\
-Immunities Frightened\
-Senses Darkvision 120 ft.; Passive Perception 12\
-Languages Deep Speech, Undercommon\
-CR 8 (XP 3,900; PB +3)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Large Aberration, Chaotic Neutral\
+> AC 14 Initiative +5 (15)\
+> HP 91 (14d10 + 14)\
+> Speed 10 ft., Fly 40 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 17 +3 +3 Dex 15 +2 +2 Con 12 +1 +1\
+> Int 13 +1 +1 Wis 14 +2 +2 Cha 7 −2 −2\
+> Skills Stealth +5\
+> Immunities Frightened\
+> Senses Darkvision 120 ft.; Passive Perception 12\
+> Languages Deep Speech, Undercommon\
+> CR 8 (XP 3,900; PB +3)
+
 
 ### Traits
 
@@ -53,47 +80,11 @@ Phantasms (Recharge after a Short or Long Rest). The cloaker casts the Mirror Im
 
 Original layout: [[../../srd-5.2.1/pages/274|page 274]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` large ` |
-| ` type ` | ` aberration ` |
-| ` alignment ` | ` Chaotic Neutral ` |
-| ` movement_text ` | ` 10 ft., Fly 40 ft. ` |
-| ` skills_text ` | ` Stealth +5 ` |
-| ` immunities_text ` | ` Frightened ` |
-| ` senses_text ` | ` Darkvision 120 ft.; Passive Perception 12 ` |
-| ` languages_text ` | ` Deep Speech, Undercommon ` |
-| ` cr_text ` | ` 8 (XP 3,900; PB +3) ` |
-| ` hit_points_text ` | ` 91 (14d10 + 14) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 17 ` | ` 3 ` |
-| ` Dexterity ` | ` 15 ` | ` 2 ` |
-| ` Constitution ` | ` 12 ` | ` 1 ` |
-| ` Intelligence ` | ` 13 ` | ` 1 ` |
-| ` Wisdom ` | ` 14 ` | ` 2 ` |
-| ` Charisma ` | ` 7 ` | ` -2 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 14 ` |  |
-| ` max_hp ` | ` 91 ` |  |
-| ` initiative ` | ` 5 ` |  |
-| ` speed ` | ` 10 ` | ` ft ` |
-| ` fly_speed ` | ` 40 ` | ` ft ` |
 
 ## Health
 
@@ -356,3 +347,13 @@ geometry_assumptions:
   - plane
   - form_appearance
 ```
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_stats_extras -->
+> 
+> ```yaml
+> fly_speed:
+>   unit: ft
+>   value: 40
+> ```
+

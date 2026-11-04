@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 6c344711-b7dc-5066-ba78-2d8444c7ba8f
 splat_kind: rule
 splat_key: dnd2024:rules/trinkets
 splat_name: Trinkets
-splat_origin:
-  key: dnd2024:reference/pages/026
+splat_origin: dnd2024:reference/pages/026
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 26, 27
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 26, 27, https://www.dndbeyond.com/srd
 ---
 
 # Trinkets

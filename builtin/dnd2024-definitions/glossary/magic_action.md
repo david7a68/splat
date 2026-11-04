@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: be712871-bf75-5349-b321-b51143649e3d
 splat_kind: rule
 splat_key: dnd2024:glossary/magic_action
 splat_name: Magic [Action]
-splat_origin:
-  key: dnd2024:reference/glossary/magic_action
+splat_origin: dnd2024:reference/glossary/magic_action
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 185
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 185, https://www.dndbeyond.com/srd
 ---
 
 # Magic [Action]

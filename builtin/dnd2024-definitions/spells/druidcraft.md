@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 980b488b-41db-5b44-a10f-103ef931e39e
 splat_kind: spell
 splat_key: dnd2024:spells/druidcraft
 splat_name: Druidcraft
-splat_origin:
-  key: dnd2024:reference/spell/druidcraft
+splat_origin: dnd2024:reference/spell/druidcraft
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 126
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 126, https://www.dndbeyond.com/srd
 ---
 
 # Druidcraft
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | Cantrip |
+| School | Transmutation |
+| Classes | Druid |
+| Casting Time | Action |
+| Range | 30 feet |
+| Components | V, S |
+| Duration | Instantaneous |
+
 
 ## Source text
 
@@ -36,28 +47,9 @@ Fire Play. You light or snuff out a candle, a torch, or a campfire.
 
 Original layout: [[../../srd-5.2.1/pages/126|page 126]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 0 ` |
-| ` school ` | ` transmutation ` |
-| ` classes ` | ` ["druid"] ` |
-| ` components ` | ` ["verbal", "somatic"] ` |
-| ` concentration ` | ` false ` |
-| ` duration ` | ` Instantaneous ` |
-| ` casting_time ` | ` Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
-
-<!-- splat:values path=splat_spell/range -->
-
-| Field | Value |
-| --- | --- |
-| ` feet ` | ` 30 ` |
 
 ## Rule
 

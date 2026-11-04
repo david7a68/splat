@@ -1,10 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "35a261df-2b80-5f81-8f47-c52f80d5f952"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/wall_of_ice"
 splat_name: "Wall of Ice"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [172, 173], "executable": false}
+splat_pages:
+- 172
+- 173
 ---
 
 # Wall of Ice
@@ -30,3 +32,13 @@ A creature moving through the sheet of frigid air for the first time on a turn m
 Using a Higher-Level Spell Slot. The damage the wall deals when it appears increases by 2d6 and the damage from passing through the sheet of frigid air increases by 1d6 for each spell slot level above 6.
 
 Original layout: [[../pages/172|page 172]], [[../pages/173|page 173]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

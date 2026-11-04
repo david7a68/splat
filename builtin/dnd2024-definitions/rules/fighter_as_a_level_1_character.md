@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 49ccdad9-d2eb-5c4a-b1ce-870bf0a32f07
 splat_kind: rule
 splat_key: dnd2024:rules/fighter_as_a_level_1_character
 splat_name: As a Level 1 Character
-splat_origin:
-  key: dnd2024:reference/pages/047
+splat_origin: dnd2024:reference/pages/047
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 47
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 47, https://www.dndbeyond.com/srd
 ---
 
 # As a Level 1 Character

@@ -1,10 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "e5d5bb66-982b-58b0-b596-e4a80cf290f6"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/zombie"
 splat_name: "Zombie"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [343, 344], "executable": false}
+splat_pages:
+- 343
+- 344
 ---
 
 # Zombie
@@ -34,3 +36,13 @@ Undead Fortitude. If damage reduces the zombie to 0 Hit Points, it makes a Const
 Slam. Melee Attack Roll: +3, reach 5 ft. Hit: 5 (1d8 + 1) Bludgeoning damage.
 
 Original layout: [[../pages/343|page 343]], [[../pages/344|page 344]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

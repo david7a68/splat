@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "ef320b02-936d-529e-82fb-8553c21fd5b2"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/green_hag"
 splat_name: "Green Hag"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [295], "executable": false}
+splat_pages:
+- 295
 ---
 
 # Green Hag
@@ -42,3 +43,13 @@ Spellcasting. The hag casts one of the following spells, requiring no Material c
 At Will: Dancing Lights, Disguise Self (24-hour duration), Invisibility (self only, and the hag leaves no tracks while Invisible), Minor Illusion, Ray of Sickness (level 3 version)
 
 Original layout: [[../pages/295|page 295]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

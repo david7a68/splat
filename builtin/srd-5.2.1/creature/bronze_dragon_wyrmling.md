@@ -1,10 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "e7e51ab1-3b15-59d4-bfa6-906569c81c87"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/bronze_dragon_wyrmling"
 splat_name: "Bronze Dragon Wyrmling"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [269, 270], "executable": false}
+splat_pages:
+- 269
+- 270
 ---
 
 # Bronze Dragon Wyrmling
@@ -41,3 +43,13 @@ Lightning Breath (Recharge 5–6). Dexterity Saving Throw: DC 12, each creature 
 Repulsion Breath. Strength Saving Throw: DC 12, each creature in a 30-foot Cone. Failure: The target is pushed up to 30 feet straight away from the dragon and has the Prone condition.
 
 Original layout: [[../pages/269|page 269]], [[../pages/270|page 270]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

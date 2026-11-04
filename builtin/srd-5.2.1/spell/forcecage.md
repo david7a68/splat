@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "f29097ae-77bc-596e-9183-c8ee0f41c8d3"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/forcecage"
 splat_name: "Forcecage"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [134], "executable": false}
+splat_pages:
+- 134
 ---
 
 # Forcecage
@@ -28,3 +29,13 @@ A creature inside the cage can’t leave it by nonmagical means. If the creature
 This spell can’t be dispelled by Dispel Magic.
 
 Original layout: [[../pages/134|page 134]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

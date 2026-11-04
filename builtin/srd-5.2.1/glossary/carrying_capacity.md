@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "02b83948-8ea9-5359-84da-0dd04e525c27"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/glossary/carrying_capacity"
 splat_name: "Carrying Capacity"
-splat_reference: {"source": "SRD 5.2.1", "category": "glossary", "pages": [178], "executable": false}
+splat_pages:
+- 178
 ---
 
 # Carrying Capacity
@@ -26,3 +27,13 @@ While dragging, lifting, or pushing weight in excess of the maximum weight you c
 | Gargantuan | Str. × 120 lb. | Str. × 240 lb. |
 
 Original layout: [[../pages/178|page 178]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: glossary
+> executable: false
+> ```
+

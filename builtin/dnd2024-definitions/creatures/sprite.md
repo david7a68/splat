@@ -1,34 +1,60 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 5ff9859e-7b55-5d3c-9841-f7f6300087bb
 splat_kind: creature
 splat_key: dnd2024:creatures/sprite
 splat_name: Sprite
-splat_origin:
-  key: dnd2024:reference/creature/sprite
+splat_origin: dnd2024:reference/creature/sprite
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 329
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 329, https://www.dndbeyond.com/srd
 ---
 
 # Sprite
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Tiny |
+| Type | Fey |
+| Alignment | Neutral Good |
+| Armor Class | 15 |
+| Hit Points | 10 (4d4) |
+| Initiative | +4 (14) |
+| Speed | 10 ft., Fly 40 ft. |
+| Challenge | 1/4 (XP 50; PB +2) |
+| Skills | Perception +3, Stealth +8 |
+| Senses | Passive Perception 13 |
+| Languages | Common, Elvish, Sylvan |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 3 | -4 | -4 |
+| Dex | 18 | +4 | +4 |
+| Con | 10 | +0 | +0 |
+| Int | 14 | +2 | +2 |
+| Wis | 13 | +1 | +1 |
+| Cha | 11 | +0 | +0 |
+
 
 ## Source text
 
 <!-- SRD page 329 -->
 
-Tiny Fey, Neutral Good\
-AC 15  Initiative +4 (14)\
-HP 10 (4d4)\
-Speed 10 ft., Fly 40 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 3 −4 −4 Dex 18 +4 +4 Con 10 +0 +0\
-Int 14 +2 +2 Wis 13 +1 +1 Cha 11 +0 +0\
-Skills Perception +3, Stealth +8\
-Senses Passive Perception 13\
-Languages Common, Elvish, Sylvan\
-CR 1/4 (XP 50; PB +2)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Tiny Fey, Neutral Good\
+> AC 15  Initiative +4 (14)\
+> HP 10 (4d4)\
+> Speed 10 ft., Fly 40 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 3 −4 −4 Dex 18 +4 +4 Con 10 +0 +0\
+> Int 14 +2 +2 Wis 13 +1 +1 Cha 11 +0 +0\
+> Skills Perception +3, Stealth +8\
+> Senses Passive Perception 13\
+> Languages Common, Elvish, Sylvan\
+> CR 1/4 (XP 50; PB +2)
+
 
 ### Actions
 
@@ -42,46 +68,11 @@ Invisibility. The sprite casts Invisibility on itself, requiring no spell compon
 
 Original layout: [[../../srd-5.2.1/pages/329|page 329]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` tiny ` |
-| ` type ` | ` fey ` |
-| ` alignment ` | ` Neutral Good ` |
-| ` movement_text ` | ` 10 ft., Fly 40 ft. ` |
-| ` skills_text ` | ` Perception +3, Stealth +8 ` |
-| ` senses_text ` | ` Passive Perception 13 ` |
-| ` languages_text ` | ` Common, Elvish, Sylvan ` |
-| ` cr_text ` | ` 1/4 (XP 50; PB +2) ` |
-| ` hit_points_text ` | ` 10 (4d4) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 3 ` | ` -4 ` |
-| ` Dexterity ` | ` 18 ` | ` 4 ` |
-| ` Constitution ` | ` 10 ` | ` 0 ` |
-| ` Intelligence ` | ` 14 ` | ` 2 ` |
-| ` Wisdom ` | ` 13 ` | ` 1 ` |
-| ` Charisma ` | ` 11 ` | ` 0 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 15 ` |  |
-| ` max_hp ` | ` 10 ` |  |
-| ` initiative ` | ` 4 ` |  |
-| ` speed ` | ` 10 ` | ` ft ` |
-| ` fly_speed ` | ` 40 ` | ` ft ` |
 
 ## Health
 
@@ -254,3 +245,13 @@ geometry:
 unlisted_success_branch: no_effect
 unlisted_duration: until_removed_by_applicable_rule
 ```
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_stats_extras -->
+> 
+> ```yaml
+> fly_speed:
+>   unit: ft
+>   value: 40
+> ```
+

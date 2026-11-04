@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: b8aaf636-c9ef-547d-b777-d2c8ab19ffaa
 splat_kind: rule
 splat_key: dnd2024:glossary/ability_score_and_modifier
 splat_name: Ability Score and Modifier
-splat_origin:
-  key: dnd2024:reference/glossary/ability_score_and_modifier
+splat_origin: dnd2024:reference/glossary/ability_score_and_modifier
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 176
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 176, https://www.dndbeyond.com/srd
 ---
 
 # Ability Score and Modifier

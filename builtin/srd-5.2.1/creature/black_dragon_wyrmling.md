@@ -1,10 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "6f8bb22f-706c-5645-80c4-063ab3c76b7c"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/black_dragon_wyrmling"
 splat_name: "Black Dragon Wyrmling"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [263, 264], "executable": false}
+splat_pages:
+- 263
+- 264
 ---
 
 # Black Dragon Wyrmling
@@ -39,3 +41,13 @@ Rend. Melee Attack Roll: +4, reach 5 ft. Hit: 5 (1d6 + 2) Slashing damage plus 2
 Acid Breath (Recharge 5–6). Dexterity Saving Throw: DC 11, each creature in a 15-foot-long, 5-foot-wide Line. Failure: 22 (5d8) Acid damage. Success: Half damage.
 
 Original layout: [[../pages/263|page 263]], [[../pages/264|page 264]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

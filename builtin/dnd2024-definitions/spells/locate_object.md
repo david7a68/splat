@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 162482da-06c9-57c0-bb21-ed2effd1e491
 splat_kind: spell
 splat_key: dnd2024:spells/locate_object
 splat_name: Locate Object
-splat_origin:
-  key: dnd2024:reference/spell/locate_object
+splat_origin: dnd2024:reference/spell/locate_object
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 145
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 145, https://www.dndbeyond.com/srd
 ---
 
 # Locate Object
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 2 |
+| School | Divination |
+| Classes | Bard, Cleric, Druid, Paladin, Ranger, Wizard |
+| Casting Time | Action |
+| Range |  |
+| Components | V, S, M (a forked twig) |
+| Duration | Concentration, up to 10 minutes |
+
 
 ## Source text
 
@@ -32,37 +43,11 @@ This spell can’t locate an object if any thickness of lead blocks a direct pat
 
 Original layout: [[../../srd-5.2.1/pages/145|page 145]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 2 ` |
-| ` school ` | ` divination ` |
-| ` classes ` | ` ["bard", "cleric", "druid", "paladin", "ranger", "wizard"] ` |
-| ` components ` | ` ["verbal", "somatic", "material"] ` |
-| ` concentration ` | ` true ` |
-| ` duration ` | ` Concentration, up to 10 minutes ` |
-| ` casting_time ` | ` Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
 
-<!-- splat:values path=splat_spell/range -->
 
-| Field | Value |
-| --- | --- |
-| ` mode ` | ` self ` |
-
-### Material
-
-<!-- splat:values path=splat_spell/material -->
-
-| Field | Value |
-| --- | --- |
-| ` description ` | ` a forked twig ` |
-| ` consumed ` | ` false ` |
 
 ## Rule
 
@@ -106,3 +91,14 @@ object_kind:
 | ` material ` | ` lead ` |
 | ` thickness ` | ` any ` |
 | ` path ` | ` direct_caster_to_object ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_spell_extras -->
+> 
+> ```yaml
+> material:
+>   consumed: false
+> range:
+>   mode: self
+> ```
+

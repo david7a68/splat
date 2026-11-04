@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: d4d4815c-1dc1-5546-81a7-0429135dfedf
 splat_kind: rule
 splat_key: dnd2024:class_features/fiend_patron_level_10_fiendish_resilience
 splat_name: 'Level 10: Fiendish Resilience'
-splat_origin:
-  key: dnd2024:reference/pages/076
+splat_origin: dnd2024:reference/pages/076
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 76
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 76, https://www.dndbeyond.com/srd
 ---
 
 # Level 10: Fiendish Resilience

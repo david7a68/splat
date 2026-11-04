@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 6776851c-fb4c-5fac-a0f3-e0e73424054d
 splat_kind: item
 splat_key: dnd2024:items/periapt_of_health
 splat_name: Periapt of Health
-splat_origin:
-  key: dnd2024:reference/magic_item/periapt_of_health
+splat_origin: dnd2024:reference/magic_item/periapt_of_health
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 234
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 234, https://www.dndbeyond.com/srd
 ---
 
 # Periapt of Health
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Wondrous Item |
+| Rarity | Uncommon |
+| Attunement | Yes |
+
 
 ## Source text
 
@@ -26,22 +33,9 @@ In addition, you have Advantage on saving throws to avoid or end the Poisoned co
 
 Original layout: [[../../srd-5.2.1/pages/234|page 234]].
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` wondrous_item ` |
-| ` rarity ` | ` uncommon ` |
 
-### Equipment
-
-<!-- splat:values path=splat_item/equipment -->
-
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` required ` |
 
 ## Rule
 

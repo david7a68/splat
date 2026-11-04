@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 26fabfbe-7fc0-5d8f-8a44-013a4f8e1d7d
 splat_kind: rule
 splat_key: dnd2024:rules/traps_fire_casting_statue
 splat_name: Fire-Casting Statue
-splat_origin:
-  key: dnd2024:reference/pages/199
+splat_origin: dnd2024:reference/pages/199
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 199, 200
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 199, 200, https://www.dndbeyond.com/srd
 ---
 
 # Fire-Casting Statue

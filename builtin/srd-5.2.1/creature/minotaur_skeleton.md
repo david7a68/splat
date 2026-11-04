@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "6e79e07c-af8c-5f04-86c2-cda910ced6c9"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/minotaur_skeleton"
 splat_name: "Minotaur Skeleton"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [326], "executable": false}
+splat_pages:
+- 326
 ---
 
 # Minotaur Skeleton
@@ -31,3 +32,13 @@ Gore. Melee Attack Roll: +6, reach 5 ft. Hit: 11 (2d6 + 4) Piercing damage. If t
 Slam. Melee Attack Roll: +6, reach 5 ft. Hit: 15 (2d10 + 4) Bludgeoning damage.
 
 Original layout: [[../pages/326|page 326]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

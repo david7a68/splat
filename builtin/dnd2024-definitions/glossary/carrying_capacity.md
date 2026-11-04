@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: e041315e-4ff5-595e-aea6-d711a3482fcd
 splat_kind: rule
 splat_key: dnd2024:glossary/carrying_capacity
 splat_name: Carrying Capacity
-splat_origin:
-  key: dnd2024:reference/glossary/carrying_capacity
+splat_origin: dnd2024:reference/glossary/carrying_capacity
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 178
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 178, https://www.dndbeyond.com/srd
 ---
 
 # Carrying Capacity

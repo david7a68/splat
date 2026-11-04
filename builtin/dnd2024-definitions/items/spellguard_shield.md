@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 05caec82-0065-5872-8cc1-05fc07d9addd
 splat_kind: item
 splat_key: dnd2024:items/spellguard_shield
 splat_name: Spellguard Shield
-splat_origin:
-  key: dnd2024:reference/magic_item/spellguard_shield
+splat_origin: dnd2024:reference/magic_item/spellguard_shield
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 244
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 244, https://www.dndbeyond.com/srd
 ---
 
 # Spellguard Shield
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Armor |
+| Rarity | Very Rare |
+| Attunement | Yes |
+
 
 ## Source text
 
@@ -24,22 +31,9 @@ While holding this Shield, you have Advantage on saving throws against spells an
 
 Original layout: [[../../srd-5.2.1/pages/244|page 244]].
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` armor ` |
-| ` rarity ` | ` very_rare ` |
 
-### Equipment
-
-<!-- splat:values path=splat_item/equipment -->
-
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` required ` |
 
 ## Rule
 

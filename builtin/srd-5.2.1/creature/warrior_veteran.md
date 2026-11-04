@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "bf7903ba-b588-5d1c-9751-a5250b076bc7"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/warrior_veteran"
 splat_name: "Warrior Veteran"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [337], "executable": false}
+splat_pages:
+- 337
 ---
 
 # Warrior Veteran
@@ -37,3 +38,13 @@ Heavy Crossbow. Ranged Attack Roll: +3, range 100/400 ft. Hit: 12 (2d10 + 1) Pie
 Parry. Trigger: The warrior is hit by a melee attack roll while holding a weapon. Response: The warrior adds 2 to its AC against that attack, possibly causing it to miss.
 
 Original layout: [[../pages/337|page 337]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

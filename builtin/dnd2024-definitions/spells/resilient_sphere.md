@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 44a28709-8b1c-5801-814a-505dabb20225
 splat_kind: spell
 splat_key: dnd2024:spells/resilient_sphere
 splat_name: Resilient Sphere
-splat_origin:
-  key: dnd2024:reference/spell/resilient_sphere
+splat_origin: dnd2024:reference/spell/resilient_sphere
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 158
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 158, https://www.dndbeyond.com/srd
 ---
 
 # Resilient Sphere
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 4 |
+| School | Abjuration |
+| Classes | Wizard |
+| Casting Time | Action |
+| Range | 30 feet |
+| Components | V, S, M (a glass sphere) |
+| Duration | Concentration, up to 1 minute |
+
 
 ## Source text
 
@@ -32,37 +43,11 @@ The sphere is weightless and just large enough to contain the creature or object
 
 Original layout: [[../../srd-5.2.1/pages/158|page 158]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 4 ` |
-| ` school ` | ` abjuration ` |
-| ` classes ` | ` ["wizard"] ` |
-| ` components ` | ` ["verbal", "somatic", "material"] ` |
-| ` concentration ` | ` true ` |
-| ` duration ` | ` Concentration, up to 1 minute ` |
-| ` casting_time ` | ` Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
 
-<!-- splat:values path=splat_spell/range -->
 
-| Field | Value |
-| --- | --- |
-| ` feet ` | ` 30 ` |
-
-### Material
-
-<!-- splat:values path=splat_spell/material -->
-
-| Field | Value |
-| --- | --- |
-| ` description ` | ` a glass sphere ` |
-| ` consumed ` | ` false ` |
 
 ## Rule
 
@@ -143,3 +128,12 @@ other_creatures_can_pick_up_and_move: true
 | Field | Value |
 | --- | --- |
 | ` eligible ` | ` ["willing_creature", "object"] ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_spell_extras -->
+> 
+> ```yaml
+> material:
+>   consumed: false
+> ```
+

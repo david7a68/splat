@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "eba306c6-f7b2-59dc-b5dc-1a12651fefa2"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/scrying"
 splat_name: "Scrying"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [160], "executable": false}
+splat_pages:
+- 160
 ---
 
 # Scrying
@@ -36,3 +37,13 @@ On a failed save, the spell creates an Invisible, intangible sensor within 10 fe
 Instead of targeting a creature, you can target a location you have seen. When you do so, the sensor appears at that location and doesn’t move.
 
 Original layout: [[../pages/160|page 160]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

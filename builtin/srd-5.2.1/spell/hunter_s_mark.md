@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "871abc9b-8aa7-5f63-8783-842fe280d1ec"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/hunter_s_mark"
 splat_name: "Hunter’s Mark"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [141], "executable": false}
+splat_pages:
+- 141
 ---
 
 # Hunter’s Mark
@@ -24,3 +25,13 @@ If the target drops to 0 Hit Points before this spell ends, you can take a Bonus
 Using a Higher-Level Spell Slot. Your Concentration can last longer with a spell slot of level 3–4 (up to 8 hours) or 5+ (up to 24 hours).
 
 Original layout: [[../pages/141|page 141]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

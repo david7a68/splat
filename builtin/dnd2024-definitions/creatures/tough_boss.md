@@ -1,34 +1,60 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: e046c72b-0474-5e7d-abb7-02703b4ac38c
 splat_kind: creature
 splat_key: dnd2024:creatures/tough_boss
 splat_name: Tough Boss
-splat_origin:
-  key: dnd2024:reference/creature/tough_boss
+splat_origin: dnd2024:reference/creature/tough_boss
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 332
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 332, https://www.dndbeyond.com/srd
 ---
 
 # Tough Boss
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Medium or Small |
+| Type | Humanoid |
+| Alignment | Neutral |
+| Armor Class | 16 |
+| Hit Points | 82 (11d8 + 33) |
+| Initiative | +2 (12) |
+| Speed | 30 ft. |
+| Challenge | 4 (XP 1,100; PB +2) |
+| Senses | Passive Perception 10 |
+| Languages | Common plus one other language |
+| Gear | Chain Mail, Heavy Crossbow, Warhammer |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 17 | +3 | +5 |
+| Dex | 14 | +2 | +2 |
+| Con | 16 | +3 | +5 |
+| Int | 11 | +0 | +0 |
+| Wis | 10 | +0 | +0 |
+| Cha | 11 | +0 | +2 |
+
 
 ## Source text
 
 <!-- SRD page 332 -->
 
 Medium or Small Humanoid, Neutral\
-AC 16  Initiative +2 (12)\
-HP 82 (11d8 + 33)\
-Speed 30 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 17 +3 +5 Dex 14 +2 +2 Con 16 +3 +5\
-Int 11 +0 +0 Wis 10 +0 +0 Cha 11 +0 +2\
-Gear Chain Mail, Heavy Crossbow, Warhammer\
-Senses Passive Perception 10\
-Languages Common plus one other language\
-CR 4 (XP 1,100; PB +2)
+> [!quote]- Printed stat block (not read; edit the table above)
+> AC 16  Initiative +2 (12)\
+> HP 82 (11d8 + 33)\
+> Speed 30 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 17 +3 +5 Dex 14 +2 +2 Con 16 +3 +5\
+> Int 11 +0 +0 Wis 10 +0 +0 Cha 11 +0 +2\
+> Gear Chain Mail, Heavy Crossbow, Warhammer\
+> Senses Passive Perception 10\
+> Languages Common plus one other language\
+> CR 4 (XP 1,100; PB +2)
+
 
 ### Traits
 
@@ -44,46 +70,11 @@ Heavy Crossbow. Ranged Attack Roll: +4, range 100/400 ft. Hit: 13 (2d10 + 2) Pie
 
 Original layout: [[../../srd-5.2.1/pages/332|page 332]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` medium ` |
-| ` type ` | ` humanoid ` |
-| ` alignment ` | ` Neutral ` |
-| ` size_options_text ` | ` Medium or Small ` |
-| ` movement_text ` | ` 30 ft. ` |
-| ` gear_text ` | ` Chain Mail, Heavy Crossbow, Warhammer ` |
-| ` senses_text ` | ` Passive Perception 10 ` |
-| ` languages_text ` | ` Common plus one other language ` |
-| ` cr_text ` | ` 4 (XP 1,100; PB +2) ` |
-| ` hit_points_text ` | ` 82 (11d8 + 33) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 17 ` | ` 5 ` |
-| ` Dexterity ` | ` 14 ` | ` 2 ` |
-| ` Constitution ` | ` 16 ` | ` 5 ` |
-| ` Intelligence ` | ` 11 ` | ` 0 ` |
-| ` Wisdom ` | ` 10 ` | ` 0 ` |
-| ` Charisma ` | ` 11 ` | ` 2 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 16 ` |  |
-| ` max_hp ` | ` 82 ` |  |
-| ` initiative ` | ` 2 ` |  |
-| ` speed ` | ` 30 ` | ` ft ` |
 
 ## Health
 

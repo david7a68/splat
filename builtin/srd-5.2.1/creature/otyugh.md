@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "fd10494c-28ce-5e85-b486-35262262f64e"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/otyugh"
 splat_name: "Otyugh"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [313], "executable": false}
+splat_pages:
+- 313
 ---
 
 # Otyugh
@@ -33,3 +34,13 @@ Tentacle. Melee Attack Roll: +6, reach 10 ft. Hit: 12 (2d8 + 3) Piercing damage.
 Tentacle Slam. Constitution Saving Throw: DC 14, each creature Grappled by the otyugh. Failure: 16 (3d8 + 3) Bludgeoning damage, and the target has the Stunned condition until the start of the otyugh’s next turn. Success: Half damage only.
 
 Original layout: [[../pages/313|page 313]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

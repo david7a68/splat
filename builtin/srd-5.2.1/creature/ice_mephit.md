@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "2f2b5967-cee4-526d-8697-3428be977b95"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/ice_mephit"
 splat_name: "Ice Mephit"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [307], "executable": false}
+splat_pages:
+- 307
 ---
 
 # Ice Mephit
@@ -38,3 +39,13 @@ Fog Cloud (1/Day). The mephit casts Fog Cloud, requiring no spell components and
 Frost Breath (Recharge 6). Constitution Saving Throw: DC 10, each creature in a 15-foot Cone. Failure: 7 (3d4) Cold damage. Success: Half damage.
 
 Original layout: [[../pages/307|page 307]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

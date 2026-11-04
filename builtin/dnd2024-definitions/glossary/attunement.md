@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 2ab77d10-2d87-547e-a68e-d3261669781e
 splat_kind: rule
 splat_key: dnd2024:glossary/attunement
 splat_name: Attunement
-splat_origin:
-  key: dnd2024:reference/glossary/attunement
+splat_origin: dnd2024:reference/glossary/attunement
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 177
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 177, https://www.dndbeyond.com/srd
 ---
 
 # Attunement

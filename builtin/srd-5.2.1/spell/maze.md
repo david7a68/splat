@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "62f16505-c731-5e40-82bc-06f586cf889a"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/maze"
 splat_name: "Maze"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [148], "executable": false}
+splat_pages:
+- 148
 ---
 
 # Maze
@@ -24,3 +25,13 @@ The target can take a Study action to try to escape. When it does so, it makes a
 When the spell ends, the target reappears in the space it left or, if that space is occupied, in the nearest unoccupied space.
 
 Original layout: [[../pages/148|page 148]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "4cb3e4a6-4bf6-52a5-893c-92503f5a6745"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/legend_lore"
 splat_name: "Legend Lore"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [144], "executable": false}
+splat_pages:
+- 144
 ---
 
 # Legend Lore
@@ -24,3 +25,13 @@ The lore might consist of important details, amusing revelations, or even secret
 If the famous thing you chose isn’t actually famous, you hear sad musical notes played on a trombone, and the spell fails.
 
 Original layout: [[../pages/144|page 144]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

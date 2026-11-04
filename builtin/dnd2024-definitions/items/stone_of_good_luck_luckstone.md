@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 1def14bc-dd94-5aed-aa96-1603e2e9b7d5
 splat_kind: item
 splat_key: dnd2024:items/stone_of_good_luck_luckstone
 splat_name: Stone of Good Luck (Luckstone)
-splat_origin:
-  key: dnd2024:reference/magic_item/stone_of_good_luck_luckstone
+splat_origin: dnd2024:reference/magic_item/stone_of_good_luck_luckstone
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 248
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 248, https://www.dndbeyond.com/srd
 ---
 
 # Stone of Good Luck (Luckstone)
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Wondrous Item |
+| Rarity | Uncommon |
+| Attunement | Yes |
+
 
 ## Source text
 
@@ -24,22 +31,9 @@ While this polished agate is on your person, you gain a +1 bonus to ability chec
 
 Original layout: [[../../srd-5.2.1/pages/248|page 248]].
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` wondrous_item ` |
-| ` rarity ` | ` uncommon ` |
 
-### Equipment
-
-<!-- splat:values path=splat_item/equipment -->
-
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` required ` |
 
 ## Rule
 

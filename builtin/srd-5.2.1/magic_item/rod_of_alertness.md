@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "6724b77a-6ec1-55b5-a629-8eaaba4bd5a5"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/magic_item/rod_of_alertness"
 splat_name: "Rod of Alertness"
-splat_reference: {"source": "SRD 5.2.1", "category": "magic_item", "pages": [241], "executable": false}
+splat_pages:
+- 241
 ---
 
 # Rod of Alertness
@@ -32,3 +33,13 @@ Protective Aura. As a Magic action, you can plant the haft end of the rod in the
 The rod’s head stops glowing and the effect ends after 10 minutes or when a creature takes a Magic action to pull the rod from the ground. Once used, this property can’t be used again until the next dawn.
 
 Original layout: [[../pages/241|page 241]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: magic_item
+> executable: false
+> ```
+

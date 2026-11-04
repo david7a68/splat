@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: f6d9bfb2-c33a-57d6-982b-847d019de796
 splat_kind: rule
 splat_key: dnd2024:glossary/attack_action
 splat_name: Attack [Action]
-splat_origin:
-  key: dnd2024:reference/glossary/attack_action
+splat_origin: dnd2024:reference/glossary/attack_action
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 177
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 177, https://www.dndbeyond.com/srd
 ---
 
 # Attack [Action]

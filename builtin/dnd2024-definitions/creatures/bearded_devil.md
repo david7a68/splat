@@ -1,35 +1,62 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 172a6671-e997-51ae-b11a-9885c15c3af9
 splat_kind: creature
 splat_key: dnd2024:creatures/bearded_devil
 splat_name: Bearded Devil
-splat_origin:
-  key: dnd2024:reference/creature/bearded_devil
+splat_origin: dnd2024:reference/creature/bearded_devil
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 262, 263
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 262, 263, https://www.dndbeyond.com/srd
 ---
 
 # Bearded Devil
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Medium |
+| Type | Fiend (Devil) |
+| Alignment | Lawful Evil |
+| Armor Class | 13 |
+| Hit Points | 58 (9d8 + 18) |
+| Initiative | +2 (12) |
+| Speed | 30 ft. |
+| Challenge | 3 (XP 700; PB +2) |
+| Senses | Darkvision 120 ft. (unimpeded by magical Darkness); Passive Perception 10 |
+| Languages | Infernal; telepathy 120 ft. |
+| Resistances | Cold |
+| Immunities | Fire, Poison; Frightened, Poisoned |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 16 | +3 | +5 |
+| Dex | 15 | +2 | +2 |
+| Con | 15 | +2 | +4 |
+| Int | 9 | -1 | -1 |
+| Wis | 11 | +0 | +0 |
+| Cha | 14 | +2 | +4 |
+
 
 ## Source text
 
 <!-- SRD page 262 -->
 
-Medium Fiend (Devil), Lawful Evil\
-AC 13 Initiative +2 (12)\
-HP 58 (9d8 + 18)\
-Speed 30 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 16 +3 +5 Dex 15 +2 +2 Con 15 +2 +4\
-Int 9 −1 −1 Wis 11 +0 +0 Cha 14 +2 +4\
-Resistances Cold\
-Immunities Fire, Poison; Frightened, Poisoned\
-Senses Darkvision 120 ft. (unimpeded by magical Darkness); Passive Perception 10\
-Languages Infernal; telepathy 120 ft.\
-CR 3 (XP 700; PB +2)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Medium Fiend (Devil), Lawful Evil\
+> AC 13 Initiative +2 (12)\
+> HP 58 (9d8 + 18)\
+> Speed 30 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 16 +3 +5 Dex 15 +2 +2 Con 15 +2 +4\
+> Int 9 −1 −1 Wis 11 +0 +0 Cha 14 +2 +4\
+> Resistances Cold\
+> Immunities Fire, Poison; Frightened, Poisoned\
+> Senses Darkvision 120 ft. (unimpeded by magical Darkness); Passive Perception 10\
+> Languages Infernal; telepathy 120 ft.\
+> CR 3 (XP 700; PB +2)
+
 
 <!-- SRD page 263 -->
 
@@ -47,47 +74,11 @@ Infernal Glaive. Melee Attack Roll: +5, reach 10 ft. Hit: 8 (1d10 + 3) Slashing 
 
 Original layout: [[../../srd-5.2.1/pages/262|page 262]], [[../../srd-5.2.1/pages/263|page 263]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` medium ` |
-| ` type ` | ` fiend ` |
-| ` alignment ` | ` Lawful Evil ` |
-| ` tags_text ` | ` (Devil) ` |
-| ` movement_text ` | ` 30 ft. ` |
-| ` resistances_text ` | ` Cold ` |
-| ` immunities_text ` | ` Fire, Poison; Frightened, Poisoned ` |
-| ` senses_text ` | ` Darkvision 120 ft. (unimpeded by magical Darkness); Passive Perception 10 ` |
-| ` languages_text ` | ` Infernal; telepathy 120 ft. ` |
-| ` cr_text ` | ` 3 (XP 700; PB +2) ` |
-| ` hit_points_text ` | ` 58 (9d8 + 18) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 16 ` | ` 5 ` |
-| ` Dexterity ` | ` 15 ` | ` 2 ` |
-| ` Constitution ` | ` 15 ` | ` 4 ` |
-| ` Intelligence ` | ` 9 ` | ` -1 ` |
-| ` Wisdom ` | ` 11 ` | ` 0 ` |
-| ` Charisma ` | ` 14 ` | ` 4 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 13 ` |  |
-| ` max_hp ` | ` 58 ` |  |
-| ` initiative ` | ` 2 ` |  |
-| ` speed ` | ` 30 ` | ` ft ` |
 
 ## Health
 

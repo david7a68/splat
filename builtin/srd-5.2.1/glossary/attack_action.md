@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "84b537b4-0be0-5282-aebc-b3944d695c20"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/glossary/attack_action"
 splat_name: "Attack [Action]"
-splat_reference: {"source": "SRD 5.2.1", "category": "glossary", "pages": [177], "executable": false}
+splat_pages:
+- 177
 ---
 
 # Attack [Action]
@@ -18,3 +19,13 @@ Equipping and Unequipping Weapons. You can either equip or unequip one weapon wh
 Moving between Attacks. If you move on your turn and have a feature, such as Extra Attack, that gives you more than one attack as part of the Attack action, you can use some or all of that movement to move between those attacks.
 
 Original layout: [[../pages/177|page 177]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: glossary
+> executable: false
+> ```
+

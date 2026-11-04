@@ -1,37 +1,66 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 9e1c2359-fb23-576e-abf4-42956b5e8bc6
 splat_kind: creature
 splat_key: dnd2024:creatures/lich
 splat_name: Lich
-splat_origin:
-  key: dnd2024:reference/creature/lich
+splat_origin: dnd2024:reference/creature/lich
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 304
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 304, https://www.dndbeyond.com/srd
 ---
 
 # Lich
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Medium |
+| Type | Undead (Wizard) |
+| Alignment | Neutral Evil |
+| Armor Class | 20 |
+| Hit Points | 315 (42d8 + 126) |
+| Initiative | +17 (27) |
+| Speed | 30 ft. |
+| Challenge | 21 (XP 33,000, or 41,000 in lair; PB +7) |
+| Skills | Arcana +19, History +12, Insight +9, Perception +9 |
+| Senses | Truesight 120 ft.; Passive Perception 19 |
+| Languages | All |
+| Gear | Component Pouch |
+| Resistances | Cold, Lightning |
+| Immunities | Necrotic, Poison; Charmed, Exhaustion, Frightened, Paralyzed, Poisoned |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 11 | +0 | +0 |
+| Dex | 16 | +3 | +10 |
+| Con | 16 | +3 | +10 |
+| Int | 21 | +5 | +12 |
+| Wis | 14 | +2 | +9 |
+| Cha | 16 | +3 | +3 |
+
 
 ## Source text
 
 <!-- SRD page 304 -->
 
-Medium Undead (Wizard), Neutral Evil\
-AC 20 Initiative +17 (27)\
-HP 315 (42d8 + 126)\
-Speed 30 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 11 +0 +0 Dex 16 +3 +10 Con 16 +3 +10\
-Int 21 +5 +12 Wis 14 +2 +9 Cha 16 +3 +3\
-Skills Arcana +19, History +12, Insight +9, Perception +9\
-Resistances Cold, Lightning\
-Immunities Necrotic, Poison; Charmed, Exhaustion, Frightened, Paralyzed, Poisoned\
-Gear Component Pouch\
-Senses Truesight 120 ft.; Passive Perception 19\
-Languages All\
-CR 21 (XP 33,000, or 41,000 in lair; PB +7)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Medium Undead (Wizard), Neutral Evil\
+> AC 20 Initiative +17 (27)\
+> HP 315 (42d8 + 126)\
+> Speed 30 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 11 +0 +0 Dex 16 +3 +10 Con 16 +3 +10\
+> Int 21 +5 +12 Wis 14 +2 +9 Cha 16 +3 +3\
+> Skills Arcana +19, History +12, Insight +9, Perception +9\
+> Resistances Cold, Lightning\
+> Immunities Necrotic, Poison; Charmed, Exhaustion, Frightened, Paralyzed, Poisoned\
+> Gear Component Pouch\
+> Senses Truesight 120 ft.; Passive Perception 19\
+> Languages All\
+> CR 21 (XP 33,000, or 41,000 in lair; PB +7)
+
 
 ### Traits
 
@@ -70,49 +99,11 @@ Frightening Gaze. The lich casts Fear, using the same spellcasting ability as Sp
 
 Original layout: [[../../srd-5.2.1/pages/304|page 304]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` medium ` |
-| ` type ` | ` undead ` |
-| ` alignment ` | ` Neutral Evil ` |
-| ` tags_text ` | ` (Wizard) ` |
-| ` movement_text ` | ` 30 ft. ` |
-| ` skills_text ` | ` Arcana +19, History +12, Insight +9, Perception +9 ` |
-| ` resistances_text ` | ` Cold, Lightning ` |
-| ` immunities_text ` | ` Necrotic, Poison; Charmed, Exhaustion, Frightened, Paralyzed, Poisoned ` |
-| ` gear_text ` | ` Component Pouch ` |
-| ` senses_text ` | ` Truesight 120 ft.; Passive Perception 19 ` |
-| ` languages_text ` | ` All ` |
-| ` cr_text ` | ` 21 (XP 33,000, or 41,000 in lair; PB +7) ` |
-| ` hit_points_text ` | ` 315 (42d8 + 126) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 11 ` | ` 0 ` |
-| ` Dexterity ` | ` 16 ` | ` 10 ` |
-| ` Constitution ` | ` 16 ` | ` 10 ` |
-| ` Intelligence ` | ` 21 ` | ` 12 ` |
-| ` Wisdom ` | ` 14 ` | ` 9 ` |
-| ` Charisma ` | ` 16 ` | ` 3 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 20 ` |  |
-| ` max_hp ` | ` 315 ` |  |
-| ` initiative ` | ` 17 ` |  |
-| ` speed ` | ` 30 ` | ` ft ` |
 
 ## Health
 

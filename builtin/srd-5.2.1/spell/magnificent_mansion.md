@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "ead3f48b-7875-566f-aff2-5120ba9085bb"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/magnificent_mansion"
 splat_name: "Magnificent Mansion"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [147], "executable": false}
+splat_pages:
+- 147
 ---
 
 # Magnificent Mansion
@@ -28,3 +29,13 @@ A staff of 100 near-transparent servants attends all who enter. You determine th
 When the spell ends, any creatures or objects left inside the extradimensional space are expelled into the unoccupied spaces nearest to the entrance.
 
 Original layout: [[../pages/147|page 147]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "93a58bb5-2d99-5049-b27b-e252d2cfca5b"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/nightmare"
 splat_name: "Nightmare"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [311], "executable": false}
+splat_pages:
+- 311
 ---
 
 # Nightmare
@@ -36,3 +37,13 @@ Hooves. Melee Attack Roll: +6, reach 5 ft. Hit: 13 (2d8 + 4) Bludgeoning damage 
 Ethereal Stride. The nightmare and up to three willing creatures within 5 feet of it teleport to the Ethereal Plane from the Material Plane or vice versa.
 
 Original layout: [[../pages/311|page 311]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

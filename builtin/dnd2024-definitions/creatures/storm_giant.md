@@ -1,36 +1,64 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: e042044b-02ee-5924-a25f-5af0cc5317c0
 splat_kind: creature
 splat_key: dnd2024:creatures/storm_giant
 splat_name: Storm Giant
-splat_origin:
-  key: dnd2024:reference/creature/storm_giant
+splat_origin: dnd2024:reference/creature/storm_giant
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 330, 331
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 330, 331, https://www.dndbeyond.com/srd
 ---
 
 # Storm Giant
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Huge |
+| Type | Giant |
+| Alignment | Chaotic Good |
+| Armor Class | 16 |
+| Hit Points | 230 (20d12 + 100) |
+| Initiative | +7 (17) |
+| Speed | 50 ft., Fly 25 ft. (hover), Swim 50 ft. |
+| Challenge | 13 (XP 10,000; PB +5) |
+| Skills | Arcana +8, Athletics +14, History +8, Perception +10 |
+| Senses | Darkvision 120 ft., Truesight 30 ft.; Passive Perception 20 |
+| Languages | Common, Giant |
+| Resistances | Cold |
+| Immunities | Lightning, Thunder |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 29 | +9 | +14 |
+| Dex | 14 | +2 | +2 |
+| Con | 20 | +5 | +10 |
+| Int | 16 | +3 | +3 |
+| Wis | 20 | +5 | +10 |
+| Cha | 18 | +4 | +9 |
+
 
 ## Source text
 
 <!-- SRD page 330 -->
 
-Huge Giant, Chaotic Good\
-AC 16 Initiative +7 (17)\
-HP 230 (20d12 + 100)\
-Speed 50 ft., Fly 25 ft. (hover), Swim 50 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 29 +9 +14 Dex 14 +2 +2 Con 20 +5 +10\
-Int 16 +3 +3 Wis 20 +5 +10 Cha 18 +4 +9\
-Skills Arcana +8, Athletics +14, History +8, Perception +10\
-Resistances Cold\
-Immunities Lightning, Thunder\
-Senses Darkvision 120 ft., Truesight 30 ft.; Passive Perception 20\
-Languages Common, Giant\
-CR 13 (XP 10,000; PB +5)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Huge Giant, Chaotic Good\
+> AC 16 Initiative +7 (17)\
+> HP 230 (20d12 + 100)\
+> Speed 50 ft., Fly 25 ft. (hover), Swim 50 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 29 +9 +14 Dex 14 +2 +2 Con 20 +5 +10\
+> Int 16 +3 +3 Wis 20 +5 +10 Cha 18 +4 +9\
+> Skills Arcana +8, Athletics +14, History +8, Perception +10\
+> Resistances Cold\
+> Immunities Lightning, Thunder\
+> Senses Darkvision 120 ft., Truesight 30 ft.; Passive Perception 20\
+> Languages Common, Giant\
+> CR 13 (XP 10,000; PB +5)
+
 
 <!-- SRD page 331 -->
 
@@ -55,49 +83,11 @@ At Will: Detect Magic, Light\
 
 Original layout: [[../../srd-5.2.1/pages/330|page 330]], [[../../srd-5.2.1/pages/331|page 331]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` huge ` |
-| ` type ` | ` giant ` |
-| ` alignment ` | ` Chaotic Good ` |
-| ` movement_text ` | ` 50 ft., Fly 25 ft. (hover), Swim 50 ft. ` |
-| ` skills_text ` | ` Arcana +8, Athletics +14, History +8, Perception +10 ` |
-| ` resistances_text ` | ` Cold ` |
-| ` immunities_text ` | ` Lightning, Thunder ` |
-| ` senses_text ` | ` Darkvision 120 ft., Truesight 30 ft.; Passive Perception 20 ` |
-| ` languages_text ` | ` Common, Giant ` |
-| ` cr_text ` | ` 13 (XP 10,000; PB +5) ` |
-| ` hit_points_text ` | ` 230 (20d12 + 100) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 29 ` | ` 14 ` |
-| ` Dexterity ` | ` 14 ` | ` 2 ` |
-| ` Constitution ` | ` 20 ` | ` 10 ` |
-| ` Intelligence ` | ` 16 ` | ` 3 ` |
-| ` Wisdom ` | ` 20 ` | ` 10 ` |
-| ` Charisma ` | ` 18 ` | ` 9 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 16 ` |  |
-| ` max_hp ` | ` 230 ` |  |
-| ` initiative ` | ` 7 ` |  |
-| ` speed ` | ` 50 ` | ` ft ` |
-| ` fly_speed ` | ` 25 ` | ` ft ` |
-| ` swim_speed ` | ` 50 ` | ` ft ` |
 
 ## Health
 
@@ -436,3 +426,16 @@ geometry:
 unlisted_success_branch: no_effect
 unlisted_duration: until_removed_by_applicable_rule
 ```
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_stats_extras -->
+> 
+> ```yaml
+> fly_speed:
+>   unit: ft
+>   value: 25
+> swim_speed:
+>   unit: ft
+>   value: 50
+> ```
+

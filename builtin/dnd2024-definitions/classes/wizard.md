@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: c69937e7-0b05-56d7-a464-f13afb2a5542
 splat_kind: rule_group
 splat_key: dnd2024:classes/wizard
 splat_name: Wizard
-splat_origin:
-  key: dnd2024:reference/pages/077
+splat_origin: dnd2024:reference/pages/077
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 77
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 77, https://www.dndbeyond.com/srd
 ---
 
 # Wizard

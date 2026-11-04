@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 7137802e-4cb8-559f-a7fa-3bf5429c7007
 splat_kind: rule
 splat_key: dnd2024:glossary/long_jump
 splat_name: Long Jump
-splat_origin:
-  key: dnd2024:reference/glossary/long_jump
+splat_origin: dnd2024:reference/glossary/long_jump
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 184, 185
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 184, 185, https://www.dndbeyond.com/srd
 ---
 
 # Long Jump

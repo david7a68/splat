@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "27b2191c-edd1-5c87-8e97-29390a3b4b9e"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/gibbering_mouther"
 splat_name: "Gibbering Mouther"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [288], "executable": false}
+splat_pages:
+- 288
 ---
 
 # Gibbering Mouther
@@ -42,3 +43,13 @@ Bite. Melee Attack Roll: +2, reach 5 ft. Hit: 7 (2d6) Piercing damage. If the ta
 Blinding Spittle (Recharge 5–6). Dexterity Saving Throw: DC 10, each creature in a 10-foot-radius Sphere centered on a point within 30 feet. Failure: 7 (2d6) Radiant damage, and the target has the Blinded condition until the end of the mouther’s next turn.
 
 Original layout: [[../pages/288|page 288]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

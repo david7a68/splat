@@ -1,35 +1,62 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 4dc854a6-6d82-5089-b95f-ccf2527a0dae
 splat_kind: creature
 splat_key: dnd2024:creatures/chain_devil
 splat_name: Chain Devil
-splat_origin:
-  key: dnd2024:reference/creature/chain_devil
+splat_origin: dnd2024:reference/creature/chain_devil
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 272, 273
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 272, 273, https://www.dndbeyond.com/srd
 ---
 
 # Chain Devil
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Medium |
+| Type | Fiend (Devil) |
+| Alignment | Lawful Evil |
+| Armor Class | 15 |
+| Hit Points | 85 (10d8 + 40) |
+| Initiative | +5 (15) |
+| Speed | 30 ft. |
+| Challenge | 8 (XP 3,900; PB +3) |
+| Senses | Darkvision 120 ft. (unimpeded by magical Darkness); Passive Perception 11 |
+| Languages | Infernal; telepathy 120 ft. |
+| Resistances | Bludgeoning, Cold, Piercing, Slashing |
+| Immunities | Fire, Poison; Poisoned |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 18 | +4 | +4 |
+| Dex | 15 | +2 | +2 |
+| Con | 18 | +4 | +7 |
+| Int | 11 | +0 | +0 |
+| Wis | 12 | +1 | +4 |
+| Cha | 14 | +2 | +2 |
+
 
 ## Source text
 
 <!-- SRD page 272 -->
 
-Medium Fiend (Devil), Lawful Evil\
-AC 15 Initiative +5 (15)\
-HP 85 (10d8 + 40)\
-Speed 30 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 18 +4 +4 Dex 15 +2 +2 Con 18 +4 +7\
-Int 11 +0 +0 Wis 12 +1 +4 Cha 14 +2 +2\
-Resistances Bludgeoning, Cold, Piercing, Slashing\
-Immunities Fire, Poison; Poisoned\
-Senses Darkvision 120 ft. (unimpeded by magical Darkness); Passive Perception 11\
-Languages Infernal; telepathy 120 ft.\
-CR 8 (XP 3,900; PB +3)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Medium Fiend (Devil), Lawful Evil\
+> AC 15 Initiative +5 (15)\
+> HP 85 (10d8 + 40)\
+> Speed 30 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 18 +4 +4 Dex 15 +2 +2 Con 18 +4 +7\
+> Int 11 +0 +0 Wis 12 +1 +4 Cha 14 +2 +2\
+> Resistances Bludgeoning, Cold, Piercing, Slashing\
+> Immunities Fire, Poison; Poisoned\
+> Senses Darkvision 120 ft. (unimpeded by magical Darkness); Passive Perception 11\
+> Languages Infernal; telepathy 120 ft.\
+> CR 8 (XP 3,900; PB +3)
+
 
 <!-- SRD page 273 -->
 
@@ -53,47 +80,11 @@ Unnerving Gaze. Trigger: A creature the devil can see starts its turn within 30 
 
 Original layout: [[../../srd-5.2.1/pages/272|page 272]], [[../../srd-5.2.1/pages/273|page 273]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` medium ` |
-| ` type ` | ` fiend ` |
-| ` alignment ` | ` Lawful Evil ` |
-| ` tags_text ` | ` (Devil) ` |
-| ` movement_text ` | ` 30 ft. ` |
-| ` resistances_text ` | ` Bludgeoning, Cold, Piercing, Slashing ` |
-| ` immunities_text ` | ` Fire, Poison; Poisoned ` |
-| ` senses_text ` | ` Darkvision 120 ft. (unimpeded by magical Darkness); Passive Perception 11 ` |
-| ` languages_text ` | ` Infernal; telepathy 120 ft. ` |
-| ` cr_text ` | ` 8 (XP 3,900; PB +3) ` |
-| ` hit_points_text ` | ` 85 (10d8 + 40) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 18 ` | ` 4 ` |
-| ` Dexterity ` | ` 15 ` | ` 2 ` |
-| ` Constitution ` | ` 18 ` | ` 7 ` |
-| ` Intelligence ` | ` 11 ` | ` 0 ` |
-| ` Wisdom ` | ` 12 ` | ` 4 ` |
-| ` Charisma ` | ` 14 ` | ` 2 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 15 ` |  |
-| ` max_hp ` | ` 85 ` |  |
-| ` initiative ` | ` 5 ` |  |
-| ` speed ` | ` 30 ` | ` ft ` |
 
 ## Health
 

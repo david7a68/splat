@@ -1,10 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "57494c7d-1685-5d2a-a0f5-9d15f5bc2c47"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/spirit_guardians"
 splat_name: "Spirit Guardians"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [164, 165], "executable": false}
+splat_pages:
+- 164
+- 165
 ---
 
 # Spirit Guardians
@@ -26,3 +28,13 @@ When you cast this spell, you can designate creatures to be unaffected by it. An
 Using a Higher-Level Spell Slot. The damage increases by 1d8 for each spell slot level above 3.
 
 Original layout: [[../pages/164|page 164]], [[../pages/165|page 165]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

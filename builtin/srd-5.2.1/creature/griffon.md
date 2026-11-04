@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "3502098b-0ffc-58a2-bf7f-49da1e254e23"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/griffon"
 splat_name: "Griffon"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [295], "executable": false}
+splat_pages:
+- 295
 ---
 
 # Griffon
@@ -30,3 +31,13 @@ Multiattack. The griffon makes two Rend attacks.
 Rend. Melee Attack Roll: +6, reach 5 ft. Hit: 8 (1d8 + 4) Piercing damage. If the target is a Medium or smaller creature, it has the Grappled condition (escape DC 14) from both of the griffon’s front claws.
 
 Original layout: [[../pages/295|page 295]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

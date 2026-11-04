@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: b68a6254-8080-5093-abb4-54380a137949
 splat_kind: item
 splat_key: dnd2024:items/eversmoking_bottle
 splat_name: Eversmoking Bottle
-splat_origin:
-  key: dnd2024:reference/magic_item/eversmoking_bottle
+splat_origin: dnd2024:reference/magic_item/eversmoking_bottle
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 220, 221
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 220, 221, https://www.dndbeyond.com/srd
 ---
 
 # Eversmoking Bottle
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Wondrous Item |
+| Rarity | Uncommon |
+| Attunement | No |
+
 
 ## Source text
 
@@ -32,22 +39,9 @@ Closing the bottle causes the cloud to become fixed in place until it disperses 
 
 Original layout: [[../../srd-5.2.1/pages/220|page 220]], [[../../srd-5.2.1/pages/221|page 221]].
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` wondrous_item ` |
-| ` rarity ` | ` uncommon ` |
 
-### Equipment
-
-<!-- splat:values path=splat_item/equipment -->
-
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` none ` |
 
 ## Rule
 

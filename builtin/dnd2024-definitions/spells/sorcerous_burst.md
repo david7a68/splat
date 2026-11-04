@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 8ec51fa9-2142-5cb4-8a48-0506239318cf
 splat_kind: spell
 splat_key: dnd2024:spells/sorcerous_burst
 splat_name: Sorcerous Burst
-splat_origin:
-  key: dnd2024:reference/spell/sorcerous_burst
+splat_origin: dnd2024:reference/spell/sorcerous_burst
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 163
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 163, https://www.dndbeyond.com/srd
 ---
 
 # Sorcerous Burst
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | Cantrip |
+| School | Evocation |
+| Classes | Sorcerer |
+| Casting Time | Action |
+| Range | 120 feet |
+| Components | V, S |
+| Duration | Instantaneous |
+
 
 ## Source text
 
@@ -32,28 +43,9 @@ Cantrip Upgrade. The damage increases by 1d8 when you reach levels 5 (2d8), 11 (
 
 Original layout: [[../../srd-5.2.1/pages/163|page 163]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 0 ` |
-| ` school ` | ` evocation ` |
-| ` classes ` | ` ["sorcerer"] ` |
-| ` components ` | ` ["verbal", "somatic"] ` |
-| ` concentration ` | ` false ` |
-| ` duration ` | ` Instantaneous ` |
-| ` casting_time ` | ` Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
-
-<!-- splat:values path=splat_spell/range -->
-
-| Field | Value |
-| --- | --- |
-| ` feet ` | ` 120 ` |
 
 ## Rule
 

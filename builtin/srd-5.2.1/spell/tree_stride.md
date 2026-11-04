@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "85e58e06-a83d-5a06-bbef-2ba111b33843"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/tree_stride"
 splat_name: "Tree Stride"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [170], "executable": false}
+splat_pages:
+- 170
 ---
 
 # Tree Stride
@@ -22,3 +23,13 @@ You gain the ability to enter a tree and move from inside it to inside another t
 You can use this transportation ability only once on each of your turns. You must end each turn outside a tree.
 
 Original layout: [[../pages/170|page 170]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

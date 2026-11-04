@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "af933a9d-3a78-5bfd-a74a-a9c00fe824cb"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/vampire_familiar"
 splat_name: "Vampire Familiar"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [334], "executable": false}
+splat_pages:
+- 334
 ---
 
 # Vampire Familiar
@@ -41,3 +42,13 @@ Umbral Dagger. Melee or Ranged Attack Roll: +5, reach 5 ft. or range 20/60 ft. H
 Deathless Agility. The familiar takes the Dash or Disengage action.
 
 Original layout: [[../pages/334|page 334]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 131ad305-433e-5c2b-b948-986c734f888c
 splat_kind: item
 splat_key: dnd2024:items/wand_of_magic_missiles
 splat_name: Wand of Magic Missiles
-splat_origin:
-  key: dnd2024:reference/magic_item/wand_of_magic_missiles
+splat_origin: dnd2024:reference/magic_item/wand_of_magic_missiles
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 251
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 251, https://www.dndbeyond.com/srd
 ---
 
 # Wand of Magic Missiles
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Wand |
+| Rarity | Uncommon |
+| Attunement | No |
+
 
 ## Source text
 
@@ -26,22 +33,9 @@ Regaining Charges. The wand regains 1d6 + 1 expended charges daily at dawn. If y
 
 Original layout: [[../../srd-5.2.1/pages/251|page 251]].
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` wand ` |
-| ` rarity ` | ` uncommon ` |
 
-### Equipment
-
-<!-- splat:values path=splat_item/equipment -->
-
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` none ` |
 
 ## Rule
 

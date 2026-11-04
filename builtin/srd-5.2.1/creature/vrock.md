@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "49f13310-0eac-572b-9961-a8659d94d427"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/vrock"
 splat_name: "Vrock"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [336], "executable": false}
+splat_pages:
+- 336
 ---
 
 # Vrock
@@ -41,3 +42,13 @@ Spores (Recharge 6). Constitution Saving Throw: DC 15, each creature in a 20-foo
 Stunning Screech (1/Day). Constitution Saving Throw: DC 15, each creature in a 20-foot Emanation originating from the vrock (demons succeed automatically). Failure: 10 (3d6) Thunder damage, and the target has the Stunned condition until the end of the vrock’s next turn.
 
 Original layout: [[../pages/336|page 336]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

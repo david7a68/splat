@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 9b635d79-3b98-56da-bd2d-f3b909067e3c
 splat_kind: rule
 splat_key: dnd2024:rules/sentient_magic_items_special_purpose
 splat_name: Special Purpose
-splat_origin:
-  key: dnd2024:reference/pages/208
+splat_origin: dnd2024:reference/pages/208
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 208
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 208, https://www.dndbeyond.com/srd
 ---
 
 # Special Purpose

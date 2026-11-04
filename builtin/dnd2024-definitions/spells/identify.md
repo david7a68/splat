@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 962403d3-4ca7-58f0-a9f5-debe7fdb4788
 splat_kind: spell
 splat_key: dnd2024:spells/identify
 splat_name: Identify
-splat_origin:
-  key: dnd2024:reference/spell/identify
+splat_origin: dnd2024:reference/spell/identify
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 142
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 142, https://www.dndbeyond.com/srd
 ---
 
 # Identify
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 1 |
+| School | Divination |
+| Classes | Bard, Wizard |
+| Casting Time | 1 minute or Ritual |
+| Range |  |
+| Components | V, S, M (a pearl worth 100+ GP) |
+| Duration | Instantaneous |
+
 
 ## Source text
 
@@ -30,37 +41,11 @@ If you instead touch a creature throughout the casting, you learn which ongoing 
 
 Original layout: [[../../srd-5.2.1/pages/142|page 142]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 1 ` |
-| ` school ` | ` divination ` |
-| ` classes ` | ` ["bard", "wizard"] ` |
-| ` components ` | ` ["verbal", "somatic", "material"] ` |
-| ` concentration ` | ` false ` |
-| ` duration ` | ` Instantaneous ` |
-| ` casting_time ` | ` 1 minute or Ritual ` |
-| ` ritual ` | ` true ` |
 
-### Range
 
-<!-- splat:values path=splat_spell/range -->
 
-| Field | Value |
-| --- | --- |
-| ` mode ` | ` touch ` |
-
-### Material
-
-<!-- splat:values path=splat_spell/material -->
-
-| Field | Value |
-| --- | --- |
-| ` description ` | ` a pearl worth 100+ GP ` |
-| ` consumed ` | ` false ` |
 
 ## Rule
 
@@ -92,3 +77,14 @@ Original layout: [[../../srd-5.2.1/pages/142|page 142]].
 | ` magical_object ` | ` ["properties", "use_instructions", "attunement_required", "charges_if_any"] ` |
 | ` object ` | ` ["ongoing_spells", "creating_spell_name_if_created_by_spell"] ` |
 | ` creature ` | ` ["ongoing_spells"] ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_spell_extras -->
+> 
+> ```yaml
+> material:
+>   consumed: false
+> range:
+>   mode: touch
+> ```
+

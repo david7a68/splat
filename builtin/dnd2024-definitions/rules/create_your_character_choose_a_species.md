@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: cece6c90-0039-55f7-83d9-803e352b05c7
 splat_kind: rule
 splat_key: dnd2024:rules/create_your_character_choose_a_species
 splat_name: Choose a Species
-splat_origin:
-  key: dnd2024:reference/pages/020
+splat_origin: dnd2024:reference/pages/020
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 20
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 20, https://www.dndbeyond.com/srd
 ---
 
 # Choose a Species

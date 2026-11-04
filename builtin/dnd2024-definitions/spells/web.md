@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: af3616c0-4b1f-5a0d-b2d9-1f0fff2fb376
 splat_kind: spell
 splat_key: dnd2024:spells/web
 splat_name: Web
-splat_origin:
-  key: dnd2024:reference/spell/web
+splat_origin: dnd2024:reference/spell/web
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 174
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 174, https://www.dndbeyond.com/srd
 ---
 
 # Web
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 2 |
+| School | Conjuration |
+| Classes | Sorcerer, Wizard |
+| Casting Time | Action |
+| Range | 60 feet |
+| Components | V, S, M (a bit of spiderweb) |
+| Duration | Concentration, up to 1 hour |
+
 
 ## Source text
 
@@ -36,37 +47,11 @@ The webs are flammable. Any 5-foot Cube of webs exposed to fire burns away in 1 
 
 Original layout: [[../../srd-5.2.1/pages/174|page 174]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 2 ` |
-| ` school ` | ` conjuration ` |
-| ` classes ` | ` ["sorcerer", "wizard"] ` |
-| ` components ` | ` ["verbal", "somatic", "material"] ` |
-| ` concentration ` | ` true ` |
-| ` duration ` | ` Concentration, up to 1 hour ` |
-| ` casting_time ` | ` Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
 
-<!-- splat:values path=splat_spell/range -->
 
-| Field | Value |
-| --- | --- |
-| ` feet ` | ` 60 ` |
-
-### Material
-
-<!-- splat:values path=splat_spell/material -->
-
-| Field | Value |
-| --- | --- |
-| ` description ` | ` a bit of spiderweb ` |
-| ` consumed ` | ` false ` |
 
 ## Rule
 
@@ -157,3 +142,12 @@ damage:
       add: 0
   type: fire
 ```
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_spell_extras -->
+> 
+> ```yaml
+> material:
+>   consumed: false
+> ```
+

@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "31b4e8fc-9439-5d22-b9a4-5246441ec4b4"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/divine_word"
 splat_name: "Divine Word"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [125], "executable": false}
+splat_pages:
+- 125
 ---
 
 # Divine Word
@@ -29,3 +30,13 @@ You utter a word imbued with power from the Upper Planes. Each creature of your 
 | 41–50 | The target has the Deafened condition for 1 minute. |
 
 Original layout: [[../pages/125|page 125]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

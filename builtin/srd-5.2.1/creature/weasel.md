@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "fffc77d0-de17-564f-a18e-82c29216f3c5"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/weasel"
 splat_name: "Weasel"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [364], "executable": false}
+splat_pages:
+- 364
 ---
 
 # Weasel
@@ -28,3 +29,13 @@ CR 0 (XP 10; PB +2)
 Bite. Melee Attack Roll: +5, reach 5 ft. Hit: 1 Piercing damage.
 
 Original layout: [[../pages/364|page 364]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

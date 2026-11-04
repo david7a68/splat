@@ -1,10 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "0c53add1-65c6-5280-a949-3383b3c93d0d"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/bone_devil"
 splat_name: "Bone Devil"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [267, 268], "executable": false}
+splat_pages:
+- 267
+- 268
 ---
 
 # Bone Devil
@@ -40,3 +42,13 @@ Claw. Melee Attack Roll: +8, reach 10 ft. Hit: 13 (2d8 + 4) Slashing damage.
 Infernal Sting. Melee Attack Roll: +8, reach 10 ft. Hit: 15 (2d10 + 4) Piercing damage plus 18 (4d8) Poison damage, and the target has the Poisoned condition until the start of the devil’s next turn. While Poisoned, the target can’t regain Hit Points.
 
 Original layout: [[../pages/267|page 267]], [[../pages/268|page 268]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

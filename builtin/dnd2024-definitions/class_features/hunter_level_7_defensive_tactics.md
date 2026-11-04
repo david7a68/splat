@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 4ce22736-a27c-56e4-a2f5-8a49d15fa34b
 splat_kind: rule
 splat_key: dnd2024:class_features/hunter_level_7_defensive_tactics
 splat_name: 'Level 7: Defensive Tactics'
-splat_origin:
-  key: dnd2024:reference/pages/061
+splat_origin: dnd2024:reference/pages/061
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 61
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 61, https://www.dndbeyond.com/srd
 ---
 
 # Level 7: Defensive Tactics

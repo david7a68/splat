@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 0e2b61b1-d000-5af1-af7c-b265c8b5025f
 splat_kind: spell
 splat_key: dnd2024:spells/searing_smite
 splat_name: Searing Smite
-splat_origin:
-  key: dnd2024:reference/spell/searing_smite
+splat_origin: dnd2024:reference/spell/searing_smite
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 160
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 160, https://www.dndbeyond.com/srd
 ---
 
 # Searing Smite
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 1 |
+| School | Evocation |
+| Classes | Paladin |
+| Casting Time | Bonus Action, which you take immediately after hitting a target with a Melee weapon or an Unarmed Strike |
+| Range |  |
+| Components | V |
+| Duration | 1 minute |
+
 
 ## Source text
 
@@ -30,28 +41,9 @@ Using a Higher-Level Spell Slot. All the damage increases by 1d6 for each spell 
 
 Original layout: [[../../srd-5.2.1/pages/160|page 160]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 1 ` |
-| ` school ` | ` evocation ` |
-| ` classes ` | ` ["paladin"] ` |
-| ` components ` | ` ["verbal"] ` |
-| ` concentration ` | ` false ` |
-| ` duration ` | ` 1 minute ` |
-| ` casting_time ` | ` Bonus Action, which you take immediately after hitting a target with a Melee weapon or an Unarmed Strike ` |
-| ` ritual ` | ` false ` |
 
-### Range
-
-<!-- splat:values path=splat_spell/range -->
-
-| Field | Value |
-| --- | --- |
-| ` mode ` | ` self ` |
 
 ## Rule
 
@@ -172,3 +164,12 @@ args:
     - binding: cast_level
     - 1
 ```
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_spell_extras -->
+> 
+> ```yaml
+> range:
+>   mode: self
+> ```
+

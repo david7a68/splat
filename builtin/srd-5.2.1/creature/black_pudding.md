@@ -1,10 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "4a732cb8-74bb-5fdf-8cd8-77212691f1f0"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/black_pudding"
 splat_name: "Black Pudding"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [265, 266], "executable": false}
+splat_pages:
+- 265
+- 266
 ---
 
 # Black Pudding
@@ -42,3 +44,13 @@ Dissolving Pseudopod. Melee Attack Roll: +5, reach 10 ft. Hit: 17 (4d6 + 3) Acid
 Split. Trigger: While the pudding is Large or Medium and has 10+ Hit Points, it becomes Bloodied or is subjected to Lightning or Slashing damage. Response: The pudding splits into two new Black Puddings. Each new pudding is one size smaller than the original pudding and acts on its Initiative. The original pudding’s Hit Points are divided evenly between the new puddings (round down).
 
 Original layout: [[../pages/265|page 265]], [[../pages/266|page 266]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

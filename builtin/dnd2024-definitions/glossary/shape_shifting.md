@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: b42d9888-d40e-5013-a08a-742cb002b901
 splat_kind: rule
 splat_key: dnd2024:glossary/shape_shifting
 splat_name: Shape-Shifting
-splat_origin:
-  key: dnd2024:reference/glossary/shape_shifting
+splat_origin: dnd2024:reference/glossary/shape_shifting
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 187
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 187, https://www.dndbeyond.com/srd
 ---
 
 # Shape-Shifting

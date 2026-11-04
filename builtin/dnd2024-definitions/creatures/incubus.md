@@ -1,35 +1,62 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: e5d39c22-fefe-5740-9dd2-904b59632f06
 splat_kind: creature
 splat_key: dnd2024:creatures/incubus
 splat_name: Incubus
-splat_origin:
-  key: dnd2024:reference/creature/incubus
+splat_origin: dnd2024:reference/creature/incubus
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 301
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 301, https://www.dndbeyond.com/srd
 ---
 
 # Incubus
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Medium |
+| Type | Fiend |
+| Alignment | Neutral Evil |
+| Armor Class | 15 |
+| Hit Points | 66 (12d8 + 12) |
+| Initiative | +3 (13) |
+| Speed | 30 ft., Fly 60 ft. |
+| Challenge | 4 (XP 1,100; PB +2) |
+| Skills | Deception +9, Insight +5, Perception +5, Persuasion +9, Stealth +7 |
+| Senses | Darkvision 60 ft.; Passive Perception 15 |
+| Languages | Abyssal, Common, Infernal; telepathy 60 ft. |
+| Resistances | Cold, Fire, Poison, Psychic |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 8 | -1 | -1 |
+| Dex | 17 | +3 | +3 |
+| Con | 13 | +1 | +1 |
+| Int | 15 | +2 | +2 |
+| Wis | 12 | +1 | +1 |
+| Cha | 20 | +5 | +5 |
+
 
 ## Source text
 
 <!-- SRD page 301 -->
 
-Medium Fiend, Neutral Evil\
-AC 15  Initiative +3 (13)\
-HP 66 (12d8 + 12)\
-Speed 30 ft., Fly 60 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 8 −1 −1 Dex 17 +3 +3 Con 13 +1 +1\
-Int 15 +2 +2 Wis 12 +1 +1 Cha 20 +5 +5\
-Skills Deception +9, Insight +5, Perception +5, Persuasion +9, Stealth +7\
-Resistances Cold, Fire, Poison, Psychic\
-Senses Darkvision 60 ft.; Passive Perception 15\
-Languages Abyssal, Common, Infernal; telepathy 60 ft.\
-CR 4 (XP 1,100; PB +2)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Medium Fiend, Neutral Evil\
+> AC 15  Initiative +3 (13)\
+> HP 66 (12d8 + 12)\
+> Speed 30 ft., Fly 60 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 8 −1 −1 Dex 17 +3 +3 Con 13 +1 +1\
+> Int 15 +2 +2 Wis 12 +1 +1 Cha 20 +5 +5\
+> Skills Deception +9, Insight +5, Perception +5, Persuasion +9, Stealth +7\
+> Resistances Cold, Fire, Poison, Psychic\
+> Senses Darkvision 60 ft.; Passive Perception 15\
+> Languages Abyssal, Common, Infernal; telepathy 60 ft.\
+> CR 4 (XP 1,100; PB +2)
+
 
 ### Traits
 
@@ -52,47 +79,11 @@ Nightmare (Recharge 6). Wisdom Saving Throw: DC 15, one creature the incubus can
 
 Original layout: [[../../srd-5.2.1/pages/301|page 301]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` medium ` |
-| ` type ` | ` fiend ` |
-| ` alignment ` | ` Neutral Evil ` |
-| ` movement_text ` | ` 30 ft., Fly 60 ft. ` |
-| ` skills_text ` | ` Deception +9, Insight +5, Perception +5, Persuasion +9, Stealth +7 ` |
-| ` resistances_text ` | ` Cold, Fire, Poison, Psychic ` |
-| ` senses_text ` | ` Darkvision 60 ft.; Passive Perception 15 ` |
-| ` languages_text ` | ` Abyssal, Common, Infernal; telepathy 60 ft. ` |
-| ` cr_text ` | ` 4 (XP 1,100; PB +2) ` |
-| ` hit_points_text ` | ` 66 (12d8 + 12) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 8 ` | ` -1 ` |
-| ` Dexterity ` | ` 17 ` | ` 3 ` |
-| ` Constitution ` | ` 13 ` | ` 1 ` |
-| ` Intelligence ` | ` 15 ` | ` 2 ` |
-| ` Wisdom ` | ` 12 ` | ` 1 ` |
-| ` Charisma ` | ` 20 ` | ` 5 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 15 ` |  |
-| ` max_hp ` | ` 66 ` |  |
-| ` initiative ` | ` 3 ` |  |
-| ` speed ` | ` 30 ` | ` ft ` |
-| ` fly_speed ` | ` 60 ` | ` ft ` |
 
 ## Health
 
@@ -359,3 +350,13 @@ other_components: spell_definition_unless_waived
 | ` provider ` | ` caller ` |
 | ` required_facts ` | ` ["distance", "area_membership", "visibility", "occupancy", "movement_path"] ` |
 | ` validate_against_typed_constraints ` | ` true ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_stats_extras -->
+> 
+> ```yaml
+> fly_speed:
+>   unit: ft
+>   value: 60
+> ```
+

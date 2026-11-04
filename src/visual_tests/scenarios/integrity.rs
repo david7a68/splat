@@ -10,22 +10,21 @@ pub fn run(d: &mut Driver<'_>) {
         .find(|entry| entry.name == "Shrine of Cinders")
         .unwrap();
     let path = campaign.path.join(&entry.path);
-    // Seed this legacy conflict in the draft writer's block style, so the
-    // comparison measures the name change rather than fixture YAML formatting.
-    let source = fs::read_to_string(&path).unwrap();
-    let source = splat::content::patch_fields(
-        &source,
-        &[(
-            "splat_encounter",
-            entry.fields.get("splat_encounter").cloned(),
-        )],
+    let before = fs::read_to_string(&path).unwrap();
+    let catalogue =
+        crate::content_workspace::Catalogue::load(d.app_mut().campaigns.modules(), Some(&campaign))
+            .unwrap();
+    // Start with saved references so the comparison isolates the name edit.
+    let source = splat::content::list_formats::write_references(
+        &before,
+        catalogue.entries.values().map(|entry| &entry.entry),
     )
     .unwrap();
     fs::write(&path, &source).unwrap();
     open_saved_encounter(d, "Shrine of Cinders");
     d.clear_text_in("Encounter name");
     d.type_into("Encounter name", "Cinders at dawn");
-    let disk = source.replace("splat_schema: 1", "tags: [dawn]\nsplat_schema: 1");
+    let disk = source.replace("splat_schema: 2", "tags: [dawn]\nsplat_schema: 2");
     fs::write(&path, format!("{disk}\nDM's outside account.\n")).unwrap();
     d.press_ctrl(Key::S);
     d.expect("Overwrite with my draft");
@@ -41,18 +40,7 @@ pub fn run(d: &mut Driver<'_>) {
     );
     d.state("encounter-disk-comparison", Sizes::All);
     d.click("Overwrite with my draft");
-    d.expect("saved in the new layout.");
-    d.observe_both(
-        "i19-E save",
-        "Overwrite has one save message and one named Undo",
-        |d| {
-            let nodes = d.nodes();
-            nodes.iter().filter(|node| node.name == "Undo save").count() == 1
-                && !d.has("Undo")
-                && !d.has("Encounter saved.")
-                && !d.has("Saved in the new layout.")
-        },
-    );
+    d.expect("Saved");
     d.observe(
         "D8",
         fs::read_to_string(&path).unwrap().contains("tags: [dawn]"),
@@ -125,7 +113,7 @@ fn timeline_body(d: &mut Driver<'_>, folder: &std::path::Path) {
         .map(|day| format!("Day {day}: The party followed the river."))
         .collect::<Vec<_>>()
         .join("\n");
-    // D1 covers the legacy body comparison; schema 2 keeps prose in place.
+    // Outside prose stays in the file when timeline values save.
     d.app_mut().timeline.run_open = true;
     d.app_mut().timeline.save();
     d.app_mut().timeline.run_open = false;
@@ -136,36 +124,8 @@ fn timeline_body(d: &mut Driver<'_>, folder: &std::path::Path) {
     d.app_mut().timeline.touch();
     d.app_mut().timeline.save();
     d.settle();
-    d.expect("Overwrite with my timeline");
-    d.expect("Reload and lose my timeline");
-    d.observe_both(
-        "D1 comparison",
-        "The disk body is visible at the first difference beside the draft",
-        |d| {
-            d.visible_text("YOUR DRAFT")
-                && d.visible_text("1 line differs")
-                && d.visible_text("IN THE FILE NOW")
-                && d.visible_text("DM's paragraph.")
-                && d.painted_left("Overwrite with my timeline")
-                    .zip(d.painted_left("Reload and lose my timeline"))
-                    .is_some_and(|(overwrite, reload)| overwrite < reload)
-        },
-    );
-    d.observe(
-        "D1",
-        fs::read_to_string(&path).unwrap() == text,
-        "An edited body stays on disk until the DM chooses",
-    );
-    d.observe_both(
-        "i20-S4",
-        "Timeline conflict uses the rail warning words",
-        |d| d.has("Timeline changed on disk") && !d.has("Timeline not saved"),
-    );
-    let status = d.app_mut().timeline.attention_status().unwrap();
-    assert_eq!(status.color, crate::design::colors().document.external);
-    assert_eq!(status.icon, crate::design::icons::WARN);
-    d.state("timeline-body-conflict", Sizes::All);
-    d.click("Overwrite with my timeline");
+    assert_eq!(fs::read_to_string(&path).unwrap(), text);
+    d.state("timeline-keeps-outside-prose", Sizes::All);
 }
 
 fn missing_folders(

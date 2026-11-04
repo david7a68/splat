@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "170c77bd-58ba-5e07-81b3-79db4886c73a"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/magma_mephit"
 splat_name: "Magma Mephit"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [307], "executable": false}
+splat_pages:
+- 307
 ---
 
 # Magma Mephit
@@ -36,3 +37,13 @@ Claw. Melee Attack Roll: +3, reach 5 ft. Hit: 3 (1d4 + 1) Slashing damage plus 3
 Fire Breath (Recharge 6). Dexterity Saving Throw: DC 11, each creature in a 15-foot Cone. Failure: 7 (2d6) Fire damage. Success: Half damage.
 
 Original layout: [[../pages/307|page 307]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

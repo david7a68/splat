@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "4a843653-8d74-540a-b709-889e1e52533c"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/wyvern"
 splat_name: "Wyvern"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [343], "executable": false}
+splat_pages:
+- 343
 ---
 
 # Wyvern
@@ -32,3 +33,13 @@ Bite. Melee Attack Roll: +7, reach 5 ft. Hit: 13 (2d8 + 4) Piercing damage.
 Sting. Melee Attack Roll: +7, reach 10 ft. Hit: 11 (2d6 + 4) Piercing damage plus 24 (7d6) Poison damage, and the target has the Poisoned condition until the start of the wyvern’s next turn.
 
 Original layout: [[../pages/343|page 343]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

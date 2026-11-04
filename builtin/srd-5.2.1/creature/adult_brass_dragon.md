@@ -1,10 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "843c156d-8d97-516e-894b-b39b9cce6089"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/adult_brass_dragon"
 splat_name: "Adult Brass Dragon"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [268, 269], "executable": false}
+splat_pages:
+- 268
+- 269
 ---
 
 # Adult Brass Dragon
@@ -57,3 +59,13 @@ Pounce. The dragon moves up to half its Speed, and it makes one Rend attack.
 Scorching Sands. Dexterity Saving Throw: DC 16, one creature the dragon can see within 120 feet. Failure: 27 (6d8) Fire damage, and the target’s Speed is halved until the end of its next turn. Failure or Success: The dragon can’t take this action again until the start of its next turn.
 
 Original layout: [[../pages/268|page 268]], [[../pages/269|page 269]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

@@ -1,10 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "9c9a4e97-e27b-5d88-aa18-7599074d15dd"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/adult_gold_dragon"
 splat_name: "Adult Gold Dragon"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [291, 292], "executable": false}
+splat_pages:
+- 291
+- 292
 ---
 
 # Adult Gold Dragon
@@ -59,3 +61,13 @@ Guiding Light. The dragon uses Spellcasting to cast Guiding Bolt (level 2 versio
 Pounce. The dragon moves up to half its Speed, and it makes one Rend attack.
 
 Original layout: [[../pages/291|page 291]], [[../pages/292|page 292]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

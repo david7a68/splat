@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "21a8d927-d62e-5d00-bc13-0c5826709bc6"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/priest"
 splat_name: "Priest"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [316], "executable": false}
+splat_pages:
+- 316
 ---
 
 # Priest
@@ -42,3 +43,13 @@ At Will: Light, Thaumaturgy\
 Divine Aid (3/Day). The priest casts Bless, Dispel Magic, Healing Word, or Lesser Restoration, using the same spellcasting ability as Spellcasting.
 
 Original layout: [[../pages/316|page 316]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

@@ -1,33 +1,58 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 8cff2e8f-1067-58f4-ac6f-975eedd92bdd
 splat_kind: creature
 splat_key: dnd2024:creatures/merrow
 splat_name: Merrow
-splat_origin:
-  key: dnd2024:reference/creature/merrow
+splat_origin: dnd2024:reference/creature/merrow
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 308
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 308, https://www.dndbeyond.com/srd
 ---
 
 # Merrow
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Large |
+| Type | Monstrosity |
+| Alignment | Chaotic Evil |
+| Armor Class | 13 |
+| Hit Points | 45 (6d10 + 12) |
+| Initiative | +2 (12) |
+| Speed | 10 ft., Swim 40 ft. |
+| Challenge | 2 (XP 450; PB +2) |
+| Senses | Darkvision 60 ft.; Passive Perception 10 |
+| Languages | Abyssal, Primordial (Aquan) |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 18 | +4 | +4 |
+| Dex | 15 | +2 | +2 |
+| Con | 15 | +2 | +2 |
+| Int | 8 | -1 | -1 |
+| Wis | 10 | +0 | +0 |
+| Cha | 9 | -1 | -1 |
+
 
 ## Source text
 
 <!-- SRD page 308 -->
 
-Large Monstrosity, Chaotic Evil\
-AC 13 Initiative +2 (12)\
-HP 45 (6d10 + 12)\
-Speed 10 ft., Swim 40 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 18 +4 +4 Dex 15 +2 +2 Con 15 +2 +2\
-Int 8 −1 −1 Wis 10 +0 +0 Cha 9 −1 −1\
-Senses Darkvision 60 ft.; Passive Perception 10\
-Languages Abyssal, Primordial (Aquan)\
-CR 2 (XP 450; PB +2)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Large Monstrosity, Chaotic Evil\
+> AC 13 Initiative +2 (12)\
+> HP 45 (6d10 + 12)\
+> Speed 10 ft., Swim 40 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 18 +4 +4 Dex 15 +2 +2 Con 15 +2 +2\
+> Int 8 −1 −1 Wis 10 +0 +0 Cha 9 −1 −1\
+> Senses Darkvision 60 ft.; Passive Perception 10\
+> Languages Abyssal, Primordial (Aquan)\
+> CR 2 (XP 450; PB +2)
+
 
 ### Traits
 
@@ -45,45 +70,11 @@ Harpoon. Melee or Ranged Attack Roll: +6, reach 5 ft. or range 20/60 ft. Hit: 11
 
 Original layout: [[../../srd-5.2.1/pages/308|page 308]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` large ` |
-| ` type ` | ` monstrosity ` |
-| ` alignment ` | ` Chaotic Evil ` |
-| ` movement_text ` | ` 10 ft., Swim 40 ft. ` |
-| ` senses_text ` | ` Darkvision 60 ft.; Passive Perception 10 ` |
-| ` languages_text ` | ` Abyssal, Primordial (Aquan) ` |
-| ` cr_text ` | ` 2 (XP 450; PB +2) ` |
-| ` hit_points_text ` | ` 45 (6d10 + 12) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 18 ` | ` 4 ` |
-| ` Dexterity ` | ` 15 ` | ` 2 ` |
-| ` Constitution ` | ` 15 ` | ` 2 ` |
-| ` Intelligence ` | ` 8 ` | ` -1 ` |
-| ` Wisdom ` | ` 10 ` | ` 0 ` |
-| ` Charisma ` | ` 9 ` | ` -1 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 13 ` |  |
-| ` max_hp ` | ` 45 ` |  |
-| ` initiative ` | ` 2 ` |  |
-| ` speed ` | ` 10 ` | ` ft ` |
-| ` swim_speed ` | ` 40 ` | ` ft ` |
 
 ## Health
 
@@ -262,3 +253,13 @@ geometry:
 unlisted_success_branch: no_effect
 unlisted_duration: until_removed_by_applicable_rule
 ```
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_stats_extras -->
+> 
+> ```yaml
+> swim_speed:
+>   unit: ft
+>   value: 40
+> ```
+

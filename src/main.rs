@@ -3,7 +3,9 @@ pub mod auth;
 mod campaign_content;
 mod campaigns;
 mod combat_sync;
+mod commands;
 mod content_workspace;
+mod conversion;
 mod copy_dialog;
 mod credentials;
 mod design;
@@ -38,6 +40,10 @@ use design::{Action, Density, Status, Tone, Type, colors, icons};
 use eframe::egui;
 
 fn main() -> eframe::Result {
+    let args: Vec<_> = std::env::args().skip(1).collect();
+    if !args.is_empty() {
+        std::process::exit(commands::run(&args, &mut std::io::stdout().lock()));
+    }
     let _instance = if let Some(dirs) = directories::ProjectDirs::from("", "", "splat") {
         match ui_state::InstanceLock::acquire(&dirs.config_dir().join("instance.lock")) {
             Ok(lock) => Some(lock),
@@ -81,6 +87,7 @@ struct Splat {
     discard_on_close: bool,
     library: library::Library,
     campaign_content: campaign_content::CampaignContent,
+    file_conversion: formats_ui::State,
     copy_dialog: Option<copy_dialog::CopyDialog>,
     settings: settings::Settings,
     campaigns: campaigns::Campaigns,
@@ -122,6 +129,7 @@ impl Default for Splat {
             discard_on_close: false,
             library: Default::default(),
             campaign_content: Default::default(),
+            file_conversion: Default::default(),
             copy_dialog: None,
             settings: Default::default(),
             campaigns: Default::default(),
@@ -2029,6 +2037,12 @@ impl eframe::App for Splat {
         self.sessions.run_open = self.encounters.has_run();
         self.library.run_open = self.encounters.has_run();
         self.campaign_content.run_open = self.encounters.has_run();
+        ctx.data_mut(|data| {
+            data.insert_temp(
+                egui::Id::new("conversion_run_open"),
+                self.encounters.has_run(),
+            )
+        });
         self.processing.poll(ctx);
         self.processing.recording_now = self.sessions.recording();
         let open = self.campaigns.active_campaign();
@@ -2161,6 +2175,40 @@ impl eframe::App for Splat {
                     return;
                 }
                 self.page(ui);
+                if let Some(paths) = ctx.data_mut(|data| {
+                    data.remove_temp::<Vec<std::path::PathBuf>>(egui::Id::new("convert_old_files"))
+                }) {
+                    let paths: Vec<_> = paths
+                        .into_iter()
+                        .map(|path| {
+                            if path.is_relative() {
+                                self.campaigns
+                                    .active_campaign()
+                                    .map_or(path.clone(), |campaign| campaign.path.join(&path))
+                            } else {
+                                path
+                            }
+                        })
+                        .collect();
+                    self.file_conversion.scan_paths(&self.campaigns, &paths);
+                }
+                let blocked = if self.encounters.has_run() {
+                    Some("Close the run before converting files.")
+                } else if self.timeline.not_saved()
+                    || self.library.dirty()
+                    || self.world_page.dirty()
+                    || self.campaign_content.dirty()
+                    || self.encounters.dirty()
+                {
+                    Some("Save or discard changes before converting files.")
+                } else {
+                    None
+                };
+                if self.file_conversion.show_conversion(ui, blocked) {
+                    self.lookup.refresh();
+                    self.lookup.files_changed = true;
+                    self.timeline.reload();
+                }
             });
         design::reserve_primary(ctx, false);
         self.route(ctx);
@@ -2189,7 +2237,6 @@ impl eframe::App for Splat {
             self.library.clear_notice();
             self.campaign_content.clear_notice();
             self.encounters.clear_notice();
-            self.timeline.clear_notice();
             self.sessions.clear_notice();
             self.world_page.reader.clear_notice();
             let from_sessions = self.shown_page == Page::Sessions;

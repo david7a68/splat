@@ -1,10 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "4300db17-7fdd-5056-9714-cd03c7cf4fda"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/giant_wasp"
 splat_name: "Giant Wasp"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [354, 355], "executable": false}
+splat_pages:
+- 354
+- 355
 ---
 
 # Giant Wasp
@@ -33,3 +35,13 @@ Flyby. The wasp doesn’t provoke an Opportunity Attack when it flies out of an 
 Sting. Melee Attack Roll: +4, reach 5 ft. Hit: 5 (1d6 + 2) Piercing damage plus 5 (2d4) Poison damage.
 
 Original layout: [[../pages/354|page 354]], [[../pages/355|page 355]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

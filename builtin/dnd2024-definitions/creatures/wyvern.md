@@ -1,34 +1,60 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 01df29a2-b902-5f07-8b69-1bfb56abf561
 splat_kind: creature
 splat_key: dnd2024:creatures/wyvern
 splat_name: Wyvern
-splat_origin:
-  key: dnd2024:reference/creature/wyvern
+splat_origin: dnd2024:reference/creature/wyvern
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 343
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 343, https://www.dndbeyond.com/srd
 ---
 
 # Wyvern
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Large |
+| Type | Dragon |
+| Alignment | Unaligned |
+| Armor Class | 14 |
+| Hit Points | 127 (15d10 + 45) |
+| Initiative | +0 (10) |
+| Speed | 30 ft., Fly 80 ft. |
+| Challenge | 6 (XP 2,300; PB +3) |
+| Skills | Perception +4 |
+| Senses | Darkvision 120 ft.; Passive Perception 14 |
+| Languages | None |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 19 | +4 | +4 |
+| Dex | 10 | +0 | +0 |
+| Con | 16 | +3 | +3 |
+| Int | 5 | -3 | -3 |
+| Wis | 12 | +1 | +1 |
+| Cha | 6 | -2 | -2 |
+
 
 ## Source text
 
 <!-- SRD page 343 -->
 
-Large Dragon, Unaligned\
-AC 14 Initiative +0 (10)\
-HP 127 (15d10 + 45)\
-Speed 30 ft., Fly 80 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 19 +4 +4 Dex 10 +0 +0 Con 16 +3 +3\
-Int 5 −3 −3 Wis 12 +1 +1 Cha 6 −2 −2\
-Skills Perception +4\
-Senses Darkvision 120 ft.; Passive Perception 14\
-Languages None\
-CR 6 (XP 2,300; PB +3)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Large Dragon, Unaligned\
+> AC 14 Initiative +0 (10)\
+> HP 127 (15d10 + 45)\
+> Speed 30 ft., Fly 80 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 19 +4 +4 Dex 10 +0 +0 Con 16 +3 +3\
+> Int 5 −3 −3 Wis 12 +1 +1 Cha 6 −2 −2\
+> Skills Perception +4\
+> Senses Darkvision 120 ft.; Passive Perception 14\
+> Languages None\
+> CR 6 (XP 2,300; PB +3)
+
 
 ### Actions
 
@@ -40,46 +66,11 @@ Sting. Melee Attack Roll: +7, reach 10 ft. Hit: 11 (2d6 + 4) Piercing damage plu
 
 Original layout: [[../../srd-5.2.1/pages/343|page 343]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` large ` |
-| ` type ` | ` dragon ` |
-| ` alignment ` | ` Unaligned ` |
-| ` movement_text ` | ` 30 ft., Fly 80 ft. ` |
-| ` skills_text ` | ` Perception +4 ` |
-| ` senses_text ` | ` Darkvision 120 ft.; Passive Perception 14 ` |
-| ` languages_text ` | ` None ` |
-| ` cr_text ` | ` 6 (XP 2,300; PB +3) ` |
-| ` hit_points_text ` | ` 127 (15d10 + 45) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 19 ` | ` 4 ` |
-| ` Dexterity ` | ` 10 ` | ` 0 ` |
-| ` Constitution ` | ` 16 ` | ` 3 ` |
-| ` Intelligence ` | ` 5 ` | ` -3 ` |
-| ` Wisdom ` | ` 12 ` | ` 1 ` |
-| ` Charisma ` | ` 6 ` | ` -2 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 14 ` |  |
-| ` max_hp ` | ` 127 ` |  |
-| ` initiative ` | ` 0 ` |  |
-| ` speed ` | ` 30 ` | ` ft ` |
-| ` fly_speed ` | ` 80 ` | ` ft ` |
 
 ## Health
 
@@ -248,3 +239,13 @@ columns:
 | ` provider ` | ` caller ` |
 | ` required_facts ` | ` ["distance", "area_membership", "visibility", "occupancy", "movement_path"] ` |
 | ` validate_against_typed_constraints ` | ` true ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_stats_extras -->
+> 
+> ```yaml
+> fly_speed:
+>   unit: ft
+>   value: 80
+> ```
+

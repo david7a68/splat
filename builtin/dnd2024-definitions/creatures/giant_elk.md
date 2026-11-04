@@ -1,35 +1,62 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 4a2827a5-4abb-5488-965b-d32d2333a195
 splat_kind: creature
 splat_key: dnd2024:creatures/giant_elk
 splat_name: Giant Elk
-splat_origin:
-  key: dnd2024:reference/creature/giant_elk
+splat_origin: dnd2024:reference/creature/giant_elk
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 351
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 351, https://www.dndbeyond.com/srd
 ---
 
 # Giant Elk
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Huge |
+| Type | Celestial |
+| Alignment | Neutral Good |
+| Armor Class | 14 |
+| Hit Points | 42 (5d12 + 10) |
+| Initiative | +6 (16) |
+| Speed | 60 ft. |
+| Challenge | 2 (XP 450; PB +2) |
+| Skills | Perception +4 |
+| Senses | Darkvision 90 ft.; Passive Perception 14 |
+| Languages | Celestial; understands Common, Elvish, and Sylvan but can’t speak them |
+| Resistances | Necrotic, Radiant |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 19 | +4 | +6 |
+| Dex | 18 | +4 | +6 |
+| Con | 14 | +2 | +2 |
+| Int | 7 | -2 | -2 |
+| Wis | 14 | +2 | +2 |
+| Cha | 10 | +0 | +0 |
+
 
 ## Source text
 
 <!-- SRD page 351 -->
 
-Huge Celestial, Neutral Good\
-AC 14 Initiative +6 (16)\
-HP 42 (5d12 + 10)\
-Speed 60 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 19 +4 +6 Dex 18 +4 +6 Con 14 +2 +2\
-Int 7 −2 −2 Wis 14 +2 +2 Cha 10 +0 +0\
-Skills Perception +4\
-Resistances Necrotic, Radiant\
-Senses Darkvision 90 ft.; Passive Perception 14\
-Languages Celestial; understands Common, Elvish, and Sylvan but can’t speak them\
-CR 2 (XP 450; PB +2)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Huge Celestial, Neutral Good\
+> AC 14 Initiative +6 (16)\
+> HP 42 (5d12 + 10)\
+> Speed 60 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 19 +4 +6 Dex 18 +4 +6 Con 14 +2 +2\
+> Int 7 −2 −2 Wis 14 +2 +2 Cha 10 +0 +0\
+> Skills Perception +4\
+> Resistances Necrotic, Radiant\
+> Senses Darkvision 90 ft.; Passive Perception 14\
+> Languages Celestial; understands Common, Elvish, and Sylvan but can’t speak them\
+> CR 2 (XP 450; PB +2)
+
 
 ### Actions
 
@@ -37,46 +64,11 @@ Ram. Melee Attack Roll: +6, reach 10 ft. Hit: 11 (2d6 + 4) Bludgeoning damage pl
 
 Original layout: [[../../srd-5.2.1/pages/351|page 351]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` huge ` |
-| ` type ` | ` celestial ` |
-| ` alignment ` | ` Neutral Good ` |
-| ` movement_text ` | ` 60 ft. ` |
-| ` skills_text ` | ` Perception +4 ` |
-| ` resistances_text ` | ` Necrotic, Radiant ` |
-| ` senses_text ` | ` Darkvision 90 ft.; Passive Perception 14 ` |
-| ` languages_text ` | ` Celestial; understands Common, Elvish, and Sylvan but can’t speak them ` |
-| ` cr_text ` | ` 2 (XP 450; PB +2) ` |
-| ` hit_points_text ` | ` 42 (5d12 + 10) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 19 ` | ` 6 ` |
-| ` Dexterity ` | ` 18 ` | ` 6 ` |
-| ` Constitution ` | ` 14 ` | ` 2 ` |
-| ` Intelligence ` | ` 7 ` | ` -2 ` |
-| ` Wisdom ` | ` 14 ` | ` 2 ` |
-| ` Charisma ` | ` 10 ` | ` 0 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 14 ` |  |
-| ` max_hp ` | ` 42 ` |  |
-| ` initiative ` | ` 6 ` |  |
-| ` speed ` | ` 60 ` | ` ft ` |
 
 ## Health
 

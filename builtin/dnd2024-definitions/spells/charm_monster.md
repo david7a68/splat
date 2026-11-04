@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 2f38c561-bd58-5c2f-b824-080a87441002
 splat_kind: spell
 splat_key: dnd2024:spells/charm_monster
 splat_name: Charm Monster
-splat_origin:
-  key: dnd2024:reference/spell/charm_monster
+splat_origin: dnd2024:reference/spell/charm_monster
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 114, 115
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 114, 115, https://www.dndbeyond.com/srd
 ---
 
 # Charm Monster
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 4 |
+| School | Enchantment |
+| Classes | Bard, Druid, Sorcerer, Warlock, Wizard |
+| Casting Time | Action |
+| Range | 30 feet |
+| Components | V, S |
+| Duration | 1 hour |
+
 
 ## Source text
 
@@ -32,28 +43,9 @@ Using a Higher-Level Spell Slot. You can target one additional creature for each
 
 Original layout: [[../../srd-5.2.1/pages/114|page 114]], [[../../srd-5.2.1/pages/115|page 115]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 4 ` |
-| ` school ` | ` enchantment ` |
-| ` classes ` | ` ["bard", "druid", "sorcerer", "warlock", "wizard"] ` |
-| ` components ` | ` ["verbal", "somatic"] ` |
-| ` concentration ` | ` false ` |
-| ` duration ` | ` 1 hour ` |
-| ` casting_time ` | ` Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
-
-<!-- splat:values path=splat_spell/range -->
-
-| Field | Value |
-| --- | --- |
-| ` feet ` | ` 30 ` |
 
 ## Rule
 

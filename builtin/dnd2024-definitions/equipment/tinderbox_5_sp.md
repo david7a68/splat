@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 08eddade-32e9-5fb4-b96b-b9c141eb5b8a
 splat_kind: item
 splat_key: dnd2024:equipment/tinderbox_5_sp
 splat_name: Tinderbox (5 SP)
-splat_origin:
-  key: dnd2024:reference/pages/100
+splat_origin: dnd2024:reference/pages/100
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 100
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 100, https://www.dndbeyond.com/srd
 ---
 
 # Tinderbox (5 SP)
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Adventuring Gear |
+| Rarity |  |
+| Attunement | No |
+
 
 ## Source text
 
@@ -20,39 +27,13 @@ splat_sources:
 
 A Tinderbox is a small container holding flint, fire steel, and tinder (usually dry cloth soaked in light oil) used to kindle a fire. Using it to light a Candle, Lamp, Lantern, or Torch—or anything else with exposed fuel—takes a Bonus Action. Lighting any other fire takes 1 minute.
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` adventuring_gear ` |
 
-### Equipment
 
-<!-- splat:values path=splat_item/equipment -->
 
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` none ` |
 
-### Price
 
-<!-- splat:values path=splat_item/price -->
-
-| Field | Value |
-| --- | --- |
-| ` value ` | ` 5 ` |
-| ` unit ` | ` sp ` |
-
-### Mass
-
-<!-- splat:values path=splat_item/mass -->
-
-| Field | Value |
-| --- | --- |
-| ` value ` | ` 1.0 ` |
-| ` unit ` | ` lb ` |
 
 ## Rule
 
@@ -92,3 +73,16 @@ other_fire:
 | --- | --- |
 | ` value ` | ` 1.0 ` |
 | ` unit ` | ` lb ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_item_extras -->
+> 
+> ```yaml
+> price:
+>   unit: sp
+>   value: 5
+> mass:
+>   unit: lb
+>   value: 1.0
+> ```
+

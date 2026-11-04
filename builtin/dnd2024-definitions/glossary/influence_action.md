@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 64cf776a-1dcb-503a-b035-94e83b5f868a
 splat_kind: rule
 splat_key: dnd2024:glossary/influence_action
 splat_name: Influence [Action]
-splat_origin:
-  key: dnd2024:reference/glossary/influence_action
+splat_origin: dnd2024:reference/glossary/influence_action
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 184
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 184, https://www.dndbeyond.com/srd
 ---
 
 # Influence [Action]

@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "84e06d00-c92f-51ee-adea-d3cb3b0f202b"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/alarm"
 splat_name: "Alarm"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [107], "executable": false}
+splat_pages:
+- 107
 ---
 
 # Alarm
@@ -24,3 +25,13 @@ Audible Alarm. The alarm produces the sound of a handbell for 10 seconds within 
 Mental Alarm. You are alerted by a mental ping if you are within 1 mile of the warded area. This ping awakens you if you’re asleep.
 
 Original layout: [[../pages/107|page 107]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

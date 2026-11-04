@@ -1,34 +1,60 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 6b8e85fc-e125-5c0d-96a0-7c8f04cd52e9
 splat_kind: creature
 splat_key: dnd2024:creatures/shrieker_fungus
 splat_name: Shrieker Fungus
-splat_origin:
-  key: dnd2024:reference/creature/shrieker_fungus
+splat_origin: dnd2024:reference/creature/shrieker_fungus
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 286
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 286, https://www.dndbeyond.com/srd
 ---
 
 # Shrieker Fungus
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Medium |
+| Type | Plant |
+| Alignment | Unaligned |
+| Armor Class | 5 |
+| Hit Points | 13 (3d8) |
+| Initiative | -5 (5) |
+| Speed | 5 ft. |
+| Challenge | 0 (XP 0; PB +2) |
+| Senses | Blindsight 30 ft.; Passive Perception 6 |
+| Languages | None |
+| Immunities | Blinded, Charmed, Deafened, Frightened |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 1 | -5 | -5 |
+| Dex | 1 | -5 | -5 |
+| Con | 10 | +0 | +0 |
+| Int | 1 | -5 | -5 |
+| Wis | 3 | -4 | -4 |
+| Cha | 1 | -5 | -5 |
+
 
 ## Source text
 
 <!-- SRD page 286 -->
 
-Medium Plant, Unaligned\
-AC 5 Initiative −5 (5)\
-HP 13 (3d8)\
-Speed 5 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 1 −5 −5 Dex 1 −5 −5 Con 10 +0 +0\
-Int 1 −5 −5 Wis 3 −4 −4 Cha 1 −5 −5\
-Immunities Blinded, Charmed, Deafened, Frightened\
-Senses Blindsight 30 ft.; Passive Perception 6\
-Languages None\
-CR 0 (XP 0; PB +2)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Medium Plant, Unaligned\
+> AC 5 Initiative −5 (5)\
+> HP 13 (3d8)\
+> Speed 5 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 1 −5 −5 Dex 1 −5 −5 Con 10 +0 +0\
+> Int 1 −5 −5 Wis 3 −4 −4 Cha 1 −5 −5\
+> Immunities Blinded, Charmed, Deafened, Frightened\
+> Senses Blindsight 30 ft.; Passive Perception 6\
+> Languages None\
+> CR 0 (XP 0; PB +2)
+
 
 ### Reactions
 
@@ -36,45 +62,11 @@ Shriek. Trigger: A creature or a source of Bright Light moves within 30 feet of 
 
 Original layout: [[../../srd-5.2.1/pages/286|page 286]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` medium ` |
-| ` type ` | ` plant ` |
-| ` alignment ` | ` Unaligned ` |
-| ` movement_text ` | ` 5 ft. ` |
-| ` immunities_text ` | ` Blinded, Charmed, Deafened, Frightened ` |
-| ` senses_text ` | ` Blindsight 30 ft.; Passive Perception 6 ` |
-| ` languages_text ` | ` None ` |
-| ` cr_text ` | ` 0 (XP 0; PB +2) ` |
-| ` hit_points_text ` | ` 13 (3d8) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 1 ` | ` -5 ` |
-| ` Dexterity ` | ` 1 ` | ` -5 ` |
-| ` Constitution ` | ` 10 ` | ` 0 ` |
-| ` Intelligence ` | ` 1 ` | ` -5 ` |
-| ` Wisdom ` | ` 3 ` | ` -4 ` |
-| ` Charisma ` | ` 1 ` | ` -5 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 5 ` |  |
-| ` max_hp ` | ` 13 ` |  |
-| ` initiative ` | ` -5 ` |  |
-| ` speed ` | ` 5 ` | ` ft ` |
 
 ## Health
 

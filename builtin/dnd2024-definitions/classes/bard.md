@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 99562e22-b8dc-5d70-be60-dbc025fba62f
 splat_kind: rule_group
 splat_key: dnd2024:classes/bard
 splat_name: Bard
-splat_origin:
-  key: dnd2024:reference/pages/031
+splat_origin: dnd2024:reference/pages/031
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 31
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 31, https://www.dndbeyond.com/srd
 ---
 
 # Bard

@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "1f3e52c6-3e74-545f-9a7f-83be2fff79ae"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/ankheg"
 splat_name: "Ankheg"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [259], "executable": false}
+splat_pages:
+- 259
 ---
 
 # Ankheg
@@ -33,3 +34,13 @@ Bite. Melee Attack Roll: +5 (with Advantage if the target is Grappled by the ank
 Acid Spray (Recharge 6). Dexterity Saving Throw: DC 12, each creature in a 30-foot-long, 5-foot-wide Line. Failure: 14 (4d6) Acid damage. Success: Half damage.
 
 Original layout: [[../pages/259|page 259]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

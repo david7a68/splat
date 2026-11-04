@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: d87a20fc-113d-55bc-8803-7c508c15cc5c
 splat_kind: spell
 splat_key: dnd2024:spells/find_familiar
 splat_name: Find Familiar
-splat_origin:
-  key: dnd2024:reference/spell/find_familiar
+splat_origin: dnd2024:reference/spell/find_familiar
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 130
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 130, https://www.dndbeyond.com/srd
 ---
 
 # Find Familiar
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 1 |
+| School | Conjuration |
+| Classes | Wizard |
+| Casting Time | 1 hour or Ritual |
+| Range | 10 feet |
+| Components | V, S, M (burning incense worth 10+ GP, which the spell consumes) |
+| Duration | Instantaneous |
+
 
 ## Source text
 
@@ -38,37 +49,11 @@ One Familiar Only. You can’t have more than one familiar at a time. If you cas
 
 Original layout: [[../../srd-5.2.1/pages/130|page 130]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 1 ` |
-| ` school ` | ` conjuration ` |
-| ` classes ` | ` ["wizard"] ` |
-| ` components ` | ` ["verbal", "somatic", "material"] ` |
-| ` concentration ` | ` false ` |
-| ` duration ` | ` Instantaneous ` |
-| ` casting_time ` | ` 1 hour or Ritual ` |
-| ` ritual ` | ` true ` |
 
-### Range
 
-<!-- splat:values path=splat_spell/range -->
 
-| Field | Value |
-| --- | --- |
-| ` feet ` | ` 10 ` |
-
-### Material
-
-<!-- splat:values path=splat_spell/material -->
-
-| Field | Value |
-| --- | --- |
-| ` description ` | ` burning incense worth 10+ GP, which the spell consumes ` |
-| ` consumed ` | ` true ` |
 
 ## Rule
 
@@ -197,3 +182,12 @@ concentration: false
 maximum:
   kind: instantaneous
 ```
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_spell_extras -->
+> 
+> ```yaml
+> material:
+>   consumed: true
+> ```
+

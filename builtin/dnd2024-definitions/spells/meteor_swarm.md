@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: e453db69-a71f-5b63-87bc-c0c86214f934
 splat_kind: spell
 splat_key: dnd2024:spells/meteor_swarm
 splat_name: Meteor Swarm
-splat_origin:
-  key: dnd2024:reference/spell/meteor_swarm
+splat_origin: dnd2024:reference/spell/meteor_swarm
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 149
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 149, https://www.dndbeyond.com/srd
 ---
 
 # Meteor Swarm
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 9 |
+| School | Evocation |
+| Classes | Sorcerer, Wizard |
+| Casting Time | Action |
+| Range |  |
+| Components | V, S |
+| Duration | Instantaneous |
+
 
 ## Source text
 
@@ -30,28 +41,9 @@ A nonmagical object that isn’t being worn or carried also takes the damage if 
 
 Original layout: [[../../srd-5.2.1/pages/149|page 149]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 9 ` |
-| ` school ` | ` evocation ` |
-| ` classes ` | ` ["sorcerer", "wizard"] ` |
-| ` components ` | ` ["verbal", "somatic"] ` |
-| ` concentration ` | ` false ` |
-| ` duration ` | ` Instantaneous ` |
-| ` casting_time ` | ` Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
-
-<!-- splat:values path=splat_spell/range -->
-
-| Field | Value |
-| --- | --- |
-| ` mode ` | ` 1 mile ` |
 
 ## Rule
 
@@ -161,3 +153,12 @@ columns:
 | ` source ` | ` supplied_world_geometry ` |
 | ` unknown_facts ` | ` require_resolution ` |
 | ` infer_unprovided_geometry ` | ` false ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_spell_extras -->
+> 
+> ```yaml
+> range:
+>   mode: 1 mile
+> ```
+

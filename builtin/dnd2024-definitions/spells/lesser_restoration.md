@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: f9ed276d-2674-5d36-ae3b-0e5c34192ee7
 splat_kind: spell
 splat_key: dnd2024:spells/lesser_restoration
 splat_name: Lesser Restoration
-splat_origin:
-  key: dnd2024:reference/spell/lesser_restoration
+splat_origin: dnd2024:reference/spell/lesser_restoration
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 144
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 144, https://www.dndbeyond.com/srd
 ---
 
 # Lesser Restoration
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 2 |
+| School | Abjuration |
+| Classes | Bard, Cleric, Druid, Paladin, Ranger |
+| Casting Time | Bonus Action |
+| Range |  |
+| Components | V, S |
+| Duration | Instantaneous |
+
 
 ## Source text
 
@@ -28,28 +39,9 @@ You touch a creature and end one condition on it: Blinded, Deafened, Paralyzed, 
 
 Original layout: [[../../srd-5.2.1/pages/144|page 144]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 2 ` |
-| ` school ` | ` abjuration ` |
-| ` classes ` | ` ["bard", "cleric", "druid", "paladin", "ranger"] ` |
-| ` components ` | ` ["verbal", "somatic"] ` |
-| ` concentration ` | ` false ` |
-| ` duration ` | ` Instantaneous ` |
-| ` casting_time ` | ` Bonus Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
-
-<!-- splat:values path=splat_spell/range -->
-
-| Field | Value |
-| --- | --- |
-| ` mode ` | ` touch ` |
 
 ## Rule
 
@@ -81,3 +73,12 @@ Original layout: [[../../srd-5.2.1/pages/144|page 144]].
 | --- | --- |
 | ` count ` | ` 1 ` |
 | ` choices ` | ` ["blinded", "deafened", "paralyzed", "poisoned"] ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_spell_extras -->
+> 
+> ```yaml
+> range:
+>   mode: touch
+> ```
+

@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "a9bae4f7-acf8-54fd-8237-7a5dd0cb9c65"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/floating_disk"
 splat_name: "Floating Disk"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [133], "executable": false}
+splat_pages:
+- 133
 ---
 
 # Floating Disk
@@ -24,3 +25,13 @@ The disk is immobile while you are within 20 feet of it. If you move more than 2
 If you move more than 100 feet from the disk (typically because it can’t move around an obstacle to follow you), the spell ends.
 
 Original layout: [[../pages/133|page 133]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

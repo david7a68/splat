@@ -1,34 +1,60 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 45736a8e-2b24-57d7-ba5a-3551a26cfee1
 splat_kind: creature
 splat_key: dnd2024:creatures/remorhaz
 splat_name: Remorhaz
-splat_origin:
-  key: dnd2024:reference/creature/remorhaz
+splat_origin: dnd2024:reference/creature/remorhaz
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 319, 320
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 319, 320, https://www.dndbeyond.com/srd
 ---
 
 # Remorhaz
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Huge |
+| Type | Monstrosity |
+| Alignment | Unaligned |
+| Armor Class | 17 |
+| Hit Points | 195 (17d12 + 85) |
+| Initiative | +5 (15) |
+| Speed | 40 ft., Burrow 30 ft. |
+| Challenge | 11 (XP 7,200; PB +4) |
+| Senses | Darkvision 60 ft., Tremorsense 60 ft.; Passive Perception 10 |
+| Languages | None |
+| Immunities | Cold, Fire |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 24 | +7 | +7 |
+| Dex | 13 | +1 | +1 |
+| Con | 21 | +5 | +5 |
+| Int | 4 | -3 | -3 |
+| Wis | 10 | +0 | +0 |
+| Cha | 5 | -3 | -3 |
+
 
 ## Source text
 
 <!-- SRD page 319 -->
 
-Huge Monstrosity, Unaligned\
-AC 17 Initiative +5 (15)\
-HP 195 (17d12 + 85)\
-Speed 40 ft., Burrow 30 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 24 +7 +7 Dex 13 +1 +1 Con 21 +5 +5\
-Int 4 −3 −3 Wis 10 +0 +0 Cha 5 −3 −3\
-Immunities Cold, Fire\
-Senses Darkvision 60 ft., Tremorsense 60 ft.; Passive Perception 10\
-Languages None\
-CR 11 (XP 7,200; PB +4)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Huge Monstrosity, Unaligned\
+> AC 17 Initiative +5 (15)\
+> HP 195 (17d12 + 85)\
+> Speed 40 ft., Burrow 30 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 24 +7 +7 Dex 13 +1 +1 Con 21 +5 +5\
+> Int 4 −3 −3 Wis 10 +0 +0 Cha 5 −3 −3\
+> Immunities Cold, Fire\
+> Senses Darkvision 60 ft., Tremorsense 60 ft.; Passive Perception 10\
+> Languages None\
+> CR 11 (XP 7,200; PB +4)
+
 
 ### Traits
 
@@ -48,46 +74,11 @@ If the remorhaz takes 30 damage or more on a single turn from a creature inside 
 
 Original layout: [[../../srd-5.2.1/pages/319|page 319]], [[../../srd-5.2.1/pages/320|page 320]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` huge ` |
-| ` type ` | ` monstrosity ` |
-| ` alignment ` | ` Unaligned ` |
-| ` movement_text ` | ` 40 ft., Burrow 30 ft. ` |
-| ` immunities_text ` | ` Cold, Fire ` |
-| ` senses_text ` | ` Darkvision 60 ft., Tremorsense 60 ft.; Passive Perception 10 ` |
-| ` languages_text ` | ` None ` |
-| ` cr_text ` | ` 11 (XP 7,200; PB +4) ` |
-| ` hit_points_text ` | ` 195 (17d12 + 85) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 24 ` | ` 7 ` |
-| ` Dexterity ` | ` 13 ` | ` 1 ` |
-| ` Constitution ` | ` 21 ` | ` 5 ` |
-| ` Intelligence ` | ` 4 ` | ` -3 ` |
-| ` Wisdom ` | ` 10 ` | ` 0 ` |
-| ` Charisma ` | ` 5 ` | ` -3 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 17 ` |  |
-| ` max_hp ` | ` 195 ` |  |
-| ` initiative ` | ` 5 ` |  |
-| ` speed ` | ` 40 ` | ` ft ` |
-| ` burrow_speed ` | ` 30 ` | ` ft ` |
 
 ## Health
 
@@ -378,3 +369,13 @@ geometry:
 unlisted_success_branch: no_effect
 unlisted_duration: until_removed_by_applicable_rule
 ```
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_stats_extras -->
+> 
+> ```yaml
+> burrow_speed:
+>   unit: ft
+>   value: 30
+> ```
+

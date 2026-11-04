@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "0f0564d9-7efc-536c-9327-280155412183"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/magic_item/iron_bands"
 splat_name: "Iron Bands"
-splat_reference: {"source": "SRD 5.2.1", "category": "magic_item", "pages": [228], "executable": false}
+splat_pages:
+- 228
 ---
 
 # Iron Bands
@@ -22,3 +23,13 @@ A creature that can touch the bands, including the one Restrained, can take an a
 Once the bands are used, they can’t be used again until the next dawn.
 
 Original layout: [[../pages/228|page 228]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: magic_item
+> executable: false
+> ```
+

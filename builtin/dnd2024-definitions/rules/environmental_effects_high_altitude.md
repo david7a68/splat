@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: ead59709-203b-5520-be75-a6ad1a7e69e4
 splat_kind: rule
 splat_key: dnd2024:rules/environmental_effects_high_altitude
 splat_name: High Altitude
-splat_origin:
-  key: dnd2024:reference/pages/195
+splat_origin: dnd2024:reference/pages/195
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 195
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 195, https://www.dndbeyond.com/srd
 ---
 
 # High Altitude

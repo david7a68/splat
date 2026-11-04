@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "bbd9d12b-b636-58f2-87db-fe4301cb0a96"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/faithful_hound"
 splat_name: "Faithful Hound"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [129], "executable": false}
+splat_pages:
+- 129
 ---
 
 # Faithful Hound
@@ -26,3 +27,13 @@ At the start of each of your turns, the hound attempts to bite one enemy within 
 On your later turns, you can take a Magic action to move the hound up to 30 feet.
 
 Original layout: [[../pages/129|page 129]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

@@ -1,10 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "71e9e716-a550-5c77-8bc9-3407f8fcf901"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/chuul"
 splat_name: "Chuul"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [273, 274], "executable": false}
+splat_pages:
+- 273
+- 274
 ---
 
 # Chuul
@@ -41,3 +43,13 @@ Pincer. Melee Attack Roll: +6, reach 10 ft. Hit: 9 (1d10 + 4) Bludgeoning damage
 Paralyzing Tentacles. Constitution Saving Throw: DC 13, one creature Grappled by the chuul. Failure: The target has the Poisoned condition and repeats the save at the end of each of its turns, ending the effect on itself on a success. After 1 minute, it succeeds automatically. While Poisoned, the target has the Paralyzed condition.
 
 Original layout: [[../pages/273|page 273]], [[../pages/274|page 274]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

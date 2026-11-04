@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: f7a92c05-ad3a-51ee-8ee8-a47c492ddaeb
 splat_kind: rule
 splat_key: dnd2024:feats/epic_boon_feats_boon_of_spell_recall
 splat_name: Boon of Spell Recall
-splat_origin:
-  key: dnd2024:reference/pages/088
+splat_origin: dnd2024:reference/pages/088
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 88
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 88, https://www.dndbeyond.com/srd
 ---
 
 # Boon of Spell Recall

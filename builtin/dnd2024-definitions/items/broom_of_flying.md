@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 0c7ef23c-412e-528a-8d62-9deb5250fc57
 splat_kind: item
 splat_key: dnd2024:items/broom_of_flying
 splat_name: Broom of Flying
-splat_origin:
-  key: dnd2024:reference/magic_item/broom_of_flying
+splat_origin: dnd2024:reference/magic_item/broom_of_flying
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 214
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 214, https://www.dndbeyond.com/srd
 ---
 
 # Broom of Flying
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Wondrous Item |
+| Rarity | Uncommon |
+| Attunement | Yes |
+
 
 ## Source text
 
@@ -26,22 +33,9 @@ As a Magic action, you can send the broom to travel alone to a destination withi
 
 Original layout: [[../../srd-5.2.1/pages/214|page 214]].
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` wondrous_item ` |
-| ` rarity ` | ` uncommon ` |
 
-### Equipment
-
-<!-- splat:values path=splat_item/equipment -->
-
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` required ` |
 
 ## Rule
 

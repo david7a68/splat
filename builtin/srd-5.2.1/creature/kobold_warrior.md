@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "48faddf1-952e-5d76-93b8-62d8def85d64"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/kobold_warrior"
 splat_name: "Kobold Warrior"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [302], "executable": false}
+splat_pages:
+- 302
 ---
 
 # Kobold Warrior
@@ -34,3 +35,13 @@ Sunlight Sensitivity. While in sunlight, the kobold has Disadvantage on ability 
 Dagger. Melee or Ranged Attack Roll: +4, reach 5 ft. or range 20/60 ft. Hit: 4 (1d4 + 2) Piercing damage.
 
 Original layout: [[../pages/302|page 302]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

@@ -1,10 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "60bd284b-4ae1-5657-86ea-e4ce0ab13481"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/nalfeshnee"
 splat_name: "Nalfeshnee"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [310, 311], "executable": false}
+splat_pages:
+- 310
+- 311
 ---
 
 # Nalfeshnee
@@ -49,3 +51,13 @@ Horror Nimbus (Recharge 5–6). Wisdom Saving Throw: DC 15, each creature in a 1
 Pursuit. Trigger: Another creature the nalfeshnee can see ends its move within 120 feet of the nalfeshnee. Response: The nalfeshnee uses Teleport, but its destination space must be within 10 feet of the triggering creature.
 
 Original layout: [[../pages/310|page 310]], [[../pages/311|page 311]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

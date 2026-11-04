@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: ce805c53-e8a6-5937-9b5f-57da4eee5039
 splat_kind: rule_group
 splat_key: dnd2024:species/elf
 splat_name: Elf
-splat_origin:
-  key: dnd2024:reference/pages/084
+splat_origin: dnd2024:reference/pages/084
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 84, 85
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 84, 85, https://www.dndbeyond.com/srd
 ---
 
 # Elf

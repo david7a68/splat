@@ -1,35 +1,62 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: da6a0d9a-9e54-5118-a7c0-0508b28c00fe
 splat_kind: creature
 splat_key: dnd2024:creatures/fire_giant
 splat_name: Fire Giant
-splat_origin:
-  key: dnd2024:reference/creature/fire_giant
+splat_origin: dnd2024:reference/creature/fire_giant
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 285
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 285, https://www.dndbeyond.com/srd
 ---
 
 # Fire Giant
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Huge |
+| Type | Giant |
+| Alignment | Lawful Evil |
+| Armor Class | 18 |
+| Hit Points | 162 (13d12 + 78) |
+| Initiative | +3 (13) |
+| Speed | 30 ft. |
+| Challenge | 9 (XP 5,000; PB +4) |
+| Skills | Athletics +11, Perception +6 |
+| Senses | Passive Perception 16 |
+| Languages | Giant |
+| Immunities | Fire |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 25 | +7 | +7 |
+| Dex | 9 | -1 | +3 |
+| Con | 23 | +6 | +10 |
+| Int | 10 | +0 | +0 |
+| Wis | 14 | +2 | +2 |
+| Cha | 13 | +1 | +5 |
+
 
 ## Source text
 
 <!-- SRD page 285 -->
 
-Huge Giant, Lawful Evil\
-AC 18 Initiative +3 (13)\
-HP 162 (13d12 + 78)\
-Speed 30 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 25 +7 +7 Dex 9 −1 +3 Con 23 +6 +10\
-Int 10 +0 +0 Wis 14 +2 +2 Cha 13 +1 +5\
-Skills Athletics +11, Perception +6\
-Immunities Fire\
-Senses Passive Perception 16\
-Languages Giant\
-CR 9 (XP 5,000; PB +4)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Huge Giant, Lawful Evil\
+> AC 18 Initiative +3 (13)\
+> HP 162 (13d12 + 78)\
+> Speed 30 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 25 +7 +7 Dex 9 −1 +3 Con 23 +6 +10\
+> Int 10 +0 +0 Wis 14 +2 +2 Cha 13 +1 +5\
+> Skills Athletics +11, Perception +6\
+> Immunities Fire\
+> Senses Passive Perception 16\
+> Languages Giant\
+> CR 9 (XP 5,000; PB +4)
+
 
 ### Actions
 
@@ -41,46 +68,11 @@ Hammer Throw. Ranged Attack Roll: +11, range 60/240 ft. Hit: 23 (3d10 + 7) Bludg
 
 Original layout: [[../../srd-5.2.1/pages/285|page 285]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` huge ` |
-| ` type ` | ` giant ` |
-| ` alignment ` | ` Lawful Evil ` |
-| ` movement_text ` | ` 30 ft. ` |
-| ` skills_text ` | ` Athletics +11, Perception +6 ` |
-| ` immunities_text ` | ` Fire ` |
-| ` senses_text ` | ` Passive Perception 16 ` |
-| ` languages_text ` | ` Giant ` |
-| ` cr_text ` | ` 9 (XP 5,000; PB +4) ` |
-| ` hit_points_text ` | ` 162 (13d12 + 78) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 25 ` | ` 7 ` |
-| ` Dexterity ` | ` 9 ` | ` 3 ` |
-| ` Constitution ` | ` 23 ` | ` 10 ` |
-| ` Intelligence ` | ` 10 ` | ` 0 ` |
-| ` Wisdom ` | ` 14 ` | ` 2 ` |
-| ` Charisma ` | ` 13 ` | ` 5 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 18 ` |  |
-| ` max_hp ` | ` 162 ` |  |
-| ` initiative ` | ` 3 ` |  |
-| ` speed ` | ` 30 ` | ` ft ` |
 
 ## Health
 

@@ -1,6 +1,6 @@
 //! Campaign run location and the selected initiative rule.
 use crate::{
-    content_workspace::{CampaignDocument, Catalogue, EntryRef, patch_fields},
+    content_workspace::{CampaignDocument, Catalogue, EntryRef},
     library::note_path,
     persistence::Campaign,
 };
@@ -283,8 +283,17 @@ impl Options {
             Grouping::Explicit => "explicit",
         };
         let value: Value = serde_yaml_ng::from_str(&format!("mechanic: {MECHANIC}\nmode: replace\nimplementation: splat:manual_initiative\nparameters:\n  grouping: {grouping}\n  within_group: {}\n  tie: {}\n  group_bonus: first_npc_in_roster\n", if self.initiative.roster_ties {"roster"}else{"controller"}, if self.initiative.roster_ties {"roster"}else{"core_rule"})).map_err(|e|e.to_string())?;
-        let source = previous.clone().unwrap_or_else(|| format!("---\nsplat_schema: 1\nsplat_id: {rule_id}\nsplat_kind: rule\nsplat_name: Campaign initiative\nsplat_run_settings: true\nsplat_rule: {{}}\n---\n\nNPC group rolls use the first NPC in roster order as the group's initiative bonus and roll mode. Player initiative is entered separately.\n"));
-        let rule = patch_fields(&source, &[("splat_rule", Some(value))])?;
+        let source = previous.clone().unwrap_or_else(|| format!("---\nsplat_schema: 2\nsplat_id: {rule_id}\nsplat_kind: rule\nsplat_name: Campaign initiative\nsplat_run_settings: true\nsplat_rule: {{}}\n---\n\nNPC group rolls use the first NPC in roster order as the group's initiative bonus and roll mode. Player initiative is entered separately.\n"));
+        let rule = splat::content::formats::patch_model(
+            &source,
+            &[
+                ("splat_rule", Some(value)),
+                (
+                    "splat_requires_mechanics",
+                    Some(vec![Value::from("splat:manual_initiative")].into()),
+                ),
+            ],
+        )?;
         let mut choices = entry
             .fields
             .get("splat_rule_choices")
@@ -315,7 +324,6 @@ impl Options {
                 ),
             ],
         )?;
-        let text = splat::content::formats::convert(&document.path, &text)?;
         fs::create_dir_all(rule_path.parent().ok_or("Invalid rules folder")?)
             .map_err(|e| e.to_string())?;
         crate::file_batch::apply(&[

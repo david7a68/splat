@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: f0c38a4c-3aae-574b-834e-fe869289d1e4
 splat_kind: rule
 splat_key: dnd2024:rules/d20_tests_roll_two_d20s
 splat_name: Roll Two D20s
-splat_origin:
-  key: dnd2024:reference/pages/008
+splat_origin: dnd2024:reference/pages/008
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 8
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 8, https://www.dndbeyond.com/srd
 ---
 
 # Roll Two D20s

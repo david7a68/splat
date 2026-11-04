@@ -1,35 +1,62 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 501f429d-aec6-542a-98c8-ffdbd2772985
 splat_kind: creature
 splat_key: dnd2024:creatures/ancient_black_dragon
 splat_name: Ancient Black Dragon
-splat_origin:
-  key: dnd2024:reference/creature/ancient_black_dragon
+splat_origin: dnd2024:reference/creature/ancient_black_dragon
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 265
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 265, https://www.dndbeyond.com/srd
 ---
 
 # Ancient Black Dragon
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Gargantuan |
+| Type | Dragon (Chromatic) |
+| Alignment | Chaotic Evil |
+| Armor Class | 22 |
+| Hit Points | 367 (21d20 + 147) |
+| Initiative | +16 (26) |
+| Speed | 40 ft., Fly 80 ft., Swim 40 ft. |
+| Challenge | 21 (XP 33,000, or 41,000 in lair; PB +7) |
+| Skills | Perception +16, Stealth +9 |
+| Senses | Blindsight 60 ft., Darkvision 120 ft.; Passive Perception 26 |
+| Languages | Common, Draconic |
+| Immunities | Acid |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 27 | +8 | +8 |
+| Dex | 14 | +2 | +9 |
+| Con | 25 | +7 | +7 |
+| Int | 16 | +3 | +3 |
+| Wis | 15 | +2 | +9 |
+| Cha | 22 | +6 | +6 |
+
 
 ## Source text
 
 <!-- SRD page 265 -->
 
-Gargantuan Dragon (Chromatic), Chaotic Evil\
-AC 22  Initiative +16 (26)\
-HP 367 (21d20 + 147)\
-Speed 40 ft., Fly 80 ft., Swim 40 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 27 +8 +8 Dex 14 +2 +9 Con 25 +7 +7\
-Int 16 +3 +3 Wis 15 +2 +9 Cha 22 +6 +6\
-Skills Perception +16, Stealth +9\
-Immunities Acid\
-Senses Blindsight 60 ft., Darkvision 120 ft.; Passive Perception 26\
-Languages Common, Draconic\
-CR 21 (XP 33,000, or 41,000 in lair; PB +7)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Gargantuan Dragon (Chromatic), Chaotic Evil\
+> AC 22  Initiative +16 (26)\
+> HP 367 (21d20 + 147)\
+> Speed 40 ft., Fly 80 ft., Swim 40 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 27 +8 +8 Dex 14 +2 +9 Con 25 +7 +7\
+> Int 16 +3 +3 Wis 15 +2 +9 Cha 22 +6 +6\
+> Skills Perception +16, Stealth +9\
+> Immunities Acid\
+> Senses Blindsight 60 ft., Darkvision 120 ft.; Passive Perception 26\
+> Languages Common, Draconic\
+> CR 21 (XP 33,000, or 41,000 in lair; PB +7)
+
 
 ### Traits
 
@@ -62,49 +89,11 @@ Pounce. The dragon moves up to half its Speed, and it makes one Rend attack.
 
 Original layout: [[../../srd-5.2.1/pages/265|page 265]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` gargantuan ` |
-| ` type ` | ` dragon ` |
-| ` alignment ` | ` Chaotic Evil ` |
-| ` tags_text ` | ` (Chromatic) ` |
-| ` movement_text ` | ` 40 ft., Fly 80 ft., Swim 40 ft. ` |
-| ` skills_text ` | ` Perception +16, Stealth +9 ` |
-| ` immunities_text ` | ` Acid ` |
-| ` senses_text ` | ` Blindsight 60 ft., Darkvision 120 ft.; Passive Perception 26 ` |
-| ` languages_text ` | ` Common, Draconic ` |
-| ` cr_text ` | ` 21 (XP 33,000, or 41,000 in lair; PB +7) ` |
-| ` hit_points_text ` | ` 367 (21d20 + 147) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 27 ` | ` 8 ` |
-| ` Dexterity ` | ` 14 ` | ` 9 ` |
-| ` Constitution ` | ` 25 ` | ` 7 ` |
-| ` Intelligence ` | ` 16 ` | ` 3 ` |
-| ` Wisdom ` | ` 15 ` | ` 9 ` |
-| ` Charisma ` | ` 22 ` | ` 6 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 22 ` |  |
-| ` max_hp ` | ` 367 ` |  |
-| ` initiative ` | ` 16 ` |  |
-| ` speed ` | ` 40 ` | ` ft ` |
-| ` fly_speed ` | ` 80 ` | ` ft ` |
-| ` swim_speed ` | ` 40 ` | ` ft ` |
 
 ## Health
 
@@ -571,3 +560,16 @@ geometry_assumptions:
   - plane
   - form_appearance
 ```
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_stats_extras -->
+> 
+> ```yaml
+> fly_speed:
+>   unit: ft
+>   value: 80
+> swim_speed:
+>   unit: ft
+>   value: 40
+> ```
+

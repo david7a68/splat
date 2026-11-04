@@ -1,35 +1,62 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: e9b6ff57-018a-5931-b144-c9338a133035
 splat_kind: creature
 splat_key: dnd2024:creatures/druid
 splat_name: Druid
-splat_origin:
-  key: dnd2024:reference/creature/druid
+splat_origin: dnd2024:reference/creature/druid
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 282
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 282, https://www.dndbeyond.com/srd
 ---
 
 # Druid
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Medium or Small |
+| Type | Humanoid (Druid) |
+| Alignment | Neutral |
+| Armor Class | 13 |
+| Hit Points | 44 (8d8 + 8) |
+| Initiative | +1 (11) |
+| Speed | 30 ft. |
+| Challenge | 2 (XP 450; PB +2) |
+| Skills | Medicine +5, Nature +3, Perception +5 |
+| Senses | Passive Perception 15 |
+| Languages | Common, Druidic, Sylvan |
+| Gear | Studded Leather Armor |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 10 | +0 | +0 |
+| Dex | 12 | +1 | +1 |
+| Con | 13 | +1 | +1 |
+| Int | 12 | +1 | +1 |
+| Wis | 16 | +3 | +3 |
+| Cha | 11 | +0 | +0 |
+
 
 ## Source text
 
 <!-- SRD page 282 -->
 
 Medium or Small Humanoid (Druid), Neutral\
-AC 13 Initiative +1 (11)\
-HP 44 (8d8 + 8)\
-Speed 30 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 10 +0 +0 Dex 12 +1 +1 Con 13 +1 +1\
-Int 12 +1 +1 Wis 16 +3 +3 Cha 11 +0 +0\
-Skills Medicine +5, Nature +3, Perception +5\
-Gear Studded Leather Armor\
-Senses Passive Perception 15\
-Languages Common, Druidic, Sylvan\
-CR 2 (XP 450; PB +2)
+> [!quote]- Printed stat block (not read; edit the table above)
+> AC 13 Initiative +1 (11)\
+> HP 44 (8d8 + 8)\
+> Speed 30 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 10 +0 +0 Dex 12 +1 +1 Con 13 +1 +1\
+> Int 12 +1 +1 Wis 16 +3 +3 Cha 11 +0 +0\
+> Skills Medicine +5, Nature +3, Perception +5\
+> Gear Studded Leather Armor\
+> Senses Passive Perception 15\
+> Languages Common, Druidic, Sylvan\
+> CR 2 (XP 450; PB +2)
+
 
 ### Actions
 
@@ -47,48 +74,11 @@ At Will: Druidcraft, Speak with Animals\
 
 Original layout: [[../../srd-5.2.1/pages/282|page 282]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` medium ` |
-| ` type ` | ` humanoid ` |
-| ` alignment ` | ` Neutral ` |
-| ` size_options_text ` | ` Medium or Small ` |
-| ` tags_text ` | ` (Druid) ` |
-| ` movement_text ` | ` 30 ft. ` |
-| ` skills_text ` | ` Medicine +5, Nature +3, Perception +5 ` |
-| ` gear_text ` | ` Studded Leather Armor ` |
-| ` senses_text ` | ` Passive Perception 15 ` |
-| ` languages_text ` | ` Common, Druidic, Sylvan ` |
-| ` cr_text ` | ` 2 (XP 450; PB +2) ` |
-| ` hit_points_text ` | ` 44 (8d8 + 8) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 10 ` | ` 0 ` |
-| ` Dexterity ` | ` 12 ` | ` 1 ` |
-| ` Constitution ` | ` 13 ` | ` 1 ` |
-| ` Intelligence ` | ` 12 ` | ` 1 ` |
-| ` Wisdom ` | ` 16 ` | ` 3 ` |
-| ` Charisma ` | ` 11 ` | ` 0 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 13 ` |  |
-| ` max_hp ` | ` 44 ` |  |
-| ` initiative ` | ` 1 ` |  |
-| ` speed ` | ` 30 ` | ` ft ` |
 
 ## Health
 

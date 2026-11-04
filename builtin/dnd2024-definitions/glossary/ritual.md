@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 474292db-4ba5-521b-8568-7b91557c05cd
 splat_kind: rule
 splat_key: dnd2024:glossary/ritual
 splat_name: Ritual
-splat_origin:
-  key: dnd2024:reference/glossary/ritual
+splat_origin: dnd2024:reference/glossary/ritual
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 187
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 187, https://www.dndbeyond.com/srd
 ---
 
 # Ritual

@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 96942747-6e7d-5727-af60-b822a8017e8e
 splat_kind: rule
 splat_key: dnd2024:class_features/monk_level_1_martial_arts
 splat_name: 'Level 1: Martial Arts'
-splat_origin:
-  key: dnd2024:reference/pages/050
+splat_origin: dnd2024:reference/pages/050
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 50
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 50, https://www.dndbeyond.com/srd
 ---
 
 # Level 1: Martial Arts

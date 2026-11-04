@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 59dbb391-bf1e-5619-ae77-a55b240910d8
 splat_kind: rule
 splat_key: dnd2024:class_features/paladin_level_11_radiant_strikes
 splat_name: 'Level 11: Radiant Strikes'
-splat_origin:
-  key: dnd2024:reference/pages/055
+splat_origin: dnd2024:reference/pages/055
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 55
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 55, https://www.dndbeyond.com/srd
 ---
 
 # Level 11: Radiant Strikes

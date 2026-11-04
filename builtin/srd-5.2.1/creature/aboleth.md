@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "0798f13e-2467-5457-ac2e-7fcd0865161b"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/aboleth"
 splat_name: "Aboleth"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [258], "executable": false}
+splat_pages:
+- 258
 ---
 
 # Aboleth
@@ -58,3 +59,13 @@ Lash. The aboleth makes one Tentacle attack.
 Psychic Drain. If the aboleth has at least one creature Charmed or Grappled, it uses Consume Memories and regains 5 (1d10) Hit Points.
 
 Original layout: [[../pages/258|page 258]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

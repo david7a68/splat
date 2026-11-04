@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 98dbb838-e5ce-5565-9713-e103b8a8d837
 splat_kind: spell
 splat_key: dnd2024:spells/geas
 splat_name: Geas
-splat_origin:
-  key: dnd2024:reference/spell/geas
+splat_origin: dnd2024:reference/spell/geas
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 135
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 135, https://www.dndbeyond.com/srd
 ---
 
 # Geas
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 5 |
+| School | Enchantment |
+| Classes | Bard, Cleric, Druid, Paladin, Wizard |
+| Casting Time | 1 minute |
+| Range | 60 feet |
+| Components | V |
+| Duration | 30 days |
+
 
 ## Source text
 
@@ -34,28 +45,9 @@ Using a Higher-Level Spell Slot. If you use a level 7 or 8 spell slot, the durat
 
 Original layout: [[../../srd-5.2.1/pages/135|page 135]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 5 ` |
-| ` school ` | ` enchantment ` |
-| ` classes ` | ` ["bard", "cleric", "druid", "paladin", "wizard"] ` |
-| ` components ` | ` ["verbal"] ` |
-| ` concentration ` | ` false ` |
-| ` duration ` | ` 30 days ` |
-| ` casting_time ` | ` 1 minute ` |
-| ` ritual ` | ` false ` |
 
-### Range
-
-<!-- splat:values path=splat_spell/range -->
-
-| Field | Value |
-| --- | --- |
-| ` feet ` | ` 60 ` |
 
 ## Rule
 

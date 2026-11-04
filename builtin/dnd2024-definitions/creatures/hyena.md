@@ -1,34 +1,60 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 247e28ca-ee08-53c5-846e-4fcd417019fd
 splat_kind: creature
 splat_key: dnd2024:creatures/hyena
 splat_name: Hyena
-splat_origin:
-  key: dnd2024:reference/creature/hyena
+splat_origin: dnd2024:reference/creature/hyena
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 356
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 356, https://www.dndbeyond.com/srd
 ---
 
 # Hyena
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Medium |
+| Type | Beast |
+| Alignment | Unaligned |
+| Armor Class | 11 |
+| Hit Points | 5 (1d8 + 1) |
+| Initiative | +1 (11) |
+| Speed | 50 ft. |
+| Challenge | 0 (XP 10; PB +2) |
+| Skills | Perception +3 |
+| Senses | Darkvision 60 ft.; Passive Perception 13 |
+| Languages | None |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 11 | +0 | +0 |
+| Dex | 13 | +1 | +1 |
+| Con | 12 | +1 | +1 |
+| Int | 2 | -4 | -4 |
+| Wis | 12 | +1 | +1 |
+| Cha | 5 | -3 | -3 |
+
 
 ## Source text
 
 <!-- SRD page 356 -->
 
-Medium Beast, Unaligned\
-AC 11  Initiative +1 (11)\
-HP 5 (1d8 + 1)\
-Speed 50 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 11 +0 +0 Dex 13 +1 +1 Con 12 +1 +1\
-Int 2 −4 −4 Wis 12 +1 +1 Cha 5 −3 −3\
-Skills Perception +3\
-Senses Darkvision 60 ft.; Passive Perception 13\
-Languages None\
-CR 0 (XP 10; PB +2)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Medium Beast, Unaligned\
+> AC 11  Initiative +1 (11)\
+> HP 5 (1d8 + 1)\
+> Speed 50 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 11 +0 +0 Dex 13 +1 +1 Con 12 +1 +1\
+> Int 2 −4 −4 Wis 12 +1 +1 Cha 5 −3 −3\
+> Skills Perception +3\
+> Senses Darkvision 60 ft.; Passive Perception 13\
+> Languages None\
+> CR 0 (XP 10; PB +2)
+
 
 ### Traits
 
@@ -40,45 +66,11 @@ Bite. Melee Attack Roll: +2, reach 5 ft. Hit: 3 (1d6) Piercing damage.
 
 Original layout: [[../../srd-5.2.1/pages/356|page 356]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` medium ` |
-| ` type ` | ` beast ` |
-| ` alignment ` | ` Unaligned ` |
-| ` movement_text ` | ` 50 ft. ` |
-| ` skills_text ` | ` Perception +3 ` |
-| ` senses_text ` | ` Darkvision 60 ft.; Passive Perception 13 ` |
-| ` languages_text ` | ` None ` |
-| ` cr_text ` | ` 0 (XP 10; PB +2) ` |
-| ` hit_points_text ` | ` 5 (1d8 + 1) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 11 ` | ` 0 ` |
-| ` Dexterity ` | ` 13 ` | ` 1 ` |
-| ` Constitution ` | ` 12 ` | ` 1 ` |
-| ` Intelligence ` | ` 2 ` | ` -4 ` |
-| ` Wisdom ` | ` 12 ` | ` 1 ` |
-| ` Charisma ` | ` 5 ` | ` -3 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 11 ` |  |
-| ` max_hp ` | ` 5 ` |  |
-| ` initiative ` | ` 1 ` |  |
-| ` speed ` | ` 50 ` | ` ft ` |
 
 ## Health
 

@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 93abf320-7330-5202-b16c-a1d5dfee1f4c
 splat_kind: spell
 splat_key: dnd2024:spells/zone_of_truth
 splat_name: Zone of Truth
-splat_origin:
-  key: dnd2024:reference/spell/zone_of_truth
+splat_origin: dnd2024:reference/spell/zone_of_truth
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 175
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 175, https://www.dndbeyond.com/srd
 ---
 
 # Zone of Truth
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 2 |
+| School | Enchantment |
+| Classes | Bard, Cleric, Paladin |
+| Casting Time | Action |
+| Range | 60 feet |
+| Components | V, S |
+| Duration | 10 minutes |
+
 
 ## Source text
 
@@ -30,28 +41,9 @@ An affected creature is aware of the spell and can avoid answering questions to 
 
 Original layout: [[../../srd-5.2.1/pages/175|page 175]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 2 ` |
-| ` school ` | ` enchantment ` |
-| ` classes ` | ` ["bard", "cleric", "paladin"] ` |
-| ` components ` | ` ["verbal", "somatic"] ` |
-| ` concentration ` | ` false ` |
-| ` duration ` | ` 10 minutes ` |
-| ` casting_time ` | ` Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
-
-<!-- splat:values path=splat_spell/range -->
-
-| Field | Value |
-| --- | --- |
-| ` feet ` | ` 60 ` |
 
 ## Rule
 

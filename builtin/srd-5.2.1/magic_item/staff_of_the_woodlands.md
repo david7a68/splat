@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "5df572f4-289c-5114-bd4c-ca35c7af7898"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/magic_item/staff_of_the_woodlands"
 splat_name: "Staff of the Woodlands"
-splat_reference: {"source": "SRD 5.2.1", "category": "magic_item", "pages": [247], "executable": false}
+splat_pages:
+- 247
 ---
 
 # Staff of the Woodlands
@@ -33,3 +34,13 @@ Tree Form. You can take a Magic action to plant one end of the staff in earth in
 Regaining Charges. The staff regains 1d6 expended charges daily at dawn. If you expend the last charge, roll 1d20. On a 1, the staff loses its properties and becomes a nonmagical Quarterstaff.
 
 Original layout: [[../pages/247|page 247]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: magic_item
+> executable: false
+> ```
+

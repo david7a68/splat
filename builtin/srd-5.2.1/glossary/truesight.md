@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "88febe22-0cf6-5c47-92e2-4402b88434e1"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/glossary/truesight"
 splat_name: "Truesight"
-splat_reference: {"source": "SRD 5.2.1", "category": "glossary", "pages": [190], "executable": false}
+splat_pages:
+- 190
 ---
 
 # Truesight
@@ -24,3 +25,13 @@ Transformations. You discern the true form of any creature or object you see tha
 Ethereal Plane. You see into the Ethereal Plane.
 
 Original layout: [[../pages/190|page 190]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: glossary
+> executable: false
+> ```
+

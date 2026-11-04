@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "a08cb412-10e0-51a0-abdd-b372e8f0b2c8"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/call_lightning"
 splat_name: "Call Lightning"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [114], "executable": false}
+splat_pages:
+- 114
 ---
 
 # Call Lightning
@@ -28,3 +29,13 @@ If you’re outdoors in a storm when you cast this spell, the spell gives you co
 Using a Higher-Level Spell Slot. The damage increases by 1d10 for each spell slot level above 3.
 
 Original layout: [[../pages/114|page 114]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

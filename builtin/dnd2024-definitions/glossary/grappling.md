@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 470f050d-30bd-597d-ad11-c8d557a4463a
 splat_kind: rule
 splat_key: dnd2024:glossary/grappling
 splat_name: Grappling
-splat_origin:
-  key: dnd2024:reference/glossary/grappling
+splat_origin: dnd2024:reference/glossary/grappling
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 182
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 182, https://www.dndbeyond.com/srd
 ---
 
 # Grappling

@@ -1,36 +1,66 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 3480ce3e-ec81-597d-9ecf-a57846062274
 splat_kind: creature
 splat_key: dnd2024:creatures/archmage
 splat_name: Archmage
-splat_origin:
-  key: dnd2024:reference/creature/archmage
+splat_origin: dnd2024:reference/creature/archmage
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 305
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 305, https://www.dndbeyond.com/srd
 ---
 
 # Archmage
+
+
+## Stat block
+
+%% splat reward=printed %%
+
+| Stat | Value |
+| --- | --- |
+| Size | Medium or Small |
+| Type | Humanoid (Wizard) |
+| Alignment | Neutral |
+| Armor Class | 17 |
+| Hit Points | 170 (31d8 + 31) |
+| Initiative | +7 (17) |
+| Speed | 30 ft. |
+| Challenge | 12 (XP 8,000; PB +4) |
+| Skills | Arcana +13, History +9, Perception +6 |
+| Senses | Passive Perception 16 |
+| Languages | Common plus five other languages |
+| Gear | Wand |
+| Immunities | Psychic; Charmed (with Mind Blank) |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 10 | +0 | +0 |
+| Dex | 14 | +2 | +2 |
+| Con | 12 | +1 | +1 |
+| Int | 20 | +5 | +9 |
+| Wis | 15 | +2 | +6 |
+| Cha | 16 | +3 | +3 |
+
 
 ## Source text
 
 <!-- SRD page 305 -->
 
 Medium or Small Humanoid (Wizard), Neutral\
-AC 17 Initiative +7 (17)\
-HP 170 (31d8 + 31)\
-Speed 30 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 10 +0 +0 Dex 14 +2 +2 Con 12 +1 +1\
-Int 20 +5 +9 Wis 15 +2 +6 Cha 16 +3 +3\
-Skills Arcana +13, History +9, Perception +6\
-Immunities Psychic; Charmed (with Mind Blank)\
-Gear Wand\
-Senses Passive Perception 16\
-Languages Common plus five other languages\
-CR 12 (XP 8,000; PB +4)
+> [!quote]- Printed stat block (not read; edit the table above)
+> AC 17 Initiative +7 (17)\
+> HP 170 (31d8 + 31)\
+> Speed 30 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 10 +0 +0 Dex 14 +2 +2 Con 12 +1 +1\
+> Int 20 +5 +9 Wis 15 +2 +6 Cha 16 +3 +3\
+> Skills Arcana +13, History +9, Perception +6\
+> Immunities Psychic; Charmed (with Mind Blank)\
+> Gear Wand\
+> Senses Passive Perception 16\
+> Languages Common plus five other languages\
+> CR 12 (XP 8,000; PB +4)
+
 
 ### Traits
 
@@ -59,49 +89,11 @@ Protective Magic (3/Day). The archmage casts Counterspell or Shield in response 
 
 Original layout: [[../../srd-5.2.1/pages/305|page 305]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` medium ` |
-| ` type ` | ` humanoid ` |
-| ` alignment ` | ` Neutral ` |
-| ` size_options_text ` | ` Medium or Small ` |
-| ` tags_text ` | ` (Wizard) ` |
-| ` movement_text ` | ` 30 ft. ` |
-| ` skills_text ` | ` Arcana +13, History +9, Perception +6 ` |
-| ` immunities_text ` | ` Psychic; Charmed (with Mind Blank) ` |
-| ` gear_text ` | ` Wand ` |
-| ` senses_text ` | ` Passive Perception 16 ` |
-| ` languages_text ` | ` Common plus five other languages ` |
-| ` cr_text ` | ` 12 (XP 8,000; PB +4) ` |
-| ` hit_points_text ` | ` 170 (31d8 + 31) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 10 ` | ` 0 ` |
-| ` Dexterity ` | ` 14 ` | ` 2 ` |
-| ` Constitution ` | ` 12 ` | ` 1 ` |
-| ` Intelligence ` | ` 20 ` | ` 9 ` |
-| ` Wisdom ` | ` 15 ` | ` 6 ` |
-| ` Charisma ` | ` 16 ` | ` 3 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 17 ` |  |
-| ` max_hp ` | ` 170 ` |  |
-| ` initiative ` | ` 7 ` |  |
-| ` speed ` | ` 30 ` | ` ft ` |
 
 ## Health
 

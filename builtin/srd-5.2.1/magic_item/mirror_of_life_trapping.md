@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "c068ae7c-3210-5ffc-8f54-5bec7c62344e"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/magic_item/mirror_of_life_trapping"
 splat_name: "Mirror of Life Trapping"
-splat_reference: {"source": "SRD 5.2.1", "category": "magic_item", "pages": [230], "executable": false}
+splat_pages:
+- 230
 ---
 
 # Mirror of Life Trapping
@@ -30,3 +31,13 @@ In a similar way, you can take a Magic action and use a second command word to f
 Placing the mirror inside an extradimensional space created by a Bag of Holding, Portable Hole, or similar item instantly destroys both items and opens a gate to the Astral Plane. The gate originates where the one item was placed inside the other. Any creature within 10 feet of the gate and not behind Total Cover is sucked through it to a random location on the Astral Plane. The gate then closes. The gate is one-way only and can’t be reopened.
 
 Original layout: [[../pages/230|page 230]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: magic_item
+> executable: false
+> ```
+

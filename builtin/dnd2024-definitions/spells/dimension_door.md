@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 92805162-dfe9-551f-bc67-dba7847f5e2b
 splat_kind: spell
 splat_key: dnd2024:spells/dimension_door
 splat_name: Dimension Door
-splat_origin:
-  key: dnd2024:reference/spell/dimension_door
+splat_origin: dnd2024:reference/spell/dimension_door
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 123, 124
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 123, 124, https://www.dndbeyond.com/srd
 ---
 
 # Dimension Door
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 4 |
+| School | Conjuration |
+| Classes | Bard, Sorcerer, Warlock, Wizard |
+| Casting Time | Action |
+| Range | 500 feet |
+| Components | V |
+| Duration | Instantaneous |
+
 
 ## Source text
 
@@ -34,28 +45,9 @@ If you, the other creature, or both would arrive in a space occupied by a creatu
 
 Original layout: [[../../srd-5.2.1/pages/123|page 123]], [[../../srd-5.2.1/pages/124|page 124]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 4 ` |
-| ` school ` | ` conjuration ` |
-| ` classes ` | ` ["bard", "sorcerer", "warlock", "wizard"] ` |
-| ` components ` | ` ["verbal"] ` |
-| ` concentration ` | ` false ` |
-| ` duration ` | ` Instantaneous ` |
-| ` casting_time ` | ` Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
-
-<!-- splat:values path=splat_spell/range -->
-
-| Field | Value |
-| --- | --- |
-| ` feet ` | ` 500 ` |
 
 ## Rule
 

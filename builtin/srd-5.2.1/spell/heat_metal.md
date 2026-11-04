@@ -1,10 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "139f6da6-774d-5745-b6f5-16055ec2a66d"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/heat_metal"
 splat_name: "Heat Metal"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [139, 140], "executable": false}
+splat_pages:
+- 139
+- 140
 ---
 
 # Heat Metal
@@ -26,3 +28,13 @@ If a creature is holding or wearing the object and takes the damage from it, the
 Using a Higher-Level Spell Slot. The damage increases by 1d8 for each spell slot level above 2.
 
 Original layout: [[../pages/139|page 139]], [[../pages/140|page 140]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

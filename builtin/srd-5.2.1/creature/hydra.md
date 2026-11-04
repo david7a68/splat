@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "318ee818-ffbe-555e-80dc-1c1d8e7cc711"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/hydra"
 splat_name: "Hydra"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [300], "executable": false}
+splat_pages:
+- 300
 ---
 
 # Hydra
@@ -39,3 +40,13 @@ Multiattack. The hydra makes as many Bite attacks as it has heads.
 Bite. Melee Attack Roll: +8, reach 10 ft. Hit: 10 (1d10 + 5) Piercing damage.
 
 Original layout: [[../pages/300|page 300]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

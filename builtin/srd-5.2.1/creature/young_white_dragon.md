@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "c64e0d17-0df3-51e1-b751-b4c589e0dd34"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/young_white_dragon"
 splat_name: "Young White Dragon"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [340], "executable": false}
+splat_pages:
+- 340
 ---
 
 # Young White Dragon
@@ -37,3 +38,13 @@ Rend. Melee Attack Roll: +7, reach 10 ft. Hit: 9 (2d4 + 4) Slashing damage plus 
 Cold Breath (Recharge 5–6). Constitution Saving Throw: DC 15, each creature in a 30-foot Cone. Failure: 40 (9d8) Cold damage. Success: Half damage.
 
 Original layout: [[../pages/340|page 340]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

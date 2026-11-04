@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 412dad3e-1aae-5ba0-8a41-89a807f38d4f
 splat_kind: rule
 splat_key: dnd2024:rules/warlock_devil_s_sight
 splat_name: Devil’s Sight
-splat_origin:
-  key: dnd2024:reference/pages/072
+splat_origin: dnd2024:reference/pages/072
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 72
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 72, https://www.dndbeyond.com/srd
 ---
 
 # Devil’s Sight

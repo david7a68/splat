@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: e8e788a3-9823-5375-99ad-87e814401cce
 splat_kind: spell
 splat_key: dnd2024:spells/hellish_rebuke
 splat_name: Hellish Rebuke
-splat_origin:
-  key: dnd2024:reference/spell/hellish_rebuke
+splat_origin: dnd2024:reference/spell/hellish_rebuke
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 140
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 140, https://www.dndbeyond.com/srd
 ---
 
 # Hellish Rebuke
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 1 |
+| School | Evocation |
+| Classes | Warlock |
+| Casting Time | Reaction, which you take in response to taking damage from a creature that you can see within 60 feet of yourself |
+| Range | 60 feet |
+| Components | V, S |
+| Duration | Instantaneous |
+
 
 ## Source text
 
@@ -30,28 +41,9 @@ Using a Higher-Level Spell Slot. The damage increases by 1d10 for each spell slo
 
 Original layout: [[../../srd-5.2.1/pages/140|page 140]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 1 ` |
-| ` school ` | ` evocation ` |
-| ` classes ` | ` ["warlock"] ` |
-| ` components ` | ` ["verbal", "somatic"] ` |
-| ` concentration ` | ` false ` |
-| ` duration ` | ` Instantaneous ` |
-| ` casting_time ` | ` Reaction, which you take in response to taking damage from a creature that you can see within 60 feet of yourself ` |
-| ` ritual ` | ` false ` |
 
-### Range
-
-<!-- splat:values path=splat_spell/range -->
-
-| Field | Value |
-| --- | --- |
-| ` feet ` | ` 60 ` |
 
 ## Rule
 

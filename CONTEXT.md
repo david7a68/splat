@@ -475,3 +475,10 @@ with no link is not compared, because a name alone does not prove the edition.
 **Execution profile**:
 A bounded, executable view of a definition, with explicit limits on the rules
 and situations it supports. It does not prove support for the full definition.
+
+**Old layout**:
+A file with `splat_schema: 1` or `timeline_version: 1`. Splat no longer loads it.
+Library and Campaign flag it with its path and the Convert files action. Conversion
+is explicit, through Convert files or `splat convert`; normal saves never convert.
+The old parser exists only for conversion. Built-in notes use schema 2. `splat check`
+uses the normal readers without opening a window or changing files.

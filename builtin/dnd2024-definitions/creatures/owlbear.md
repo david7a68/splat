@@ -1,34 +1,60 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 72cc0187-32ce-54cd-b408-09dc5fb4205c
 splat_kind: creature
 splat_key: dnd2024:creatures/owlbear
 splat_name: Owlbear
-splat_origin:
-  key: dnd2024:reference/creature/owlbear
+splat_origin: dnd2024:reference/creature/owlbear
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 313
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 313, https://www.dndbeyond.com/srd
 ---
 
 # Owlbear
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Large |
+| Type | Monstrosity |
+| Alignment | Unaligned |
+| Armor Class | 13 |
+| Hit Points | 59 (7d10 + 21) |
+| Initiative | +1 (11) |
+| Speed | 40 ft., Climb 40 ft. |
+| Challenge | 3 (XP 700; PB +2) |
+| Skills | Perception +5 |
+| Senses | Darkvision 60 ft.; Passive Perception 15 |
+| Languages | None |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 20 | +5 | +5 |
+| Dex | 12 | +1 | +1 |
+| Con | 17 | +3 | +3 |
+| Int | 3 | -4 | -4 |
+| Wis | 12 | +1 | +1 |
+| Cha | 7 | -2 | -2 |
+
 
 ## Source text
 
 <!-- SRD page 313 -->
 
-Large Monstrosity, Unaligned\
-AC 13 Initiative +1 (11)\
-HP 59 (7d10 + 21)\
-Speed 40 ft., Climb 40 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 20 +5 +5 Dex 12 +1 +1 Con 17 +3 +3\
-Int 3 −4 −4 Wis 12 +1 +1 Cha 7 −2 −2\
-Skills Perception +5\
-Senses Darkvision 60 ft.; Passive Perception 15\
-Languages None\
-CR 3 (XP 700; PB +2)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Large Monstrosity, Unaligned\
+> AC 13 Initiative +1 (11)\
+> HP 59 (7d10 + 21)\
+> Speed 40 ft., Climb 40 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 20 +5 +5 Dex 12 +1 +1 Con 17 +3 +3\
+> Int 3 −4 −4 Wis 12 +1 +1 Cha 7 −2 −2\
+> Skills Perception +5\
+> Senses Darkvision 60 ft.; Passive Perception 15\
+> Languages None\
+> CR 3 (XP 700; PB +2)
+
 
 ### Actions
 
@@ -38,46 +64,11 @@ Rend. Melee Attack Roll: +7, reach 5 ft. Hit: 14 (2d8 + 5) Slashing damage.
 
 Original layout: [[../../srd-5.2.1/pages/313|page 313]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` large ` |
-| ` type ` | ` monstrosity ` |
-| ` alignment ` | ` Unaligned ` |
-| ` movement_text ` | ` 40 ft., Climb 40 ft. ` |
-| ` skills_text ` | ` Perception +5 ` |
-| ` senses_text ` | ` Darkvision 60 ft.; Passive Perception 15 ` |
-| ` languages_text ` | ` None ` |
-| ` cr_text ` | ` 3 (XP 700; PB +2) ` |
-| ` hit_points_text ` | ` 59 (7d10 + 21) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 20 ` | ` 5 ` |
-| ` Dexterity ` | ` 12 ` | ` 1 ` |
-| ` Constitution ` | ` 17 ` | ` 3 ` |
-| ` Intelligence ` | ` 3 ` | ` -4 ` |
-| ` Wisdom ` | ` 12 ` | ` 1 ` |
-| ` Charisma ` | ` 7 ` | ` -2 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 13 ` |  |
-| ` max_hp ` | ` 59 ` |  |
-| ` initiative ` | ` 1 ` |  |
-| ` speed ` | ` 40 ` | ` ft ` |
-| ` climb_speed ` | ` 40 ` | ` ft ` |
 
 ## Health
 
@@ -221,3 +212,13 @@ geometry_assumptions:
   - plane
   - form_appearance
 ```
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_stats_extras -->
+> 
+> ```yaml
+> climb_speed:
+>   unit: ft
+>   value: 40
+> ```
+

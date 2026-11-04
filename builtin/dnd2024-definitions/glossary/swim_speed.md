@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: e8452e0e-fe4b-51b2-8c61-cf7fcfc7e4a7
 splat_kind: rule
 splat_key: dnd2024:glossary/swim_speed
 splat_name: Swim Speed
-splat_origin:
-  key: dnd2024:reference/glossary/swim_speed
+splat_origin: dnd2024:reference/glossary/swim_speed
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 189
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 189, https://www.dndbeyond.com/srd
 ---
 
 # Swim Speed

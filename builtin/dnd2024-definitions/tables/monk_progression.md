@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 235f10c4-25ec-5b36-8da9-344befa0f4c4
 splat_kind: rule
 splat_key: dnd2024:tables/monk_progression
 splat_name: Monk Progression
-splat_origin:
-  key: dnd2024:reference/pages/050
+splat_origin: dnd2024:reference/pages/050
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 50
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 50, https://www.dndbeyond.com/srd
 ---
 
 # Monk Progression

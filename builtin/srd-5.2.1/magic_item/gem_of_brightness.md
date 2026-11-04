@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "9a5dbbe9-b7de-5823-bb73-da73b5c2c852"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/magic_item/gem_of_brightness"
 splat_name: "Gem of Brightness"
-splat_reference: {"source": "SRD 5.2.1", "category": "magic_item", "pages": [223], "executable": false}
+splat_pages:
+- 223
 ---
 
 # Gem of Brightness
@@ -24,3 +25,13 @@ Third Command Word. You expend 5 charges and cause the gem to flare with intense
 When all of the gem’s charges are expended, the gem becomes a nonmagical jewel worth 50 GP.
 
 Original layout: [[../pages/223|page 223]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: magic_item
+> executable: false
+> ```
+

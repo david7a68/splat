@@ -1,36 +1,64 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 7e990459-90d3-5c1a-bd68-288c41d1cfe0
 splat_kind: creature
 splat_key: dnd2024:creatures/imp
 splat_name: Imp
-splat_origin:
-  key: dnd2024:reference/creature/imp
+splat_origin: dnd2024:reference/creature/imp
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 300, 301
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 300, 301, https://www.dndbeyond.com/srd
 ---
 
 # Imp
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Tiny |
+| Type | Fiend (Devil) |
+| Alignment | Lawful Evil |
+| Armor Class | 13 |
+| Hit Points | 21 (6d4 + 6) |
+| Initiative | +3 (13) |
+| Speed | 20 ft., Fly 40 ft. |
+| Challenge | 1 (XP 200; PB +2) |
+| Skills | Deception +4, Insight +3, Stealth +5 |
+| Senses | Darkvision 120 ft. (unimpeded by magical Darkness); Passive Perception 11 |
+| Languages | Common, Infernal |
+| Resistances | Cold |
+| Immunities | Fire, Poison; Poisoned |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 6 | -2 | -2 |
+| Dex | 17 | +3 | +3 |
+| Con | 13 | +1 | +1 |
+| Int | 11 | +0 | +0 |
+| Wis | 12 | +1 | +1 |
+| Cha | 14 | +2 | +2 |
+
 
 ## Source text
 
 <!-- SRD page 300 -->
 
-Tiny Fiend (Devil), Lawful Evil\
-AC 13  Initiative +3 (13)\
-HP 21 (6d4 + 6)\
-Speed 20 ft., Fly 40 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 6 −2 −2 Dex 17 +3 +3 Con 13 +1 +1\
-Int 11 +0 +0 Wis 12 +1 +1 Cha 14 +2 +2\
-Skills Deception +4, Insight +3, Stealth +5\
-Resistances Cold\
-Immunities Fire, Poison; Poisoned\
-Senses Darkvision 120 ft. (unimpeded by magical Darkness); Passive Perception 11\
-Languages Common, Infernal\
-CR 1 (XP 200; PB +2)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Tiny Fiend (Devil), Lawful Evil\
+> AC 13  Initiative +3 (13)\
+> HP 21 (6d4 + 6)\
+> Speed 20 ft., Fly 40 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 6 −2 −2 Dex 17 +3 +3 Con 13 +1 +1\
+> Int 11 +0 +0 Wis 12 +1 +1 Cha 14 +2 +2\
+> Skills Deception +4, Insight +3, Stealth +5\
+> Resistances Cold\
+> Immunities Fire, Poison; Poisoned\
+> Senses Darkvision 120 ft. (unimpeded by magical Darkness); Passive Perception 11\
+> Languages Common, Infernal\
+> CR 1 (XP 200; PB +2)
+
 
 <!-- SRD page 301 -->
 
@@ -48,49 +76,11 @@ Shape-Shift. The imp shape-shifts to resemble a rat (Speed 20 ft.), a raven (20 
 
 Original layout: [[../../srd-5.2.1/pages/300|page 300]], [[../../srd-5.2.1/pages/301|page 301]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` tiny ` |
-| ` type ` | ` fiend ` |
-| ` alignment ` | ` Lawful Evil ` |
-| ` tags_text ` | ` (Devil) ` |
-| ` movement_text ` | ` 20 ft., Fly 40 ft. ` |
-| ` skills_text ` | ` Deception +4, Insight +3, Stealth +5 ` |
-| ` resistances_text ` | ` Cold ` |
-| ` immunities_text ` | ` Fire, Poison; Poisoned ` |
-| ` senses_text ` | ` Darkvision 120 ft. (unimpeded by magical Darkness); Passive Perception 11 ` |
-| ` languages_text ` | ` Common, Infernal ` |
-| ` cr_text ` | ` 1 (XP 200; PB +2) ` |
-| ` hit_points_text ` | ` 21 (6d4 + 6) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 6 ` | ` -2 ` |
-| ` Dexterity ` | ` 17 ` | ` 3 ` |
-| ` Constitution ` | ` 13 ` | ` 1 ` |
-| ` Intelligence ` | ` 11 ` | ` 0 ` |
-| ` Wisdom ` | ` 12 ` | ` 1 ` |
-| ` Charisma ` | ` 14 ` | ` 2 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 13 ` |  |
-| ` max_hp ` | ` 21 ` |  |
-| ` initiative ` | ` 3 ` |  |
-| ` speed ` | ` 20 ` | ` ft ` |
-| ` fly_speed ` | ` 40 ` | ` ft ` |
 
 ## Health
 
@@ -312,3 +302,13 @@ geometry_assumptions:
   - plane
   - form_appearance
 ```
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_stats_extras -->
+> 
+> ```yaml
+> fly_speed:
+>   unit: ft
+>   value: 40
+> ```
+

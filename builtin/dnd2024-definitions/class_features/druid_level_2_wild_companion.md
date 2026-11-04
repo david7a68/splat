@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 5fb5c6b0-bcad-5fd8-9885-88f250f23e14
 splat_kind: rule
 splat_key: dnd2024:class_features/druid_level_2_wild_companion
 splat_name: 'Level 2: Wild Companion'
-splat_origin:
-  key: dnd2024:reference/pages/043
+splat_origin: dnd2024:reference/pages/043
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 43
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 43, https://www.dndbeyond.com/srd
 ---
 
 # Level 2: Wild Companion

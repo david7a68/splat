@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 549c3cfc-df28-5bad-89f1-b3cb2ceb2810
 splat_kind: rule
 splat_key: dnd2024:rules/traps_poisoned_darts
 splat_name: Poisoned Darts
-splat_origin:
-  key: dnd2024:reference/pages/200
+splat_origin: dnd2024:reference/pages/200
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 200
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 200, https://www.dndbeyond.com/srd
 ---
 
 # Poisoned Darts

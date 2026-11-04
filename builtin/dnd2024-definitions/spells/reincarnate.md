@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 31f53b8a-2be8-58e4-a533-fd0b381f61f3
 splat_kind: spell
 splat_key: dnd2024:spells/reincarnate
 splat_name: Reincarnate
-splat_origin:
-  key: dnd2024:reference/spell/reincarnate
+splat_origin: dnd2024:reference/spell/reincarnate
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 158
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 158, https://www.dndbeyond.com/srd
 ---
 
 # Reincarnate
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 5 |
+| School | Necromancy |
+| Classes | Druid |
+| Casting Time | 1 hour |
+| Range |  |
+| Components | V, S, M (rare oils worth 1,000+ GP, which the spell consumes) |
+| Duration | Instantaneous |
+
 
 ## Source text
 
@@ -38,37 +49,11 @@ The reincarnated creature makes any choices that a species’ description offers
 
 Original layout: [[../../srd-5.2.1/pages/158|page 158]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 5 ` |
-| ` school ` | ` necromancy ` |
-| ` classes ` | ` ["druid"] ` |
-| ` components ` | ` ["verbal", "somatic", "material"] ` |
-| ` concentration ` | ` false ` |
-| ` duration ` | ` Instantaneous ` |
-| ` casting_time ` | ` 1 hour ` |
-| ` ritual ` | ` false ` |
 
-### Range
 
-<!-- splat:values path=splat_spell/range -->
 
-| Field | Value |
-| --- | --- |
-| ` mode ` | ` touch ` |
-
-### Material
-
-<!-- splat:values path=splat_spell/material -->
-
-| Field | Value |
-| --- | --- |
-| ` description ` | ` rare oils worth 1,000+ GP, which the spell consumes ` |
-| ` consumed ` | ` true ` |
 
 ## Rule
 
@@ -125,3 +110,14 @@ retains:
 remove: previous_species_traits
 gain: new_species_traits
 ```
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_spell_extras -->
+> 
+> ```yaml
+> material:
+>   consumed: true
+> range:
+>   mode: touch
+> ```
+

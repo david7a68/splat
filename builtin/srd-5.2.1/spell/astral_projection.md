@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "2cf8b6c3-32a2-58b2-8e0c-47aafe54e165"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/astral_projection"
 splat_name: "Astral Projection"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [111], "executable": false}
+splat_pages:
+- 111
 ---
 
 # Astral Projection
@@ -28,3 +29,13 @@ Any damage or other effects that apply to an astral form have no effect on the t
 When the spell ends for a target who isn’t dead, the target reappears in its body and exits the state of suspended animation.
 
 Original layout: [[../pages/111|page 111]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

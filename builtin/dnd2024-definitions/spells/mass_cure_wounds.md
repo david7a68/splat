@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 65399dfc-e071-52d4-8a0d-953570dfa950
 splat_kind: spell
 splat_key: dnd2024:spells/mass_cure_wounds
 splat_name: Mass Cure Wounds
-splat_origin:
-  key: dnd2024:reference/spell/mass_cure_wounds
+splat_origin: dnd2024:reference/spell/mass_cure_wounds
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 147
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 147, https://www.dndbeyond.com/srd
 ---
 
 # Mass Cure Wounds
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 5 |
+| School | Abjuration |
+| Classes | Bard, Cleric, Druid |
+| Casting Time | Action |
+| Range | 60 feet |
+| Components | V, S |
+| Duration | Instantaneous |
+
 
 ## Source text
 
@@ -30,28 +41,9 @@ Using a Higher-Level Spell Slot. The healing increases by 1d8 for each spell slo
 
 Original layout: [[../../srd-5.2.1/pages/147|page 147]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 5 ` |
-| ` school ` | ` abjuration ` |
-| ` classes ` | ` ["bard", "cleric", "druid"] ` |
-| ` components ` | ` ["verbal", "somatic"] ` |
-| ` concentration ` | ` false ` |
-| ` duration ` | ` Instantaneous ` |
-| ` casting_time ` | ` Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
-
-<!-- splat:values path=splat_spell/range -->
-
-| Field | Value |
-| --- | --- |
-| ` feet ` | ` 60 ` |
 
 ## Rule
 

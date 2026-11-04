@@ -1,34 +1,60 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 3f631fda-bb06-535a-8dd9-bb98f9c56127
 splat_kind: creature
 splat_key: dnd2024:creatures/cockatrice
 splat_name: Cockatrice
-splat_origin:
-  key: dnd2024:reference/creature/cockatrice
+splat_origin: dnd2024:reference/creature/cockatrice
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 275
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 275, https://www.dndbeyond.com/srd
 ---
 
 # Cockatrice
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Small |
+| Type | Monstrosity |
+| Alignment | Unaligned |
+| Armor Class | 11 |
+| Hit Points | 22 (5d6 + 5) |
+| Initiative | +1 (11) |
+| Speed | 20 ft., Fly 40 ft. |
+| Challenge | 1/2 (XP 100; PB +2) |
+| Senses | Darkvision 60 ft.; Passive Perception 11 |
+| Languages | None |
+| Immunities | Petrified |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 6 | -2 | -2 |
+| Dex | 12 | +1 | +1 |
+| Con | 12 | +1 | +1 |
+| Int | 2 | -4 | -4 |
+| Wis | 13 | +1 | +1 |
+| Cha | 5 | -3 | -3 |
+
 
 ## Source text
 
 <!-- SRD page 275 -->
 
-Small Monstrosity, Unaligned\
-AC 11 Initiative +1 (11)\
-HP 22 (5d6 + 5)\
-Speed 20 ft., Fly 40 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 6 −2 −2 Dex 12 +1 +1 Con 12 +1 +1\
-Int 2 −4 −4 Wis 13 +1 +1 Cha 5 −3 −3\
-Immunities Petrified\
-Senses Darkvision 60 ft.; Passive Perception 11\
-Languages None\
-CR 1/2 (XP 100; PB +2)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Small Monstrosity, Unaligned\
+> AC 11 Initiative +1 (11)\
+> HP 22 (5d6 + 5)\
+> Speed 20 ft., Fly 40 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 6 −2 −2 Dex 12 +1 +1 Con 12 +1 +1\
+> Int 2 −4 −4 Wis 13 +1 +1 Cha 5 −3 −3\
+> Immunities Petrified\
+> Senses Darkvision 60 ft.; Passive Perception 11\
+> Languages None\
+> CR 1/2 (XP 100; PB +2)
+
 
 ### Actions
 
@@ -36,46 +62,11 @@ Petrifying Bite. Melee Attack Roll: +3, reach 5 ft. Hit: 3 (1d4 + 1) Piercing da
 
 Original layout: [[../../srd-5.2.1/pages/275|page 275]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` small ` |
-| ` type ` | ` monstrosity ` |
-| ` alignment ` | ` Unaligned ` |
-| ` movement_text ` | ` 20 ft., Fly 40 ft. ` |
-| ` immunities_text ` | ` Petrified ` |
-| ` senses_text ` | ` Darkvision 60 ft.; Passive Perception 11 ` |
-| ` languages_text ` | ` None ` |
-| ` cr_text ` | ` 1/2 (XP 100; PB +2) ` |
-| ` hit_points_text ` | ` 22 (5d6 + 5) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 6 ` | ` -2 ` |
-| ` Dexterity ` | ` 12 ` | ` 1 ` |
-| ` Constitution ` | ` 12 ` | ` 1 ` |
-| ` Intelligence ` | ` 2 ` | ` -4 ` |
-| ` Wisdom ` | ` 13 ` | ` 1 ` |
-| ` Charisma ` | ` 5 ` | ` -3 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 11 ` |  |
-| ` max_hp ` | ` 22 ` |  |
-| ` initiative ` | ` 1 ` |  |
-| ` speed ` | ` 20 ` | ` ft ` |
-| ` fly_speed ` | ` 40 ` | ` ft ` |
 
 ## Health
 
@@ -199,3 +190,13 @@ geometry:
 unlisted_success_branch: no_effect
 unlisted_duration: until_removed_by_applicable_rule
 ```
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_stats_extras -->
+> 
+> ```yaml
+> fly_speed:
+>   unit: ft
+>   value: 40
+> ```
+

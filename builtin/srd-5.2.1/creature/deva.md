@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "2cd0d2a4-10db-526c-9693-d86b2242c696"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/deva"
 splat_name: "Deva"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [279], "executable": false}
+splat_pages:
+- 279
 ---
 
 # Deva
@@ -48,3 +49,13 @@ At Will: Detect Evil and Good, Shapechange (Beast or Humanoid form only, no Temp
 Divine Aid (2/Day). The deva casts Cure Wounds, Lesser Restoration, or Remove Curse, using the same spellcasting ability as Spellcasting.
 
 Original layout: [[../pages/279|page 279]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

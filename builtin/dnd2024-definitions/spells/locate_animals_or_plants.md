@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 05638e36-0859-546d-99bc-47ed8f8331e2
 splat_kind: spell
 splat_key: dnd2024:spells/locate_animals_or_plants
 splat_name: Locate Animals or Plants
-splat_origin:
-  key: dnd2024:reference/spell/locate_animals_or_plants
+splat_origin: dnd2024:reference/spell/locate_animals_or_plants
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 144
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 144, https://www.dndbeyond.com/srd
 ---
 
 # Locate Animals or Plants
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 2 |
+| School | Divination |
+| Classes | Bard, Druid, Ranger |
+| Casting Time | Action or Ritual |
+| Range |  |
+| Components | V, S, M (fur from a bloodhound) |
+| Duration | Instantaneous |
+
 
 ## Source text
 
@@ -28,37 +39,11 @@ Describe or name a specific kind of Beast, Plant creature, or nonmagical plant. 
 
 Original layout: [[../../srd-5.2.1/pages/144|page 144]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 2 ` |
-| ` school ` | ` divination ` |
-| ` classes ` | ` ["bard", "druid", "ranger"] ` |
-| ` components ` | ` ["verbal", "somatic", "material"] ` |
-| ` concentration ` | ` false ` |
-| ` duration ` | ` Instantaneous ` |
-| ` casting_time ` | ` Action or Ritual ` |
-| ` ritual ` | ` true ` |
 
-### Range
 
-<!-- splat:values path=splat_spell/range -->
 
-| Field | Value |
-| --- | --- |
-| ` mode ` | ` self ` |
-
-### Material
-
-<!-- splat:values path=splat_spell/material -->
-
-| Field | Value |
-| --- | --- |
-| ` description ` | ` fur from a bloodhound ` |
-| ` consumed ` | ` false ` |
 
 ## Rule
 
@@ -83,3 +68,14 @@ Original layout: [[../../srd-5.2.1/pages/144|page 144]].
 | ` match ` | ` closest ` |
 | ` output ` | ` ["direction", "distance"] ` |
 | ` requires_match_present ` | ` true ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_spell_extras -->
+> 
+> ```yaml
+> material:
+>   consumed: false
+> range:
+>   mode: self
+> ```
+

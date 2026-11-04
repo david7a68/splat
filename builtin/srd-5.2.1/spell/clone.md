@@ -1,10 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "d45b76fc-0c1d-5e48-aca8-10eda7e1bbb9"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/clone"
 splat_name: "Clone"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [115, 116], "executable": false}
+splat_pages:
+- 115
+- 116
 ---
 
 # Clone
@@ -24,3 +26,13 @@ You touch a creature or at least 1 cubic inch of its flesh. An inert duplicate o
 If the original creature dies after the clone finishes forming, the creature’s soul transfers to the clone if the soul is free and willing to return. The clone is physically identical to the original and has the same personality, memories, and abilities, but none of the original’s equipment. The creature’s original remains, if any, become inert and can’t be revived, since the creature’s soul is elsewhere.
 
 Original layout: [[../pages/115|page 115]], [[../pages/116|page 116]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

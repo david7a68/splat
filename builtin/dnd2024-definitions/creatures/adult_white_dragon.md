@@ -1,35 +1,62 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: cbd73464-e151-5f76-b39b-cb9b2fb367ff
 splat_kind: creature
 splat_key: dnd2024:creatures/adult_white_dragon
 splat_name: Adult White Dragon
-splat_origin:
-  key: dnd2024:reference/creature/adult_white_dragon
+splat_origin: dnd2024:reference/creature/adult_white_dragon
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 340
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 340, https://www.dndbeyond.com/srd
 ---
 
 # Adult White Dragon
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Huge |
+| Type | Dragon (Chromatic) |
+| Alignment | Chaotic Evil |
+| Armor Class | 18 |
+| Hit Points | 200 (16d12 + 96) |
+| Initiative | +10 (20) |
+| Speed | 40 ft., Burrow 30 ft., Fly 80 ft., Swim 40 ft. |
+| Challenge | 13 (XP 10,000, or 11,500 in lair; PB +5) |
+| Skills | Perception +11, Stealth +5 |
+| Senses | Blindsight 60 ft., Darkvision 120 ft.; Passive Perception 21 |
+| Languages | Common, Draconic |
+| Immunities | Cold |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 22 | +6 | +6 |
+| Dex | 10 | +0 | +5 |
+| Con | 22 | +6 | +6 |
+| Int | 8 | -1 | -1 |
+| Wis | 12 | +1 | +6 |
+| Cha | 12 | +1 | +1 |
+
 
 ## Source text
 
 <!-- SRD page 340 -->
 
-Huge Dragon (Chromatic), Chaotic Evil\
-AC 18 Initiative +10 (20)\
-HP 200 (16d12 + 96)\
-Speed 40 ft., Burrow 30 ft., Fly 80 ft., Swim 40 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 22 +6 +6 Dex 10 +0 +5 Con 22 +6 +6\
-Int 8 −1 −1 Wis 12 +1 +6 Cha 12 +1 +1\
-Skills Perception +11, Stealth +5\
-Immunities Cold\
-Senses Blindsight 60 ft., Darkvision 120 ft.; Passive Perception 21\
-Languages Common, Draconic\
-CR 13 (XP 10,000, or 11,500 in lair; PB +5)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Huge Dragon (Chromatic), Chaotic Evil\
+> AC 18 Initiative +10 (20)\
+> HP 200 (16d12 + 96)\
+> Speed 40 ft., Burrow 30 ft., Fly 80 ft., Swim 40 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 22 +6 +6 Dex 10 +0 +5 Con 22 +6 +6\
+> Int 8 −1 −1 Wis 12 +1 +6 Cha 12 +1 +1\
+> Skills Perception +11, Stealth +5\
+> Immunities Cold\
+> Senses Blindsight 60 ft., Darkvision 120 ft.; Passive Perception 21\
+> Languages Common, Draconic\
+> CR 13 (XP 10,000, or 11,500 in lair; PB +5)
+
 
 ### Traits
 
@@ -57,50 +84,11 @@ Pounce. The dragon moves up to half its Speed, and it makes one Rend attack.
 
 Original layout: [[../../srd-5.2.1/pages/340|page 340]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` huge ` |
-| ` type ` | ` dragon ` |
-| ` alignment ` | ` Chaotic Evil ` |
-| ` tags_text ` | ` (Chromatic) ` |
-| ` movement_text ` | ` 40 ft., Burrow 30 ft., Fly 80 ft., Swim 40 ft. ` |
-| ` skills_text ` | ` Perception +11, Stealth +5 ` |
-| ` immunities_text ` | ` Cold ` |
-| ` senses_text ` | ` Blindsight 60 ft., Darkvision 120 ft.; Passive Perception 21 ` |
-| ` languages_text ` | ` Common, Draconic ` |
-| ` cr_text ` | ` 13 (XP 10,000, or 11,500 in lair; PB +5) ` |
-| ` hit_points_text ` | ` 200 (16d12 + 96) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 22 ` | ` 6 ` |
-| ` Dexterity ` | ` 10 ` | ` 5 ` |
-| ` Constitution ` | ` 22 ` | ` 6 ` |
-| ` Intelligence ` | ` 8 ` | ` -1 ` |
-| ` Wisdom ` | ` 12 ` | ` 6 ` |
-| ` Charisma ` | ` 12 ` | ` 1 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 18 ` |  |
-| ` max_hp ` | ` 200 ` |  |
-| ` initiative ` | ` 10 ` |  |
-| ` speed ` | ` 40 ` | ` ft ` |
-| ` burrow_speed ` | ` 30 ` | ` ft ` |
-| ` fly_speed ` | ` 80 ` | ` ft ` |
-| ` swim_speed ` | ` 40 ` | ` ft ` |
 
 ## Health
 
@@ -444,3 +432,19 @@ geometry_assumptions:
   - plane
   - form_appearance
 ```
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_stats_extras -->
+> 
+> ```yaml
+> fly_speed:
+>   unit: ft
+>   value: 80
+> burrow_speed:
+>   unit: ft
+>   value: 30
+> swim_speed:
+>   unit: ft
+>   value: 40
+> ```
+

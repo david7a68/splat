@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 028154e6-b9bb-57af-b2a1-5990f575e950
 splat_kind: spell
 splat_key: dnd2024:spells/counterspell
 splat_name: Counterspell
-splat_origin:
-  key: dnd2024:reference/spell/counterspell
+splat_origin: dnd2024:reference/spell/counterspell
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 120
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 120, https://www.dndbeyond.com/srd
 ---
 
 # Counterspell
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 3 |
+| School | Abjuration |
+| Classes | Sorcerer, Warlock, Wizard |
+| Casting Time | Reaction, which you take when you see a creature within 60 feet of yourself casting a spell with Verbal, Somatic, or Material components |
+| Range | 60 feet |
+| Components | S |
+| Duration | Instantaneous |
+
 
 ## Source text
 
@@ -28,28 +39,9 @@ You attempt to interrupt a creature in the process of casting a spell. The creat
 
 Original layout: [[../../srd-5.2.1/pages/120|page 120]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 3 ` |
-| ` school ` | ` abjuration ` |
-| ` classes ` | ` ["sorcerer", "warlock", "wizard"] ` |
-| ` components ` | ` ["somatic"] ` |
-| ` concentration ` | ` false ` |
-| ` duration ` | ` Instantaneous ` |
-| ` casting_time ` | ` Reaction, which you take when you see a creature within 60 feet of yourself casting a spell with Verbal, Somatic, or Material components ` |
-| ` ritual ` | ` false ` |
 
-### Range
-
-<!-- splat:values path=splat_spell/range -->
-
-| Field | Value |
-| --- | --- |
-| ` feet ` | ` 60 ` |
 
 ## Rule
 

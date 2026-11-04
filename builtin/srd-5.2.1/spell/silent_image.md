@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "89233ecf-8b29-568b-9e35-d64f845afe5d"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/silent_image"
 splat_name: "Silent Image"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [162], "executable": false}
+splat_pages:
+- 162
 ---
 
 # Silent Image
@@ -24,3 +25,13 @@ As a Magic action, you can cause the image to move to any spot within range. As 
 Physical interaction with the image reveals it to be an illusion, since things can pass through it. A creature that takes a Study action to examine the image can determine that it is an illusion with a successful Intelligence (Investigation) check against your spell save DC. If a creature discerns the illusion for what it is, the creature can see through the image.
 
 Original layout: [[../pages/162|page 162]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

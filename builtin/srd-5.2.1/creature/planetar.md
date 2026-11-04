@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "6452d376-6f70-5eb5-bc30-1b776093e261"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/planetar"
 splat_name: "Planetar"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [315], "executable": false}
+splat_pages:
+- 315
 ---
 
 # Planetar
@@ -51,3 +52,13 @@ At Will: Detect Evil and Good\
 Divine Aid (2/Day). The planetar casts Cure Wounds, Invisibility, Lesser Restoration, or Remove Curse, using the same spellcasting ability as Spellcasting.
 
 Original layout: [[../pages/315|page 315]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

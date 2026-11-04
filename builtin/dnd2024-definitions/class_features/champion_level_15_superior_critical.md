@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: dba9cc10-b4d9-5a2e-b9fb-2b1549c3f37f
 splat_kind: rule
 splat_key: dnd2024:class_features/champion_level_15_superior_critical
 splat_name: 'Level 15: Superior Critical'
-splat_origin:
-  key: dnd2024:reference/pages/049
+splat_origin: dnd2024:reference/pages/049
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 49
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 49, https://www.dndbeyond.com/srd
 ---
 
 # Level 15: Superior Critical

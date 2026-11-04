@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "5bfadae9-0d0d-5be6-9682-24387e10a04e"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/mirror_image"
 splat_name: "Mirror Image"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [150], "executable": false}
+splat_pages:
+- 150
 ---
 
 # Mirror Image
@@ -24,3 +25,13 @@ Each time a creature hits you with an attack roll during the spell’s duration,
 A creature is unaffected by this spell if it has the Blinded condition, Blindsight, or Truesight.
 
 Original layout: [[../pages/150|page 150]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 1f2b7ac1-fa40-53ca-9bae-203376d8160c
 splat_kind: spell
 splat_key: dnd2024:spells/telepathic_bond
 splat_name: Telepathic Bond
-splat_origin:
-  key: dnd2024:reference/spell/telepathic_bond
+splat_origin: dnd2024:reference/spell/telepathic_bond
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 168
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 168, https://www.dndbeyond.com/srd
 ---
 
 # Telepathic Bond
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 5 |
+| School | Divination |
+| Classes | Bard, Wizard |
+| Casting Time | Action or Ritual |
+| Range | 30 feet |
+| Components | V, S, M (two eggs) |
+| Duration | 1 hour |
+
 
 ## Source text
 
@@ -30,37 +41,11 @@ Until the spell ends, the targets can communicate telepathically through the bon
 
 Original layout: [[../../srd-5.2.1/pages/168|page 168]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 5 ` |
-| ` school ` | ` divination ` |
-| ` classes ` | ` ["bard", "wizard"] ` |
-| ` components ` | ` ["verbal", "somatic", "material"] ` |
-| ` concentration ` | ` false ` |
-| ` duration ` | ` 1 hour ` |
-| ` casting_time ` | ` Action or Ritual ` |
-| ` ritual ` | ` true ` |
 
-### Range
 
-<!-- splat:values path=splat_spell/range -->
 
-| Field | Value |
-| --- | --- |
-| ` feet ` | ` 30 ` |
-
-### Material
-
-<!-- splat:values path=splat_spell/material -->
-
-| Field | Value |
-| --- | --- |
-| ` description ` | ` two eggs ` |
-| ` consumed ` | ` false ` |
 
 ## Rule
 
@@ -109,3 +94,12 @@ maximum:
   value: 1
   unit: hour
 ```
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_spell_extras -->
+> 
+> ```yaml
+> material:
+>   consumed: false
+> ```
+

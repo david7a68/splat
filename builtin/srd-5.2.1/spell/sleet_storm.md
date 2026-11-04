@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "f907b131-070d-5dbb-89a7-75b82c054eca"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/sleet_storm"
 splat_name: "Sleet Storm"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [163], "executable": false}
+splat_pages:
+- 163
 ---
 
 # Sleet Storm
@@ -22,3 +23,13 @@ Until the spell ends, sleet falls in a 40-foot-tall, 20-foot-radius Cylinder cen
 Ground in the Cylinder is Difficult Terrain. When a creature enters the Cylinder for the first time on a turn or starts its turn there, it must succeed on a Dexterity saving throw or have the Prone condition and lose Concentration.
 
 Original layout: [[../pages/163|page 163]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

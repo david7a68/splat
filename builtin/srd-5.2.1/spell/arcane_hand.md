@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "4b8f4125-dc41-5b11-bdff-d67636fa0816"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/arcane_hand"
 splat_name: "Arcane Hand"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [110], "executable": false}
+splat_pages:
+- 110
 ---
 
 # Arcane Hand
@@ -34,3 +35,13 @@ Interposing Hand. The hand grants you Half Cover against attacks and other effec
 Using a Higher-Level Spell Slot. The damage of the Clenched Fist increases by 2d8 and the damage of the Grasping Hand increases by 2d6 for each spell slot level above 5.
 
 Original layout: [[../pages/110|page 110]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

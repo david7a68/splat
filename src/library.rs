@@ -264,25 +264,14 @@ struct Loaded {
 }
 impl Loaded {
     fn old_layout_count(&self) -> usize {
-        let generated: std::collections::HashSet<_> = self
-            .owners
-            .iter()
-            .filter_map(|owner| {
-                let Owner::Package(module) = owner else {
-                    return None;
-                };
-                crate::content_workspace::generated_package(&module.path).then_some(module.id)
-            })
-            .collect();
         self.notes
             .iter()
             .filter(|note| {
-                note.owner.editable()
-                    && !note.owner.id().is_some_and(|id| generated.contains(&id))
-                    && note.entry.as_ref().is_some_and(|entry| {
-                        content::formats::eligible(entry)
-                            && content::formats::schema(&entry.fields) == Ok(1)
-                    })
+                note.owner != Owner::Builtin
+                    && note
+                        .error
+                        .as_deref()
+                        .is_some_and(|e| e.contains(content::OLD_LAYOUT))
             })
             .count()
     }
@@ -560,6 +549,9 @@ impl Loaded {
                     || {
                         let (_, line) =
                             crate::campaign_content::repair_problem(&note.path, &note.text);
+                        if note.error.as_deref().is_some_and(crate::formats_ui::is_old) {
+                            return "Old layout".to_owned();
+                        }
                         line.map_or_else(
                             || "Cannot be read".to_owned(),
                             |line| format!("Line {line}"),
@@ -743,7 +735,7 @@ fn module_from_entries(path: PathBuf, entries: &[Entry]) -> Result<Module, Strin
 
 pub(crate) fn note_text(name: &str, kind: &str, namespace: Option<&str>) -> String {
     let mut fields = serde_yaml_ng::Mapping::new();
-    fields.insert("splat_schema".into(), 1.into());
+    fields.insert("splat_schema".into(), 2.into());
     fields.insert(
         "splat_id".into(),
         crate::hermetic::new_uuid().to_string().into(),
@@ -758,6 +750,10 @@ pub(crate) fn note_text(name: &str, kind: &str, namespace: Option<&str>) -> Stri
     }
     if let Some(ns) = namespace {
         fields.insert("splat_namespace".into(), ns.into());
+    }
+    if kind == "world" {
+        fields.remove("splat_world");
+        fields.insert("splat_type".into(), "other".into());
     }
     if kind == "creature" {
         fields.insert(
@@ -805,10 +801,15 @@ pub(crate) fn note_text(name: &str, kind: &str, namespace: Option<&str>) -> Stri
             }
         );
     }
+    if kind == "campaign" {
+        fields.remove("splat_campaign");
+    }
     let yaml = serde_yaml_ng::to_string(&fields).expect("string fields");
     format!(
         "---\n{yaml}---\n\n# {name}\n\n{}",
-        if kind == "effect" {
+        if kind == "campaign" {
+            "## Packages\n\n## Rule choices\n\n| Rule | Choice |\n| --- | --- |\n"
+        } else if kind == "effect" {
             "## Effect\n\nDescribe what changes and when it ends.\n"
         } else if kind == "rule" {
             "## Rule\n\nDescribe when and how this rule applies.\n"
@@ -989,7 +990,6 @@ fn create_module(path: &Path, name: &str, namespace: &str) -> Result<Module, Str
     }
     fs::create_dir(path).map_err(|e| format!("Could not create a new package folder: {e}"))?;
     let text = note_text(name.trim(), "package", Some(namespace));
-    let text = content::formats::convert("Module.md", &text)?;
     if let Err(error) = write_note(path, "Module.md", None, &text) {
         let _ = fs::remove_dir(path);
         return Err(error);
@@ -2076,19 +2076,11 @@ impl Library {
             self.run_open
                 .then(|| "Close the run before converting files.".into())
         });
-        let file = self.loaded.as_ref().and_then(|loaded| {
-            let note = loaded.notes.get(self.selected?)?;
-            Some(note.owner.root()?.join(&note.path))
-        });
         if self.form || self.new_form || self.layout_scope.is_some_and(|scope| scope != self.scope)
         {
             self.layouts.clear();
         }
-        if self.pending.is_none()
-            && self
-                .layouts
-                .show_conversion(ui, convert_blocked.as_deref(), file.as_deref())
-        {
+        if self.pending.is_none() && self.layouts.show_conversion(ui, convert_blocked.as_deref()) {
             self.stale = true;
             self.content_changed = campaigns.active_campaign().map(|c| c.path.clone());
         }
@@ -3486,13 +3478,6 @@ impl Library {
                         }
                         let path = relative.clone();
                         let text = note_text(name, &self.new_kind, None);
-                        let text = match content::formats::convert(&path, &text) {
-                            Ok(text) => text,
-                            Err(error) => {
-                                self.error = Some(error);
-                                return;
-                            }
-                        };
                         let owner = places[place].clone();
                         let root = owner.root().expect("a writable owner").to_path_buf();
                         match write_note(&root, &path, None, &text) {
@@ -3721,30 +3706,7 @@ impl Library {
                 return Err("Another entry already uses this UUID or key.".into());
             }
             let baseline = (!file_gone).then_some(note.text.as_str());
-            let after = if matches!(note.owner, Owner::Package(_))
-                && (crate::content_workspace::generated_package(&root)
-                    || (note.path == "Package.md"
-                        && crate::content_workspace::generated_manifest(&self.draft)))
-            {
-                self.draft.clone()
-            } else {
-                content::formats::convert_resolved(
-                    &note.path,
-                    &self.draft,
-                    self.loaded
-                        .as_ref()
-                        .unwrap()
-                        .notes
-                        .iter()
-                        .filter_map(|note| note.entry.as_ref()),
-                )?
-            };
-            let entry = write_note(&root, &note.path, baseline, &after)?;
-            if after != self.draft {
-                self.layouts
-                    .remember(&root, &note.path, baseline.unwrap_or(&self.draft), &after);
-                self.draft = after;
-            }
+            let entry = write_note(&root, &note.path, baseline, &self.draft)?;
             Ok(entry)
         });
         match result {
@@ -4056,10 +4018,7 @@ impl Library {
                 },
             }
         };
-        let notice_path = note.owner.root().map(|root| root.join(&note.path));
-        let conversion_notice = !dirty && !conflict && self.layouts.current(notice_path.as_deref());
-        let mut undo_save = false;
-        let save_row = editable && (self.source || dirty || conversion_notice);
+        let save_row = editable && (self.source || dirty);
         let mut go_back =
             ui.input_mut(|input| input.consume_key(egui::Modifiers::ALT, egui::Key::ArrowLeft));
         let can_copy = note
@@ -4448,35 +4407,14 @@ impl Library {
                 .max(Density::Read.control() + design::XS);
             let (slot, _) =
                 ui.allocate_exact_size(egui::vec2(editor_width, height), egui::Sense::hover());
-            if conversion_notice
-                || draft_reason.is_some()
-                || discard_is_for(self.discarded.as_ref(), note)
-            {
+            if draft_reason.is_some() || discard_is_for(self.discarded.as_ref(), note) {
                 let mut slot_ui = ui.new_child(
                     egui::UiBuilder::new()
                         .max_rect(slot)
                         .layout(egui::Layout::left_to_right(egui::Align::Center)),
                 );
                 let ui = &mut slot_ui;
-                if conversion_notice {
-                    let name = notice_path
-                        .as_deref()
-                        .and_then(Path::file_name)
-                        .unwrap_or_default()
-                        .to_string_lossy();
-                    ui.label(Type::Small.rich(ui, format!("{name} saved in the new layout.")));
-                    if Action::quiet("Undo save")
-                        .icon(icons::UNDO)
-                        .density(Density::Read)
-                        .show(ui)
-                        .clicked()
-                    {
-                        match self.layouts.undo() {
-                            Ok(()) => undo_save = true,
-                            Err(error) => self.error = Some(error),
-                        }
-                    }
-                } else if discard_is_for(self.discarded.as_ref(), note) && self.draft == note.text {
+                if discard_is_for(self.discarded.as_ref(), note) && self.draft == note.text {
                     ui.label(Type::Small.rich(ui, format!("{} draft discarded.", note.name())));
                     if Action::quiet("Undo discard")
                         .name(&format!("Undo discard of {}", note.name()))
@@ -4568,7 +4506,19 @@ impl Library {
         if note.error.is_some()
             && let Some(problem) = &repair_problem
         {
-            design::message(ui, Tone::Error, problem);
+            if crate::formats_ui::is_old(problem) {
+                crate::formats_ui::old_notice(
+                    ui,
+                    &crate::formats_ui::old_message(&note.path),
+                    note.owner
+                        .root()
+                        .map(|root| root.join(&note.path))
+                        .into_iter()
+                        .collect(),
+                );
+            } else {
+                design::message(ui, Tone::Error, problem);
+            }
         }
         if let Some(module) = recovery {
             let path = crate::content_workspace::package_manifest_path(&module);
@@ -4719,7 +4669,8 @@ impl Library {
                         state.store(ui.ctx(), response.id);
                     }
                 } else {
-                    let body = parsed.as_ref().map_or(self.draft.as_str(), |e| &e.body);
+                    // A failed parse must never render YAML properties as book prose.
+                    let body = parsed.as_ref().map_or("", |e| e.body.as_str());
                     ui.push_id(&note.path, |ui| {
                         reader_style::measure(ui, |ui| {
                             ui.add_space(design::XS);
@@ -4732,7 +4683,7 @@ impl Library {
                             };
                             let subtitle = reading_subtitle;
                             let subtitle = subtitle.strip_suffix(" · Campaign").unwrap_or(subtitle);
-                            let subtitle = if subtitle == "Campaign" { note.section().label().trim_end_matches('s') } else { subtitle };
+                            let subtitle = if note.error.is_some() { "" } else if subtitle == "Campaign" { note.section().label().trim_end_matches('s') } else { subtitle };
                             view::title_with_art(ui, title, subtitle, parsed.as_ref().ok());
                         });
                         open_link = view::show_with_related(
@@ -4931,19 +4882,7 @@ impl Library {
                 Err(error) => self.error = Some(error),
             }
         }
-        if undo_save {
-            let note = &mut self.loaded.as_mut().unwrap().notes[i];
-            if let Some(root) = note.owner.root() {
-                self.content_changed = Some(root.to_path_buf());
-                if let Ok(text) = fs::read_to_string(root.join(&note.path)) {
-                    note.entry = Entry::parse(&note.path, &text).ok();
-                    note.text = text;
-                    self.just_saved = false;
-                    self.loaded.as_mut().unwrap().invalidate();
-                    self.loaded.as_mut().unwrap().refresh_diagnostics();
-                }
-            }
-        }
+
         if save {
             self.save_selected(file_gone);
         }
@@ -5146,7 +5085,7 @@ mod tests {
     }
 
     #[test]
-    fn i20_u3_generated_files_do_not_add_to_layout_count() {
+    fn generated_old_files_stay_in_the_layout_count() {
         let dir = tempfile::tempdir().unwrap();
         let module = create_module(&dir.path().join("book"), "Book", "book").unwrap();
         fs::write(
@@ -5163,230 +5102,9 @@ mod tests {
         )
         .unwrap();
         let loaded = load_all(std::slice::from_ref(&module), None).unwrap();
-        assert_eq!(loaded.old_layout_count(), 0);
+        assert_eq!(loaded.old_layout_count(), 1);
         fs::write(manifest, text).unwrap();
         assert!(loaded.old_layout_count() > 0);
-    }
-
-    #[test]
-    fn i20_w8_moved_save_notice_survives_catalogue_reload_and_undo_targets_new_path() {
-        let dir = tempfile::tempdir().unwrap();
-        let module = create_module(&dir.path().join("book"), "Book", "book").unwrap();
-        let before = format!(
-            "---\nsplat_schema: 1\nsplat_id: {}\nsplat_kind: rule\nsplat_name: Ruling\nsplat_rule: {{}}\n---\n\nOld ruling.\n",
-            Uuid::new_v4()
-        );
-        let old = module.path.join("Ruling.md");
-        let moved = module.path.join("Moved.md");
-        fs::write(&old, &before).unwrap();
-        let mut campaigns = Campaigns::at(dir.path().join("settings.json"));
-        campaigns.register_module(module.clone()).unwrap();
-        let loaded = load_all(std::slice::from_ref(&module), None).unwrap();
-        let selected = loaded
-            .notes
-            .iter()
-            .position(|n| n.path == "Ruling.md")
-            .unwrap();
-        let mut library = Library {
-            loaded: Some(loaded),
-            selected: Some(selected),
-            draft: format!("{before}My moved draft.\n"),
-            ..Default::default()
-        };
-        fs::rename(&old, &moved).unwrap();
-        library.save_selected(true);
-        assert!(library.error.is_none(), "{:?}", library.error);
-        assert!(library.layouts.current(Some(&moved)));
-        // Hold the reload at the same boundary as the background loader.
-        let (tx, rx) = mpsc::channel();
-        library.pending = Some(rx);
-        library.load_key = Some(load_key(&campaigns));
-        library.loaded = None;
-        library.selected = None;
-        library.reselect = Some((Some(module.id), "Moved.md".into()));
-        library.stale = false;
-        let ctx = egui::Context::default();
-        let mut frame = || {
-            ctx.run(Default::default(), |ctx| {
-                egui::CentralPanel::default().show(ctx, |ui| library.show(ui, &mut campaigns));
-            })
-        };
-        frame();
-        tx.send(load_all(std::slice::from_ref(&module), None))
-            .unwrap();
-        frame();
-        assert!(library.layouts.current(Some(&moved)));
-        library.layouts.undo().unwrap();
-        assert_eq!(fs::read(&moved).unwrap(), before.as_bytes());
-        assert!(!old.exists());
-    }
-
-    #[test]
-    fn i20_c2_undo_save_keeps_typed_text_as_unsaved_draft() {
-        let dir = tempfile::tempdir().unwrap();
-        let module = create_module(&dir.path().join("book"), "Book", "book").unwrap();
-        let before = format!(
-            "---\nsplat_schema: 1\nsplat_id: {}\nsplat_kind: rule\nsplat_name: Ruling\nsplat_rule: {{}}\n---\n\nOld ruling.\n",
-            Uuid::new_v4()
-        );
-        let path = module.path.join("Ruling.md");
-        fs::write(&path, &before).unwrap();
-        let loaded = load(Some(&module)).unwrap();
-        let selected = loaded
-            .notes
-            .iter()
-            .position(|n| n.path == "Ruling.md")
-            .unwrap();
-        let mut library = Library {
-            loaded: Some(loaded),
-            selected: Some(selected),
-            source: true,
-            draft: format!("{before}Rangers of the ash line are exempt.\n"),
-            ..Default::default()
-        };
-        library.save_selected(false);
-        assert!(library.error.is_none(), "{:?}", library.error);
-        let typed = library.draft.clone();
-        let ctx = egui::Context::default();
-        let mut frame = |events| {
-            ctx.run(
-                egui::RawInput {
-                    screen_rect: Some(egui::Rect::from_min_size(
-                        egui::Pos2::ZERO,
-                        egui::vec2(960.0, 640.0),
-                    )),
-                    events,
-                    ..Default::default()
-                },
-                |ctx| {
-                    egui::CentralPanel::default().show(ctx, |ui| {
-                        library.editor(ui, "Rule · Book", &Campaigns::default());
-                    });
-                },
-            )
-        };
-        frame(vec![]);
-        let output = frame(vec![]);
-        let label = output
-            .shapes
-            .iter()
-            .find_map(|shape| match &shape.shape {
-                egui::Shape::Text(text) if text.galley.job.text == "Undo save" => Some(text),
-                _ => None,
-            })
-            .expect("Undo save is visible");
-        let pos = label.pos + label.galley.size() * 0.5;
-        for pressed in [true, false] {
-            frame(vec![
-                egui::Event::PointerMoved(pos),
-                egui::Event::PointerButton {
-                    pos,
-                    button: egui::PointerButton::Primary,
-                    pressed,
-                    modifiers: Default::default(),
-                },
-            ]);
-        }
-        assert_eq!(fs::read(&path).unwrap(), before.as_bytes());
-        assert_eq!(library.draft, typed);
-        assert!(library.dirty());
-        library.save_selected(false);
-        assert!(
-            fs::read_to_string(path)
-                .unwrap()
-                .contains("Rangers of the ash line are exempt.")
-        );
-    }
-
-    #[test]
-    fn i19_h1_library_save_undo_restores_bytes_and_expires_on_second_save() {
-        let dir = tempfile::tempdir().unwrap();
-        let module = create_module(&dir.path().join("book"), "Book", "book").unwrap();
-        let text = format!(
-            "---\nsplat_schema: 1\nsplat_id: {}\nsplat_kind: rule\nsplat_name: Ruling\nsplat_rule: {{}}\n---\n\nOld ruling.\n",
-            Uuid::new_v4()
-        );
-        let path = module.path.join("Ruling.md");
-        fs::write(&path, &text).unwrap();
-        let loaded = load(Some(&module)).unwrap();
-        let selected = loaded
-            .notes
-            .iter()
-            .position(|n| n.path == "Ruling.md")
-            .unwrap();
-        let mut library = Library {
-            loaded: Some(loaded),
-            selected: Some(selected),
-            draft: format!("{text}New ruling.\n"),
-            ..Default::default()
-        };
-        library.save_selected(false);
-        assert!(library.error.is_none(), "{:?}", library.error);
-        let labels = crate::formats_ui::test_notice_labels(&mut library.layouts, &path);
-        assert!(labels.iter().any(|s| s == "Undo save"), "{labels:?}");
-        library.layouts.undo().unwrap();
-        assert_eq!(fs::read_to_string(&path).unwrap(), text);
-        // Start again and save twice. Undo for the first save must be gone.
-        library.loaded.as_mut().unwrap().notes[selected].text = text.clone();
-        library.draft = format!("{text}New ruling.\n");
-        library.save_selected(false);
-        library.draft.push_str("Second ruling.\n");
-        library.save_selected(false);
-        assert!(
-            !crate::formats_ui::test_notice_labels(&mut library.layouts, &path)
-                .iter()
-                .any(|s| s.starts_with("Undo"))
-        );
-        library.layouts.undo().unwrap();
-        assert!(
-            fs::read_to_string(&path)
-                .unwrap()
-                .contains("Second ruling.")
-        );
-    }
-
-    #[test]
-    fn fmt_f2_generated_package_save_keeps_schema_one_without_conversion_undo() {
-        let dir = tempfile::tempdir().unwrap();
-        let module =
-            create_module(&dir.path().join("book"), "Generated book", "generated_book").unwrap();
-        let manifest = fs::read_to_string(module.path.join("Module.md")).unwrap();
-        fs::write(
-            module.path.join("Package.md"),
-            content::patch_fields(&manifest, &[("splat_generated", Some(true.into()))]).unwrap(),
-        )
-        .unwrap();
-        fs::remove_file(module.path.join("Module.md")).unwrap();
-        let text = format!(
-            "---\nsplat_schema: 1\nsplat_id: {}\nsplat_kind: creature\nsplat_name: Book Wolf\nsplat_creature: {{size: medium, type: beast}}\nsplat_stats: {{max_hp: {{value: 22}}}}\n---\n\n# Book Wolf\n",
-            Uuid::new_v4()
-        );
-        fs::write(module.path.join("Wolf.md"), &text).unwrap();
-        let loaded = load(Some(&module)).unwrap();
-        let selected = loaded
-            .notes
-            .iter()
-            .position(|note| note.path == "Wolf.md")
-            .unwrap();
-        let draft = format!("{text}\nThe DM's words.\n");
-        let mut library = Library {
-            loaded: Some(loaded),
-            selected: Some(selected),
-            draft: draft.clone(),
-            ..Default::default()
-        };
-        library.save_selected(false);
-        assert!(library.error.is_none(), "{:?}", library.error);
-        assert_eq!(
-            fs::read_to_string(module.path.join("Wolf.md")).unwrap(),
-            draft
-        );
-        library.layouts.undo().unwrap();
-        assert_eq!(
-            fs::read_to_string(module.path.join("Wolf.md")).unwrap(),
-            draft,
-            "No conversion notice or Undo was created"
-        );
     }
 
     #[test]
@@ -5494,6 +5212,11 @@ mod tests {
             let mut library = navigation_library();
             let notes = &mut library.loaded.as_mut().unwrap().notes;
             notes[0].owner = Owner::Builtin;
+            for index in [0, 2] {
+                notes[index].entry = None;
+                notes[index].error = Some(content::OLD_LAYOUT.into());
+            }
+
             notes[1]
                 .entry
                 .as_mut()
@@ -7084,11 +6807,11 @@ mod tests {
     /// Writes a package whose one item needs `needs`.
     fn package_needing(root: &Path, name: &str, namespace: &str, needs: &str) -> Module {
         let module = create_module(&root.join(name), name, namespace).unwrap();
-        let note = format!(
+        let note = splat::content::formats::convert("Fixture.md", &format!(
             "---\nsplat_schema: 1\nsplat_id: {}\nsplat_kind: item\nsplat_key: {namespace}:items/own\n\
              splat_name: Own\nsplat_item: {{category: gear}}\nsplat_requires:\n  - key: {needs}\n---\n",
             Uuid::new_v4()
-        );
+        )).expect("schema-2 fixture");
         fs::write(module.path.join("Own.md"), note).unwrap();
         module
     }

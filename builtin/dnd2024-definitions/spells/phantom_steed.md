@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: ca2807a9-3c37-510a-9d4b-cf175549dbbd
 splat_kind: spell
 splat_key: dnd2024:spells/phantom_steed
 splat_name: Phantom Steed
-splat_origin:
-  key: dnd2024:reference/spell/phantom_steed
+splat_origin: dnd2024:reference/spell/phantom_steed
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 152
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 152, https://www.dndbeyond.com/srd
 ---
 
 # Phantom Steed
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 3 |
+| School | Illusion |
+| Classes | Wizard |
+| Casting Time | 1 minute or Ritual |
+| Range | 30 feet |
+| Components | V, S |
+| Duration | 1 hour |
+
 
 ## Source text
 
@@ -30,28 +41,9 @@ For the duration, you or a creature you choose can ride the steed. The steed use
 
 Original layout: [[../../srd-5.2.1/pages/152|page 152]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 3 ` |
-| ` school ` | ` illusion ` |
-| ` classes ` | ` ["wizard"] ` |
-| ` components ` | ` ["verbal", "somatic"] ` |
-| ` concentration ` | ` false ` |
-| ` duration ` | ` 1 hour ` |
-| ` casting_time ` | ` 1 minute or Ritual ` |
-| ` ritual ` | ` true ` |
 
-### Range
-
-<!-- splat:values path=splat_spell/range -->
-
-| Field | Value |
-| --- | --- |
-| ` feet ` | ` 30 ` |
 
 ## Rule
 

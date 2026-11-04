@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 4a852418-1cfd-599d-8511-812b3997433c
 splat_kind: rule
 splat_key: dnd2024:glossary/prone_condition
 splat_name: Prone [Condition]
-splat_origin:
-  key: dnd2024:reference/glossary/prone_condition
+splat_origin: dnd2024:reference/glossary/prone_condition
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 186
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 186, https://www.dndbeyond.com/srd
 ---
 
 # Prone [Condition]

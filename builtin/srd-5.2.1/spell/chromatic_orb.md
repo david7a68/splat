@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "2d6302fa-b3e3-594e-b97c-4e27df61f7e6"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/chromatic_orb"
 splat_name: "Chromatic Orb"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [115], "executable": false}
+splat_pages:
+- 115
 ---
 
 # Chromatic Orb
@@ -24,3 +25,13 @@ If you roll the same number on two or more of the d8s, the orb leaps to a differ
 Using a Higher-Level Spell Slot. The damage increases by 1d8 for each spell slot level above 1. The orb can leap a maximum number of times equal to the level of the slot expended, and a creature can be targeted only once by each casting of this spell.
 
 Original layout: [[../pages/115|page 115]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

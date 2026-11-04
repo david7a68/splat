@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 7ecefdcd-9575-5bde-a625-51c97bc691db
 splat_kind: spell
 splat_key: dnd2024:spells/heat_metal
 splat_name: Heat Metal
-splat_origin:
-  key: dnd2024:reference/spell/heat_metal
+splat_origin: dnd2024:reference/spell/heat_metal
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 139, 140
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 139, 140, https://www.dndbeyond.com/srd
 ---
 
 # Heat Metal
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 2 |
+| School | Transmutation |
+| Classes | Bard, Druid |
+| Casting Time | Action |
+| Range | 60 feet |
+| Components | V, S, M (a piece of iron and a flame) |
+| Duration | Concentration, up to 1 minute |
+
 
 ## Source text
 
@@ -34,37 +45,11 @@ Using a Higher-Level Spell Slot. The damage increases by 1d8 for each spell slot
 
 Original layout: [[../../srd-5.2.1/pages/139|page 139]], [[../../srd-5.2.1/pages/140|page 140]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 2 ` |
-| ` school ` | ` transmutation ` |
-| ` classes ` | ` ["bard", "druid"] ` |
-| ` components ` | ` ["verbal", "somatic", "material"] ` |
-| ` concentration ` | ` true ` |
-| ` duration ` | ` Concentration, up to 1 minute ` |
-| ` casting_time ` | ` Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
 
-<!-- splat:values path=splat_spell/range -->
 
-| Field | Value |
-| --- | --- |
-| ` feet ` | ` 60 ` |
-
-### Material
-
-<!-- splat:values path=splat_spell/material -->
-
-| Field | Value |
-| --- | --- |
-| ` description ` | ` a piece of iron and a flame ` |
-| ` consumed ` | ` false ` |
 
 ## Rule
 
@@ -147,3 +132,12 @@ maximum:
   value: 1
   unit: minute
 ```
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_spell_extras -->
+> 
+> ```yaml
+> material:
+>   consumed: false
+> ```
+

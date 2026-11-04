@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: dd34418b-5021-57cc-b928-0e9d53f175d4
 splat_kind: spell
 splat_key: dnd2024:spells/gate
 splat_name: Gate
-splat_origin:
-  key: dnd2024:reference/spell/gate
+splat_origin: dnd2024:reference/spell/gate
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 135
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 135, https://www.dndbeyond.com/srd
 ---
 
 # Gate
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 9 |
+| School | Conjuration |
+| Classes | Cleric, Sorcerer, Warlock, Wizard |
+| Casting Time | Action |
+| Range | 60 feet |
+| Components | V, S, M (a diamond worth 5,000+ GP) |
+| Duration | Concentration, up to 1 minute |
+
 
 ## Source text
 
@@ -34,37 +45,11 @@ When you cast this spell, you can speak the name of a specific creature (a pseud
 
 Original layout: [[../../srd-5.2.1/pages/135|page 135]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 9 ` |
-| ` school ` | ` conjuration ` |
-| ` classes ` | ` ["cleric", "sorcerer", "warlock", "wizard"] ` |
-| ` components ` | ` ["verbal", "somatic", "material"] ` |
-| ` concentration ` | ` true ` |
-| ` duration ` | ` Concentration, up to 1 minute ` |
-| ` casting_time ` | ` Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
 
-<!-- splat:values path=splat_spell/range -->
 
-| Field | Value |
-| --- | --- |
-| ` feet ` | ` 60 ` |
-
-### Material
-
-<!-- splat:values path=splat_spell/material -->
-
-| Field | Value |
-| --- | --- |
-| ` description ` | ` a diamond worth 5,000+ GP ` |
-| ` consumed ` | ` false ` |
 
 ## Rule
 
@@ -161,3 +146,12 @@ subsequent_behavior:
 | ` source ` | ` supplied_world_geometry ` |
 | ` unknown_facts ` | ` require_resolution ` |
 | ` infer_unprovided_geometry ` | ` false ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_spell_extras -->
+> 
+> ```yaml
+> material:
+>   consumed: false
+> ```
+

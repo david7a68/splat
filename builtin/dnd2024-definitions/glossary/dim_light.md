@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: c233e9a2-7b91-561a-86b4-ff861efa34d7
 splat_kind: rule
 splat_key: dnd2024:glossary/dim_light
 splat_name: Dim Light
-splat_origin:
-  key: dnd2024:reference/glossary/dim_light
+splat_origin: dnd2024:reference/glossary/dim_light
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 181
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 181, https://www.dndbeyond.com/srd
 ---
 
 # Dim Light

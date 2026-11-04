@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 23c2a7d0-f633-56b9-b23d-c4008e65c4af
 splat_kind: rule
 splat_key: dnd2024:glossary/knocking_out_a_creature
 splat_name: Knocking Out a Creature
-splat_origin:
-  key: dnd2024:reference/glossary/knocking_out_a_creature
+splat_origin: dnd2024:reference/glossary/knocking_out_a_creature
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 184
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 184, https://www.dndbeyond.com/srd
 ---
 
 # Knocking Out a Creature

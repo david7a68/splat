@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 7778c6e8-9f45-54cb-b8c2-b83cd45b4304
 splat_kind: item
 splat_key: dnd2024:items/manual_of_bodily_health
 splat_name: Manual of Bodily Health
-splat_origin:
-  key: dnd2024:reference/magic_item/manual_of_bodily_health
+splat_origin: dnd2024:reference/magic_item/manual_of_bodily_health
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 229
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 229, https://www.dndbeyond.com/srd
 ---
 
 # Manual of Bodily Health
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Wondrous Item |
+| Rarity | Very Rare |
+| Attunement | No |
+
 
 ## Source text
 
@@ -24,22 +31,9 @@ This book contains health and nutrition tips, and its words are charged with mag
 
 Original layout: [[../../srd-5.2.1/pages/229|page 229]].
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` wondrous_item ` |
-| ` rarity ` | ` very_rare ` |
 
-### Equipment
-
-<!-- splat:values path=splat_item/equipment -->
-
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` none ` |
 
 ## Rule
 

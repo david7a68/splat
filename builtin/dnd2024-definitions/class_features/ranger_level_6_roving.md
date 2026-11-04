@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: c615f96a-0485-54ce-9e1e-9686fefdd8cf
 splat_kind: rule
 splat_key: dnd2024:class_features/ranger_level_6_roving
 splat_name: 'Level 6: Roving'
-splat_origin:
-  key: dnd2024:reference/pages/059
+splat_origin: dnd2024:reference/pages/059
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 59
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 59, https://www.dndbeyond.com/srd
 ---
 
 # Level 6: Roving

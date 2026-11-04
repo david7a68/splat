@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "3084d9f6-4092-51d0-873b-a8d95e0def73"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/wall_of_fire"
 splat_name: "Wall of Fire"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [172], "executable": false}
+splat_pages:
+- 172
 ---
 
 # Wall of Fire
@@ -26,3 +27,13 @@ One side of the wall, selected by you when you cast this spell, deals 5d8 Fire d
 Using a Higher-Level Spell Slot. The damage increases by 1d8 for each spell slot level above 4.
 
 Original layout: [[../pages/172|page 172]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

@@ -8,6 +8,7 @@ if its source also imposes a condition, movement, resource or other effect.
 from pathlib import Path
 import argparse, copy, hashlib, json, re, uuid
 import yaml
+from schema2_notes import convert
 
 SOURCE=Path('builtin/srd-5.2.1')
 MANUAL=Path('builtin/dnd2024-mechanics')
@@ -20,7 +21,12 @@ LOAD=getattr(yaml,'CSafeLoader',yaml.SafeLoader)
 class Unsupported(ValueError): pass
 
 def load_note(path):
-    _,front,body=path.read_text().split('---',2)
+    text=path.read_text()
+    _,front,body=text.split('---',2)
+    if yaml.load(front,Loader=LOAD).get('splat_schema') == 2:
+        front=convert(text, '__model__')
+        if path.is_relative_to(SOURCE):
+            body=body.split('\n> [!note]- Splat data')[0]
     return yaml.load(front,Loader=LOAD),body
 
 def slug(name):return re.sub('[^a-z0-9]+','_',name.lower()).strip('_')
@@ -129,7 +135,7 @@ def main():
                 front={'splat_schema':1,'splat_id':str(uuid.uuid5(NAMESPACE,'mechanics/creatures/'+path.stem)),'splat_kind':'creature','splat_key':key,'splat_name':meta['splat_name'],'splat_origin':{'key':source},'splat_sources':[{'title':'SRD 5.2.1','locator':'pp. '+', '.join(map(str,record['pages'])),'url':'https://www.dndbeyond.com/srd'}],**fields}
                 # Full source prose stays with the typed note for review of the profile.
                 data='---\n'+yaml.safe_dump(front,sort_keys=False,allow_unicode=True)+'---\n\n'+body.strip().replace('[[../pages/','[[../../srd-5.2.1/pages/')+'\n'
-                outputs[path.stem+'.md']=data;record.update(status='converted_attack_profile',definitions=[key])
+                outputs[path.stem+'.md']=convert(data, path.stem+'.md');record.update(status='converted_attack_profile',definitions=[key])
             except Unsupported as error:record.update(status='outside_execution_profile',reason=str(error))
         else:record.update(status='outside_execution_profile',reason='Outside the bounded execution profile; see the full definition catalogue for typed rules and engine gaps')
         records.append(record)

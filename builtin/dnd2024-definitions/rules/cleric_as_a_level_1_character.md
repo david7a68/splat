@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: f2ba5c21-ec3d-517e-9038-6e49be5d389f
 splat_kind: rule
 splat_key: dnd2024:rules/cleric_as_a_level_1_character
 splat_name: As a Level 1 Character
-splat_origin:
-  key: dnd2024:reference/pages/036
+splat_origin: dnd2024:reference/pages/036
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 36
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 36, https://www.dndbeyond.com/srd
 ---
 
 # As a Level 1 Character

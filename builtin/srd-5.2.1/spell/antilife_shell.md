@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "0e4c89cc-547b-54db-9368-c8b1ff24b4ef"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/antilife_shell"
 splat_name: "Antilife Shell"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [109], "executable": false}
+splat_pages:
+- 109
 ---
 
 # Antilife Shell
@@ -22,3 +23,13 @@ An aura extends from you in a 10-foot Emanation for the duration. The aura preve
 If you move so that an affected creature is forced to pass through the barrier, the spell ends.
 
 Original layout: [[../pages/109|page 109]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

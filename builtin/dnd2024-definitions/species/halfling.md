@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: a3652a77-77b0-5fce-9a0a-ecff179361c8
 splat_kind: rule_group
 splat_key: dnd2024:species/halfling
 splat_name: Halfling
-splat_origin:
-  key: dnd2024:reference/pages/086
+splat_origin: dnd2024:reference/pages/086
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 86
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 86, https://www.dndbeyond.com/srd
 ---
 
 # Halfling

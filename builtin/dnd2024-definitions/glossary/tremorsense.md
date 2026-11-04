@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 7ec5c6bc-1f82-5d91-a8ef-0125d960d85e
 splat_kind: rule
 splat_key: dnd2024:glossary/tremorsense
 splat_name: Tremorsense
-splat_origin:
-  key: dnd2024:reference/glossary/tremorsense
+splat_origin: dnd2024:reference/glossary/tremorsense
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 190
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 190, https://www.dndbeyond.com/srd
 ---
 
 # Tremorsense

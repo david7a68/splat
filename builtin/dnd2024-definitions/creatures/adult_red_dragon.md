@@ -1,35 +1,62 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 064a002d-1b22-5c6d-aeef-eae338efbded
 splat_kind: creature
 splat_key: dnd2024:creatures/adult_red_dragon
 splat_name: Adult Red Dragon
-splat_origin:
-  key: dnd2024:reference/creature/adult_red_dragon
+splat_origin: dnd2024:reference/creature/adult_red_dragon
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 318, 319
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 318, 319, https://www.dndbeyond.com/srd
 ---
 
 # Adult Red Dragon
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Huge |
+| Type | Dragon (Chromatic) |
+| Alignment | Chaotic Evil |
+| Armor Class | 19 |
+| Hit Points | 256 (19d12 + 133) |
+| Initiative | +12 (22) |
+| Speed | 40 ft., Climb 40 ft., Fly 80 ft. |
+| Challenge | 17 (XP 18,000, or 20,000 in lair; PB +6) |
+| Skills | Perception +13, Stealth +6 |
+| Senses | Blindsight 60 ft., Darkvision 120 ft.; Passive Perception 23 |
+| Languages | Common, Draconic |
+| Immunities | Fire |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 27 | +8 | +8 |
+| Dex | 10 | +0 | +6 |
+| Con | 25 | +7 | +7 |
+| Int | 16 | +3 | +3 |
+| Wis | 13 | +1 | +7 |
+| Cha | 23 | +6 | +6 |
+
 
 ## Source text
 
 <!-- SRD page 318 -->
 
-Huge Dragon (Chromatic), Chaotic Evil\
-AC 19 Initiative +12 (22)\
-HP 256 (19d12 + 133)\
-Speed 40 ft., Climb 40 ft., Fly 80 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 27 +8 +8 Dex 10 +0 +6 Con 25 +7 +7\
-Int 16 +3 +3 Wis 13 +1 +7 Cha 23 +6 +6\
-Skills Perception +13, Stealth +6\
-Immunities Fire\
-Senses Blindsight 60 ft., Darkvision 120 ft.; Passive Perception 23\
-Languages Common, Draconic\
-CR 17 (XP 18,000, or 20,000 in lair; PB +6)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Huge Dragon (Chromatic), Chaotic Evil\
+> AC 19 Initiative +12 (22)\
+> HP 256 (19d12 + 133)\
+> Speed 40 ft., Climb 40 ft., Fly 80 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 27 +8 +8 Dex 10 +0 +6 Con 25 +7 +7\
+> Int 16 +3 +3 Wis 13 +1 +7 Cha 23 +6 +6\
+> Skills Perception +13, Stealth +6\
+> Immunities Fire\
+> Senses Blindsight 60 ft., Darkvision 120 ft.; Passive Perception 23\
+> Languages Common, Draconic\
+> CR 17 (XP 18,000, or 20,000 in lair; PB +6)
+
 
 ### Traits
 
@@ -62,49 +89,11 @@ Pounce. The dragon moves up to half its Speed, and it makes one Rend attack.
 
 Original layout: [[../../srd-5.2.1/pages/318|page 318]], [[../../srd-5.2.1/pages/319|page 319]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` huge ` |
-| ` type ` | ` dragon ` |
-| ` alignment ` | ` Chaotic Evil ` |
-| ` tags_text ` | ` (Chromatic) ` |
-| ` movement_text ` | ` 40 ft., Climb 40 ft., Fly 80 ft. ` |
-| ` skills_text ` | ` Perception +13, Stealth +6 ` |
-| ` immunities_text ` | ` Fire ` |
-| ` senses_text ` | ` Blindsight 60 ft., Darkvision 120 ft.; Passive Perception 23 ` |
-| ` languages_text ` | ` Common, Draconic ` |
-| ` cr_text ` | ` 17 (XP 18,000, or 20,000 in lair; PB +6) ` |
-| ` hit_points_text ` | ` 256 (19d12 + 133) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 27 ` | ` 8 ` |
-| ` Dexterity ` | ` 10 ` | ` 6 ` |
-| ` Constitution ` | ` 25 ` | ` 7 ` |
-| ` Intelligence ` | ` 16 ` | ` 3 ` |
-| ` Wisdom ` | ` 13 ` | ` 7 ` |
-| ` Charisma ` | ` 23 ` | ` 6 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 19 ` |  |
-| ` max_hp ` | ` 256 ` |  |
-| ` initiative ` | ` 12 ` |  |
-| ` speed ` | ` 40 ` | ` ft ` |
-| ` climb_speed ` | ` 40 ` | ` ft ` |
-| ` fly_speed ` | ` 80 ` | ` ft ` |
 
 ## Health
 
@@ -454,3 +443,16 @@ other_components: spell_definition_unless_waived
 | ` provider ` | ` caller ` |
 | ` required_facts ` | ` ["distance", "area_membership", "visibility", "occupancy", "movement_path"] ` |
 | ` validate_against_typed_constraints ` | ` true ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_stats_extras -->
+> 
+> ```yaml
+> fly_speed:
+>   unit: ft
+>   value: 80
+> climb_speed:
+>   unit: ft
+>   value: 40
+> ```
+

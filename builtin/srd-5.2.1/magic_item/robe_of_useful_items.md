@@ -1,10 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "dccd1c58-f448-5c18-b1be-9a0b94c5792f"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/magic_item/robe_of_useful_items"
 splat_name: "Robe of Useful Items"
-splat_reference: {"source": "SRD 5.2.1", "category": "magic_item", "pages": [240, 241], "executable": false}
+splat_pages:
+- 240
+- 241
 ---
 
 # Robe of Useful Items
@@ -53,3 +55,13 @@ In addition, the robe has 4d4 other patches. The GM chooses the patches or deter
 | 97–00 | Portable Ram |
 
 Original layout: [[../pages/240|page 240]], [[../pages/241|page 241]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: magic_item
+> executable: false
+> ```
+

@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "10d1a821-7111-5b6a-af49-459d0d175a3e"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/goat"
 splat_name: "Goat"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [355], "executable": false}
+splat_pages:
+- 355
 ---
 
 # Goat
@@ -28,3 +29,13 @@ CR 0 (XP 10; PB +2)
 Ram. Melee Attack Roll: +2, reach 5 ft. Hit: 1 Bludgeoning damage, or 2 (1d4) Bludgeoning damage if the goat moved 20+ feet straight toward the target immediately before the hit.
 
 Original layout: [[../pages/355|page 355]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

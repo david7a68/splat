@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "2245ed65-f61f-5bfe-b157-1418b7600aee"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/burning_hands"
 splat_name: "Burning Hands"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [114], "executable": false}
+splat_pages:
+- 114
 ---
 
 # Burning Hands
@@ -24,3 +25,13 @@ Flammable objects in the Cone that aren’t being worn or carried start burning.
 Using a Higher-Level Spell Slot. The damage increases by 1d6 for each spell slot level above 1.
 
 Original layout: [[../pages/114|page 114]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 33142484-5f8a-5086-b6bd-09a560c3d819
 splat_kind: rule
 splat_key: dnd2024:glossary/monster
 splat_name: Monster
-splat_origin:
-  key: dnd2024:reference/glossary/monster
+splat_origin: dnd2024:reference/glossary/monster
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 185
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 185, https://www.dndbeyond.com/srd
 ---
 
 # Monster

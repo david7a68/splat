@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 9ccb7da8-f94b-586e-af14-bd64723d0330
 splat_kind: rule
 splat_key: dnd2024:class_features/warrior_of_the_open_hand_level_11_fleet_step
 splat_name: 'Level 11: Fleet Step'
-splat_origin:
-  key: dnd2024:reference/pages/052
+splat_origin: dnd2024:reference/pages/052
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 52
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 52, https://www.dndbeyond.com/srd
 ---
 
 # Level 11: Fleet Step

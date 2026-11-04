@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "a6a0b79e-c574-55c4-b4bd-97be33094c31"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/animated_flying_sword"
 splat_name: "Animated Flying Sword"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [259], "executable": false}
+splat_pages:
+- 259
 ---
 
 # Animated Flying Sword
@@ -28,3 +29,13 @@ CR 1/4 (XP 50; PB +2)
 Slash. Melee Attack Roll: +4, reach 5 ft. Hit: 6 (1d8 + 2) Slashing damage.
 
 Original layout: [[../pages/259|page 259]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

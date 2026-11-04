@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 52803957-ef91-5928-b69d-66c179ae2818
 splat_kind: item
 splat_key: dnd2024:items/potion_of_water_breathing
 splat_name: Potion of Water Breathing
-splat_origin:
-  key: dnd2024:reference/magic_item/potion_of_water_breathing
+splat_origin: dnd2024:reference/magic_item/potion_of_water_breathing
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 236, 237
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 236, 237, https://www.dndbeyond.com/srd
 ---
 
 # Potion of Water Breathing
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Potion |
+| Rarity | Uncommon |
+| Attunement | No |
+
 
 ## Source text
 
@@ -28,22 +35,9 @@ This potion’s cloudy green fluid smells of the sea and has a jellyfish-like bu
 
 Original layout: [[../../srd-5.2.1/pages/236|page 236]], [[../../srd-5.2.1/pages/237|page 237]].
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` potion ` |
-| ` rarity ` | ` uncommon ` |
 
-### Equipment
-
-<!-- splat:values path=splat_item/equipment -->
-
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` none ` |
 
 ## Rule
 

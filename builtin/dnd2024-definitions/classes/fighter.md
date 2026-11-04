@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 6d3c3b76-326b-5f07-8bd3-3802868b70ca
 splat_kind: rule_group
 splat_key: dnd2024:classes/fighter
 splat_name: Fighter
-splat_origin:
-  key: dnd2024:reference/pages/047
+splat_origin: dnd2024:reference/pages/047
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 47
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 47, https://www.dndbeyond.com/srd
 ---
 
 # Fighter

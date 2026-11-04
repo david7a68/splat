@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "b509f703-544d-5d70-a3a6-db6ba7d5f146"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/tough"
 splat_name: "Tough"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [332], "executable": false}
+splat_pages:
+- 332
 ---
 
 # Tough
@@ -34,3 +35,13 @@ Mace. Melee Attack Roll: +4, reach 5 ft. Hit: 5 (1d6 + 2) Bludgeoning damage.
 Heavy Crossbow. Ranged Attack Roll: +3, range 100/400 ft. Hit: 6 (1d10 + 1) Piercing damage.
 
 Original layout: [[../pages/332|page 332]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

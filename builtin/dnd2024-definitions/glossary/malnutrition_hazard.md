@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 06b355bc-8fc6-593d-b2e3-6d4ac8dc9c70
 splat_kind: rule
 splat_key: dnd2024:glossary/malnutrition_hazard
 splat_name: Malnutrition [Hazard]
-splat_origin:
-  key: dnd2024:reference/glossary/malnutrition_hazard
+splat_origin: dnd2024:reference/glossary/malnutrition_hazard
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 185
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 185, https://www.dndbeyond.com/srd
 ---
 
 # Malnutrition [Hazard]

@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: fdda293d-3ffe-5a92-8eb6-9e7c15474c40
 splat_kind: spell
 splat_key: dnd2024:spells/enhance_ability
 splat_name: Enhance Ability
-splat_origin:
-  key: dnd2024:reference/spell/enhance_ability
+splat_origin: dnd2024:reference/spell/enhance_ability
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 127
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 127, https://www.dndbeyond.com/srd
 ---
 
 # Enhance Ability
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 2 |
+| School | Transmutation |
+| Classes | Bard, Cleric, Druid, Ranger, Sorcerer, Wizard |
+| Casting Time | Action |
+| Range |  |
+| Components | V, S, M (fur or a feather) |
+| Duration | Concentration, up to 1 hour |
+
 
 ## Source text
 
@@ -30,37 +41,11 @@ Using a Higher-Level Spell Slot. You can target one additional creature for each
 
 Original layout: [[../../srd-5.2.1/pages/127|page 127]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 2 ` |
-| ` school ` | ` transmutation ` |
-| ` classes ` | ` ["bard", "cleric", "druid", "ranger", "sorcerer", "wizard"] ` |
-| ` components ` | ` ["verbal", "somatic", "material"] ` |
-| ` concentration ` | ` true ` |
-| ` duration ` | ` Concentration, up to 1 hour ` |
-| ` casting_time ` | ` Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
 
-<!-- splat:values path=splat_spell/range -->
 
-| Field | Value |
-| --- | --- |
-| ` mode ` | ` touch ` |
-
-### Material
-
-<!-- splat:values path=splat_spell/material -->
-
-| Field | Value |
-| --- | --- |
-| ` description ` | ` fur or a feather ` |
-| ` consumed ` | ` false ` |
 
 ## Rule
 
@@ -113,3 +98,14 @@ count:
 | --- | --- |
 | ` selector ` | ` ability_checks_using_chosen_ability ` |
 | ` advantage ` | ` true ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_spell_extras -->
+> 
+> ```yaml
+> material:
+>   consumed: false
+> range:
+>   mode: touch
+> ```
+

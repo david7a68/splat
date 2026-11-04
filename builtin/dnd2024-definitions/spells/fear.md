@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 429ab81d-cc32-5595-aeeb-6901f5462992
 splat_kind: spell
 splat_key: dnd2024:spells/fear
 splat_name: Fear
-splat_origin:
-  key: dnd2024:reference/spell/fear
+splat_origin: dnd2024:reference/spell/fear
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 130
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 130, https://www.dndbeyond.com/srd
 ---
 
 # Fear
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 3 |
+| School | Illusion |
+| Classes | Bard, Sorcerer, Warlock, Wizard |
+| Casting Time | Action |
+| Range |  |
+| Components | V, S, M (a white feather) |
+| Duration | Concentration, up to 1 minute |
+
 
 ## Source text
 
@@ -30,37 +41,11 @@ A Frightened creature takes the Dash action and moves away from you by the safes
 
 Original layout: [[../../srd-5.2.1/pages/130|page 130]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 3 ` |
-| ` school ` | ` illusion ` |
-| ` classes ` | ` ["bard", "sorcerer", "warlock", "wizard"] ` |
-| ` components ` | ` ["verbal", "somatic", "material"] ` |
-| ` concentration ` | ` true ` |
-| ` duration ` | ` Concentration, up to 1 minute ` |
-| ` casting_time ` | ` Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
 
-<!-- splat:values path=splat_spell/range -->
 
-| Field | Value |
-| --- | --- |
-| ` mode ` | ` self ` |
-
-### Material
-
-<!-- splat:values path=splat_spell/material -->
-
-| Field | Value |
-| --- | --- |
-| ` description ` | ` a white feather ` |
-| ` consumed ` | ` false ` |
 
 ## Rule
 
@@ -156,3 +141,14 @@ Original layout: [[../../srd-5.2.1/pages/130|page 130]].
 | ` source ` | ` supplied_world_geometry ` |
 | ` unknown_facts ` | ` require_resolution ` |
 | ` infer_unprovided_geometry ` | ` false ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_spell_extras -->
+> 
+> ```yaml
+> material:
+>   consumed: false
+> range:
+>   mode: self
+> ```
+

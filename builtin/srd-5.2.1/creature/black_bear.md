@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "f79e324f-39cc-57f3-88b2-2188ada76b04"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/black_bear"
 splat_name: "Black Bear"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [345], "executable": false}
+splat_pages:
+- 345
 ---
 
 # Black Bear
@@ -30,3 +31,13 @@ Multiattack. The bear makes two Rend attacks.
 Rend. Melee Attack Roll: +4, reach 5 ft. Hit: 5 (1d6 + 2) Slashing damage.
 
 Original layout: [[../pages/345|page 345]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

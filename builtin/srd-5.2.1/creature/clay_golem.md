@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "5a14b60a-578b-567c-b307-2054f0df843e"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/clay_golem"
 splat_name: "Clay Golem"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [274], "executable": false}
+splat_pages:
+- 274
 ---
 
 # Clay Golem
@@ -45,3 +46,13 @@ Slam. Melee Attack Roll: +9, reach 5 ft. Hit: 10 (1d10 + 5) Bludgeoning damage p
 Hasten (Recharge 5–6). The golem takes the Dash and Disengage actions.
 
 Original layout: [[../pages/274|page 274]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

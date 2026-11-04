@@ -1,35 +1,62 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 6fd4ab02-bb66-5826-9e5f-16e92b75e672
 splat_kind: creature
 splat_key: dnd2024:creatures/priest
 splat_name: Priest
-splat_origin:
-  key: dnd2024:reference/creature/priest
+splat_origin: dnd2024:reference/creature/priest
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 316
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 316, https://www.dndbeyond.com/srd
 ---
 
 # Priest
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Medium or Small |
+| Type | Humanoid (Cleric) |
+| Alignment | Neutral |
+| Armor Class | 13 |
+| Hit Points | 38 (7d8 + 7) |
+| Initiative | +0 (10) |
+| Speed | 30 ft. |
+| Challenge | 2 (XP 450; PB +2) |
+| Skills | Medicine +7, Perception +5, Religion +5 |
+| Senses | Passive Perception 15 |
+| Languages | Common plus one other language |
+| Gear | Chain Shirt, Holy Symbol, Mace |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 16 | +3 | +3 |
+| Dex | 10 | +0 | +0 |
+| Con | 12 | +1 | +1 |
+| Int | 13 | +1 | +1 |
+| Wis | 16 | +3 | +3 |
+| Cha | 13 | +1 | +1 |
+
 
 ## Source text
 
 <!-- SRD page 316 -->
 
 Medium or Small Humanoid (Cleric), Neutral\
-AC 13 Initiative +0 (10)\
-HP 38 (7d8 + 7)\
-Speed 30 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 16 +3 +3 Dex 10 +0 +0 Con 12 +1 +1\
-Int 13 +1 +1 Wis 16 +3 +3 Cha 13 +1 +1\
-Skills Medicine +7, Perception +5, Religion +5\
-Gear Chain Shirt, Holy Symbol, Mace\
-Senses Passive Perception 15\
-Languages Common plus one other language\
-CR 2 (XP 450; PB +2)
+> [!quote]- Printed stat block (not read; edit the table above)
+> AC 13 Initiative +0 (10)\
+> HP 38 (7d8 + 7)\
+> Speed 30 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 16 +3 +3 Dex 10 +0 +0 Con 12 +1 +1\
+> Int 13 +1 +1 Wis 16 +3 +3 Cha 13 +1 +1\
+> Skills Medicine +7, Perception +5, Religion +5\
+> Gear Chain Shirt, Holy Symbol, Mace\
+> Senses Passive Perception 15\
+> Languages Common plus one other language\
+> CR 2 (XP 450; PB +2)
+
 
 ### Actions
 
@@ -50,48 +77,11 @@ Divine Aid (3/Day). The priest casts Bless, Dispel Magic, Healing Word, or Lesse
 
 Original layout: [[../../srd-5.2.1/pages/316|page 316]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` medium ` |
-| ` type ` | ` humanoid ` |
-| ` alignment ` | ` Neutral ` |
-| ` size_options_text ` | ` Medium or Small ` |
-| ` tags_text ` | ` (Cleric) ` |
-| ` movement_text ` | ` 30 ft. ` |
-| ` skills_text ` | ` Medicine +7, Perception +5, Religion +5 ` |
-| ` gear_text ` | ` Chain Shirt, Holy Symbol, Mace ` |
-| ` senses_text ` | ` Passive Perception 15 ` |
-| ` languages_text ` | ` Common plus one other language ` |
-| ` cr_text ` | ` 2 (XP 450; PB +2) ` |
-| ` hit_points_text ` | ` 38 (7d8 + 7) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 16 ` | ` 3 ` |
-| ` Dexterity ` | ` 10 ` | ` 0 ` |
-| ` Constitution ` | ` 12 ` | ` 1 ` |
-| ` Intelligence ` | ` 13 ` | ` 1 ` |
-| ` Wisdom ` | ` 16 ` | ` 3 ` |
-| ` Charisma ` | ` 13 ` | ` 1 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 13 ` |  |
-| ` max_hp ` | ` 38 ` |  |
-| ` initiative ` | ` 0 ` |  |
-| ` speed ` | ` 30 ` | ` ft ` |
 
 ## Health
 

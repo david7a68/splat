@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 34dbfb32-3426-56f7-aac8-6fad5adc572e
 splat_kind: rule
 splat_key: dnd2024:rules/brewing_potions_of_healing
 splat_name: Brewing Potions of Healing
-splat_origin:
-  key: dnd2024:reference/pages/103
+splat_origin: dnd2024:reference/pages/103
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 103
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 103, https://www.dndbeyond.com/srd
 ---
 
 # Brewing Potions of Healing

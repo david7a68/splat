@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "d702c1a3-ea8e-5439-9ff1-613c53936c8f"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/scorpion"
 splat_name: "Scorpion"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [360], "executable": false}
+splat_pages:
+- 360
 ---
 
 # Scorpion
@@ -27,3 +28,13 @@ CR 0 (XP 10; PB +2)
 Sting. Melee Attack Roll: +2, reach 5 ft. Hit: 1 Piercing damage plus 3 (1d6) Poison damage.
 
 Original layout: [[../pages/360|page 360]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

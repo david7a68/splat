@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "7c37a348-de71-55f7-ad1b-962891580824"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/adult_white_dragon"
 splat_name: "Adult White Dragon"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [340], "executable": false}
+splat_pages:
+- 340
 ---
 
 # Adult White Dragon
@@ -49,3 +50,13 @@ Frightful Presence. The dragon casts Fear, requiring no Material components and 
 Pounce. The dragon moves up to half its Speed, and it makes one Rend attack.
 
 Original layout: [[../pages/340|page 340]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

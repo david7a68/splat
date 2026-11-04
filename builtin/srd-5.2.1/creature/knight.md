@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "198a78e8-ccb6-5af1-96d8-71c716d37215"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/knight"
 splat_name: "Knight"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [302], "executable": false}
+splat_pages:
+- 302
 ---
 
 # Knight
@@ -37,3 +38,13 @@ Heavy Crossbow. Ranged Attack Roll: +2, range 100/400 ft. Hit: 11 (2d10) Piercin
 Parry. Trigger: The knight is hit by a melee attack roll while holding a weapon. Response: The knight adds 2 to its AC against that attack, possibly causing it to miss.
 
 Original layout: [[../pages/302|page 302]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

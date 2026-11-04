@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 3214d5d0-ab3f-5d2f-a4dc-27dc268a48b2
 splat_kind: spell
 splat_key: dnd2024:spells/sanctuary
 splat_name: Sanctuary
-splat_origin:
-  key: dnd2024:reference/spell/sanctuary
+splat_origin: dnd2024:reference/spell/sanctuary
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 159
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 159, https://www.dndbeyond.com/srd
 ---
 
 # Sanctuary
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 1 |
+| School | Abjuration |
+| Classes | Cleric |
+| Casting Time | Bonus Action |
+| Range | 30 feet |
+| Components | V, S, M (a shard of glass from a mirror) |
+| Duration | 1 minute |
+
 
 ## Source text
 
@@ -28,37 +39,11 @@ You ward a creature within range. Until the spell ends, any creature who targets
 
 Original layout: [[../../srd-5.2.1/pages/159|page 159]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 1 ` |
-| ` school ` | ` abjuration ` |
-| ` classes ` | ` ["cleric"] ` |
-| ` components ` | ` ["verbal", "somatic", "material"] ` |
-| ` concentration ` | ` false ` |
-| ` duration ` | ` 1 minute ` |
-| ` casting_time ` | ` Bonus Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
 
-<!-- splat:values path=splat_spell/range -->
 
-| Field | Value |
-| --- | --- |
-| ` feet ` | ` 30 ` |
-
-### Material
-
-<!-- splat:values path=splat_spell/material -->
-
-| Field | Value |
-| --- | --- |
-| ` description ` | ` a shard of glass from a mirror ` |
-| ` consumed ` | ` false ` |
 
 ## Rule
 
@@ -120,3 +105,12 @@ failure:
   - choose_new_legal_target
   - lose_attack_or_spell
 ```
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_spell_extras -->
+> 
+> ```yaml
+> material:
+>   consumed: false
+> ```
+

@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 2077d049-21be-5fc9-9fe8-c1f7788dc692
 splat_kind: item
 splat_key: dnd2024:equipment/other_tools_poisoner_s_kit_50_gp
 splat_name: Poisoner’s Kit (50 GP)
-splat_origin:
-  key: dnd2024:reference/pages/094
+splat_origin: dnd2024:reference/pages/094
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 94
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 94, https://www.dndbeyond.com/srd
 ---
 
 # Poisoner’s Kit (50 GP)
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Adventuring Gear |
+| Rarity |  |
+| Attunement | No |
+
 
 ## Source text
 
@@ -22,39 +29,13 @@ Ability: Intelligence Weight: 2 lb.\
 Utilize: Detect a poisoned object (DC 10)\
 Craft: Basic Poison
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` adventuring_gear ` |
 
-### Equipment
 
-<!-- splat:values path=splat_item/equipment -->
 
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` none ` |
 
-### Price
 
-<!-- splat:values path=splat_item/price -->
-
-| Field | Value |
-| --- | --- |
-| ` value ` | ` 50 ` |
-| ` unit ` | ` gp ` |
-
-### Mass
-
-<!-- splat:values path=splat_item/mass -->
-
-| Field | Value |
-| --- | --- |
-| ` value ` | ` 2 ` |
-| ` unit ` | ` lb ` |
 
 ## Rule
 
@@ -98,3 +79,16 @@ crafting_rule:
 | --- | --- |
 | ` value ` | ` 2 ` |
 | ` unit ` | ` lb ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_item_extras -->
+> 
+> ```yaml
+> price:
+>   unit: gp
+>   value: 50
+> mass:
+>   unit: lb
+>   value: 2
+> ```
+

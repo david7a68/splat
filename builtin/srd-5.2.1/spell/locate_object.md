@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "e80d12ef-cb0a-558a-9b1b-26e959d563bb"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/locate_object"
 splat_name: "Locate Object"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [145], "executable": false}
+splat_pages:
+- 145
 ---
 
 # Locate Object
@@ -24,3 +25,13 @@ The spell can locate a specific object known to you if you have seen it up close
 This spell can’t locate an object if any thickness of lead blocks a direct path between you and the object.
 
 Original layout: [[../pages/145|page 145]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

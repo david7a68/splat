@@ -1,34 +1,60 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 82451a28-9fdd-576c-a92f-0b4c706175ba
 splat_kind: creature
 splat_key: dnd2024:creatures/owl
 splat_name: Owl
-splat_origin:
-  key: dnd2024:reference/creature/owl
+splat_origin: dnd2024:reference/creature/owl
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 358
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 358, https://www.dndbeyond.com/srd
 ---
 
 # Owl
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Tiny |
+| Type | Beast |
+| Alignment | Unaligned |
+| Armor Class | 11 |
+| Hit Points | 1 (1d4 - 1) |
+| Initiative | +1 (11) |
+| Speed | 5 ft., Fly 60 ft. |
+| Challenge | 0 (XP 10; PB +2) |
+| Skills | Perception +5, Stealth +5 |
+| Senses | Darkvision 120 ft.; Passive Perception 15 |
+| Languages | None |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 3 | -4 | -4 |
+| Dex | 13 | +1 | +1 |
+| Con | 8 | -1 | -1 |
+| Int | 2 | -4 | -4 |
+| Wis | 12 | +1 | +1 |
+| Cha | 7 | -2 | -2 |
+
 
 ## Source text
 
 <!-- SRD page 358 -->
 
-Tiny Beast, Unaligned\
-AC 11  Initiative +1 (11)\
-HP 1 (1d4 − 1)\
-Speed 5 ft., Fly 60 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 3 −4 −4 Dex 13 +1 +1 Con 8 −1 −1\
-Int 2 −4 −4 Wis 12 +1 +1 Cha 7 −2 −2\
-Skills Perception +5, Stealth +5\
-Senses Darkvision 120 ft.; Passive Perception 15\
-Languages None\
-CR 0 (XP 10; PB +2)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Tiny Beast, Unaligned\
+> AC 11  Initiative +1 (11)\
+> HP 1 (1d4 − 1)\
+> Speed 5 ft., Fly 60 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 3 −4 −4 Dex 13 +1 +1 Con 8 −1 −1\
+> Int 2 −4 −4 Wis 12 +1 +1 Cha 7 −2 −2\
+> Skills Perception +5, Stealth +5\
+> Senses Darkvision 120 ft.; Passive Perception 15\
+> Languages None\
+> CR 0 (XP 10; PB +2)
+
 
 ### Traits
 
@@ -40,46 +66,11 @@ Talons. Melee Attack Roll: +3, reach 5 ft. Hit: 1 Slashing damage.
 
 Original layout: [[../../srd-5.2.1/pages/358|page 358]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` tiny ` |
-| ` type ` | ` beast ` |
-| ` alignment ` | ` Unaligned ` |
-| ` movement_text ` | ` 5 ft., Fly 60 ft. ` |
-| ` skills_text ` | ` Perception +5, Stealth +5 ` |
-| ` senses_text ` | ` Darkvision 120 ft.; Passive Perception 15 ` |
-| ` languages_text ` | ` None ` |
-| ` cr_text ` | ` 0 (XP 10; PB +2) ` |
-| ` hit_points_text ` | ` 1 (1d4 - 1) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 3 ` | ` -4 ` |
-| ` Dexterity ` | ` 13 ` | ` 1 ` |
-| ` Constitution ` | ` 8 ` | ` -1 ` |
-| ` Intelligence ` | ` 2 ` | ` -4 ` |
-| ` Wisdom ` | ` 12 ` | ` 1 ` |
-| ` Charisma ` | ` 7 ` | ` -2 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 11 ` |  |
-| ` max_hp ` | ` 1 ` |  |
-| ` initiative ` | ` 1 ` |  |
-| ` speed ` | ` 5 ` | ` ft ` |
-| ` fly_speed ` | ` 60 ` | ` ft ` |
 
 ## Health
 
@@ -190,3 +181,13 @@ geometry:
 unlisted_success_branch: no_effect
 unlisted_duration: until_removed_by_applicable_rule
 ```
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_stats_extras -->
+> 
+> ```yaml
+> fly_speed:
+>   unit: ft
+>   value: 60
+> ```
+

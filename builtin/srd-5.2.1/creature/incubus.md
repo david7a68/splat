@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "b15d6707-96e0-58bd-b174-10a245979aed"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/incubus"
 splat_name: "Incubus"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [301], "executable": false}
+splat_pages:
+- 301
 ---
 
 # Incubus
@@ -44,3 +45,13 @@ At Will: Disguise Self, Etherealness\
 Nightmare (Recharge 6). Wisdom Saving Throw: DC 15, one creature the incubus can see within 60 feet. Failure: If the target has 20 Hit Points or fewer, it has the Unconscious condition for 1 hour, until it takes damage, or until a creature within 5 feet of it takes an action to wake it. Otherwise, the target takes 18 (4d8) Psychic damage.
 
 Original layout: [[../pages/301|page 301]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

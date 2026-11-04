@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 5340380a-57af-5094-9f38-02fe5c88b00b
 splat_kind: spell
 splat_key: dnd2024:spells/silence
 splat_name: Silence
-splat_origin:
-  key: dnd2024:reference/spell/silence
+splat_origin: dnd2024:reference/spell/silence
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 162
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 162, https://www.dndbeyond.com/srd
 ---
 
 # Silence
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 2 |
+| School | Illusion |
+| Classes | Bard, Cleric, Ranger |
+| Casting Time | Action or Ritual |
+| Range | 120 feet |
+| Components | V, S |
+| Duration | Concentration, up to 10 minutes |
+
 
 ## Source text
 
@@ -28,28 +39,9 @@ For the duration, no sound can be created within or pass through a 20-foot-radiu
 
 Original layout: [[../../srd-5.2.1/pages/162|page 162]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 2 ` |
-| ` school ` | ` illusion ` |
-| ` classes ` | ` ["bard", "cleric", "ranger"] ` |
-| ` components ` | ` ["verbal", "somatic"] ` |
-| ` concentration ` | ` true ` |
-| ` duration ` | ` Concentration, up to 10 minutes ` |
-| ` casting_time ` | ` Action or Ritual ` |
-| ` ritual ` | ` true ` |
 
-### Range
-
-<!-- splat:values path=splat_spell/range -->
-
-| Field | Value |
-| --- | --- |
-| ` feet ` | ` 120 ` |
 
 ## Rule
 

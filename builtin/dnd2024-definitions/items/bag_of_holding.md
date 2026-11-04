@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 8e4d8e47-b47e-5fce-abfc-f501e8ddac94
 splat_kind: item
 splat_key: dnd2024:items/bag_of_holding
 splat_name: Bag of Holding
-splat_origin:
-  key: dnd2024:reference/magic_item/bag_of_holding
+splat_origin: dnd2024:reference/magic_item/bag_of_holding
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 212
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 212, https://www.dndbeyond.com/srd
 ---
 
 # Bag of Holding
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Wondrous Item |
+| Rarity | Uncommon |
+| Attunement | No |
+
 
 ## Source text
 
@@ -28,57 +35,18 @@ Placing a Bag of Holding inside an extradimensional space created by a Handy Hav
 
 Original layout: [[../../srd-5.2.1/pages/212|page 212]].
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` wondrous_item ` |
-| ` rarity ` | ` uncommon ` |
-| ` stackable ` | ` false ` |
 
-### Mass
 
-<!-- splat:values path=splat_item/mass -->
 
-| Field | Value |
-| --- | --- |
-| ` value ` | ` 5 ` |
-| ` unit ` | ` lb ` |
-
-### Equipment
-
-<!-- splat:values path=splat_item/equipment -->
-
-| Field | Value |
-| --- | --- |
-| ` allowed ` | ` ["carried"] ` |
-| ` attunement ` | ` none ` |
 
 ### Containment
 
-#### Capacity
 
-<!-- splat:yaml path=splat_item/containment/capacity -->
 
-```yaml
-mass:
-  value: 500
-  unit: lb
-volume:
-  value: 64
-  unit: ft3
-```
 
-#### Carried mass
 
-<!-- splat:values path=splat_item/containment/carried_mass -->
-
-| Field | Value |
-| --- | --- |
-| ` value ` | ` 5 ` |
-| ` unit ` | ` lb ` |
 
 ## Rule
 
@@ -154,3 +122,28 @@ gate:
 | Field | Value |
 | --- | --- |
 | ` required ` | ` false ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_item_extras -->
+> 
+> ```yaml
+> stackable: false
+> containment:
+>   capacity:
+>     mass:
+>       value: 500
+>       unit: lb
+>     volume:
+>       value: 64
+>       unit: ft3
+>   carried_mass:
+>     unit: lb
+>     value: 5
+> equipment:
+>   allowed:
+>   - carried
+> mass:
+>   unit: lb
+>   value: 5
+> ```
+

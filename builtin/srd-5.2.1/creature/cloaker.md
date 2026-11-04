@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "9831c1b4-f3fc-59a7-a5f8-dd1f3b4a8306"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/cloaker"
 splat_name: "Cloaker"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [274], "executable": false}
+splat_pages:
+- 274
 ---
 
 # Cloaker
@@ -45,3 +46,13 @@ Moan. Wisdom Saving Throw: DC 13, each creature in a 60-foot Emanation originati
 Phantasms (Recharge after a Short or Long Rest). The cloaker casts the Mirror Image spell, requiring no spell components and using Wisdom as the spellcasting ability. The spell ends early if the cloaker starts or ends its turn in Bright Light.
 
 Original layout: [[../pages/274|page 274]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

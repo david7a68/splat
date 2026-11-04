@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: ee140b38-12f7-5951-bda1-66881e7118fc
 splat_kind: item
 splat_key: dnd2024:items/sovereign_glue
 splat_name: Sovereign Glue
-splat_origin:
-  key: dnd2024:reference/magic_item/sovereign_glue
+splat_origin: dnd2024:reference/magic_item/sovereign_glue
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 244
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 244, https://www.dndbeyond.com/srd
 ---
 
 # Sovereign Glue
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Wondrous Item |
+| Rarity | Legendary |
+| Attunement | No |
+
 
 ## Source text
 
@@ -26,22 +33,9 @@ One ounce of the glue can cover a 1-foot square surface. Applying an ounce of So
 
 Original layout: [[../../srd-5.2.1/pages/244|page 244]].
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` wondrous_item ` |
-| ` rarity ` | ` legendary ` |
 
-### Equipment
-
-<!-- splat:values path=splat_item/equipment -->
-
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` none ` |
 
 ## Rule
 

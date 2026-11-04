@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "55bae643-a395-5d74-9f76-5ad73e32c1b4"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/cone_of_cold"
 splat_name: "Cone of Cold"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [117], "executable": false}
+splat_pages:
+- 117
 ---
 
 # Cone of Cold
@@ -22,3 +23,13 @@ You unleash a blast of cold air. Each creature in a 60-foot Cone originating fro
 Using a Higher-Level Spell Slot. The damage increases by 1d8 for each spell slot level above 5.
 
 Original layout: [[../pages/117|page 117]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

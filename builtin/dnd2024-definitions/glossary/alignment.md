@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 6cbca415-8b1a-5a63-922e-5bd896d157bb
 splat_kind: rule
 splat_key: dnd2024:glossary/alignment
 splat_name: Alignment
-splat_origin:
-  key: dnd2024:reference/glossary/alignment
+splat_origin: dnd2024:reference/glossary/alignment
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 176
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 176, https://www.dndbeyond.com/srd
 ---
 
 # Alignment

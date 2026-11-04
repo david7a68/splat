@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: c205b4a5-f3dc-527a-b7d7-38b0ee8afbd8
 splat_kind: item
 splat_key: dnd2024:items/tome_of_clear_thought
 splat_name: Tome of Clear Thought
-splat_origin:
-  key: dnd2024:reference/magic_item/tome_of_clear_thought
+splat_origin: dnd2024:reference/magic_item/tome_of_clear_thought
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 249
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 249, https://www.dndbeyond.com/srd
 ---
 
 # Tome of Clear Thought
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Wondrous Item |
+| Rarity | Very Rare |
+| Attunement | No |
+
 
 ## Source text
 
@@ -24,22 +31,9 @@ This book contains memory and logic exercises, and its words are charged with ma
 
 Original layout: [[../../srd-5.2.1/pages/249|page 249]].
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` wondrous_item ` |
-| ` rarity ` | ` very_rare ` |
 
-### Equipment
-
-<!-- splat:values path=splat_item/equipment -->
-
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` none ` |
 
 ## Rule
 

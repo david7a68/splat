@@ -1,10 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "f30c2d12-2067-5f36-bc3c-46308707a3a0"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/archelon"
 splat_name: "Archelon"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [344, 345], "executable": false}
+splat_pages:
+- 344
+- 345
 ---
 
 # Archelon
@@ -36,3 +38,13 @@ Multiattack. The archelon makes two Bite attacks.
 Bite. Melee Attack Roll: +6, reach 5 ft. Hit: 14 (3d6 + 4) Piercing damage.
 
 Original layout: [[../pages/344|page 344]], [[../pages/345|page 345]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

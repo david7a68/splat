@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "b19c601f-6109-599c-8b61-9a941594ff92"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/illusory_script"
 splat_name: "Illusory Script"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [142], "executable": false}
+splat_pages:
+- 142
 ---
 
 # Illusory Script
@@ -24,3 +25,13 @@ If the spell is dispelled, the original script and the illusion both disappear.
 A creature that has Truesight can read the hidden message.
 
 Original layout: [[../pages/142|page 142]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

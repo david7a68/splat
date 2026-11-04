@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 938946e7-6520-5556-87f0-621c883cc5ce
 splat_kind: rule
 splat_key: dnd2024:class_features/cleric_level_2_channel_divinity
 splat_name: 'Level 2: Channel Divinity'
-splat_origin:
-  key: dnd2024:reference/pages/037
+splat_origin: dnd2024:reference/pages/037
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 37
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 37, https://www.dndbeyond.com/srd
 ---
 
 # Level 2: Channel Divinity

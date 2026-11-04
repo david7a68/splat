@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 30b96f68-8540-5b47-ad85-b7ff206689d4
 splat_kind: rule
 splat_key: dnd2024:class_features/barbarian_level_1_rage
 splat_name: 'Level 1: Rage'
-splat_origin:
-  key: dnd2024:reference/pages/028
+splat_origin: dnd2024:reference/pages/028
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 28, 29
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 28, 29, https://www.dndbeyond.com/srd
 ---
 
 # Level 1: Rage

@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: cfc106b6-22ae-589d-a591-314d0166fc92
 splat_kind: spell
 splat_key: dnd2024:spells/gaseous_form
 splat_name: Gaseous Form
-splat_origin:
-  key: dnd2024:reference/spell/gaseous_form
+splat_origin: dnd2024:reference/spell/gaseous_form
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 134, 135
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 134, 135, https://www.dndbeyond.com/srd
 ---
 
 # Gaseous Form
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 3 |
+| School | Transmutation |
+| Classes | Sorcerer, Warlock, Wizard |
+| Casting Time | Action |
+| Range |  |
+| Components | V, S, M (a bit of gauze) |
+| Duration | Concentration, up to 1 hour |
+
 
 ## Source text
 
@@ -36,37 +47,11 @@ Using a Higher-Level Spell Slot. You can target one additional creature for each
 
 Original layout: [[../../srd-5.2.1/pages/134|page 134]], [[../../srd-5.2.1/pages/135|page 135]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 3 ` |
-| ` school ` | ` transmutation ` |
-| ` classes ` | ` ["sorcerer", "warlock", "wizard"] ` |
-| ` components ` | ` ["verbal", "somatic", "material"] ` |
-| ` concentration ` | ` true ` |
-| ` duration ` | ` Concentration, up to 1 hour ` |
-| ` casting_time ` | ` Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
 
-<!-- splat:values path=splat_spell/range -->
 
-| Field | Value |
-| --- | --- |
-| ` mode ` | ` touch ` |
-
-### Material
-
-<!-- splat:values path=splat_spell/material -->
-
-| Field | Value |
-| --- | --- |
-| ` description ` | ` a bit of gauze ` |
-| ` consumed ` | ` false ` |
 
 ## Rule
 
@@ -143,3 +128,14 @@ prohibit:
 | --- | --- |
 | ` hp_zero ` | ` true ` |
 | ` voluntary_cost ` | ` magic_action ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_spell_extras -->
+> 
+> ```yaml
+> material:
+>   consumed: false
+> range:
+>   mode: touch
+> ```
+

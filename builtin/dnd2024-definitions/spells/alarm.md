@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 7c12a608-4c5d-5a17-b3cc-5e8600636ad5
 splat_kind: spell
 splat_key: dnd2024:spells/alarm
 splat_name: Alarm
-splat_origin:
-  key: dnd2024:reference/spell/alarm
+splat_origin: dnd2024:reference/spell/alarm
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 107
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 107, https://www.dndbeyond.com/srd
 ---
 
 # Alarm
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 1 |
+| School | Abjuration |
+| Classes | Ranger, Wizard |
+| Casting Time | 1 minute or Ritual |
+| Range | 30 feet |
+| Components | V, S, M (a bell and silver wire) |
+| Duration | 8 hours |
+
 
 ## Source text
 
@@ -32,37 +43,11 @@ Mental Alarm. You are alerted by a mental ping if you are within 1 mile of the w
 
 Original layout: [[../../srd-5.2.1/pages/107|page 107]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 1 ` |
-| ` school ` | ` abjuration ` |
-| ` classes ` | ` ["ranger", "wizard"] ` |
-| ` components ` | ` ["verbal", "somatic", "material"] ` |
-| ` concentration ` | ` false ` |
-| ` duration ` | ` 8 hours ` |
-| ` casting_time ` | ` 1 minute or Ritual ` |
-| ` ritual ` | ` true ` |
 
-### Range
 
-<!-- splat:values path=splat_spell/range -->
 
-| Field | Value |
-| --- | --- |
-| ` feet ` | ` 30 ` |
-
-### Material
-
-<!-- splat:values path=splat_spell/material -->
-
-| Field | Value |
-| --- | --- |
-| ` description ` | ` a bell and silver wire ` |
-| ` consumed ` | ` false ` |
 
 ## Rule
 
@@ -143,3 +128,12 @@ options:
 | ` source ` | ` supplied_world_geometry ` |
 | ` unknown_facts ` | ` require_resolution ` |
 | ` infer_unprovided_geometry ` | ` false ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_spell_extras -->
+> 
+> ```yaml
+> material:
+>   consumed: false
+> ```
+

@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 828fb932-2962-5fb5-928f-2fd5e0ea624b
 splat_kind: spell
 splat_key: dnd2024:spells/chill_touch
 splat_name: Chill Touch
-splat_origin:
-  key: dnd2024:reference/spell/chill_touch
+splat_origin: dnd2024:reference/spell/chill_touch
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 115
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 115, https://www.dndbeyond.com/srd
 ---
 
 # Chill Touch
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | Cantrip |
+| School | Necromancy |
+| Classes | Sorcerer, Warlock, Wizard |
+| Casting Time | Action |
+| Range |  |
+| Components | V, S |
+| Duration | Instantaneous |
+
 
 ## Source text
 
@@ -30,28 +41,9 @@ Cantrip Upgrade. The damage increases by 1d10 when you reach levels 5 (2d10), 11
 
 Original layout: [[../../srd-5.2.1/pages/115|page 115]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 0 ` |
-| ` school ` | ` necromancy ` |
-| ` classes ` | ` ["sorcerer", "warlock", "wizard"] ` |
-| ` components ` | ` ["verbal", "somatic"] ` |
-| ` concentration ` | ` false ` |
-| ` duration ` | ` Instantaneous ` |
-| ` casting_time ` | ` Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
-
-<!-- splat:values path=splat_spell/range -->
-
-| Field | Value |
-| --- | --- |
-| ` mode ` | ` touch ` |
 
 ## Rule
 
@@ -108,3 +100,12 @@ concentration: false
 maximum:
   kind: instantaneous
 ```
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_spell_extras -->
+> 
+> ```yaml
+> range:
+>   mode: touch
+> ```
+

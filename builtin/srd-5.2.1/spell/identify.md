@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "cdd1382d-837c-578f-ac3e-c7289582a42e"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/identify"
 splat_name: "Identify"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [142], "executable": false}
+splat_pages:
+- 142
 ---
 
 # Identify
@@ -22,3 +23,13 @@ You touch an object throughout the spell’s casting. If the object is a magic i
 If you instead touch a creature throughout the casting, you learn which ongoing spells, if any, are currently affecting it.
 
 Original layout: [[../pages/142|page 142]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "4145360b-e897-52bd-851e-5358beb0a1dd"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/detect_evil_and_good"
 splat_name: "Detect Evil and Good"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [123], "executable": false}
+splat_pages:
+- 123
 ---
 
 # Detect Evil and Good
@@ -22,3 +23,13 @@ For the duration, you sense the location of any Aberration, Celestial, Elemental
 The spell is blocked by 1 foot of stone, dirt, or wood; 1 inch of metal; or a thin sheet of lead.
 
 Original layout: [[../pages/123|page 123]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

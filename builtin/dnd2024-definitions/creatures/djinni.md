@@ -1,34 +1,60 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 7adeeade-0bcf-5c22-a420-eb750d4da8f6
 splat_kind: creature
 splat_key: dnd2024:creatures/djinni
 splat_name: Djinni
-splat_origin:
-  key: dnd2024:reference/creature/djinni
+splat_origin: dnd2024:reference/creature/djinni
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 280
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 280, https://www.dndbeyond.com/srd
 ---
 
 # Djinni
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Large |
+| Type | Elemental (Genie) |
+| Alignment | Neutral |
+| Armor Class | 17 |
+| Hit Points | 218 (19d10 + 114) |
+| Initiative | +2 (12) |
+| Speed | 30 ft., Fly 90 ft. (hover) |
+| Challenge | 11 (XP 7,200; PB +4) |
+| Senses | Darkvision 120 ft.; Passive Perception 13 |
+| Languages | Primordial (Auran) |
+| Immunities | Lightning, Thunder |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 21 | +5 | +5 |
+| Dex | 15 | +2 | +6 |
+| Con | 22 | +6 | +6 |
+| Int | 15 | +2 | +2 |
+| Wis | 16 | +3 | +7 |
+| Cha | 20 | +5 | +5 |
+
 
 ## Source text
 
 <!-- SRD page 280 -->
 
-Large Elemental (Genie), Neutral\
-AC 17  Initiative +2 (12)\
-HP 218 (19d10 + 114)\
-Speed 30 ft., Fly 90 ft. (hover)\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 21 +5 +5 Dex 15 +2 +6 Con 22 +6 +6\
-Int 15 +2 +2 Wis 16 +3 +7 Cha 20 +5 +5\
-Immunities Lightning, Thunder\
-Senses Darkvision 120 ft.; Passive Perception 13\
-Languages Primordial (Auran)\
-CR 11 (XP 7,200; PB +4)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Large Elemental (Genie), Neutral\
+> AC 17  Initiative +2 (12)\
+> HP 218 (19d10 + 114)\
+> Speed 30 ft., Fly 90 ft. (hover)\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 21 +5 +5 Dex 15 +2 +6 Con 22 +6 +6\
+> Int 15 +2 +2 Wis 16 +3 +7 Cha 20 +5 +5\
+> Immunities Lightning, Thunder\
+> Senses Darkvision 120 ft.; Passive Perception 13\
+> Languages Primordial (Auran)\
+> CR 11 (XP 7,200; PB +4)
+
 
 ### Traits
 
@@ -58,47 +84,11 @@ At Will: Detect Evil and Good, Detect Magic\
 
 Original layout: [[../../srd-5.2.1/pages/280|page 280]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` large ` |
-| ` type ` | ` elemental ` |
-| ` alignment ` | ` Neutral ` |
-| ` tags_text ` | ` (Genie) ` |
-| ` movement_text ` | ` 30 ft., Fly 90 ft. (hover) ` |
-| ` immunities_text ` | ` Lightning, Thunder ` |
-| ` senses_text ` | ` Darkvision 120 ft.; Passive Perception 13 ` |
-| ` languages_text ` | ` Primordial (Auran) ` |
-| ` cr_text ` | ` 11 (XP 7,200; PB +4) ` |
-| ` hit_points_text ` | ` 218 (19d10 + 114) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 21 ` | ` 5 ` |
-| ` Dexterity ` | ` 15 ` | ` 6 ` |
-| ` Constitution ` | ` 22 ` | ` 6 ` |
-| ` Intelligence ` | ` 15 ` | ` 2 ` |
-| ` Wisdom ` | ` 16 ` | ` 7 ` |
-| ` Charisma ` | ` 20 ` | ` 5 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 17 ` |  |
-| ` max_hp ` | ` 218 ` |  |
-| ` initiative ` | ` 2 ` |  |
-| ` speed ` | ` 30 ` | ` ft ` |
-| ` fly_speed ` | ` 90 ` | ` ft ` |
 
 ## Health
 
@@ -449,3 +439,13 @@ other_components: spell_definition_unless_waived
 | ` provider ` | ` caller ` |
 | ` required_facts ` | ` ["distance", "area_membership", "visibility", "occupancy", "movement_path"] ` |
 | ` validate_against_typed_constraints ` | ` true ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_stats_extras -->
+> 
+> ```yaml
+> fly_speed:
+>   unit: ft
+>   value: 90
+> ```
+

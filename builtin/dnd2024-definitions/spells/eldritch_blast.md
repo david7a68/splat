@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 955fbc1e-8225-57c6-89f5-0c4bdc89b22a
 splat_kind: spell
 splat_key: dnd2024:spells/eldritch_blast
 splat_name: Eldritch Blast
-splat_origin:
-  key: dnd2024:reference/spell/eldritch_blast
+splat_origin: dnd2024:reference/spell/eldritch_blast
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 127
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 127, https://www.dndbeyond.com/srd
 ---
 
 # Eldritch Blast
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | Cantrip |
+| School | Evocation |
+| Classes | Warlock |
+| Casting Time | Action |
+| Range | 120 feet |
+| Components | V, S |
+| Duration | Instantaneous |
+
 
 ## Source text
 
@@ -30,28 +41,9 @@ Cantrip Upgrade. The spell creates two beams at level 5, three beams at level 11
 
 Original layout: [[../../srd-5.2.1/pages/127|page 127]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 0 ` |
-| ` school ` | ` evocation ` |
-| ` classes ` | ` ["warlock"] ` |
-| ` components ` | ` ["verbal", "somatic"] ` |
-| ` concentration ` | ` false ` |
-| ` duration ` | ` Instantaneous ` |
-| ` casting_time ` | ` Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
-
-<!-- splat:values path=splat_spell/range -->
-
-| Field | Value |
-| --- | --- |
-| ` feet ` | ` 120 ` |
 
 ## Rule
 

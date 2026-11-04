@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "2f366bef-b75b-5860-9730-4bdebdf989e6"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/pirate_captain"
 splat_name: "Pirate Captain"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [314], "executable": false}
+splat_pages:
+- 314
 ---
 
 # Pirate Captain
@@ -41,3 +42,13 @@ Captain’s Charm. Wisdom Saving Throw: DC 14, one creature the pirate can see w
 Riposte. Trigger: The pirate is hit by a melee attack roll while holding a weapon. Response: The pirate adds 3 to its AC against that attack, possibly causing it to miss. On a miss, the pirate makes one Rapier attack against the triggering creature if within range.
 
 Original layout: [[../pages/314|page 314]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

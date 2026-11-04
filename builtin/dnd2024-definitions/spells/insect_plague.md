@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: b10f57ec-1516-5549-8079-74b97a695911
 splat_kind: spell
 splat_key: dnd2024:spells/insect_plague
 splat_name: Insect Plague
-splat_origin:
-  key: dnd2024:reference/spell/insect_plague
+splat_origin: dnd2024:reference/spell/insect_plague
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 143
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 143, https://www.dndbeyond.com/srd
 ---
 
 # Insect Plague
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 5 |
+| School | Conjuration |
+| Classes | Cleric, Druid, Sorcerer |
+| Casting Time | Action |
+| Range | 300 feet |
+| Components | V, S, M (a locust) |
+| Duration | Concentration, up to 10 minutes |
+
 
 ## Source text
 
@@ -32,37 +43,11 @@ Using a Higher-Level Spell Slot. The damage increases by 1d10 for each spell slo
 
 Original layout: [[../../srd-5.2.1/pages/143|page 143]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 5 ` |
-| ` school ` | ` conjuration ` |
-| ` classes ` | ` ["cleric", "druid", "sorcerer"] ` |
-| ` components ` | ` ["verbal", "somatic", "material"] ` |
-| ` concentration ` | ` true ` |
-| ` duration ` | ` Concentration, up to 10 minutes ` |
-| ` casting_time ` | ` Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
 
-<!-- splat:values path=splat_spell/range -->
 
-| Field | Value |
-| --- | --- |
-| ` feet ` | ` 300 ` |
-
-### Material
-
-<!-- splat:values path=splat_spell/material -->
-
-| Field | Value |
-| --- | --- |
-| ` description ` | ` a locust ` |
-| ` consumed ` | ` false ` |
 
 ## Rule
 
@@ -186,3 +171,12 @@ type: piercing
 | ` source ` | ` supplied_world_geometry ` |
 | ` unknown_facts ` | ` require_resolution ` |
 | ` infer_unprovided_geometry ` | ` false ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_spell_extras -->
+> 
+> ```yaml
+> material:
+>   consumed: false
+> ```
+

@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 691823bb-24ef-5b0c-a455-5a9cb9598b9e
 splat_kind: rule
 splat_key: dnd2024:rules/warlock_gift_of_the_depths
 splat_name: Gift of the Depths
-splat_origin:
-  key: dnd2024:reference/pages/073
+splat_origin: dnd2024:reference/pages/073
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 73
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 73, https://www.dndbeyond.com/srd
 ---
 
 # Gift of the Depths

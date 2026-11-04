@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "e77780db-3a95-5d23-a84b-1a96bea3c040"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/create_or_destroy_water"
 splat_name: "Create or Destroy Water"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [121], "executable": false}
+splat_pages:
+- 121
 ---
 
 # Create or Destroy Water
@@ -26,3 +27,13 @@ Destroy Water. You destroy up to 10 gallons of water in an open container within
 Using a Higher-Level Spell Slot. You create or destroy 10 additional gallons of water, or the size of the Cube increases by 5 feet, for each spell slot level above 1.
 
 Original layout: [[../pages/121|page 121]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

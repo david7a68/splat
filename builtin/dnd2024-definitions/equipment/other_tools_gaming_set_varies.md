@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 7e27ca57-e047-5c7c-a358-f31c2dae1961
 splat_kind: item
 splat_key: dnd2024:equipment/other_tools_gaming_set_varies
 splat_name: Gaming Set (Varies)
-splat_origin:
-  key: dnd2024:reference/pages/094
+splat_origin: dnd2024:reference/pages/094
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 94
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 94, https://www.dndbeyond.com/srd
 ---
 
 # Gaming Set (Varies)
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Adventuring Gear |
+| Rarity |  |
+| Attunement | No |
+
 
 ## Source text
 
@@ -22,21 +29,9 @@ Ability: Wisdom Weight: —\
 Utilize: Discern whether someone is cheating (DC 10), or win the game (DC 20)\
 Variants: Dice (1 SP), dragonchess (1 GP), playing cards (5 SP), three-dragon ante (1 GP)
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` adventuring_gear ` |
 
-### Equipment
-
-<!-- splat:values path=splat_item/equipment -->
-
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` none ` |
 
 ## Rule
 

@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 54c22968-f68b-5337-aef0-496804aee395
 splat_kind: spell
 splat_key: dnd2024:spells/hallucinatory_terrain
 splat_name: Hallucinatory Terrain
-splat_origin:
-  key: dnd2024:reference/spell/hallucinatory_terrain
+splat_origin: dnd2024:reference/spell/hallucinatory_terrain
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 139
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 139, https://www.dndbeyond.com/srd
 ---
 
 # Hallucinatory Terrain
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 4 |
+| School | Illusion |
+| Classes | Bard, Druid, Warlock, Wizard |
+| Casting Time | 10 minutes |
+| Range | 300 feet |
+| Components | V, S, M (a mushroom) |
+| Duration | 24 hours |
+
 
 ## Source text
 
@@ -30,37 +41,11 @@ The tactile characteristics of the terrain are unchanged, so creatures entering 
 
 Original layout: [[../../srd-5.2.1/pages/139|page 139]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 4 ` |
-| ` school ` | ` illusion ` |
-| ` classes ` | ` ["bard", "druid", "warlock", "wizard"] ` |
-| ` components ` | ` ["verbal", "somatic", "material"] ` |
-| ` concentration ` | ` false ` |
-| ` duration ` | ` 24 hours ` |
-| ` casting_time ` | ` 10 minutes ` |
-| ` ritual ` | ` false ` |
 
-### Range
 
-<!-- splat:values path=splat_spell/range -->
 
-| Field | Value |
-| --- | --- |
-| ` feet ` | ` 300 ` |
-
-### Material
-
-<!-- splat:values path=splat_spell/material -->
-
-| Field | Value |
-| --- | --- |
-| ` description ` | ` a mushroom ` |
-| ` consumed ` | ` false ` |
 
 ## Rule
 
@@ -109,3 +94,12 @@ otherwise:
   success: disbelieve
 after_discern: vague_image_over_real_terrain
 ```
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_spell_extras -->
+> 
+> ```yaml
+> material:
+>   consumed: false
+> ```
+

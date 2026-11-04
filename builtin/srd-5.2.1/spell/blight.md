@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "1eb8f450-1b7f-5ec7-803d-ff78384d93a9"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/blight"
 splat_name: "Blight"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [113], "executable": false}
+splat_pages:
+- 113
 ---
 
 # Blight
@@ -24,3 +25,13 @@ Alternatively, target a nonmagical plant that isn’t a creature, such as a tree
 Using a Higher-Level Spell Slot. The damage increases by 1d8 for each spell slot level above 4.
 
 Original layout: [[../pages/113|page 113]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

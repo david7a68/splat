@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: b7cef3b8-4a9e-549b-8d5b-0ab068c7a69e
 splat_kind: item
 splat_key: dnd2024:items/marvelous_pigments
 splat_name: Marvelous Pigments
-splat_origin:
-  key: dnd2024:reference/magic_item/marvelous_pigments
+splat_origin: dnd2024:reference/magic_item/marvelous_pigments
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 230
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 230, https://www.dndbeyond.com/srd
 ---
 
 # Marvelous Pigments
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Wondrous Item |
+| Rarity | Very Rare |
+| Attunement | No |
+
 
 ## Source text
 
@@ -32,22 +39,9 @@ If you paint a form of energy such as fire or lightning, the energy dissipates a
 
 Original layout: [[../../srd-5.2.1/pages/230|page 230]].
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` wondrous_item ` |
-| ` rarity ` | ` very_rare ` |
 
-### Equipment
-
-<!-- splat:values path=splat_item/equipment -->
-
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` none ` |
 
 ## Rule
 

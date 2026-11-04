@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "3cd085bb-e56e-5580-a6eb-c26f575bc91a"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/ancient_red_dragon"
 splat_name: "Ancient Red Dragon"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [319], "executable": false}
+splat_pages:
+- 319
 ---
 
 # Ancient Red Dragon
@@ -52,3 +53,13 @@ Fiery Rays. The dragon uses Spellcasting to cast Scorching Ray (level 3 version)
 Pounce. The dragon moves up to half its Speed, and it makes one Rend attack.
 
 Original layout: [[../pages/319|page 319]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "88ed0ea7-e339-5dcd-b52a-9f73587db829"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/find_the_path"
 splat_name: "Find the Path"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [131], "executable": false}
+splat_pages:
+- 131
 ---
 
 # Find the Path
@@ -22,3 +23,13 @@ You magically sense the most direct physical route to a location you name. You m
 For the duration, as long as you are on the same plane of existence as the destination, you know how far it is and in what direction it lies. Whenever you face a choice of paths along the way there, you know which path is the most direct.
 
 Original layout: [[../pages/131|page 131]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

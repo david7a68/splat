@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 54e4346b-9165-5413-a574-d02241065131
 splat_kind: spell
 splat_key: dnd2024:spells/conjure_animals
 splat_name: Conjure Animals
-splat_origin:
-  key: dnd2024:reference/spell/conjure_animals
+splat_origin: dnd2024:reference/spell/conjure_animals
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 117, 118
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 117, 118, https://www.dndbeyond.com/srd
 ---
 
 # Conjure Animals
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 3 |
+| School | Conjuration |
+| Classes | Druid, Ranger |
+| Casting Time | Action |
+| Range | 60 feet |
+| Components | V, S |
+| Duration | Concentration, up to 10 minutes |
+
 
 ## Source text
 
@@ -36,28 +47,9 @@ Using a Higher-Level Spell Slot. The damage increases by 1d10 for each spell slo
 
 Original layout: [[../../srd-5.2.1/pages/117|page 117]], [[../../srd-5.2.1/pages/118|page 118]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 3 ` |
-| ` school ` | ` conjuration ` |
-| ` classes ` | ` ["druid", "ranger"] ` |
-| ` components ` | ` ["verbal", "somatic"] ` |
-| ` concentration ` | ` true ` |
-| ` duration ` | ` Concentration, up to 10 minutes ` |
-| ` casting_time ` | ` Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
-
-<!-- splat:values path=splat_spell/range -->
-
-| Field | Value |
-| --- | --- |
-| ` feet ` | ` 60 ` |
 
 ## Rule
 

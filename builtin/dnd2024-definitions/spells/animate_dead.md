@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: a51449cb-c485-55a6-86ba-d96a901af1a0
 splat_kind: spell
 splat_key: dnd2024:spells/animate_dead
 splat_name: Animate Dead
-splat_origin:
-  key: dnd2024:reference/spell/animate_dead
+splat_origin: dnd2024:reference/spell/animate_dead
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 108
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 108, https://www.dndbeyond.com/srd
 ---
 
 # Animate Dead
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 3 |
+| School | Necromancy |
+| Classes | Cleric, Wizard |
+| Casting Time | 1 minute |
+| Range | 10 feet |
+| Components | V, S, M (a drop of blood, a piece of flesh, and a pinch of bone dust) |
+| Duration | Instantaneous |
+
 
 ## Source text
 
@@ -34,37 +45,11 @@ Using a Higher-Level Spell Slot. You animate or reassert control over two additi
 
 Original layout: [[../../srd-5.2.1/pages/108|page 108]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 3 ` |
-| ` school ` | ` necromancy ` |
-| ` classes ` | ` ["cleric", "wizard"] ` |
-| ` components ` | ` ["verbal", "somatic", "material"] ` |
-| ` concentration ` | ` false ` |
-| ` duration ` | ` Instantaneous ` |
-| ` casting_time ` | ` 1 minute ` |
-| ` ritual ` | ` false ` |
 
-### Range
 
-<!-- splat:values path=splat_spell/range -->
 
-| Field | Value |
-| --- | --- |
-| ` feet ` | ` 10 ` |
-
-### Material
-
-<!-- splat:values path=splat_spell/material -->
-
-| Field | Value |
-| --- | --- |
-| ` description ` | ` a drop of blood, a piece of flesh, and a pinch of bone dust ` |
-| ` consumed ` | ` false ` |
 
 ## Rule
 
@@ -144,3 +129,12 @@ expiry: stop_obeying
 | ` per_slot_above ` | ` 3 ` |
 | ` additional_animated ` | ` 2 ` |
 | ` additional_reasserted ` | ` 2 ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_spell_extras -->
+> 
+> ```yaml
+> material:
+>   consumed: false
+> ```
+

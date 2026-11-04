@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "8c2aff6d-ef14-50dd-be3a-bd81e6165e31"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/magic_item/bowl_of_commanding_water_elementals"
 splat_name: "Bowl of Commanding Water Elementals"
-splat_reference: {"source": "SRD 5.2.1", "category": "magic_item", "pages": [214], "executable": false}
+splat_pages:
+- 214
 ---
 
 # Bowl of Commanding Water Elementals
@@ -18,3 +19,13 @@ While this bowl is filled with water and you are within 5 feet of it, you can ta
 The bowl is about 1 foot in diameter and half as deep. It holds about 3 gallons.
 
 Original layout: [[../pages/214|page 214]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: magic_item
+> executable: false
+> ```
+

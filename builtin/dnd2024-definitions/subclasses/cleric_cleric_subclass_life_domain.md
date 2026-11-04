@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: bf2323c0-8261-5c65-8ab4-dc2ad40e1c6c
 splat_kind: rule_group
 splat_key: dnd2024:subclasses/cleric_cleric_subclass_life_domain
 splat_name: 'Cleric Subclass: Life Domain'
-splat_origin:
-  key: dnd2024:reference/pages/040
+splat_origin: dnd2024:reference/pages/040
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 40
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 40, https://www.dndbeyond.com/srd
 ---
 
 # Cleric Subclass: Life Domain

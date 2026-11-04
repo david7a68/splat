@@ -1,35 +1,64 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: cf229e93-690c-5692-a3b5-ed157c48597e
 splat_kind: creature
 splat_key: dnd2024:creatures/werewolf
 splat_name: Werewolf
-splat_origin:
-  key: dnd2024:reference/creature/werewolf
+splat_origin: dnd2024:reference/creature/werewolf
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 339
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 339, https://www.dndbeyond.com/srd
 ---
 
 # Werewolf
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Medium or Small |
+| Type | Monstrosity (Lycanthrope) |
+| Alignment | Chaotic Evil |
+| Armor Class | 15 |
+| Hit Points | 71 (11d8 + 22) |
+| Initiative | +4 (14) |
+| Speed | 30 ft., 40 ft. (wolf form only) |
+| Challenge | 3 (XP 700; PB +2) |
+| Skills | Perception +4, Stealth +4 |
+| Senses | Darkvision 60 ft.; Passive Perception 14 |
+| Languages | Common (can’t speak in wolf form) |
+| Gear | Longbow |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 16 | +3 | +3 |
+| Dex | 14 | +2 | +2 |
+| Con | 14 | +2 | +2 |
+| Int | 10 | +0 | +0 |
+| Wis | 11 | +0 | +0 |
+| Cha | 10 | +0 | +0 |
+
+%% splat shape=speed_max %%
+
 
 ## Source text
 
 <!-- SRD page 339 -->
 
 Medium or Small Monstrosity (Lycanthrope), Chaotic Evil\
-AC 15 Initiative +4 (14)\
-HP 71 (11d8 + 22)\
-Speed 30 ft., 40 ft. (wolf form only)\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 16 +3 +3 Dex 14 +2 +2 Con 14 +2 +2\
-Int 10 +0 +0 Wis 11 +0 +0 Cha 10 +0 +0\
-Skills Perception +4, Stealth +4\
-Gear Longbow\
-Senses Darkvision 60 ft.; Passive Perception 14\
-Languages Common (can’t speak in wolf form)\
-CR 3 (XP 700; PB +2)
+> [!quote]- Printed stat block (not read; edit the table above)
+> AC 15 Initiative +4 (14)\
+> HP 71 (11d8 + 22)\
+> Speed 30 ft., 40 ft. (wolf form only)\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 16 +3 +3 Dex 14 +2 +2 Con 14 +2 +2\
+> Int 10 +0 +0 Wis 11 +0 +0 Cha 10 +0 +0\
+> Skills Perception +4, Stealth +4\
+> Gear Longbow\
+> Senses Darkvision 60 ft.; Passive Perception 14\
+> Languages Common (can’t speak in wolf form)\
+> CR 3 (XP 700; PB +2)
+
 
 ### Traits
 
@@ -51,48 +80,11 @@ Shape-Shift. The werewolf shape-shifts into a Large wolf-humanoid hybrid or a Me
 
 Original layout: [[../../srd-5.2.1/pages/339|page 339]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` medium ` |
-| ` type ` | ` monstrosity ` |
-| ` alignment ` | ` Chaotic Evil ` |
-| ` size_options_text ` | ` Medium or Small ` |
-| ` tags_text ` | ` (Lycanthrope) ` |
-| ` movement_text ` | ` 30 ft., 40 ft. (wolf form only) ` |
-| ` skills_text ` | ` Perception +4, Stealth +4 ` |
-| ` gear_text ` | ` Longbow ` |
-| ` senses_text ` | ` Darkvision 60 ft.; Passive Perception 14 ` |
-| ` languages_text ` | ` Common (can’t speak in wolf form) ` |
-| ` cr_text ` | ` 3 (XP 700; PB +2) ` |
-| ` hit_points_text ` | ` 71 (11d8 + 22) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 16 ` | ` 3 ` |
-| ` Dexterity ` | ` 14 ` | ` 2 ` |
-| ` Constitution ` | ` 14 ` | ` 2 ` |
-| ` Intelligence ` | ` 10 ` | ` 0 ` |
-| ` Wisdom ` | ` 11 ` | ` 0 ` |
-| ` Charisma ` | ` 10 ` | ` 0 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 15 ` |  |
-| ` max_hp ` | ` 71 ` |  |
-| ` initiative ` | ` 4 ` |  |
-| ` speed ` | ` 40 ` | ` ft ` |
 
 ## Health
 

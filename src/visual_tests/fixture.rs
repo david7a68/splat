@@ -56,9 +56,9 @@ pub enum Seed {
     Groups,
     /// `Campaign`, plus plain world notes with links, headings and a roll table.
     World,
-    /// World, with old and new World layouts and one malformed flat property.
+    /// World, with explicit old-layout conversion files and one malformed property.
     Formats,
-    /// Both list layouts, with an invalid table cell.
+    /// An old Timeline for conversion, plus schema-2 lists with an invalid cell.
     ListFormats,
     /// `Campaign`, plus ended runs: one on the timeline under a session, one with no event.
     History,
@@ -172,6 +172,10 @@ fn seed_campaigns(
                 stable_id("visual:book-wolf")
             ),
         )?;
+        old_layout(&generated_root, "Creatures/Book Wolf.md")?;
+        old_layout(&modules[0].path, "Creatures/Cinder Wolf.md")?;
+        old_layout(&active.path, "NPCs/Rook.md")?;
+        old_layout(&active.path, "Notes/Emberfall Rumours.md")?;
         modules.push(Module {
             id,
             name: "Generated Book".into(),
@@ -217,8 +221,31 @@ fn module_entry_id(name: &str) -> uuid::Uuid {
 fn write_note(root: &Path, relative: &str, text: &str) -> Result<(), String> {
     let path = root.join(relative);
     fs::create_dir_all(path.parent().ok_or("Missing folder")?).map_err(|e| e.to_string())?;
-    fs::write(path, text).map_err(|e| e.to_string())?;
-    Entry::parse(relative, text).map(|_| ())
+    let text = splat::content::formats::convert(relative, text)?;
+    fs::write(path, &text).map_err(|e| e.to_string())?;
+    Entry::parse(relative, &text).map(|_| ())
+}
+
+/// Conversion scenarios alone keep selected old files on disk.
+fn old_layout(root: &Path, relative: &str) -> Result<(), String> {
+    let path = root.join(relative);
+    let text = fs::read_to_string(&path).map_err(|e| e.to_string())?;
+    let entry = Entry::parse(relative, &text)?;
+    let body = splat::content::stat_blocks::reading_body(&entry, &entry.body)
+        .split("\n> [!note]- Splat data")
+        .next()
+        .unwrap_or(&entry.body)
+        .to_owned();
+    let mut fields = (*entry.fields).clone();
+    fields.insert("splat_schema".into(), 1.into());
+    fs::write(
+        path,
+        format!(
+            "---\n{}---\n{body}",
+            serde_yaml_ng::to_string(&fields).map_err(|e| e.to_string())?
+        ),
+    )
+    .map_err(|e| e.to_string())
 }
 
 fn write_module(root: &Path) -> Result<Module, String> {
@@ -319,17 +346,6 @@ fn write_module(root: &Path) -> Result<Module, String> {
             ),
         ),
     ] {
-        let text = if [
-            "Creatures/Ash Wraith.md",
-            "Spells/Ashfall.md",
-            "Items/Veilglass Lantern.md",
-        ]
-        .contains(&path)
-        {
-            splat::content::formats::convert(path, &text)?
-        } else {
-            text
-        };
         write_note(root, path, &text)?;
     }
     write_art(root)?;
@@ -1377,17 +1393,17 @@ fn cached_art_is_byte_identical_and_world_files_remain_independent() {
     );
 }
 
-/// Mix schemas without changing the model or the existing workflow's words.
+/// Seed explicit conversion fixtures and normal schema-2 lists.
 fn seed_list_layouts(
     active: &Campaign,
     quiet: &Campaign,
     unlinked: &Campaign,
-    module: &Module,
-    scenario: &str,
+    _module: &Module,
+    _scenario: &str,
     seed: Seed,
 ) -> Result<(), String> {
-    // Keep a legacy campaign too, including its package choices.
-    {
+    // Conversion scenarios retain one old campaign for preview and Undo.
+    if seed == Seed::Formats {
         let campaign = unlinked;
         let path = campaign.path.join("Campaign.md");
         let text = fs::read_to_string(&path).map_err(|e| e.to_string())?;
@@ -1404,36 +1420,7 @@ fn seed_list_layouts(
         )
         .map_err(|e| e.to_string())?;
     }
-    let catalogue =
-        crate::content_workspace::Catalogue::load(std::slice::from_ref(module), Some(active))?;
-    let entries = splat::content::read_directory(&active.path)?.0;
-    let mut groups = 0;
-    let mut encounters = 0;
-    for entry in entries {
-        let convert = match entry.kind.as_str() {
-            "encounter_group" => {
-                groups += 1;
-                groups % 2 == 1
-            }
-            "encounter" => {
-                encounters += 1;
-                encounters % 2 == 1
-            }
-            _ => false,
-        };
-        if convert && scenario != "data-integrity" {
-            let path = active.path.join(&entry.path);
-            let before = fs::read_to_string(&path).map_err(|e| e.to_string())?;
-            let after = splat::content::formats::convert_resolved(
-                &entry.path,
-                &before,
-                catalogue.entries.values().map(|e| &e.entry),
-            )
-            .map_err(|e| format!("{}: {e}", entry.path))?;
-            fs::write(path, after).map_err(|e| e.to_string())?;
-        }
-    }
-    // A quiet campaign has a version 2 timeline while older History fixtures stay version 1.
+    // Quiet campaigns also use version 2 timelines.
     let quiet_folder = crate::sessions::open_folder(quiet)?;
     fs::write(
         quiet_folder.join(crate::timeline::FILE),

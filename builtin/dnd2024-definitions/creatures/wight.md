@@ -1,37 +1,66 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 5e3982d6-f3ff-5853-9522-57c4d3de919a
 splat_kind: creature
 splat_key: dnd2024:creatures/wight
 splat_name: Wight
-splat_origin:
-  key: dnd2024:reference/creature/wight
+splat_origin: dnd2024:reference/creature/wight
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 341
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 341, https://www.dndbeyond.com/srd
 ---
 
 # Wight
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Medium |
+| Type | Undead |
+| Alignment | Neutral Evil |
+| Armor Class | 14 |
+| Hit Points | 82 (11d8 + 33) |
+| Initiative | +4 (14) |
+| Speed | 30 ft. |
+| Challenge | 3 (XP 700; PB +2) |
+| Skills | Perception +3, Stealth +4 |
+| Senses | Darkvision 60 ft.; Passive Perception 13 |
+| Languages | Common plus one other language |
+| Gear | Studded Leather Armor |
+| Resistances | Necrotic |
+| Immunities | Poison; Exhaustion, Poisoned |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 15 | +2 | +2 |
+| Dex | 14 | +2 | +2 |
+| Con | 16 | +3 | +3 |
+| Int | 10 | +0 | +0 |
+| Wis | 13 | +1 | +1 |
+| Cha | 15 | +2 | +2 |
+
 
 ## Source text
 
 <!-- SRD page 341 -->
 
-Medium Undead, Neutral Evil\
-AC 14 Initiative +4 (14)\
-HP 82 (11d8 + 33)\
-Speed 30 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 15 +2 +2 Dex 14 +2 +2 Con 16 +3 +3\
-Int 10 +0 +0 Wis 13 +1 +1 Cha 15 +2 +2\
-Skills Perception +3, Stealth +4\
-Resistances Necrotic\
-Immunities Poison; Exhaustion, Poisoned\
-Gear Studded Leather Armor\
-Senses Darkvision 60 ft.; Passive Perception 13\
-Languages Common plus one other language\
-CR 3 (XP 700; PB +2)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Medium Undead, Neutral Evil\
+> AC 14 Initiative +4 (14)\
+> HP 82 (11d8 + 33)\
+> Speed 30 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 15 +2 +2 Dex 14 +2 +2 Con 16 +3 +3\
+> Int 10 +0 +0 Wis 13 +1 +1 Cha 15 +2 +2\
+> Skills Perception +3, Stealth +4\
+> Resistances Necrotic\
+> Immunities Poison; Exhaustion, Poisoned\
+> Gear Studded Leather Armor\
+> Senses Darkvision 60 ft.; Passive Perception 13\
+> Languages Common plus one other language\
+> CR 3 (XP 700; PB +2)
+
 
 ### Traits
 
@@ -51,48 +80,11 @@ A Humanoid slain by this attack rises 24 hours later as a Zombie under the wight
 
 Original layout: [[../../srd-5.2.1/pages/341|page 341]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` medium ` |
-| ` type ` | ` undead ` |
-| ` alignment ` | ` Neutral Evil ` |
-| ` movement_text ` | ` 30 ft. ` |
-| ` skills_text ` | ` Perception +3, Stealth +4 ` |
-| ` resistances_text ` | ` Necrotic ` |
-| ` immunities_text ` | ` Poison; Exhaustion, Poisoned ` |
-| ` gear_text ` | ` Studded Leather Armor ` |
-| ` senses_text ` | ` Darkvision 60 ft.; Passive Perception 13 ` |
-| ` languages_text ` | ` Common plus one other language ` |
-| ` cr_text ` | ` 3 (XP 700; PB +2) ` |
-| ` hit_points_text ` | ` 82 (11d8 + 33) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 15 ` | ` 2 ` |
-| ` Dexterity ` | ` 14 ` | ` 2 ` |
-| ` Constitution ` | ` 16 ` | ` 3 ` |
-| ` Intelligence ` | ` 10 ` | ` 0 ` |
-| ` Wisdom ` | ` 13 ` | ` 1 ` |
-| ` Charisma ` | ` 15 ` | ` 2 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 14 ` |  |
-| ` max_hp ` | ` 82 ` |  |
-| ` initiative ` | ` 4 ` |  |
-| ` speed ` | ` 30 ` | ` ft ` |
 
 ## Health
 

@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: d61bdb61-79ee-54bc-a351-233ed15ee7ae
 splat_kind: rule
 splat_key: dnd2024:class_features/ranger_level_1_favored_enemy
 splat_name: 'Level 1: Favored Enemy'
-splat_origin:
-  key: dnd2024:reference/pages/058
+splat_origin: dnd2024:reference/pages/058
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 58
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 58, https://www.dndbeyond.com/srd
 ---
 
 # Level 1: Favored Enemy

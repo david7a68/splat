@@ -1,35 +1,62 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 0bef5350-ad14-5b5c-95a7-be01b33718aa
 splat_kind: creature
 splat_key: dnd2024:creatures/giant_eagle
 splat_name: Giant Eagle
-splat_origin:
-  key: dnd2024:reference/creature/giant_eagle
+splat_origin: dnd2024:reference/creature/giant_eagle
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 350, 351
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 350, 351, https://www.dndbeyond.com/srd
 ---
 
 # Giant Eagle
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Large |
+| Type | Celestial |
+| Alignment | Neutral Good |
+| Armor Class | 13 |
+| Hit Points | 26 (4d10 + 4) |
+| Initiative | +3 (13) |
+| Speed | 10 ft., Fly 80 ft. |
+| Challenge | 1 (XP 200; PB +2) |
+| Skills | Perception +6 |
+| Senses | Passive Perception 16 |
+| Languages | Celestial; understands Common and Primordial (Auran) but can’t speak them |
+| Resistances | Necrotic, Radiant |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 16 | +3 | +3 |
+| Dex | 17 | +3 | +3 |
+| Con | 13 | +1 | +1 |
+| Int | 8 | -1 | -1 |
+| Wis | 14 | +2 | +2 |
+| Cha | 10 | +0 | +0 |
+
 
 ## Source text
 
 <!-- SRD page 350 -->
 
-Large Celestial, Neutral Good\
-AC 13 Initiative +3 (13)\
-HP 26 (4d10 + 4)\
-Speed 10 ft., Fly 80 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 16 +3 +3 Dex 17 +3 +3 Con 13 +1 +1\
-Int 8 −1 −1 Wis 14 +2 +2 Cha 10 +0 +0\
-Skills Perception +6\
-Resistances Necrotic, Radiant\
-Senses Passive Perception 16\
-Languages Celestial; understands Common and Primordial (Auran) but can’t speak them\
-CR 1 (XP 200; PB +2)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Large Celestial, Neutral Good\
+> AC 13 Initiative +3 (13)\
+> HP 26 (4d10 + 4)\
+> Speed 10 ft., Fly 80 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 16 +3 +3 Dex 17 +3 +3 Con 13 +1 +1\
+> Int 8 −1 −1 Wis 14 +2 +2 Cha 10 +0 +0\
+> Skills Perception +6\
+> Resistances Necrotic, Radiant\
+> Senses Passive Perception 16\
+> Languages Celestial; understands Common and Primordial (Auran) but can’t speak them\
+> CR 1 (XP 200; PB +2)
+
 
 ### Actions
 
@@ -41,47 +68,11 @@ Rend. Melee Attack Roll: +5, reach 5 ft. Hit: 5 (1d4 + 3) Slashing damage plus 3
 
 Original layout: [[../../srd-5.2.1/pages/350|page 350]], [[../../srd-5.2.1/pages/351|page 351]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` large ` |
-| ` type ` | ` celestial ` |
-| ` alignment ` | ` Neutral Good ` |
-| ` movement_text ` | ` 10 ft., Fly 80 ft. ` |
-| ` skills_text ` | ` Perception +6 ` |
-| ` resistances_text ` | ` Necrotic, Radiant ` |
-| ` senses_text ` | ` Passive Perception 16 ` |
-| ` languages_text ` | ` Celestial; understands Common and Primordial (Auran) but can’t speak them ` |
-| ` cr_text ` | ` 1 (XP 200; PB +2) ` |
-| ` hit_points_text ` | ` 26 (4d10 + 4) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 16 ` | ` 3 ` |
-| ` Dexterity ` | ` 17 ` | ` 3 ` |
-| ` Constitution ` | ` 13 ` | ` 1 ` |
-| ` Intelligence ` | ` 8 ` | ` -1 ` |
-| ` Wisdom ` | ` 14 ` | ` 2 ` |
-| ` Charisma ` | ` 10 ` | ` 0 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 13 ` |  |
-| ` max_hp ` | ` 26 ` |  |
-| ` initiative ` | ` 3 ` |  |
-| ` speed ` | ` 10 ` | ` ft ` |
-| ` fly_speed ` | ` 80 ` | ` ft ` |
 
 ## Health
 
@@ -237,3 +228,13 @@ geometry:
 unlisted_success_branch: no_effect
 unlisted_duration: until_removed_by_applicable_rule
 ```
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_stats_extras -->
+> 
+> ```yaml
+> fly_speed:
+>   unit: ft
+>   value: 80
+> ```
+

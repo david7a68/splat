@@ -1,34 +1,60 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: c9f591c5-9263-50d8-89c0-8fbe20db6c14
 splat_kind: creature
 splat_key: dnd2024:creatures/crocodile
 splat_name: Crocodile
-splat_origin:
-  key: dnd2024:reference/creature/crocodile
+splat_origin: dnd2024:reference/creature/crocodile
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 347
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 347, https://www.dndbeyond.com/srd
 ---
 
 # Crocodile
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Large |
+| Type | Beast |
+| Alignment | Unaligned |
+| Armor Class | 12 |
+| Hit Points | 13 (2d10 + 2) |
+| Initiative | +0 (10) |
+| Speed | 20 ft., Swim 30 ft. |
+| Challenge | 1/2 (XP 100; PB +2) |
+| Skills | Stealth +2 |
+| Senses | Passive Perception 10 |
+| Languages | None |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 15 | +2 | +2 |
+| Dex | 10 | +0 | +0 |
+| Con | 13 | +1 | +3 |
+| Int | 2 | -4 | -4 |
+| Wis | 10 | +0 | +0 |
+| Cha | 5 | -3 | -3 |
+
 
 ## Source text
 
 <!-- SRD page 347 -->
 
-Large Beast, Unaligned\
-AC 12  Initiative +0 (10)\
-HP 13 (2d10 + 2)\
-Speed 20 ft., Swim 30 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 15 +2 +2 Dex 10 +0 +0 Con 13 +1 +3\
-Int 2 −4 −4 Wis 10 +0 +0 Cha 5 −3 −3\
-Skills Stealth +2\
-Senses Passive Perception 10\
-Languages None\
-CR 1/2 (XP 100; PB +2)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Large Beast, Unaligned\
+> AC 12  Initiative +0 (10)\
+> HP 13 (2d10 + 2)\
+> Speed 20 ft., Swim 30 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 15 +2 +2 Dex 10 +0 +0 Con 13 +1 +3\
+> Int 2 −4 −4 Wis 10 +0 +0 Cha 5 −3 −3\
+> Skills Stealth +2\
+> Senses Passive Perception 10\
+> Languages None\
+> CR 1/2 (XP 100; PB +2)
+
 
 ### Traits
 
@@ -40,46 +66,11 @@ Bite. Melee Attack Roll: +4, reach 5 ft. Hit: 6 (1d8 + 2) Piercing damage. If th
 
 Original layout: [[../../srd-5.2.1/pages/347|page 347]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` large ` |
-| ` type ` | ` beast ` |
-| ` alignment ` | ` Unaligned ` |
-| ` movement_text ` | ` 20 ft., Swim 30 ft. ` |
-| ` skills_text ` | ` Stealth +2 ` |
-| ` senses_text ` | ` Passive Perception 10 ` |
-| ` languages_text ` | ` None ` |
-| ` cr_text ` | ` 1/2 (XP 100; PB +2) ` |
-| ` hit_points_text ` | ` 13 (2d10 + 2) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 15 ` | ` 2 ` |
-| ` Dexterity ` | ` 10 ` | ` 0 ` |
-| ` Constitution ` | ` 13 ` | ` 3 ` |
-| ` Intelligence ` | ` 2 ` | ` -4 ` |
-| ` Wisdom ` | ` 10 ` | ` 0 ` |
-| ` Charisma ` | ` 5 ` | ` -3 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 12 ` |  |
-| ` max_hp ` | ` 13 ` |  |
-| ` initiative ` | ` 0 ` |  |
-| ` speed ` | ` 20 ` | ` ft ` |
-| ` swim_speed ` | ` 30 ` | ` ft ` |
 
 ## Health
 
@@ -196,3 +187,13 @@ geometry:
 unlisted_success_branch: no_effect
 unlisted_duration: until_removed_by_applicable_rule
 ```
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_stats_extras -->
+> 
+> ```yaml
+> swim_speed:
+>   unit: ft
+>   value: 30
+> ```
+

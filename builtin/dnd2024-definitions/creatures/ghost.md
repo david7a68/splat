@@ -1,35 +1,62 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 03807394-3280-5142-bdda-03ebdf020faa
 splat_kind: creature
 splat_key: dnd2024:creatures/ghost
 splat_name: Ghost
-splat_origin:
-  key: dnd2024:reference/creature/ghost
+splat_origin: dnd2024:reference/creature/ghost
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 287, 288
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 287, 288, https://www.dndbeyond.com/srd
 ---
 
 # Ghost
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Medium |
+| Type | Undead |
+| Alignment | Neutral |
+| Armor Class | 11 |
+| Hit Points | 45 (10d8) |
+| Initiative | +1 (11) |
+| Speed | 5 ft., Fly 40 ft. (hover) |
+| Challenge | 4 (XP 1,100; PB +2) |
+| Senses | Darkvision 60 ft.; Passive Perception 11 |
+| Languages | Common plus one other language |
+| Resistances | Acid, Bludgeoning, Cold, Fire, Lightning, Piercing, Slashing, Thunder |
+| Immunities | Necrotic, Poison; Charmed, Exhaustion, Frightened, Grappled, Paralyzed, Petrified, Poisoned, Prone, Restrained |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 7 | -2 | -2 |
+| Dex | 13 | +1 | +1 |
+| Con | 10 | +0 | +0 |
+| Int | 10 | +0 | +0 |
+| Wis | 12 | +1 | +1 |
+| Cha | 17 | +3 | +3 |
+
 
 ## Source text
 
 <!-- SRD page 287 -->
 
-Medium Undead, Neutral\
-AC 11 Initiative +1 (11)\
-HP 45 (10d8)\
-Speed 5 ft., Fly 40 ft. (hover)\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 7 −2 −2 Dex 13 +1 +1 Con 10 +0 +0\
-Int 10 +0 +0 Wis 12 +1 +1 Cha 17 +3 +3\
-Resistances Acid, Bludgeoning, Cold, Fire, Lightning, Piercing, Slashing, Thunder\
-Immunities Necrotic, Poison; Charmed, Exhaustion, Frightened, Grappled, Paralyzed, Petrified, Poisoned, Prone, Restrained\
-Senses Darkvision 60 ft.; Passive Perception 11\
-Languages Common plus one other language\
-CR 4 (XP 1,100; PB +2)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Medium Undead, Neutral\
+> AC 11 Initiative +1 (11)\
+> HP 45 (10d8)\
+> Speed 5 ft., Fly 40 ft. (hover)\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 7 −2 −2 Dex 13 +1 +1 Con 10 +0 +0\
+> Int 10 +0 +0 Wis 12 +1 +1 Cha 17 +3 +3\
+> Resistances Acid, Bludgeoning, Cold, Fire, Lightning, Piercing, Slashing, Thunder\
+> Immunities Necrotic, Poison; Charmed, Exhaustion, Frightened, Grappled, Paralyzed, Petrified, Poisoned, Prone, Restrained\
+> Senses Darkvision 60 ft.; Passive Perception 11\
+> Languages Common plus one other language\
+> CR 4 (XP 1,100; PB +2)
+
 
 ### Traits
 
@@ -57,47 +84,11 @@ Success: The target is immune to this ghost’s Possession for 24 hours.
 
 Original layout: [[../../srd-5.2.1/pages/287|page 287]], [[../../srd-5.2.1/pages/288|page 288]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` medium ` |
-| ` type ` | ` undead ` |
-| ` alignment ` | ` Neutral ` |
-| ` movement_text ` | ` 5 ft., Fly 40 ft. (hover) ` |
-| ` resistances_text ` | ` Acid, Bludgeoning, Cold, Fire, Lightning, Piercing, Slashing, Thunder ` |
-| ` immunities_text ` | ` Necrotic, Poison; Charmed, Exhaustion, Frightened, Grappled, Paralyzed, Petrified, Poisoned, Prone, Restrained ` |
-| ` senses_text ` | ` Darkvision 60 ft.; Passive Perception 11 ` |
-| ` languages_text ` | ` Common plus one other language ` |
-| ` cr_text ` | ` 4 (XP 1,100; PB +2) ` |
-| ` hit_points_text ` | ` 45 (10d8) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 7 ` | ` -2 ` |
-| ` Dexterity ` | ` 13 ` | ` 1 ` |
-| ` Constitution ` | ` 10 ` | ` 0 ` |
-| ` Intelligence ` | ` 10 ` | ` 0 ` |
-| ` Wisdom ` | ` 12 ` | ` 1 ` |
-| ` Charisma ` | ` 17 ` | ` 3 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 11 ` |  |
-| ` max_hp ` | ` 45 ` |  |
-| ` initiative ` | ` 1 ` |  |
-| ` speed ` | ` 5 ` | ` ft ` |
-| ` fly_speed ` | ` 40 ` | ` ft ` |
 
 ## Health
 
@@ -379,3 +370,13 @@ other_components: spell_definition_unless_waived
 | ` provider ` | ` caller ` |
 | ` required_facts ` | ` ["distance", "area_membership", "visibility", "occupancy", "movement_path"] ` |
 | ` validate_against_typed_constraints ` | ` true ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_stats_extras -->
+> 
+> ```yaml
+> fly_speed:
+>   unit: ft
+>   value: 40
+> ```
+

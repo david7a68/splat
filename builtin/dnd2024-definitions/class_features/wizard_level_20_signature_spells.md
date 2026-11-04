@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: d3277324-ecf6-55cf-9a82-c019bc9e9372
 splat_kind: rule
 splat_key: dnd2024:class_features/wizard_level_20_signature_spells
 splat_name: 'Level 20: Signature Spells'
-splat_origin:
-  key: dnd2024:reference/pages/079
+splat_origin: dnd2024:reference/pages/079
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 79
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 79, https://www.dndbeyond.com/srd
 ---
 
 # Level 20: Signature Spells

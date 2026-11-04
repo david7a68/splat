@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "271c9e1c-5c09-5d36-8c42-32fe3922632e"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/dispel_magic"
 splat_name: "Dispel Magic"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [124], "executable": false}
+splat_pages:
+- 124
 ---
 
 # Dispel Magic
@@ -22,3 +23,13 @@ Choose one creature, object, or magical effect within range. Any ongoing spell o
 Using a Higher-Level Spell Slot. You automatically end a spell on the target if the spell’s level is equal to or less than the level of the spell slot you use.
 
 Original layout: [[../pages/124|page 124]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

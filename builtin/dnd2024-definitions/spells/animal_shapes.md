@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: c96e58c9-06f4-5457-9c3c-43725c3e0c20
 splat_kind: spell
 splat_key: dnd2024:spells/animal_shapes
 splat_name: Animal Shapes
-splat_origin:
-  key: dnd2024:reference/spell/animal_shapes
+splat_origin: dnd2024:reference/spell/animal_shapes
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 108
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 108, https://www.dndbeyond.com/srd
 ---
 
 # Animal Shapes
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 8 |
+| School | Transmutation |
+| Classes | Druid |
+| Casting Time | Action |
+| Range | 30 feet |
+| Components | V, S |
+| Duration | 24 hours |
+
 
 ## Source text
 
@@ -32,28 +43,9 @@ The target gains a number of Temporary Hit Points equal to the Hit Points of the
 
 Original layout: [[../../srd-5.2.1/pages/108|page 108]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 8 ` |
-| ` school ` | ` transmutation ` |
-| ` classes ` | ` ["druid"] ` |
-| ` components ` | ` ["verbal", "somatic"] ` |
-| ` concentration ` | ` false ` |
-| ` duration ` | ` 24 hours ` |
-| ` casting_time ` | ` Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
-
-<!-- splat:values path=splat_spell/range -->
-
-| Field | Value |
-| --- | --- |
-| ` feet ` | ` 30 ` |
 
 ## Rule
 

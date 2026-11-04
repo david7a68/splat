@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 2de9b05c-d0ae-535b-a710-0af8929e509f
 splat_kind: spell
 splat_key: dnd2024:spells/stone_shape
 splat_name: Stone Shape
-splat_origin:
-  key: dnd2024:reference/spell/stone_shape
+splat_origin: dnd2024:reference/spell/stone_shape
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 165
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 165, https://www.dndbeyond.com/srd
 ---
 
 # Stone Shape
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 4 |
+| School | Transmutation |
+| Classes | Cleric, Druid, Wizard |
+| Casting Time | Action |
+| Range |  |
+| Components | V, S, M (soft clay) |
+| Duration | Instantaneous |
+
 
 ## Source text
 
@@ -28,37 +39,11 @@ You touch a stone object of Medium size or smaller or a section of stone no more
 
 Original layout: [[../../srd-5.2.1/pages/165|page 165]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 4 ` |
-| ` school ` | ` transmutation ` |
-| ` classes ` | ` ["cleric", "druid", "wizard"] ` |
-| ` components ` | ` ["verbal", "somatic", "material"] ` |
-| ` concentration ` | ` false ` |
-| ` duration ` | ` Instantaneous ` |
-| ` casting_time ` | ` Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
 
-<!-- splat:values path=splat_spell/range -->
 
-| Field | Value |
-| --- | --- |
-| ` mode ` | ` touch ` |
-
-### Material
-
-<!-- splat:values path=splat_spell/material -->
-
-| Field | Value |
-| --- | --- |
-| ` description ` | ` soft clay ` |
-| ` consumed ` | ` false ` |
 
 ## Rule
 
@@ -119,3 +104,14 @@ columns:
 | ` maximum_hinges ` | ` 2 ` |
 | ` latch_allowed ` | ` true ` |
 | ` finer_mechanical_detail ` | ` false ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_spell_extras -->
+> 
+> ```yaml
+> material:
+>   consumed: false
+> range:
+>   mode: touch
+> ```
+

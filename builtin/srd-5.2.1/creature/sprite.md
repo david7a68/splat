@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "ab5693b1-59e8-57e3-b16d-0ba4e6c73adf"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/sprite"
 splat_name: "Sprite"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [329], "executable": false}
+splat_pages:
+- 329
 ---
 
 # Sprite
@@ -34,3 +35,13 @@ Heart Sight. Charisma Saving Throw: DC 10, one creature within 5 feet the sprite
 Invisibility. The sprite casts Invisibility on itself, requiring no spell components and using Charisma as the spellcasting ability.
 
 Original layout: [[../pages/329|page 329]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

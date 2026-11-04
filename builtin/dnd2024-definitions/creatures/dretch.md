@@ -1,35 +1,62 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: ed70a67c-f9f5-5278-ac81-426da49fed85
 splat_kind: creature
 splat_key: dnd2024:creatures/dretch
 splat_name: Dretch
-splat_origin:
-  key: dnd2024:reference/creature/dretch
+splat_origin: dnd2024:reference/creature/dretch
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 281
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 281, https://www.dndbeyond.com/srd
 ---
 
 # Dretch
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Small |
+| Type | Fiend (Demon) |
+| Alignment | Chaotic Evil |
+| Armor Class | 11 |
+| Hit Points | 18 (4d6 + 4) |
+| Initiative | +0 (10) |
+| Speed | 20 ft. |
+| Challenge | 1/4 (XP 50; PB +2) |
+| Senses | Darkvision 60 ft.; Passive Perception 9 |
+| Languages | Abyssal; telepathy 60 ft. (works only with creatures that understand Abyssal) |
+| Resistances | Cold, Fire, Lightning |
+| Immunities | Poison; Poisoned |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 12 | +1 | +1 |
+| Dex | 11 | +0 | +0 |
+| Con | 12 | +1 | +1 |
+| Int | 5 | -3 | -3 |
+| Wis | 8 | -1 | -1 |
+| Cha | 3 | -4 | -4 |
+
 
 ## Source text
 
 <!-- SRD page 281 -->
 
-Small Fiend (Demon), Chaotic Evil\
-AC 11 Initiative +0 (10)\
-HP 18 (4d6 + 4)\
-Speed 20 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 12 +1 +1 Dex 11 +0 +0 Con 12 +1 +1\
-Int 5 −3 −3 Wis 8 −1 −1 Cha 3 −4 −4\
-Resistances Cold, Fire, Lightning\
-Immunities Poison; Poisoned\
-Senses Darkvision 60 ft.; Passive Perception 9\
-Languages Abyssal; telepathy 60 ft. (works only with creatures that understand Abyssal)\
-CR 1/4 (XP 50; PB +2)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Small Fiend (Demon), Chaotic Evil\
+> AC 11 Initiative +0 (10)\
+> HP 18 (4d6 + 4)\
+> Speed 20 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 12 +1 +1 Dex 11 +0 +0 Con 12 +1 +1\
+> Int 5 −3 −3 Wis 8 −1 −1 Cha 3 −4 −4\
+> Resistances Cold, Fire, Lightning\
+> Immunities Poison; Poisoned\
+> Senses Darkvision 60 ft.; Passive Perception 9\
+> Languages Abyssal; telepathy 60 ft. (works only with creatures that understand Abyssal)\
+> CR 1/4 (XP 50; PB +2)
+
 
 ### Actions
 
@@ -39,47 +66,11 @@ Fetid Cloud (1/Day). Constitution Saving Throw: DC 11, each creature in a 10-foo
 
 Original layout: [[../../srd-5.2.1/pages/281|page 281]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` small ` |
-| ` type ` | ` fiend ` |
-| ` alignment ` | ` Chaotic Evil ` |
-| ` tags_text ` | ` (Demon) ` |
-| ` movement_text ` | ` 20 ft. ` |
-| ` resistances_text ` | ` Cold, Fire, Lightning ` |
-| ` immunities_text ` | ` Poison; Poisoned ` |
-| ` senses_text ` | ` Darkvision 60 ft.; Passive Perception 9 ` |
-| ` languages_text ` | ` Abyssal; telepathy 60 ft. (works only with creatures that understand Abyssal) ` |
-| ` cr_text ` | ` 1/4 (XP 50; PB +2) ` |
-| ` hit_points_text ` | ` 18 (4d6 + 4) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 12 ` | ` 1 ` |
-| ` Dexterity ` | ` 11 ` | ` 0 ` |
-| ` Constitution ` | ` 12 ` | ` 1 ` |
-| ` Intelligence ` | ` 5 ` | ` -3 ` |
-| ` Wisdom ` | ` 8 ` | ` -1 ` |
-| ` Charisma ` | ` 3 ` | ` -4 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 11 ` |  |
-| ` max_hp ` | ` 18 ` |  |
-| ` initiative ` | ` 0 ` |  |
-| ` speed ` | ` 20 ` | ` ft ` |
 
 ## Health
 

@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "e219dff4-7eed-5927-a8d8-a53af77198df"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/half_dragon"
 splat_name: "Half-Dragon"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [297], "executable": false}
+splat_pages:
+- 297
 ---
 
 # Half-Dragon
@@ -41,3 +42,13 @@ Dragon’s Breath (Recharge 5–6). Dexterity Saving Throw: DC 14, each creature
 Leap. The half-dragon jumps up to 30 feet by spending 10 feet of movement.
 
 Original layout: [[../pages/297|page 297]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

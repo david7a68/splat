@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "49667166-2c44-5f6e-a1db-cca4fcc8eb1d"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/ancient_silver_dragon"
 splat_name: "Ancient Silver Dragon"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [325], "executable": false}
+splat_pages:
+- 325
 ---
 
 # Ancient Silver Dragon
@@ -55,3 +56,13 @@ Cold Gale. Dexterity Saving Throw: DC 23, each creature in a 60-foot-long, 10-fo
 Pounce. The dragon moves up to half its Speed, and it makes one Rend attack.
 
 Original layout: [[../pages/325|page 325]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

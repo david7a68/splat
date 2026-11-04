@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: ab33196c-b0ce-5509-b8f0-134faa497055
 splat_kind: rule_group
 splat_key: dnd2024:subclasses/warlock_warlock_subclass_fiend_patron
 splat_name: 'Warlock Subclass: Fiend Patron'
-splat_origin:
-  key: dnd2024:reference/pages/076
+splat_origin: dnd2024:reference/pages/076
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 76
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 76, https://www.dndbeyond.com/srd
 ---
 
 # Warlock Subclass: Fiend Patron

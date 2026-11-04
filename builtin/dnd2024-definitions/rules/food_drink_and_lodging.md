@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 6e633ecb-2f5d-54de-9745-a598e3d5217b
 splat_kind: rule
 splat_key: dnd2024:rules/food_drink_and_lodging
 splat_name: Food, Drink, and Lodging
-splat_origin:
-  key: dnd2024:reference/pages/101
+splat_origin: dnd2024:reference/pages/101
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 101, 102
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 101, 102, https://www.dndbeyond.com/srd
 ---
 
 # Food, Drink, and Lodging

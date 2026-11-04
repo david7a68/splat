@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "83cd640e-6ebd-56ba-93fb-87910dbea88b"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/elk"
 splat_name: "Elk"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [348], "executable": false}
+splat_pages:
+- 348
 ---
 
 # Elk
@@ -28,3 +29,13 @@ CR 1/4 (XP 50; PB +2)
 Ram. Melee Attack Roll: +5, reach 5 ft. Hit: 6 (1d6 + 3) Bludgeoning damage. If the target is a Large or smaller creature and the elk moved 20+ feet straight toward it immediately before the hit, the target takes an extra 3 (1d6) Bludgeoning damage and has the Prone condition.
 
 Original layout: [[../pages/348|page 348]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

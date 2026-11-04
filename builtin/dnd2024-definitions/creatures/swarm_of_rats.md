@@ -1,35 +1,62 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 8f82174e-ed19-5709-85e6-a3e3d2a1d8a7
 splat_kind: creature
 splat_key: dnd2024:creatures/swarm_of_rats
 splat_name: Swarm of Rats
-splat_origin:
-  key: dnd2024:reference/creature/swarm_of_rats
+splat_origin: dnd2024:reference/creature/swarm_of_rats
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 362
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 362, https://www.dndbeyond.com/srd
 ---
 
 # Swarm of Rats
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Medium Swarm of Tiny |
+| Type | Beast |
+| Alignment | Unaligned |
+| Armor Class | 10 |
+| Hit Points | 14 (4d8 - 4) |
+| Initiative | +0 (10) |
+| Speed | 30 ft., Climb 30 ft. |
+| Challenge | 1/4 (XP 50; PB +2) |
+| Senses | Darkvision 30 ft.; Passive Perception 10 |
+| Languages | None |
+| Resistances | Bludgeoning, Piercing, Slashing |
+| Immunities | Charmed, Frightened, Grappled, Paralyzed, Petrified, Prone, Restrained, Stunned |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 9 | -1 | -1 |
+| Dex | 11 | +0 | +2 |
+| Con | 9 | -1 | -1 |
+| Int | 2 | -4 | -4 |
+| Wis | 10 | +0 | +0 |
+| Cha | 3 | -4 | -4 |
+
 
 ## Source text
 
 <!-- SRD page 362 -->
 
 Medium Swarm of Tiny Beasts, Unaligned\
-AC 10 Initiative +0 (10)\
-HP 14 (4d8 − 4)\
-Speed 30 ft., Climb 30 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 9 −1 −1 Dex 11 +0 +2 Con 9 −1 −1\
-Int 2 −4 −4 Wis 10 +0 +0 Cha 3 −4 −4\
-Resistances Bludgeoning, Piercing, Slashing\
-Immunities Charmed, Frightened, Grappled, Paralyzed, Petrified, Prone, Restrained, Stunned\
-Senses Darkvision 30 ft.; Passive Perception 10\
-Languages None\
-CR 1/4 (XP 50; PB +2)
+> [!quote]- Printed stat block (not read; edit the table above)
+> AC 10 Initiative +0 (10)\
+> HP 14 (4d8 − 4)\
+> Speed 30 ft., Climb 30 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 9 −1 −1 Dex 11 +0 +2 Con 9 −1 −1\
+> Int 2 −4 −4 Wis 10 +0 +0 Cha 3 −4 −4\
+> Resistances Bludgeoning, Piercing, Slashing\
+> Immunities Charmed, Frightened, Grappled, Paralyzed, Petrified, Prone, Restrained, Stunned\
+> Senses Darkvision 30 ft.; Passive Perception 10\
+> Languages None\
+> CR 1/4 (XP 50; PB +2)
+
 
 ### Traits
 
@@ -41,48 +68,11 @@ Bites. Melee Attack Roll: +2, reach 5 ft. Hit: 5 (2d4) Piercing damage, or 2 (1d
 
 Original layout: [[../../srd-5.2.1/pages/362|page 362]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` medium ` |
-| ` type ` | ` beast ` |
-| ` alignment ` | ` Unaligned ` |
-| ` size_options_text ` | ` Medium Swarm of Tiny ` |
-| ` movement_text ` | ` 30 ft., Climb 30 ft. ` |
-| ` resistances_text ` | ` Bludgeoning, Piercing, Slashing ` |
-| ` immunities_text ` | ` Charmed, Frightened, Grappled, Paralyzed, Petrified, Prone, Restrained, Stunned ` |
-| ` senses_text ` | ` Darkvision 30 ft.; Passive Perception 10 ` |
-| ` languages_text ` | ` None ` |
-| ` cr_text ` | ` 1/4 (XP 50; PB +2) ` |
-| ` hit_points_text ` | ` 14 (4d8 - 4) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 9 ` | ` -1 ` |
-| ` Dexterity ` | ` 11 ` | ` 2 ` |
-| ` Constitution ` | ` 9 ` | ` -1 ` |
-| ` Intelligence ` | ` 2 ` | ` -4 ` |
-| ` Wisdom ` | ` 10 ` | ` 0 ` |
-| ` Charisma ` | ` 3 ` | ` -4 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 10 ` |  |
-| ` max_hp ` | ` 14 ` |  |
-| ` initiative ` | ` 0 ` |  |
-| ` speed ` | ` 30 ` | ` ft ` |
-| ` climb_speed ` | ` 30 ` | ` ft ` |
 
 ## Health
 
@@ -212,3 +202,13 @@ geometry:
 unlisted_success_branch: no_effect
 unlisted_duration: until_removed_by_applicable_rule
 ```
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_stats_extras -->
+> 
+> ```yaml
+> climb_speed:
+>   unit: ft
+>   value: 30
+> ```
+

@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "27b75349-9824-5258-9847-0dff6cb2729a"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/reef_shark"
 splat_name: "Reef Shark"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [360], "executable": false}
+splat_pages:
+- 360
 ---
 
 # Reef Shark
@@ -34,3 +35,13 @@ Water Breathing. The shark can breathe only underwater.
 Bite. Melee Attack Roll: +4, reach 5 ft. Hit: 7 (2d4 + 2) Piercing damage.
 
 Original layout: [[../pages/360|page 360]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

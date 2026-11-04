@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "721f07ab-9345-54b8-9be5-0c49361bfc2e"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/disintegrate"
 splat_name: "Disintegrate"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [124], "executable": false}
+splat_pages:
+- 124
 ---
 
 # Disintegrate
@@ -26,3 +27,13 @@ This spell automatically disintegrates a Large or smaller nonmagical object or a
 Using a Higher-Level Spell Slot. The damage increases by 3d6 for each spell slot level above 6.
 
 Original layout: [[../pages/124|page 124]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

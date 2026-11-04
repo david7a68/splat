@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: f1eb1136-7b9b-5b53-9dfb-0e404ed5029f
 splat_kind: rule
 splat_key: dnd2024:rules/barbarian_as_a_multiclass_character
 splat_name: As a Multiclass Character
-splat_origin:
-  key: dnd2024:reference/pages/028
+splat_origin: dnd2024:reference/pages/028
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 28
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 28, https://www.dndbeyond.com/srd
 ---
 
 # As a Multiclass Character

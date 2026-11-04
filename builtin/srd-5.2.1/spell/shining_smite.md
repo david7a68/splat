@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "b2de0b68-1767-51f6-a2cb-44b2ec4779d8"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/shining_smite"
 splat_name: "Shining Smite"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [162], "executable": false}
+splat_pages:
+- 162
 ---
 
 # Shining Smite
@@ -22,3 +23,13 @@ The target hit by the strike takes an extra 2d6 Radiant damage from the attack. 
 Using a Higher-Level Spell Slot. The damage increases by 1d6 for each spell slot level above 2.
 
 Original layout: [[../pages/162|page 162]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

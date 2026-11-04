@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 8910f23e-77e5-525c-a122-2ab5a264c305
 splat_kind: rule
 splat_key: dnd2024:glossary/swimming
 splat_name: Swimming
-splat_origin:
-  key: dnd2024:reference/glossary/swimming
+splat_origin: dnd2024:reference/glossary/swimming
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 189
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 189, https://www.dndbeyond.com/srd
 ---
 
 # Swimming

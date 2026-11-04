@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 9cfc86c9-7bfb-5579-a4f0-30ab90c2b223
 splat_kind: rule
 splat_key: dnd2024:glossary/burning_hazard
 splat_name: Burning [Hazard]
-splat_origin:
-  key: dnd2024:reference/glossary/burning_hazard
+splat_origin: dnd2024:reference/glossary/burning_hazard
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 178
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 178, https://www.dndbeyond.com/srd
 ---
 
 # Burning [Hazard]

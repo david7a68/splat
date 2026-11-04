@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 9f2a75bc-7610-58ac-9e92-56b38e9f6025
 splat_kind: item
 splat_key: dnd2024:items/holy_avenger
 splat_name: Holy Avenger
-splat_origin:
-  key: dnd2024:reference/magic_item/holy_avenger
+splat_origin: dnd2024:reference/magic_item/holy_avenger
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 226
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 226, https://www.dndbeyond.com/srd
 ---
 
 # Holy Avenger
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Weapon |
+| Rarity | Legendary |
+| Attunement | Yes |
+
 
 ## Source text
 
@@ -26,23 +33,9 @@ While you hold the drawn weapon, it creates a 10-foot Emanation originating from
 
 Original layout: [[../../srd-5.2.1/pages/226|page 226]].
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` weapon ` |
-| ` rarity ` | ` legendary ` |
 
-### Equipment
-
-<!-- splat:values path=splat_item/equipment -->
-
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` required ` |
-| ` attunement_requirement_text ` | ` a Paladin ` |
 
 ## Rule
 
@@ -115,3 +108,12 @@ save_advantage_against:
 | --- | --- |
 | ` 0 ` | ` dnd2024:rules/magic_item_categories_weapons ` |
 | ` 1 ` | ` dnd2024:rules/activating_a_magic_item_spells_cast_from_items ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_item_extras -->
+> 
+> ```yaml
+> equipment:
+>   attunement_requirement_text: a Paladin
+> ```
+

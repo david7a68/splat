@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 354ce3e5-2276-5504-a741-ec46d2f38de5
 splat_kind: rule_group
 splat_key: dnd2024:species/orc
 splat_name: Orc
-splat_origin:
-  key: dnd2024:reference/pages/086
+splat_origin: dnd2024:reference/pages/086
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 86
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 86, https://www.dndbeyond.com/srd
 ---
 
 # Orc

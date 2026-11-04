@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "42be99a1-0743-578f-a005-2896fa49aee9"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/glossary/cylinder_area_of_effect"
 splat_name: "Cylinder [Area of Effect]"
-splat_reference: {"source": "SRD 5.2.1", "category": "glossary", "pages": [180], "executable": false}
+splat_pages:
+- 180
 ---
 
 # Cylinder [Area of Effect]
@@ -16,3 +17,13 @@ A Cylinder is an area of effect that extends in straight lines from a point of o
 A Cylinder’s point of origin is included in the area of effect.
 
 Original layout: [[../pages/180|page 180]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: glossary
+> executable: false
+> ```
+

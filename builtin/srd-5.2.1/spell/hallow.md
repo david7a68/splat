@@ -1,10 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "fe66806d-518b-56c2-a1c0-3f07e6ee7509"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/hallow"
 splat_name: "Hallow"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [138, 139], "executable": false}
+splat_pages:
+- 138
+- 139
 ---
 
 # Hallow
@@ -46,3 +48,13 @@ Tongues. Creatures of any types you choose can communicate with any other creatu
 Vulnerability. Creatures of any types you choose have Vulnerability to one damage type of your choice while in the area.
 
 Original layout: [[../pages/138|page 138]], [[../pages/139|page 139]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

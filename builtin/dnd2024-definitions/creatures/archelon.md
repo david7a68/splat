@@ -1,34 +1,60 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 6a1bb24a-f0ac-53c9-bcc2-e8639b61111b
 splat_kind: creature
 splat_key: dnd2024:creatures/archelon
 splat_name: Archelon
-splat_origin:
-  key: dnd2024:reference/creature/archelon
+splat_origin: dnd2024:reference/creature/archelon
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 344, 345
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 344, 345, https://www.dndbeyond.com/srd
 ---
 
 # Archelon
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Huge |
+| Type | Beast (Dinosaur) |
+| Alignment | Unaligned |
+| Armor Class | 17 |
+| Hit Points | 90 (12d12 + 12) |
+| Initiative | +3 (13) |
+| Speed | 20 ft., Swim 80 ft. |
+| Challenge | 4 (XP 1,100; PB +2) |
+| Skills | Stealth +5 |
+| Senses | Passive Perception 12 |
+| Languages | None |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 18 | +4 | +4 |
+| Dex | 16 | +3 | +3 |
+| Con | 13 | +1 | +1 |
+| Int | 4 | -3 | -3 |
+| Wis | 14 | +2 | +2 |
+| Cha | 6 | -2 | -2 |
+
 
 ## Source text
 
 <!-- SRD page 344 -->
 
-Huge Beast (Dinosaur), Unaligned\
-AC 17  Initiative +3 (13)\
-HP 90 (12d12 + 12)\
-Speed 20 ft., Swim 80 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 18 +4 +4 Dex 16 +3 +3 Con 13 +1 +1\
-Int 4 −3 −3 Wis 14 +2 +2 Cha 6 −2 −2\
-Skills Stealth +5\
-Senses Passive Perception 12\
-Languages None\
-CR 4 (XP 1,100; PB +2)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Huge Beast (Dinosaur), Unaligned\
+> AC 17  Initiative +3 (13)\
+> HP 90 (12d12 + 12)\
+> Speed 20 ft., Swim 80 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 18 +4 +4 Dex 16 +3 +3 Con 13 +1 +1\
+> Int 4 −3 −3 Wis 14 +2 +2 Cha 6 −2 −2\
+> Skills Stealth +5\
+> Senses Passive Perception 12\
+> Languages None\
+> CR 4 (XP 1,100; PB +2)
+
 
 <!-- SRD page 345 -->
 
@@ -44,47 +70,11 @@ Bite. Melee Attack Roll: +6, reach 5 ft. Hit: 14 (3d6 + 4) Piercing damage.
 
 Original layout: [[../../srd-5.2.1/pages/344|page 344]], [[../../srd-5.2.1/pages/345|page 345]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` huge ` |
-| ` type ` | ` beast ` |
-| ` alignment ` | ` Unaligned ` |
-| ` tags_text ` | ` (Dinosaur) ` |
-| ` movement_text ` | ` 20 ft., Swim 80 ft. ` |
-| ` skills_text ` | ` Stealth +5 ` |
-| ` senses_text ` | ` Passive Perception 12 ` |
-| ` languages_text ` | ` None ` |
-| ` cr_text ` | ` 4 (XP 1,100; PB +2) ` |
-| ` hit_points_text ` | ` 90 (12d12 + 12) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 18 ` | ` 4 ` |
-| ` Dexterity ` | ` 16 ` | ` 3 ` |
-| ` Constitution ` | ` 13 ` | ` 1 ` |
-| ` Intelligence ` | ` 4 ` | ` -3 ` |
-| ` Wisdom ` | ` 14 ` | ` 2 ` |
-| ` Charisma ` | ` 6 ` | ` -2 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 17 ` |  |
-| ` max_hp ` | ` 90 ` |  |
-| ` initiative ` | ` 3 ` |  |
-| ` speed ` | ` 20 ` | ` ft ` |
-| ` swim_speed ` | ` 80 ` | ` ft ` |
 
 ## Health
 
@@ -206,3 +196,13 @@ geometry:
 unlisted_success_branch: no_effect
 unlisted_duration: until_removed_by_applicable_rule
 ```
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_stats_extras -->
+> 
+> ```yaml
+> swim_speed:
+>   unit: ft
+>   value: 80
+> ```
+

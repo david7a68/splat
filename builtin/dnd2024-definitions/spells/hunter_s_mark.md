@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 9969e83a-34fe-5bd6-bdc1-f9f4e29bb5a0
 splat_kind: spell
 splat_key: dnd2024:spells/hunter_s_mark
 splat_name: Hunter’s Mark
-splat_origin:
-  key: dnd2024:reference/spell/hunter_s_mark
+splat_origin: dnd2024:reference/spell/hunter_s_mark
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 141
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 141, https://www.dndbeyond.com/srd
 ---
 
 # Hunter’s Mark
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 1 |
+| School | Divination |
+| Classes | Ranger |
+| Casting Time | Bonus Action |
+| Range | 90 feet |
+| Components | V |
+| Duration | Concentration, up to 1 hour |
+
 
 ## Source text
 
@@ -32,28 +43,9 @@ Using a Higher-Level Spell Slot. Your Concentration can last longer with a spell
 
 Original layout: [[../../srd-5.2.1/pages/141|page 141]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 1 ` |
-| ` school ` | ` divination ` |
-| ` classes ` | ` ["ranger"] ` |
-| ` components ` | ` ["verbal"] ` |
-| ` concentration ` | ` true ` |
-| ` duration ` | ` Concentration, up to 1 hour ` |
-| ` casting_time ` | ` Bonus Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
-
-<!-- splat:values path=splat_spell/range -->
-
-| Field | Value |
-| --- | --- |
-| ` feet ` | ` 90 ` |
 
 ## Rule
 

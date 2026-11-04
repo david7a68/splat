@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: e9180ba2-3083-50d8-8054-9cd64e6f8d02
 splat_kind: spell
 splat_key: dnd2024:spells/confusion
 splat_name: Confusion
-splat_origin:
-  key: dnd2024:reference/spell/confusion
+splat_origin: dnd2024:reference/spell/confusion
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 117
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 117, https://www.dndbeyond.com/srd
 ---
 
 # Confusion
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 4 |
+| School | Enchantment |
+| Classes | Bard, Druid, Sorcerer, Wizard |
+| Casting Time | Action |
+| Range | 90 feet |
+| Components | V, S, M (three nut shells) |
+| Duration | Concentration, up to 1 minute |
+
 
 ## Source text
 
@@ -39,37 +50,11 @@ Using a Higher-Level Spell Slot. The Sphere’s radius increases by 5 feet for e
 
 Original layout: [[../../srd-5.2.1/pages/117|page 117]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 4 ` |
-| ` school ` | ` enchantment ` |
-| ` classes ` | ` ["bard", "druid", "sorcerer", "wizard"] ` |
-| ` components ` | ` ["verbal", "somatic", "material"] ` |
-| ` concentration ` | ` true ` |
-| ` duration ` | ` Concentration, up to 1 minute ` |
-| ` casting_time ` | ` Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
 
-<!-- splat:values path=splat_spell/range -->
 
-| Field | Value |
-| --- | --- |
-| ` feet ` | ` 90 ` |
-
-### Material
-
-<!-- splat:values path=splat_spell/material -->
-
-| Field | Value |
-| --- | --- |
-| ` description ` | ` three nut shells ` |
-| ` consumed ` | ` false ` |
 
 ## Rule
 
@@ -227,3 +212,12 @@ columns:
 | Field | Value |
 | --- | --- |
 | ` effect ` | ` none ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_spell_extras -->
+> 
+> ```yaml
+> material:
+>   consumed: false
+> ```
+

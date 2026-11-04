@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "648f9639-04c3-5f5a-86b6-2939799fc93c"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/banishment"
 splat_name: "Banishment"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [112], "executable": false}
+splat_pages:
+- 112
 ---
 
 # Banishment
@@ -24,3 +25,13 @@ If the target is an Aberration, a Celestial, an Elemental, a Fey, or a Fiend, th
 Using a Higher-Level Spell Slot. You can target one additional creature for each spell slot level above 4.
 
 Original layout: [[../pages/112|page 112]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

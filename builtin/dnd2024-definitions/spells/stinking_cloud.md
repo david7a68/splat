@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: b4589ffa-998a-52df-bd77-d3db52107ad2
 splat_kind: spell
 splat_key: dnd2024:spells/stinking_cloud
 splat_name: Stinking Cloud
-splat_origin:
-  key: dnd2024:reference/spell/stinking_cloud
+splat_origin: dnd2024:reference/spell/stinking_cloud
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 165
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 165, https://www.dndbeyond.com/srd
 ---
 
 # Stinking Cloud
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 3 |
+| School | Conjuration |
+| Classes | Bard, Sorcerer, Wizard |
+| Casting Time | Action |
+| Range | 90 feet |
+| Components | V, S, M (a rotten egg) |
+| Duration | Concentration, up to 1 minute |
+
 
 ## Source text
 
@@ -30,37 +41,11 @@ Each creature that starts its turn in the Sphere must succeed on a Constitution 
 
 Original layout: [[../../srd-5.2.1/pages/165|page 165]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 3 ` |
-| ` school ` | ` conjuration ` |
-| ` classes ` | ` ["bard", "sorcerer", "wizard"] ` |
-| ` components ` | ` ["verbal", "somatic", "material"] ` |
-| ` concentration ` | ` true ` |
-| ` duration ` | ` Concentration, up to 1 minute ` |
-| ` casting_time ` | ` Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
 
-<!-- splat:values path=splat_spell/range -->
 
-| Field | Value |
-| --- | --- |
-| ` feet ` | ` 90 ` |
-
-### Material
-
-<!-- splat:values path=splat_spell/material -->
-
-| Field | Value |
-| --- | --- |
-| ` description ` | ` a rotten egg ` |
-| ` consumed ` | ` false ` |
 
 ## Rule
 
@@ -155,3 +140,12 @@ while_poisoned:
 | ` source ` | ` supplied_world_geometry ` |
 | ` unknown_facts ` | ` require_resolution ` |
 | ` infer_unprovided_geometry ` | ` false ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_spell_extras -->
+> 
+> ```yaml
+> material:
+>   consumed: false
+> ```
+

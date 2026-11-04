@@ -1,10 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "9c769fb1-67aa-5df7-8e4e-8d3ed1a5cf5f"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/magic_item/talisman_of_pure_good"
 splat_name: "Talisman of Pure Good"
-splat_reference: {"source": "SRD 5.2.1", "category": "magic_item", "pages": [248, 249], "executable": false}
+splat_pages:
+- 248
+- 249
 ---
 
 # Talisman of Pure Good
@@ -22,3 +24,13 @@ Holy Symbol. You can use the talisman as a Holy Symbol. You gain a +2 bonus to s
 Pure Rebuke. The talisman has 7 charges. While wearing or holding the talisman, you can take a Magic action to expend 1 charge and target one creature you can see on the ground within 120 feet of yourself. A flaming fissure opens under the target, and the target makes a DC 20 Dexterity saving throw. If the target is a Fiend or an Undead, it has Disadvantage on the save. On a failed save, the target falls into the fissure and is destroyed, leaving no remains. On a successful save, the target isn’t cast into the fissure but takes 4d6 Psychic damage from the ordeal. In either case, the fissure then closes, leaving no trace of its existence. When you expend the last charge, the talisman disperses into motes of golden light and is destroyed.
 
 Original layout: [[../pages/248|page 248]], [[../pages/249|page 249]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: magic_item
+> executable: false
+> ```
+

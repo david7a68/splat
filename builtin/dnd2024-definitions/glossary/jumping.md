@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: cde6ea23-885b-5ef4-a0f4-848d6d0447bd
 splat_kind: rule
 splat_key: dnd2024:glossary/jumping
 splat_name: Jumping
-splat_origin:
-  key: dnd2024:reference/glossary/jumping
+splat_origin: dnd2024:reference/glossary/jumping
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 184
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 184, https://www.dndbeyond.com/srd
 ---
 
 # Jumping

@@ -1,35 +1,62 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: fbed3a50-0260-5326-beca-47503b2433dc
 splat_kind: creature
 splat_key: dnd2024:creatures/oni
 splat_name: Oni
-splat_origin:
-  key: dnd2024:reference/creature/oni
+splat_origin: dnd2024:reference/creature/oni
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 312, 313
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 312, 313, https://www.dndbeyond.com/srd
 ---
 
 # Oni
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Large |
+| Type | Fiend |
+| Alignment | Lawful Evil |
+| Armor Class | 17 |
+| Hit Points | 119 (14d10 + 42) |
+| Initiative | +0 (10) |
+| Speed | 30 ft., Fly 30 ft. (hover) |
+| Challenge | 7 (XP 2,900; PB +3) |
+| Skills | Arcana +5, Deception +8, Perception +4 |
+| Senses | Darkvision 60 ft.; Passive Perception 14 |
+| Languages | Common, Giant |
+| Resistances | Cold |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 19 | +4 | +4 |
+| Dex | 11 | +0 | +3 |
+| Con | 16 | +3 | +6 |
+| Int | 14 | +2 | +2 |
+| Wis | 12 | +1 | +4 |
+| Cha | 15 | +2 | +5 |
+
 
 ## Source text
 
 <!-- SRD page 312 -->
 
-Large Fiend, Lawful Evil\
-AC 17  Initiative +0 (10)\
-HP 119 (14d10 + 42)\
-Speed 30 ft., Fly 30 ft. (hover)\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 19 +4 +4 Dex 11 +0 +3 Con 16 +3 +6\
-Int 14 +2 +2 Wis 12 +1 +4 Cha 15 +2 +5\
-Skills Arcana +5, Deception +8, Perception +4\
-Resistances Cold\
-Senses Darkvision 60 ft.; Passive Perception 14\
-Languages Common, Giant\
-CR 7 (XP 2,900; PB +3)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Large Fiend, Lawful Evil\
+> AC 17  Initiative +0 (10)\
+> HP 119 (14d10 + 42)\
+> Speed 30 ft., Fly 30 ft. (hover)\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 19 +4 +4 Dex 11 +0 +3 Con 16 +3 +6\
+> Int 14 +2 +2 Wis 12 +1 +4 Cha 15 +2 +5\
+> Skills Arcana +5, Deception +8, Perception +4\
+> Resistances Cold\
+> Senses Darkvision 60 ft.; Passive Perception 14\
+> Languages Common, Giant\
+> CR 7 (XP 2,900; PB +3)
+
 
 ### Traits
 
@@ -57,47 +84,11 @@ Invisibility. The oni casts Invisibility on itself, requiring no spell component
 
 Original layout: [[../../srd-5.2.1/pages/312|page 312]], [[../../srd-5.2.1/pages/313|page 313]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` large ` |
-| ` type ` | ` fiend ` |
-| ` alignment ` | ` Lawful Evil ` |
-| ` movement_text ` | ` 30 ft., Fly 30 ft. (hover) ` |
-| ` skills_text ` | ` Arcana +5, Deception +8, Perception +4 ` |
-| ` resistances_text ` | ` Cold ` |
-| ` senses_text ` | ` Darkvision 60 ft.; Passive Perception 14 ` |
-| ` languages_text ` | ` Common, Giant ` |
-| ` cr_text ` | ` 7 (XP 2,900; PB +3) ` |
-| ` hit_points_text ` | ` 119 (14d10 + 42) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 19 ` | ` 4 ` |
-| ` Dexterity ` | ` 11 ` | ` 3 ` |
-| ` Constitution ` | ` 16 ` | ` 6 ` |
-| ` Intelligence ` | ` 14 ` | ` 2 ` |
-| ` Wisdom ` | ` 12 ` | ` 4 ` |
-| ` Charisma ` | ` 15 ` | ` 5 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 17 ` |  |
-| ` max_hp ` | ` 119 ` |  |
-| ` initiative ` | ` 0 ` |  |
-| ` speed ` | ` 30 ` | ` ft ` |
-| ` fly_speed ` | ` 30 ` | ` ft ` |
 
 ## Health
 
@@ -439,3 +430,13 @@ geometry:
 unlisted_success_branch: no_effect
 unlisted_duration: until_removed_by_applicable_rule
 ```
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_stats_extras -->
+> 
+> ```yaml
+> fly_speed:
+>   unit: ft
+>   value: 30
+> ```
+

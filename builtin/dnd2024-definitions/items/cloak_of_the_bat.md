@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: e9e47748-b495-55bd-af8b-7585b3209dfe
 splat_kind: item
 splat_key: dnd2024:items/cloak_of_the_bat
 splat_name: Cloak of the Bat
-splat_origin:
-  key: dnd2024:reference/magic_item/cloak_of_the_bat
+splat_origin: dnd2024:reference/magic_item/cloak_of_the_bat
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 216
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 216, https://www.dndbeyond.com/srd
 ---
 
 # Cloak of the Bat
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Wondrous Item |
+| Rarity | Rare |
+| Attunement | Yes |
+
 
 ## Source text
 
@@ -26,22 +33,9 @@ While wearing the cloak in an area of Dim Light or Darkness, you can cast Polymo
 
 Original layout: [[../../srd-5.2.1/pages/216|page 216]].
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` wondrous_item ` |
-| ` rarity ` | ` rare ` |
 
-### Equipment
-
-<!-- splat:values path=splat_item/equipment -->
-
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` required ` |
 
 ## Rule
 

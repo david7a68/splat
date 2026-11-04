@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "6efcb11f-b269-57ae-b25e-0d1baacb19ab"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/hell_hound"
 splat_name: "Hell Hound"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [297], "executable": false}
+splat_pages:
+- 297
 ---
 
 # Hell Hound
@@ -37,3 +38,13 @@ Bite. Melee Attack Roll: +5, reach 5 ft. Hit: 7 (1d8 + 3) Piercing damage plus 3
 Fire Breath (Recharge 5–6). Dexterity Saving Throw: DC 12, each creature in a 15-foot Cone. Failure: 17 (5d6) Fire damage. Success: Half damage.
 
 Original layout: [[../pages/297|page 297]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

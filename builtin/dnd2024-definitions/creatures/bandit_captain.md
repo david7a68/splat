@@ -1,35 +1,62 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 34d57125-2ab3-533f-8cfc-df44ed4a96ee
 splat_kind: creature
 splat_key: dnd2024:creatures/bandit_captain
 splat_name: Bandit Captain
-splat_origin:
-  key: dnd2024:reference/creature/bandit_captain
+splat_origin: dnd2024:reference/creature/bandit_captain
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 261, 262
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 261, 262, https://www.dndbeyond.com/srd
 ---
 
 # Bandit Captain
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Medium or Small |
+| Type | Humanoid |
+| Alignment | Neutral |
+| Armor Class | 15 |
+| Hit Points | 52 (8d8 + 16) |
+| Initiative | +3 (13) |
+| Speed | 30 ft. |
+| Challenge | 2 (XP 450; PB +2) |
+| Skills | Athletics +4, Deception +4 |
+| Senses | Passive Perception 10 |
+| Languages | Common, Thieves’ Cant |
+| Gear | Pistol, Scimitar, Studded Leather Armor |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 15 | +2 | +4 |
+| Dex | 16 | +3 | +5 |
+| Con | 14 | +2 | +2 |
+| Int | 14 | +2 | +2 |
+| Wis | 11 | +0 | +2 |
+| Cha | 14 | +2 | +2 |
+
 
 ## Source text
 
 <!-- SRD page 261 -->
 
 Medium or Small Humanoid, Neutral\
-AC 15 Initiative +3 (13)\
-HP 52 (8d8 + 16)\
-Speed 30 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 15 +2 +4 Dex 16 +3 +5 Con 14 +2 +2\
-Int 14 +2 +2 Wis 11 +0 +2 Cha 14 +2 +2\
-Skills Athletics +4, Deception +4\
-Gear Pistol, Scimitar, Studded Leather Armor\
-Senses Passive Perception 10\
-Languages Common, Thieves’ Cant\
-CR 2 (XP 450; PB +2)
+> [!quote]- Printed stat block (not read; edit the table above)
+> AC 15 Initiative +3 (13)\
+> HP 52 (8d8 + 16)\
+> Speed 30 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 15 +2 +4 Dex 16 +3 +5 Con 14 +2 +2\
+> Int 14 +2 +2 Wis 11 +0 +2 Cha 14 +2 +2\
+> Skills Athletics +4, Deception +4\
+> Gear Pistol, Scimitar, Studded Leather Armor\
+> Senses Passive Perception 10\
+> Languages Common, Thieves’ Cant\
+> CR 2 (XP 450; PB +2)
+
 
 <!-- SRD page 262 -->
 
@@ -47,47 +74,11 @@ Parry. Trigger: The bandit is hit by a melee attack roll while holding a weapon.
 
 Original layout: [[../../srd-5.2.1/pages/261|page 261]], [[../../srd-5.2.1/pages/262|page 262]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` medium ` |
-| ` type ` | ` humanoid ` |
-| ` alignment ` | ` Neutral ` |
-| ` size_options_text ` | ` Medium or Small ` |
-| ` movement_text ` | ` 30 ft. ` |
-| ` skills_text ` | ` Athletics +4, Deception +4 ` |
-| ` gear_text ` | ` Pistol, Scimitar, Studded Leather Armor ` |
-| ` senses_text ` | ` Passive Perception 10 ` |
-| ` languages_text ` | ` Common, Thieves’ Cant ` |
-| ` cr_text ` | ` 2 (XP 450; PB +2) ` |
-| ` hit_points_text ` | ` 52 (8d8 + 16) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 15 ` | ` 4 ` |
-| ` Dexterity ` | ` 16 ` | ` 5 ` |
-| ` Constitution ` | ` 14 ` | ` 2 ` |
-| ` Intelligence ` | ` 14 ` | ` 2 ` |
-| ` Wisdom ` | ` 11 ` | ` 2 ` |
-| ` Charisma ` | ` 14 ` | ` 2 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 15 ` |  |
-| ` max_hp ` | ` 52 ` |  |
-| ` initiative ` | ` 3 ` |  |
-| ` speed ` | ` 30 ` | ` ft ` |
 
 ## Health
 

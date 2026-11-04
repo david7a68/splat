@@ -1,10 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "828b83c9-0c32-500d-8e2c-4d6d94209b29"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/water_walk"
 splat_name: "Water Walk"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [173, 174], "executable": false}
+splat_pages:
+- 173
+- 174
 ---
 
 # Water Walk
@@ -24,3 +26,13 @@ This spell grants the ability to move across any liquid surface—such as water,
 An affected target must take a Bonus Action to pass from the liquid’s surface into the liquid itself and vice versa, but if the target falls into the liquid, the target passes through the surface into the liquid below.
 
 Original layout: [[../pages/173|page 173]], [[../pages/174|page 174]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

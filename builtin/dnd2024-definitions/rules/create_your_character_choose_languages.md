@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 324d5c1b-b439-56a5-8b13-dd48e1ea576b
 splat_kind: rule
 splat_key: dnd2024:rules/create_your_character_choose_languages
 splat_name: Choose Languages
-splat_origin:
-  key: dnd2024:reference/pages/020
+splat_origin: dnd2024:reference/pages/020
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 20
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 20, https://www.dndbeyond.com/srd
 ---
 
 # Choose Languages

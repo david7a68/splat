@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 64232bd1-5e1c-54a7-9975-06561b611acc
 splat_kind: spell
 splat_key: dnd2024:spells/power_word_stun
 splat_name: Power Word Stun
-splat_origin:
-  key: dnd2024:reference/spell/power_word_stun
+splat_origin: dnd2024:reference/spell/power_word_stun
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 154
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 154, https://www.dndbeyond.com/srd
 ---
 
 # Power Word Stun
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 8 |
+| School | Enchantment |
+| Classes | Bard, Sorcerer, Warlock, Wizard |
+| Casting Time | Action |
+| Range | 60 feet |
+| Components | V |
+| Duration | Instantaneous |
+
 
 ## Source text
 
@@ -30,28 +41,9 @@ The Stunned target makes a Constitution saving throw at the end of each of its t
 
 Original layout: [[../../srd-5.2.1/pages/154|page 154]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 8 ` |
-| ` school ` | ` enchantment ` |
-| ` classes ` | ` ["bard", "sorcerer", "warlock", "wizard"] ` |
-| ` components ` | ` ["verbal"] ` |
-| ` concentration ` | ` false ` |
-| ` duration ` | ` Instantaneous ` |
-| ` casting_time ` | ` Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
-
-<!-- splat:values path=splat_spell/range -->
-
-| Field | Value |
-| --- | --- |
-| ` feet ` | ` 60 ` |
 
 ## Rule
 

@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "81451f11-8a9a-504f-807a-15f3a7f3e3bb"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/killer_whale"
 splat_name: "Killer Whale"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [356], "executable": false}
+splat_pages:
+- 356
 ---
 
 # Killer Whale
@@ -32,3 +33,13 @@ Hold Breath. The whale can hold its breath for 30 minutes.
 Bite. Melee Attack Roll: +6, reach 5 ft. Hit: 21 (5d6 + 4) Piercing damage.
 
 Original layout: [[../pages/356|page 356]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

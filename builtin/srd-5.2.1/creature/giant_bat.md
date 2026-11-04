@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "26842422-916b-5d32-93ec-2c943eb19a12"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/giant_bat"
 splat_name: "Giant Bat"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [349], "executable": false}
+splat_pages:
+- 349
 ---
 
 # Giant Bat
@@ -27,3 +28,13 @@ CR 1/4 (XP 50; PB +2)
 Bite. Melee Attack Roll: +5, reach 5 ft. Hit: 6 (1d6 + 3) Piercing damage.
 
 Original layout: [[../pages/349|page 349]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

@@ -1,36 +1,64 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 354c2bcd-4b81-50ec-8696-b361255d6067
 splat_kind: creature
 splat_key: dnd2024:creatures/planetar
 splat_name: Planetar
-splat_origin:
-  key: dnd2024:reference/creature/planetar
+splat_origin: dnd2024:reference/creature/planetar
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 315
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 315, https://www.dndbeyond.com/srd
 ---
 
 # Planetar
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Large |
+| Type | Celestial (Angel) |
+| Alignment | Lawful Good |
+| Armor Class | 19 |
+| Hit Points | 262 (21d10 + 147) |
+| Initiative | +10 (20) |
+| Speed | 40 ft., Fly 120 ft. (hover) |
+| Challenge | 16 (XP 15,000; PB +5) |
+| Skills | Perception +11 |
+| Senses | Truesight 120 ft.; Passive Perception 21 |
+| Languages | All; telepathy 120 ft. |
+| Resistances | Radiant |
+| Immunities | Charmed, Exhaustion, Frightened |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 24 | +7 | +12 |
+| Dex | 20 | +5 | +5 |
+| Con | 24 | +7 | +12 |
+| Int | 19 | +4 | +4 |
+| Wis | 22 | +6 | +11 |
+| Cha | 25 | +7 | +12 |
+
 
 ## Source text
 
 <!-- SRD page 315 -->
 
-Large Celestial (Angel), Lawful Good\
-AC 19 Initiative +10 (20)\
-HP 262 (21d10 + 147)\
-Speed 40 ft., Fly 120 ft. (hover)\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 24 +7 +12 Dex 20 +5 +5 Con 24 +7 +12\
-Int 19 +4 +4 Wis 22 +6 +11 Cha 25 +7 +12\
-Skills Perception +11\
-Resistances Radiant\
-Immunities Charmed, Exhaustion, Frightened\
-Senses Truesight 120 ft.; Passive Perception 21\
-Languages All; telepathy 120 ft.\
-CR 16 (XP 15,000; PB +5)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Large Celestial (Angel), Lawful Good\
+> AC 19 Initiative +10 (20)\
+> HP 262 (21d10 + 147)\
+> Speed 40 ft., Fly 120 ft. (hover)\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 24 +7 +12 Dex 20 +5 +5 Con 24 +7 +12\
+> Int 19 +4 +4 Wis 22 +6 +11 Cha 25 +7 +12\
+> Skills Perception +11\
+> Resistances Radiant\
+> Immunities Charmed, Exhaustion, Frightened\
+> Senses Truesight 120 ft.; Passive Perception 21\
+> Languages All; telepathy 120 ft.\
+> CR 16 (XP 15,000; PB +5)
+
 
 ### Traits
 
@@ -59,49 +87,11 @@ Divine Aid (2/Day). The planetar casts Cure Wounds, Invisibility, Lesser Restora
 
 Original layout: [[../../srd-5.2.1/pages/315|page 315]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` large ` |
-| ` type ` | ` celestial ` |
-| ` alignment ` | ` Lawful Good ` |
-| ` tags_text ` | ` (Angel) ` |
-| ` movement_text ` | ` 40 ft., Fly 120 ft. (hover) ` |
-| ` skills_text ` | ` Perception +11 ` |
-| ` resistances_text ` | ` Radiant ` |
-| ` immunities_text ` | ` Charmed, Exhaustion, Frightened ` |
-| ` senses_text ` | ` Truesight 120 ft.; Passive Perception 21 ` |
-| ` languages_text ` | ` All; telepathy 120 ft. ` |
-| ` cr_text ` | ` 16 (XP 15,000; PB +5) ` |
-| ` hit_points_text ` | ` 262 (21d10 + 147) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 24 ` | ` 12 ` |
-| ` Dexterity ` | ` 20 ` | ` 5 ` |
-| ` Constitution ` | ` 24 ` | ` 12 ` |
-| ` Intelligence ` | ` 19 ` | ` 4 ` |
-| ` Wisdom ` | ` 22 ` | ` 11 ` |
-| ` Charisma ` | ` 25 ` | ` 12 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 19 ` |  |
-| ` max_hp ` | ` 262 ` |  |
-| ` initiative ` | ` 10 ` |  |
-| ` speed ` | ` 40 ` | ` ft ` |
-| ` fly_speed ` | ` 120 ` | ` ft ` |
 
 ## Health
 
@@ -419,3 +409,13 @@ geometry:
 unlisted_success_branch: no_effect
 unlisted_duration: until_removed_by_applicable_rule
 ```
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_stats_extras -->
+> 
+> ```yaml
+> fly_speed:
+>   unit: ft
+>   value: 120
+> ```
+

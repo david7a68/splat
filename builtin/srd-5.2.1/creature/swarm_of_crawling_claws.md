@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "b0005825-c843-525e-b9d7-f1ddcb577c38"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/swarm_of_crawling_claws"
 splat_name: "Swarm of Crawling Claws"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [278], "executable": false}
+splat_pages:
+- 278
 ---
 
 # Swarm of Crawling Claws
@@ -33,3 +34,13 @@ Swarm. The swarm can occupy another creature’s space and vice versa, and the s
 Swarm of Grasping Hands. Melee Attack Roll: +4, reach 5 ft. Hit: 20 (4d8 + 2) Necrotic damage, or 11 (2d8 + 2) Necrotic damage if the swarm is Bloodied. If the target is a Medium or smaller creature, it has the Prone condition.
 
 Original layout: [[../pages/278|page 278]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

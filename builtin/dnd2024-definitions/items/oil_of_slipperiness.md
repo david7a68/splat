@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 80a04f46-be96-5809-b662-9b2bdaeee518
 splat_kind: item
 splat_key: dnd2024:items/oil_of_slipperiness
 splat_name: Oil of Slipperiness
-splat_origin:
-  key: dnd2024:reference/magic_item/oil_of_slipperiness
+splat_origin: dnd2024:reference/magic_item/oil_of_slipperiness
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 233, 234
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 233, 234, https://www.dndbeyond.com/srd
 ---
 
 # Oil of Slipperiness
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Potion |
+| Rarity | Uncommon |
+| Attunement | No |
+
 
 ## Source text
 
@@ -30,22 +37,9 @@ This sticky, black unguent is thick and heavy, but it flows quickly when poured.
 
 Original layout: [[../../srd-5.2.1/pages/233|page 233]], [[../../srd-5.2.1/pages/234|page 234]].
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` potion ` |
-| ` rarity ` | ` uncommon ` |
 
-### Equipment
-
-<!-- splat:values path=splat_item/equipment -->
-
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` none ` |
 
 ## Rule
 

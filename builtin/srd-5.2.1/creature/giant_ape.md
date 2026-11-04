@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "621b4ac5-b77a-5479-b72a-2f9371ead7b0"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/giant_ape"
 splat_name: "Giant Ape"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [349], "executable": false}
+splat_pages:
+- 349
 ---
 
 # Giant Ape
@@ -36,3 +37,13 @@ Boulder Toss (Recharge 6). The ape hurls a boulder at a point it can see within 
 Leap. The ape jumps up to 30 feet by spending 10 feet of movement.
 
 Original layout: [[../pages/349|page 349]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "1e8f90a0-888a-58d6-a584-360d37ab97f9"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/glossary/damage_types"
 splat_name: "Damage Types"
-splat_reference: {"source": "SRD 5.2.1", "category": "glossary", "pages": [180], "executable": false}
+splat_pages:
+- 180
 ---
 
 # Damage Types
@@ -35,3 +36,13 @@ Attacks and other harmful effects deal different types of damage. Damage types h
 | Thunder | Concussive sound |
 
 Original layout: [[../pages/180|page 180]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: glossary
+> executable: false
+> ```
+

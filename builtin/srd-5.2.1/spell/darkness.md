@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "a500b1b6-f244-55ef-9925-8253e44aee06"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/darkness"
 splat_name: "Darkness"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [122], "executable": false}
+splat_pages:
+- 122
 ---
 
 # Darkness
@@ -24,3 +25,13 @@ Alternatively, you cast the spell on an object that isn’t being worn or carrie
 If any of this spell’s area overlaps with an area of Bright Light or Dim Light created by a spell of level 2 or lower, that other spell is dispelled.
 
 Original layout: [[../pages/122|page 122]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

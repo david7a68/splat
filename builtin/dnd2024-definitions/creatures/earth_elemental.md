@@ -1,35 +1,62 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: b9070a54-028a-52b6-a468-1414db2a2d04
 splat_kind: creature
 splat_key: dnd2024:creatures/earth_elemental
 splat_name: Earth Elemental
-splat_origin:
-  key: dnd2024:reference/creature/earth_elemental
+splat_origin: dnd2024:reference/creature/earth_elemental
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 282, 283
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 282, 283, https://www.dndbeyond.com/srd
 ---
 
 # Earth Elemental
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Large |
+| Type | Elemental |
+| Alignment | Neutral |
+| Armor Class | 17 |
+| Hit Points | 147 (14d10 + 70) |
+| Initiative | -1 (9) |
+| Speed | 30 ft., Burrow 30 ft. |
+| Challenge | 5 (XP 1,800; PB +3) |
+| Senses | Darkvision 60 ft., Tremorsense 60 ft.; Passive Perception 10 |
+| Languages | Primordial (Terran) |
+| Immunities | Poison; Exhaustion, Paralyzed, Petrified, Poisoned, Unconscious |
+| Vulnerabilities | Thunder |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 20 | +5 | +5 |
+| Dex | 8 | -1 | -1 |
+| Con | 20 | +5 | +5 |
+| Int | 5 | -3 | -3 |
+| Wis | 10 | +0 | +0 |
+| Cha | 5 | -3 | -3 |
+
 
 ## Source text
 
 <!-- SRD page 282 -->
 
-Large Elemental, Neutral\
-AC 17 Initiative −1 (9)\
-HP 147 (14d10 + 70)\
-Speed 30 ft., Burrow 30 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 20 +5 +5 Dex 8 −1 −1 Con 20 +5 +5\
-Int 5 −3 −3 Wis 10 +0 +0 Cha 5 −3 −3\
-Vulnerabilities Thunder\
-Immunities Poison; Exhaustion, Paralyzed, Petrified, Poisoned, Unconscious\
-Senses Darkvision 60 ft., Tremorsense 60 ft.; Passive Perception 10\
-Languages Primordial (Terran)\
-CR 5 (XP 1,800; PB +3)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Large Elemental, Neutral\
+> AC 17 Initiative −1 (9)\
+> HP 147 (14d10 + 70)\
+> Speed 30 ft., Burrow 30 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 20 +5 +5 Dex 8 −1 −1 Con 20 +5 +5\
+> Int 5 −3 −3 Wis 10 +0 +0 Cha 5 −3 −3\
+> Vulnerabilities Thunder\
+> Immunities Poison; Exhaustion, Paralyzed, Petrified, Poisoned, Unconscious\
+> Senses Darkvision 60 ft., Tremorsense 60 ft.; Passive Perception 10\
+> Languages Primordial (Terran)\
+> CR 5 (XP 1,800; PB +3)
+
 
 ### Traits
 
@@ -49,47 +76,11 @@ Rock Launch. Ranged Attack Roll: +8, range 60 ft. Hit: 8 (1d6 + 5) Bludgeoning d
 
 Original layout: [[../../srd-5.2.1/pages/282|page 282]], [[../../srd-5.2.1/pages/283|page 283]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` large ` |
-| ` type ` | ` elemental ` |
-| ` alignment ` | ` Neutral ` |
-| ` movement_text ` | ` 30 ft., Burrow 30 ft. ` |
-| ` vulnerabilities_text ` | ` Thunder ` |
-| ` immunities_text ` | ` Poison; Exhaustion, Paralyzed, Petrified, Poisoned, Unconscious ` |
-| ` senses_text ` | ` Darkvision 60 ft., Tremorsense 60 ft.; Passive Perception 10 ` |
-| ` languages_text ` | ` Primordial (Terran) ` |
-| ` cr_text ` | ` 5 (XP 1,800; PB +3) ` |
-| ` hit_points_text ` | ` 147 (14d10 + 70) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 20 ` | ` 5 ` |
-| ` Dexterity ` | ` 8 ` | ` -1 ` |
-| ` Constitution ` | ` 20 ` | ` 5 ` |
-| ` Intelligence ` | ` 5 ` | ` -3 ` |
-| ` Wisdom ` | ` 10 ` | ` 0 ` |
-| ` Charisma ` | ` 5 ` | ` -3 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 17 ` |  |
-| ` max_hp ` | ` 147 ` |  |
-| ` initiative ` | ` -1 ` |  |
-| ` speed ` | ` 30 ` | ` ft ` |
-| ` burrow_speed ` | ` 30 ` | ` ft ` |
 
 ## Health
 
@@ -318,3 +309,13 @@ geometry_assumptions:
   - plane
   - form_appearance
 ```
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_stats_extras -->
+> 
+> ```yaml
+> burrow_speed:
+>   unit: ft
+>   value: 30
+> ```
+

@@ -1,10 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "fec93a70-d7a3-5df9-bde8-1e9c7253a2f4"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/message"
 splat_name: "Message"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [148, 149], "executable": false}
+splat_pages:
+- 148
+- 149
 ---
 
 # Message
@@ -24,3 +26,13 @@ You point toward a creature within range and whisper a message. The target (and 
 You can cast this spell through solid objects if you are familiar with the target and know it is beyond the barrier. Magical silence; 1 foot of stone, metal, or wood; or a thin sheet of lead blocks the spell.
 
 Original layout: [[../pages/148|page 148]], [[../pages/149|page 149]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

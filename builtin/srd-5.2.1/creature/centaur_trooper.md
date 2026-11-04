@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "60bb5a9c-c9aa-5ad5-ae67-0c930afb383a"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/centaur_trooper"
 splat_name: "Centaur Trooper"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [272], "executable": false}
+splat_pages:
+- 272
 ---
 
 # Centaur Trooper
@@ -37,3 +38,13 @@ Longbow. Ranged Attack Roll: +4, range 150/600 ft. Hit: 6 (1d8 + 2) Piercing dam
 Trampling Charge (Recharge 5–6). The centaur moves up to its Speed without provoking Opportunity Attacks and can move through the spaces of Medium or smaller creatures. Each creature whose space the centaur enters is targeted once by the following effect. Strength Saving Throw: DC 14. Failure: 7 (1d6 + 4) Bludgeoning damage, and the target has the Prone condition.
 
 Original layout: [[../pages/272|page 272]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

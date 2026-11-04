@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 0a152959-c402-533a-ab75-eabcaf59b4fa
 splat_kind: item
 splat_key: dnd2024:items/boots_of_striding_and_springing
 splat_name: Boots of Striding and Springing
-splat_origin:
-  key: dnd2024:reference/magic_item/boots_of_striding_and_springing
+splat_origin: dnd2024:reference/magic_item/boots_of_striding_and_springing
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 214
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 214, https://www.dndbeyond.com/srd
 ---
 
 # Boots of Striding and Springing
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Wondrous Item |
+| Rarity | Uncommon |
+| Attunement | Yes |
+
 
 ## Source text
 
@@ -26,22 +33,9 @@ Once on each of your turns, you can jump up to 30 feet by spending only 10 feet 
 
 Original layout: [[../../srd-5.2.1/pages/214|page 214]].
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` wondrous_item ` |
-| ` rarity ` | ` uncommon ` |
 
-### Equipment
-
-<!-- splat:values path=splat_item/equipment -->
-
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` required ` |
 
 ## Rule
 

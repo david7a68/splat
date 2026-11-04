@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 61eb8bd2-0a43-51a9-a4d6-06a420afc613
 splat_kind: rule
 splat_key: dnd2024:glossary/skill
 splat_name: Skill
-splat_origin:
-  key: dnd2024:reference/glossary/skill
+splat_origin: dnd2024:reference/glossary/skill
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 188
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 188, https://www.dndbeyond.com/srd
 ---
 
 # Skill

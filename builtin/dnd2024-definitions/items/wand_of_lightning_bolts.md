@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 14d7eb55-c00b-5868-8a8b-f9d3df0830bd
 splat_kind: item
 splat_key: dnd2024:items/wand_of_lightning_bolts
 splat_name: Wand of Lightning Bolts
-splat_origin:
-  key: dnd2024:reference/magic_item/wand_of_lightning_bolts
+splat_origin: dnd2024:reference/magic_item/wand_of_lightning_bolts
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 251
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 251, https://www.dndbeyond.com/srd
 ---
 
 # Wand of Lightning Bolts
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Wand |
+| Rarity | Rare |
+| Attunement | Yes |
+
 
 ## Source text
 
@@ -26,23 +33,9 @@ Regaining Charges. The wand regains 1d6 + 1 expended charges daily at dawn. If y
 
 Original layout: [[../../srd-5.2.1/pages/251|page 251]].
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` wand ` |
-| ` rarity ` | ` rare ` |
 
-### Equipment
-
-<!-- splat:values path=splat_item/equipment -->
-
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` required ` |
-| ` attunement_requirement_text ` | ` a Spellcaster ` |
 
 ## Rule
 
@@ -133,3 +126,12 @@ required: true
 eligibility:
   spellcaster: true
 ```
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_item_extras -->
+> 
+> ```yaml
+> equipment:
+>   attunement_requirement_text: a Spellcaster
+> ```
+

@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "5e32447f-418b-5af4-92d6-0e125886161d"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/saber_toothed_tiger"
 splat_name: "Saber-Toothed Tiger"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [360], "executable": false}
+splat_pages:
+- 360
 ---
 
 # Saber-Toothed Tiger
@@ -38,3 +39,13 @@ Rend. Melee Attack Roll: +6, reach 5 ft. Hit: 11 (2d6 + 4) Slashing damage.
 Nimble Escape. The tiger takes the Disengage or Hide action.
 
 Original layout: [[../pages/360|page 360]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

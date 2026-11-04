@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: f07a831d-667a-58d5-892d-a1f6f2ff5157
 splat_kind: item
 splat_key: dnd2024:items/robe_of_the_archmagi
 splat_name: Robe of the Archmagi
-splat_origin:
-  key: dnd2024:reference/magic_item/robe_of_the_archmagi
+splat_origin: dnd2024:reference/magic_item/robe_of_the_archmagi
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 240
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 240, https://www.dndbeyond.com/srd
 ---
 
 # Robe of the Archmagi
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Wondrous Item |
+| Rarity | Legendary |
+| Attunement | Yes |
+
 
 ## Source text
 
@@ -32,23 +39,9 @@ War Mage. Your spell save DC and spell attack bonus each increase by 2.
 
 Original layout: [[../../srd-5.2.1/pages/240|page 240]].
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` wondrous_item ` |
-| ` rarity ` | ` legendary ` |
 
-### Equipment
-
-<!-- splat:values path=splat_item/equipment -->
-
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` required ` |
-| ` attunement_requirement_text ` | ` a Sorcerer, Warlock, or Wizard ` |
 
 ## Rule
 
@@ -90,3 +83,12 @@ base:
 | Field | Value |
 | --- | --- |
 | ` against ` | ` ["spells", "other_magical_effects"] ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_item_extras -->
+> 
+> ```yaml
+> equipment:
+>   attunement_requirement_text: a Sorcerer, Warlock, or Wizard
+> ```
+

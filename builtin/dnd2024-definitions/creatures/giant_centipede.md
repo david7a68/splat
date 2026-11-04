@@ -1,33 +1,58 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 15457a07-7534-57dd-8d2d-e338cc32d8bc
 splat_kind: creature
 splat_key: dnd2024:creatures/giant_centipede
 splat_name: Giant Centipede
-splat_origin:
-  key: dnd2024:reference/creature/giant_centipede
+splat_origin: dnd2024:reference/creature/giant_centipede
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 349, 350
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 349, 350, https://www.dndbeyond.com/srd
 ---
 
 # Giant Centipede
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Small |
+| Type | Beast |
+| Alignment | Unaligned |
+| Armor Class | 14 |
+| Hit Points | 9 (2d6 + 2) |
+| Initiative | +2 (12) |
+| Speed | 30 ft., Climb 30 ft. |
+| Challenge | 1/4 (XP 50; PB +2) |
+| Senses | Blindsight 30 ft.; Passive Perception 8 |
+| Languages | None |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 5 | -3 | -3 |
+| Dex | 14 | +2 | +2 |
+| Con | 12 | +1 | +1 |
+| Int | 1 | -5 | -5 |
+| Wis | 7 | -2 | -2 |
+| Cha | 3 | -4 | -4 |
+
 
 ## Source text
 
 <!-- SRD page 349 -->
 
-Small Beast, Unaligned\
-AC 14  Initiative +2 (12)\
-HP 9 (2d6 + 2)\
-Speed 30 ft., Climb 30 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 5 −3 −3 Dex 14 +2 +2 Con 12 +1 +1\
-Int 1 −5 −5 Wis 7 −2 −2 Cha 3 −4 −4\
-Senses Blindsight 30 ft.; Passive Perception 8\
-Languages None\
-CR 1/4 (XP 50; PB +2)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Small Beast, Unaligned\
+> AC 14  Initiative +2 (12)\
+> HP 9 (2d6 + 2)\
+> Speed 30 ft., Climb 30 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 5 −3 −3 Dex 14 +2 +2 Con 12 +1 +1\
+> Int 1 −5 −5 Wis 7 −2 −2 Cha 3 −4 −4\
+> Senses Blindsight 30 ft.; Passive Perception 8\
+> Languages None\
+> CR 1/4 (XP 50; PB +2)
+
 
 <!-- SRD page 350 -->
 
@@ -37,45 +62,11 @@ Bite. Melee Attack Roll: +4, reach 5 ft. Hit: 4 (1d4 + 2) Piercing damage, and t
 
 Original layout: [[../../srd-5.2.1/pages/349|page 349]], [[../../srd-5.2.1/pages/350|page 350]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` small ` |
-| ` type ` | ` beast ` |
-| ` alignment ` | ` Unaligned ` |
-| ` movement_text ` | ` 30 ft., Climb 30 ft. ` |
-| ` senses_text ` | ` Blindsight 30 ft.; Passive Perception 8 ` |
-| ` languages_text ` | ` None ` |
-| ` cr_text ` | ` 1/4 (XP 50; PB +2) ` |
-| ` hit_points_text ` | ` 9 (2d6 + 2) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 5 ` | ` -3 ` |
-| ` Dexterity ` | ` 14 ` | ` 2 ` |
-| ` Constitution ` | ` 12 ` | ` 1 ` |
-| ` Intelligence ` | ` 1 ` | ` -5 ` |
-| ` Wisdom ` | ` 7 ` | ` -2 ` |
-| ` Charisma ` | ` 3 ` | ` -4 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 14 ` |  |
-| ` max_hp ` | ` 9 ` |  |
-| ` initiative ` | ` 2 ` |  |
-| ` speed ` | ` 30 ` | ` ft ` |
-| ` climb_speed ` | ` 30 ` | ` ft ` |
 
 ## Health
 
@@ -170,3 +161,13 @@ hit:
 | ` provider ` | ` caller ` |
 | ` required_facts ` | ` ["distance", "area_membership", "visibility", "occupancy", "movement_path"] ` |
 | ` validate_against_typed_constraints ` | ` true ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_stats_extras -->
+> 
+> ```yaml
+> climb_speed:
+>   unit: ft
+>   value: 30
+> ```
+

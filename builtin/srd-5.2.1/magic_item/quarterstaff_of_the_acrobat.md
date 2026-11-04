@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "9b52163a-d5c4-5446-921e-76437e403e7c"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/magic_item/quarterstaff_of_the_acrobat"
 splat_name: "Quarterstaff of the Acrobat"
-splat_reference: {"source": "SRD 5.2.1", "category": "magic_item", "pages": [237], "executable": false}
+splat_pages:
+- 237
 ---
 
 # Quarterstaff of the Acrobat
@@ -28,3 +29,13 @@ Attack Deflection (Quarterstaff Form Only). When you are hit by an attack while 
 Ranged Weapon (Quarterstaff Form Only). This weapon has the Thrown property with a normal range of 30 feet and a long range of 120 feet. Immediately after you make a ranged attack with the weapon, it flies back to your hand.
 
 Original layout: [[../pages/237|page 237]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: magic_item
+> executable: false
+> ```
+

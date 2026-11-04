@@ -1,10 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "ce9d2b38-e709-5b9f-bf2f-365238ba97e9"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/giant_eagle"
 splat_name: "Giant Eagle"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [350, 351], "executable": false}
+splat_pages:
+- 350
+- 351
 ---
 
 # Giant Eagle
@@ -33,3 +35,13 @@ Multiattack. The eagle makes two Rend attacks.
 Rend. Melee Attack Roll: +5, reach 5 ft. Hit: 5 (1d4 + 3) Slashing damage plus 3 (1d6) Radiant damage.
 
 Original layout: [[../pages/350|page 350]], [[../pages/351|page 351]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

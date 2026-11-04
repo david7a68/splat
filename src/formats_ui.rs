@@ -3,14 +3,37 @@ use crate::{
     campaigns::Campaigns,
     design::{self, Action, Tone, Type},
     file_batch::{self, Change},
-    library::{note_path, write_note},
+    library::note_path,
 };
 use eframe::egui;
-use splat::content::{Entry, formats};
-use std::{
-    fs,
-    path::{Path, PathBuf},
-};
+#[cfg(test)]
+use splat::content::Entry;
+use splat::content::formats;
+use std::{fs, path::PathBuf};
+
+pub fn is_old(problem: &str) -> bool {
+    problem.contains(splat::content::OLD_LAYOUT)
+}
+
+pub fn old_message(path: &str) -> String {
+    format!("{path} uses the old layout. Splat no longer reads it.")
+}
+
+pub fn old_notice(ui: &mut egui::Ui, message: &str, paths: Vec<PathBuf>) {
+    let run_open = ui
+        .ctx()
+        .data(|data| data.get_temp::<bool>(egui::Id::new("conversion_run_open")))
+        .unwrap_or(false);
+    if design::locked(
+        ui,
+        run_open.then_some("Close the run before converting files."),
+        |ui| design::message_with_action(ui, Tone::Warning, message, "Convert files…"),
+    ) {
+        ui.ctx().data_mut(|data| {
+            data.insert_temp(egui::Id::new("convert_old_files"), paths);
+        });
+    }
+}
 
 pub struct Preview {
     owner: usize,
@@ -20,13 +43,12 @@ pub struct Preview {
     after: String,
 }
 
-const GENERATED_REASON: &str = "Generated package; its converter writes the layout";
+const GENERATED_REASON: &str = "Its converter will overwrite these files on its next run.";
 
 struct OwnerPreview {
     root: PathBuf,
     name: String,
     checked: bool,
-    package: bool,
     reason: Option<&'static str>,
 }
 
@@ -37,7 +59,6 @@ impl OwnerPreview {
             root,
             name,
             checked: campaign,
-            package: !campaign,
             reason: generated.then_some(GENERATED_REASON),
         }
     }
@@ -49,21 +70,27 @@ pub struct State {
     owners: Vec<OwnerPreview>,
     selected: usize,
     undo: Vec<Change>,
-    notice_file: Option<PathBuf>,
     skipped: Vec<String>,
     undone: bool,
     error: Option<String>,
 }
 
 impl State {
-    pub fn show_any(&mut self, ui: &mut egui::Ui) -> bool {
-        let path = self.notice_file.clone();
-        self.show(ui, None, path.as_deref())
+    pub fn scan_paths(&mut self, campaigns: &Campaigns, paths: &[PathBuf]) {
+        self.scan(campaigns);
+        if let Some(files) = &self.preview {
+            self.selected = files
+                .iter()
+                .position(|file| paths.contains(&file.root.join(&file.path)))
+                .unwrap_or(0);
+            for owner in &mut self.owners {
+                owner.checked = paths.iter().any(|path| path.starts_with(&owner.root));
+            }
+        }
     }
 
     pub fn clear(&mut self) {
         self.undo.clear();
-        self.notice_file = None;
         self.error = None;
         self.skipped.clear();
         self.undone = false;
@@ -75,40 +102,16 @@ impl State {
         self.skipped.clear();
     }
 
-    /// A notice only owns the bytes from this save, on this file.
-    pub fn current(&mut self, file: Option<&Path>) -> bool {
+    /// Undo remains available while the converted bytes still match the disk.
+    pub fn current(&mut self) -> bool {
         if self
-            .notice_file
-            .as_deref()
-            .is_some_and(|path| Some(path) != file)
-            || self
-                .undo
-                .iter()
-                .any(|change| fs::read(&change.path).ok() != change.after)
+            .undo
+            .iter()
+            .any(|change| fs::read(&change.path).ok() != change.after)
         {
             self.clear();
         }
         !self.undo.is_empty()
-    }
-
-    pub fn has_action(&self) -> bool {
-        self.notice_file.is_some() && !self.undo.is_empty()
-    }
-
-    pub fn remember(&mut self, root: &Path, path: &str, before: &str, after: &str) {
-        self.clear();
-        self.undo = vec![Change::text(root.join(path), Some(before), Some(after))];
-        self.notice_file = Some(root.join(path));
-    }
-    pub fn remember_conversion(&mut self, root: &Path, path: &str, before: &str, after: &str) {
-        self.clear();
-        if Entry::parse(path, before)
-            .is_ok_and(|e| splat::content::formats::schema(&e.fields) == Ok(1))
-            && Entry::parse(path, after)
-                .is_ok_and(|e| splat::content::formats::schema(&e.fields) == Ok(2))
-        {
-            self.remember(root, path, before, after);
-        }
     }
 
     pub fn scan(&mut self, campaigns: &Campaigns) {
@@ -134,11 +137,8 @@ impl State {
         let mut preview = Vec::new();
         let mut seen = std::collections::BTreeSet::new();
         for (owner, group) in self.owners.iter().enumerate() {
-            if group.reason.is_some() {
-                continue;
-            }
             let root = &group.root;
-            let Ok((entries, errors)) = splat::content::read_directory(root) else {
+            let Ok((entries, errors)) = splat::content::legacy::read_directory(root) else {
                 continue;
             };
             self.skipped.extend(
@@ -163,13 +163,14 @@ impl State {
                         return Err("Read only".into());
                     }
                     let before = fs::read_to_string(path).map_err(|e| e.to_string())?;
-                    let after = formats::convert_resolved(
-                        &entry.path,
-                        &before,
-                        catalogue
-                            .iter()
-                            .flat_map(|cat| cat.entries.values().map(|item| &item.entry)),
-                    )?;
+                    let mut targets: Vec<_> = catalogue
+                        .iter()
+                        .flat_map(|cat| cat.entries.values().map(|item| item.entry.clone()))
+                        .collect();
+                    targets.extend(splat::content::legacy::read_directory(root)?.0);
+                    let after =
+                        crate::conversion::preview(root, &entry.path, before.clone(), &targets)?
+                            .after;
                     Ok::<_, String>(Some(Preview {
                         owner,
                         root: root.clone(),
@@ -185,32 +186,35 @@ impl State {
                 }
             }
         }
-        if let Some(campaign) = campaigns.active_campaign()
-            && let Ok(folder) = crate::sessions::folder(&campaign)
-        {
-            let path = folder.join(crate::timeline::FILE);
-            if path.is_file() && !fs::metadata(&path).is_ok_and(|m| m.permissions().readonly()) {
-                match fs::read_to_string(&path)
+        for (owner, group) in self.owners.iter().enumerate() {
+            let paths = crate::conversion::runs(&group.root)
+                .unwrap_or_default()
+                .into_iter()
+                .chain(crate::conversion::timelines(&group.root).unwrap_or_default());
+            for path in paths {
+                let relative = path
+                    .strip_prefix(&group.root)
+                    .unwrap()
+                    .to_string_lossy()
+                    .to_string();
+                let result = fs::read_to_string(&path)
                     .map_err(|e| e.to_string())
                     .and_then(|before| {
-                        let after =
-                            crate::timeline::formats::convert(&before, &Default::default())?;
-                        Ok((before, after))
-                    }) {
-                    Ok((before, after)) if before != after => preview.push(Preview {
-                        owner: 0,
-                        root: folder,
-                        path: crate::timeline::FILE.into(),
-                        before,
-                        after,
+                        crate::conversion::preview(&group.root, &relative, before, &[])
+                    });
+                match result {
+                    Ok(file) if file.before != file.after => preview.push(Preview {
+                        owner,
+                        root: file.root,
+                        path: file.path,
+                        before: file.before,
+                        after: file.after,
                     }),
                     Ok(_) => {}
-                    Err(error) => self.skipped.push(skipped_file("Timeline.md", &error)),
+                    Err(error) => self.skipped.push(skipped_file(&relative, &error)),
                 }
             }
         }
-        preview.sort_by(|a, b| a.owner.cmp(&b.owner).then(a.path.cmp(&b.path)));
-        self.selected = 0;
         self.preview = Some(preview);
     }
 
@@ -219,46 +223,29 @@ impl State {
             return;
         };
         self.undo.clear();
-        self.notice_file = None;
         for file in files {
             if !self
                 .owners
                 .get(file.owner)
-                .is_some_and(|owner| owner.checked && owner.reason.is_none())
-                || self.owners.get(file.owner).is_some_and(|owner| {
-                    owner.package && crate::content_workspace::generated_package(&file.root)
-                })
+                .is_some_and(|owner| owner.checked)
             {
                 continue;
             }
-            let change = Change::text(
-                file.root.join(&file.path),
-                Some(&file.before),
-                Some(&file.after),
-            );
-            let result = if file.path == crate::timeline::FILE {
-                (|| {
-                    let path = note_path(&file.root, &file.path)?;
-                    if [&path, &file.root]
-                        .iter()
-                        .any(|p| fs::metadata(p).is_ok_and(|m| m.permissions().readonly()))
-                    {
-                        return Err("This file is read only.".into());
-                    }
-                    file_batch::apply(std::slice::from_ref(&change))
-                })()
-            } else {
-                write_note(&file.root, &file.path, Some(&file.before), &file.after).map(|_| ())
+            let candidate = crate::conversion::File {
+                root: file.root.clone(),
+                path: file.path.clone(),
+                before: file.before,
+                after: file.after,
             };
+            let result = crate::conversion::publish(&candidate);
             match result {
-                Ok(()) => self.undo.push(change),
+                Ok(change) => self.undo.push(change),
                 Err(error) => self.skipped.push(skipped_file(&file.path, &error)),
             }
         }
     }
 
     pub fn undo(&mut self) -> Result<(), String> {
-        let batch = self.notice_file.is_none();
         let changes: Vec<_> = self
             .undo
             .iter()
@@ -270,70 +257,30 @@ impl State {
             .collect();
         file_batch::apply(&changes)?;
         self.clear();
-        self.undone = batch;
+        self.undone = true;
         Ok(())
     }
 
-    pub fn show_conversion(
-        &mut self,
-        ui: &mut egui::Ui,
-        blocked: Option<&str>,
-        file: Option<&Path>,
-    ) -> bool {
-        self.show_inner(ui, blocked, file, false)
-    }
-
-    /// Returns true after disk writes, so the owner can reload its catalogue.
-    pub fn show(&mut self, ui: &mut egui::Ui, blocked: Option<&str>, file: Option<&Path>) -> bool {
-        self.show_inner(ui, blocked, file, true)
-    }
-
-    pub fn show_saved(&mut self, ui: &mut egui::Ui, file: Option<&Path>) -> bool {
-        if self.notice_file.is_none() {
-            return false;
-        }
-        self.show_notice(ui, file)
-    }
-
-    fn show_notice(&mut self, ui: &mut egui::Ui, file: Option<&Path>) -> bool {
+    fn show_notice(&mut self, ui: &mut egui::Ui) -> bool {
         let mut changed = false;
-        if self.current(file) {
-            let (words, undo) = self.notice_file.as_ref().map_or_else(
-                || {
-                    let mut words = format!(
-                        "{} now use{} the new layout.",
-                        design::count(self.undo.len(), "file", "files"),
-                        if self.undo.len() == 1 { "s" } else { "" }
-                    );
-                    if !self.skipped.is_empty() {
-                        words.push_str(&format!(
-                            " {} {} skipped.",
-                            design::count(self.skipped.len(), "file", "files"),
-                            if self.skipped.len() == 1 {
-                                "was"
-                            } else {
-                                "were"
-                            }
-                        ));
-                    }
-                    (words, "Undo convert")
-                },
-                |path| {
-                    let name = path.file_name().unwrap_or_default().to_string_lossy();
-                    (
-                        if name == "Campaign.md" {
-                            "Campaign selections saved. Campaign.md now uses the new layout.".into()
-                        } else {
-                            format!("{name} saved in the new layout.")
-                        },
-                        if name == "Campaign.md" {
-                            "Undo selections"
-                        } else {
-                            "Undo save"
-                        },
-                    )
-                },
+        if self.current() {
+            let mut words = format!(
+                "{} now use{} the new layout.",
+                design::count(self.undo.len(), "file", "files"),
+                if self.undo.len() == 1 { "s" } else { "" }
             );
+            if !self.skipped.is_empty() {
+                words.push_str(&format!(
+                    " {} {} skipped.",
+                    design::count(self.skipped.len(), "file", "files"),
+                    if self.skipped.len() == 1 {
+                        "was"
+                    } else {
+                        "were"
+                    }
+                ));
+            }
+            let undo = "Undo convert";
             let tone = if self.skipped.is_empty() {
                 Tone::Success
             } else {
@@ -349,15 +296,9 @@ impl State {
         changed
     }
 
-    fn show_inner(
-        &mut self,
-        ui: &mut egui::Ui,
-        blocked: Option<&str>,
-        file: Option<&Path>,
-        action: bool,
-    ) -> bool {
-        let changed_notice = self.current(file) && (action || self.notice_file.is_none());
-        let mut changed = changed_notice && self.show_notice(ui, file);
+    pub fn show_conversion(&mut self, ui: &mut egui::Ui, blocked: Option<&str>) -> bool {
+        let changed_notice = self.current();
+        let mut changed = changed_notice && self.show_notice(ui);
         if let Some(error) = &self.error {
             design::message(ui, Tone::Error, error);
         }
@@ -376,9 +317,7 @@ impl State {
                 let files = self.preview.as_ref().unwrap();
                 ui.horizontal_wrapped(|ui| {
                     for owner in &mut self.owners {
-                        ui.add_enabled_ui(owner.reason.is_none(), |ui| {
-                            ui.checkbox(&mut owner.checked, &owner.name);
-                        });
+                        ui.checkbox(&mut owner.checked, &owner.name);
                     }
                 });
                 for owner in &self.owners {
@@ -388,9 +327,7 @@ impl State {
                 }
                 let selected_files: Vec<_> = files
                     .iter()
-                    .filter(|file| {
-                        self.owners[file.owner].checked && self.owners[file.owner].reason.is_none()
-                    })
+                    .filter(|file| self.owners[file.owner].checked)
                     .collect();
                 ui.label(format!(
                     "{} use the new layout.",
@@ -400,7 +337,9 @@ impl State {
                 for file in &selected_files {
                     if file.path == crate::timeline::FILE {
                         *kinds.entry("timeline".into()).or_default() += 1;
-                    } else if let Ok(entry) = Entry::parse(&file.path, &file.before) {
+                    } else if let Ok(entry) =
+                        splat::content::legacy::parse(&file.path, &file.before)
+                    {
                         let kind = if entry.fields.contains_key("splat_character") {
                             "character".into()
                         } else {
@@ -436,9 +375,6 @@ impl State {
                         .selected_text(&file.path)
                         .show_ui(ui, |ui| {
                             for (owner, group) in self.owners.iter().enumerate() {
-                                if group.reason.is_some() {
-                                    continue;
-                                }
                                 ui.label(Type::Small.rich(ui, &group.name));
                                 for (at, file) in files
                                     .iter()
@@ -535,30 +471,6 @@ fn skipped_list(ui: &mut egui::Ui, files: &[String]) {
 }
 
 #[cfg(test)]
-pub(crate) fn test_notice_labels(state: &mut State, file: &Path) -> Vec<String> {
-    let ctx = egui::Context::default();
-    crate::design::theme::install(&ctx);
-    ctx.enable_accesskit();
-    let mut output = None;
-    for _ in 0..3 {
-        output = Some(ctx.run(Default::default(), |ctx| {
-            egui::CentralPanel::default().show(ctx, |ui| {
-                state.show(ui, None, Some(file));
-            });
-        }));
-    }
-    output
-        .unwrap()
-        .platform_output
-        .accesskit_update
-        .unwrap()
-        .nodes
-        .into_iter()
-        .filter_map(|(_, node)| node.label().map(str::to_owned))
-        .collect()
-}
-
-#[cfg(test)]
 mod tests {
     use super::*;
 
@@ -595,7 +507,7 @@ mod tests {
                     },
                     |ctx| {
                         egui::CentralPanel::default().show(ctx, |ui| {
-                            state.show_conversion(ui, None, None);
+                            state.show_conversion(ui, None);
                         });
                     },
                 ));
@@ -624,41 +536,7 @@ mod tests {
         }
     }
 
-    #[test]
-    fn i19_h1_named_save_notice_clears_after_outside_edit_and_second_save() {
-        let dir = tempfile::tempdir().unwrap();
-        let path = dir.path().join("Rook.md");
-        let mut state = State::default();
-        fs::write(&path, "saved").unwrap();
-        state.remember(dir.path(), "Rook.md", "old", "saved");
-        let labels = test_notice_labels(&mut state, &path);
-        assert_eq!(
-            labels
-                .iter()
-                .filter(|s| s.starts_with("Undo"))
-                .collect::<Vec<_>>(),
-            [&"Undo save"]
-        );
-        fs::write(&path, "Outside edit").unwrap();
-        assert!(
-            !test_notice_labels(&mut state, &path)
-                .iter()
-                .any(|s| s.contains("new layout") || s.starts_with("Undo"))
-        );
-        state.undo().unwrap();
-        assert_eq!(fs::read_to_string(&path).unwrap(), "Outside edit");
-        fs::write(&path, "saved").unwrap();
-        state.remember(dir.path(), "Rook.md", "old", "saved");
-        state.remember_conversion(dir.path(), "Rook.md", "saved", "second save");
-        fs::write(&path, "second save").unwrap();
-        assert!(
-            !test_notice_labels(&mut state, &path)
-                .iter()
-                .any(|s| s.starts_with("Undo"))
-        );
-    }
-
-    fn snapshot(root: &Path) -> Vec<(PathBuf, Vec<u8>)> {
+    fn snapshot(root: &std::path::Path) -> Vec<(PathBuf, Vec<u8>)> {
         let mut files = Vec::new();
         for item in fs::read_dir(root).unwrap() {
             let path = item.unwrap().path();
@@ -700,10 +578,9 @@ mod tests {
         {
             fs::write(root.join("Legacy guards.md"), format!("---\nsplat_schema: 1\nsplat_id: {}\nsplat_kind: encounter_group\nsplat_name: Legacy guards\nsplat_encounter_group: {{side: enemies, members: [{{creature: {{key: 'dnd2024:creatures/goblin_warrior'}}, count: 2, overrides: {{name: Scout, note: Quiet}}}}]}}\n---\n", uuid::Uuid::new_v4())).unwrap();
         }
-        let timeline = crate::sessions::open_folder(&campaign)
-            .unwrap()
-            .join(crate::timeline::FILE);
+        let timeline = campaign.path.join("Sessions").join(crate::timeline::FILE);
         let old_timeline = "---\ntimeline_version: 1\ntimeline:\n- id: t-owner-day\n  kind: day\n  title: The crossing\n---\n\n# Timeline\n";
+        fs::create_dir_all(timeline.parent().unwrap()).unwrap();
         fs::write(&timeline, old_timeline).unwrap();
         let campaign_before = snapshot(&campaign.path);
         let generated = app
@@ -716,10 +593,11 @@ mod tests {
         let mut state = State::default();
         state.scan(&app.campaigns);
         let files = state.preview.as_ref().unwrap();
-        for kind in ["campaign", "encounter_group", "encounter"] {
+        for kind in ["campaign", "encounter_group"] {
             assert!(
                 files.iter().any(|f| f.owner == 0
-                    && Entry::parse(&f.path, &f.before).is_ok_and(|e| e.kind == kind)),
+                    && splat::content::legacy::parse(&f.path, &f.before)
+                        .is_ok_and(|e| e.kind == kind)),
                 "{kind}: {:?}",
                 state.skipped
             );
@@ -727,7 +605,7 @@ mod tests {
         assert!(
             files
                 .iter()
-                .any(|f| f.owner == 0 && f.path == crate::timeline::FILE)
+                .any(|f| f.owner == 0 && f.path.ends_with(crate::timeline::FILE))
         );
         for owner in &mut state.owners {
             owner.checked = owner.name == "Ashen Marches";
@@ -764,7 +642,7 @@ mod tests {
     }
 
     #[test]
-    fn fmt_f2_conversion_defaults_to_campaign_and_never_writes_generated_or_unticked_packages() {
+    fn conversion_defaults_to_campaign_and_allows_generated_opt_in() {
         let dir = tempfile::tempdir().unwrap();
         let world = crate::visual_tests::fixture::World::build(
             dir.path(),
@@ -796,48 +674,30 @@ mod tests {
                 .as_ref()
                 .unwrap()
                 .iter()
-                .all(|file| file.owner != generated)
+                .any(|file| file.owner == generated)
         );
-        // Even a stale or forged selection cannot opt a generated package in.
-        state.owners[generated].checked = true;
         state.apply();
         assert!(!state.undo.is_empty(), "campaign files converted");
-        for (module, before) in app.campaigns.modules().iter().zip(before) {
-            assert_eq!(snapshot(&module.path), before, "{}", module.name);
+        for (module, before) in app.campaigns.modules().iter().zip(&before) {
+            assert_eq!(snapshot(&module.path), *before, "{}", module.name);
         }
-    }
-
-    #[test]
-    fn fmt_f2_generated_marker_added_after_preview_still_blocks_conversion() {
-        let dir = tempfile::tempdir().unwrap();
-        let world = crate::visual_tests::fixture::World::build(
-            dir.path(),
-            &dir.path().join("cache"),
-            "conversion-marker-race",
-            crate::visual_tests::fixture::Seed::Formats,
-        )
-        .unwrap();
-        let app = world.app();
-        let mut state = State::default();
         state.scan(&app.campaigns);
-        let group = state
-            .owners
-            .iter_mut()
-            .find(|owner| owner.name == "Ashen Marches")
-            .unwrap();
-        group.checked = true;
-        fs::copy(group.root.join("Module.md"), group.root.join("Package.md")).unwrap();
-        let manifest = fs::read_to_string(group.root.join("Package.md")).unwrap();
-        fs::write(
-            group.root.join("Package.md"),
-            splat::content::patch_fields(&manifest, &[("splat_generated", Some(true.into()))])
-                .unwrap(),
-        )
-        .unwrap();
-        let before = snapshot(&group.root);
-        let root = group.root.clone();
+        for owner in &mut state.owners {
+            owner.checked = owner.name == "Generated Book";
+        }
         state.apply();
-        assert_eq!(snapshot(&root), before);
+        assert!(!state.undo.is_empty());
+        let generated = app
+            .campaigns
+            .modules()
+            .iter()
+            .find(|m| m.name == "Generated Book")
+            .unwrap();
+        assert!(
+            fs::read_to_string(generated.path.join("Creatures/Book Wolf.md"))
+                .unwrap()
+                .contains("splat_schema: 2")
+        );
     }
 
     #[test]

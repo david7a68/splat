@@ -1,34 +1,60 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: d00bd6b3-23c5-5121-81d2-def8a283e438
 splat_kind: creature
 splat_key: dnd2024:creatures/giant_spider
 splat_name: Giant Spider
-splat_origin:
-  key: dnd2024:reference/creature/giant_spider
+splat_origin: dnd2024:reference/creature/giant_spider
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 353, 354
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 353, 354, https://www.dndbeyond.com/srd
 ---
 
 # Giant Spider
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Large |
+| Type | Beast |
+| Alignment | Unaligned |
+| Armor Class | 14 |
+| Hit Points | 26 (4d10 + 4) |
+| Initiative | +3 (13) |
+| Speed | 30 ft., Climb 30 ft. |
+| Challenge | 1 (XP 200; PB +2) |
+| Skills | Perception +4, Stealth +7 |
+| Senses | Darkvision 60 ft.; Passive Perception 14 |
+| Languages | None |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 14 | +2 | +2 |
+| Dex | 16 | +3 | +3 |
+| Con | 12 | +1 | +1 |
+| Int | 2 | -4 | -4 |
+| Wis | 11 | +0 | +0 |
+| Cha | 4 | -3 | -3 |
+
 
 ## Source text
 
 <!-- SRD page 353 -->
 
-Large Beast, Unaligned\
-AC 14  Initiative +3 (13)\
-HP 26 (4d10 + 4)\
-Speed 30 ft., Climb 30 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 14 +2 +2 Dex 16 +3 +3 Con 12 +1 +1\
-Int 2 −4 −4 Wis 11 +0 +0 Cha 4 −3 −3\
-Skills Perception +4, Stealth +7\
-Senses Darkvision 60 ft.; Passive Perception 14\
-Languages None\
-CR 1 (XP 200; PB +2)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Large Beast, Unaligned\
+> AC 14  Initiative +3 (13)\
+> HP 26 (4d10 + 4)\
+> Speed 30 ft., Climb 30 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 14 +2 +2 Dex 16 +3 +3 Con 12 +1 +1\
+> Int 2 −4 −4 Wis 11 +0 +0 Cha 4 −3 −3\
+> Skills Perception +4, Stealth +7\
+> Senses Darkvision 60 ft.; Passive Perception 14\
+> Languages None\
+> CR 1 (XP 200; PB +2)
+
 
 <!-- SRD page 354 -->
 
@@ -46,46 +72,11 @@ Web (Recharge 5–6). Dexterity Saving Throw: DC 13, one creature the spider can
 
 Original layout: [[../../srd-5.2.1/pages/353|page 353]], [[../../srd-5.2.1/pages/354|page 354]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` large ` |
-| ` type ` | ` beast ` |
-| ` alignment ` | ` Unaligned ` |
-| ` movement_text ` | ` 30 ft., Climb 30 ft. ` |
-| ` skills_text ` | ` Perception +4, Stealth +7 ` |
-| ` senses_text ` | ` Darkvision 60 ft.; Passive Perception 14 ` |
-| ` languages_text ` | ` None ` |
-| ` cr_text ` | ` 1 (XP 200; PB +2) ` |
-| ` hit_points_text ` | ` 26 (4d10 + 4) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 14 ` | ` 2 ` |
-| ` Dexterity ` | ` 16 ` | ` 3 ` |
-| ` Constitution ` | ` 12 ` | ` 1 ` |
-| ` Intelligence ` | ` 2 ` | ` -4 ` |
-| ` Wisdom ` | ` 11 ` | ` 0 ` |
-| ` Charisma ` | ` 4 ` | ` -3 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 14 ` |  |
-| ` max_hp ` | ` 26 ` |  |
-| ` initiative ` | ` 3 ` |  |
-| ` speed ` | ` 30 ` | ` ft ` |
-| ` climb_speed ` | ` 30 ` | ` ft ` |
 
 ## Health
 
@@ -284,3 +275,13 @@ geometry:
 unlisted_success_branch: no_effect
 unlisted_duration: until_removed_by_applicable_rule
 ```
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_stats_extras -->
+> 
+> ```yaml
+> climb_speed:
+>   unit: ft
+>   value: 30
+> ```
+

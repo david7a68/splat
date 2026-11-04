@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 4c950cfd-53fd-5274-8288-6b3c76a44b29
 splat_kind: rule
 splat_key: dnd2024:rules/warlock_eldritch_spear
 splat_name: Eldritch Spear
-splat_origin:
-  key: dnd2024:reference/pages/073
+splat_origin: dnd2024:reference/pages/073
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 73
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 73, https://www.dndbeyond.com/srd
 ---
 
 # Eldritch Spear

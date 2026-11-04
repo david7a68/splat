@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 463d14d1-fd72-5ea7-9eb9-51797f64ecee
 splat_kind: spell
 splat_key: dnd2024:spells/pass_without_trace
 splat_name: Pass without Trace
-splat_origin:
-  key: dnd2024:reference/spell/pass_without_trace
+splat_origin: dnd2024:reference/spell/pass_without_trace
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 151
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 151, https://www.dndbeyond.com/srd
 ---
 
 # Pass without Trace
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 2 |
+| School | Abjuration |
+| Classes | Druid, Ranger |
+| Casting Time | Action |
+| Range |  |
+| Components | V, S, M (ashes from burned mistletoe) |
+| Duration | Concentration, up to 1 hour |
+
 
 ## Source text
 
@@ -28,37 +39,11 @@ You radiate a concealing aura in a 30-foot Emanation for the duration. While in 
 
 Original layout: [[../../srd-5.2.1/pages/151|page 151]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 2 ` |
-| ` school ` | ` abjuration ` |
-| ` classes ` | ` ["druid", "ranger"] ` |
-| ` components ` | ` ["verbal", "somatic", "material"] ` |
-| ` concentration ` | ` true ` |
-| ` duration ` | ` Concentration, up to 1 hour ` |
-| ` casting_time ` | ` Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
 
-<!-- splat:values path=splat_spell/range -->
 
-| Field | Value |
-| --- | --- |
-| ` mode ` | ` self ` |
-
-### Material
-
-<!-- splat:values path=splat_spell/material -->
-
-| Field | Value |
-| --- | --- |
-| ` description ` | ` ashes from burned mistletoe ` |
-| ` consumed ` | ` false ` |
 
 ## Rule
 
@@ -119,3 +104,14 @@ Original layout: [[../../srd-5.2.1/pages/151|page 151]].
 | ` source ` | ` supplied_world_geometry ` |
 | ` unknown_facts ` | ` require_resolution ` |
 | ` infer_unprovided_geometry ` | ` false ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_spell_extras -->
+> 
+> ```yaml
+> material:
+>   consumed: false
+> range:
+>   mode: self
+> ```
+

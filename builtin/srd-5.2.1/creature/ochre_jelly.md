@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "200b2b7f-2041-537d-b0dc-288390f8fbdc"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/ochre_jelly"
 splat_name: "Ochre Jelly"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [312], "executable": false}
+splat_pages:
+- 312
 ---
 
 # Ochre Jelly
@@ -39,3 +40,13 @@ Pseudopod. Melee Attack Roll: +4, reach 5 ft. Hit: 12 (3d6 + 2) Acid damage.
 Split. Trigger: While the jelly is Large or Medium and has 10+ Hit Points, it becomes Bloodied or is subjected to Lightning or Slashing damage. Response: The jelly splits into two new Ochre Jellies. Each new jelly is one size smaller than the original jelly and acts on its Initiative. The original jelly’s Hit Points are divided evenly between the new jellies (round down).
 
 Original layout: [[../pages/312|page 312]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

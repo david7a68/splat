@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "438fb903-2780-5740-ba19-bb1c00d72980"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/programmed_illusion"
 splat_name: "Programmed Illusion"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [156], "executable": false}
+splat_pages:
+- 156
 ---
 
 # Programmed Illusion
@@ -26,3 +27,13 @@ The trigger can be as general or as detailed as you like, though it must be base
 Physical interaction with the image reveals it to be illusory, since things can pass through it. A creature that takes the Study action to examine the image can determine that it is an illusion with a successful Intelligence (Investigation) check against your spell save DC. If a creature discerns the illusion for what it is, the creature can see through the image, and any noise it makes sounds hollow to the creature.
 
 Original layout: [[../pages/156|page 156]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 297dc3e1-1085-5ad9-ac62-80dc9a4a13ce
 splat_kind: rule
 splat_key: dnd2024:rules/level_advancement_tier_2_levels_5_10
 splat_name: Tier 2 (Levels 5–10)
-splat_origin:
-  key: dnd2024:reference/pages/024
+splat_origin: dnd2024:reference/pages/024
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 24
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 24, https://www.dndbeyond.com/srd
 ---
 
 # Tier 2 (Levels 5–10)

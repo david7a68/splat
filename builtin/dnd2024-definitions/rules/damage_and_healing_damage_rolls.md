@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 59db096b-3ba9-530b-9514-f7084d964f31
 splat_kind: rule
 splat_key: dnd2024:rules/damage_and_healing_damage_rolls
 splat_name: Damage Rolls
-splat_origin:
-  key: dnd2024:reference/pages/016
+splat_origin: dnd2024:reference/pages/016
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 16
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 16, https://www.dndbeyond.com/srd
 ---
 
 # Damage Rolls

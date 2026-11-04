@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 06b372a2-f70b-5b3c-adbf-af31ca9529bf
 splat_kind: item
 splat_key: dnd2024:items/well_of_many_worlds
 splat_name: Well of Many Worlds
-splat_origin:
-  key: dnd2024:reference/magic_item/well_of_many_worlds
+splat_origin: dnd2024:reference/magic_item/well_of_many_worlds
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 253
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 253, https://www.dndbeyond.com/srd
 ---
 
 # Well of Many Worlds
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Wondrous Item |
+| Rarity | Legendary |
+| Attunement | No |
+
 
 ## Source text
 
@@ -28,22 +35,9 @@ Once the Well of Many Worlds has opened a portal, it can’t do so again for 1d8
 
 Original layout: [[../../srd-5.2.1/pages/253|page 253]].
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` wondrous_item ` |
-| ` rarity ` | ` legendary ` |
 
-### Equipment
-
-<!-- splat:values path=splat_item/equipment -->
-
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` none ` |
 
 ## Rule
 

@@ -1,10 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "db292de3-c1dd-52ae-a01e-a75a78d2097f"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/bandit_captain"
 splat_name: "Bandit Captain"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [261, 262], "executable": false}
+splat_pages:
+- 261
+- 262
 ---
 
 # Bandit Captain
@@ -39,3 +41,13 @@ Pistol. Ranged Attack Roll: +5, range 30/90 ft. Hit: 8 (1d10 + 3) Piercing damag
 Parry. Trigger: The bandit is hit by a melee attack roll while holding a weapon. Response: The bandit adds 2 to its AC against that attack, possibly causing it to miss.
 
 Original layout: [[../pages/261|page 261]], [[../pages/262|page 262]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

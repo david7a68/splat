@@ -1,35 +1,62 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 70219a9d-618c-52de-80dc-6918dcb1b6da
 splat_kind: creature
 splat_key: dnd2024:creatures/frost_giant
 splat_name: Frost Giant
-splat_origin:
-  key: dnd2024:reference/creature/frost_giant
+splat_origin: dnd2024:reference/creature/frost_giant
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 285, 286
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 285, 286, https://www.dndbeyond.com/srd
 ---
 
 # Frost Giant
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Huge |
+| Type | Giant |
+| Alignment | Neutral Evil |
+| Armor Class | 15 |
+| Hit Points | 149 (13d12 + 65) |
+| Initiative | +2 (12) |
+| Speed | 40 ft. |
+| Challenge | 8 (XP 3,900; PB +3) |
+| Skills | Athletics +9, Perception +3 |
+| Senses | Passive Perception 13 |
+| Languages | Giant |
+| Immunities | Cold |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 23 | +6 | +6 |
+| Dex | 9 | -1 | -1 |
+| Con | 21 | +5 | +8 |
+| Int | 9 | -1 | -1 |
+| Wis | 10 | +0 | +3 |
+| Cha | 12 | +1 | +4 |
+
 
 ## Source text
 
 <!-- SRD page 285 -->
 
-Huge Giant, Neutral Evil\
-AC 15 Initiative +2 (12)\
-HP 149 (13d12 + 65)\
-Speed 40 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 23 +6 +6 Dex 9 −1 −1 Con 21 +5 +8\
-Int 9 −1 −1 Wis 10 +0 +3 Cha 12 +1 +4\
-Skills Athletics +9, Perception +3\
-Immunities Cold\
-Senses Passive Perception 13\
-Languages Giant\
-CR 8 (XP 3,900; PB +3)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Huge Giant, Neutral Evil\
+> AC 15 Initiative +2 (12)\
+> HP 149 (13d12 + 65)\
+> Speed 40 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 23 +6 +6 Dex 9 −1 −1 Con 21 +5 +8\
+> Int 9 −1 −1 Wis 10 +0 +3 Cha 12 +1 +4\
+> Skills Athletics +9, Perception +3\
+> Immunities Cold\
+> Senses Passive Perception 13\
+> Languages Giant\
+> CR 8 (XP 3,900; PB +3)
+
 
 <!-- SRD page 286 -->
 
@@ -47,46 +74,11 @@ War Cry (Recharge 5–6). The giant or one creature of its choice that can see o
 
 Original layout: [[../../srd-5.2.1/pages/285|page 285]], [[../../srd-5.2.1/pages/286|page 286]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` huge ` |
-| ` type ` | ` giant ` |
-| ` alignment ` | ` Neutral Evil ` |
-| ` movement_text ` | ` 40 ft. ` |
-| ` skills_text ` | ` Athletics +9, Perception +3 ` |
-| ` immunities_text ` | ` Cold ` |
-| ` senses_text ` | ` Passive Perception 13 ` |
-| ` languages_text ` | ` Giant ` |
-| ` cr_text ` | ` 8 (XP 3,900; PB +3) ` |
-| ` hit_points_text ` | ` 149 (13d12 + 65) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 23 ` | ` 6 ` |
-| ` Dexterity ` | ` 9 ` | ` -1 ` |
-| ` Constitution ` | ` 21 ` | ` 8 ` |
-| ` Intelligence ` | ` 9 ` | ` -1 ` |
-| ` Wisdom ` | ` 10 ` | ` 3 ` |
-| ` Charisma ` | ` 12 ` | ` 4 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 15 ` |  |
-| ` max_hp ` | ` 149 ` |  |
-| ` initiative ` | ` 2 ` |  |
-| ` speed ` | ` 40 ` | ` ft ` |
 
 ## Health
 

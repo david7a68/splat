@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "e5e5cb9c-02fa-5029-81e4-c62568d6d9fc"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/baboon"
 splat_name: "Baboon"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [345], "executable": false}
+splat_pages:
+- 345
 ---
 
 # Baboon
@@ -31,3 +32,13 @@ Pack Tactics. The baboon has Advantage on an attack roll against a creature if a
 Bite. Melee Attack Roll: +1, reach 5 ft. Hit: 1 (1d4 − 1) Piercing damage.
 
 Original layout: [[../pages/345|page 345]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

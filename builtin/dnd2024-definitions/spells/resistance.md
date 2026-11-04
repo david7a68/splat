@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: c60032dc-0ab4-5660-afd7-386b0c6fc57d
 splat_kind: spell
 splat_key: dnd2024:spells/resistance
 splat_name: Resistance
-splat_origin:
-  key: dnd2024:reference/spell/resistance
+splat_origin: dnd2024:reference/spell/resistance
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 158
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 158, https://www.dndbeyond.com/srd
 ---
 
 # Resistance
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | Cantrip |
+| School | Abjuration |
+| Classes | Cleric, Druid |
+| Casting Time | Action |
+| Range |  |
+| Components | V, S |
+| Duration | Concentration, up to 1 minute |
+
 
 ## Source text
 
@@ -28,28 +39,9 @@ You touch a willing creature and choose a damage type: Acid, Bludgeoning, Cold, 
 
 Original layout: [[../../srd-5.2.1/pages/158|page 158]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 0 ` |
-| ` school ` | ` abjuration ` |
-| ` classes ` | ` ["cleric", "druid"] ` |
-| ` components ` | ` ["verbal", "somatic"] ` |
-| ` concentration ` | ` true ` |
-| ` duration ` | ` Concentration, up to 1 minute ` |
-| ` casting_time ` | ` Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
-
-<!-- splat:values path=splat_spell/range -->
-
-| Field | Value |
-| --- | --- |
-| ` mode ` | ` touch ` |
 
 ## Rule
 
@@ -100,3 +92,12 @@ maximum:
   value: 1
   unit: minute
 ```
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_spell_extras -->
+> 
+> ```yaml
+> range:
+>   mode: touch
+> ```
+

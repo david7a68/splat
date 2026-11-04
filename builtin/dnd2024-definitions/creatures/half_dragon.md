@@ -1,35 +1,62 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: e6484aed-61b8-567b-835d-4f18c472deb2
 splat_kind: creature
 splat_key: dnd2024:creatures/half_dragon
 splat_name: Half-Dragon
-splat_origin:
-  key: dnd2024:reference/creature/half_dragon
+splat_origin: dnd2024:reference/creature/half_dragon
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 297
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 297, https://www.dndbeyond.com/srd
 ---
 
 # Half-Dragon
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Medium |
+| Type | Dragon |
+| Alignment | Neutral |
+| Armor Class | 18 |
+| Hit Points | 105 (14d8 + 42) |
+| Initiative | +5 (15) |
+| Speed | 40 ft. |
+| Challenge | 5 (XP 1,800; PB +3) |
+| Skills | Athletics +7, Perception +5, Stealth +5 |
+| Senses | Blindsight 10 ft., Darkvision 60 ft.; Passive Perception 15 |
+| Languages | Common, Draconic |
+| Resistances | Damage type chosen for the Draconic Origin trait below |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 19 | +4 | +4 |
+| Dex | 14 | +2 | +5 |
+| Con | 16 | +3 | +3 |
+| Int | 10 | +0 | +0 |
+| Wis | 15 | +2 | +5 |
+| Cha | 14 | +2 | +2 |
+
 
 ## Source text
 
 <!-- SRD page 297 -->
 
-Medium Dragon, Neutral\
-AC 18  Initiative +5 (15)\
-HP 105 (14d8 + 42)\
-Speed 40 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 19 +4 +4 Dex 14 +2 +5 Con 16 +3 +3\
-Int 10 +0 +0 Wis 15 +2 +5 Cha 14 +2 +2\
-Skills Athletics +7, Perception +5, Stealth +5\
-Resistances Damage type chosen for the Draconic Origin trait below\
-Senses Blindsight 10 ft., Darkvision 60 ft.; Passive Perception 15\
-Languages Common, Draconic\
-CR 5 (XP 1,800; PB +3)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Medium Dragon, Neutral\
+> AC 18  Initiative +5 (15)\
+> HP 105 (14d8 + 42)\
+> Speed 40 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 19 +4 +4 Dex 14 +2 +5 Con 16 +3 +3\
+> Int 10 +0 +0 Wis 15 +2 +5 Cha 14 +2 +2\
+> Skills Athletics +7, Perception +5, Stealth +5\
+> Resistances Damage type chosen for the Draconic Origin trait below\
+> Senses Blindsight 10 ft., Darkvision 60 ft.; Passive Perception 15\
+> Languages Common, Draconic\
+> CR 5 (XP 1,800; PB +3)
+
 
 ### Traits
 
@@ -49,46 +76,11 @@ Leap. The half-dragon jumps up to 30 feet by spending 10 feet of movement.
 
 Original layout: [[../../srd-5.2.1/pages/297|page 297]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` medium ` |
-| ` type ` | ` dragon ` |
-| ` alignment ` | ` Neutral ` |
-| ` movement_text ` | ` 40 ft. ` |
-| ` skills_text ` | ` Athletics +7, Perception +5, Stealth +5 ` |
-| ` resistances_text ` | ` Damage type chosen for the Draconic Origin trait below ` |
-| ` senses_text ` | ` Blindsight 10 ft., Darkvision 60 ft.; Passive Perception 15 ` |
-| ` languages_text ` | ` Common, Draconic ` |
-| ` cr_text ` | ` 5 (XP 1,800; PB +3) ` |
-| ` hit_points_text ` | ` 105 (14d8 + 42) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 19 ` | ` 4 ` |
-| ` Dexterity ` | ` 14 ` | ` 5 ` |
-| ` Constitution ` | ` 16 ` | ` 3 ` |
-| ` Intelligence ` | ` 10 ` | ` 0 ` |
-| ` Wisdom ` | ` 15 ` | ` 5 ` |
-| ` Charisma ` | ` 14 ` | ` 2 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 18 ` |  |
-| ` max_hp ` | ` 105 ` |  |
-| ` initiative ` | ` 5 ` |  |
-| ` speed ` | ` 40 ` | ` ft ` |
 
 ## Health
 

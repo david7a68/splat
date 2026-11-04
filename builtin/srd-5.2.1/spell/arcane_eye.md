@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "4e15f150-d705-50f9-91bf-a9de29376be8"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/arcane_eye"
 splat_name: "Arcane Eye"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [110], "executable": false}
+splat_pages:
+- 110
 ---
 
 # Arcane Eye
@@ -22,3 +23,13 @@ You create an Invisible, invulnerable eye within range that hovers for the durat
 As a Bonus Action, you can move the eye up to 30 feet in any direction. A solid barrier blocks the eye’s movement, but the eye can pass through an opening as small as 1 inch in diameter.
 
 Original layout: [[../pages/110|page 110]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

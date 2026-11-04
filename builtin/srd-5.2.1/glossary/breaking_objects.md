@@ -1,10 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "20ebcef8-6a94-5256-b301-7a72503c88ea"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/glossary/breaking_objects"
 splat_name: "Breaking Objects"
-splat_reference: {"source": "SRD 5.2.1", "category": "glossary", "pages": [177, 178], "executable": false}
+splat_pages:
+- 177
+- 178
 ---
 
 # Breaking Objects
@@ -44,3 +46,13 @@ Damage Threshold. Big objects, such as castle walls, often have extra resilience
 No Ability Scores. An object lacks ability scores unless a rule assigns scores to the object. Without ability scores, an object can’t make ability checks, and it fails all saving throws.
 
 Original layout: [[../pages/177|page 177]], [[../pages/178|page 178]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: glossary
+> executable: false
+> ```
+

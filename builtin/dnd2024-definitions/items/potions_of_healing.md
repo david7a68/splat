@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 1063d842-0468-5b8a-86de-f8e52750cbac
 splat_kind: item
 splat_key: dnd2024:items/potions_of_healing
 splat_name: Potions of Healing
-splat_origin:
-  key: dnd2024:reference/magic_item/potions_of_healing
+splat_origin: dnd2024:reference/magic_item/potions_of_healing
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 236
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 236, https://www.dndbeyond.com/srd
 ---
 
 # Potions of Healing
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Potion |
+| Rarity | Rarity Varies |
+| Attunement | No |
+
 
 ## Source text
 
@@ -33,22 +40,9 @@ Whatever its potency, the potion’s red liquid glimmers when agitated.
 
 Original layout: [[../../srd-5.2.1/pages/236|page 236]].
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` potion ` |
-| ` rarity ` | ` rarity_varies ` |
 
-### Equipment
-
-<!-- splat:values path=splat_item/equipment -->
-
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` none ` |
 
 ## Rule
 

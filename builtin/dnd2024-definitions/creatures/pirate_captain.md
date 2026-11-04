@@ -1,35 +1,62 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: b9d9ae32-e7fc-5ddc-a4c2-14c1d4f47ee0
 splat_kind: creature
 splat_key: dnd2024:creatures/pirate_captain
 splat_name: Pirate Captain
-splat_origin:
-  key: dnd2024:reference/creature/pirate_captain
+splat_origin: dnd2024:reference/creature/pirate_captain
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 314
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 314, https://www.dndbeyond.com/srd
 ---
 
 # Pirate Captain
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Medium or Small |
+| Type | Humanoid |
+| Alignment | Neutral |
+| Armor Class | 17 |
+| Hit Points | 84 (13d8 + 26) |
+| Initiative | +7 (17) |
+| Speed | 30 ft. |
+| Challenge | 6 (XP 2,300; PB +3) |
+| Skills | Acrobatics +7, Perception +5 |
+| Senses | Passive Perception 15 |
+| Languages | Common plus one other language |
+| Gear | Pistol, Rapier |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 10 | +0 | +3 |
+| Dex | 18 | +4 | +7 |
+| Con | 14 | +2 | +2 |
+| Int | 10 | +0 | +0 |
+| Wis | 14 | +2 | +5 |
+| Cha | 17 | +3 | +6 |
+
 
 ## Source text
 
 <!-- SRD page 314 -->
 
 Medium or Small Humanoid, Neutral\
-AC 17  Initiative +7 (17)\
-HP 84 (13d8 + 26)\
-Speed 30 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 10 +0 +3 Dex 18 +4 +7 Con 14 +2 +2\
-Int 10 +0 +0 Wis 14 +2 +5 Cha 17 +3 +6\
-Skills Acrobatics +7, Perception +5\
-Gear Pistol, Rapier\
-Senses Passive Perception 15\
-Languages Common plus one other language\
-CR 6 (XP 2,300; PB +3)
+> [!quote]- Printed stat block (not read; edit the table above)
+> AC 17  Initiative +7 (17)\
+> HP 84 (13d8 + 26)\
+> Speed 30 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 10 +0 +3 Dex 18 +4 +7 Con 14 +2 +2\
+> Int 10 +0 +0 Wis 14 +2 +5 Cha 17 +3 +6\
+> Skills Acrobatics +7, Perception +5\
+> Gear Pistol, Rapier\
+> Senses Passive Perception 15\
+> Languages Common plus one other language\
+> CR 6 (XP 2,300; PB +3)
+
 
 ### Actions
 
@@ -49,47 +76,11 @@ Riposte. Trigger: The pirate is hit by a melee attack roll while holding a weapo
 
 Original layout: [[../../srd-5.2.1/pages/314|page 314]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` medium ` |
-| ` type ` | ` humanoid ` |
-| ` alignment ` | ` Neutral ` |
-| ` size_options_text ` | ` Medium or Small ` |
-| ` movement_text ` | ` 30 ft. ` |
-| ` skills_text ` | ` Acrobatics +7, Perception +5 ` |
-| ` gear_text ` | ` Pistol, Rapier ` |
-| ` senses_text ` | ` Passive Perception 15 ` |
-| ` languages_text ` | ` Common plus one other language ` |
-| ` cr_text ` | ` 6 (XP 2,300; PB +3) ` |
-| ` hit_points_text ` | ` 84 (13d8 + 26) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 10 ` | ` 3 ` |
-| ` Dexterity ` | ` 18 ` | ` 7 ` |
-| ` Constitution ` | ` 14 ` | ` 2 ` |
-| ` Intelligence ` | ` 10 ` | ` 0 ` |
-| ` Wisdom ` | ` 14 ` | ` 5 ` |
-| ` Charisma ` | ` 17 ` | ` 6 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 17 ` |  |
-| ` max_hp ` | ` 84 ` |  |
-| ` initiative ` | ` 7 ` |  |
-| ` speed ` | ` 30 ` | ` ft ` |
 
 ## Health
 

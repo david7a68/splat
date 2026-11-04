@@ -1,35 +1,62 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: d989aa4d-b3f7-5d11-88ff-6def51fa42e1
 splat_kind: creature
 splat_key: dnd2024:creatures/steam_mephit
 splat_name: Steam Mephit
-splat_origin:
-  key: dnd2024:reference/creature/steam_mephit
+splat_origin: dnd2024:reference/creature/steam_mephit
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 308
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 308, https://www.dndbeyond.com/srd
 ---
 
 # Steam Mephit
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Small |
+| Type | Elemental |
+| Alignment | Neutral Evil |
+| Armor Class | 10 |
+| Hit Points | 17 (5d6) |
+| Initiative | +0 (10) |
+| Speed | 30 ft., Fly 30 ft. |
+| Challenge | 1/4 (XP 50; PB +2) |
+| Skills | Stealth +2 |
+| Senses | Darkvision 60 ft.; Passive Perception 10 |
+| Languages | Primordial (Aquan, Ignan) |
+| Immunities | Fire, Poison; Exhaustion, Poisoned |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 5 | -3 | -3 |
+| Dex | 11 | +0 | +0 |
+| Con | 10 | +0 | +0 |
+| Int | 11 | +0 | +0 |
+| Wis | 10 | +0 | +0 |
+| Cha | 12 | +1 | +1 |
+
 
 ## Source text
 
 <!-- SRD page 308 -->
 
-Small Elemental, Neutral Evil\
-AC 10 Initiative +0 (10)\
-HP 17 (5d6)\
-Speed 30 ft., Fly 30 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 5 −3 −3 Dex 11 +0 +0 Con 10 +0 +0\
-Int 11 +0 +0 Wis 10 +0 +0 Cha 12 +1 +1\
-Skills Stealth +2\
-Immunities Fire, Poison; Exhaustion, Poisoned\
-Senses Darkvision 60 ft.; Passive Perception 10\
-Languages Primordial (Aquan, Ignan)\
-CR 1/4 (XP 50; PB +2)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Small Elemental, Neutral Evil\
+> AC 10 Initiative +0 (10)\
+> HP 17 (5d6)\
+> Speed 30 ft., Fly 30 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 5 −3 −3 Dex 11 +0 +0 Con 10 +0 +0\
+> Int 11 +0 +0 Wis 10 +0 +0 Cha 12 +1 +1\
+> Skills Stealth +2\
+> Immunities Fire, Poison; Exhaustion, Poisoned\
+> Senses Darkvision 60 ft.; Passive Perception 10\
+> Languages Primordial (Aquan, Ignan)\
+> CR 1/4 (XP 50; PB +2)
+
 
 ### Traits
 
@@ -45,47 +72,11 @@ Steam Breath (Recharge 6). Constitution Saving Throw: DC 10, each creature in a 
 
 Original layout: [[../../srd-5.2.1/pages/308|page 308]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` small ` |
-| ` type ` | ` elemental ` |
-| ` alignment ` | ` Neutral Evil ` |
-| ` movement_text ` | ` 30 ft., Fly 30 ft. ` |
-| ` skills_text ` | ` Stealth +2 ` |
-| ` immunities_text ` | ` Fire, Poison; Exhaustion, Poisoned ` |
-| ` senses_text ` | ` Darkvision 60 ft.; Passive Perception 10 ` |
-| ` languages_text ` | ` Primordial (Aquan, Ignan) ` |
-| ` cr_text ` | ` 1/4 (XP 50; PB +2) ` |
-| ` hit_points_text ` | ` 17 (5d6) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 5 ` | ` -3 ` |
-| ` Dexterity ` | ` 11 ` | ` 0 ` |
-| ` Constitution ` | ` 10 ` | ` 0 ` |
-| ` Intelligence ` | ` 11 ` | ` 0 ` |
-| ` Wisdom ` | ` 10 ` | ` 0 ` |
-| ` Charisma ` | ` 12 ` | ` 1 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 10 ` |  |
-| ` max_hp ` | ` 17 ` |  |
-| ` initiative ` | ` 0 ` |  |
-| ` speed ` | ` 30 ` | ` ft ` |
-| ` fly_speed ` | ` 30 ` | ` ft ` |
 
 ## Health
 
@@ -290,3 +281,13 @@ recharge:
 | ` provider ` | ` caller ` |
 | ` required_facts ` | ` ["distance", "area_membership", "visibility", "occupancy", "movement_path"] ` |
 | ` validate_against_typed_constraints ` | ` true ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_stats_extras -->
+> 
+> ```yaml
+> fly_speed:
+>   unit: ft
+>   value: 30
+> ```
+

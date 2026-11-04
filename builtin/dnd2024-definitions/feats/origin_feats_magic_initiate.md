@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 5b970f1a-1808-5912-bea8-762c21675dee
 splat_kind: rule
 splat_key: dnd2024:feats/origin_feats_magic_initiate
 splat_name: Magic Initiate
-splat_origin:
-  key: dnd2024:reference/pages/087
+splat_origin: dnd2024:reference/pages/087
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 87
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 87, https://www.dndbeyond.com/srd
 ---
 
 # Magic Initiate

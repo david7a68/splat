@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "52857c49-4032-51e0-94ad-ef77aacc284e"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/magic_item/rope_of_climbing"
 splat_name: "Rope of Climbing"
-splat_reference: {"source": "SRD 5.2.1", "category": "magic_item", "pages": [242], "executable": false}
+splat_pages:
+- 242
 ---
 
 # Rope of Climbing
@@ -20,3 +21,13 @@ If you tell the rope to knot, large knots appear at 1-foot intervals along the r
 The rope has AC 20, HP 20, and Immunity to Poison and Psychic damage. It regains 1 Hit Point every 5 minutes as long as it has at least 1 Hit Point. If the rope drops to 0 Hit Points, it is destroyed.
 
 Original layout: [[../pages/242|page 242]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: magic_item
+> executable: false
+> ```
+

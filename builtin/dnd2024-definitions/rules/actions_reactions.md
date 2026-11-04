@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: cb4d373c-9890-5a96-ab17-86bf65a3f03b
 splat_kind: rule
 splat_key: dnd2024:rules/actions_reactions
 splat_name: Reactions
-splat_origin:
-  key: dnd2024:reference/pages/010
+splat_origin: dnd2024:reference/pages/010
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 10
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 10, https://www.dndbeyond.com/srd
 ---
 
 # Reactions

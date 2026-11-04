@@ -1,10 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "c5242053-6f4a-5c6a-bdaf-b5f5e8c089a4"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/magic_item/portable_hole"
 splat_name: "Portable Hole"
-splat_reference: {"source": "SRD 5.2.1", "category": "magic_item", "pages": [234, 235], "executable": false}
+splat_pages:
+- 234
+- 235
 ---
 
 # Portable Hole
@@ -26,3 +28,13 @@ If the hole is folded up, a creature within the hole’s extradimensional space 
 Placing a Portable Hole inside an extradimensional space created by a Bag of Holding, Handy Haversack, or similar item instantly destroys both items and opens a gate to the Astral Plane. The gate originates where the one item was placed inside the other. Any creature within 10 feet of the gate and not behind Total Cover is sucked through it and deposited in a random location on the Astral Plane. The gate then closes. The gate is one-way only and can’t be reopened.
 
 Original layout: [[../pages/234|page 234]], [[../pages/235|page 235]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: magic_item
+> executable: false
+> ```
+

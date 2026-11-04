@@ -1,36 +1,64 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 9aba72ea-1243-5435-b57d-530d93f4bf5b
 splat_kind: creature
 splat_key: dnd2024:creatures/gray_ooze
 splat_name: Gray Ooze
-splat_origin:
-  key: dnd2024:reference/creature/gray_ooze
+splat_origin: dnd2024:reference/creature/gray_ooze
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 293
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 293, https://www.dndbeyond.com/srd
 ---
 
 # Gray Ooze
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Medium |
+| Type | Ooze |
+| Alignment | Unaligned |
+| Armor Class | 9 |
+| Hit Points | 22 (3d8 + 9) |
+| Initiative | -2 (8) |
+| Speed | 10 ft., Climb 10 ft. |
+| Challenge | 1/2 (XP 100; PB +2) |
+| Skills | Stealth +2 |
+| Senses | Blindsight 60 ft.; Passive Perception 8 |
+| Languages | None |
+| Resistances | Acid, Cold, Fire |
+| Immunities | Blinded, Charmed, Deafened, Exhaustion, Frightened, Grappled, Prone, Restrained |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 12 | +1 | +1 |
+| Dex | 6 | -2 | -2 |
+| Con | 16 | +3 | +3 |
+| Int | 1 | -5 | -5 |
+| Wis | 6 | -2 | -2 |
+| Cha | 2 | -4 | -4 |
+
 
 ## Source text
 
 <!-- SRD page 293 -->
 
-Medium Ooze, Unaligned\
-AC 9 Initiative −2 (13)\
-HP 22 (3d8 + 9)\
-Speed 10 ft., Climb 10 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 12 +1 +1 Dex 6 −2 −2 Con 16 +3 +3\
-Int 1 −5 −5 Wis 6 −2 −2 Cha 2 −4 −4\
-Skills Stealth +2\
-Resistances Acid, Cold, Fire\
-Immunities Blinded, Charmed, Deafened, Exhaustion, Frightened, Grappled, Prone, Restrained\
-Senses Blindsight 60 ft.; Passive Perception 8\
-Languages None\
-CR 1/2 (XP 100; PB +2)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Medium Ooze, Unaligned\
+> AC 9 Initiative −2 (13)\
+> HP 22 (3d8 + 9)\
+> Speed 10 ft., Climb 10 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 12 +1 +1 Dex 6 −2 −2 Con 16 +3 +3\
+> Int 1 −5 −5 Wis 6 −2 −2 Cha 2 −4 −4\
+> Skills Stealth +2\
+> Resistances Acid, Cold, Fire\
+> Immunities Blinded, Charmed, Deafened, Exhaustion, Frightened, Grappled, Prone, Restrained\
+> Senses Blindsight 60 ft.; Passive Perception 8\
+> Languages None\
+> CR 1/2 (XP 100; PB +2)
+
 
 ### Traits
 
@@ -46,48 +74,11 @@ Pseudopod. Melee Attack Roll: +3, reach 5 ft. Hit: 10 (2d8 + 1) Acid damage. Non
 
 Original layout: [[../../srd-5.2.1/pages/293|page 293]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` medium ` |
-| ` type ` | ` ooze ` |
-| ` alignment ` | ` Unaligned ` |
-| ` movement_text ` | ` 10 ft., Climb 10 ft. ` |
-| ` skills_text ` | ` Stealth +2 ` |
-| ` resistances_text ` | ` Acid, Cold, Fire ` |
-| ` immunities_text ` | ` Blinded, Charmed, Deafened, Exhaustion, Frightened, Grappled, Prone, Restrained ` |
-| ` senses_text ` | ` Blindsight 60 ft.; Passive Perception 8 ` |
-| ` languages_text ` | ` None ` |
-| ` cr_text ` | ` 1/2 (XP 100; PB +2) ` |
-| ` hit_points_text ` | ` 22 (3d8 + 9) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 12 ` | ` 1 ` |
-| ` Dexterity ` | ` 6 ` | ` -2 ` |
-| ` Constitution ` | ` 16 ` | ` 3 ` |
-| ` Intelligence ` | ` 1 ` | ` -5 ` |
-| ` Wisdom ` | ` 6 ` | ` -2 ` |
-| ` Charisma ` | ` 2 ` | ` -4 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 9 ` |  |
-| ` max_hp ` | ` 22 ` |  |
-| ` initiative ` | ` -2 ` |  |
-| ` speed ` | ` 10 ` | ` ft ` |
-| ` climb_speed ` | ` 10 ` | ` ft ` |
 
 ## Health
 
@@ -269,3 +260,13 @@ other_components: spell_definition_unless_waived
 | ` provider ` | ` caller ` |
 | ` required_facts ` | ` ["distance", "area_membership", "visibility", "occupancy", "movement_path"] ` |
 | ` validate_against_typed_constraints ` | ` true ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_stats_extras -->
+> 
+> ```yaml
+> climb_speed:
+>   unit: ft
+>   value: 10
+> ```
+

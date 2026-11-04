@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "94da1300-ac2a-53bb-b26e-6f6be74c1b60"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/tough_boss"
 splat_name: "Tough Boss"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [332], "executable": false}
+splat_pages:
+- 332
 ---
 
 # Tough Boss
@@ -36,3 +37,13 @@ Warhammer. Melee Attack Roll: +5, reach 5 ft. Hit: 12 (2d8 + 3) Bludgeoning dama
 Heavy Crossbow. Ranged Attack Roll: +4, range 100/400 ft. Hit: 13 (2d10 + 2) Piercing damage.
 
 Original layout: [[../pages/332|page 332]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

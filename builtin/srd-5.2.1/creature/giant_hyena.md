@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "81650905-4605-5d85-a0ef-35a42277bb28"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/giant_hyena"
 splat_name: "Giant Hyena"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [352], "executable": false}
+splat_pages:
+- 352
 ---
 
 # Giant Hyena
@@ -32,3 +33,13 @@ Bite. Melee Attack Roll: +5, reach 5 ft. Hit: 10 (2d6 + 3) Piercing damage.
 Rampage (1/Day). Immediately after dealing damage to a creature that was already Bloodied, the hyena can move up to half its Speed, and it makes one Bite attack.
 
 Original layout: [[../pages/352|page 352]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

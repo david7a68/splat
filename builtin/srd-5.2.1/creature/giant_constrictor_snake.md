@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "52e7f3f7-f10f-5d52-bcb5-ed5d8b817183"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/giant_constrictor_snake"
 splat_name: "Giant Constrictor Snake"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [350], "executable": false}
+splat_pages:
+- 350
 ---
 
 # Giant Constrictor Snake
@@ -32,3 +33,13 @@ Bite. Melee Attack Roll: +6, reach 10 ft. Hit: 11 (2d6 + 4) Piercing damage.
 Constrict. Strength Saving Throw: DC 14, one Large or smaller creature the snake can see within 10 feet. Failure: 13 (2d8 + 4) Bludgeoning damage, and the target has the Grappled condition (escape DC 14).
 
 Original layout: [[../pages/350|page 350]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 24cfa087-f9ed-5f95-997f-36352318e52c
 splat_kind: rule
 splat_key: dnd2024:rules/magic_items_attune_during_a_short_rest
 splat_name: Attune during a Short Rest
-splat_origin:
-  key: dnd2024:reference/pages/102
+splat_origin: dnd2024:reference/pages/102
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 102
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 102, https://www.dndbeyond.com/srd
 ---
 
 # Attune during a Short Rest

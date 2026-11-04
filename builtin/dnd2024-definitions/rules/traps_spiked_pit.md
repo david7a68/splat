@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 53d7b4b0-dab8-5eb6-9392-d8d81d0d818f
 splat_kind: rule
 splat_key: dnd2024:rules/traps_spiked_pit
 splat_name: Spiked Pit
-splat_origin:
-  key: dnd2024:reference/pages/201
+splat_origin: dnd2024:reference/pages/201
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 201
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 201, https://www.dndbeyond.com/srd
 ---
 
 # Spiked Pit

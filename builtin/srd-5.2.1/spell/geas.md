@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "f7a0228c-39e0-52c7-9bff-b3a546258f29"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/geas"
 splat_name: "Geas"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [135], "executable": false}
+splat_pages:
+- 135
 ---
 
 # Geas
@@ -26,3 +27,13 @@ You can issue any command you choose, short of an activity that would result in 
 Using a Higher-Level Spell Slot. If you use a level 7 or 8 spell slot, the duration is 365 days. If you use a level 9 spell slot, the spell lasts until it is ended by one of the spells mentioned above.
 
 Original layout: [[../pages/135|page 135]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

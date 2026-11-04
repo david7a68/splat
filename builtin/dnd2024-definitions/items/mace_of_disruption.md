@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 7e889f70-9118-5d06-ae0c-cbd5d05419de
 splat_kind: item
 splat_key: dnd2024:items/mace_of_disruption
 splat_name: Mace of Disruption
-splat_origin:
-  key: dnd2024:reference/magic_item/mace_of_disruption
+splat_origin: dnd2024:reference/magic_item/mace_of_disruption
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 229
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 229, https://www.dndbeyond.com/srd
 ---
 
 # Mace of Disruption
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Weapon |
+| Rarity | Rare |
+| Attunement | Yes |
+
 
 ## Source text
 
@@ -26,22 +33,9 @@ Light. While you hold this weapon, it sheds Bright Light in a 20-foot radius and
 
 Original layout: [[../../srd-5.2.1/pages/229|page 229]].
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` weapon ` |
-| ` rarity ` | ` rare ` |
 
-### Equipment
-
-<!-- splat:values path=splat_item/equipment -->
-
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` required ` |
 
 ## Rule
 

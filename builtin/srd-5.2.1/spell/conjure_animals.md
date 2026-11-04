@@ -1,10 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "d6950892-aeae-5f19-a200-a197fa486c03"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/conjure_animals"
 splat_name: "Conjure Animals"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [117, 118], "executable": false}
+splat_pages:
+- 117
+- 118
 ---
 
 # Conjure Animals
@@ -28,3 +30,13 @@ Whenever the pack moves within 10 feet of a creature you can see and whenever a 
 Using a Higher-Level Spell Slot. The damage increases by 1d10 for each spell slot level above 3.
 
 Original layout: [[../pages/117|page 117]], [[../pages/118|page 118]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

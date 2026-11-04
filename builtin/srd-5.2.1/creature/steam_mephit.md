@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "04f1f0e8-90d4-5410-ab37-1ef86eef9b8d"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/steam_mephit"
 splat_name: "Steam Mephit"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [308], "executable": false}
+splat_pages:
+- 308
 ---
 
 # Steam Mephit
@@ -37,3 +38,13 @@ Claw. Melee Attack Roll: +2, reach 5 ft. Hit: 2 (1d4) Slashing damage plus 2 (1d
 Steam Breath (Recharge 6). Constitution Saving Throw: DC 10, each creature in a 15-foot Cone. Failure: 5 (2d4) Fire damage, and the target’s Speed decreases by 10 feet until the end of the mephit’s next turn. Success: Half damage only. Failure or Success: Being underwater doesn’t grant Resistance to this Fire damage.
 
 Original layout: [[../pages/308|page 308]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

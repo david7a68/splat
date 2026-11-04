@@ -129,27 +129,20 @@ fn read(root: &Path, path: &str) -> Result<Option<String>, String> {
     }
 }
 
-/// Compare like layouts. Overwrite performs conversion after the choice.
-/// Schema 2 keeps the save writer's readable-reference updates.
+/// Compare the exact schema-2 text that Overwrite will save.
 pub(super) fn comparison_text(
-    path: &str,
+    _path: &str,
     text: String,
     snapshot: &super::Snapshot,
 ) -> Result<String, String> {
-    use splat::content::{Entry, formats};
-    if formats::schema(&Entry::parse(path, &text)?.fields) == Ok(1) {
-        Ok(text)
-    } else {
-        formats::convert_resolved(
-            path,
-            &text,
-            snapshot
-                .catalogue
-                .entries
-                .values()
-                .map(|entry| &entry.entry),
-        )
-    }
+    splat::content::list_formats::write_references(
+        &text,
+        snapshot
+            .catalogue
+            .entries
+            .values()
+            .map(|entry| &entry.entry),
+    )
 }
 
 impl super::Encounters {

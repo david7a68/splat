@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "7967ffe3-b2cf-5a06-b160-ea78a9a177c7"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/ogre"
 splat_name: "Ogre"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [312], "executable": false}
+splat_pages:
+- 312
 ---
 
 # Ogre
@@ -30,3 +31,13 @@ Greatclub. Melee Attack Roll: +6, reach 5 ft. Hit: 13 (2d8 + 4) Bludgeoning dama
 Javelin. Melee or Ranged Attack Roll: +6, reach 5 ft. or range 30/120 ft. Hit: 11 (2d6 + 4) Piercing damage.
 
 Original layout: [[../pages/312|page 312]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

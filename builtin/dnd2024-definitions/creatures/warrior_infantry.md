@@ -1,34 +1,60 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 885c82de-0918-50a6-90e1-c501b866da58
 splat_kind: creature
 splat_key: dnd2024:creatures/warrior_infantry
 splat_name: Warrior Infantry
-splat_origin:
-  key: dnd2024:reference/creature/warrior_infantry
+splat_origin: dnd2024:reference/creature/warrior_infantry
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 336, 337
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 336, 337, https://www.dndbeyond.com/srd
 ---
 
 # Warrior Infantry
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Medium or Small |
+| Type | Humanoid |
+| Alignment | Neutral |
+| Armor Class | 13 |
+| Hit Points | 9 (2d8) |
+| Initiative | +0 (10) |
+| Speed | 30 ft. |
+| Challenge | 1/8 (XP 25; PB +2) |
+| Senses | Passive Perception 10 |
+| Languages | Common |
+| Gear | Chain Shirt, Spear |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 13 | +1 | +1 |
+| Dex | 11 | +0 | +0 |
+| Con | 11 | +0 | +0 |
+| Int | 8 | -1 | -1 |
+| Wis | 11 | +0 | +0 |
+| Cha | 8 | -1 | -1 |
+
 
 ## Source text
 
 <!-- SRD page 336 -->
 
 Medium or Small Humanoid, Neutral\
-AC 13 Initiative +0 (10)\
-HP 9 (2d8)\
-Speed 30 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 13 +1 +1 Dex 11 +0 +0 Con 11 +0 +0\
-Int 8 −1 −1 Wis 11 +0 +0 Cha 8 −1 −1\
-Gear Chain Shirt, Spear\
-Senses Passive Perception 10\
-Languages Common\
-CR 1/8 (XP 25; PB +2)
+> [!quote]- Printed stat block (not read; edit the table above)
+> AC 13 Initiative +0 (10)\
+> HP 9 (2d8)\
+> Speed 30 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 13 +1 +1 Dex 11 +0 +0 Con 11 +0 +0\
+> Int 8 −1 −1 Wis 11 +0 +0 Cha 8 −1 −1\
+> Gear Chain Shirt, Spear\
+> Senses Passive Perception 10\
+> Languages Common\
+> CR 1/8 (XP 25; PB +2)
+
 
 <!-- SRD page 337 -->
 
@@ -42,46 +68,11 @@ Spear. Melee or Ranged Attack Roll: +3, reach 5 ft. or range 20/60 ft. Hit: 4 (1
 
 Original layout: [[../../srd-5.2.1/pages/336|page 336]], [[../../srd-5.2.1/pages/337|page 337]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` medium ` |
-| ` type ` | ` humanoid ` |
-| ` alignment ` | ` Neutral ` |
-| ` size_options_text ` | ` Medium or Small ` |
-| ` movement_text ` | ` 30 ft. ` |
-| ` gear_text ` | ` Chain Shirt, Spear ` |
-| ` senses_text ` | ` Passive Perception 10 ` |
-| ` languages_text ` | ` Common ` |
-| ` cr_text ` | ` 1/8 (XP 25; PB +2) ` |
-| ` hit_points_text ` | ` 9 (2d8) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 13 ` | ` 1 ` |
-| ` Dexterity ` | ` 11 ` | ` 0 ` |
-| ` Constitution ` | ` 11 ` | ` 0 ` |
-| ` Intelligence ` | ` 8 ` | ` -1 ` |
-| ` Wisdom ` | ` 11 ` | ` 0 ` |
-| ` Charisma ` | ` 8 ` | ` -1 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 13 ` |  |
-| ` max_hp ` | ` 9 ` |  |
-| ` initiative ` | ` 0 ` |  |
-| ` speed ` | ` 30 ` | ` ft ` |
 
 ## Health
 

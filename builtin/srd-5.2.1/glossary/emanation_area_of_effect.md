@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "24b6af9c-f156-5fa1-aad4-495f6c504545"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/glossary/emanation_area_of_effect"
 splat_name: "Emanation [Area of Effect]"
-splat_reference: {"source": "SRD 5.2.1", "category": "glossary", "pages": [181], "executable": false}
+splat_pages:
+- 181
 ---
 
 # Emanation [Area of Effect]
@@ -18,3 +19,13 @@ An Emanation moves with the creature or object that is its origin unless it is a
 An Emanation’s origin (creature or object) isn’t included in the area of effect unless its creator decides otherwise.
 
 Original layout: [[../pages/181|page 181]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: glossary
+> executable: false
+> ```
+

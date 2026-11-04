@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 040eb293-0e03-5fc0-a3cd-f1fc83aa3792
 splat_kind: rule
 splat_key: dnd2024:class_features/cleric_level_20_greater_divine_intervention
 splat_name: 'Level 20: Greater Divine Intervention'
-splat_origin:
-  key: dnd2024:reference/pages/038
+splat_origin: dnd2024:reference/pages/038
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 38
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 38, https://www.dndbeyond.com/srd
 ---
 
 # Level 20: Greater Divine Intervention

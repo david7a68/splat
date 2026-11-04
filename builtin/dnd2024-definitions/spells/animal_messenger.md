@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 09a6df3c-5bd5-5498-8636-eb626e962461
 splat_kind: spell
 splat_key: dnd2024:spells/animal_messenger
 splat_name: Animal Messenger
-splat_origin:
-  key: dnd2024:reference/spell/animal_messenger
+splat_origin: dnd2024:reference/spell/animal_messenger
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 108
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 108, https://www.dndbeyond.com/srd
 ---
 
 # Animal Messenger
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 2 |
+| School | Enchantment |
+| Classes | Bard, Druid, Ranger |
+| Casting Time | Action or Ritual |
+| Range | 30 feet |
+| Components | V, S, M (a morsel of food) |
+| Duration | 24 hours |
+
 
 ## Source text
 
@@ -32,37 +43,11 @@ Using a Higher-Level Spell Slot. The spell’s duration increases by 48 hours fo
 
 Original layout: [[../../srd-5.2.1/pages/108|page 108]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 2 ` |
-| ` school ` | ` enchantment ` |
-| ` classes ` | ` ["bard", "druid", "ranger"] ` |
-| ` components ` | ` ["verbal", "somatic", "material"] ` |
-| ` concentration ` | ` false ` |
-| ` duration ` | ` 24 hours ` |
-| ` casting_time ` | ` Action or Ritual ` |
-| ` ritual ` | ` true ` |
 
-### Range
 
-<!-- splat:values path=splat_spell/range -->
 
-| Field | Value |
-| --- | --- |
-| ` feet ` | ` 30 ` |
-
-### Material
-
-<!-- splat:values path=splat_spell/material -->
-
-| Field | Value |
-| --- | --- |
-| ` description ` | ` a morsel of food ` |
-| ` consumed ` | ` false ` |
 
 ## Rule
 
@@ -149,3 +134,12 @@ on_duration_expired_before_arrival:
   beast_destination: casting_location
 on_arrival_duration_remaining: spell_duration_remaining
 ```
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_spell_extras -->
+> 
+> ```yaml
+> material:
+>   consumed: false
+> ```
+

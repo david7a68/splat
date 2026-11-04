@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: c8a337ca-728e-5f68-8f3c-f5ff79763038
 splat_kind: rule
 splat_key: dnd2024:rules/combat_encounters_cr_0_creatures
 splat_name: CR 0 Creatures
-splat_origin:
-  key: dnd2024:reference/pages/203
+splat_origin: dnd2024:reference/pages/203
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 203
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 203, https://www.dndbeyond.com/srd
 ---
 
 # CR 0 Creatures

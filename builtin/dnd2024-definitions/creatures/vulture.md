@@ -1,34 +1,60 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: cb038f77-0dc2-56f4-a91d-e123d1acb532
 splat_kind: creature
 splat_key: dnd2024:creatures/vulture
 splat_name: Vulture
-splat_origin:
-  key: dnd2024:reference/creature/vulture
+splat_origin: dnd2024:reference/creature/vulture
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 363, 364
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 363, 364, https://www.dndbeyond.com/srd
 ---
 
 # Vulture
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Medium |
+| Type | Beast |
+| Alignment | Unaligned |
+| Armor Class | 10 |
+| Hit Points | 5 (1d8 + 1) |
+| Initiative | +0 (10) |
+| Speed | 10 ft., Fly 50 ft. |
+| Challenge | 0 (XP 10; PB +2) |
+| Skills | Perception +3 |
+| Senses | Passive Perception 13 |
+| Languages | None |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 7 | -2 | -2 |
+| Dex | 10 | +0 | +0 |
+| Con | 13 | +1 | +1 |
+| Int | 2 | -4 | -4 |
+| Wis | 12 | +1 | +1 |
+| Cha | 4 | -3 | -3 |
+
 
 ## Source text
 
 <!-- SRD page 363 -->
 
-Medium Beast, Unaligned\
-AC 10  Initiative +0 (10)\
-HP 5 (1d8 + 1)\
-Speed 10 ft., Fly 50 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 7 −2 −2 Dex 10 +0 +0 Con 13 +1 +1\
-Int 2 −4 −4 Wis 12 +1 +1 Cha  4 −3 −3\
-Skills Perception +3\
-Senses Passive Perception 13\
-Languages None\
-CR 0 (XP 10; PB +2)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Medium Beast, Unaligned\
+> AC 10  Initiative +0 (10)\
+> HP 5 (1d8 + 1)\
+> Speed 10 ft., Fly 50 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 7 −2 −2 Dex 10 +0 +0 Con 13 +1 +1\
+> Int 2 −4 −4 Wis 12 +1 +1 Cha  4 −3 −3\
+> Skills Perception +3\
+> Senses Passive Perception 13\
+> Languages None\
+> CR 0 (XP 10; PB +2)
+
 
 <!-- SRD page 364 -->
 
@@ -42,46 +68,11 @@ Beak. Melee Attack Roll: +2, reach 5 ft. Hit: 2 (1d4) Piercing damage.
 
 Original layout: [[../../srd-5.2.1/pages/363|page 363]], [[../../srd-5.2.1/pages/364|page 364]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` medium ` |
-| ` type ` | ` beast ` |
-| ` alignment ` | ` Unaligned ` |
-| ` movement_text ` | ` 10 ft., Fly 50 ft. ` |
-| ` skills_text ` | ` Perception +3 ` |
-| ` senses_text ` | ` Passive Perception 13 ` |
-| ` languages_text ` | ` None ` |
-| ` cr_text ` | ` 0 (XP 10; PB +2) ` |
-| ` hit_points_text ` | ` 5 (1d8 + 1) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 7 ` | ` -2 ` |
-| ` Dexterity ` | ` 10 ` | ` 0 ` |
-| ` Constitution ` | ` 13 ` | ` 1 ` |
-| ` Intelligence ` | ` 2 ` | ` -4 ` |
-| ` Wisdom ` | ` 12 ` | ` 1 ` |
-| ` Charisma ` | ` 4 ` | ` -3 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 10 ` |  |
-| ` max_hp ` | ` 5 ` |  |
-| ` initiative ` | ` 0 ` |  |
-| ` speed ` | ` 10 ` | ` ft ` |
-| ` fly_speed ` | ` 50 ` | ` ft ` |
 
 ## Health
 
@@ -226,3 +217,13 @@ geometry_assumptions:
   - plane
   - form_appearance
 ```
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_stats_extras -->
+> 
+> ```yaml
+> fly_speed:
+>   unit: ft
+>   value: 50
+> ```
+

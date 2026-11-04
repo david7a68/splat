@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "26418b8e-70ab-5f07-ab30-c4606c5d481a"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/produce_flame"
 splat_name: "Produce Flame"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [156], "executable": false}
+splat_pages:
+- 156
 ---
 
 # Produce Flame
@@ -24,3 +25,13 @@ Until the spell ends, you can take a Magic action to hurl fire at a creature or 
 Cantrip Upgrade. The damage increases by 1d8 when you reach levels 5 (2d8), 11 (3d8), and 17 (4d8).
 
 Original layout: [[../pages/156|page 156]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

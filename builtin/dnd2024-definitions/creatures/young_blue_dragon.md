@@ -1,35 +1,62 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 3c69da88-f30f-5f64-b083-7cc44ef33822
 splat_kind: creature
 splat_key: dnd2024:creatures/young_blue_dragon
 splat_name: Young Blue Dragon
-splat_origin:
-  key: dnd2024:reference/creature/young_blue_dragon
+splat_origin: dnd2024:reference/creature/young_blue_dragon
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 266
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 266, https://www.dndbeyond.com/srd
 ---
 
 # Young Blue Dragon
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Large |
+| Type | Dragon (Chromatic) |
+| Alignment | Lawful Evil |
+| Armor Class | 18 |
+| Hit Points | 152 (16d10 + 64) |
+| Initiative | +4 (14) |
+| Speed | 40 ft., Burrow 20 ft., Fly 80 ft. |
+| Challenge | 9 (XP 5,000; PB +4) |
+| Skills | Perception +9, Stealth +4 |
+| Senses | Blindsight 30 ft., Darkvision 120 ft.; Passive Perception 19 |
+| Languages | Common, Draconic |
+| Immunities | Lightning |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 21 | +5 | +5 |
+| Dex | 10 | +0 | +4 |
+| Con | 19 | +4 | +4 |
+| Int | 14 | +2 | +2 |
+| Wis | 13 | +1 | +5 |
+| Cha | 17 | +3 | +3 |
+
 
 ## Source text
 
 <!-- SRD page 266 -->
 
-Large Dragon (Chromatic), Lawful Evil\
-AC 18 Initiative +4 (14)\
-HP 152 (16d10 + 64)\
-Speed 40 ft., Burrow 20 ft., Fly 80 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 21 +5 +5 Dex 10 +0 +4 Con 19 +4 +4\
-Int 14 +2 +2 Wis 13 +1 +5 Cha 17 +3 +3\
-Skills Perception +9, Stealth +4\
-Immunities Lightning\
-Senses Blindsight 30 ft., Darkvision 120 ft.; Passive Perception 19\
-Languages Common, Draconic\
-CR 9 (XP 5,000; PB +4)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Large Dragon (Chromatic), Lawful Evil\
+> AC 18 Initiative +4 (14)\
+> HP 152 (16d10 + 64)\
+> Speed 40 ft., Burrow 20 ft., Fly 80 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 21 +5 +5 Dex 10 +0 +4 Con 19 +4 +4\
+> Int 14 +2 +2 Wis 13 +1 +5 Cha 17 +3 +3\
+> Skills Perception +9, Stealth +4\
+> Immunities Lightning\
+> Senses Blindsight 30 ft., Darkvision 120 ft.; Passive Perception 19\
+> Languages Common, Draconic\
+> CR 9 (XP 5,000; PB +4)
+
 
 ### Actions
 
@@ -41,49 +68,11 @@ Lightning Breath (Recharge 5–6). Dexterity Saving Throw: DC 16, each creature 
 
 Original layout: [[../../srd-5.2.1/pages/266|page 266]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` large ` |
-| ` type ` | ` dragon ` |
-| ` alignment ` | ` Lawful Evil ` |
-| ` tags_text ` | ` (Chromatic) ` |
-| ` movement_text ` | ` 40 ft., Burrow 20 ft., Fly 80 ft. ` |
-| ` skills_text ` | ` Perception +9, Stealth +4 ` |
-| ` immunities_text ` | ` Lightning ` |
-| ` senses_text ` | ` Blindsight 30 ft., Darkvision 120 ft.; Passive Perception 19 ` |
-| ` languages_text ` | ` Common, Draconic ` |
-| ` cr_text ` | ` 9 (XP 5,000; PB +4) ` |
-| ` hit_points_text ` | ` 152 (16d10 + 64) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 21 ` | ` 5 ` |
-| ` Dexterity ` | ` 10 ` | ` 4 ` |
-| ` Constitution ` | ` 19 ` | ` 4 ` |
-| ` Intelligence ` | ` 14 ` | ` 2 ` |
-| ` Wisdom ` | ` 13 ` | ` 5 ` |
-| ` Charisma ` | ` 17 ` | ` 3 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 18 ` |  |
-| ` max_hp ` | ` 152 ` |  |
-| ` initiative ` | ` 4 ` |  |
-| ` speed ` | ` 40 ` | ` ft ` |
-| ` burrow_speed ` | ` 20 ` | ` ft ` |
-| ` fly_speed ` | ` 80 ` | ` ft ` |
 
 ## Health
 
@@ -271,3 +260,16 @@ sequence:
 | ` provider ` | ` caller ` |
 | ` required_facts ` | ` ["distance", "area_membership", "visibility", "occupancy", "movement_path"] ` |
 | ` validate_against_typed_constraints ` | ` true ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_stats_extras -->
+> 
+> ```yaml
+> fly_speed:
+>   unit: ft
+>   value: 80
+> burrow_speed:
+>   unit: ft
+>   value: 20
+> ```
+

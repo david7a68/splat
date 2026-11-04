@@ -1,10 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "94790282-1920-5693-85ae-6f74f020c859"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/tarrasque"
 splat_name: "Tarrasque"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [331, 332], "executable": false}
+splat_pages:
+- 331
+- 332
 ---
 
 # Tarrasque
@@ -64,3 +66,13 @@ Onslaught. The tarrasque moves up to half its Speed, and it makes one Claw or Ta
 World-Shaking Movement. The tarrasque moves up to its Speed. At the end of this movement, the tarrasque creates an instantaneous shock wave in a 60-foot Emanation originating from itself. Creatures in that area lose Concentration and, if Medium or smaller, have the Prone condition. The tarrasque can’t take this action again until the start of its next turn.
 
 Original layout: [[../pages/331|page 331]], [[../pages/332|page 332]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

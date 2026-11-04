@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "5f76444e-8f77-570d-b550-19652dfebaa2"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/young_black_dragon"
 splat_name: "Young Black Dragon"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [264], "executable": false}
+splat_pages:
+- 264
 ---
 
 # Young Black Dragon
@@ -37,3 +38,13 @@ Rend. Melee Attack Roll: +7, reach 10 ft. Hit: 9 (2d4 + 4) Slashing damage plus 
 Acid Breath (Recharge 5–6). Dexterity Saving Throw: DC 14, each creature in a 30-foot-long, 5-foot-wide Line. Failure: 49 (14d6) Acid damage. Success: Half damage.
 
 Original layout: [[../pages/264|page 264]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

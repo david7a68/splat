@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 82c2be54-7083-5c43-9d69-917d6f78556e
 splat_kind: spell
 splat_key: dnd2024:spells/antimagic_field
 splat_name: Antimagic Field
-splat_origin:
-  key: dnd2024:reference/spell/antimagic_field
+splat_origin: dnd2024:reference/spell/antimagic_field
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 109
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 109, https://www.dndbeyond.com/srd
 ---
 
 # Antimagic Field
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 8 |
+| School | Abjuration |
+| Classes | Cleric, Wizard |
+| Casting Time | Action |
+| Range |  |
+| Components | V, S, M (iron filings) |
+| Duration | Concentration, up to 1 hour |
+
 
 ## Source text
 
@@ -34,37 +45,11 @@ Dispel Magic has no effect on the aura, and the auras created by different Antim
 
 Original layout: [[../../srd-5.2.1/pages/109|page 109]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 8 ` |
-| ` school ` | ` abjuration ` |
-| ` classes ` | ` ["cleric", "wizard"] ` |
-| ` components ` | ` ["verbal", "somatic", "material"] ` |
-| ` concentration ` | ` true ` |
-| ` duration ` | ` Concentration, up to 1 hour ` |
-| ` casting_time ` | ` Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
 
-<!-- splat:values path=splat_spell/range -->
 
-| Field | Value |
-| --- | --- |
-| ` mode ` | ` self ` |
-
-### Material
-
-<!-- splat:values path=splat_spell/material -->
-
-| Field | Value |
-| --- | --- |
-| ` description ` | ` iron filings ` |
-| ` consumed ` | ` false ` |
 
 ## Rule
 
@@ -143,3 +128,14 @@ Original layout: [[../../srd-5.2.1/pages/109|page 109]].
 | ` source ` | ` supplied_world_geometry ` |
 | ` unknown_facts ` | ` require_resolution ` |
 | ` infer_unprovided_geometry ` | ` false ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_spell_extras -->
+> 
+> ```yaml
+> material:
+>   consumed: false
+> range:
+>   mode: self
+> ```
+

@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 7e0b22bc-9ed8-50fa-b68d-9d1f0718f6bb
 splat_kind: spell
 splat_key: dnd2024:spells/charm_person
 splat_name: Charm Person
-splat_origin:
-  key: dnd2024:reference/spell/charm_person
+splat_origin: dnd2024:reference/spell/charm_person
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 115
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 115, https://www.dndbeyond.com/srd
 ---
 
 # Charm Person
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 1 |
+| School | Enchantment |
+| Classes | Bard, Druid, Sorcerer, Warlock, Wizard |
+| Casting Time | Action |
+| Range | 30 feet |
+| Components | V, S |
+| Duration | 1 hour |
+
 
 ## Source text
 
@@ -30,28 +41,9 @@ Using a Higher-Level Spell Slot. You can target one additional creature for each
 
 Original layout: [[../../srd-5.2.1/pages/115|page 115]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 1 ` |
-| ` school ` | ` enchantment ` |
-| ` classes ` | ` ["bard", "druid", "sorcerer", "warlock", "wizard"] ` |
-| ` components ` | ` ["verbal", "somatic"] ` |
-| ` concentration ` | ` false ` |
-| ` duration ` | ` 1 hour ` |
-| ` casting_time ` | ` Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
-
-<!-- splat:values path=splat_spell/range -->
-
-| Field | Value |
-| --- | --- |
-| ` feet ` | ` 30 ` |
 
 ## Rule
 

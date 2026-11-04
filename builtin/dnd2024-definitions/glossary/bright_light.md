@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 864c0a59-7a94-5209-ad0a-531f3efcc301
 splat_kind: rule
 splat_key: dnd2024:glossary/bright_light
 splat_name: Bright Light
-splat_origin:
-  key: dnd2024:reference/glossary/bright_light
+splat_origin: dnd2024:reference/glossary/bright_light
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 178
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 178, https://www.dndbeyond.com/srd
 ---
 
 # Bright Light

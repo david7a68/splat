@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "ff978c05-487c-5185-884e-4ba01aa909c9"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/magic_item/potions_of_healing"
 splat_name: "Potions of Healing"
-splat_reference: {"source": "SRD 5.2.1", "category": "magic_item", "pages": [236], "executable": false}
+splat_pages:
+- 236
 ---
 
 # Potions of Healing
@@ -25,3 +26,13 @@ Whatever its potency, the potion’s red liquid glimmers when agitated.
 | Potion of Healing (supreme) | 10d4 + 20 | Very Rare |
 
 Original layout: [[../pages/236|page 236]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: magic_item
+> executable: false
+> ```
+

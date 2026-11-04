@@ -12,7 +12,7 @@ fn entry(d: &Driver<'_>, path: &str, name: &str, kind: &str, fields: &str) -> Uu
     let id = splat::character::stable_id(path);
     let path = root(d).join(path);
     fs::create_dir_all(path.parent().unwrap()).unwrap();
-    fs::write(path, format!("---\nsplat_schema: 1\nsplat_id: {id}\nsplat_kind: world\nsplat_name: {name}\nsplat_world:\n  type: {kind}\n{fields}---\n\n# {name}\n\nA note for tonight.\n")).unwrap();
+    fs::write(path, splat::content::formats::convert("World.md", &format!("---\nsplat_schema: 1\nsplat_id: {id}\nsplat_kind: world\nsplat_name: {name}\nsplat_world:\n  type: {kind}\n{fields}---\n\n# {name}\n\nA note for tonight.\n")).unwrap()).unwrap();
     id
 }
 
@@ -34,7 +34,7 @@ fn reveal_editor_passage(d: &mut Driver<'_>, words: &str) {
 
 pub fn broken(d: &mut Driver<'_>) {
     let path = root(d).join("Notes/Broken.md");
-    fs::write(&path, "---\nsplat_schema: 1\nsplat_id: [\n---\n").unwrap();
+    fs::write(&path, "---\nsplat_schema: 2\nsplat_id: [\n---\n").unwrap();
     reload(d);
     d.click(NAV_WORLD);
     d.expect("1 note cannot be read");
@@ -52,13 +52,13 @@ pub fn broken(d: &mut Driver<'_>) {
         "The broken note opens the shared repair editor and its file actions",
     );
     d.state("broken-note-repair", Sizes::All);
-    let external = "---\nsplat_schema: 1\nsplat_id: [\n---\n\nOutside edit kept.\n";
+    let external = "---\nsplat_schema: 2\nsplat_id: [\n---\n\nOutside edit kept.\n";
     fs::write(&path, external).unwrap();
     d.settle();
     assert_eq!(d.editor_text().as_deref(), Some(external));
     d.state("clean-repair-follows-disk", Sizes::All);
     let fixed = format!(
-        "---\nsplat_schema: 1\nsplat_id: {}\nsplat_kind: world\nsplat_name: Repaired watchkeeper\nsplat_world: {{type: npc}}\n---\n\nThe watchkeeper is back.\n",
+        "---\nsplat_schema: 2\nsplat_id: {}\nsplat_kind: world\nsplat_name: Repaired watchkeeper\nsplat_type: npc\n---\n\nThe watchkeeper is back.\n",
         splat::character::stable_id("repaired-watchkeeper")
     );
     d.replace_text_in("Note text", &fixed);
@@ -91,7 +91,7 @@ pub fn broken(d: &mut Driver<'_>) {
     d.expect("The watchkeeper is back.");
     d.state("broken-note-repaired", Sizes::Default);
 
-    fs::write(&path, "---\nsplat_schema: 1\nsplat_id: [\n---\n").unwrap();
+    fs::write(&path, "---\nsplat_schema: 2\nsplat_id: [\n---\n").unwrap();
     reload(d);
     look_up(d, "watchkeeper");
     d.expect("1 note cannot be read");
@@ -158,25 +158,24 @@ pub fn places(d: &mut Driver<'_>) {
         d.interaction_count() - before <= 3,
         "Give an NPC a stat block in three interactions",
     );
-    d.expect("Saved in the new layout.");
     assert!(
         fs::read_to_string(root(d).join("NPCs/Rook Ambry.md"))
             .unwrap()
             .contains("splat_stat_block:")
     );
-    d.expect_same("Adding the stat block keeps the note's content and offers conversion Undo.");
+    d.expect_same("Adding the stat block keeps the note's content and offers Undo.");
     d.state("npc-stat-block-changed", Sizes::All);
     d.click("Undo stat block change");
     d.observe(
         "W3",
         fs::read(root(d).join("NPCs/Rook Ambry.md")).unwrap() == original,
-        "Undo restores the old content and layout byte for byte",
+        "Undo restores the previous content byte for byte",
     );
     d.click("Change In");
     d.click("New location…");
     d.type_into("Location name", "Watch House");
     d.click("Create location here");
-    d.expect("In: The Keep → Watch House. Saved in the new layout.");
+    d.expect("In: The Keep → Watch House.");
     d.state("npc-new-place", Sizes::All);
     d.click("Undo place change");
     d.click("Ashfall Keep");
@@ -215,7 +214,6 @@ pub fn places(d: &mut Driver<'_>) {
             .fields["splat_world"]["in"]
     );
     d.wait_for_text("Obsidian added the watch schedule.");
-    d.expect("Saved in the new layout.");
     d.state("place-change-keeps-disk-edit", Sizes::All);
     d.click("Undo place change");
     assert_eq!(fs::read_to_string(&path).unwrap(), external);
@@ -536,8 +534,7 @@ pub fn package_rename(d: &mut Driver<'_>) {
     d.state("draft-file-moved-on-disk", Sizes::All);
     let before_save = fs::read_to_string(&moved).unwrap();
     d.click("Save my draft to Moved/Ash Exposure.md");
-    d.wait_for_text("Ash Exposure.md saved in the new layout.");
-    d.expect("Undo save");
+    d.wait_for_text("Saved");
     assert!(!old.exists());
     let saved = fs::read_to_string(&moved).unwrap();
     assert!(saved.contains("My moved draft."));
@@ -547,11 +544,8 @@ pub fn package_rename(d: &mut Driver<'_>) {
     assert_eq!(entries.iter().filter(|entry| entry.id == id).count(), 1);
     reveal_editor_passage(d, "My moved draft.");
     d.state("draft-saved-at-moved-path", Sizes::All);
-    d.click("Undo save");
-    d.expect(UNSAVED_NOTE);
-    assert_eq!(fs::read_to_string(&moved).unwrap(), before_save);
-    assert!(d.editor_text().unwrap().contains("My moved draft."));
-    d.state("moved-save-undone-with-draft", Sizes::All);
+    assert_ne!(saved, before_save);
+    assert!(!d.has("Undo save"));
 }
 
 pub fn package_about(d: &mut Driver<'_>) {
@@ -951,7 +945,8 @@ pub fn package_duplicate_id(d: &mut Driver<'_>) {
     let copy_text = before
         .replace("splat_name: Cinder Wolf", "splat_name: Cinder Wolf copy")
         .replace("max_hp: {value: 22}", "max_hp: {value: 44}")
-        .replace("HP 22 (", "HP 44 (");
+        .replace("HP 22 (", "HP 44 (")
+        .replace("| Hit Points | 22 (", "| Hit Points | 44 (");
     fs::write(&copy, &copy_text).unwrap();
     go_library(d);
     search_library(d, "Cinder Wolf");
@@ -963,8 +958,7 @@ pub fn package_duplicate_id(d: &mut Driver<'_>) {
     d.state("duplicate-original-editor", Sizes::All);
     d.type_into_editor("Saved only to the original.\n");
     d.click("Save");
-    d.wait_for_text("Cinder Wolf.md saved in the new layout.");
-    d.expect("Undo save");
+    d.wait_for_text("Saved");
     assert!(
         fs::read_to_string(&original)
             .unwrap()
@@ -1112,7 +1106,6 @@ pub fn world_note_moved(d: &mut Driver<'_>) {
     d.expect("This link matches more than one note. Choose one.");
     d.state("duplicate-place-chooser-in-world", Sizes::All);
     d.click("Always use Locations/Watch House.md");
-    d.expect("Saved in the new layout.");
     d.state("place-choice-kept-with-undo", Sizes::All);
     d.click("Undo place change");
     d.click_containing("Watch House · 2 matches");
@@ -1153,7 +1146,6 @@ pub fn world_note_moved(d: &mut Driver<'_>) {
     d.click("Change In");
     d.type_text("North Gate");
     d.click("North Gate");
-    d.expect("Saved in the new layout.");
     assert!(
         fs::read_to_string(&moved_npc)
             .unwrap()

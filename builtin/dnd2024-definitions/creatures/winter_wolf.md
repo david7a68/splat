@@ -1,35 +1,62 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: b02d5610-4e8b-510d-9951-89f98e719302
 splat_kind: creature
 splat_key: dnd2024:creatures/winter_wolf
 splat_name: Winter Wolf
-splat_origin:
-  key: dnd2024:reference/creature/winter_wolf
+splat_origin: dnd2024:reference/creature/winter_wolf
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 342
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 342, https://www.dndbeyond.com/srd
 ---
 
 # Winter Wolf
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Large |
+| Type | Monstrosity |
+| Alignment | Neutral Evil |
+| Armor Class | 13 |
+| Hit Points | 75 (10d10 + 20) |
+| Initiative | +1 (11) |
+| Speed | 50 ft. |
+| Challenge | 3 (XP 700; PB +2) |
+| Skills | Perception +5, Stealth +5 |
+| Senses | Passive Perception 15 |
+| Languages | Common, Giant |
+| Immunities | Cold |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 18 | +4 | +4 |
+| Dex | 13 | +1 | +1 |
+| Con | 14 | +2 | +2 |
+| Int | 7 | -2 | -2 |
+| Wis | 12 | +1 | +1 |
+| Cha | 8 | -1 | -1 |
+
 
 ## Source text
 
 <!-- SRD page 342 -->
 
-Large Monstrosity, Neutral Evil\
-AC 13 Initiative +1 (11)\
-HP 75 (10d10 + 20)\
-Speed 50 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 18 +4 +4 Dex 13 +1 +1 Con 14 +2 +2\
-Int 7 −2 −2 Wis 12 +1 +1 Cha 8 −1 −1\
-Skills Perception +5, Stealth +5\
-Immunities Cold\
-Senses Passive Perception 15\
-Languages Common, Giant\
-CR 3 (XP 700; PB +2)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Large Monstrosity, Neutral Evil\
+> AC 13 Initiative +1 (11)\
+> HP 75 (10d10 + 20)\
+> Speed 50 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 18 +4 +4 Dex 13 +1 +1 Con 14 +2 +2\
+> Int 7 −2 −2 Wis 12 +1 +1 Cha 8 −1 −1\
+> Skills Perception +5, Stealth +5\
+> Immunities Cold\
+> Senses Passive Perception 15\
+> Languages Common, Giant\
+> CR 3 (XP 700; PB +2)
+
 
 ### Traits
 
@@ -43,46 +70,11 @@ Cold Breath (Recharge 5–6). Constitution Saving Throw: DC 12, each creature in
 
 Original layout: [[../../srd-5.2.1/pages/342|page 342]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` large ` |
-| ` type ` | ` monstrosity ` |
-| ` alignment ` | ` Neutral Evil ` |
-| ` movement_text ` | ` 50 ft. ` |
-| ` skills_text ` | ` Perception +5, Stealth +5 ` |
-| ` immunities_text ` | ` Cold ` |
-| ` senses_text ` | ` Passive Perception 15 ` |
-| ` languages_text ` | ` Common, Giant ` |
-| ` cr_text ` | ` 3 (XP 700; PB +2) ` |
-| ` hit_points_text ` | ` 75 (10d10 + 20) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 18 ` | ` 4 ` |
-| ` Dexterity ` | ` 13 ` | ` 1 ` |
-| ` Constitution ` | ` 14 ` | ` 2 ` |
-| ` Intelligence ` | ` 7 ` | ` -2 ` |
-| ` Wisdom ` | ` 12 ` | ` 1 ` |
-| ` Charisma ` | ` 8 ` | ` -1 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 13 ` |  |
-| ` max_hp ` | ` 75 ` |  |
-| ` initiative ` | ` 1 ` |  |
-| ` speed ` | ` 50 ` | ` ft ` |
 
 ## Health
 

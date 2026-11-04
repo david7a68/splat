@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: b96d0eea-daf0-56bb-a9e5-324f249d7afe
 splat_kind: rule
 splat_key: dnd2024:rules/barbarian_as_a_level_1_character
 splat_name: As a Level 1 Character
-splat_origin:
-  key: dnd2024:reference/pages/028
+splat_origin: dnd2024:reference/pages/028
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 28
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 28, https://www.dndbeyond.com/srd
 ---
 
 # As a Level 1 Character

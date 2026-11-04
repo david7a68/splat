@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: adf66340-9c97-5579-95aa-fe5f626a86db
 splat_kind: item
 splat_key: dnd2024:items/talisman_of_the_sphere
 splat_name: Talisman of the Sphere
-splat_origin:
-  key: dnd2024:reference/magic_item/talisman_of_the_sphere
+splat_origin: dnd2024:reference/magic_item/talisman_of_the_sphere
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 249
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 249, https://www.dndbeyond.com/srd
 ---
 
 # Talisman of the Sphere
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Wondrous Item |
+| Rarity | Legendary |
+| Attunement | Yes |
+
 
 ## Source text
 
@@ -24,22 +31,9 @@ While holding or wearing this talisman, you have Advantage on any Intelligence (
 
 Original layout: [[../../srd-5.2.1/pages/249|page 249]].
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` wondrous_item ` |
-| ` rarity ` | ` legendary ` |
 
-### Equipment
-
-<!-- splat:values path=splat_item/equipment -->
-
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` required ` |
 
 ## Rule
 

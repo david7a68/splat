@@ -1,10 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "4d700a8b-12c7-5a53-ba20-ad758483b61b"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/warrior_infantry"
 splat_name: "Warrior Infantry"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [336, 337], "executable": false}
+splat_pages:
+- 336
+- 337
 ---
 
 # Warrior Infantry
@@ -34,3 +36,13 @@ Pack Tactics. The warrior has Advantage on an attack roll against a creature if 
 Spear. Melee or Ranged Attack Roll: +3, reach 5 ft. or range 20/60 ft. Hit: 4 (1d6 + 1) Piercing damage.
 
 Original layout: [[../pages/336|page 336]], [[../pages/337|page 337]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

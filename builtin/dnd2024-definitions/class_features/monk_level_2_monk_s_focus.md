@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 36f8521e-68ca-57d2-900a-89da5c6a91b4
 splat_kind: rule
 splat_key: dnd2024:class_features/monk_level_2_monk_s_focus
 splat_name: 'Level 2: Monk’s Focus'
-splat_origin:
-  key: dnd2024:reference/pages/050
+splat_origin: dnd2024:reference/pages/050
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 50, 51
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 50, 51, https://www.dndbeyond.com/srd
 ---
 
 # Level 2: Monk’s Focus

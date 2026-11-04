@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 19812bef-7e04-560e-ba1d-256201a0789d
 splat_kind: spell
 splat_key: dnd2024:spells/contagion
 splat_name: Contagion
-splat_origin:
-  key: dnd2024:reference/spell/contagion
+splat_origin: dnd2024:reference/spell/contagion
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 119
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 119, https://www.dndbeyond.com/srd
 ---
 
 # Contagion
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 5 |
+| School | Necromancy |
+| Classes | Cleric, Druid |
+| Casting Time | Action |
+| Range |  |
+| Components | V, S |
+| Duration | 7 days |
+
 
 ## Source text
 
@@ -32,28 +43,9 @@ Whenever the Poisoned target receives an effect that would end the Poisoned cond
 
 Original layout: [[../../srd-5.2.1/pages/119|page 119]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 5 ` |
-| ` school ` | ` necromancy ` |
-| ` classes ` | ` ["cleric", "druid"] ` |
-| ` components ` | ` ["verbal", "somatic"] ` |
-| ` concentration ` | ` false ` |
-| ` duration ` | ` 7 days ` |
-| ` casting_time ` | ` Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
-
-<!-- splat:values path=splat_spell/range -->
-
-| Field | Value |
-| --- | --- |
-| ` mode ` | ` touch ` |
 
 ## Rule
 
@@ -118,3 +110,12 @@ failure:
 success:
   effect: none
 ```
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_spell_extras -->
+> 
+> ```yaml
+> range:
+>   mode: touch
+> ```
+

@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: ed577dd9-19e9-5948-81fc-a74e88e4e5f6
 splat_kind: rule
 splat_key: dnd2024:rules/combat_difficult_terrain
 splat_name: Difficult Terrain
-splat_origin:
-  key: dnd2024:reference/pages/014
+splat_origin: dnd2024:reference/pages/014
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 14
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 14, https://www.dndbeyond.com/srd
 ---
 
 # Difficult Terrain

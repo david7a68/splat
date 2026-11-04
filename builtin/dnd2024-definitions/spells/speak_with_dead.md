@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: be9423d1-2ca8-544d-b016-3c882f52a1b1
 splat_kind: spell
 splat_key: dnd2024:spells/speak_with_dead
 splat_name: Speak with Dead
-splat_origin:
-  key: dnd2024:reference/spell/speak_with_dead
+splat_origin: dnd2024:reference/spell/speak_with_dead
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 164
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 164, https://www.dndbeyond.com/srd
 ---
 
 # Speak with Dead
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 3 |
+| School | Necromancy |
+| Classes | Bard, Cleric, Wizard |
+| Casting Time | Action |
+| Range | 10 feet |
+| Components | V, S, M (burning incense) |
+| Duration | 10 minutes |
+
 
 ## Source text
 
@@ -30,37 +41,11 @@ Until the spell ends, you can ask the corpse up to five questions. The corpse kn
 
 Original layout: [[../../srd-5.2.1/pages/164|page 164]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 3 ` |
-| ` school ` | ` necromancy ` |
-| ` classes ` | ` ["bard", "cleric", "wizard"] ` |
-| ` components ` | ` ["verbal", "somatic", "material"] ` |
-| ` concentration ` | ` false ` |
-| ` duration ` | ` 10 minutes ` |
-| ` casting_time ` | ` Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
 
-<!-- splat:values path=splat_spell/range -->
 
-| Field | Value |
-| --- | --- |
-| ` feet ` | ` 10 ` |
-
-### Material
-
-<!-- splat:values path=splat_spell/material -->
-
-| Field | Value |
-| --- | --- |
-| ` description ` | ` burning incense ` |
-| ` consumed ` | ` false ` |
 
 ## Rule
 
@@ -109,3 +94,12 @@ Original layout: [[../../srd-5.2.1/pages/164|page 164]].
 | --- | --- |
 | ` returns_soul ` | ` false ` |
 | ` animating_spirit_only ` | ` true ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_spell_extras -->
+> 
+> ```yaml
+> material:
+>   consumed: false
+> ```
+

@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 9f360395-d296-5962-a00e-3baef5a65710
 splat_kind: item
 splat_key: dnd2024:items/bag_of_devouring
 splat_name: Bag of Devouring
-splat_origin:
-  key: dnd2024:reference/magic_item/bag_of_devouring
+splat_origin: dnd2024:reference/magic_item/bag_of_devouring
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 212
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 212, https://www.dndbeyond.com/srd
 ---
 
 # Bag of Devouring
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Wondrous Item |
+| Rarity | Very Rare |
+| Attunement | No |
+
 
 ## Source text
 
@@ -30,22 +37,9 @@ If the bag is pierced or torn, it is destroyed, and anything contained within it
 
 Original layout: [[../../srd-5.2.1/pages/212|page 212]].
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` wondrous_item ` |
-| ` rarity ` | ` very_rare ` |
 
-### Equipment
-
-<!-- splat:values path=splat_item/equipment -->
-
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` none ` |
 
 ## Rule
 

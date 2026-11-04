@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 0a116960-606b-592f-9315-16325154c317
 splat_kind: rule
 splat_key: dnd2024:glossary/telepathy
 splat_name: Telepathy
-splat_origin:
-  key: dnd2024:reference/glossary/telepathy
+splat_origin: dnd2024:reference/glossary/telepathy
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 190
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 190, https://www.dndbeyond.com/srd
 ---
 
 # Telepathy

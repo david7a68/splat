@@ -1,33 +1,58 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 344926f3-0b11-5607-90f7-157c741d6038
 splat_kind: creature
 splat_key: dnd2024:creatures/flying_snake
 splat_name: Flying Snake
-splat_origin:
-  key: dnd2024:reference/creature/flying_snake
+splat_origin: dnd2024:reference/creature/flying_snake
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 348
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 348, https://www.dndbeyond.com/srd
 ---
 
 # Flying Snake
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Tiny |
+| Type | Monstrosity |
+| Alignment | Unaligned |
+| Armor Class | 14 |
+| Hit Points | 5 (2d4) |
+| Initiative | +2 (12) |
+| Speed | 30 ft., Fly 60 ft., Swim 30 ft. |
+| Challenge | 1/8 (XP 25; PB +2) |
+| Senses | Blindsight 10 ft.; Passive Perception 11 |
+| Languages | None |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 4 | -3 | -3 |
+| Dex | 15 | +2 | +2 |
+| Con | 11 | +0 | +0 |
+| Int | 2 | -4 | -4 |
+| Wis | 12 | +1 | +1 |
+| Cha | 5 | -3 | -3 |
+
 
 ## Source text
 
 <!-- SRD page 348 -->
 
-Tiny Monstrosity, Unaligned\
-AC 14  Initiative +2 (12)\
-HP 5 (2d4)\
-Speed 30 ft., Fly 60 ft., Swim 30 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 4 −3 −3 Dex 15 +2 +2 Con 11 +0 +0\
-Int 2 −4 −4 Wis 12 +1 +1 Cha 5 −3 −3\
-Senses Blindsight 10 ft.; Passive Perception 11\
-Languages None\
-CR 1/8 (XP 25; PB +2)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Tiny Monstrosity, Unaligned\
+> AC 14  Initiative +2 (12)\
+> HP 5 (2d4)\
+> Speed 30 ft., Fly 60 ft., Swim 30 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 4 −3 −3 Dex 15 +2 +2 Con 11 +0 +0\
+> Int 2 −4 −4 Wis 12 +1 +1 Cha 5 −3 −3\
+> Senses Blindsight 10 ft.; Passive Perception 11\
+> Languages None\
+> CR 1/8 (XP 25; PB +2)
+
 
 ### Traits
 
@@ -39,46 +64,11 @@ Bite. Melee Attack Roll: +4, reach 5 ft. Hit: 1 Piercing damage plus 5 (2d4) Poi
 
 Original layout: [[../../srd-5.2.1/pages/348|page 348]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` tiny ` |
-| ` type ` | ` monstrosity ` |
-| ` alignment ` | ` Unaligned ` |
-| ` movement_text ` | ` 30 ft., Fly 60 ft., Swim 30 ft. ` |
-| ` senses_text ` | ` Blindsight 10 ft.; Passive Perception 11 ` |
-| ` languages_text ` | ` None ` |
-| ` cr_text ` | ` 1/8 (XP 25; PB +2) ` |
-| ` hit_points_text ` | ` 5 (2d4) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 4 ` | ` -3 ` |
-| ` Dexterity ` | ` 15 ` | ` 2 ` |
-| ` Constitution ` | ` 11 ` | ` 0 ` |
-| ` Intelligence ` | ` 2 ` | ` -4 ` |
-| ` Wisdom ` | ` 12 ` | ` 1 ` |
-| ` Charisma ` | ` 5 ` | ` -3 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 14 ` |  |
-| ` max_hp ` | ` 5 ` |  |
-| ` initiative ` | ` 2 ` |  |
-| ` speed ` | ` 30 ` | ` ft ` |
-| ` fly_speed ` | ` 60 ` | ` ft ` |
-| ` swim_speed ` | ` 30 ` | ` ft ` |
 
 ## Health
 
@@ -184,3 +174,16 @@ hit:
 | ` provider ` | ` caller ` |
 | ` required_facts ` | ` ["distance", "area_membership", "visibility", "occupancy", "movement_path"] ` |
 | ` validate_against_typed_constraints ` | ` true ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_stats_extras -->
+> 
+> ```yaml
+> fly_speed:
+>   unit: ft
+>   value: 60
+> swim_speed:
+>   unit: ft
+>   value: 30
+> ```
+

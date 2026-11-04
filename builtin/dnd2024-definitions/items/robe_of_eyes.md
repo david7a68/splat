@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 1c8ebf98-c2c6-5e3d-acaf-be0f0be519a4
 splat_kind: item
 splat_key: dnd2024:items/robe_of_eyes
 splat_name: Robe of Eyes
-splat_origin:
-  key: dnd2024:reference/magic_item/robe_of_eyes
+splat_origin: dnd2024:reference/magic_item/robe_of_eyes
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 240
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 240, https://www.dndbeyond.com/srd
 ---
 
 # Robe of Eyes
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Wondrous Item |
+| Rarity | Rare |
+| Attunement | Yes |
+
 
 ## Source text
 
@@ -30,22 +37,9 @@ Drawbacks. A Light spell cast on the robe or a Daylight spell cast within 5 feet
 
 Original layout: [[../../srd-5.2.1/pages/240|page 240]].
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` wondrous_item ` |
-| ` rarity ` | ` rare ` |
 
-### Equipment
-
-<!-- splat:values path=splat_item/equipment -->
-
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` required ` |
 
 ## Rule
 

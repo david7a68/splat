@@ -1,34 +1,60 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 4eb6a57f-e362-59ad-8474-2d2e0563379a
 splat_kind: creature
 splat_key: dnd2024:creatures/lamia
 splat_name: Lamia
-splat_origin:
-  key: dnd2024:reference/creature/lamia
+splat_origin: dnd2024:reference/creature/lamia
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 303, 304
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 303, 304, https://www.dndbeyond.com/srd
 ---
 
 # Lamia
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Large |
+| Type | Fiend |
+| Alignment | Chaotic Evil |
+| Armor Class | 13 |
+| Hit Points | 97 (13d10 + 26) |
+| Initiative | +1 (11) |
+| Speed | 40 ft. |
+| Challenge | 4 (XP 1,100; PB +2) |
+| Skills | Deception +7, Insight +4, Stealth +5 |
+| Senses | Darkvision 60 ft.; Passive Perception 12 |
+| Languages | Abyssal, Common |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 16 | +3 | +3 |
+| Dex | 13 | +1 | +1 |
+| Con | 15 | +2 | +2 |
+| Int | 14 | +2 | +2 |
+| Wis | 15 | +2 | +2 |
+| Cha | 16 | +3 | +3 |
+
 
 ## Source text
 
 <!-- SRD page 303 -->
 
-Large Fiend, Chaotic Evil\
-AC 13 Initiative +1 (11)\
-HP 97 (13d10 + 26)\
-Speed 40 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 16 +3 +3 Dex 13 +1 +1 Con 15 +2 +2\
-Int 14 +2 +2 Wis 15 +2 +2 Cha 16 +3 +3\
-Skills Deception +7, Insight +4, Stealth +5\
-Senses Darkvision 60 ft.; Passive Perception 12\
-Languages Abyssal, Common\
-CR 4 (XP 1,100; PB +2)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Large Fiend, Chaotic Evil\
+> AC 13 Initiative +1 (11)\
+> HP 97 (13d10 + 26)\
+> Speed 40 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 16 +3 +3 Dex 13 +1 +1 Con 15 +2 +2\
+> Int 14 +2 +2 Wis 15 +2 +2 Cha 16 +3 +3\
+> Skills Deception +7, Insight +4, Stealth +5\
+> Senses Darkvision 60 ft.; Passive Perception 12\
+> Languages Abyssal, Common\
+> CR 4 (XP 1,100; PB +2)
+
 
 ### Actions
 
@@ -51,45 +77,11 @@ Leap. The lamia jumps up to 30 feet by spending 10 feet of movement.
 
 Original layout: [[../../srd-5.2.1/pages/303|page 303]], [[../../srd-5.2.1/pages/304|page 304]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` large ` |
-| ` type ` | ` fiend ` |
-| ` alignment ` | ` Chaotic Evil ` |
-| ` movement_text ` | ` 40 ft. ` |
-| ` skills_text ` | ` Deception +7, Insight +4, Stealth +5 ` |
-| ` senses_text ` | ` Darkvision 60 ft.; Passive Perception 12 ` |
-| ` languages_text ` | ` Abyssal, Common ` |
-| ` cr_text ` | ` 4 (XP 1,100; PB +2) ` |
-| ` hit_points_text ` | ` 97 (13d10 + 26) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 16 ` | ` 3 ` |
-| ` Dexterity ` | ` 13 ` | ` 1 ` |
-| ` Constitution ` | ` 15 ` | ` 2 ` |
-| ` Intelligence ` | ` 14 ` | ` 2 ` |
-| ` Wisdom ` | ` 15 ` | ` 2 ` |
-| ` Charisma ` | ` 16 ` | ` 3 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 13 ` |  |
-| ` max_hp ` | ` 97 ` |  |
-| ` initiative ` | ` 1 ` |  |
-| ` speed ` | ` 40 ` | ` ft ` |
 
 ## Health
 

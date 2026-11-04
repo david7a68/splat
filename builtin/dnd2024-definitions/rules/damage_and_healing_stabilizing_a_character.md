@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: e82ba8ae-7528-581a-8985-ece751b33ea3
 splat_kind: rule
 splat_key: dnd2024:rules/damage_and_healing_stabilizing_a_character
 splat_name: Stabilizing a Character
-splat_origin:
-  key: dnd2024:reference/pages/018
+splat_origin: dnd2024:reference/pages/018
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 18
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 18, https://www.dndbeyond.com/srd
 ---
 
 # Stabilizing a Character

@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 0a971496-ae3b-5b45-91b8-87841b2e2ae3
 splat_kind: rule
 splat_key: dnd2024:glossary/stunned_condition
 splat_name: Stunned [Condition]
-splat_origin:
-  key: dnd2024:reference/glossary/stunned_condition
+splat_origin: dnd2024:reference/glossary/stunned_condition
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 189
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 189, https://www.dndbeyond.com/srd
 ---
 
 # Stunned [Condition]

@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: dafa5e63-f21b-5e6c-b07f-be909cd51747
 splat_kind: spell
 splat_key: dnd2024:spells/augury
 splat_name: Augury
-splat_origin:
-  key: dnd2024:reference/spell/augury
+splat_origin: dnd2024:reference/spell/augury
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 111
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 111, https://www.dndbeyond.com/srd
 ---
 
 # Augury
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 2 |
+| School | Divination |
+| Classes | Cleric, Druid, Wizard |
+| Casting Time | 1 minute or Ritual |
+| Range |  |
+| Components | V, S, M (specially marked sticks, bones, cards, or other divinatory tokens worth 25+ GP) |
+| Duration | Instantaneous |
+
 
 ## Source text
 
@@ -41,37 +52,11 @@ If you cast the spell more than once before finishing a Long Rest, there is a cu
 
 Original layout: [[../../srd-5.2.1/pages/111|page 111]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 2 ` |
-| ` school ` | ` divination ` |
-| ` classes ` | ` ["cleric", "druid", "wizard"] ` |
-| ` components ` | ` ["verbal", "somatic", "material"] ` |
-| ` concentration ` | ` false ` |
-| ` duration ` | ` Instantaneous ` |
-| ` casting_time ` | ` 1 minute or Ritual ` |
-| ` ritual ` | ` true ` |
 
-### Range
 
-<!-- splat:values path=splat_spell/range -->
 
-| Field | Value |
-| --- | --- |
-| ` mode ` | ` self ` |
-
-### Material
-
-<!-- splat:values path=splat_spell/material -->
-
-| Field | Value |
-| --- | --- |
-| ` description ` | ` specially marked sticks, bones, cards, or other divinatory tokens worth 25+ GP ` |
-| ` consumed ` | ` false ` |
 
 ## Rule
 
@@ -128,3 +113,14 @@ account_for_future_changed_circumstances: false
 | ` extra_cast_increment_percent ` | ` 25 ` |
 | ` maximum_percent ` | ` 100 ` |
 | ` failure_output ` | ` no_answer ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_spell_extras -->
+> 
+> ```yaml
+> material:
+>   consumed: false
+> range:
+>   mode: self
+> ```
+

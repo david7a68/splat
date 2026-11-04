@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "9de34a5e-c357-5348-b128-eb9090515c7a"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/glossary/speed"
 splat_name: "Speed"
-splat_reference: {"source": "SRD 5.2.1", "category": "glossary", "pages": [188], "executable": false}
+splat_pages:
+- 188
 ---
 
 # Speed
@@ -18,3 +19,13 @@ Special Speeds. Some creatures have special speeds, such as a Burrow Speed, Clim
 Changes to Your Speeds. If an effect increases or decreases your Speed for a time, any special speed you have increases or decreases by an equal amount for the same duration. For example, if your Speed is reduced to 0 and you have a Climb Speed, your Climb Speed is also reduced to 0. Similarly, if your Speed is halved and you have a Fly Speed, your Fly Speed is also halved.
 
 Original layout: [[../pages/188|page 188]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: glossary
+> executable: false
+> ```
+

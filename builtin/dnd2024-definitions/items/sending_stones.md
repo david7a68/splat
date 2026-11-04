@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 257e062b-0245-5f12-9887-8d187aac2a7b
 splat_kind: item
 splat_key: dnd2024:items/sending_stones
 splat_name: Sending Stones
-splat_origin:
-  key: dnd2024:reference/magic_item/sending_stones
+splat_origin: dnd2024:reference/magic_item/sending_stones
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 243
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 243, https://www.dndbeyond.com/srd
 ---
 
 # Sending Stones
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Wondrous Item |
+| Rarity | Uncommon |
+| Attunement | No |
+
 
 ## Source text
 
@@ -24,22 +31,9 @@ Sending Stones come in pairs, with each stone carved to match the other so the p
 
 Original layout: [[../../srd-5.2.1/pages/243|page 243]].
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` wondrous_item ` |
-| ` rarity ` | ` uncommon ` |
 
-### Equipment
-
-<!-- splat:values path=splat_item/equipment -->
-
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` none ` |
 
 ## Rule
 

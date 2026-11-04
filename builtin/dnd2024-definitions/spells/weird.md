@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 9ce28dee-20bd-5fa6-b585-1a86c8c37f08
 splat_kind: spell
 splat_key: dnd2024:spells/weird
 splat_name: Weird
-splat_origin:
-  key: dnd2024:reference/spell/weird
+splat_origin: dnd2024:reference/spell/weird
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 174
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 174, https://www.dndbeyond.com/srd
 ---
 
 # Weird
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 9 |
+| School | Illusion |
+| Classes | Warlock, Wizard |
+| Casting Time | Action |
+| Range | 120 feet |
+| Components | V, S |
+| Duration | Concentration, up to 1 minute |
+
 
 ## Source text
 
@@ -30,28 +41,9 @@ A Frightened target makes a Wisdom saving throw at the end of each of its turns.
 
 Original layout: [[../../srd-5.2.1/pages/174|page 174]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 9 ` |
-| ` school ` | ` illusion ` |
-| ` classes ` | ` ["warlock", "wizard"] ` |
-| ` components ` | ` ["verbal", "somatic"] ` |
-| ` concentration ` | ` true ` |
-| ` duration ` | ` Concentration, up to 1 minute ` |
-| ` casting_time ` | ` Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
-
-<!-- splat:values path=splat_spell/range -->
-
-| Field | Value |
-| --- | --- |
-| ` feet ` | ` 120 ` |
 
 ## Rule
 

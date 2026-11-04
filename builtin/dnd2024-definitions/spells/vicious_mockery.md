@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: aa37a87f-10b2-5eae-b22b-db3e9e858235
 splat_kind: spell
 splat_key: dnd2024:spells/vicious_mockery
 splat_name: Vicious Mockery
-splat_origin:
-  key: dnd2024:reference/spell/vicious_mockery
+splat_origin: dnd2024:reference/spell/vicious_mockery
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 171, 172
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 171, 172, https://www.dndbeyond.com/srd
 ---
 
 # Vicious Mockery
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | Cantrip |
+| School | Enchantment |
+| Classes | Bard |
+| Casting Time | Action |
+| Range | 60 feet |
+| Components | V |
+| Duration | Instantaneous |
+
 
 ## Source text
 
@@ -32,28 +43,9 @@ Cantrip Upgrade. The damage increases by 1d6 when you reach levels 5 (2d6), 11 (
 
 Original layout: [[../../srd-5.2.1/pages/171|page 171]], [[../../srd-5.2.1/pages/172|page 172]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 0 ` |
-| ` school ` | ` enchantment ` |
-| ` classes ` | ` ["bard"] ` |
-| ` components ` | ` ["verbal"] ` |
-| ` concentration ` | ` false ` |
-| ` duration ` | ` Instantaneous ` |
-| ` casting_time ` | ` Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
-
-<!-- splat:values path=splat_spell/range -->
-
-| Field | Value |
-| --- | --- |
-| ` feet ` | ` 60 ` |
 
 ## Rule
 

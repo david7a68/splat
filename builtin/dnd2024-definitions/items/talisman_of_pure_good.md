@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 43be2844-96d0-5f1b-b02a-7a33082106e2
 splat_kind: item
 splat_key: dnd2024:items/talisman_of_pure_good
 splat_name: Talisman of Pure Good
-splat_origin:
-  key: dnd2024:reference/magic_item/talisman_of_pure_good
+splat_origin: dnd2024:reference/magic_item/talisman_of_pure_good
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 248, 249
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 248, 249, https://www.dndbeyond.com/srd
 ---
 
 # Talisman of Pure Good
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Wondrous Item |
+| Rarity | Legendary |
+| Attunement | Yes |
+
 
 ## Source text
 
@@ -30,23 +37,9 @@ Pure Rebuke. The talisman has 7 charges. While wearing or holding the talisman, 
 
 Original layout: [[../../srd-5.2.1/pages/248|page 248]], [[../../srd-5.2.1/pages/249|page 249]].
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` wondrous_item ` |
-| ` rarity ` | ` legendary ` |
 
-### Equipment
-
-<!-- splat:values path=splat_item/equipment -->
-
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` required ` |
-| ` attunement_requirement_text ` | ` a Cleric or Paladin ` |
 
 ## Rule
 
@@ -151,3 +144,12 @@ eligibility:
   - cleric
   - paladin
 ```
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_item_extras -->
+> 
+> ```yaml
+> equipment:
+>   attunement_requirement_text: a Cleric or Paladin
+> ```
+

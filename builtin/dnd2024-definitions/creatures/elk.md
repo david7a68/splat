@@ -1,34 +1,60 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 837bc152-ee71-5eff-bc33-6edc96f9beab
 splat_kind: creature
 splat_key: dnd2024:creatures/elk
 splat_name: Elk
-splat_origin:
-  key: dnd2024:reference/creature/elk
+splat_origin: dnd2024:reference/creature/elk
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 348
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 348, https://www.dndbeyond.com/srd
 ---
 
 # Elk
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Large |
+| Type | Beast |
+| Alignment | Unaligned |
+| Armor Class | 10 |
+| Hit Points | 11 (2d10) |
+| Initiative | +0 (10) |
+| Speed | 50 ft. |
+| Challenge | 1/4 (XP 50; PB +2) |
+| Skills | Perception +2 |
+| Senses | Darkvision 60 ft.; Passive Perception 12 |
+| Languages | None |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 16 | +3 | +3 |
+| Dex | 10 | +0 | +0 |
+| Con | 11 | +0 | +0 |
+| Int | 2 | -4 | -4 |
+| Wis | 10 | +0 | +0 |
+| Cha | 6 | -2 | -2 |
+
 
 ## Source text
 
 <!-- SRD page 348 -->
 
-Large Beast, Unaligned\
-AC 10  Initiative +0 (10)\
-HP 11 (2d10)\
-Speed 50 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 16 +3 +3 Dex 10 +0 +0 Con 11 +0 +0\
-Int 2 −4 −4 Wis 10 +0 +0 Cha 6 −2 −2\
-Skills Perception +2\
-Senses Darkvision 60 ft.; Passive Perception 12\
-Languages None\
-CR 1/4 (XP 50; PB +2)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Large Beast, Unaligned\
+> AC 10  Initiative +0 (10)\
+> HP 11 (2d10)\
+> Speed 50 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 16 +3 +3 Dex 10 +0 +0 Con 11 +0 +0\
+> Int 2 −4 −4 Wis 10 +0 +0 Cha 6 −2 −2\
+> Skills Perception +2\
+> Senses Darkvision 60 ft.; Passive Perception 12\
+> Languages None\
+> CR 1/4 (XP 50; PB +2)
+
 
 ### Actions
 
@@ -36,45 +62,11 @@ Ram. Melee Attack Roll: +5, reach 5 ft. Hit: 6 (1d6 + 3) Bludgeoning damage. If 
 
 Original layout: [[../../srd-5.2.1/pages/348|page 348]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` large ` |
-| ` type ` | ` beast ` |
-| ` alignment ` | ` Unaligned ` |
-| ` movement_text ` | ` 50 ft. ` |
-| ` skills_text ` | ` Perception +2 ` |
-| ` senses_text ` | ` Darkvision 60 ft.; Passive Perception 12 ` |
-| ` languages_text ` | ` None ` |
-| ` cr_text ` | ` 1/4 (XP 50; PB +2) ` |
-| ` hit_points_text ` | ` 11 (2d10) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 16 ` | ` 3 ` |
-| ` Dexterity ` | ` 10 ` | ` 0 ` |
-| ` Constitution ` | ` 11 ` | ` 0 ` |
-| ` Intelligence ` | ` 2 ` | ` -4 ` |
-| ` Wisdom ` | ` 10 ` | ` 0 ` |
-| ` Charisma ` | ` 6 ` | ` -2 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 10 ` |  |
-| ` max_hp ` | ` 11 ` |  |
-| ` initiative ` | ` 0 ` |  |
-| ` speed ` | ` 50 ` | ` ft ` |
 
 ## Health
 

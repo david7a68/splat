@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: ea893ce1-636c-54cb-8ddd-fde7402372fc
 splat_kind: rule
 splat_key: dnd2024:glossary/attitude
 splat_name: Attitude
-splat_origin:
-  key: dnd2024:reference/glossary/attitude
+splat_origin: dnd2024:reference/glossary/attitude
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 177
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 177, https://www.dndbeyond.com/srd
 ---
 
 # Attitude

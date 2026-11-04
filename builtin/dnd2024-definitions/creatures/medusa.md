@@ -1,34 +1,60 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 4db58924-8af5-5174-8218-1a90dee028b5
 splat_kind: creature
 splat_key: dnd2024:creatures/medusa
 splat_name: Medusa
-splat_origin:
-  key: dnd2024:reference/creature/medusa
+splat_origin: dnd2024:reference/creature/medusa
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 306, 307
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 306, 307, https://www.dndbeyond.com/srd
 ---
 
 # Medusa
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Medium |
+| Type | Monstrosity |
+| Alignment | Lawful Evil |
+| Armor Class | 15 |
+| Hit Points | 127 (17d8 + 51) |
+| Initiative | +6 (16) |
+| Speed | 30 ft. |
+| Challenge | 6 (XP 2,300; PB +3) |
+| Skills | Deception +5, Perception +4, Stealth +6 |
+| Senses | Darkvision 150 ft.; Passive Perception 14 |
+| Languages | Common plus one other language |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 10 | +0 | +0 |
+| Dex | 17 | +3 | +3 |
+| Con | 16 | +3 | +3 |
+| Int | 12 | +1 | +1 |
+| Wis | 13 | +1 | +4 |
+| Cha | 15 | +2 | +2 |
+
 
 ## Source text
 
 <!-- SRD page 306 -->
 
-Medium Monstrosity, Lawful Evil\
-AC 15 Initiative +6 (16)\
-HP 127 (17d8 + 51)\
-Speed 30 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 10 +0 +0 Dex 17 +3 +3 Con 16 +3 +3\
-Int 12 +1 +1 Wis 13 +1 +4 Cha 15 +2 +2\
-Skills Deception +5, Perception +4, Stealth +6\
-Senses Darkvision 150 ft.; Passive Perception 14\
-Languages Common plus one other language\
-CR 6 (XP 2,300; PB +3)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Medium Monstrosity, Lawful Evil\
+> AC 15 Initiative +6 (16)\
+> HP 127 (17d8 + 51)\
+> Speed 30 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 10 +0 +0 Dex 17 +3 +3 Con 16 +3 +3\
+> Int 12 +1 +1 Wis 13 +1 +4 Cha 15 +2 +2\
+> Skills Deception +5, Perception +4, Stealth +6\
+> Senses Darkvision 150 ft.; Passive Perception 14\
+> Languages Common plus one other language\
+> CR 6 (XP 2,300; PB +3)
+
 
 ### Actions
 
@@ -48,45 +74,11 @@ Petrifying Gaze (Recharge 5–6). Constitution Saving Throw: DC 13, each creatur
 
 Original layout: [[../../srd-5.2.1/pages/306|page 306]], [[../../srd-5.2.1/pages/307|page 307]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` medium ` |
-| ` type ` | ` monstrosity ` |
-| ` alignment ` | ` Lawful Evil ` |
-| ` movement_text ` | ` 30 ft. ` |
-| ` skills_text ` | ` Deception +5, Perception +4, Stealth +6 ` |
-| ` senses_text ` | ` Darkvision 150 ft.; Passive Perception 14 ` |
-| ` languages_text ` | ` Common plus one other language ` |
-| ` cr_text ` | ` 6 (XP 2,300; PB +3) ` |
-| ` hit_points_text ` | ` 127 (17d8 + 51) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 10 ` | ` 0 ` |
-| ` Dexterity ` | ` 17 ` | ` 3 ` |
-| ` Constitution ` | ` 16 ` | ` 3 ` |
-| ` Intelligence ` | ` 12 ` | ` 1 ` |
-| ` Wisdom ` | ` 13 ` | ` 4 ` |
-| ` Charisma ` | ` 15 ` | ` 2 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 15 ` |  |
-| ` max_hp ` | ` 127 ` |  |
-| ` initiative ` | ` 6 ` |  |
-| ` speed ` | ` 30 ` | ` ft ` |
 
 ## Health
 

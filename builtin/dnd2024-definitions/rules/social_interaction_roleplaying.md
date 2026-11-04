@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: f73255bb-dce4-52cf-881c-cec29cb332fc
 splat_kind: rule
 splat_key: dnd2024:rules/social_interaction_roleplaying
 splat_name: Roleplaying
-splat_origin:
-  key: dnd2024:reference/pages/010
+splat_origin: dnd2024:reference/pages/010
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 10, 11
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 10, 11, https://www.dndbeyond.com/srd
 ---
 
 # Roleplaying

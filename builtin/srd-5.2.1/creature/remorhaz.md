@@ -1,10 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "2ff515c3-e894-5d67-a93d-c35723700598"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/remorhaz"
 splat_name: "Remorhaz"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [319, 320], "executable": false}
+splat_pages:
+- 319
+- 320
 ---
 
 # Remorhaz
@@ -40,3 +42,13 @@ Swallow. Strength Saving Throw: DC 19, one Large or smaller creature Grappled by
 If the remorhaz takes 30 damage or more on a single turn from a creature inside it, the remorhaz must succeed on a DC 15 Constitution saving throw at the end of that turn or regurgitate all swallowed creatures, each of which falls in a space within 5 feet of the remorhaz and has the Prone condition. If the remorhaz dies, any swallowed creature no longer has the Restrained condition and can escape from the corpse by using 15 feet of movement, exiting Prone.
 
 Original layout: [[../pages/319|page 319]], [[../pages/320|page 320]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

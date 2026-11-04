@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "a58ec5ce-a760-5984-a3a8-731dd2e20dbd"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/balor"
 splat_name: "Balor"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [261], "executable": false}
+splat_pages:
+- 261
 ---
 
 # Balor
@@ -48,3 +49,13 @@ Lightning Blade. Melee Attack Roll: +14, reach 10 ft. Hit: 21 (3d8 + 8) Force da
 Teleport. The balor teleports itself or a willing demon within 10 feet of itself up to 60 feet to an unoccupied space the balor can see.
 
 Original layout: [[../pages/261|page 261]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "0046912d-1178-5003-adfe-5b556213ca88"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/young_red_dragon"
 splat_name: "Young Red Dragon"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [318], "executable": false}
+splat_pages:
+- 318
 ---
 
 # Young Red Dragon
@@ -33,3 +34,13 @@ Rend. Melee Attack Roll: +10, reach 10 ft. Hit: 13 (2d6 + 6) Slashing damage plu
 Fire Breath (Recharge 5–6). Dexterity Saving Throw: DC 17, each creature in a 30-foot Cone. Failure: 56 (16d6) Fire damage. Success: Half damage.
 
 Original layout: [[../pages/318|page 318]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

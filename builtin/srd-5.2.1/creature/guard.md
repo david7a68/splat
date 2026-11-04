@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "fc8c930d-1454-5e92-ad2c-568997a439a0"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/guard"
 splat_name: "Guard"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [296], "executable": false}
+splat_pages:
+- 296
 ---
 
 # Guard
@@ -29,3 +30,13 @@ CR 1/8 (XP 25; PB +2)
 Spear. Melee or Ranged Attack Roll: +3, reach 5 ft. or range 20/60 ft. Hit: 4 (1d6 + 1) Piercing damage.
 
 Original layout: [[../pages/296|page 296]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

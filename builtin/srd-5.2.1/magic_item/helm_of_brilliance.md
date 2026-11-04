@@ -1,10 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "63084369-da78-5284-820e-4fb5133d9d0e"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/magic_item/helm_of_brilliance"
 splat_name: "Helm of Brilliance"
-splat_reference: {"source": "SRD 5.2.1", "category": "magic_item", "pages": [225, 226], "executable": false}
+splat_pages:
+- 225
+- 226
 ---
 
 # Helm of Brilliance
@@ -28,3 +30,13 @@ Spells. You can cast one of the following spells (save DC 18), using one of the 
 Taking Fire Damage. Roll 1d20 if you are wearing the helm and take Fire damage as a result of failing a saving throw against a spell. On a roll of 1, the helm emits beams of light from its remaining gems and is then destroyed. Each creature within a 60-foot Emanation originating from you must succeed on a DC 17 Dexterity saving throw or be struck by a beam, taking Radiant damage equal to the number of gems in the helm.
 
 Original layout: [[../pages/225|page 225]], [[../pages/226|page 226]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: magic_item
+> executable: false
+> ```
+

@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "6fab51cd-7532-59af-ba6e-e3bd1eb17b56"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/true_strike"
 splat_name: "True Strike"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [171], "executable": false}
+splat_pages:
+- 171
 ---
 
 # True Strike
@@ -22,3 +23,13 @@ Guided by a flash of magical insight, you make one attack with the weapon used i
 Cantrip Upgrade. Whether you deal Radiant damage or the weapon’s normal damage type, the attack deals extra Radiant damage when you reach levels 5 (1d6), 11 (2d6), and 17 (3d6).
 
 Original layout: [[../pages/171|page 171]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

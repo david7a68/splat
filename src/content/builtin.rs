@@ -240,7 +240,7 @@ fn verify(files: &BTreeMap<String, &[u8]>) -> Package {
                 .iter()
                 .find(|e| e.path == path)
                 .and_then(|e| e.body.split_once("```text\n"))
-                .and_then(|(_, s)| s.strip_suffix("\n```\n"));
+                .and_then(|(_, s)| s.split_once("\n```\n").map(|(page, _)| page));
             if actual != Some(expected.as_str()) {
                 error(&path, "Page text differs from full source extraction");
             }

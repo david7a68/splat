@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "b8340e0b-3e0f-57e7-bf07-174f8c8269b2"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/mind_spike"
 splat_name: "Mind Spike"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [149], "executable": false}
+splat_pages:
+- 149
 ---
 
 # Mind Spike
@@ -22,3 +23,13 @@ You drive a spike of psionic energy into the mind of one creature you can see wi
 Using a Higher-Level Spell Slot. The damage increases by 1d8 for each spell slot level above 2.
 
 Original layout: [[../pages/149|page 149]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

@@ -1,36 +1,64 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 901a4cef-4135-5abc-adf5-810c1e85a6a8
 splat_kind: creature
 splat_key: dnd2024:creatures/ice_mephit
 splat_name: Ice Mephit
-splat_origin:
-  key: dnd2024:reference/creature/ice_mephit
+splat_origin: dnd2024:reference/creature/ice_mephit
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 307
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 307, https://www.dndbeyond.com/srd
 ---
 
 # Ice Mephit
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Small |
+| Type | Elemental |
+| Alignment | Neutral Evil |
+| Armor Class | 11 |
+| Hit Points | 21 (6d6) |
+| Initiative | +1 (11) |
+| Speed | 30 ft., Fly 30 ft. |
+| Challenge | 1/2 (XP 100; PB +2) |
+| Skills | Perception +2, Stealth +3 |
+| Senses | Darkvision 60 ft.; Passive Perception 12 |
+| Languages | Primordial (Aquan, Auran) |
+| Immunities | Cold, Poison; Exhaustion, Poisoned |
+| Vulnerabilities | Fire |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 7 | -2 | -2 |
+| Dex | 13 | +1 | +1 |
+| Con | 10 | +0 | +0 |
+| Int | 9 | -1 | -1 |
+| Wis | 11 | +0 | +0 |
+| Cha | 12 | +1 | +1 |
+
 
 ## Source text
 
 <!-- SRD page 307 -->
 
-Small Elemental, Neutral Evil\
-AC 11 Initiative +1 (11)\
-HP 21 (6d6)\
-Speed 30 ft., Fly 30 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 7 −2 −2 Dex 13 +1 +1 Con 10 +0 +0\
-Int 9 −1 −1 Wis 11 +0 +0 Cha 12 +1 +1\
-Skills Perception +2, Stealth +3\
-Vulnerabilities Fire\
-Immunities Cold, Poison; Exhaustion, Poisoned\
-Senses Darkvision 60 ft.; Passive Perception 12\
-Languages Primordial (Aquan, Auran)\
-CR 1/2 (XP 100; PB +2)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Small Elemental, Neutral Evil\
+> AC 11 Initiative +1 (11)\
+> HP 21 (6d6)\
+> Speed 30 ft., Fly 30 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 7 −2 −2 Dex 13 +1 +1 Con 10 +0 +0\
+> Int 9 −1 −1 Wis 11 +0 +0 Cha 12 +1 +1\
+> Skills Perception +2, Stealth +3\
+> Vulnerabilities Fire\
+> Immunities Cold, Poison; Exhaustion, Poisoned\
+> Senses Darkvision 60 ft.; Passive Perception 12\
+> Languages Primordial (Aquan, Auran)\
+> CR 1/2 (XP 100; PB +2)
+
 
 ### Traits
 
@@ -46,48 +74,11 @@ Frost Breath (Recharge 6). Constitution Saving Throw: DC 10, each creature in a 
 
 Original layout: [[../../srd-5.2.1/pages/307|page 307]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` small ` |
-| ` type ` | ` elemental ` |
-| ` alignment ` | ` Neutral Evil ` |
-| ` movement_text ` | ` 30 ft., Fly 30 ft. ` |
-| ` skills_text ` | ` Perception +2, Stealth +3 ` |
-| ` vulnerabilities_text ` | ` Fire ` |
-| ` immunities_text ` | ` Cold, Poison; Exhaustion, Poisoned ` |
-| ` senses_text ` | ` Darkvision 60 ft.; Passive Perception 12 ` |
-| ` languages_text ` | ` Primordial (Aquan, Auran) ` |
-| ` cr_text ` | ` 1/2 (XP 100; PB +2) ` |
-| ` hit_points_text ` | ` 21 (6d6) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 7 ` | ` -2 ` |
-| ` Dexterity ` | ` 13 ` | ` 1 ` |
-| ` Constitution ` | ` 10 ` | ` 0 ` |
-| ` Intelligence ` | ` 9 ` | ` -1 ` |
-| ` Wisdom ` | ` 11 ` | ` 0 ` |
-| ` Charisma ` | ` 12 ` | ` 1 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 11 ` |  |
-| ` max_hp ` | ` 21 ` |  |
-| ` initiative ` | ` 1 ` |  |
-| ` speed ` | ` 30 ` | ` ft ` |
-| ` fly_speed ` | ` 30 ` | ` ft ` |
 
 ## Health
 
@@ -323,3 +314,13 @@ geometry:
 unlisted_success_branch: no_effect
 unlisted_duration: until_removed_by_applicable_rule
 ```
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_stats_extras -->
+> 
+> ```yaml
+> fly_speed:
+>   unit: ft
+>   value: 30
+> ```
+

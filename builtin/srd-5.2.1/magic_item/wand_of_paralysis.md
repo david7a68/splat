@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "5347d236-bb97-5007-b063-145d3803fe9a"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/magic_item/wand_of_paralysis"
 splat_name: "Wand of Paralysis"
-splat_reference: {"source": "SRD 5.2.1", "category": "magic_item", "pages": [251], "executable": false}
+splat_pages:
+- 251
 ---
 
 # Wand of Paralysis
@@ -18,3 +19,13 @@ This wand has 7 charges. While holding it, you can take a Magic action to expend
 Regaining Charges. The wand regains 1d6 + 1 expended charges daily at dawn. If you expend the wand’s last charge, roll 1d20. On a 1, the wand crumbles into ashes and is destroyed.
 
 Original layout: [[../pages/251|page 251]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: magic_item
+> executable: false
+> ```
+

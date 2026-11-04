@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 09a6667d-e827-5ada-98db-6fea9ecb97de
 splat_kind: rule_group
 splat_key: dnd2024:subclasses/ranger_ranger_subclass_hunter
 splat_name: 'Ranger Subclass: Hunter'
-splat_origin:
-  key: dnd2024:reference/pages/061
+splat_origin: dnd2024:reference/pages/061
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 61
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 61, https://www.dndbeyond.com/srd
 ---
 
 # Ranger Subclass: Hunter

@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "c0d5142f-d5c2-5aca-9581-374ac2e4dc7d"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/magic_item/bag_of_devouring"
 splat_name: "Bag of Devouring"
-splat_reference: {"source": "SRD 5.2.1", "category": "magic_item", "pages": [212], "executable": false}
+splat_pages:
+- 212
 ---
 
 # Bag of Devouring
@@ -22,3 +23,13 @@ Inanimate objects can be stored in the bag, which can hold a cubic foot of such 
 If the bag is pierced or torn, it is destroyed, and anything contained within it is transported to a random location on the Astral Plane.
 
 Original layout: [[../pages/212|page 212]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: magic_item
+> executable: false
+> ```
+

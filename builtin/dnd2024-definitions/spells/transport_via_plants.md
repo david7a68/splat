@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: b3344347-6f56-5da9-962b-ee4c8eb3c8c6
 splat_kind: spell
 splat_key: dnd2024:spells/transport_via_plants
 splat_name: Transport via Plants
-splat_origin:
-  key: dnd2024:reference/spell/transport_via_plants
+splat_origin: dnd2024:reference/spell/transport_via_plants
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 170
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 170, https://www.dndbeyond.com/srd
 ---
 
 # Transport via Plants
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 6 |
+| School | Conjuration |
+| Classes | Druid |
+| Casting Time | Action |
+| Range | 10 feet |
+| Components | V, S |
+| Duration | 1 minute |
+
 
 ## Source text
 
@@ -28,28 +39,9 @@ This spell creates a magical link between a Large or larger inanimate plant with
 
 Original layout: [[../../srd-5.2.1/pages/170|page 170]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 6 ` |
-| ` school ` | ` conjuration ` |
-| ` classes ` | ` ["druid"] ` |
-| ` components ` | ` ["verbal", "somatic"] ` |
-| ` concentration ` | ` false ` |
-| ` duration ` | ` 1 minute ` |
-| ` casting_time ` | ` Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
-
-<!-- splat:values path=splat_spell/range -->
-
-| Field | Value |
-| --- | --- |
-| ` feet ` | ` 10 ` |
 
 ## Rule
 

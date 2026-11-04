@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "8d4284a7-d5f6-5d85-9e9a-4e8ffb3024ad"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/owlbear"
 splat_name: "Owlbear"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [313], "executable": false}
+splat_pages:
+- 313
 ---
 
 # Owlbear
@@ -30,3 +31,13 @@ Multiattack. The owlbear makes two Rend attacks.
 Rend. Melee Attack Roll: +7, reach 5 ft. Hit: 14 (2d8 + 5) Slashing damage.
 
 Original layout: [[../pages/313|page 313]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

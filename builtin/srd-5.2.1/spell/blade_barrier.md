@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "a20b514f-6eea-51ea-99c8-08036f40e85e"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/blade_barrier"
 splat_name: "Blade Barrier"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [113], "executable": false}
+splat_pages:
+- 113
 ---
 
 # Blade Barrier
@@ -22,3 +23,13 @@ You create a wall of whirling blades made of magical energy. The wall appears wi
 Any creature in the wall’s space makes a Dexterity saving throw, taking 6d10 Force damage on a failed save or half as much damage on a successful one. A creature also makes that save if it enters the wall’s space or ends it turn there. A creature makes that save only once per turn.
 
 Original layout: [[../pages/113|page 113]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "a08a9343-5605-5910-bdd3-5a008353dad7"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/shield_of_faith"
 splat_name: "Shield of Faith"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [162], "executable": false}
+splat_pages:
+- 162
 ---
 
 # Shield of Faith
@@ -20,3 +21,13 @@ Duration: Concentration, up to 10 minutes
 A shimmering field surrounds a creature of your choice within range, granting it a +2 bonus to AC for the duration.
 
 Original layout: [[../pages/162|page 162]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

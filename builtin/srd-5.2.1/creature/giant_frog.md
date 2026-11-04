@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "d4a60e09-3433-5533-a5be-dd2400f8d079"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/giant_frog"
 splat_name: "Giant Frog"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [351], "executable": false}
+splat_pages:
+- 351
 ---
 
 # Giant Frog
@@ -38,3 +39,13 @@ Swallow. The frog swallows a Small or smaller target it is grappling. While swal
 At the end of the frog’s next turn, the swallowed target takes 5 (2d4) Acid damage. If that damage doesn’t kill it, the frog disgorges it, causing it to exit Prone.
 
 Original layout: [[../pages/351|page 351]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

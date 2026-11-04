@@ -1,34 +1,60 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 18a69e7f-9d87-5f7d-aacb-add6f23f142d
 splat_kind: creature
 splat_key: dnd2024:creatures/ettercap
 splat_name: Ettercap
-splat_origin:
-  key: dnd2024:reference/creature/ettercap
+splat_origin: dnd2024:reference/creature/ettercap
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 284
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 284, https://www.dndbeyond.com/srd
 ---
 
 # Ettercap
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Medium |
+| Type | Monstrosity |
+| Alignment | Neutral Evil |
+| Armor Class | 13 |
+| Hit Points | 44 (8d8 + 8) |
+| Initiative | +2 (12) |
+| Speed | 30 ft., Climb 30 ft. |
+| Challenge | 2 (XP 450; PB +2) |
+| Skills | Perception +3, Stealth +4, Survival +3 |
+| Senses | Darkvision 60 ft.; Passive Perception 13 |
+| Languages | None |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 14 | +2 | +2 |
+| Dex | 15 | +2 | +2 |
+| Con | 13 | +1 | +1 |
+| Int | 7 | -2 | -2 |
+| Wis | 12 | +1 | +1 |
+| Cha | 8 | -1 | -1 |
+
 
 ## Source text
 
 <!-- SRD page 284 -->
 
-Medium Monstrosity, Neutral Evil\
-AC 13  Initiative +2 (12)\
-HP 44 (8d8 + 8)\
-Speed 30 ft., Climb 30 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 14 +2 +2 Dex 15 +2 +2 Con 13 +1 +1\
-Int 7 −2 −2 Wis 12 +1 +1 Cha 8 −1 −1\
-Skills Perception +3, Stealth +4, Survival +3\
-Senses Darkvision 60 ft.; Passive Perception 13\
-Languages None\
-CR 2 (XP 450; PB +2)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Medium Monstrosity, Neutral Evil\
+> AC 13  Initiative +2 (12)\
+> HP 44 (8d8 + 8)\
+> Speed 30 ft., Climb 30 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 14 +2 +2 Dex 15 +2 +2 Con 13 +1 +1\
+> Int 7 −2 −2 Wis 12 +1 +1 Cha 8 −1 −1\
+> Skills Perception +3, Stealth +4, Survival +3\
+> Senses Darkvision 60 ft.; Passive Perception 13\
+> Languages None\
+> CR 2 (XP 450; PB +2)
+
 
 ### Traits
 
@@ -52,46 +78,11 @@ Reel. The ettercap pulls one creature within 30 feet of itself that is Restraine
 
 Original layout: [[../../srd-5.2.1/pages/284|page 284]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` medium ` |
-| ` type ` | ` monstrosity ` |
-| ` alignment ` | ` Neutral Evil ` |
-| ` movement_text ` | ` 30 ft., Climb 30 ft. ` |
-| ` skills_text ` | ` Perception +3, Stealth +4, Survival +3 ` |
-| ` senses_text ` | ` Darkvision 60 ft.; Passive Perception 13 ` |
-| ` languages_text ` | ` None ` |
-| ` cr_text ` | ` 2 (XP 450; PB +2) ` |
-| ` hit_points_text ` | ` 44 (8d8 + 8) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 14 ` | ` 2 ` |
-| ` Dexterity ` | ` 15 ` | ` 2 ` |
-| ` Constitution ` | ` 13 ` | ` 1 ` |
-| ` Intelligence ` | ` 7 ` | ` -2 ` |
-| ` Wisdom ` | ` 12 ` | ` 1 ` |
-| ` Charisma ` | ` 8 ` | ` -1 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 13 ` |  |
-| ` max_hp ` | ` 44 ` |  |
-| ` initiative ` | ` 2 ` |  |
-| ` speed ` | ` 30 ` | ` ft ` |
-| ` climb_speed ` | ` 30 ` | ` ft ` |
 
 ## Health
 
@@ -357,3 +348,13 @@ geometry:
 unlisted_success_branch: no_effect
 unlisted_duration: until_removed_by_applicable_rule
 ```
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_stats_extras -->
+> 
+> ```yaml
+> climb_speed:
+>   unit: ft
+>   value: 30
+> ```
+

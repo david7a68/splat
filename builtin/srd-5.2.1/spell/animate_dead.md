@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "0ccc90d6-b4f6-539f-af4c-a090531b3acb"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/animate_dead"
 splat_name: "Animate Dead"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [108], "executable": false}
+splat_pages:
+- 108
 ---
 
 # Animate Dead
@@ -26,3 +27,13 @@ The creature is under your control for 24 hours, after which it stops obeying an
 Using a Higher-Level Spell Slot. You animate or reassert control over two additional Undead creatures for each spell slot level above 3. Each of the creatures must come from a different corpse or pile of bones.
 
 Original layout: [[../pages/108|page 108]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

@@ -1,33 +1,58 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: b630923a-c365-5ee2-9aee-68e460bdffaf
 splat_kind: creature
 splat_key: dnd2024:creatures/elephant
 splat_name: Elephant
-splat_origin:
-  key: dnd2024:reference/creature/elephant
+splat_origin: dnd2024:reference/creature/elephant
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 348
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 348, https://www.dndbeyond.com/srd
 ---
 
 # Elephant
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Huge |
+| Type | Beast |
+| Alignment | Unaligned |
+| Armor Class | 12 |
+| Hit Points | 76 (8d12 + 24) |
+| Initiative | -1 (9) |
+| Speed | 40 ft. |
+| Challenge | 4 (XP 1,100; PB +2) |
+| Senses | Passive Perception 10 |
+| Languages | None |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 22 | +6 | +6 |
+| Dex | 9 | -1 | -1 |
+| Con | 17 | +3 | +3 |
+| Int | 3 | -4 | -4 |
+| Wis | 11 | +0 | +0 |
+| Cha | 6 | -2 | -2 |
+
 
 ## Source text
 
 <!-- SRD page 348 -->
 
-Huge Beast, Unaligned\
-AC 12  Initiative −1 (9)\
-HP 76 (8d12 + 24)\
-Speed 40 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 22 +6 +6 Dex 9 −1 −1 Con 17 +3 +3\
-Int 3 −4 −4 Wis 11 +0 +0 Cha 6 −2 −2\
-Senses Passive Perception 10\
-Languages None\
-CR 4 (XP 1,100; PB +2)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Huge Beast, Unaligned\
+> AC 12  Initiative −1 (9)\
+> HP 76 (8d12 + 24)\
+> Speed 40 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 22 +6 +6 Dex 9 −1 −1 Con 17 +3 +3\
+> Int 3 −4 −4 Wis 11 +0 +0 Cha 6 −2 −2\
+> Senses Passive Perception 10\
+> Languages None\
+> CR 4 (XP 1,100; PB +2)
+
 
 ### Actions
 
@@ -41,44 +66,11 @@ Trample. Dexterity Saving Throw: DC 16, one creature within 5 feet that has the 
 
 Original layout: [[../../srd-5.2.1/pages/348|page 348]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` huge ` |
-| ` type ` | ` beast ` |
-| ` alignment ` | ` Unaligned ` |
-| ` movement_text ` | ` 40 ft. ` |
-| ` senses_text ` | ` Passive Perception 10 ` |
-| ` languages_text ` | ` None ` |
-| ` cr_text ` | ` 4 (XP 1,100; PB +2) ` |
-| ` hit_points_text ` | ` 76 (8d12 + 24) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 22 ` | ` 6 ` |
-| ` Dexterity ` | ` 9 ` | ` -1 ` |
-| ` Constitution ` | ` 17 ` | ` 3 ` |
-| ` Intelligence ` | ` 3 ` | ` -4 ` |
-| ` Wisdom ` | ` 11 ` | ` 0 ` |
-| ` Charisma ` | ` 6 ` | ` -2 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 12 ` |  |
-| ` max_hp ` | ` 76 ` |  |
-| ` initiative ` | ` -1 ` |  |
-| ` speed ` | ` 40 ` | ` ft ` |
 
 ## Health
 

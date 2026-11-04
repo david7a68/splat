@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 0d7805ca-c716-5d95-a3c0-471974427771
 splat_kind: spell
 splat_key: dnd2024:spells/poison_spray
 splat_name: Poison Spray
-splat_origin:
-  key: dnd2024:reference/spell/poison_spray
+splat_origin: dnd2024:reference/spell/poison_spray
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 153
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 153, https://www.dndbeyond.com/srd
 ---
 
 # Poison Spray
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | Cantrip |
+| School | Necromancy |
+| Classes | Druid, Sorcerer, Warlock, Wizard |
+| Casting Time | Action |
+| Range | 30 feet |
+| Components | V, S |
+| Duration | Instantaneous |
+
 
 ## Source text
 
@@ -30,28 +41,9 @@ Cantrip Upgrade. The damage increases by 1d12 when you reach levels 5 (2d12), 11
 
 Original layout: [[../../srd-5.2.1/pages/153|page 153]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 0 ` |
-| ` school ` | ` necromancy ` |
-| ` classes ` | ` ["druid", "sorcerer", "warlock", "wizard"] ` |
-| ` components ` | ` ["verbal", "somatic"] ` |
-| ` concentration ` | ` false ` |
-| ` duration ` | ` Instantaneous ` |
-| ` casting_time ` | ` Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
-
-<!-- splat:values path=splat_spell/range -->
-
-| Field | Value |
-| --- | --- |
-| ` feet ` | ` 30 ` |
 
 ## Rule
 

@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: c2ec689e-084d-513b-80ff-c14e8b91a1dc
 splat_kind: spell
 splat_key: dnd2024:spells/create_food_and_water
 splat_name: Create Food and Water
-splat_origin:
-  key: dnd2024:reference/spell/create_food_and_water
+splat_origin: dnd2024:reference/spell/create_food_and_water
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 120
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 120, https://www.dndbeyond.com/srd
 ---
 
 # Create Food and Water
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 3 |
+| School | Conjuration |
+| Classes | Cleric, Paladin |
+| Casting Time | Action |
+| Range | 30 feet |
+| Components | V, S |
+| Duration | Instantaneous |
+
 
 ## Source text
 
@@ -28,28 +39,9 @@ You create 45 pounds of food and 30 gallons of fresh water on the ground or in c
 
 Original layout: [[../../srd-5.2.1/pages/120|page 120]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 3 ` |
-| ` school ` | ` conjuration ` |
-| ` classes ` | ` ["cleric", "paladin"] ` |
-| ` components ` | ` ["verbal", "somatic"] ` |
-| ` concentration ` | ` false ` |
-| ` duration ` | ` Instantaneous ` |
-| ` casting_time ` | ` Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
-
-<!-- splat:values path=splat_spell/range -->
-
-| Field | Value |
-| --- | --- |
-| ` feet ` | ` 30 ` |
 
 ## Rule
 

@@ -1,35 +1,62 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 9732fc05-ce97-5ce0-b0fb-baadafc54573
 splat_kind: creature
 splat_key: dnd2024:creatures/solar
 splat_name: Solar
-splat_origin:
-  key: dnd2024:reference/creature/solar
+splat_origin: dnd2024:reference/creature/solar
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 326, 327
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 326, 327, https://www.dndbeyond.com/srd
 ---
 
 # Solar
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Large |
+| Type | Celestial (Angel) |
+| Alignment | Lawful Good |
+| Armor Class | 21 |
+| Hit Points | 297 (22d10 + 176) |
+| Initiative | +20 (30) |
+| Speed | 50 ft., Fly 150 ft. (hover) |
+| Challenge | 21 (XP 33,000; PB +7) |
+| Skills | Perception +14 |
+| Senses | Truesight 120 ft.; Passive Perception 24 |
+| Languages | All; telepathy 120 ft. |
+| Immunities | Poison, Radiant; Charmed, Exhaustion, Frightened, Poisoned |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 26 | +8 | +8 |
+| Dex | 22 | +6 | +6 |
+| Con | 26 | +8 | +8 |
+| Int | 25 | +7 | +7 |
+| Wis | 25 | +7 | +7 |
+| Cha | 30 | +10 | +10 |
+
 
 ## Source text
 
 <!-- SRD page 326 -->
 
-Large Celestial (Angel), Lawful Good\
-AC 21 Initiative +20 (30)\
-HP 297 (22d10 + 176)\
-Speed 50 ft., Fly 150 ft. (hover)\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 26 +8 +8 Dex 22 +6 +6 Con 26 +8 +8\
-Int 25 +7 +7 Wis 25 +7 +7 Cha 30 +10 +10\
-Skills Perception +14\
-Immunities Poison, Radiant; Charmed, Exhaustion, Frightened, Poisoned\
-Senses Truesight 120 ft.; Passive Perception 24\
-Languages All; telepathy 120 ft.\
-CR 21 (XP 33,000; PB +7)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Large Celestial (Angel), Lawful Good\
+> AC 21 Initiative +20 (30)\
+> HP 297 (22d10 + 176)\
+> Speed 50 ft., Fly 150 ft. (hover)\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 26 +8 +8 Dex 22 +6 +6 Con 26 +8 +8\
+> Int 25 +7 +7 Wis 25 +7 +7 Cha 30 +10 +10\
+> Skills Perception +14\
+> Immunities Poison, Radiant; Charmed, Exhaustion, Frightened, Poisoned\
+> Senses Truesight 120 ft.; Passive Perception 24\
+> Languages All; telepathy 120 ft.\
+> CR 21 (XP 33,000; PB +7)
+
 
 ### Traits
 
@@ -70,48 +97,11 @@ Radiant Teleport. The solar teleports up to 60 feet to an unoccupied space it ca
 
 Original layout: [[../../srd-5.2.1/pages/326|page 326]], [[../../srd-5.2.1/pages/327|page 327]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` large ` |
-| ` type ` | ` celestial ` |
-| ` alignment ` | ` Lawful Good ` |
-| ` tags_text ` | ` (Angel) ` |
-| ` movement_text ` | ` 50 ft., Fly 150 ft. (hover) ` |
-| ` skills_text ` | ` Perception +14 ` |
-| ` immunities_text ` | ` Poison, Radiant; Charmed, Exhaustion, Frightened, Poisoned ` |
-| ` senses_text ` | ` Truesight 120 ft.; Passive Perception 24 ` |
-| ` languages_text ` | ` All; telepathy 120 ft. ` |
-| ` cr_text ` | ` 21 (XP 33,000; PB +7) ` |
-| ` hit_points_text ` | ` 297 (22d10 + 176) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 26 ` | ` 8 ` |
-| ` Dexterity ` | ` 22 ` | ` 6 ` |
-| ` Constitution ` | ` 26 ` | ` 8 ` |
-| ` Intelligence ` | ` 25 ` | ` 7 ` |
-| ` Wisdom ` | ` 25 ` | ` 7 ` |
-| ` Charisma ` | ` 30 ` | ` 10 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 21 ` |  |
-| ` max_hp ` | ` 297 ` |  |
-| ` initiative ` | ` 20 ` |  |
-| ` speed ` | ` 50 ` | ` ft ` |
-| ` fly_speed ` | ` 150 ` | ` ft ` |
 
 ## Health
 
@@ -534,3 +524,13 @@ other_components: spell_definition_unless_waived
 | ` provider ` | ` caller ` |
 | ` required_facts ` | ` ["distance", "area_membership", "visibility", "occupancy", "movement_path"] ` |
 | ` validate_against_typed_constraints ` | ` true ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_stats_extras -->
+> 
+> ```yaml
+> fly_speed:
+>   unit: ft
+>   value: 150
+> ```
+

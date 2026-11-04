@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 07122e38-0ba9-58cb-b12f-52525bac2cf0
 splat_kind: rule
 splat_key: dnd2024:rules/magic_items_attunement
 splat_name: Attunement
-splat_origin:
-  key: dnd2024:reference/pages/102
+splat_origin: dnd2024:reference/pages/102
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 102
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 102, https://www.dndbeyond.com/srd
 ---
 
 # Attunement

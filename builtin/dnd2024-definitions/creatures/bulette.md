@@ -1,34 +1,60 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 463e7b55-64bc-5b8a-80ee-af2711e4d4b0
 splat_kind: creature
 splat_key: dnd2024:creatures/bulette
 splat_name: Bulette
-splat_origin:
-  key: dnd2024:reference/creature/bulette
+splat_origin: dnd2024:reference/creature/bulette
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 272
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 272, https://www.dndbeyond.com/srd
 ---
 
 # Bulette
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Large |
+| Type | Monstrosity |
+| Alignment | Unaligned |
+| Armor Class | 17 |
+| Hit Points | 94 (9d10 + 45) |
+| Initiative | +0 (10) |
+| Speed | 40 ft., Burrow 40 ft. |
+| Challenge | 5 (XP 1,800; PB +3) |
+| Skills | Perception +6 |
+| Senses | Darkvision 60 ft., Tremorsense 120 ft.; Passive Perception 16 |
+| Languages | None |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 19 | +4 | +4 |
+| Dex | 11 | +0 | +0 |
+| Con | 21 | +5 | +5 |
+| Int | 2 | -4 | -4 |
+| Wis | 10 | +0 | +0 |
+| Cha | 5 | -3 | -3 |
+
 
 ## Source text
 
 <!-- SRD page 272 -->
 
-Large Monstrosity, Unaligned\
-AC 17 Initiative +0 (10)\
-HP 94 (9d10 + 45)\
-Speed 40 ft., Burrow 40 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 19 +4 +4 Dex 11 +0 +0 Con 21 +5 +5\
-Int 2 −4 −4 Wis 10 +0 +0 Cha 5 −3 −3\
-Skills Perception +6\
-Senses Darkvision 60 ft., Tremorsense 120 ft.; Passive Perception 16\
-Languages None\
-CR 5 (XP 1,800; PB +3)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Large Monstrosity, Unaligned\
+> AC 17 Initiative +0 (10)\
+> HP 94 (9d10 + 45)\
+> Speed 40 ft., Burrow 40 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 19 +4 +4 Dex 11 +0 +0 Con 21 +5 +5\
+> Int 2 −4 −4 Wis 10 +0 +0 Cha 5 −3 −3\
+> Skills Perception +6\
+> Senses Darkvision 60 ft., Tremorsense 120 ft.; Passive Perception 16\
+> Languages None\
+> CR 5 (XP 1,800; PB +3)
+
 
 ### Actions
 
@@ -44,46 +70,11 @@ Leap. The bulette jumps up to 30 feet by spending 10 feet of movement.
 
 Original layout: [[../../srd-5.2.1/pages/272|page 272]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` large ` |
-| ` type ` | ` monstrosity ` |
-| ` alignment ` | ` Unaligned ` |
-| ` movement_text ` | ` 40 ft., Burrow 40 ft. ` |
-| ` skills_text ` | ` Perception +6 ` |
-| ` senses_text ` | ` Darkvision 60 ft., Tremorsense 120 ft.; Passive Perception 16 ` |
-| ` languages_text ` | ` None ` |
-| ` cr_text ` | ` 5 (XP 1,800; PB +3) ` |
-| ` hit_points_text ` | ` 94 (9d10 + 45) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 19 ` | ` 4 ` |
-| ` Dexterity ` | ` 11 ` | ` 0 ` |
-| ` Constitution ` | ` 21 ` | ` 5 ` |
-| ` Intelligence ` | ` 2 ` | ` -4 ` |
-| ` Wisdom ` | ` 10 ` | ` 0 ` |
-| ` Charisma ` | ` 5 ` | ` -3 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 17 ` |  |
-| ` max_hp ` | ` 94 ` |  |
-| ` initiative ` | ` 0 ` |  |
-| ` speed ` | ` 40 ` | ` ft ` |
-| ` burrow_speed ` | ` 40 ` | ` ft ` |
 
 ## Health
 
@@ -264,3 +255,13 @@ sequence:
 | ` provider ` | ` caller ` |
 | ` required_facts ` | ` ["distance", "area_membership", "visibility", "occupancy", "movement_path"] ` |
 | ` validate_against_typed_constraints ` | ` true ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_stats_extras -->
+> 
+> ```yaml
+> burrow_speed:
+>   unit: ft
+>   value: 40
+> ```
+

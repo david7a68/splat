@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "60d9adbb-69cf-5a48-901f-2f4da50b83fc"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/azer_sentinel"
 splat_name: "Azer Sentinel"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [261], "executable": false}
+splat_pages:
+- 261
 ---
 
 # Azer Sentinel
@@ -34,3 +35,13 @@ Illumination. The azer sheds Bright Light in a 10-foot radius and Dim Light for 
 Burning Hammer. Melee Attack Roll: +5, reach 5 ft. Hit: 8 (1d10 + 3) Bludgeoning damage plus 3 (1d6) Fire damage.
 
 Original layout: [[../pages/261|page 261]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

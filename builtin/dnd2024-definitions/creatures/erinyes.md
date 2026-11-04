@@ -1,36 +1,64 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 9d266575-5494-5489-8e63-5a74a106373f
 splat_kind: creature
 splat_key: dnd2024:creatures/erinyes
 splat_name: Erinyes
-splat_origin:
-  key: dnd2024:reference/creature/erinyes
+splat_origin: dnd2024:reference/creature/erinyes
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 283
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 283, https://www.dndbeyond.com/srd
 ---
 
 # Erinyes
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Medium |
+| Type | Fiend (Devil) |
+| Alignment | Lawful Evil |
+| Armor Class | 18 |
+| Hit Points | 178 (21d8 + 84) |
+| Initiative | +7 (17) |
+| Speed | 30 ft., Fly 60 ft. |
+| Challenge | 12 (XP 8,400; PB +4) |
+| Skills | Perception +6, Persuasion +8 |
+| Senses | Truesight 120 ft.; Passive Perception 16 |
+| Languages | Infernal; telepathy 120 ft. |
+| Resistances | Cold |
+| Immunities | Fire, Poison; Poisoned |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 18 | +4 | +4 |
+| Dex | 16 | +3 | +7 |
+| Con | 18 | +4 | +8 |
+| Int | 14 | +2 | +2 |
+| Wis | 14 | +2 | +2 |
+| Cha | 18 | +4 | +8 |
+
 
 ## Source text
 
 <!-- SRD page 283 -->
 
-Medium Fiend (Devil), Lawful Evil\
-AC 18 Initiative +7 (17)\
-HP 178 (21d8 + 84)\
-Speed 30 ft., Fly 60 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 18 +4 +4 Dex 16 +3 +7 Con 18 +4 +8\
-Int 14 +2 +2 Wis 14 +2 +2 Cha 18 +4 +8\
-Skills Perception +6, Persuasion +8\
-Resistances Cold\
-Immunities Fire, Poison; Poisoned\
-Senses Truesight 120 ft.; Passive Perception 16\
-Languages Infernal; telepathy 120 ft.\
-CR 12 (XP 8,400; PB +4)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Medium Fiend (Devil), Lawful Evil\
+> AC 18 Initiative +7 (17)\
+> HP 178 (21d8 + 84)\
+> Speed 30 ft., Fly 60 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 18 +4 +4 Dex 16 +3 +7 Con 18 +4 +8\
+> Int 14 +2 +2 Wis 14 +2 +2 Cha 18 +4 +8\
+> Skills Perception +6, Persuasion +8\
+> Resistances Cold\
+> Immunities Fire, Poison; Poisoned\
+> Senses Truesight 120 ft.; Passive Perception 16\
+> Languages Infernal; telepathy 120 ft.\
+> CR 12 (XP 8,400; PB +4)
+
 
 ### Traits
 
@@ -54,49 +82,11 @@ Parry. Trigger: The erinyes is hit by a melee attack roll while holding a weapon
 
 Original layout: [[../../srd-5.2.1/pages/283|page 283]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` medium ` |
-| ` type ` | ` fiend ` |
-| ` alignment ` | ` Lawful Evil ` |
-| ` tags_text ` | ` (Devil) ` |
-| ` movement_text ` | ` 30 ft., Fly 60 ft. ` |
-| ` skills_text ` | ` Perception +6, Persuasion +8 ` |
-| ` resistances_text ` | ` Cold ` |
-| ` immunities_text ` | ` Fire, Poison; Poisoned ` |
-| ` senses_text ` | ` Truesight 120 ft.; Passive Perception 16 ` |
-| ` languages_text ` | ` Infernal; telepathy 120 ft. ` |
-| ` cr_text ` | ` 12 (XP 8,400; PB +4) ` |
-| ` hit_points_text ` | ` 178 (21d8 + 84) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 18 ` | ` 4 ` |
-| ` Dexterity ` | ` 16 ` | ` 7 ` |
-| ` Constitution ` | ` 18 ` | ` 8 ` |
-| ` Intelligence ` | ` 14 ` | ` 2 ` |
-| ` Wisdom ` | ` 14 ` | ` 2 ` |
-| ` Charisma ` | ` 18 ` | ` 8 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 18 ` |  |
-| ` max_hp ` | ` 178 ` |  |
-| ` initiative ` | ` 7 ` |  |
-| ` speed ` | ` 30 ` | ` ft ` |
-| ` fly_speed ` | ` 60 ` | ` ft ` |
 
 ## Health
 
@@ -405,3 +395,13 @@ other_components: spell_definition_unless_waived
 | ` provider ` | ` caller ` |
 | ` required_facts ` | ` ["distance", "area_membership", "visibility", "occupancy", "movement_path"] ` |
 | ` validate_against_typed_constraints ` | ` true ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_stats_extras -->
+> 
+> ```yaml
+> fly_speed:
+>   unit: ft
+>   value: 60
+> ```
+

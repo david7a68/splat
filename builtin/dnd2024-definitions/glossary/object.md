@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: e4e21695-bdc2-5102-9875-0fc79aa154c9
 splat_kind: rule
 splat_key: dnd2024:glossary/object
 splat_name: Object
-splat_origin:
-  key: dnd2024:reference/glossary/object
+splat_origin: dnd2024:reference/glossary/object
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 185
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 185, https://www.dndbeyond.com/srd
 ---
 
 # Object

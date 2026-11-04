@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 10ccec18-2354-5c74-9132-2d99af8798d3
 splat_kind: rule
 splat_key: dnd2024:glossary/dead
 splat_name: Dead
-splat_origin:
-  key: dnd2024:reference/glossary/dead
+splat_origin: dnd2024:reference/glossary/dead
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 180
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 180, https://www.dndbeyond.com/srd
 ---
 
 # Dead

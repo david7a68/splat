@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: ebbd596b-a1bb-5673-a0cb-89aab8f3dd7f
 splat_kind: spell
 splat_key: dnd2024:spells/arcane_lock
 splat_name: Arcane Lock
-splat_origin:
-  key: dnd2024:reference/spell/arcane_lock
+splat_origin: dnd2024:reference/spell/arcane_lock
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 110
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 110, https://www.dndbeyond.com/srd
 ---
 
 # Arcane Lock
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 2 |
+| School | Abjuration |
+| Classes | Wizard |
+| Casting Time | Action |
+| Range |  |
+| Components | V, S, M (gold dust worth 25+ GP, which the spell consumes) |
+| Duration | Until dispelled |
+
 
 ## Source text
 
@@ -28,37 +39,11 @@ You touch a closed door, window, gate, container, or hatch and magically lock it
 
 Original layout: [[../../srd-5.2.1/pages/110|page 110]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 2 ` |
-| ` school ` | ` abjuration ` |
-| ` classes ` | ` ["wizard"] ` |
-| ` components ` | ` ["verbal", "somatic", "material"] ` |
-| ` concentration ` | ` false ` |
-| ` duration ` | ` Until dispelled ` |
-| ` casting_time ` | ` Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
 
-<!-- splat:values path=splat_spell/range -->
 
-| Field | Value |
-| --- | --- |
-| ` mode ` | ` touch ` |
-
-### Material
-
-<!-- splat:values path=splat_spell/material -->
-
-| Field | Value |
-| --- | --- |
-| ` description ` | ` gold dust worth 25+ GP, which the spell consumes ` |
-| ` consumed ` | ` true ` |
 
 ## Rule
 
@@ -120,3 +105,14 @@ designated_creatures:
 | ` chooser ` | ` caster ` |
 | ` spoken_within_feet ` | ` 5 ` |
 | ` unlock_seconds ` | ` 60 ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_spell_extras -->
+> 
+> ```yaml
+> material:
+>   consumed: true
+> range:
+>   mode: touch
+> ```
+

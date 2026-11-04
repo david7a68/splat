@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 2670d539-a57a-511b-8bb7-7588a4e8da93
 splat_kind: rule
 splat_key: dnd2024:rules/warlock_ascendant_step
 splat_name: Ascendant Step
-splat_origin:
-  key: dnd2024:reference/pages/072
+splat_origin: dnd2024:reference/pages/072
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 72
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 72, https://www.dndbeyond.com/srd
 ---
 
 # Ascendant Step

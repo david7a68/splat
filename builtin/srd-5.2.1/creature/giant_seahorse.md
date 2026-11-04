@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "5223544c-486a-5f86-8438-a2fd6a32ee31"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/giant_seahorse"
 splat_name: "Giant Seahorse"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [353], "executable": false}
+splat_pages:
+- 353
 ---
 
 # Giant Seahorse
@@ -35,3 +36,13 @@ Ram. Melee Attack Roll: +4, reach 5 ft. Hit: 9 (2d6 + 2) Bludgeoning damage, or 
 Bubble Dash. While underwater, the seahorse moves up to half its Swim Speed without provoking Opportunity Attacks.
 
 Original layout: [[../pages/353|page 353]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

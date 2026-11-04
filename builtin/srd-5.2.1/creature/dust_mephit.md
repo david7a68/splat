@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "11a4bfbf-4a8a-5fdc-8dc9-2e5b9e8e7970"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/dust_mephit"
 splat_name: "Dust Mephit"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [307], "executable": false}
+splat_pages:
+- 307
 ---
 
 # Dust Mephit
@@ -38,3 +39,13 @@ Blinding Breath (Recharge 6). Dexterity Saving Throw: DC 10, each creature in a 
 Sleep (1/Day). The mephit casts the Sleep spell, requiring no spell components and using Charisma as the spellcasting ability (spell save DC 10).
 
 Original layout: [[../pages/307|page 307]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 04c83d44-8888-569d-93c9-6d1dd55650c0
 splat_kind: spell
 splat_key: dnd2024:spells/instant_summons
 splat_name: Instant Summons
-splat_origin:
-  key: dnd2024:reference/spell/instant_summons
+splat_origin: dnd2024:reference/spell/instant_summons
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 143
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 143, https://www.dndbeyond.com/srd
 ---
 
 # Instant Summons
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 6 |
+| School | Conjuration |
+| Classes | Wizard |
+| Casting Time | 1 minute or Ritual |
+| Range |  |
+| Components | V, S, M (a sapphire worth 1,000+ GP) |
+| Duration | Until dispelled |
+
 
 ## Source text
 
@@ -32,37 +43,11 @@ If another creature is holding or carrying the object, crushing the sapphire doe
 
 Original layout: [[../../srd-5.2.1/pages/143|page 143]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 6 ` |
-| ` school ` | ` conjuration ` |
-| ` classes ` | ` ["wizard"] ` |
-| ` components ` | ` ["verbal", "somatic", "material"] ` |
-| ` concentration ` | ` false ` |
-| ` duration ` | ` Until dispelled ` |
-| ` casting_time ` | ` 1 minute or Ritual ` |
-| ` ritual ` | ` true ` |
 
-### Range
 
-<!-- splat:values path=splat_spell/range -->
 
-| Field | Value |
-| --- | --- |
-| ` mode ` | ` touch ` |
-
-### Material
-
-<!-- splat:values path=splat_spell/material -->
-
-| Field | Value |
-| --- | --- |
-| ` description ` | ` a sapphire worth 1,000+ GP ` |
-| ` consumed ` | ` false ` |
 
 ## Rule
 
@@ -126,3 +111,14 @@ held_or_carried_by_other_creature:
   - holder_identity
   - holder_current_location
 ```
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_spell_extras -->
+> 
+> ```yaml
+> material:
+>   consumed: false
+> range:
+>   mode: touch
+> ```
+

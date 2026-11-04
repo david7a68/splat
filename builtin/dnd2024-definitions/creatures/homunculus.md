@@ -1,34 +1,60 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 0ffb9a54-fb7c-569e-b970-25d02576365e
 splat_kind: creature
 splat_key: dnd2024:creatures/homunculus
 splat_name: Homunculus
-splat_origin:
-  key: dnd2024:reference/creature/homunculus
+splat_origin: dnd2024:reference/creature/homunculus
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 299
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 299, https://www.dndbeyond.com/srd
 ---
 
 # Homunculus
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Tiny |
+| Type | Construct |
+| Alignment | Neutral |
+| Armor Class | 13 |
+| Hit Points | 4 (1d4 + 2) |
+| Initiative | +2 (12) |
+| Speed | 20 ft., Fly 40 ft. |
+| Challenge | 0 (XP 10; PB +2) |
+| Senses | Darkvision 60 ft.; Passive Perception 10 |
+| Languages | Understands Common plus one other language but can’t speak |
+| Immunities | Poison; Charmed, Poisoned |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 4 | -3 | -3 |
+| Dex | 15 | +2 | +2 |
+| Con | 14 | +2 | +2 |
+| Int | 10 | +0 | +0 |
+| Wis | 10 | +0 | +2 |
+| Cha | 7 | -2 | +0 |
+
 
 ## Source text
 
 <!-- SRD page 299 -->
 
-Tiny Construct, Neutral\
-AC 13 Initiative +2 (12)\
-HP 4 (1d4 + 2)\
-Speed 20 ft., Fly 40 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 4 −3 −3 Dex 15 +2 +2 Con 14 +2 +2\
-Int 10 +0 +0 Wis 10 +0 +2 Cha 7 −2 +0\
-Immunities Poison; Charmed, Poisoned\
-Senses Darkvision 60 ft.; Passive Perception 10\
-Languages Understands Common plus one other language but can’t speak\
-CR 0 (XP 10; PB +2)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Tiny Construct, Neutral\
+> AC 13 Initiative +2 (12)\
+> HP 4 (1d4 + 2)\
+> Speed 20 ft., Fly 40 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 4 −3 −3 Dex 15 +2 +2 Con 14 +2 +2\
+> Int 10 +0 +0 Wis 10 +0 +2 Cha 7 −2 +0\
+> Immunities Poison; Charmed, Poisoned\
+> Senses Darkvision 60 ft.; Passive Perception 10\
+> Languages Understands Common plus one other language but can’t speak\
+> CR 0 (XP 10; PB +2)
+
 
 ### Traits
 
@@ -40,46 +66,11 @@ Bite. Melee Attack Roll: +4, reach 5 ft. Hit: 1 Piercing damage, and the target 
 
 Original layout: [[../../srd-5.2.1/pages/299|page 299]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` tiny ` |
-| ` type ` | ` construct ` |
-| ` alignment ` | ` Neutral ` |
-| ` movement_text ` | ` 20 ft., Fly 40 ft. ` |
-| ` immunities_text ` | ` Poison; Charmed, Poisoned ` |
-| ` senses_text ` | ` Darkvision 60 ft.; Passive Perception 10 ` |
-| ` languages_text ` | ` Understands Common plus one other language but can’t speak ` |
-| ` cr_text ` | ` 0 (XP 10; PB +2) ` |
-| ` hit_points_text ` | ` 4 (1d4 + 2) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 4 ` | ` -3 ` |
-| ` Dexterity ` | ` 15 ` | ` 2 ` |
-| ` Constitution ` | ` 14 ` | ` 2 ` |
-| ` Intelligence ` | ` 10 ` | ` 0 ` |
-| ` Wisdom ` | ` 10 ` | ` 2 ` |
-| ` Charisma ` | ` 7 ` | ` 0 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 13 ` |  |
-| ` max_hp ` | ` 4 ` |  |
-| ` initiative ` | ` 2 ` |  |
-| ` speed ` | ` 20 ` | ` ft ` |
-| ` fly_speed ` | ` 40 ` | ` ft ` |
 
 ## Health
 
@@ -211,3 +202,13 @@ geometry:
 unlisted_success_branch: no_effect
 unlisted_duration: until_removed_by_applicable_rule
 ```
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_stats_extras -->
+> 
+> ```yaml
+> fly_speed:
+>   unit: ft
+>   value: 40
+> ```
+

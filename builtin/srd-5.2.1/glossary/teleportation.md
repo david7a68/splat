@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "c816413b-3ef4-58c2-b327-46e168f64a73"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/glossary/teleportation"
 splat_name: "Teleportation"
-splat_reference: {"source": "SRD 5.2.1", "category": "glossary", "pages": [190], "executable": false}
+splat_pages:
+- 190
 ---
 
 # Teleportation
@@ -20,3 +21,13 @@ If the destination space of your teleportation is occupied by another creature o
 The description of a teleportation effect tells you if you must see the teleportation’s destination.
 
 Original layout: [[../pages/190|page 190]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: glossary
+> executable: false
+> ```
+

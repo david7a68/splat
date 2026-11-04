@@ -1,34 +1,60 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: c764ea50-08dd-54ef-a072-39043928808f
 splat_kind: creature
 splat_key: dnd2024:creatures/ape
 splat_name: Ape
-splat_origin:
-  key: dnd2024:reference/creature/ape
+splat_origin: dnd2024:reference/creature/ape
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 344
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 344, https://www.dndbeyond.com/srd
 ---
 
 # Ape
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Medium |
+| Type | Beast |
+| Alignment | Unaligned |
+| Armor Class | 12 |
+| Hit Points | 19 (3d8 + 6) |
+| Initiative | +2 (12) |
+| Speed | 30 ft., Climb 30 ft. |
+| Challenge | 1/2 (XP 100; PB +2) |
+| Skills | Athletics +5, Perception +3 |
+| Senses | Passive Perception 13 |
+| Languages | None |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 16 | +3 | +3 |
+| Dex | 14 | +2 | +2 |
+| Con | 14 | +2 | +2 |
+| Int | 6 | -2 | -2 |
+| Wis | 12 | +1 | +1 |
+| Cha | 7 | -2 | -2 |
+
 
 ## Source text
 
 <!-- SRD page 344 -->
 
-Medium Beast, Unaligned\
-AC 12 Initiative +2 (12)\
-HP 19 (3d8 + 6)\
-Speed 30 ft., Climb 30 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 16 +3 +3 Dex 14 +2 +2 Con 14 +2 +2\
-Int 6 −2 −2 Wis 12 +1 +1 Cha 7 −2 −2\
-Skills Athletics +5, Perception +3\
-Senses Passive Perception 13\
-Languages None\
-CR 1/2 (XP 100; PB +2)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Medium Beast, Unaligned\
+> AC 12 Initiative +2 (12)\
+> HP 19 (3d8 + 6)\
+> Speed 30 ft., Climb 30 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 16 +3 +3 Dex 14 +2 +2 Con 14 +2 +2\
+> Int 6 −2 −2 Wis 12 +1 +1 Cha 7 −2 −2\
+> Skills Athletics +5, Perception +3\
+> Senses Passive Perception 13\
+> Languages None\
+> CR 1/2 (XP 100; PB +2)
+
 
 ### Actions
 
@@ -40,46 +66,11 @@ Rock (Recharge 6). Ranged Attack Roll: +5, range 25/50 ft. Hit: 10 (2d6 + 3) Blu
 
 Original layout: [[../../srd-5.2.1/pages/344|page 344]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` medium ` |
-| ` type ` | ` beast ` |
-| ` alignment ` | ` Unaligned ` |
-| ` movement_text ` | ` 30 ft., Climb 30 ft. ` |
-| ` skills_text ` | ` Athletics +5, Perception +3 ` |
-| ` senses_text ` | ` Passive Perception 13 ` |
-| ` languages_text ` | ` None ` |
-| ` cr_text ` | ` 1/2 (XP 100; PB +2) ` |
-| ` hit_points_text ` | ` 19 (3d8 + 6) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 16 ` | ` 3 ` |
-| ` Dexterity ` | ` 14 ` | ` 2 ` |
-| ` Constitution ` | ` 14 ` | ` 2 ` |
-| ` Intelligence ` | ` 6 ` | ` -2 ` |
-| ` Wisdom ` | ` 12 ` | ` 1 ` |
-| ` Charisma ` | ` 7 ` | ` -2 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 12 ` |  |
-| ` max_hp ` | ` 19 ` |  |
-| ` initiative ` | ` 2 ` |  |
-| ` speed ` | ` 30 ` | ` ft ` |
-| ` climb_speed ` | ` 30 ` | ` ft ` |
 
 ## Health
 
@@ -229,3 +220,13 @@ sequence:
 | ` provider ` | ` caller ` |
 | ` required_facts ` | ` ["distance", "area_membership", "visibility", "occupancy", "movement_path"] ` |
 | ` validate_against_typed_constraints ` | ` true ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_stats_extras -->
+> 
+> ```yaml
+> climb_speed:
+>   unit: ft
+>   value: 30
+> ```
+

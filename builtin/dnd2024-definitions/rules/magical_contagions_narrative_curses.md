@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 8efee93e-b3fd-512d-af09-16db9a747c57
 splat_kind: rule
 splat_key: dnd2024:rules/magical_contagions_narrative_curses
 splat_name: Narrative Curses
-splat_origin:
-  key: dnd2024:reference/pages/193
+splat_origin: dnd2024:reference/pages/193
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 193
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 193, https://www.dndbeyond.com/srd
 ---
 
 # Narrative Curses

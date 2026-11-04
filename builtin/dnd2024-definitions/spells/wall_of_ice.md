@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 70ca2817-b63c-53bb-afea-e4dc74389ef2
 splat_kind: spell
 splat_key: dnd2024:spells/wall_of_ice
 splat_name: Wall of Ice
-splat_origin:
-  key: dnd2024:reference/spell/wall_of_ice
+splat_origin: dnd2024:reference/spell/wall_of_ice
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 172, 173
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 172, 173, https://www.dndbeyond.com/srd
 ---
 
 # Wall of Ice
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 6 |
+| School | Evocation |
+| Classes | Wizard |
+| Casting Time | Action |
+| Range | 120 feet |
+| Components | V, S, M (a piece of quartz) |
+| Duration | Concentration, up to 10 minutes |
+
 
 ## Source text
 
@@ -38,37 +49,11 @@ Using a Higher-Level Spell Slot. The damage the wall deals when it appears incre
 
 Original layout: [[../../srd-5.2.1/pages/172|page 172]], [[../../srd-5.2.1/pages/173|page 173]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 6 ` |
-| ` school ` | ` evocation ` |
-| ` classes ` | ` ["wizard"] ` |
-| ` components ` | ` ["verbal", "somatic", "material"] ` |
-| ` concentration ` | ` true ` |
-| ` duration ` | ` Concentration, up to 10 minutes ` |
-| ` casting_time ` | ` Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
 
-<!-- splat:values path=splat_spell/range -->
 
-| Field | Value |
-| --- | --- |
-| ` feet ` | ` 120 ` |
-
-### Material
-
-<!-- splat:values path=splat_spell/material -->
-
-| Field | Value |
-| --- | --- |
-| ` description ` | ` a piece of quartz ` |
-| ` consumed ` | ` false ` |
 
 ## Rule
 
@@ -209,3 +194,12 @@ save:
       numerator: 1
       denominator: 2
 ```
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_spell_extras -->
+> 
+> ```yaml
+> material:
+>   consumed: false
+> ```
+

@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "44e0c53c-0168-58dc-84fd-13936ca9eb2c"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/death_dog"
 splat_name: "Death Dog"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [279], "executable": false}
+splat_pages:
+- 279
 ---
 
 # Death Dog
@@ -31,3 +32,13 @@ Multiattack. The death dog makes two Bite attacks.
 Bite. Melee Attack Roll: +4, reach 5 ft. Hit: 4 (1d4 + 2) Piercing damage. If the target is a creature, it is subjected to the following effect. Constitution Saving Throw: DC 12. First Failure: The target has the Poisoned condition. While Poisoned, the target’s Hit Point maximum doesn’t return to normal when finishing a Long Rest, and it repeats the save every 24 hours that elapse, ending the effect on itself on a success. Subsequent Failures: The Poisoned target’s Hit Point maximum decreases by 5 (1d10).
 
 Original layout: [[../pages/279|page 279]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

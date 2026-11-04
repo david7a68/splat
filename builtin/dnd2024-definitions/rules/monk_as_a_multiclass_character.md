@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: ec4d2bf7-8884-53b5-82af-780a5e103ebf
 splat_kind: rule
 splat_key: dnd2024:rules/monk_as_a_multiclass_character
 splat_name: As a Multiclass Character
-splat_origin:
-  key: dnd2024:reference/pages/049
+splat_origin: dnd2024:reference/pages/049
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 49
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 49, https://www.dndbeyond.com/srd
 ---
 
 # As a Multiclass Character

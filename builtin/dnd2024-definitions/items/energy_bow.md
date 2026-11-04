@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: ee0ba5e2-169f-53ab-a27c-33082a67a6e3
 splat_kind: item
 splat_key: dnd2024:items/energy_bow
 splat_name: Energy Bow
-splat_origin:
-  key: dnd2024:reference/magic_item/energy_bow
+splat_origin: dnd2024:reference/magic_item/energy_bow
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 220
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 220, https://www.dndbeyond.com/srd
 ---
 
 # Energy Bow
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Weapon |
+| Rarity | Very Rare |
+| Attunement | Yes |
+
 
 ## Source text
 
@@ -32,22 +39,9 @@ Energy Ladder. As a Magic action, you can loose a flurry of energy arrows from t
 
 Original layout: [[../../srd-5.2.1/pages/220|page 220]].
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` weapon ` |
-| ` rarity ` | ` very_rare ` |
 
-### Equipment
-
-<!-- splat:values path=splat_item/equipment -->
-
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` required ` |
 
 ## Rule
 

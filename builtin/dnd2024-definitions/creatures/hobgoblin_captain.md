@@ -1,34 +1,60 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 4c98848f-6ea9-5194-b756-113d2f989412
 splat_kind: creature
 splat_key: dnd2024:creatures/hobgoblin_captain
 splat_name: Hobgoblin Captain
-splat_origin:
-  key: dnd2024:reference/creature/hobgoblin_captain
+splat_origin: dnd2024:reference/creature/hobgoblin_captain
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 299
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 299, https://www.dndbeyond.com/srd
 ---
 
 # Hobgoblin Captain
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Medium |
+| Type | Fey (Goblinoid) |
+| Alignment | Lawful Evil |
+| Armor Class | 17 |
+| Hit Points | 58 (9d8 + 18) |
+| Initiative | +4 (14) |
+| Speed | 30 ft. |
+| Challenge | 3 (XP 700; PB +2) |
+| Senses | Darkvision 60 ft.; Passive Perception 10 |
+| Languages | Common, Goblin |
+| Gear | Greatsword, Half Plate Armor, Longbow |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 15 | +2 | +2 |
+| Dex | 14 | +2 | +2 |
+| Con | 14 | +2 | +2 |
+| Int | 12 | +1 | +1 |
+| Wis | 10 | +0 | +0 |
+| Cha | 13 | +1 | +1 |
+
 
 ## Source text
 
 <!-- SRD page 299 -->
 
-Medium Fey (Goblinoid), Lawful Evil\
-AC 17 Initiative +4 (14)\
-HP 58 (9d8 + 18)\
-Speed 30 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 15 +2 +2 Dex 14 +2 +2 Con 14 +2 +2\
-Int 12 +1 +1 Wis 10 +0 +0 Cha 13 +1 +1\
-Gear Greatsword, Half Plate Armor, Longbow\
-Senses Darkvision 60 ft.; Passive Perception 10\
-Languages Common, Goblin\
-CR 3 (XP 700; PB +2)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Medium Fey (Goblinoid), Lawful Evil\
+> AC 17 Initiative +4 (14)\
+> HP 58 (9d8 + 18)\
+> Speed 30 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 15 +2 +2 Dex 14 +2 +2 Con 14 +2 +2\
+> Int 12 +1 +1 Wis 10 +0 +0 Cha 13 +1 +1\
+> Gear Greatsword, Half Plate Armor, Longbow\
+> Senses Darkvision 60 ft.; Passive Perception 10\
+> Languages Common, Goblin\
+> CR 3 (XP 700; PB +2)
+
 
 ### Traits
 
@@ -44,46 +70,11 @@ Longbow. Ranged Attack Roll: +4, range 150/600 ft. Hit: 6 (1d8 + 2) Piercing dam
 
 Original layout: [[../../srd-5.2.1/pages/299|page 299]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` medium ` |
-| ` type ` | ` fey ` |
-| ` alignment ` | ` Lawful Evil ` |
-| ` tags_text ` | ` (Goblinoid) ` |
-| ` movement_text ` | ` 30 ft. ` |
-| ` gear_text ` | ` Greatsword, Half Plate Armor, Longbow ` |
-| ` senses_text ` | ` Darkvision 60 ft.; Passive Perception 10 ` |
-| ` languages_text ` | ` Common, Goblin ` |
-| ` cr_text ` | ` 3 (XP 700; PB +2) ` |
-| ` hit_points_text ` | ` 58 (9d8 + 18) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 15 ` | ` 2 ` |
-| ` Dexterity ` | ` 14 ` | ` 2 ` |
-| ` Constitution ` | ` 14 ` | ` 2 ` |
-| ` Intelligence ` | ` 12 ` | ` 1 ` |
-| ` Wisdom ` | ` 10 ` | ` 0 ` |
-| ` Charisma ` | ` 13 ` | ` 1 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 17 ` |  |
-| ` max_hp ` | ` 58 ` |  |
-| ` initiative ` | ` 4 ` |  |
-| ` speed ` | ` 30 ` | ` ft ` |
 
 ## Health
 

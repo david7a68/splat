@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 21c77eab-aa16-5c1f-9f60-33cb56973ffb
 splat_kind: item
 splat_key: dnd2024:items/shield_of_missile_attraction
 splat_name: Shield of Missile Attraction
-splat_origin:
-  key: dnd2024:reference/magic_item/shield_of_missile_attraction
+splat_origin: dnd2024:reference/magic_item/shield_of_missile_attraction
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 243
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 243, https://www.dndbeyond.com/srd
 ---
 
 # Shield of Missile Attraction
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Armor |
+| Rarity | Rare |
+| Attunement | Yes |
+
 
 ## Source text
 
@@ -26,22 +33,9 @@ Curse. This Shield is cursed. Attuning to it curses you until you are targeted b
 
 Original layout: [[../../srd-5.2.1/pages/243|page 243]].
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` armor ` |
-| ` rarity ` | ` rare ` |
 
-### Equipment
-
-<!-- splat:values path=splat_item/equipment -->
-
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` required ` |
 
 ## Rule
 

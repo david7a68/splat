@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: ba44ffb5-d3ba-51e7-b550-a6a5e0ec0729
 splat_kind: spell
 splat_key: dnd2024:spells/demiplane
 splat_name: Demiplane
-splat_origin:
-  key: dnd2024:reference/spell/demiplane
+splat_origin: dnd2024:reference/spell/demiplane
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 122, 123
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 122, 123, https://www.dndbeyond.com/srd
 ---
 
 # Demiplane
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 8 |
+| School | Conjuration |
+| Classes | Sorcerer, Warlock, Wizard |
+| Casting Time | Action |
+| Range | 60 feet |
+| Components | S |
+| Duration | 1 hour |
+
 
 ## Source text
 
@@ -34,28 +45,9 @@ Each time you cast this spell, you can create a new demiplane or connect the sha
 
 Original layout: [[../../srd-5.2.1/pages/122|page 122]], [[../../srd-5.2.1/pages/123|page 123]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 8 ` |
-| ` school ` | ` conjuration ` |
-| ` classes ` | ` ["sorcerer", "warlock", "wizard"] ` |
-| ` components ` | ` ["somatic"] ` |
-| ` concentration ` | ` false ` |
-| ` duration ` | ` 1 hour ` |
-| ` casting_time ` | ` Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
-
-<!-- splat:values path=splat_spell/range -->
-
-| Field | Value |
-| --- | --- |
-| ` feet ` | ` 60 ` |
 
 ## Rule
 

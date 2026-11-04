@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "74aea044-0f7e-58e6-90db-0851e4d1c7e4"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/conjure_fey"
 splat_name: "Conjure Fey"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [118], "executable": false}
+splat_pages:
+- 118
 ---
 
 # Conjure Fey
@@ -24,3 +25,13 @@ As a Bonus Action on your later turns, you can teleport the spirit to an unoccup
 Using a Higher-Level Spell Slot. The damage increases by 1d12 for each spell slot level above 6.
 
 Original layout: [[../pages/118|page 118]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

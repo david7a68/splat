@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: bc5f0952-a285-5838-a7d8-4f19965ff406
 splat_kind: spell
 splat_key: dnd2024:spells/symbol
 splat_name: Symbol
-splat_origin:
-  key: dnd2024:reference/spell/symbol
+splat_origin: dnd2024:reference/spell/symbol
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 167
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 167, https://www.dndbeyond.com/srd
 ---
 
 # Symbol
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 7 |
+| School | Abjuration |
+| Classes | Bard, Cleric, Druid, Wizard |
+| Casting Time | 1 minute |
+| Range |  |
+| Components | V, S, M (powdered diamond worth 1,000+ GP, which the spell consumes) |
+| Duration | Until dispelled or triggered |
+
 
 ## Source text
 
@@ -50,37 +61,11 @@ Stunning. Each target must succeed on a Wisdom saving throw or have the Stunned 
 
 Original layout: [[../../srd-5.2.1/pages/167|page 167]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 7 ` |
-| ` school ` | ` abjuration ` |
-| ` classes ` | ` ["bard", "cleric", "druid", "wizard"] ` |
-| ` components ` | ` ["verbal", "somatic", "material"] ` |
-| ` concentration ` | ` false ` |
-| ` duration ` | ` Until dispelled or triggered ` |
-| ` casting_time ` | ` 1 minute ` |
-| ` ritual ` | ` false ` |
 
-### Range
 
-<!-- splat:values path=splat_spell/range -->
 
-| Field | Value |
-| --- | --- |
-| ` mode ` | ` touch ` |
-
-### Material
-
-<!-- splat:values path=splat_spell/material -->
-
-| Field | Value |
-| --- | --- |
-| ` description ` | ` powdered diamond worth 1,000+ GP, which the spell consumes ` |
-| ` consumed ` | ` true ` |
 
 ## Rule
 
@@ -260,3 +245,14 @@ stunning:
 | ` source ` | ` supplied_world_geometry ` |
 | ` unknown_facts ` | ` require_resolution ` |
 | ` infer_unprovided_geometry ` | ` false ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_spell_extras -->
+> 
+> ```yaml
+> material:
+>   consumed: true
+> range:
+>   mode: touch
+> ```
+

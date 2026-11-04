@@ -196,7 +196,6 @@ pub struct Sessions {
     folder_error: Option<String>,
     folder_text: String,
     folder_notice: Option<String>,
-    layouts: crate::formats_ui::State,
     view: View,
     tab: Tab,
     /// The list of sessions stands beside this one, and it already gives the date.
@@ -4084,7 +4083,6 @@ impl Sessions {
                 .position(|event| event.id == just.id)
                 .map(|at| book.events[at].label(days[at]));
             if just.at.elapsed() >= UNDO_ADD_FOR
-                || !book.add_notice_current(&just.id)
                 || just.count != book.events.len()
                 || current.as_ref() != Some(&just.label)
             {
@@ -4113,7 +4111,6 @@ impl Sessions {
                     format!("{} added{to}.", just.label)
                 },
             );
-            let words = book.added_words(&id, &words);
             if design::undo_message(ui, Tone::Success, &words, "Undo add") {
                 book.undo_add(&id);
                 self.added = None;
@@ -4871,9 +4868,8 @@ impl Sessions {
             });
             if added.as_ref() == self.recording_added.as_ref()
                 && let Some(id) = &added
-                && book.add_notice_current(id)
             {
-                let words = book.added_words(id, &format!("{title} added to the timeline."));
+                let words = format!("{title} added to the timeline.");
                 if design::undo_message(ui, Tone::Success, &words, "Undo add") {
                     book.undo_add(id);
                     self.recording_added = None;
@@ -5112,13 +5108,9 @@ impl Sessions {
                                     && book
                                         .event_of_marker(key)
                                         .is_some_and(|event| event.id == *id)
-                                    && book.add_notice_current(id)
                                 {
                                     let id = id.clone();
-                                    let words = book.added_words(
-                                        &id,
-                                        &format!("{} added to the timeline.", marker.title),
-                                    );
+                                    let words = format!("{} added to the timeline.", marker.title);
                                     if design::undo_message(ui, Tone::Success, &words, "Undo add") {
                                         book.undo_add(&id);
                                         self.recording_added = None;
@@ -5495,7 +5487,6 @@ impl Sessions {
             if changed {
                 if self.tab == Tab::Recordings || shown == Tab::Recordings {
                     self.clear_notice();
-                    book.clear_notice();
                 }
                 self.tab = shown;
                 self.clear_success();
@@ -6124,7 +6115,6 @@ impl Sessions {
                 );
                 return;
             }
-            let before_layout = crate::content_workspace::CampaignDocument::load(&campaign).ok();
             let saved = if move_files {
                 super::move_storage(&campaign, &self.folder_text)
             } else {
@@ -6132,17 +6122,6 @@ impl Sessions {
             };
             match saved {
                 Ok(folder) => {
-                    if let Some(before) = before_layout
-                        && let Ok(after) =
-                            crate::content_workspace::CampaignDocument::load(&campaign)
-                    {
-                        self.layouts.remember_conversion(
-                            &campaign.path,
-                            &after.path,
-                            &before.text,
-                            &after.text,
-                        );
-                    }
                     self.folder = Some(folder);
                     self.folder_error = None;
                     self.folder_notice =
@@ -6166,7 +6145,6 @@ impl Sessions {
     }
 
     pub fn clear_notice(&mut self) {
-        self.layouts.leave();
         self.added = None;
         self.recording_added = None;
     }
@@ -6184,17 +6162,9 @@ impl Sessions {
             .is_some_and(|previous| previous != context)
         {
             self.clear_notice();
-            book.clear_notice();
         }
         self.notice_context = Some(context);
-        if self.layouts.show_any(ui)
-            && let Some(campaign) = &self.campaign
-        {
-            self.manifest_changed = Some(campaign.path.clone());
-            self.folder = super::folder(campaign).ok();
-            self.draft = None;
-            self.refresh();
-        }
+
         let folder_missing = self.folder.as_ref().is_none_or(|folder| !folder.is_dir());
         let (page_title, count, singular, plural) = if self.view == View::Templates {
             ("Templates", self.templates.len(), "template", "templates")
@@ -6349,74 +6319,6 @@ impl Sessions {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn i19_h1_recording_reader_drops_undo_after_later_save_or_outside_edit() {
-        for outside in [false, true] {
-            let dir = tempfile::tempdir().unwrap();
-            let path = dir.path().join(timeline::FILE);
-            fs::write(&path, "---\ntimeline_version: 1\ntimeline: []\n---\n\n# Timeline\n\nSplat writes this page from the list above. Edit the list, or use Splat.\n").unwrap();
-            let mut book = Book::default();
-            book.open(Some(dir.path()));
-            let marker = timeline::Marker {
-                kind: timeline::Kind::Event,
-                title: "Gate opens".into(),
-                at: "00:01".into(),
-                place: String::new(),
-                duration: String::new(),
-            };
-            let id = book.add_marker(&marker, "recording:0", None);
-            book.save();
-            assert!(book.error.is_none(), "{:?}", book.error);
-            assert!(
-                book.added_words(&id, "Added.").contains("new layout"),
-                "{}",
-                fs::read_to_string(&path).unwrap()
-            );
-            let mut sessions = Sessions {
-                recording_added: Some(id.clone()),
-                reading: Some(Reading {
-                    recording: dir.path().join("Recording.wav"),
-                    name: "Recording".into(),
-                    made: Made::Marked,
-                    parts: vec![(String::new(), marker.reading_words())],
-                    part: 0,
-                    mark: None,
-                    marker: Some((marker, "recording:0".into())),
-                    short_of: None,
-                }),
-                ..Default::default()
-            };
-            let ctx = egui::Context::default();
-            design::theme::install(&ctx);
-            let mut render = |book: &mut Book| {
-                let mut frame = || {
-                    ctx.run(Default::default(), |ctx| {
-                        egui::CentralPanel::default()
-                            .show(ctx, |ui| sessions.reading_view(ui, book));
-                    })
-                };
-                frame();
-                frame().shapes.into_iter().any(|shape| {
-                    matches!(shape.shape, egui::Shape::Text(text) if text.galley.job.text.contains("Undo add"))
-                })
-            };
-            assert!(render(&mut book));
-            if outside {
-                let saved = fs::read_to_string(&path).unwrap();
-                fs::write(&path, format!("{saved}\nOutside edit.\n")).unwrap();
-            } else {
-                book.add(timeline::Kind::Travel, None);
-                book.save();
-            }
-            assert!(!book.add_notice_current(&id), "outside={outside}");
-            assert!(
-                !render(&mut book),
-                "outside={outside}, error={:?}",
-                book.error
-            );
-        }
-    }
 
     #[test]
     fn integrity_d9_identity_undo_stays_with_its_campaign() {

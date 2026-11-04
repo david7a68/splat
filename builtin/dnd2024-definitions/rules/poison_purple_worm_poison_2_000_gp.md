@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 372f2450-098a-5935-9361-2d3cfa8f2f80
 splat_kind: rule
 splat_key: dnd2024:rules/poison_purple_worm_poison_2_000_gp
 splat_name: Purple Worm Poison (2,000 GP)
-splat_origin:
-  key: dnd2024:reference/pages/198
+splat_origin: dnd2024:reference/pages/198
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 198
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 198, https://www.dndbeyond.com/srd
 ---
 
 # Purple Worm Poison (2,000 GP)

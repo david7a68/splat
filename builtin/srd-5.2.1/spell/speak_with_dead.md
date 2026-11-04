@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "8af46d85-2ef3-531e-9f0c-47f39dc30785"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/speak_with_dead"
 splat_name: "Speak with Dead"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [164], "executable": false}
+splat_pages:
+- 164
 ---
 
 # Speak with Dead
@@ -22,3 +23,13 @@ You grant the semblance of life to a corpse of your choice within range, allowin
 Until the spell ends, you can ask the corpse up to five questions. The corpse knows only what it knew in life, including the languages it knew. Answers are usually brief, cryptic, or repetitive, and the corpse is under no compulsion to offer a truthful answer if you are antagonistic toward it or it recognizes you as an enemy. This spell doesn’t return the creature’s soul to its body, only its animating spirit. Thus, the corpse can’t learn new information, doesn’t comprehend anything that has happened since it died, and can’t speculate about future events.
 
 Original layout: [[../pages/164|page 164]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

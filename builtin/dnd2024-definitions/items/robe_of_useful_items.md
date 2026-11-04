@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 010ab45f-4997-596e-931f-0707f5a0d543
 splat_kind: item
 splat_key: dnd2024:items/robe_of_useful_items
 splat_name: Robe of Useful Items
-splat_origin:
-  key: dnd2024:reference/magic_item/robe_of_useful_items
+splat_origin: dnd2024:reference/magic_item/robe_of_useful_items
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 240, 241
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 240, 241, https://www.dndbeyond.com/srd
 ---
 
 # Robe of Useful Items
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Wondrous Item |
+| Rarity | Uncommon |
+| Attunement | No |
+
 
 ## Source text
 
@@ -61,22 +68,9 @@ In addition, the robe has 4d4 other patches. The GM chooses the patches or deter
 
 Original layout: [[../../srd-5.2.1/pages/240|page 240]], [[../../srd-5.2.1/pages/241|page 241]].
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` wondrous_item ` |
-| ` rarity ` | ` uncommon ` |
 
-### Equipment
-
-<!-- splat:values path=splat_item/equipment -->
-
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` none ` |
 
 ## Rule
 

@@ -1,34 +1,60 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: f72fd22b-59c0-5ac7-acd1-5f9ed6b376bd
 splat_kind: creature
 splat_key: dnd2024:creatures/giant_hyena
 splat_name: Giant Hyena
-splat_origin:
-  key: dnd2024:reference/creature/giant_hyena
+splat_origin: dnd2024:reference/creature/giant_hyena
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 352
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 352, https://www.dndbeyond.com/srd
 ---
 
 # Giant Hyena
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Large |
+| Type | Beast |
+| Alignment | Unaligned |
+| Armor Class | 12 |
+| Hit Points | 45 (6d10 + 12) |
+| Initiative | +2 (12) |
+| Speed | 50 ft. |
+| Challenge | 1 (XP 200; PB +2) |
+| Skills | Perception +3 |
+| Senses | Darkvision 60 ft.; Passive Perception 13 |
+| Languages | None |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 16 | +3 | +3 |
+| Dex | 14 | +2 | +2 |
+| Con | 14 | +2 | +2 |
+| Int | 2 | -4 | -4 |
+| Wis | 12 | +1 | +1 |
+| Cha | 7 | -2 | -2 |
+
 
 ## Source text
 
 <!-- SRD page 352 -->
 
-Large Beast, Unaligned\
-AC 12  Initiative +2 (12)\
-HP 45 (6d10 + 12)\
-Speed 50 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 16 +3 +3 Dex 14 +2 +2 Con 14 +2 +2\
-Int 2 −4 −4 Wis 12 +1 +1 Cha 7 −2 −2\
-Skills Perception +3\
-Senses Darkvision 60 ft.; Passive Perception 13\
-Languages None\
-CR 1 (XP 200; PB +2)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Large Beast, Unaligned\
+> AC 12  Initiative +2 (12)\
+> HP 45 (6d10 + 12)\
+> Speed 50 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 16 +3 +3 Dex 14 +2 +2 Con 14 +2 +2\
+> Int 2 −4 −4 Wis 12 +1 +1 Cha 7 −2 −2\
+> Skills Perception +3\
+> Senses Darkvision 60 ft.; Passive Perception 13\
+> Languages None\
+> CR 1 (XP 200; PB +2)
+
 
 ### Actions
 
@@ -40,45 +66,11 @@ Rampage (1/Day). Immediately after dealing damage to a creature that was already
 
 Original layout: [[../../srd-5.2.1/pages/352|page 352]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` large ` |
-| ` type ` | ` beast ` |
-| ` alignment ` | ` Unaligned ` |
-| ` movement_text ` | ` 50 ft. ` |
-| ` skills_text ` | ` Perception +3 ` |
-| ` senses_text ` | ` Darkvision 60 ft.; Passive Perception 13 ` |
-| ` languages_text ` | ` None ` |
-| ` cr_text ` | ` 1 (XP 200; PB +2) ` |
-| ` hit_points_text ` | ` 45 (6d10 + 12) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 16 ` | ` 3 ` |
-| ` Dexterity ` | ` 14 ` | ` 2 ` |
-| ` Constitution ` | ` 14 ` | ` 2 ` |
-| ` Intelligence ` | ` 2 ` | ` -4 ` |
-| ` Wisdom ` | ` 12 ` | ` 1 ` |
-| ` Charisma ` | ` 7 ` | ` -2 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 12 ` |  |
-| ` max_hp ` | ` 45 ` |  |
-| ` initiative ` | ` 2 ` |  |
-| ` speed ` | ` 50 ` | ` ft ` |
 
 ## Health
 

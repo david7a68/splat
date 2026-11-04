@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: d4c2380e-ac78-5579-8af5-fd603381dca7
 splat_kind: spell
 splat_key: dnd2024:spells/animal_friendship
 splat_name: Animal Friendship
-splat_origin:
-  key: dnd2024:reference/spell/animal_friendship
+splat_origin: dnd2024:reference/spell/animal_friendship
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 107, 108
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 107, 108, https://www.dndbeyond.com/srd
 ---
 
 # Animal Friendship
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 1 |
+| School | Enchantment |
+| Classes | Bard, Druid, Ranger |
+| Casting Time | Action |
+| Range | 30 feet |
+| Components | V, S, M (a morsel of food) |
+| Duration | 24 hours |
+
 
 ## Source text
 
@@ -32,37 +43,11 @@ Using a Higher-Level Spell Slot. You can target one additional Beast for each sp
 
 Original layout: [[../../srd-5.2.1/pages/107|page 107]], [[../../srd-5.2.1/pages/108|page 108]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 1 ` |
-| ` school ` | ` enchantment ` |
-| ` classes ` | ` ["bard", "druid", "ranger"] ` |
-| ` components ` | ` ["verbal", "somatic", "material"] ` |
-| ` concentration ` | ` false ` |
-| ` duration ` | ` 24 hours ` |
-| ` casting_time ` | ` Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
 
-<!-- splat:values path=splat_spell/range -->
 
-| Field | Value |
-| --- | --- |
-| ` feet ` | ` 30 ` |
-
-### Material
-
-<!-- splat:values path=splat_spell/material -->
-
-| Field | Value |
-| --- | --- |
-| ` description ` | ` a morsel of food ` |
-| ` consumed ` | ` false ` |
 
 ## Rule
 
@@ -123,3 +108,12 @@ maximum:
   value: 24
   unit: hour
 ```
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_spell_extras -->
+> 
+> ```yaml
+> material:
+>   consumed: false
+> ```
+

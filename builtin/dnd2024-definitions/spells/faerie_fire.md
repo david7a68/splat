@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 5eeefa95-08af-588f-bed1-c359739b95ce
 splat_kind: spell
 splat_key: dnd2024:spells/faerie_fire
 splat_name: Faerie Fire
-splat_origin:
-  key: dnd2024:reference/spell/faerie_fire
+splat_origin: dnd2024:reference/spell/faerie_fire
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 129
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 129, https://www.dndbeyond.com/srd
 ---
 
 # Faerie Fire
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 1 |
+| School | Evocation |
+| Classes | Bard, Druid |
+| Casting Time | Action |
+| Range | 60 feet |
+| Components | V |
+| Duration | Concentration, up to 1 minute |
+
 
 ## Source text
 
@@ -30,28 +41,9 @@ Attack rolls against an affected creature or object have Advantage if the attack
 
 Original layout: [[../../srd-5.2.1/pages/129|page 129]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 1 ` |
-| ` school ` | ` evocation ` |
-| ` classes ` | ` ["bard", "druid"] ` |
-| ` components ` | ` ["verbal"] ` |
-| ` concentration ` | ` true ` |
-| ` duration ` | ` Concentration, up to 1 minute ` |
-| ` casting_time ` | ` Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
-
-<!-- splat:values path=splat_spell/range -->
-
-| Field | Value |
-| --- | --- |
-| ` feet ` | ` 60 ` |
 
 ## Rule
 

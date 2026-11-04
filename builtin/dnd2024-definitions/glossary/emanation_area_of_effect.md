@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: e710403e-84d2-569a-9a6f-b30c5277b55c
 splat_kind: rule
 splat_key: dnd2024:glossary/emanation_area_of_effect
 splat_name: Emanation [Area of Effect]
-splat_origin:
-  key: dnd2024:reference/glossary/emanation_area_of_effect
+splat_origin: dnd2024:reference/glossary/emanation_area_of_effect
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 181
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 181, https://www.dndbeyond.com/srd
 ---
 
 # Emanation [Area of Effect]

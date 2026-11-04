@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 523f2b01-7d7f-5e8a-b654-c6141dd94e91
 splat_kind: spell
 splat_key: dnd2024:spells/wall_of_force
 splat_name: Wall of Force
-splat_origin:
-  key: dnd2024:reference/spell/wall_of_force
+splat_origin: dnd2024:reference/spell/wall_of_force
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 172
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 172, https://www.dndbeyond.com/srd
 ---
 
 # Wall of Force
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 5 |
+| School | Evocation |
+| Classes | Wizard |
+| Casting Time | Action |
+| Range | 120 feet |
+| Components | V, S, M (a shard of glass) |
+| Duration | Concentration, up to 10 minutes |
+
 
 ## Source text
 
@@ -30,37 +41,11 @@ Nothing can physically pass through the wall. It is immune to all damage and can
 
 Original layout: [[../../srd-5.2.1/pages/172|page 172]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 5 ` |
-| ` school ` | ` evocation ` |
-| ` classes ` | ` ["wizard"] ` |
-| ` components ` | ` ["verbal", "somatic", "material"] ` |
-| ` concentration ` | ` true ` |
-| ` duration ` | ` Concentration, up to 10 minutes ` |
-| ` casting_time ` | ` Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
 
-<!-- splat:values path=splat_spell/range -->
 
-| Field | Value |
-| --- | --- |
-| ` feet ` | ` 120 ` |
-
-### Material
-
-<!-- splat:values path=splat_spell/material -->
-
-| Field | Value |
-| --- | --- |
-| ` description ` | ` a shard of glass ` |
-| ` consumed ` | ` false ` |
 
 ## Rule
 
@@ -176,3 +161,12 @@ maximum:
   value: 10
   unit: minute
 ```
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_spell_extras -->
+> 
+> ```yaml
+> material:
+>   consumed: false
+> ```
+

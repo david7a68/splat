@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 53786ff2-4da2-5c8b-8ab6-452fe723c13e
 splat_kind: spell
 splat_key: dnd2024:spells/chromatic_orb
 splat_name: Chromatic Orb
-splat_origin:
-  key: dnd2024:reference/spell/chromatic_orb
+splat_origin: dnd2024:reference/spell/chromatic_orb
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 115
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 115, https://www.dndbeyond.com/srd
 ---
 
 # Chromatic Orb
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 1 |
+| School | Evocation |
+| Classes | Sorcerer, Wizard |
+| Casting Time | Action |
+| Range | 90 feet |
+| Components | V, S, M (a diamond worth 50+ GP) |
+| Duration | Instantaneous |
+
 
 ## Source text
 
@@ -32,37 +43,11 @@ Using a Higher-Level Spell Slot. The damage increases by 1d8 for each spell slot
 
 Original layout: [[../../srd-5.2.1/pages/115|page 115]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 1 ` |
-| ` school ` | ` evocation ` |
-| ` classes ` | ` ["sorcerer", "wizard"] ` |
-| ` components ` | ` ["verbal", "somatic", "material"] ` |
-| ` concentration ` | ` false ` |
-| ` duration ` | ` Instantaneous ` |
-| ` casting_time ` | ` Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
 
-<!-- splat:values path=splat_spell/range -->
 
-| Field | Value |
-| --- | --- |
-| ` feet ` | ` 90 ` |
-
-### Material
-
-<!-- splat:values path=splat_spell/material -->
-
-| Field | Value |
-| --- | --- |
-| ` description ` | ` a diamond worth 50+ GP ` |
-| ` consumed ` | ` false ` |
 
 ## Rule
 
@@ -128,3 +113,12 @@ maximum_leaps:
   binding: cast_level
 maximum_targets_per_creature_per_cast: 1
 ```
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_spell_extras -->
+> 
+> ```yaml
+> material:
+>   consumed: false
+> ```
+

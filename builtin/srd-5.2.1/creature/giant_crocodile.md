@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "d48ee5ba-770d-593b-aa5a-5b11ad4aa6e4"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/giant_crocodile"
 splat_name: "Giant Crocodile"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [350], "executable": false}
+splat_pages:
+- 350
 ---
 
 # Giant Crocodile
@@ -36,3 +37,13 @@ Bite. Melee Attack Roll: +8, reach 5 ft. Hit: 21 (3d10 + 5) Piercing damage. If 
 Tail. Melee Attack Roll: +8, reach 10 ft. Hit: 18 (3d8 + 5) Bludgeoning damage. If the target is a Large or smaller creature, it has the Prone condition.
 
 Original layout: [[../pages/350|page 350]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

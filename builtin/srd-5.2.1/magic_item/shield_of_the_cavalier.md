@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "9879eeb7-ed3d-5905-b104-0c0c1d1a34e5"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/magic_item/shield_of_the_cavalier"
 splat_name: "Shield of the Cavalier"
-splat_reference: {"source": "SRD 5.2.1", "category": "magic_item", "pages": [243], "executable": false}
+splat_pages:
+- 243
 ---
 
 # Shield of the Cavalier
@@ -22,3 +23,13 @@ Forceful Bash. When you take the Attack action, you can make one of the attack r
 Protective Field. As a Reaction, when you or an ally you can see within 5 feet of you is targeted by an attack or makes a saving throw against an area of effect, you can use the Shield to create an immobile 5-foot Emanation originating from you. When the Emanation appears, any creatures or objects not fully contained within it are pushed into the nearest unoccupied spaces outside it. The attack or area of effect that triggered the Reaction has no effect on creatures and objects inside the Emanation, which lasts as long as you maintain Concentration, up to 1 minute. Nothing can pass into or out of the Emanation. A creature or object inside the Emanation can’t be damaged by attacks or effects originating from outside, nor can a creature inside the Emanation damage anything outside it. Once this property is used, it can’t be used again until the next dawn.
 
 Original layout: [[../pages/243|page 243]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: magic_item
+> executable: false
+> ```
+

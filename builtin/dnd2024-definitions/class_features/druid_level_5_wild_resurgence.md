@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: e101c2c8-5dda-5491-9022-5b6a93455595
 splat_kind: rule
 splat_key: dnd2024:class_features/druid_level_5_wild_resurgence
 splat_name: 'Level 5: Wild Resurgence'
-splat_origin:
-  key: dnd2024:reference/pages/043
+splat_origin: dnd2024:reference/pages/043
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 43
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 43, https://www.dndbeyond.com/srd
 ---
 
 # Level 5: Wild Resurgence

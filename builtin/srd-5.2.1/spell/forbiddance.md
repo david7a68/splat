@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "10fcca4e-8949-568e-b62a-9b354e065e7d"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/forbiddance"
 splat_name: "Forbiddance"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [133], "executable": false}
+splat_pages:
+- 133
 ---
 
 # Forbiddance
@@ -26,3 +27,13 @@ You can designate a password when you cast the spell. A creature that speaks the
 The spell’s area can’t overlap with the area of another Forbiddance spell. If you cast Forbiddance every day for 30 days in the same location, the spell lasts until it is dispelled, and the Material components are consumed on the last casting.
 
 Original layout: [[../pages/133|page 133]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

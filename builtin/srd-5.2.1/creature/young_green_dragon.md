@@ -1,10 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "0e5dcf99-ffcb-537b-a395-42e357201b66"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/young_green_dragon"
 splat_name: "Young Green Dragon"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [293, 294], "executable": false}
+splat_pages:
+- 293
+- 294
 ---
 
 # Young Green Dragon
@@ -39,3 +41,13 @@ Rend. Melee Attack Roll: +7, reach 10 ft. Hit: 11 (2d6 + 4) Slashing damage plus
 Poison Breath (Recharge 5–6). Constitution Saving Throw: DC 14, each creature in a 30-foot Cone. Failure: 42 (12d6) Poison damage. Success: Half damage.
 
 Original layout: [[../pages/293|page 293]], [[../pages/294|page 294]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

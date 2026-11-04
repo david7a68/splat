@@ -1,10 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "87fc1212-e6a1-5e2e-83dd-2b7e9acf988c"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/simulacrum"
 splat_name: "Simulacrum"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [162, 163], "executable": false}
+splat_pages:
+- 162
+- 163
 ---
 
 # Simulacrum
@@ -28,3 +30,13 @@ If the simulacrum takes damage, the only way to restore its Hit Points is to rep
 The simulacrum lasts until it drops to 0 Hit Points, at which point it reverts to snow and melts away. If you cast this spell again, any simulacrum you created with this spell is instantly destroyed.
 
 Original layout: [[../pages/162|page 162]], [[../pages/163|page 163]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

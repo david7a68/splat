@@ -1,36 +1,64 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: b9dcdb24-96a6-5bce-841a-eb4a862eb34c
 splat_kind: creature
 splat_key: dnd2024:creatures/mummy_lord
 splat_name: Mummy Lord
-splat_origin:
-  key: dnd2024:reference/creature/mummy_lord
+splat_origin: dnd2024:reference/creature/mummy_lord
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 309, 310
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 309, 310, https://www.dndbeyond.com/srd
 ---
 
 # Mummy Lord
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Medium or Small |
+| Type | Undead (Cleric) |
+| Alignment | Lawful Evil |
+| Armor Class | 17 |
+| Hit Points | 187 (25d8 + 75) |
+| Initiative | +10 (20) |
+| Speed | 30 ft. |
+| Challenge | 15 (XP 13,000, or 15,000 in lair; PB +5) |
+| Skills | History +5, Perception +9, Religion +5 |
+| Senses | Truesight 60 ft.; Passive Perception 19 |
+| Languages | Common plus three other languages |
+| Immunities | Necrotic, Poison; Charmed, Exhaustion, Frightened, Paralyzed, Poisoned |
+| Vulnerabilities | Fire |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 18 | +4 | +4 |
+| Dex | 10 | +0 | +0 |
+| Con | 17 | +3 | +3 |
+| Int | 11 | +0 | +5 |
+| Wis | 19 | +4 | +9 |
+| Cha | 16 | +3 | +3 |
+
 
 ## Source text
 
 <!-- SRD page 309 -->
 
 Medium or Small Undead (Cleric), Lawful Evil\
-AC 17 Initiative +10 (20)\
-HP 187 (25d8 + 75)\
-Speed 30 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 18 +4 +4 Dex 10 +0 +0 Con 17 +3 +3\
-Int 11 +0 +5 Wis 19 +4 +9 Cha 16 +3 +3\
-Skills History +5, Perception +9, Religion +5\
-Vulnerabilities Fire\
-Immunities Necrotic, Poison; Charmed, Exhaustion, Frightened, Paralyzed, Poisoned\
-Senses Truesight 60 ft.; Passive Perception 19\
-Languages Common plus three other languages\
-CR 15 (XP 13,000, or 15,000 in lair; PB +5)
+> [!quote]- Printed stat block (not read; edit the table above)
+> AC 17 Initiative +10 (20)\
+> HP 187 (25d8 + 75)\
+> Speed 30 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 18 +4 +4 Dex 10 +0 +0 Con 17 +3 +3\
+> Int 11 +0 +5 Wis 19 +4 +9 Cha 16 +3 +3\
+> Skills History +5, Perception +9, Religion +5\
+> Vulnerabilities Fire\
+> Immunities Necrotic, Poison; Charmed, Exhaustion, Frightened, Paralyzed, Poisoned\
+> Senses Truesight 60 ft.; Passive Perception 19\
+> Languages Common plus three other languages\
+> CR 15 (XP 13,000, or 15,000 in lair; PB +5)
+
 
 <!-- SRD page 310 -->
 
@@ -73,49 +101,11 @@ Necrotic Strike. The mummy makes one Rotting Fist or Channel Negative Energy att
 
 Original layout: [[../../srd-5.2.1/pages/309|page 309]], [[../../srd-5.2.1/pages/310|page 310]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` medium ` |
-| ` type ` | ` undead ` |
-| ` alignment ` | ` Lawful Evil ` |
-| ` size_options_text ` | ` Medium or Small ` |
-| ` tags_text ` | ` (Cleric) ` |
-| ` movement_text ` | ` 30 ft. ` |
-| ` skills_text ` | ` History +5, Perception +9, Religion +5 ` |
-| ` vulnerabilities_text ` | ` Fire ` |
-| ` immunities_text ` | ` Necrotic, Poison; Charmed, Exhaustion, Frightened, Paralyzed, Poisoned ` |
-| ` senses_text ` | ` Truesight 60 ft.; Passive Perception 19 ` |
-| ` languages_text ` | ` Common plus three other languages ` |
-| ` cr_text ` | ` 15 (XP 13,000, or 15,000 in lair; PB +5) ` |
-| ` hit_points_text ` | ` 187 (25d8 + 75) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 18 ` | ` 4 ` |
-| ` Dexterity ` | ` 10 ` | ` 0 ` |
-| ` Constitution ` | ` 17 ` | ` 3 ` |
-| ` Intelligence ` | ` 11 ` | ` 5 ` |
-| ` Wisdom ` | ` 19 ` | ` 9 ` |
-| ` Charisma ` | ` 16 ` | ` 3 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 17 ` |  |
-| ` max_hp ` | ` 187 ` |  |
-| ` initiative ` | ` 10 ` |  |
-| ` speed ` | ` 30 ` | ` ft ` |
 
 ## Health
 

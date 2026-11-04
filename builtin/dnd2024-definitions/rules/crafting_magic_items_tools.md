@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 5a50b803-e3c0-5ced-af76-c9d017c48c68
 splat_kind: rule
 splat_key: dnd2024:rules/crafting_magic_items_tools
 splat_name: Tools
-splat_origin:
-  key: dnd2024:reference/pages/206
+splat_origin: dnd2024:reference/pages/206
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 206, 207
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 206, 207, https://www.dndbeyond.com/srd
 ---
 
 # Tools

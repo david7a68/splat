@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "18122431-451e-592b-93e2-d866579db43f"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/detect_thoughts"
 splat_name: "Detect Thoughts"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [123], "executable": false}
+splat_pages:
+- 123
 ---
 
 # Detect Thoughts
@@ -28,3 +29,13 @@ Read Thoughts. Target one creature you can see within 30 feet of yourself or one
 As a Magic action on your next turn, you can try to probe deeper into the target’s mind. If you probe deeper, the target makes a Wisdom saving throw. On a failed save, you discern the target’s reasoning, emotions, and something that looms large in its mind (such as a worry, love, or hate). On a successful save, the spell ends. Either way, the target knows that you are probing into its mind, and until you shift your attention away from the target’s mind, the target can take an action on its turn to make an Intelligence (Arcana) check against your spell save DC, ending the spell on a success.
 
 Original layout: [[../pages/123|page 123]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: acc8a3a9-1c08-5c1c-8569-ebb1df44a31c
 splat_kind: rule
 splat_key: dnd2024:rules/sorcerer_quickened_spell
 splat_name: Quickened Spell
-splat_origin:
-  key: dnd2024:reference/pages/067
+splat_origin: dnd2024:reference/pages/067
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 67
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 67, https://www.dndbeyond.com/srd
 ---
 
 # Quickened Spell

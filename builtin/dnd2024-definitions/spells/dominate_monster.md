@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 8e4dbe10-3c5c-5109-8de2-9f59553a8b4a
 splat_kind: spell
 splat_key: dnd2024:spells/dominate_monster
 splat_name: Dominate Monster
-splat_origin:
-  key: dnd2024:reference/spell/dominate_monster
+splat_origin: dnd2024:reference/spell/dominate_monster
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 125, 126
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 125, 126, https://www.dndbeyond.com/srd
 ---
 
 # Dominate Monster
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 8 |
+| School | Enchantment |
+| Classes | Bard, Sorcerer, Warlock, Wizard |
+| Casting Time | Action |
+| Range | 60 feet |
+| Components | V, S |
+| Duration | Concentration, up to 1 hour |
+
 
 ## Source text
 
@@ -36,28 +47,9 @@ Using a Higher-Level Spell Slot. Your Concentration can last longer with a level
 
 Original layout: [[../../srd-5.2.1/pages/125|page 125]], [[../../srd-5.2.1/pages/126|page 126]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 8 ` |
-| ` school ` | ` enchantment ` |
-| ` classes ` | ` ["bard", "sorcerer", "warlock", "wizard"] ` |
-| ` components ` | ` ["verbal", "somatic"] ` |
-| ` concentration ` | ` true ` |
-| ` duration ` | ` Concentration, up to 1 hour ` |
-| ` casting_time ` | ` Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
-
-<!-- splat:values path=splat_spell/range -->
-
-| Field | Value |
-| --- | --- |
-| ` feet ` | ` 60 ` |
 
 ## Rule
 

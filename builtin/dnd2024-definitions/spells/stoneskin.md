@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 5c5919d9-67ca-523e-9a4d-d49534a1c746
 splat_kind: spell
 splat_key: dnd2024:spells/stoneskin
 splat_name: Stoneskin
-splat_origin:
-  key: dnd2024:reference/spell/stoneskin
+splat_origin: dnd2024:reference/spell/stoneskin
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 165
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 165, https://www.dndbeyond.com/srd
 ---
 
 # Stoneskin
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 4 |
+| School | Transmutation |
+| Classes | Druid, Ranger, Sorcerer, Wizard |
+| Casting Time | Action |
+| Range |  |
+| Components | V, S, M (diamond dust worth 100+ GP, which the spell consumes) |
+| Duration | Concentration, up to 1 hour |
+
 
 ## Source text
 
@@ -28,37 +39,11 @@ Until the spell ends, one willing creature you touch has Resistance to Bludgeoni
 
 Original layout: [[../../srd-5.2.1/pages/165|page 165]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 4 ` |
-| ` school ` | ` transmutation ` |
-| ` classes ` | ` ["druid", "ranger", "sorcerer", "wizard"] ` |
-| ` components ` | ` ["verbal", "somatic", "material"] ` |
-| ` concentration ` | ` true ` |
-| ` duration ` | ` Concentration, up to 1 hour ` |
-| ` casting_time ` | ` Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
 
-<!-- splat:values path=splat_spell/range -->
 
-| Field | Value |
-| --- | --- |
-| ` mode ` | ` touch ` |
-
-### Material
-
-<!-- splat:values path=splat_spell/material -->
-
-| Field | Value |
-| --- | --- |
-| ` description ` | ` diamond dust worth 100+ GP, which the spell consumes ` |
-| ` consumed ` | ` true ` |
 
 ## Rule
 
@@ -102,3 +87,14 @@ maximum:
   value: 1
   unit: hour
 ```
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_spell_extras -->
+> 
+> ```yaml
+> material:
+>   consumed: true
+> range:
+>   mode: touch
+> ```
+

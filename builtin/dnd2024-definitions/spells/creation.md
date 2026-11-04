@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: d41bb77c-c62e-5e75-ad2b-d04aff455eb0
 splat_kind: spell
 splat_key: dnd2024:spells/creation
 splat_name: Creation
-splat_origin:
-  key: dnd2024:reference/spell/creation
+splat_origin: dnd2024:reference/spell/creation
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 121
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 121, https://www.dndbeyond.com/srd
 ---
 
 # Creation
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 5 |
+| School | Illusion |
+| Classes | Sorcerer, Wizard |
+| Casting Time | 1 minute |
+| Range | 30 feet |
+| Components | V, S, M (a paintbrush) |
+| Duration | Special |
+
 
 ## Source text
 
@@ -42,37 +53,11 @@ Using a Higher-Level Spell Slot. The Cube increases by 5 feet for each spell slo
 
 Original layout: [[../../srd-5.2.1/pages/121|page 121]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 5 ` |
-| ` school ` | ` illusion ` |
-| ` classes ` | ` ["sorcerer", "wizard"] ` |
-| ` components ` | ` ["verbal", "somatic", "material"] ` |
-| ` concentration ` | ` false ` |
-| ` duration ` | ` Special ` |
-| ` casting_time ` | ` 1 minute ` |
-| ` ritual ` | ` false ` |
 
-### Range
 
-<!-- splat:values path=splat_spell/range -->
 
-| Field | Value |
-| --- | --- |
-| ` feet ` | ` 30 ` |
-
-### Material
-
-<!-- splat:values path=splat_spell/material -->
-
-| Field | Value |
-| --- | --- |
-| ` description ` | ` a paintbrush ` |
-| ` consumed ` | ` false ` |
 
 ## Rule
 
@@ -149,3 +134,12 @@ maximum_cube_side_feet:
 | Field | Value |
 | --- | --- |
 | ` effect ` | ` other_spell_fails ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_spell_extras -->
+> 
+> ```yaml
+> material:
+>   consumed: false
+> ```
+

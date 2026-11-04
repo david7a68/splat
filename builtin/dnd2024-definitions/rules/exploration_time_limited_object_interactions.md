@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 7ad9f262-223a-55e6-a517-c4b8f0277e37
 splat_kind: rule
 splat_key: dnd2024:rules/exploration_time_limited_object_interactions
 splat_name: Time-Limited Object Interactions
-splat_origin:
-  key: dnd2024:reference/pages/012
+splat_origin: dnd2024:reference/pages/012
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 12
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 12, https://www.dndbeyond.com/srd
 ---
 
 # Time-Limited Object Interactions

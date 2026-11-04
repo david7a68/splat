@@ -1,34 +1,60 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 1d7d0518-86d7-59cf-8a19-085cea7e7829
 splat_kind: creature
 splat_key: dnd2024:creatures/rat
 splat_name: Rat
-splat_origin:
-  key: dnd2024:reference/creature/rat
+splat_origin: dnd2024:reference/creature/rat
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 359
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 359, https://www.dndbeyond.com/srd
 ---
 
 # Rat
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Tiny |
+| Type | Beast |
+| Alignment | Unaligned |
+| Armor Class | 10 |
+| Hit Points | 1 (1d4 - 1) |
+| Initiative | +0 (10) |
+| Speed | 20 ft., Climb 20 ft. |
+| Challenge | 0 (XP 10; PB +2) |
+| Skills | Perception +2 |
+| Senses | Darkvision 30 ft.; Passive Perception 12 |
+| Languages | None |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 2 | -4 | -4 |
+| Dex | 11 | +0 | +0 |
+| Con | 9 | -1 | -1 |
+| Int | 2 | -4 | -4 |
+| Wis | 10 | +0 | +0 |
+| Cha | 4 | -3 | -3 |
+
 
 ## Source text
 
 <!-- SRD page 359 -->
 
-Tiny Beast, Unaligned\
-AC 10  Initiative +0 (10)\
-HP 1 (1d4 − 1)\
-Speed 20 ft., Climb 20 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 2 −4 −4 Dex 11 +0 +0 Con 9 −1 −1\
-Int 2 −4 −4 Wis 10 +0 +0 Cha  4 −3 −3\
-Skills Perception +2\
-Senses Darkvision 30 ft.; Passive Perception 12\
-Languages None\
-CR 0 (XP 10; PB +2)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Tiny Beast, Unaligned\
+> AC 10  Initiative +0 (10)\
+> HP 1 (1d4 − 1)\
+> Speed 20 ft., Climb 20 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 2 −4 −4 Dex 11 +0 +0 Con 9 −1 −1\
+> Int 2 −4 −4 Wis 10 +0 +0 Cha  4 −3 −3\
+> Skills Perception +2\
+> Senses Darkvision 30 ft.; Passive Perception 12\
+> Languages None\
+> CR 0 (XP 10; PB +2)
+
 
 ### Traits
 
@@ -40,46 +66,11 @@ Bite. Melee Attack Roll: +2, reach 5 ft. Hit: 1 Piercing damage.
 
 Original layout: [[../../srd-5.2.1/pages/359|page 359]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` tiny ` |
-| ` type ` | ` beast ` |
-| ` alignment ` | ` Unaligned ` |
-| ` movement_text ` | ` 20 ft., Climb 20 ft. ` |
-| ` skills_text ` | ` Perception +2 ` |
-| ` senses_text ` | ` Darkvision 30 ft.; Passive Perception 12 ` |
-| ` languages_text ` | ` None ` |
-| ` cr_text ` | ` 0 (XP 10; PB +2) ` |
-| ` hit_points_text ` | ` 1 (1d4 - 1) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 2 ` | ` -4 ` |
-| ` Dexterity ` | ` 11 ` | ` 0 ` |
-| ` Constitution ` | ` 9 ` | ` -1 ` |
-| ` Intelligence ` | ` 2 ` | ` -4 ` |
-| ` Wisdom ` | ` 10 ` | ` 0 ` |
-| ` Charisma ` | ` 4 ` | ` -3 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 10 ` |  |
-| ` max_hp ` | ` 1 ` |  |
-| ` initiative ` | ` 0 ` |  |
-| ` speed ` | ` 20 ` | ` ft ` |
-| ` climb_speed ` | ` 20 ` | ` ft ` |
 
 ## Health
 
@@ -186,3 +177,13 @@ hit:
 | ` provider ` | ` caller ` |
 | ` required_facts ` | ` ["distance", "area_membership", "visibility", "occupancy", "movement_path"] ` |
 | ` validate_against_typed_constraints ` | ` true ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_stats_extras -->
+> 
+> ```yaml
+> climb_speed:
+>   unit: ft
+>   value: 20
+> ```
+
