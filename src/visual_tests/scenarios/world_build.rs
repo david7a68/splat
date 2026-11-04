@@ -956,7 +956,8 @@ pub fn package_duplicate_id(d: &mut Driver<'_>) {
     d.state("duplicate-original-editor", Sizes::All);
     d.type_into_editor("Saved only to the original.\n");
     d.click("Save");
-    d.wait_for_text("Saved");
+    d.wait_for_text("Cinder Wolf.md saved in the new layout.");
+    d.expect("Undo save");
     assert!(
         fs::read_to_string(&original)
             .unwrap()

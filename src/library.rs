@@ -263,6 +263,19 @@ struct Loaded {
     duplicates: std::sync::OnceLock<DuplicateIndex>,
 }
 impl Loaded {
+    fn old_layout_count(&self) -> usize {
+        self.notes
+            .iter()
+            .filter(|note| {
+                note.owner.editable()
+                    && note.entry.as_ref().is_some_and(|entry| {
+                        content::formats::eligible(entry)
+                            && content::formats::schema(&entry.fields) == Ok(1)
+                    })
+            })
+            .count()
+    }
+
     fn can_rename_links(&self, selected: usize, old: &str, new: &str) -> bool {
         !self.notes.iter().enumerate().any(|(at, note)| {
             at != selected
@@ -1949,23 +1962,13 @@ impl Library {
                             reload = true;
                             ui.close();
                         }
-                        let old = self.loaded.as_ref().map_or(0, |loaded| {
-                            loaded
-                                .notes
-                                .iter()
-                                .filter(|n| {
-                                    n.owner.editable()
-                                        && n.entry.as_ref().is_some_and(|e| {
-                                            e.fields
-                                                .get("splat_schema")
-                                                .and_then(serde_yaml_ng::Value::as_u64)
-                                                == Some(1)
-                                        })
-                                })
-                                .count()
-                        });
+                        let old = self.loaded.as_ref().map_or(0, Loaded::old_layout_count);
                         if old > 0 {
-                            ui.label(format!("{old} files use the old layout"));
+                            ui.label(design::count(
+                                old,
+                                "file uses the old layout",
+                                "files use the old layout",
+                            ));
                         }
                         if Action::quiet("Convert files…")
                             .blocked(
@@ -1993,16 +1996,7 @@ impl Library {
         );
         ui.horizontal_wrapped(|ui| {
             if let Some(loaded) = &self.loaded {
-                let old = loaded
-                    .notes
-                    .iter()
-                    .filter(|note| {
-                        note.entry.as_ref().is_some_and(|entry| {
-                            content::formats::eligible(entry)
-                                && content::formats::schema(&entry.fields) == Ok(1)
-                        })
-                    })
-                    .count();
+                let old = loaded.old_layout_count();
                 if old > 0
                     && design::status_link(
                         ui,
@@ -5242,6 +5236,66 @@ mod tests {
                 ..Default::default()
             }),
             ..Default::default()
+        }
+    }
+
+    #[test]
+    fn i19_w9_header_counts_only_editable_old_files_and_hides_at_zero() {
+        for size in [egui::vec2(960.0, 640.0), egui::vec2(1200.0, 800.0)] {
+            let mut library = navigation_library();
+            let notes = &mut library.loaded.as_mut().unwrap().notes;
+            notes[0].owner = Owner::Builtin;
+            notes[1]
+                .entry
+                .as_mut()
+                .unwrap()
+                .fields
+                .insert("splat_schema".into(), 2.into());
+            let ctx = egui::Context::default();
+            let mut campaigns = Campaigns::default();
+            let mut render = |library: &mut Library| {
+                let mut frame = || {
+                    ctx.run(
+                        egui::RawInput {
+                            screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, size)),
+                            ..Default::default()
+                        },
+                        |ctx| {
+                            egui::CentralPanel::default()
+                                .show(ctx, |ui| library.show(ui, &mut campaigns));
+                        },
+                    )
+                };
+                frame();
+                frame()
+                    .shapes
+                    .into_iter()
+                    .filter_map(|shape| match shape.shape {
+                        egui::Shape::Text(text) => Some(text.galley.job.text.clone()),
+                        _ => None,
+                    })
+                    .collect::<Vec<_>>()
+            };
+            let text = render(&mut library);
+            assert!(
+                text.iter()
+                    .any(|text| text.ends_with("1 file uses the old layout")),
+                "{text:?}"
+            );
+            library.loaded.as_mut().unwrap().notes[2].owner = Owner::Builtin;
+            assert!(
+                render(&mut library)
+                    .iter()
+                    .all(|text| !text.contains("old layout"))
+            );
+            let notes = &mut library.loaded.as_mut().unwrap().notes;
+            notes[0].owner = notes[1].owner.clone();
+            notes[2].owner = notes[1].owner.clone();
+            assert!(
+                render(&mut library)
+                    .iter()
+                    .any(|text| text.ends_with("2 files use the old layout"))
+            );
         }
     }
 
