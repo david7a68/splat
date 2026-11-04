@@ -2,6 +2,29 @@
 use serde_yaml_ng::Value;
 
 pub(super) fn patch(text: &str, key: &str, value: Value) -> Result<String, String> {
+    let entry = splat::content::Entry::parse("World.md", text)?;
+    if splat::content::formats::schema(&entry.fields)? == 2 {
+        let flat = splat::content::formats::WORLD_FIELDS
+            .iter()
+            .find(|(old, _)| *old == key)
+            .ok_or("Unknown World field")?
+            .1;
+        let output = splat::content::patch_fields(
+            text,
+            &[(flat, Some(splat::content::formats::flat_reference(&value)))],
+        )?;
+        let checked = splat::content::Entry::parse("World.md", &output)?;
+        let mut expected = (*entry.fields).clone();
+        expected
+            .get_mut("splat_world")
+            .and_then(Value::as_mapping_mut)
+            .ok_or("Missing World properties")?
+            .insert(key.into(), checked.fields["splat_world"][key].clone());
+        if *checked.fields != expected {
+            return Err("Edit changed another World value".into());
+        }
+        return Ok(output);
+    }
     let fail = "Use a plain splat_world mapping in Obsidian before changing this value.";
     let newline = if text.contains("\r\n") { "\r\n" } else { "\n" };
     let mut offset = 0;
@@ -122,6 +145,11 @@ pub(super) fn patch(text: &str, key: &str, value: Value) -> Result<String, Strin
 }
 
 fn validate(output: String, key: &str, value: Value) -> Result<String, String> {
+    let value = if ["in", "creature"].contains(&key) {
+        splat::content::formats::model_reference(value)
+    } else {
+        value
+    };
     let parsed = splat::content::Entry::parse("note.md", &output)?;
     if parsed.fields.get("splat_world").and_then(|v| v.get(key)) != Some(&value) {
         return Err("This YAML needs an edit in Obsidian first.".into());

@@ -2360,6 +2360,26 @@ pub fn draft_comparison_styled(
     face: egui::FontId,
     line_height: f32,
 ) {
+    draft_comparison_labeled(
+        ui,
+        [draft, disk],
+        ["Your draft", "In the file now"],
+        id,
+        face,
+        line_height,
+    );
+}
+
+/// The shared wrapped comparison with caller-supplied column headings.
+pub fn draft_comparison_labeled(
+    ui: &mut Ui,
+    text: [&str; 2],
+    headings: [&str; 2],
+    id: impl std::hash::Hash,
+    face: egui::FontId,
+    line_height: f32,
+) {
+    let [draft, disk] = text;
     let left: Vec<_> = draft.lines().collect();
     let right: Vec<_> = disk.lines().collect();
     let differences: Vec<_> = (0..left.len().max(right.len()))
@@ -2406,8 +2426,8 @@ pub fn draft_comparison_styled(
         );
     }
     ui.columns(2, |columns| {
-        group_label(&mut columns[0], "Your draft");
-        group_label(&mut columns[1], "In the file now");
+        group_label(&mut columns[0], headings[0]);
+        group_label(&mut columns[1], headings[1]);
     });
     let height = ui.available_height();
     let row_gap = ui.spacing().item_spacing.y;

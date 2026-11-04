@@ -52,6 +52,7 @@ struct Reconcile {
 }
 #[derive(Default)]
 pub struct CampaignContent {
+    pub layouts: crate::formats_ui::State,
     reconcile: Reconcile,
     active: Option<Campaign>,
     pending: Option<mpsc::Receiver<Loaded>>,
@@ -463,6 +464,14 @@ impl CampaignContent {
             self.message = None;
         }
         self.repair_section(ui, campaigns, &active);
+        if self.layouts.show(
+            ui,
+            self.run_open
+                .then_some("Close the run before converting files."),
+            None,
+        ) {
+            self.reload(ui.ctx(), campaigns, active.clone());
+        }
         if let Some(error) = &self.error {
             design::message(ui, Tone::Error, error);
             if error.contains("Campaign.md is missing")

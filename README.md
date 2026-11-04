@@ -161,6 +161,27 @@ ones they share are in `steps.rs`. Goals use the test IDs in `docs/ux-intent.md`
 
 ## Local layout
 
+World notes support `splat_schema: 1` and `2`. New notes use flat properties such as
+`splat_type`, `splat_status`, `splat_stat_block`, `splat_in`, and Obsidian `aliases`.
+Library's **Packages** menu and Campaign offer **Convert files…**. The preview lists
+each supported file before and after conversion. Lines wrap, changes are marked,
+and both sides scroll together from the first difference. Files changed on disk are skipped.
+One **Undo** restores the saved bytes and refuses to replace later edits.
+Library's Packages menu also counts files that still use the old layout.
+
+A save after a change in Splat converts supported old notes and shows
+**Saved in the new layout.** with **Undo**. Reading and polling do not convert files.
+Convert files is unavailable during a run and skips read-only files. Stat blocks,
+Timeline, campaign lists, groups and encounter rosters keep their existing layout
+until their later format phases. Character copies use their character's name once,
+keep their identity after a rename, and put imported data in a foldable end section.
+Existing character copies keep their layout when a provider refreshes them.
+
+Session plans accept task items such as `- [ ] [[Bridge Ambush]]`. Empty session
+titles have no property. Obsidian's core Templates plugin also fills `{{date}}`
+and `{{title}}`. For run JSON files to sync through Obsidian Sync, enable
+**other file types**.
+
 Code lives in `~/Projects/splat`. The vault link is
 `~/Documents/vault/D20 D&D/00-09 System/09 Tools/splat`.
 Campaign data remains in the vault. A read-only content verifier and the complete

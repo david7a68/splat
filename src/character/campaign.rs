@@ -80,7 +80,9 @@ impl EntitySnapshot {
         campaign
             .join("Characters")
             .join("D&D Beyond")
-            .join(format!("{}.md", self.definition.splat_id))
+            .join(super::content::character_filename(
+                &self.definition.splat_name,
+            ))
     }
     pub fn save_campaign_copy(&self, campaign: &Path) -> Result<PathBuf, CampaignCopyError> {
         self.save_campaign_copy_to(campaign, &Destinations::default())
@@ -111,7 +113,45 @@ impl EntitySnapshot {
             }
         }
         match paths.len() {
-            0 => Ok(self.campaign_path(campaign)),
+            0 => {
+                // The last path also protects a renamed sheet whose identity was
+                // removed by an outside edit. Never infer that the file is gone.
+                let remembered = self.path_record(campaign);
+                if let Ok(relative) = fs::read_to_string(&remembered) {
+                    let relative = Path::new(relative.trim());
+                    if relative
+                        .components()
+                        .all(|c| matches!(c, std::path::Component::Normal(_)))
+                    {
+                        let path = campaign.join(relative);
+                        if path.exists() {
+                            return Ok(path);
+                        }
+                    } else {
+                        return Err("Character path record needs repair.".into());
+                    }
+                }
+                let legacy = campaign
+                    .join("Characters/D&D Beyond")
+                    .join(format!("{}.md", self.definition.splat_id));
+                if legacy.exists() {
+                    return Ok(legacy);
+                }
+                let named = self.campaign_path(campaign);
+                if named.exists()
+                    && fs::read_to_string(&named)
+                        .ok()
+                        .and_then(|text| Entry::parse("sheet.md", &text).ok())
+                        .is_some_and(|entry| entry.id != self.definition.splat_id)
+                {
+                    return Ok(named.with_file_name(format!(
+                        "{} {}.md",
+                        named.file_stem().unwrap_or_default().to_string_lossy(),
+                        &self.definition.splat_id.simple().to_string()[..8]
+                    )));
+                }
+                Ok(named)
+            }
             1 => Ok(paths.pop().unwrap()),
             _ => Err(format!(
                 "Several character files share this identity: {}. Keep one before refreshing.",
@@ -123,6 +163,11 @@ impl EntitySnapshot {
             )
             .into()),
         }
+    }
+    fn path_record(&self, campaign: &Path) -> PathBuf {
+        campaign
+            .join("Characters/D&D Beyond")
+            .join(format!(".splat-path-{}", self.definition.splat_id))
     }
     /// Saves this copy over local edits, with the same checks and order as any save. The bytes
     /// it replaces go to an archive, and readable personal notes carry over. Returns the
@@ -183,11 +228,51 @@ impl EntitySnapshot {
                 }
             };
             let copy = previous.as_deref().map(parts);
+            if path == character_path
+                && previous
+                    .as_deref()
+                    .and_then(|text| Entry::parse("sheet.md", text).ok())
+                    .is_some_and(|entry| entry.id != self.definition.splat_id)
+            {
+                return Err(
+                    "A different character already uses this file name. No file was replaced."
+                        .into(),
+                );
+            }
             let edited = copy.as_ref().is_some_and(|copy| !copy.intact);
             if edited && on_edits == OnEdits::Stop {
                 return Err(conflict(&path));
             }
             let notes = copy.map_or(PERSONAL_NOTES, |copy| copy.notes);
+            // Refresh keeps an existing schema 1 sheet in its layout. Only the
+            // explicit conversion action migrates a copy already on disk.
+            let markdown = if previous
+                .as_deref()
+                .and_then(|text| Entry::parse("sheet.md", text).ok())
+                .is_some_and(|entry| {
+                    entry
+                        .fields
+                        .get("splat_schema")
+                        .and_then(serde_yaml_ng::Value::as_u64)
+                        == Some(1)
+                })
+                && let Ok(entry) = Entry::parse("sheet.md", &markdown)
+                && crate::content::formats::eligible(&entry)
+            {
+                let mut fields = (*entry.fields).clone();
+                fields.insert("splat_schema".into(), 1.into());
+                let body = entry
+                    .body
+                    .split("\n## Splat data")
+                    .next()
+                    .unwrap_or(&entry.body);
+                format!(
+                    "---\n{}---\n{body}",
+                    serde_yaml_ng::to_string(&fields).map_err(|e| e.to_string())?
+                )
+            } else {
+                markdown
+            };
             let text = stamped(&markdown, notes);
             staged.push(Note {
                 path,
@@ -273,6 +358,14 @@ impl EntitySnapshot {
             }
             fs::remove_file(&former.path).map_err(|e| e.to_string())?;
         }
+        let relative = character_path
+            .strip_prefix(campaign)
+            .map_err(|e| e.to_string())?
+            .to_string_lossy();
+        let record = self.path_record(campaign);
+        stage(&record, relative.as_bytes())?
+            .persist(&record)
+            .map_err(|e| e.to_string())?;
         Ok(true)
     }
 }
@@ -635,6 +728,71 @@ mod tests {
         );
         // The next ordinary refresh has nothing left to object to.
         record.save_campaign_copy(root.path()).unwrap();
+    }
+
+    #[test]
+    fn fmt_f1_character_payload_and_legacy_refresh_keep_identity_and_notes() {
+        let root = tempfile::tempdir().unwrap();
+        let mut record = super::super::tests::sample();
+        let new = record.entry_markdown().unwrap();
+        assert!(new.contains("## Splat data (from D&D Beyond; do not edit)"));
+        assert_eq!(
+            new.matches("<!-- splat:yaml path=splat_payload -->")
+                .count(),
+            1
+        );
+        let entry = Entry::parse("sheet.md", &new).unwrap();
+        let mut fields = (*entry.fields).clone();
+        fields.insert("splat_schema".into(), 1.into());
+        let body = entry.body.split("\n## Splat data").next().unwrap();
+        let legacy = format!(
+            "---\n{}---\n{body}",
+            serde_yaml_ng::to_string(&fields).unwrap()
+        );
+        let legacy = stamped(&legacy, "\n## Personal notes\n\nKeep my words.\n");
+        let path = root
+            .path()
+            .join("Characters/D&D Beyond")
+            .join(format!("{}.md", record.definition.splat_id));
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        fs::write(&path, &legacy).unwrap();
+        record.initial.temporary_hp += 1;
+        assert_eq!(record.save_campaign_copy(root.path()).unwrap(), path);
+        let refreshed = fs::read_to_string(&path).unwrap();
+        assert_eq!(
+            Entry::parse("sheet.md", &refreshed).unwrap().fields["splat_schema"].as_u64(),
+            Some(1)
+        );
+        let converted = crate::content::formats::convert("sheet.md", &refreshed).unwrap();
+        assert!(parts(&converted).intact);
+        assert!(converted.ends_with("Keep my words.\n"));
+        assert_eq!(
+            converted,
+            crate::content::formats::convert("sheet.md", &converted).unwrap()
+        );
+        fs::write(&path, converted).unwrap();
+        record.save_campaign_copy(root.path()).unwrap();
+        assert_eq!(
+            Entry::parse("sheet.md", &fs::read_to_string(path).unwrap())
+                .unwrap()
+                .fields["splat_schema"]
+                .as_u64(),
+            Some(2)
+        );
+    }
+
+    #[test]
+    fn fmt_f1_character_names_do_not_replace_another_character() {
+        let root = tempfile::tempdir().unwrap();
+        let record = super::super::tests::sample();
+        let path = record.campaign_path(root.path());
+        assert_eq!(path.file_name().unwrap(), "Example.md");
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        let other = "---\nsplat_schema: 1\nsplat_id: 00000000-0000-0000-0000-000000000099\nsplat_kind: creature\nsplat_name: Example\nsplat_creature: {}\n---\n\nA different character's note.\n";
+        fs::write(&path, other).unwrap();
+        let saved = record.save_campaign_copy(root.path()).unwrap();
+        assert_ne!(saved, path);
+        assert_eq!(fs::read_to_string(path).unwrap(), other);
     }
     #[test]
     fn overwrite_carries_readable_personal_notes_over() {

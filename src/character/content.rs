@@ -56,6 +56,15 @@ fn note(fields: Value, body: &str) -> Result<String, String> {
         serde_yaml_ng::to_string(&fields).map_err(|e| e.to_string())?
     ))
 }
+
+pub(super) fn character_filename(name: &str) -> String {
+    let safe: String = name
+        .chars()
+        .filter(|c| !c.is_control() && !"/\\:*?\"<>|#^[]".contains(*c))
+        .collect();
+    let safe = safe.trim().trim_matches('.');
+    format!("{}.md", if safe.is_empty() { "Character" } else { safe })
+}
 fn gap(gaps: &mut Vec<Gap>, path: impl Into<String>, reason: impl Into<String>) {
     gaps.push(Gap {
         path: path.into(),
@@ -731,10 +740,13 @@ impl EntitySnapshot {
         }
         notes.push(ContentNote {
             sources: Vec::new(),
-            relative_path: format!("{}.md", self.definition.splat_id),
+            relative_path: character_filename(&self.definition.splat_name),
             markdown: note(fields, &body)?,
         });
         super::rules::complete(self, &mut notes)?;
+        for note in &mut notes {
+            note.markdown = crate::content::formats::convert(&note.relative_path, &note.markdown)?;
+        }
         let entries = notes
             .iter()
             .map(|n| Entry::parse(&n.relative_path, &n.markdown))

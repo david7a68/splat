@@ -135,9 +135,10 @@ pub(crate) enum Origin {
 
 pub(crate) fn entry_origin(entry: Option<&Entry>, private: bool) -> Origin {
     let from_sheet = entry.is_some_and(|entry| {
-        std::path::Path::new(&entry.path)
-            .file_stem()
-            .is_some_and(|stem| Uuid::parse_str(&stem.to_string_lossy()).is_ok())
+        entry.fields.contains_key("splat_character")
+            || std::path::Path::new(&entry.path)
+                .file_stem()
+                .is_some_and(|stem| Uuid::parse_str(&stem.to_string_lossy()).is_ok())
     });
     origin(private, from_sheet)
 }
@@ -281,14 +282,15 @@ impl ContentIndex {
         const FROM_SHEET: &str = "From a character sheet";
         // A spell copied from a character sheet is not the book's text. It sorts after.
         let from_sheet = |entry: &Entry| {
-            Uuid::parse_str(
-                std::path::Path::new(&entry.path)
-                    .file_stem()
-                    .unwrap_or_default()
-                    .to_string_lossy()
-                    .as_ref(),
-            )
-            .is_ok()
+            entry.fields.contains_key("splat_character")
+                || Uuid::parse_str(
+                    std::path::Path::new(&entry.path)
+                        .file_stem()
+                        .unwrap_or_default()
+                        .to_string_lossy()
+                        .as_ref(),
+                )
+                .is_ok()
         };
         let mut items: Vec<Item> = catalogue
             .entries
@@ -483,20 +485,61 @@ impl ContentIndex {
 
     fn parent(&self, position: usize) -> Option<usize> {
         let entry = &self.items[position].entry;
-        if let Some(reference) = world::place(entry) {
-            return self.position_of(&reference);
+        self.world_target(entry, "in")
+    }
+
+    /// Flat World links resolve by file, then key, UUID, and unique catalogue name.
+    pub(crate) fn world_target(&self, entry: &Entry, key: &str) -> Option<usize> {
+        let value = entry.fields.get("splat_world")?.get(key)?;
+        let raw = value
+            .as_str()
+            .or_else(|| value.get("link").and_then(serde_yaml_ng::Value::as_str));
+        if let Some(raw) = raw {
+            if let Some(link) = raw.strip_prefix("[[").and_then(|s| s.strip_suffix("]]")) {
+                let name = link
+                    .split(['|', '#'])
+                    .next()?
+                    .trim()
+                    .trim_end_matches(".md")
+                    .to_lowercase();
+                let matches = self.files.get(&name).cloned().unwrap_or_else(|| {
+                    self.items
+                        .iter()
+                        .enumerate()
+                        .filter(|(_, item)| {
+                            !matches!(item.source, Source::Heading(..))
+                                && item.file_keys().contains(&name)
+                        })
+                        .map(|(at, _)| at)
+                        .collect()
+                });
+                return match matches.as_slice() {
+                    [at] => Some(*at),
+                    _ => None,
+                };
+            }
+            if let Some(at) = self.by_key.get(raw) {
+                return Some(*at);
+            }
+            if let Ok(id) = Uuid::parse_str(raw) {
+                return self.by_id.get(&id).copied();
+            }
+            let mut matches = self
+                .items
+                .iter()
+                .enumerate()
+                .filter(|(_, item)| item.entry.name.eq_ignore_ascii_case(raw));
+            let (at, _) = matches.next()?;
+            return matches.next().is_none().then_some(at);
         }
-        let link = entry.fields.get("splat_world")?.get("in")?.as_str()?;
-        let target = link
-            .strip_prefix("[[")?
-            .strip_suffix("]]")?
-            .split('|')
-            .next()?
-            .trim();
-        match self.follow(target, &self.items[position]) {
-            Go::Item(at, _) => Some(at),
-            _ => None,
+        if let Some(key) = value.get("key").and_then(serde_yaml_ng::Value::as_str) {
+            return self.by_key.get(key).copied();
         }
+        value
+            .get("id")
+            .and_then(serde_yaml_ng::Value::as_str)
+            .and_then(|id| Uuid::parse_str(id).ok())
+            .and_then(|id| self.by_id.get(&id).copied())
     }
 
     pub fn place_of(&self, id: Uuid) -> Option<usize> {
@@ -2106,6 +2149,43 @@ mod tests {
             std::fs::read_to_string(campaign.path.join("Moved/Rook.md")).unwrap(),
             npc_text
         );
+    }
+
+    #[test]
+    fn fmt_f1_world_references_use_file_key_id_then_unique_name() {
+        let block = crate::library::note_text("Vault Guard", "creature", None);
+        let block =
+            splat::content::patch_fields(&block, &[("splat_key", Some("pack:guard".into()))])
+                .unwrap();
+        let block_id = crate::content_workspace::note_id(&block).unwrap();
+        let (_dir, campaign) = campaign_with(&[("Moved/Guard.md", &block)]);
+        let index = ContentIndex::load(&[], Some(&campaign)).unwrap();
+        for reference in [
+            "[[Moved/Guard|The Guard]]".into(),
+            "pack:guard".into(),
+            block_id.to_string(),
+            "Vault Guard".into(),
+        ] {
+            let mut npc = crate::world::note_entry("Rook.md", "Rook", String::new());
+            npc.fields.insert(
+                "splat_world".into(),
+                serde_yaml_ng::from_str(&format!("{{type: npc, creature: '{reference}'}}"))
+                    .unwrap(),
+            );
+            assert_eq!(
+                index
+                    .world_target(&npc, "creature")
+                    .map(|at| index.items[at].entry.id),
+                Some(block_id),
+                "{reference}"
+            );
+        }
+        let mut npc = crate::world::note_entry("Rook.md", "Rook", String::new());
+        npc.fields.insert(
+            "splat_world".into(),
+            serde_yaml_ng::from_str("{type: npc, creature: '[[Tuogh]]'}").unwrap(),
+        );
+        assert!(index.world_target(&npc, "creature").is_none());
     }
 
     #[test]

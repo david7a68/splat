@@ -56,6 +56,8 @@ pub enum Seed {
     Groups,
     /// `Campaign`, plus plain world notes with links, headings and a roll table.
     World,
+    /// World, with old and new World layouts and one malformed flat property.
+    Formats,
     /// `Campaign`, plus ended runs: one on the timeline under a session, one with no event.
     History,
     /// `Groups`, plus groups that belong to an encounter, and one whose encounter is gone.
@@ -140,8 +142,11 @@ fn seed_campaigns(
     if seed == Seed::OwnedGroups {
         write_owned_groups(&active.path)?;
     }
-    if seed == Seed::World {
+    if matches!(seed, Seed::World | Seed::Formats) {
         write_world_notes(&active.path)?;
+    }
+    if seed == Seed::Formats {
+        write_format_notes(&active.path)?;
     }
 
     let data = UserData {
@@ -380,6 +385,39 @@ fn write_world_notes(root: &Path) -> Result<(), String> {
         fs::create_dir_all(path.parent().ok_or("A note needs a folder.")?)
             .map_err(|e| e.to_string())?;
         fs::write(path, text).map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
+fn write_format_notes(root: &Path) -> Result<(), String> {
+    for (path, schema, name, data) in [
+        (
+            "NPCs/Rook.md",
+            1,
+            "Rook",
+            "splat_world: {type: npc, status: alive, aliases: [The Veteran]}",
+        ),
+        (
+            "Locations/Undercroft.md",
+            2,
+            "Undercroft",
+            "splat_type: location\naliases: [The Cellar]",
+        ),
+        (
+            "NPCs/Malformed.md",
+            2,
+            "Malformed",
+            "splat_type: npc\nsplat_status: [alive]",
+        ),
+    ] {
+        write_note(
+            root,
+            path,
+            &format!(
+                "---\nsplat_schema: {schema}\nsplat_id: {}\nsplat_kind: world\nsplat_name: {name}\n{data}\n---\n\n# {name}\n\nA note for tonight.\n",
+                stable_id(path)
+            ),
+        )?;
     }
     Ok(())
 }

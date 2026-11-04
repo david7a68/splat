@@ -184,7 +184,7 @@ fn rejects_duplicate_yaml_keys_at_any_depth_and_future_schema() {
         );
     }
     let raw =
-        note("bad", "item", "splat_item: {}", "").replace("splat_schema: 1", "splat_schema: 2");
+        note("bad", "item", "splat_item: {}", "").replace("splat_schema: 1", "splat_schema: 3");
     assert!(
         Entry::parse("bad", &raw)
             .unwrap_err()

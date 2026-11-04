@@ -580,7 +580,9 @@ pub fn create_note(folder: &Path, new: &NewNote<'_>) -> Result<Note, String> {
     let mut front = serde_yaml_ng::Mapping::new();
     front.insert("session_id".into(), id.to_string().into());
     front.insert("session_number".into(), u64::from(new.number).into());
-    front.insert("session_title".into(), new.title.trim().to_owned().into());
+    if !new.title.trim().is_empty() {
+        front.insert("session_title".into(), new.title.trim().to_owned().into());
+    }
     front.insert("session_date".into(), new.date.to_owned().into());
     let front = serde_yaml_ng::to_string(&front).map_err(|e| e.to_string())?;
     let text = format!("---\n{front}---\n{}", fill_template(new));
@@ -608,7 +610,7 @@ pub fn update_details(note: &Note, title: &str, date: &str, number: u32) -> Resu
         &[
             (
                 "session_title",
-                Some(Value::String(title.trim().to_owned())),
+                (!title.trim().is_empty()).then(|| Value::String(title.trim().to_owned())),
             ),
             ("session_date", Some(Value::String(date.trim().to_owned()))),
             (
@@ -2034,6 +2036,24 @@ mod tests {
         let mut other = "## Next time\n\n".to_owned();
         insert_in_plan(&mut other, "[[A]]");
         assert!(other.contains("[[A]]"));
+    }
+
+    #[test]
+    fn fmt_f1_empty_session_title_is_absent() {
+        let dir = tempfile::tempdir().unwrap();
+        let note = create_note(dir.path(), &new_note(1, "", "Body")).unwrap();
+        assert!(
+            !fs::read_to_string(&note.path)
+                .unwrap()
+                .contains("session_title:")
+        );
+        let titled = update_details(&note, "Title", "2026-11-03", 1).unwrap();
+        let cleared = update_details(&titled, "", "2026-11-03", 1).unwrap();
+        assert!(
+            !fs::read_to_string(&cleared.path)
+                .unwrap()
+                .contains("session_title:")
+        );
     }
 
     #[test]

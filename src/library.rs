@@ -929,6 +929,7 @@ fn create_module(path: &Path, name: &str, namespace: &str) -> Result<Module, Str
     }
     fs::create_dir(path).map_err(|e| format!("Could not create a new package folder: {e}"))?;
     let text = note_text(name.trim(), "package", Some(namespace));
+    let text = content::formats::convert("Module.md", &text)?;
     if let Err(error) = write_note(path, "Module.md", None, &text) {
         let _ = fs::remove_dir(path);
         return Err(error);
@@ -974,6 +975,11 @@ pub(crate) fn write_note(
 ) -> Result<Entry, String> {
     let entry = Entry::parse(relative, text)?;
     let path = note_path(root, relative)?;
+    if fs::metadata(&path).is_ok_and(|m| m.permissions().readonly())
+        || fs::metadata(root).is_ok_and(|m| m.permissions().readonly())
+    {
+        return Err("This file is read only.".into());
+    }
     let current = match fs::read_to_string(&path) {
         Ok(text) => Some(text),
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => None,
@@ -1202,6 +1208,7 @@ struct IdentityUndo {
 
 #[derive(Default)]
 pub struct Library {
+    layouts: crate::formats_ui::State,
     /// The list should scroll to the selected entry, which arrived by a link.
     reveal_row: bool,
     list_hidden: bool,
@@ -1904,6 +1911,36 @@ impl Library {
                             reload = true;
                             ui.close();
                         }
+                        let old = self.loaded.as_ref().map_or(0, |loaded| {
+                            loaded
+                                .notes
+                                .iter()
+                                .filter(|n| {
+                                    n.owner.editable()
+                                        && n.entry.as_ref().is_some_and(|e| {
+                                            e.fields
+                                                .get("splat_schema")
+                                                .and_then(serde_yaml_ng::Value::as_u64)
+                                                == Some(1)
+                                        })
+                                })
+                                .count()
+                        });
+                        if old > 0 {
+                            ui.label(format!("{old} files use the old layout"));
+                        }
+                        if Action::quiet("Convert files…")
+                            .blocked(
+                                locked.or(self
+                                    .run_open
+                                    .then_some("Close the run before converting files.")),
+                            )
+                            .show(ui)
+                            .clicked()
+                        {
+                            self.layouts.scan(campaigns);
+                            ui.close();
+                        }
                         if Action::quiet("Manage packages…")
                             .icon(icons::SETTINGS)
                             .show(ui)
@@ -1958,6 +1995,21 @@ impl Library {
             self.new_folder = kind_folder(&self.new_kind).into();
             self.focus_new_name = true;
             self.form = false;
+        }
+        let convert_blocked = self.draft_reason().map(str::to_owned).or_else(|| {
+            self.run_open
+                .then(|| "Close the run before converting files.".into())
+        });
+        let file = self.loaded.as_ref().and_then(|loaded| {
+            let note = loaded.notes.get(self.selected?)?;
+            Some(note.owner.root()?.join(&note.path))
+        });
+        if self
+            .layouts
+            .show(ui, convert_blocked.as_deref(), file.as_deref())
+        {
+            self.stale = true;
+            self.content_changed = campaigns.active_campaign().map(|c| c.path.clone());
         }
         if let Some(words) = &self.scope_notice {
             design::message(ui, Tone::Info, words);
@@ -3353,6 +3405,13 @@ impl Library {
                         }
                         let path = relative.clone();
                         let text = note_text(name, &self.new_kind, None);
+                        let text = match content::formats::convert(&path, &text) {
+                            Ok(text) => text,
+                            Err(error) => {
+                                self.error = Some(error);
+                                return;
+                            }
+                        };
                         let owner = places[place].clone();
                         let root = owner.root().expect("a writable owner").to_path_buf();
                         match write_note(&root, &path, None, &text) {
@@ -3579,7 +3638,23 @@ impl Library {
                 return Err("Another entry already uses this UUID or key.".into());
             }
             let baseline = (!file_gone).then_some(note.text.as_str());
-            write_note(&root, &note.path, baseline, &self.draft)
+            let after = content::formats::convert_resolved(
+                &note.path,
+                &self.draft,
+                self.loaded
+                    .as_ref()
+                    .unwrap()
+                    .notes
+                    .iter()
+                    .filter_map(|note| note.entry.as_ref()),
+            )?;
+            let entry = write_note(&root, &note.path, baseline, &after)?;
+            if after != self.draft {
+                self.layouts
+                    .remember(&root, &note.path, baseline.unwrap_or(&self.draft), &after);
+                self.draft = after;
+            }
+            Ok(entry)
         });
         match result {
             Ok(entry) => {

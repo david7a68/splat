@@ -197,6 +197,13 @@ fn show_inner(
     if let Some(entry) = entry {
         ui.ctx()
             .data_mut(|data| data.insert_temp(egui::Id::new("reader_document"), entry.id));
+        for flag in &entry.flags {
+            design::message(
+                ui,
+                crate::design::Tone::Warning,
+                &format!("Line {}: {}", flag.line, flag.message),
+            );
+        }
     }
     let reading = entry.and_then(|entry| entry.reading().ok().flatten());
     let clean_body;
@@ -289,7 +296,10 @@ fn reference(
     }
     let technical: Vec<_> = sections
         .iter()
-        .filter(|section| splat::content::has_data_marker(section.body))
+        .filter(|section| {
+            !section.title.starts_with("Splat data")
+                && splat::content::has_data_marker(section.body)
+        })
         .collect();
     let item_details = entry.is_some_and(reader::has_item_details);
     if (!styled && !technical.is_empty()) || item_details {
@@ -354,6 +364,10 @@ fn reference(
                 .and_then(|v| v.as_sequence())
             {
                 for source in sources {
+                    if let Some(text) = source.as_str() {
+                        ui.label(text);
+                        continue;
+                    }
                     let title = source
                         .get("title")
                         .and_then(|v| v.as_str())
