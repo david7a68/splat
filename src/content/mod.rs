@@ -1266,9 +1266,12 @@ pub fn read_directory(root: &Path) -> Result<(Vec<Entry>, Vec<Diagnostic>), Stri
     walk(root, root, &mut files, &mut errors)?;
     // Parallel parsing preserves traversal order for entries and diagnostics.
     let parsed: Vec<_> = files
-        .into_par_iter()
+        .par_iter()
         .map(|(path, text)| {
-            Entry::parse(&path, &text).map_err(|message| Diagnostic { path, message })
+            Entry::parse(path, text).map_err(|message| Diagnostic {
+                path: path.clone(),
+                message,
+            })
         })
         .collect();
     let mut entries = Vec::new();
@@ -1279,8 +1282,10 @@ pub fn read_directory(root: &Path) -> Result<(Vec<Entry>, Vec<Diagnostic>), Stri
         }
     }
     let catalogue = entries.clone();
+    let sources: std::collections::BTreeMap<_, _> = files.into_iter().collect();
     for entry in &mut entries {
-        list_formats::resolve(entry, &catalogue);
+        let source = &sources[&entry.path];
+        list_formats::resolve(entry, &catalogue, source);
     }
     Ok((entries, errors))
 }

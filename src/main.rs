@@ -851,6 +851,10 @@ impl Splat {
                         self.page = Page::Party;
                     }
                     response
+                } else if state.word == "Session folder not found" {
+                    let response = design::status_link(ui, state);
+                    if response.clicked() { self.page = Page::Sessions; }
+                    response
                 } else if state.word == "Connected · not remembered" {
                     design::rail_status_detail(ui, Status { word: "Connected", ..state }, "Not remembered")
                 } else { design::wrapped_status(ui, state) }.on_hover_text(full);
@@ -1050,7 +1054,13 @@ impl Splat {
                 });
             }
         }
-        if self.timeline.unreadable.is_some() {
+        if self.sessions.folder_missing() {
+            statuses.push(Status {
+                icon: icons::WARN,
+                word: "Session folder not found",
+                color: c.result.warning,
+            });
+        } else if self.timeline.unreadable.is_some() {
             statuses.push(Status {
                 icon: icons::ERROR,
                 word: "Timeline not readable",

@@ -17,17 +17,19 @@ use uuid::Uuid;
 
 /// Recover an identity even when another front-matter line cannot be parsed.
 pub(crate) fn note_id(text: &str) -> Option<Uuid> {
+    Uuid::parse_str(&note_property(text, "splat_id:")?)
+        .ok()
+        .filter(|id| !id.is_nil())
+}
+
+fn note_property(text: &str, property: &str) -> Option<String> {
     let mut lines = text.trim_start_matches('\u{feff}').lines();
     if lines.next()?.trim() != "---" {
         return None;
     }
     lines
         .take_while(|line| line.trim() != "---")
-        .find_map(|line| {
-            let value = line.strip_prefix("splat_id:")?;
-            let value: String = serde_yaml_ng::from_str(value).ok()?;
-            Uuid::parse_str(&value).ok().filter(|id| !id.is_nil())
-        })
+        .find_map(|line| serde_yaml_ng::from_str(line.strip_prefix(property)?).ok())
 }
 
 pub(crate) const DELETED_MANIFEST: &str = "Package.md was deleted. Entries are still available. Write it again, or restore it from a backup.";
@@ -657,6 +659,7 @@ pub struct Catalogue {
 pub struct UnreadableNote {
     pub path: PathBuf,
     pub word: String,
+    key: Option<String>,
 }
 
 /// A file that differs from its shared key's filename is the copy. Otherwise
@@ -785,8 +788,14 @@ impl Catalogue {
                 }
             );
             self.errors.push(word.clone());
-            self.unreadable
-                .insert(entry.id, UnreadableNote { path, word });
+            self.unreadable.insert(
+                entry.id,
+                UnreadableNote {
+                    path,
+                    word,
+                    key: entry.key.clone(),
+                },
+            );
             return Ok(());
         }
         self.files.insert(
@@ -816,6 +825,7 @@ impl Catalogue {
             self.unreadable.insert(
                 id,
                 UnreadableNote {
+                    key: note_property(&text, "splat_key:"),
                     word: format!("{name} cannot be read{line}"),
                     path,
                 },
@@ -900,6 +910,18 @@ impl Catalogue {
             );
         }
         self.resolve(&reference.reference()?)
+    }
+
+    pub fn unreadable_ref(&self, reference: &EntryRef) -> Option<&UnreadableNote> {
+        reference
+            .id
+            .and_then(|id| self.unreadable.get(&id))
+            .or_else(|| {
+                let key = reference.key.as_deref()?;
+                self.unreadable
+                    .values()
+                    .find(|note| note.key.as_deref() == Some(key))
+            })
     }
     /// The package an unresolved reference points into, when no such package is loaded.
     fn missing_package(&self, reference: &Reference) -> Option<String> {
@@ -1088,7 +1110,11 @@ impl Catalogue {
         }
         let list_entries: Vec<_> = result.entries.values().map(|e| e.entry.clone()).collect();
         for indexed in result.entries.values_mut() {
-            content::list_formats::resolve(&mut indexed.entry, &list_entries);
+            let source = result
+                .files
+                .get(&indexed.entry.id)
+                .map_or("", |(_, source)| source.as_str());
+            content::list_formats::resolve(&mut indexed.entry, &list_entries, source);
             if indexed.entry.kind == "campaign"
                 && content::formats::schema(&indexed.entry.fields) == Ok(2)
                 && let Some((_, source)) = result.files.get(&indexed.entry.id)
@@ -1717,6 +1743,7 @@ pub fn redirect_reference(text: &str, old: &Entry, new_id: Uuid) -> Result<Strin
                         .is_some_and(|key| map.get("key").and_then(Value::as_str) == Some(key));
                 if matches {
                     map.remove("key");
+                    map.remove("link");
                     map.insert("id".into(), new_id.to_string().into());
                 }
                 if let Some(Value::Mapping(related)) = map.get_mut("related") {
@@ -2692,14 +2719,26 @@ mod tests {
         };
         fs::write(module.path.join("Package.md"), format!("---\nsplat_schema: 1\nsplat_id: {}\nsplat_kind: package\nsplat_name: Test\nsplat_namespace: test\n---\n", module.id)).unwrap();
         let id = Uuid::new_v4();
-        let text =
-            format!("---\nsplat_schema: 1\nsplat_id: '{id}' # keep identity\nsplat_kind: [\n---\n");
+        let text = format!(
+            "---\nsplat_schema: 1\nsplat_id: '{id}' # keep identity\nsplat_kind: [\nsplat_key: test:creatures/wolf\n---\n"
+        );
         fs::write(module.path.join("Wolf.md"), &text).unwrap();
         let catalogue = Catalogue::load(std::slice::from_ref(&module), None).unwrap();
         let note = &catalogue.unreadable[&id];
         assert_eq!(note.path, module.path.join("Wolf.md"));
         assert_eq!(note.word, "Wolf.md cannot be read (line 4)");
         assert!(!catalogue.entries.contains_key(&id));
+        assert_eq!(
+            catalogue
+                .unreadable_ref(&EntryRef {
+                    key: Some("test:creatures/wolf".into()),
+                    id: None,
+                    link: None,
+                })
+                .unwrap()
+                .path,
+            note.path
+        );
         assert_eq!(note_id(&format!("No front matter\nsplat_id: {id}")), None);
         assert_eq!(
             note_id(&format!("---\nsplat_id: [\n---\nsplat_id: {id}")),
@@ -2907,6 +2946,24 @@ mod tests {
             fs::read_to_string(source_root.join(&dependency.path)).unwrap(),
             dependency_text
         );
+    }
+
+    #[test]
+    fn i19_source_change_replaces_a_named_link_and_its_backup_together() {
+        let mut old = entry("Wolf", "creature");
+        old.key = Some("test:creatures/wolf".into());
+        let source = format!(
+            "---\nsplat_schema: 2\nsplat_id: {}\nsplat_kind: encounter_group\nsplat_name: Wolves\nsplat_side: enemies\n---\n\n## Members\n\n| Count | Creature | Name | Changes | Note |\n| --- | --- | --- | --- | --- |\n| 2 | [Wolf](splat:test:creatures/wolf) %% splat id={} %% | | HP +5 | keep |\n",
+            Uuid::new_v4(),
+            old.id
+        );
+        let new_id = Uuid::new_v4();
+        let changed = redirect_reference(&source, &old, new_id).unwrap();
+        let parsed = Entry::parse("Wolves.md", &changed).unwrap();
+        let creature = &parsed.fields["splat_encounter_group"]["members"][0]["creature"];
+        assert_eq!(creature["id"], Value::from(new_id.to_string()));
+        assert!(!changed.contains("test:creatures/wolf"));
+        assert!(changed.contains("HP +5 | keep"));
     }
 
     #[test]

@@ -437,7 +437,7 @@ impl ProcessingSettings {
                 design::named(ui, &response, label);
                 if focus {
                     response.request_focus();
-                    response.scroll_to_me(Some(egui::Align::Center));
+                    response.scroll_to_me(None);
                 }
                 if show_save {
                     save = Action::secondary("Save key")

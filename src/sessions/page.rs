@@ -281,6 +281,7 @@ pub struct Sessions {
     note_had_focus: bool,
     /// The caret to bring into view, on the frame after the editor has laid out.
     caret_to_show: Option<usize>,
+    note_scroll_to_top: bool,
     last_check: Option<Instant>,
     last_scan: Option<Instant>,
     /// The campaign's manifest changed, so what holds a copy of it must reload.
@@ -414,6 +415,17 @@ fn plan_event_summary(ui: &mut egui::Ui, summary: &str, restores: bool) {
     }
 }
 
+fn plan_group_summary(ui: &mut egui::Ui, summary: &str) {
+    let mut job = egui::text::LayoutJob::simple(
+        summary.replace(" · ", " ·\u{a0}"),
+        Type::Small.font(ui),
+        colors().muted,
+        ui.available_width(),
+    );
+    job.wrap.max_rows = 2;
+    ui.add(egui::Label::new(job).wrap()).on_hover_text(summary);
+}
+
 /// The recording count belongs to the tab's label and click target.
 fn recordings_tab(ui: &mut egui::Ui, shown: &mut Tab, count: usize) -> bool {
     design::counted_tab(
@@ -520,6 +532,7 @@ fn plan_row(
                     .layout(egui::Layout::right_to_left(egui::Align::Center)),
             );
             action(&mut action_ui);
+            ui.spacing_mut().item_spacing.y = 0.0;
             ui.advance_cursor_after_rect(
                 title
                     .response
@@ -538,6 +551,7 @@ fn plan_row(
                     summary(ui);
                 },
             );
+            ui.expand_to_include_rect(action_rect.union(action_ui.min_rect()));
         });
     });
 }
@@ -552,6 +566,12 @@ fn plan_link(ui: &mut egui::Ui, label: &str, open: bool) -> egui::Response {
     design::named(ui, &response, label);
     ui.ctx()
         .accesskit_node_builder(response.id, |node| node.set_expanded(open));
+    response
+}
+
+fn plan_run_link(ui: &mut egui::Ui, word: &str) -> egui::Response {
+    let response = design::small_link(ui, &format!("{} {word}", icons::RUN));
+    design::named(ui, &response, word);
     response
 }
 
@@ -1479,6 +1499,13 @@ impl Sessions {
         }
     }
 
+    pub fn folder_missing(&self) -> bool {
+        self.folder_error
+            .as_ref()
+            .is_some_and(|error| error.starts_with("Session folder not found"))
+            || self.folder.as_ref().is_some_and(|folder| !folder.is_dir())
+    }
+
     pub fn select(&mut self, session: Option<Uuid>) {
         self.flush();
         self.list_only = false;
@@ -1497,6 +1524,8 @@ impl Sessions {
             self.notes_open = false;
         }
         self.selected = session;
+        self.caret_to_show = None;
+        self.note_scroll_to_top = true;
         self.draft = session
             .and_then(|id| self.notes.iter().find(|note| note.id == id))
             .and_then(|note| Draft::open(&note.path).ok());
@@ -2952,6 +2981,7 @@ impl Sessions {
         } else {
             0.0
         };
+        let reset_scroll = !in_panel && std::mem::take(&mut self.note_scroll_to_top);
         let frame = egui::Frame::new()
             .fill(colors().well)
             .stroke(egui::Stroke::new(
@@ -2962,8 +2992,12 @@ impl Sessions {
             .inner_margin(design::S);
         frame.show(ui, |ui| {
             let visible_height = ui.available_height().max(design::XL);
-            egui::ScrollArea::vertical()
-                .id_salt(("session_editor", self.selected, in_panel))
+            let mut scroll =
+                egui::ScrollArea::vertical().id_salt(("session_editor", self.selected, in_panel));
+            if reset_scroll {
+                scroll = scroll.vertical_scroll_offset(0.0);
+            }
+            scroll
                 .max_height(visible_height)
                 .auto_shrink([false, false])
                 .show(ui, |ui| {
@@ -3266,6 +3300,8 @@ impl Sessions {
     fn write_in_note(&mut self) {
         self.tab = Tab::Note;
         self.reading_note = false;
+        self.caret_to_show = None;
+        self.note_scroll_to_top = true;
     }
 
     /// The note, as one view: words to write, or the same words to read.
@@ -3684,8 +3720,7 @@ impl Sessions {
                             if plan_link(ui, &label, is_open).clicked() { toggle = Some(event.id.clone()); }
                         }, |ui| {
                             if running {
-                                if design::inline_status_link(ui, Status { icon: icons::RUN,
-                                    word: &plan.open_state, color: c.text }).clicked() {
+                                if plan_run_link(ui, &plan.open_state).clicked() {
                                     self.wants_back_to_run = true;
                                 }
                             } else if let Some(saved) = saved {
@@ -3776,8 +3811,7 @@ impl Sessions {
                             }
                         }, |ui| {
                             if running {
-                                if design::inline_status_link(ui, Status { icon: icons::RUN,
-                                    word: &plan.open_state, color: c.text }).clicked() {
+                                if plan_run_link(ui, &plan.open_state).clicked() {
                                     self.wants_back_to_run = true;
                                 }
                             } else if let Some(saved) = &fight.saved {
@@ -3839,8 +3873,7 @@ impl Sessions {
                             if design::wrapped_link(ui, &group.name).clicked() { read_group = true; }
                         }, |ui| {
                             let summary = group.summary();
-                            let shown = design::words_that_fit(ui, &summary, &Type::Small.font(ui), ui.available_width());
-                            ui.label(Type::Small.rich(ui, shown).color(c.muted)).on_hover_text(&summary);
+                            plan_group_summary(ui, &summary);
                             if let Some(problem) = &group.problem { wrapped_words(ui, Type::Small, problem, c.result.warning); }
                         }, |ui| {
                             design::row_menu(ui, &group.name, |ui| {
@@ -4352,6 +4385,8 @@ impl Sessions {
                     ui,
                     if live {
                         megabytes(recording.bytes)
+                    } else if !recording.path.exists() {
+                        "Audio removed".to_owned()
                     } else {
                         format!("{length} · {}", megabytes(recording.bytes))
                     },
@@ -6175,7 +6210,7 @@ impl Sessions {
         let mut stop = false;
         design::page_header(ui, page_title, Some(&context), |ui| {
             let list_alone = self.list_only && ui.ctx().content_rect().width() < 1500.0;
-            if self.view == View::Notes && !in_form && !empty {
+            if self.view == View::Notes && !in_form && !empty && !folder_missing {
                 new_session = Action::secondary("New session")
                     .icon(icons::ADD)
                     .blocked_if(
@@ -6410,7 +6445,7 @@ mod tests {
     }
 
     #[test]
-    fn plan_summary_stays_below_both_wrapped_title_and_action() {
+    fn plan_summary_follows_the_title_without_an_extra_gap() {
         let ctx = egui::Context::default();
         design::theme::install(&ctx);
         let _ = ctx.run(Default::default(), |ctx| {
@@ -6449,12 +6484,28 @@ mod tests {
                         "{name}: {title:?} {summary:?}"
                     );
                     assert!(
-                        summary.top() >= action.bottom(),
-                        "{name}: {action:?} {summary:?}"
+                        (summary.top() - title.bottom().max(action.bottom())).abs() < 1.0,
+                        "No extra item gap: {title:?} {action:?} {summary:?}"
                     );
                 }
             });
         });
+    }
+
+    #[test]
+    fn i19_p5_group_summary_wraps_before_it_shortens() {
+        let mut harness = egui_kittest::Harness::builder()
+            .with_size(egui::vec2(design::FORM_WIDTH / 2.0, 200.0))
+            .build_state(|ctx, rect| {
+                egui::CentralPanel::default().show(ctx, |ui| {
+                    *rect = ui.scope(|ui| plan_group_summary(ui, "Rivals · 3 members · XP 600 · Changed · 1 × Ember Cultist · 2 × Goblin Warrior")).response.rect;
+                });
+            }, egui::Rect::NOTHING);
+        design::theme::install(&harness.ctx);
+        harness.run_steps(2);
+        let rect = harness.state();
+        assert!(rect.height() > Type::Small.line(), "{rect:?}");
+        assert!(rect.height() <= Type::Small.line() * 2.0);
     }
 
     #[test]

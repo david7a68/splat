@@ -93,6 +93,7 @@ impl Options {
                 .values()
                 .map(|e| e.entry.clone())
                 .collect::<Vec<_>>(),
+            &document.text,
         );
         let folder = match entry
             .fields
