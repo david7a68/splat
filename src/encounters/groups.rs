@@ -1631,6 +1631,7 @@ impl Encounters {
         // Only a group for any encounter can be linked in a plan.
         let was_linkable = draft.saved_setup.encounter.is_none();
         let path = draft.path.clone();
+        self.layouts.clear();
         let before = draft.baseline.clone();
         match draft.save(active, modules) {
             Ok(()) => {
@@ -1706,9 +1707,6 @@ impl Encounters {
         campaigns: &Campaigns,
         in_plan: bool,
     ) {
-        if in_plan && self.layout_notice(ui, active, campaigns.modules()) {
-            return;
-        }
         if self.group_disk_view(ui, active, campaigns.modules()) {
             return;
         }
@@ -1730,6 +1728,14 @@ impl Encounters {
             ("Encounters", "Back to encounters")
         };
         let compact = ui.available_width() < 760.0;
+        let notice_path = self
+            .group_draft
+            .as_ref()
+            .map(|draft| active.path.join(draft.path()));
+        if self.layouts.has_action() && !self.layouts.current(notice_path.as_deref()) {
+            self.message = None;
+        }
+        let layout_notice = !dirty && self.layouts.current(notice_path.as_deref());
         let saved_note = self.message.clone();
         let focus_name = std::mem::take(&mut self.focus_name);
         let draft = self.group_draft.as_mut().expect("the editor has a draft");
@@ -1796,7 +1802,9 @@ impl Encounters {
             } else {
                 (icons::OK, "No changes", colors().muted)
             };
-            discard = super::editor_save_state(ui, Status { icon, word, color }, dirty, None);
+            if !layout_notice {
+                discard = super::editor_save_state(ui, Status { icon, word, color }, dirty, None);
+            }
             if dirty && in_plan {
                 super::blocked_reason(ui, Some(super::draft_switch_reason()));
             }
@@ -1813,12 +1821,18 @@ impl Encounters {
                 );
             }
         }
+        if layout_notice && self.layout_notice(ui, active, campaigns.modules()) {
+            self.message = None;
+            return;
+        }
         if back {
+            self.clear_notice();
             self.close_group_in_plan();
             self.error = None;
             return;
         }
         if discard {
+            self.clear_notice();
             let draft = self.group_draft.take().expect("the editor has a draft");
             if draft.baseline.is_some() {
                 match GroupDraft::open(&active.path, &draft.path) {

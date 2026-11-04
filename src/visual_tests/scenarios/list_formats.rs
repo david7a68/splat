@@ -125,4 +125,11 @@ pub fn run(d: &mut Driver<'_>) {
         fs::read_to_string(campaign.path.join("Encounter Groups/Bridge guards.md")).unwrap();
     assert_eq!(saved, text.replace("HP lots", "HP +5"));
     d.state("group-changes-cell-repaired", Sizes::All);
+
+    let text = fs::read_to_string(&path).unwrap();
+    fs::write(&path, text.replace("## Day 1:", "## Day 5:")).unwrap();
+    d.app_mut().timeline.reload();
+    d.click(NAV_TIMELINE);
+    d.expect("Day number comes from the order of days");
+    d.state("timeline-item-edited-and-flagged-in-obsidian", Sizes::All);
 }

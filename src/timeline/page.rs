@@ -209,10 +209,7 @@ pub fn problems(ui: &mut egui::Ui, book: &mut Book) -> bool {
             &format!("Line {}: {}", flag.line, flag.message),
         );
     }
-    let path = book.path.clone();
-    if book.layouts.show(ui, None, path.as_deref()) {
-        book.reload();
-    }
+    book.layouts.current(book.path.as_deref());
     if let Some(warning) = &book.duplicate {
         design::message(ui, Tone::Warning, warning);
     }
@@ -257,16 +254,6 @@ pub fn problems(ui: &mut egui::Ui, book: &mut Book) -> bool {
                     let face = egui::TextStyle::Monospace.resolve(ui.style());
                     let height = ui.fonts_mut(|fonts| fonts.row_height(&face));
                     let id = ("timeline_conflict", &book.path, &disk);
-                    // Seed the shared comparison's cursor once. Schema conversion must
-                    // not hide the body edit that caused this conflict.
-                    let cursor = ui.make_persistent_id(("draft_difference", id));
-                    if let Some(line) = book.conflict_body_line(&disk) {
-                        ui.data_mut(|data| {
-                            if data.get_temp::<usize>(cursor).is_none() {
-                                data.insert_temp(cursor, line);
-                            }
-                        });
-                    }
                     design::draft_comparison_styled(ui, &draft, &disk, id, face, height);
                 }
                 Err(error) => {
@@ -610,6 +597,13 @@ impl TimelinePage {
             .just_added
             .take()
             .filter(|(id, at)| at.elapsed() < UNDO_ADD_FOR && self.selected.as_ref() == Some(id));
+        if self
+            .just_added
+            .as_ref()
+            .is_some_and(|(id, _)| !book.add_notice_current(id))
+        {
+            self.just_added = None;
+        }
         if let Some((id, _)) = self.just_added.clone() {
             ui.ctx().request_repaint_after(UNDO_ADD_FOR);
             let days = day_numbers(&book.events);
@@ -629,8 +623,9 @@ impl TimelinePage {
             } else {
                 format!("{label} added.")
             };
+            let words = book.added_words(&id, &words);
             if design::undo_message(ui, Tone::Success, &words, "Undo add") {
-                book.remove(&id);
+                book.undo_add(&id);
                 self.just_added = None;
                 self.selected = None;
             }

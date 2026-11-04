@@ -2174,6 +2174,12 @@ impl eframe::App for Splat {
         }
         // Coming back to a page beside the open note, the keyboard goes back to the note.
         if self.page != self.shown_page {
+            self.library.clear_notice();
+            self.campaign_content.clear_notice();
+            self.encounters.clear_notice();
+            self.timeline.clear_notice();
+            self.sessions.clear_notice();
+            self.world_page.reader.clear_notice();
             let from_sessions = self.shown_page == Page::Sessions;
             self.shown_page = self.page;
             if from_sessions {

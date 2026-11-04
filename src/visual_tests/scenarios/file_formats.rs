@@ -22,11 +22,23 @@ pub fn run(d: &mut Driver<'_>) {
     d.type_text("Undercroft");
     d.click("Undercroft");
     d.expect("Saved in the new layout.");
+    d.observe_both(
+        "H1 World",
+        "One named Undo restores the place change and the old layout",
+        |d| {
+            d.nodes()
+                .iter()
+                .filter(|node| node.in_view() && node.name.starts_with("Undo"))
+                .count()
+                == 1
+                && d.visible_text("In: not set → Undercroft. Saved in the new layout.")
+        },
+    );
     d.state("saved-in-new-layout", Sizes::All);
     let after = fs::read_to_string(&path).unwrap();
     assert!(after.contains("splat_schema: 2"));
     assert!(after.contains("splat_in:"));
-    d.click("Undo");
+    d.click("Undo place change");
     d.settle();
     assert_eq!(fs::read_to_string(&path).unwrap(), before);
 
@@ -51,8 +63,12 @@ pub fn run(d: &mut Driver<'_>) {
             d.visible_text("splat_schema: 1")
                 && d.visible_text("splat_schema: 2")
                 && d.visible_text(identity)
-                && d.visible_text(world)
-                && d.visible_text("1 rule file · 1 World note")
+                && d.nodes().iter().any(|node| {
+                    node.name == world
+                        && node.in_view()
+                        && node.rect.height() <= crate::design::Type::Mono.line()
+                })
+                && d.visible_text("1 rule · 1 World note")
                 && d.visible_text("Next difference")
                 && d.visible_text("Convert files")
                 && d.visible_text("Cancel")
@@ -61,4 +77,32 @@ pub fn run(d: &mut Driver<'_>) {
     d.state("convert-files-preview", Sizes::All);
     d.click("Cancel");
     assert_eq!(fs::read_to_string(&path).unwrap(), before);
+    // Preview is read-only. A race at conversion is reported beside the result.
+    d.click(NAV_LIBRARY);
+    d.click_containing("files use the old layout");
+    fs::write(&path, format!("{before}Outside edit after preview.\n")).unwrap();
+    d.click("Convert files");
+    d.expect("Saved in the new layout.");
+    d.expect("Undo convert");
+    d.click("Files skipped");
+    d.expect("NPCs/Rook.md: This entry changed on disk.");
+    d.observe_both(
+        "W11 conversion result",
+        "One batch Undo and the skipped file stay with the conversion result",
+        |d| {
+            d.nodes()
+                .iter()
+                .filter(|node| node.in_view() && node.name.starts_with("Undo"))
+                .count()
+                == 1
+                && d.visible_text("Undo convert")
+        },
+    );
+    d.state("converted-with-skipped-file-and-one-undo", Sizes::All);
+    d.click("Undo convert");
+    assert!(
+        fs::read_to_string(&path)
+            .unwrap()
+            .contains("Outside edit after preview.")
+    );
 }

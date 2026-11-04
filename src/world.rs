@@ -940,6 +940,7 @@ impl Reader {
         campaign: Option<&Campaign>,
     ) -> Option<Nav> {
         if self.showing != Some(item.entry.id) {
+            self.undo = None;
             if let Some(previous) = self.showing {
                 self.status_drafts.insert(previous, self.status.clone());
             }
@@ -953,6 +954,16 @@ impl Reader {
             self.adding = None;
             self.picker = None;
             self.error = None;
+        }
+        if self.undo.as_ref().is_some_and(|change| {
+            campaign.is_none_or(|campaign| {
+                fs::read_to_string(campaign.path.join(&change.path))
+                    .ok()
+                    .as_deref()
+                    != Some(&change.after)
+            })
+        }) {
+            self.undo = None;
         }
         let heading = if self.heading_document.is_none_or(|id| id == item.entry.id) {
             self.heading_document = None;
@@ -993,28 +1004,8 @@ impl Reader {
             &format!("{} · {}", item.subtitle, item.owner),
             Some(&item.entry),
         );
-        let undo_name = format!(
-            "Undo {} change for {}",
-            if self
-                .undo
-                .as_ref()
-                .is_some_and(|change| change.word.starts_with("In:"))
-            {
-                "place"
-            } else {
-                "stat block"
-            },
-            item.entry.name
-        );
-        ui.data_mut(|data| data.insert_temp(egui::Id::new("world_undo_name"), undo_name));
         if let Some(error) = &self.error {
             design::message(ui, Tone::Error, error);
-        }
-        if self.converted(item)
-            && design::message_with_action(ui, Tone::Success, "Saved in the new layout.", "Undo")
-            && let Some(campaign) = campaign
-        {
-            return self.undo_change(campaign, item.entry.id);
         }
         if !self.compact
             && (item.is_world_note() || item.entry.kind == "world")
@@ -1311,6 +1302,10 @@ impl Reader {
         };
         let before_name = world_field(&item.entry, key).map_or_else(|| "not set".into(), name);
         let after_name = name(&value);
+        let mut value = value;
+        if let Value::Mapping(fields) = &mut value {
+            fields.remove("link");
+        }
         let value = reference(&value)
             .and_then(|r| index.position_of(&r))
             .map(|at| {
@@ -1338,9 +1333,21 @@ impl Reader {
             write_note(&campaign.path, &item.entry.path, Some(&before), &after)?;
             Ok::<_, String>(Change {
                 path: item.entry.path.clone(),
-                before,
-                after,
-                word: format!("{label}: {before_name} → {after_name}."),
+                before: before.clone(),
+                after: after.clone(),
+                word: format!(
+                    "{label}: {before_name} → {after_name}.{}",
+                    if Entry::parse(&item.entry.path, &before)
+                        .is_ok_and(|entry| splat::content::formats::schema(&entry.fields) == Ok(1))
+                        && Entry::parse(&item.entry.path, &after).is_ok_and(|entry| {
+                            splat::content::formats::schema(&entry.fields) == Ok(2)
+                        })
+                    {
+                        " Saved in the new layout."
+                    } else {
+                        ""
+                    }
+                ),
             })
         })();
         match result {
@@ -1445,8 +1452,18 @@ impl Reader {
                 + design::number_width(ui, word, &Type::Small.font(ui))
                 + Type::Small.line()
                 + design::XS
-                + Action::quiet("Undo").natural_width(ui)
+                + Action::quiet(Self::undo_label(word)).natural_width(ui)
                 + ui.spacing().item_spacing.x * 4.0
+    }
+
+    fn undo_label(word: &str) -> &'static str {
+        if word.starts_with("In:") {
+            "Undo place change"
+        } else if word.starts_with("Status:") {
+            "Undo status change"
+        } else {
+            "Undo stat block change"
+        }
     }
 
     fn change_notice(ui: &mut egui::Ui, word: &str) -> bool {
@@ -1458,13 +1475,11 @@ impl Reader {
                 color: colors().muted,
             },
         );
-        Action::quiet("Undo")
-            .name(
-                &ui.data(|data| data.get_temp::<String>(egui::Id::new("world_undo_name")))
-                    .unwrap_or_else(|| "Undo World change".into()),
-            )
-            .show(ui)
-            .clicked()
+        Action::quiet(Self::undo_label(word)).show(ui).clicked()
+    }
+
+    pub fn clear_notice(&mut self) {
+        self.undo = None;
     }
 
     fn undo_change(&mut self, campaign: &Campaign, id: Uuid) -> Option<Go> {
@@ -1478,20 +1493,6 @@ impl Reader {
                 None
             }
         }
-    }
-
-    fn converted(&self, item: &Item) -> bool {
-        self.undo.as_ref().is_some_and(|change| {
-            change.path == item.entry.path
-                && Entry::parse(&change.path, &change.before)
-                    .is_ok_and(|e| e.fields.get("splat_schema").and_then(Value::as_u64) == Some(1))
-                && item
-                    .entry
-                    .fields
-                    .get("splat_schema")
-                    .and_then(Value::as_u64)
-                    == Some(2)
-        })
     }
 
     fn relationships(
@@ -1516,8 +1517,7 @@ impl Reader {
                 .undo
                 .as_ref()
                 .filter(|change| {
-                    !self.converted(item)
-                        && change.path == item.entry.path
+                    change.path == item.entry.path
                         && change
                             .word
                             .starts_with(if key == "in" { "In:" } else { "Stat block:" })
@@ -1681,7 +1681,11 @@ impl Reader {
                         .clicked()
                     {
                         match create_entry(campaign, &picker.new_location, "location") {
-                            Ok(id) => chosen = serde_yaml_ng::to_value(EntryRef::id(id)).ok(),
+                            Ok(id) => {
+                                let mut target = EntryRef::id(id);
+                                target.link = Some(picker.new_location.trim().to_owned());
+                                chosen = serde_yaml_ng::to_value(target).ok();
+                            }
                             Err(error) => self.error = Some(error),
                         }
                     }
@@ -1879,11 +1883,10 @@ impl Reader {
         }
         if !self.compact
             && let Some(change) = &self.undo
-            && !self.converted(item)
             && change.path == item.entry.path
             && !Self::notice_fits(ui, Self::relationship_width(ui), &change.word)
             && ui
-                .horizontal(|ui| Self::change_notice(ui, &change.word))
+                .horizontal_wrapped(|ui| Self::change_notice(ui, &change.word))
                 .inner
         {
             return self.undo_change(campaign, item.entry.id);
@@ -2092,6 +2095,28 @@ fn add_form(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn i19_h1_world_notice_names_the_change_and_undo() {
+        let ctx = egui::Context::default();
+        crate::design::theme::install(&ctx);
+        ctx.enable_accesskit();
+        let output = ctx.run(Default::default(), |ctx| {
+            egui::CentralPanel::default().show(ctx, |ui| {
+                Reader::change_notice(ui, "In: Watch House → North Gate. Saved in the new layout.");
+            });
+        });
+        let nodes = output.platform_output.accesskit_update.unwrap().nodes;
+        let labels: Vec<_> = nodes.iter().filter_map(|(_, node)| node.label()).collect();
+        assert_eq!(
+            labels
+                .iter()
+                .filter(|s| s.starts_with("Undo"))
+                .copied()
+                .collect::<Vec<_>>(),
+            ["Undo place change"]
+        );
+    }
 
     #[test]
     fn integrity_d27_focus_checks_include_run_json_files() {

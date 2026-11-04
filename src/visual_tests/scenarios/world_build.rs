@@ -148,6 +148,7 @@ pub fn places(d: &mut Driver<'_>) {
         "An NPC can use a place's alias in its in link",
     );
     d.state("npc-place", Sizes::All);
+    let original = fs::read(root(d).join("NPCs/Rook Ambry.md")).unwrap();
     let before = d.interaction_count();
     d.click("Change Stat block");
     d.type_text("Guard");
@@ -165,21 +166,19 @@ pub fn places(d: &mut Driver<'_>) {
     );
     d.expect_same("Adding the stat block keeps the note's content and offers conversion Undo.");
     d.state("npc-stat-block-changed", Sizes::All);
-    d.click("Undo");
+    d.click("Undo stat block change");
     d.observe(
         "W3",
-        !fs::read_to_string(root(d).join("NPCs/Rook Ambry.md"))
-            .unwrap()
-            .contains("splat_stat_block:"),
-        "Undo removes only the new stat block key",
+        fs::read(root(d).join("NPCs/Rook Ambry.md")).unwrap() == original,
+        "Undo restores the old content and layout byte for byte",
     );
     d.click("Change In");
     d.click("New location…");
     d.type_into("Location name", "Watch House");
     d.click("Create location here");
-    d.expect("Saved in the new layout.");
+    d.expect("In: The Keep → Watch House. Saved in the new layout.");
     d.state("npc-new-place", Sizes::All);
-    d.click("Undo");
+    d.click("Undo place change");
     d.click("Ashfall Keep");
     d.observe(
         "World places",
@@ -218,7 +217,7 @@ pub fn places(d: &mut Driver<'_>) {
     d.wait_for_text("Obsidian added the watch schedule.");
     d.expect("Saved in the new layout.");
     d.state("place-change-keeps-disk-edit", Sizes::All);
-    d.click("Undo");
+    d.click("Undo place change");
     assert_eq!(fs::read_to_string(&path).unwrap(), external);
 }
 
@@ -957,7 +956,8 @@ pub fn package_duplicate_id(d: &mut Driver<'_>) {
     d.state("duplicate-original-editor", Sizes::All);
     d.type_into_editor("Saved only to the original.\n");
     d.click("Save");
-    d.wait_for_text("Saved");
+    d.wait_for_text("Cinder Wolf.md saved in the new layout.");
+    d.expect("Undo save");
     assert!(
         fs::read_to_string(&original)
             .unwrap()
@@ -1107,7 +1107,7 @@ pub fn world_note_moved(d: &mut Driver<'_>) {
     d.click("Always use Locations/Watch House.md");
     d.expect("Saved in the new layout.");
     d.state("place-choice-kept-with-undo", Sizes::All);
-    d.click("Undo");
+    d.click("Undo place change");
     d.click_containing("Watch House · 2 matches");
     d.click("Locations/Watch House.md");
     look_up(d, "Rook Ambry");

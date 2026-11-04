@@ -172,12 +172,14 @@ Library's **Packages** menu and Campaign offer **Convert files…**. The preview
 each supported file before and after conversion. Lines wrap, changes are marked,
 and both sides scroll together from the first difference. Files changed on disk are skipped.
 One **Undo** restores the saved bytes and refuses to replace later edits.
-Library's Packages menu also counts files that still use the old layout.
+Library shows the old-layout file count in its header and Packages menu.
 
-A save after a change in Splat converts supported old notes and shows
-**Saved in the new layout.** with **Undo**. Reading and polling do not convert files.
+A save after a change in Splat converts supported old notes. Its message stays beside
+the action with one named Undo, which restores the whole change and the old layout.
+Reading and polling do not convert files. Convert files has its own **Undo convert**.
 Convert files is unavailable during a run and skips read-only files.
-Its preview groups files by owner. Only the campaign is selected at first.
+Its wide preview groups files by owner. Source lines do not wrap, and the two panes
+scroll together. Only the campaign is selected at first.
 Packages with `splat_generated: true` in `Package.md` keep their converter's layout,
 including when the DM saves an entry in Splat.
 Creatures use a `Stat block` section with `Stat | Value` and `Ability | Score | Mod | Save`
