@@ -151,13 +151,18 @@ supplies each value once. A bad cell shows a warning with its file line; valid
 values still lead in the reader and beside a run. Rejected vitals show their original
 text with a warning in the vitals area. Unknown rows stay readable.
 
-A schema conversion shows `Saved in the new layout.` with `Undo`. Convert files
+A converting save keeps the action's own message and adds the layout change. Its one
+named Undo restores the whole action, including the previous bytes and layout. The notice
+stays beside that action. The next save, discard, conflict, outside edit, entry or scope
+change, or page exit clears it. Only Convert files has its own `Saved in the new layout.`
+message with `Undo convert`. Convert files
 groups files by owner, with only the campaign checked at first. Generated packages
 are disabled and say `Generated package; its converter writes the layout`.
 Counts include checked owners only. The file picker groups paths by owner too.
 Convert files
 opens a modal with each file's before and after text, the counts by kind in words,
-and files skipped. It uses the shared comparison: lines wrap, changed lines are
+and files skipped. Its wide source panes use about 60% of the window height. Source lines do not wrap;
+the two panes scroll together. Changed lines are
 marked, both sides scroll together, and it opens at the first difference.
 It is blocked while a run is open. Malformed flat properties stay in the
 file; the reader shows a warning with the line number and keeps the note available. Timeline version 2 uses event lists and day IDs in comments below the headings.

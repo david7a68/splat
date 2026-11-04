@@ -1660,6 +1660,25 @@ pub fn undo_message(ui: &mut Ui, tone: Tone, text: &str, action: &str) -> bool {
 
 /// A focused dialog. Only the brief's three modal tasks use this. Escape is the caller's.
 pub fn dialog<R>(ctx: &egui::Context, id: &str, title: &str, add: impl FnOnce(&mut Ui) -> R) -> R {
+    dialog_width(ctx, id, title, FORM_WIDTH, add)
+}
+
+pub fn wide_dialog<R>(
+    ctx: &egui::Context,
+    id: &str,
+    title: &str,
+    add: impl FnOnce(&mut Ui) -> R,
+) -> R {
+    dialog_width(ctx, id, title, LIST_MEASURE + XXL * 7.0, add)
+}
+
+fn dialog_width<R>(
+    ctx: &egui::Context,
+    id: &str,
+    title: &str,
+    width: f32,
+    add: impl FnOnce(&mut Ui) -> R,
+) -> R {
     let c = colors();
     let viewport = ctx.content_rect();
     // Anchored at the top, so a dialog does not jump as its steps change its height.
@@ -1675,7 +1694,7 @@ pub fn dialog<R>(ctx: &egui::Context, id: &str, title: &str, add: impl FnOnce(&m
                 .inner_margin(egui::Margin::same(L as i8)),
         )
         .show(ctx, |ui| {
-            ui.set_max_width((viewport.width() - XXL * 2.0).min(FORM_WIDTH));
+            ui.set_max_width((viewport.width() - XXL * 2.0).min(width));
             ui.set_max_height(viewport.height() - XXL * 2.0);
             ui.label(Type::Section.rich(ui, title).color(c.text));
             ui.add_space(XS);
@@ -1980,132 +1999,7 @@ pub fn overflow_tabs_small(ui: &mut Ui, selected: &mut usize, choices: &[(usize,
 /// Compare a draft with its file. The first draw and Next difference scroll to a marked line.
 #[cfg(test)]
 pub fn draft_comparison(ui: &mut Ui, draft: &str, disk: &str, id: impl std::hash::Hash) {
-    let left: Vec<_> = draft.lines().collect();
-    let right: Vec<_> = disk.lines().collect();
-    let differences: Vec<_> = (0..left.len().max(right.len()))
-        .filter(|&line| left.get(line) != right.get(line))
-        .collect();
-    let state = ui.make_persistent_id(("draft_difference", id));
-    let first = differences.first().copied().unwrap_or(0);
-    let current = ui.data(|data| data.get_temp::<usize>(state));
-    let size = ui.available_size();
-    let previous_size = ui.data(|data| data.get_temp::<egui::Vec2>(state.with("size")));
-    ui.data_mut(|data| data.insert_temp(state.with("size"), size));
-    let mut target =
-        (current.is_none() || previous_size != Some(size)).then_some(current.unwrap_or(first));
-    ui.horizontal(|ui| {
-        let words = if differences.is_empty() {
-            "No lines differ".into()
-        } else {
-            super::count(differences.len(), "line differs", "lines differ")
-        };
-        ui.label(Type::Small.rich(ui, words).color(colors().muted));
-        if differences.len() > 1 && Action::quiet("Next difference").show(ui).clicked() {
-            target = Some(
-                differences
-                    .iter()
-                    .copied()
-                    .find(|&line| line > current.unwrap_or(first))
-                    .unwrap_or(first),
-            );
-        }
-    });
-    if let Some(line) = target {
-        ui.data_mut(|data| data.insert_temp(state, line));
-    }
-    if let Some(heading) = left
-        .iter()
-        .take(target.or(current).unwrap_or(first) + 1)
-        .rev()
-        .find(|line| line.trim_start().starts_with('#'))
-    {
-        ui.label(
-            Type::Small
-                .rich(ui, format!("In {}", heading.trim_start_matches('#').trim()))
-                .color(colors().muted),
-        );
-    }
-    ui.columns(2, |columns| {
-        group_label(&mut columns[0], "Your draft");
-        group_label(&mut columns[1], "In the file now");
-    });
-    let height = ui.available_height();
-    // Set the offset before painting. A scroll request inside the body takes effect
-    // on a later frame and can inherit the old reader's position on opening.
-    let column_width = (ui.available_width() - ui.spacing().item_spacing.x) / 2.0;
-    let text_width = column_width - XS - ui.spacing().item_spacing.x;
-    let heights: Vec<f32> = (0..left.len().max(right.len()))
-        .map(|line| {
-            [&left, &right]
-                .into_iter()
-                .map(|lines| {
-                    ui.fonts_mut(|fonts| {
-                        fonts.layout(
-                            lines.get(line).copied().unwrap_or("No line").to_owned(),
-                            Type::Body.font(ui),
-                            colors().text,
-                            text_width,
-                        )
-                    })
-                    .size()
-                    .y
-                    .max(Type::Body.line())
-                })
-                .fold(0.0, f32::max)
-                + ui.spacing().item_spacing.y
-        })
-        .collect();
-    let mut scroll = egui::ScrollArea::vertical().id_salt(state);
-    if let Some(line) = target {
-        scroll = scroll.vertical_scroll_offset(heights.iter().take(line.saturating_sub(2)).sum());
-    }
-    scroll.auto_shrink([false, false]).show(ui, |ui| {
-        for (line, &row_height) in heights.iter().enumerate() {
-            let differs = left.get(line) != right.get(line);
-            ui.columns(2, |columns| {
-                for (at, lines) in [&left, &right].into_iter().enumerate() {
-                    egui::Frame::new()
-                        .fill(if differs {
-                            colors().selected
-                        } else {
-                            colors().page
-                        })
-                        .show(&mut columns[at], |ui| {
-                            ui.set_min_width(ui.available_width());
-                            ui.set_min_height(row_height - ui.spacing().item_spacing.y);
-                            ui.horizontal_top(|ui| {
-                                let (mark, _) = ui.allocate_exact_size(
-                                    egui::vec2(XS, Type::Body.line()),
-                                    egui::Sense::hover(),
-                                );
-                                if differs {
-                                    ui.painter().vline(
-                                        mark.center().x,
-                                        mark.y_range(),
-                                        egui::Stroke::new(HAIRLINE_WIDTH, colors().accent),
-                                    );
-                                }
-                                ui.add(
-                                    egui::Label::new(
-                                        Type::Body
-                                            .rich(ui, lines.get(line).copied().unwrap_or("No line"))
-                                            .color(if lines.get(line).is_some() {
-                                                colors().text
-                                            } else {
-                                                colors().muted
-                                            }),
-                                    )
-                                    .wrap(),
-                                );
-                            });
-                        });
-                }
-            });
-        }
-        if heights.iter().sum::<f32>() > height {
-            ui.add_space((height - Type::Body.line() * 3.0).max(0.0));
-        }
-    });
+    draft_comparison_styled(ui, draft, disk, id, Type::Body.font(ui), Type::Body.line());
 }
 
 /// Consecutive differing lines are one destination for Next difference.
@@ -2277,14 +2171,23 @@ pub fn grouped_draft_comparison(
                     .size()
                     .y
                     .max(line_height)
+                    .ceil()
                 })
                 .fold(0.0, f32::max)
                 + ui.spacing().item_spacing.y
         })
         .collect();
+    let padding = if face.family != egui::FontFamily::Monospace {
+        (height - line_height * 3.0).max(0.0)
+    } else {
+        // A whole row lets the clamped offset keep the final line fully in view.
+        line_height
+    };
     let mut scroll = egui::ScrollArea::vertical().id_salt(state);
     if let Some(line) = target {
-        scroll = scroll.vertical_scroll_offset(heights.iter().take(line.saturating_sub(2)).sum());
+        let mut scroll_heights = heights.clone();
+        scroll_heights.push(padding);
+        scroll = scroll.vertical_scroll_offset(comparison_offset(&scroll_heights, line, height));
     }
     scroll.auto_shrink([false, false]).show(ui, |ui| {
         for (line, &row_height) in heights.iter().enumerate() {
@@ -2333,9 +2236,7 @@ pub fn grouped_draft_comparison(
                 }
             });
         }
-        if heights.iter().sum::<f32>() > height {
-            ui.add_space((height - line_height * 3.0).max(0.0));
-        }
+        ui.add_space(padding);
     });
     ui.spacing_mut().item_spacing.y = row_gap;
 }
@@ -2368,6 +2269,127 @@ pub fn draft_comparison_styled(
         face,
         line_height,
     );
+}
+
+/// Two source panes share their scroll position. Source lines never wrap.
+pub fn source_comparison(ui: &mut Ui, text: [&str; 2], id: impl std::hash::Hash) {
+    let lines = [
+        text[0].lines().collect::<Vec<_>>(),
+        text[1].lines().collect::<Vec<_>>(),
+    ];
+    let count = lines[0].len().max(lines[1].len());
+    let differences: Vec<_> = (0..count)
+        .filter(|&at| lines[0].get(at) != lines[1].get(at))
+        .collect();
+    let state = ui.make_persistent_id(("source_comparison", id));
+    let previous = ui.data(|data| data.get_temp::<egui::Vec2>(state));
+    let mut offset = previous.unwrap_or_default();
+    let mut target = previous
+        .is_none()
+        .then_some(differences.first().copied().unwrap_or(0));
+    let current = ui
+        .data(|data| data.get_temp::<usize>(state.with("line")))
+        .unwrap_or(0);
+    ui.horizontal(|ui| {
+        ui.label(
+            Type::Small
+                .rich(
+                    ui,
+                    super::count(differences.len(), "line differs", "lines differ"),
+                )
+                .color(colors().muted),
+        );
+        if differences.len() > 1 && Action::quiet("Next difference").show(ui).clicked() {
+            target = Some(
+                differences
+                    .iter()
+                    .copied()
+                    .find(|&line| line > current)
+                    .unwrap_or(differences[0]),
+            );
+        }
+    });
+    ui.columns(2, |columns| {
+        group_label(&mut columns[0], "Before");
+        group_label(&mut columns[1], "After");
+    });
+    let height = ui.available_height();
+    let line_height = Type::Mono
+        .line()
+        .max(ui.fonts_mut(|fonts| fonts.row_height(&Type::Mono.font(ui))));
+    if let Some(line) = target {
+        offset.y = comparison_offset(&vec![line_height; count], line, height - S);
+        ui.data_mut(|data| data.insert_temp(state.with("line"), line));
+    }
+    let source_width = text
+        .iter()
+        .flat_map(|text| text.lines())
+        .map(|line| number_width(ui, line, &Type::Mono.font(ui)))
+        .fold(0.0, f32::max);
+    let mut next = offset;
+    ui.columns(2, |columns| {
+        for side in 0..2 {
+            let ui = &mut columns[side];
+            let min_width = ui.available_width().max(source_width);
+            let output = egui::ScrollArea::both()
+                .id_salt(state.with(side))
+                .auto_shrink([false, false])
+                .max_height(height)
+                .scroll_offset(offset)
+                .show(ui, |ui| {
+                    ui.spacing_mut().item_spacing.y = 0.0;
+                    for at in 0..count {
+                        let changed = lines[0].get(at) != lines[1].get(at);
+                        egui::Frame::new()
+                            .fill(if changed {
+                                colors().selected
+                            } else {
+                                colors().raised
+                            })
+                            .show(ui, |ui| {
+                                ui.set_min_width(min_width);
+                                ui.set_min_height(line_height);
+                                ui.add(
+                                    egui::Label::new(Type::Mono.rich(
+                                        ui,
+                                        lines[side].get(at).copied().unwrap_or("No line"),
+                                    ))
+                                    .extend(),
+                                );
+                            });
+                    }
+                });
+            if output.state.offset != offset {
+                next = output.state.offset;
+            }
+        }
+    });
+    ui.data_mut(|data| data.insert_temp(state, next));
+}
+
+fn comparison_offset(heights: &[f32], line: usize, height: f32) -> f32 {
+    let first_y: f32 = heights.iter().take(line).sum();
+    if first_y <= height * 0.5 {
+        return 0.0;
+    }
+    let wanted: f32 = heights.iter().take(line.saturating_sub(2)).sum();
+    let limit = (heights.iter().sum::<f32>() - height).max(0.0);
+    let mut offset = 0.0;
+    for row in heights {
+        if offset + row > wanted.min(limit) {
+            break;
+        }
+        offset += row;
+    }
+    offset
+}
+
+#[test]
+fn i19_s2_s3_comparison_offset_fills_the_view_and_starts_on_a_whole_row() {
+    assert_eq!(comparison_offset(&[20.0; 100], 99, 210.0), 1780.0);
+    assert_eq!(comparison_offset(&[20.0; 100], 10, 600.0), 0.0);
+    assert_eq!(comparison_offset(&[24.0; 40], 20, 600.0), 360.0);
+    assert_eq!(comparison_offset(&[20.0; 4], 3, 200.0), 0.0);
 }
 
 /// The shared wrapped comparison with caller-supplied column headings.
@@ -2452,65 +2474,75 @@ pub fn draft_comparison_labeled(
                     .size()
                     .y
                     .max(line_height)
+                    .ceil()
                 })
                 .fold(0.0, f32::max)
                 + ui.spacing().item_spacing.y
         })
         .collect();
+    let padding = if face.family != egui::FontFamily::Monospace {
+        (height - line_height * 3.0).max(0.0)
+    } else {
+        // A whole row lets the clamped offset keep the final line fully in view.
+        line_height
+    };
     let mut scroll = egui::ScrollArea::vertical().id_salt(state);
     if let Some(line) = target {
-        scroll = scroll.vertical_scroll_offset(heights.iter().take(line.saturating_sub(2)).sum());
+        let mut scroll_heights = heights.clone();
+        scroll_heights.push(padding);
+        scroll = scroll.vertical_scroll_offset(comparison_offset(&scroll_heights, line, height));
     }
     scroll.auto_shrink([false, false]).show(ui, |ui| {
         for (line, &row_height) in heights.iter().enumerate() {
             let differs = left.get(line) != right.get(line);
-            ui.columns(2, |columns| {
-                for (at, lines) in [&left, &right].into_iter().enumerate() {
-                    egui::Frame::new()
-                        .fill(if differs {
-                            colors().selected
-                        } else {
-                            colors().page
-                        })
-                        .show(&mut columns[at], |ui| {
-                            ui.set_min_width(ui.available_width());
-                            ui.set_min_height(row_height - ui.spacing().item_spacing.y);
-                            ui.horizontal_top(|ui| {
-                                let (mark, _) = ui.allocate_exact_size(
-                                    egui::vec2(XS, line_height),
-                                    egui::Sense::hover(),
-                                );
-                                if differs {
-                                    ui.painter().vline(
-                                        mark.center().x,
-                                        mark.y_range(),
-                                        egui::Stroke::new(HAIRLINE_WIDTH, colors().accent),
-                                    );
-                                }
-                                ui.add(
-                                    egui::Label::new(
-                                        egui::RichText::new(
-                                            lines.get(line).copied().unwrap_or("No line"),
-                                        )
-                                        .font(face.clone())
-                                        .color(
-                                            if lines.get(line).is_some() {
-                                                colors().text
-                                            } else {
-                                                colors().muted
-                                            },
-                                        ),
-                                    )
-                                    .wrap(),
-                                );
-                            });
-                        });
+            let width = ui.available_width();
+            let (row, _) = ui.allocate_exact_size(vec2(width, row_height), Sense::hover());
+            let gap = ui.spacing().item_spacing.x;
+            let column = (width - gap) / 2.0;
+            for (side, lines) in [&left, &right].into_iter().enumerate() {
+                let rect = egui::Rect::from_min_size(
+                    row.min + vec2(side as f32 * (column + gap), 0.0),
+                    vec2(column, row_height),
+                );
+                ui.painter().rect_filled(
+                    rect,
+                    0.0,
+                    if differs {
+                        colors().selected
+                    } else {
+                        colors().page
+                    },
+                );
+                if differs {
+                    ui.painter().vline(
+                        rect.left() + XS / 2.0,
+                        rect.y_range(),
+                        Stroke::new(HAIRLINE_WIDTH, colors().accent),
+                    );
                 }
-            });
+                let text_rect = egui::Rect::from_min_max(rect.min + vec2(XS + gap, 0.0), rect.max);
+                let mut cell = ui.new_child(
+                    egui::UiBuilder::new()
+                        .max_rect(text_rect)
+                        .layout(Layout::top_down(Align::Min)),
+                );
+                let color = if lines.get(line).is_some() {
+                    colors().text
+                } else {
+                    colors().muted
+                };
+                let galley = cell.fonts_mut(|fonts| {
+                    fonts.layout(
+                        lines.get(line).copied().unwrap_or("No line").to_owned(),
+                        face.clone(),
+                        color,
+                        text_rect.width(),
+                    )
+                });
+                cell.add(egui::Label::new(galley));
+            }
         }
-        if heights.iter().sum::<f32>() > height {
-            ui.add_space((height - line_height * 3.0).max(0.0));
-        }
+        ui.add_space(padding);
     });
     ui.spacing_mut().item_spacing.y = row_gap;
 }

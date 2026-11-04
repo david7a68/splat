@@ -22,7 +22,7 @@ pub fn run(d: &mut Driver<'_>) {
     d.expect("Reload and lose my draft");
     d.state("encounter-disk-comparison", Sizes::All);
     d.click("Overwrite with my draft");
-    d.expect("Saved");
+    d.expect("saved in the new layout.");
     d.observe(
         "D8",
         fs::read_to_string(&path).unwrap().contains("tags: [dawn]"),
@@ -97,7 +97,7 @@ fn timeline_body(d: &mut Driver<'_>, folder: &std::path::Path) {
     d.app_mut().timeline.save();
     d.app_mut().timeline.run_open = false;
     let path = folder.join("Timeline.md");
-    let text = format!("{}\nDM's paragraph.\n", fs::read_to_string(&path).unwrap());
+    let text = format!("{}DM's paragraph.\n", fs::read_to_string(&path).unwrap());
     fs::write(&path, &text).unwrap();
     d.app_mut().timeline.reload();
     d.app_mut().timeline.touch();
@@ -110,6 +110,7 @@ fn timeline_body(d: &mut Driver<'_>, folder: &std::path::Path) {
         "The disk body is visible at the first difference beside the draft",
         |d| {
             d.visible_text("YOUR DRAFT")
+                && d.visible_text("1 line differs")
                 && d.visible_text("IN THE FILE NOW")
                 && d.visible_text("DM's paragraph.")
                 && d.painted_left("Overwrite with my timeline")

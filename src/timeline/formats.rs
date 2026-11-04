@@ -151,6 +151,23 @@ fn rows(text: &str) -> (Vec<Row>, Vec<Flag>) {
             None
         };
         if let Some((kind, title, id)) = parsed {
+            if kind == Kind::Day {
+                let expected = rows
+                    .iter()
+                    .filter(|row| row.event.kind == Kind::Day)
+                    .count()
+                    + 1;
+                let typed = raw
+                    .strip_prefix("## Day ")
+                    .and_then(|day| day.split(':').next())
+                    .and_then(|n| n.trim().parse::<usize>().ok());
+                if typed != Some(expected) {
+                    flags.push(Flag {
+                        line: line.number,
+                        message: "Day number comes from the order of days".into(),
+                    });
+                }
+            }
             let missing_id = id.is_none();
             let id = id.unwrap_or_else(|| stable_id(&line));
             rows.push(Row {
@@ -213,7 +230,10 @@ fn rows(text: &str) -> (Vec<Row>, Vec<Flag>) {
             {
                 child = None;
             } else {
-                row.event.extra.insert(label.into(), value.into());
+                row.event.extra.insert(
+                    label.into(),
+                    serde_yaml_ng::from_str(value).unwrap_or_else(|_| value.into()),
+                );
                 child = None;
             }
             meta(&mut row.event, raw);
@@ -323,13 +343,6 @@ fn machine_line(event: &Event) -> String {
             base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(event.marker.as_bytes())
         ));
     }
-    if !event.extra.is_empty() {
-        terms.push(format!(
-            "data={}",
-            base64::engine::general_purpose::URL_SAFE_NO_PAD
-                .encode(serde_yaml_ng::to_string(&event.extra).unwrap())
-        ));
-    }
     if terms.is_empty() {
         String::new()
     } else {
@@ -395,6 +408,17 @@ fn event_text(event: &Event, day: u32, sessions: &BTreeMap<Uuid, String>) -> Str
     }
     if let Some(name) = event.session.and_then(|id| sessions.get(&id)) {
         out.push_str(&format!("  - Session: [[{}]]\n", clean(name)));
+    }
+    for (key, value) in &event.extra {
+        if let Some(key) = key.as_str() {
+            let yaml = serde_yaml_ng::to_string(value).unwrap_or_default();
+            let value = if yaml.trim_end().contains('\n') {
+                serde_json::to_string(value).unwrap_or_default()
+            } else {
+                yaml.trim_end().to_owned()
+            };
+            out.push_str(&format!("  - {key}: {value}\n"));
+        }
     }
     out.push_str(&machine_line(event));
     out
@@ -749,7 +773,7 @@ mod tests {
         assert!(std::fs::read_to_string(path).unwrap().contains("DM prose."));
     }
     #[test]
-    fn fmt_f3_legacy_conflict_preview_matches_converted_overwrite() {
+    fn i19_s2_legacy_conflict_compares_in_disk_schema_and_converts_on_overwrite() {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join(FILE);
         let old = "---\ntags: [DM]\ntimeline_version: 1\ntimeline:\n- id: t-road\n  kind: travel\n  weather: rain\n---\n\nDM prose.\n";
@@ -761,15 +785,58 @@ mod tests {
         assert!(book.conflict);
         let (draft, disk) = book.conflict_comparison().unwrap();
         assert_eq!(disk, old);
-        assert!(is_v2(&draft));
+        assert!(!is_v2(&draft));
         assert!(draft.contains("tags: [DM]"));
         assert_eq!(
-            parse(&draft).0[0].extra["weather"],
+            super::super::parse(&draft).unwrap()[0].extra["weather"],
             serde_yaml_ng::Value::from("rain")
         );
         book.overwrite();
-        assert_eq!(std::fs::read_to_string(path).unwrap(), draft);
+        let saved = std::fs::read_to_string(path).unwrap();
+        assert!(is_v2(&saved));
+        assert_eq!(saved, convert(&draft, &BTreeMap::new()).unwrap());
     }
+    #[test]
+    fn i19_x14_custom_fields_are_visible_and_deleting_one_keeps_it_deleted() {
+        let old = "---\ntimeline_version: 1\ntimeline:\n- id: t-road\n  kind: travel\n  weather: rain\n  loot: {gold: 20}\n---\n";
+        let converted = convert(old, &BTreeMap::new()).unwrap();
+        assert!(converted.contains("  - weather: rain\n"));
+        assert!(!converted.contains("data="));
+        assert_eq!(super::super::parse(old).unwrap(), parse(&converted).0);
+        let edited = converted
+            .lines()
+            .filter(|line| !line.starts_with("  - loot:"))
+            .collect::<Vec<_>>()
+            .join("\n");
+        assert!(!parse(&edited).0[0].extra.contains_key("loot"));
+    }
+
+    #[test]
+    fn i19_x15_day_number_out_of_order_is_flagged_on_its_line() {
+        let text = "---\ntimeline_version: 2\n---\n\n## Day 1: Start\n%% splat id=t-one %%\n\n## Day 5: Storm\n%% splat id=t-two %%\n";
+        let (events, flags) = parse(text);
+        assert_eq!(events.len(), 2);
+        assert!(flags.iter().any(
+            |flag| flag.line == 8 && flag.message == "Day number comes from the order of days"
+        ));
+    }
+
+    #[test]
+    fn i19_s2_one_outside_paragraph_is_one_line_difference() {
+        let dir = tempfile::tempdir().unwrap();
+        let old = super::super::render(
+            &[event(Kind::Travel, "t-road".into(), "Road".into())],
+            &BTreeMap::new(),
+        )
+        .unwrap();
+        let disk = format!("{old}DM's paragraph.\n");
+        std::fs::write(dir.path().join(FILE), &disk).unwrap();
+        let mut book = Book::default();
+        book.open(Some(dir.path()));
+        let (draft, disk) = book.conflict_comparison().unwrap();
+        assert_eq!(crate::design::comparison_changes(&draft, &disk).0, 1);
+    }
+
     #[test]
     fn fmt_f3_repeated_run_save_changes_only_result_line() {
         let dir = tempfile::tempdir().unwrap();

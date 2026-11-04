@@ -60,6 +60,7 @@ pub struct CampaignContent {
     saved_selections: Vec<PackageSelection>,
     module: Option<Uuid>,
     dependencies: bool,
+    notice_scope: Option<(Option<Uuid>, bool)>,
     search: String,
     entry_matches: Option<(Uuid, String, Vec<Uuid>)>,
     /// The DM's choice of list. Until they choose, a package opens on the list it needs.
@@ -407,7 +408,17 @@ impl CampaignContent {
             ctx.request_repaint();
         });
     }
+    pub fn clear_notice(&mut self) {
+        self.layouts.leave();
+        self.message = None;
+    }
+
     pub fn show(&mut self, ui: &mut egui::Ui, campaigns: &Campaigns) {
+        let scope = (self.module, self.dependencies);
+        if self.notice_scope.is_some_and(|previous| previous != scope) {
+            self.clear_notice();
+        }
+        self.notice_scope = Some(scope);
         let Some(active) = campaigns.active_campaign() else {
             ui.label("Select a campaign first.");
             return;
@@ -469,7 +480,10 @@ impl CampaignContent {
             .snapshot
             .as_ref()
             .map(|s| active.path.join(&s.document.path));
-        if self.layouts.show(
+        if self.layouts.has_action() && !self.layouts.current(notice_path.as_deref()) {
+            self.message = None;
+        }
+        if self.layouts.show_conversion(
             ui,
             self.run_open
                 .then_some("Close the run before converting files."),
@@ -509,7 +523,9 @@ impl CampaignContent {
                 Err(error) => self.error = Some(error),
             }
         }
-        if let Some(message) = &self.message {
+        if let Some(message) = &self.message
+            && !self.layouts.current(notice_path.as_deref())
+        {
             design::message(ui, Tone::Success, message);
         }
         if let Some((module, previous)) = self.recovered.clone() {
@@ -823,6 +839,7 @@ impl CampaignContent {
                     .show(ui)
                     .clicked()
                 {
+                    self.layouts.clear();
                     self.discarded_selections = Some(std::mem::replace(
                         &mut document.selections,
                         self.saved_selections.clone(),
@@ -885,6 +902,7 @@ impl CampaignContent {
                 })
                 .inner;
             if pressed || save_key {
+                self.layouts.clear();
                 for selection in &mut document.selections {
                     if let Some(module) = catalogue
                         .resolve_ref(&selection.package)
@@ -921,6 +939,11 @@ impl CampaignContent {
                     design::blocked_reason(ui, Some(&reason));
                 });
             });
+        }
+        let notice_path = active.path.join(&document.path);
+        if self.layouts.show_saved(ui, Some(&notice_path)) {
+            self.message = None;
+            self.refresh_pending = true;
         }
         for module in campaigns.modules() {
             if let Some(problem) = catalogue.manifest_problems.get(&module.id) {
@@ -1727,6 +1750,28 @@ impl CampaignContent {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn i19_h1_campaign_selection_save_has_one_named_undo_and_restores_old_bytes() {
+        let dir = tempfile::tempdir().unwrap();
+        let campaign = campaign(dir.path());
+        let path = dir.path().join("Campaign.md");
+        let old = format!(
+            "---\nsplat_schema: 1\nsplat_id: {}\nsplat_kind: campaign\nsplat_name: Test campaign\nsplat_namespace: test_campaign\nsplat_campaign: {{}}\nsplat_packages: []\n---\n",
+            campaign.id
+        );
+        fs::write(&path, &old).unwrap();
+        let mut document = CampaignDocument::load(&campaign).unwrap();
+        document.selections.clear();
+        document.save().unwrap();
+        let mut layouts = crate::formats_ui::State::default();
+        layouts.remember_conversion(dir.path(), "Campaign.md", &old, &document.text);
+        let labels = crate::formats_ui::test_notice_labels(&mut layouts, &path);
+        assert!(labels.iter().any(|s| s == "Undo selections"), "{labels:?}");
+        assert!(!labels.iter().any(|s| s == "Undo"));
+        layouts.undo().unwrap();
+        assert_eq!(fs::read_to_string(&path).unwrap(), old);
+    }
 
     #[test]
     fn folder_recovery_requires_exactly_one_matching_identity() {

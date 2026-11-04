@@ -255,6 +255,8 @@ pub struct Sessions {
     job_warned: bool,
     alerts: Vec<Alert>,
     added: Option<Added>,
+    recording_added: Option<String>,
+    notice_context: Option<(Option<Uuid>, View)>,
     job: Option<(Job, Uuid)>,
     reading: Option<Reading>,
     confirm_delete: Option<PathBuf>,
@@ -4047,6 +4049,7 @@ impl Sessions {
                 .position(|event| event.id == just.id)
                 .map(|at| book.events[at].label(days[at]));
             if just.at.elapsed() >= UNDO_ADD_FOR
+                || !book.add_notice_current(&just.id)
                 || just.count != book.events.len()
                 || current.as_ref() != Some(&just.label)
             {
@@ -4075,8 +4078,9 @@ impl Sessions {
                     format!("{} added{to}.", just.label)
                 },
             );
+            let words = book.added_words(&id, &words);
             if design::undo_message(ui, Tone::Success, &words, "Undo add") {
-                book.remove(&id);
+                book.undo_add(&id);
                 self.added = None;
             }
         } else if !self.removed_event_in_plan {
@@ -4821,11 +4825,23 @@ impl Sessions {
                             .show(ui)
                             .clicked()
                         {
-                            book.add_marker(marker, &key, session);
+                            let id = book.add_marker(marker, &key, session);
+                            book.save();
+                            self.recording_added = Some(id);
                         }
                     });
                 }
             });
+            if added.as_ref() == self.recording_added.as_ref()
+                && let Some(id) = &added
+                && book.add_notice_current(id)
+            {
+                let words = book.added_words(id, &format!("{title} added to the timeline."));
+                if design::undo_message(ui, Tone::Success, &words, "Undo add") {
+                    book.undo_add(id);
+                    self.recording_added = None;
+                }
+            }
         }
         if let Some((at, marker, key)) = read_at {
             self.open_reading(recording, Made::Marked, Some(&at), Some((marker, key)));
@@ -5050,9 +5066,26 @@ impl Sessions {
                                         .show(ui)
                                         .clicked()
                                     {
-                                        book.add_marker(marker, key, session);
+                                        let id = book.add_marker(marker, key, session);
+                                        book.save();
+                                        self.recording_added = Some(id);
                                     }
                                 });
+                                if let Some(id) = &self.recording_added
+                                    && book
+                                        .event_of_marker(key)
+                                        .is_some_and(|event| event.id == *id)
+                                {
+                                    let id = id.clone();
+                                    let words = book.added_words(
+                                        &id,
+                                        &format!("{} added to the timeline.", marker.title),
+                                    );
+                                    if design::undo_message(ui, Tone::Success, &words, "Undo add") {
+                                        book.undo_add(&id);
+                                        self.recording_added = None;
+                                    }
+                                }
                                 markdown_view::show_reader(ui, &body[line_end..]);
                             } else {
                                 markdown_view::show_reader(ui, &body[at..]);
@@ -5422,6 +5455,10 @@ impl Sessions {
                 })
                 .inner;
             if changed {
+                if self.tab == Tab::Recordings || shown == Tab::Recordings {
+                    self.clear_notice();
+                    book.clear_notice();
+                }
                 self.tab = shown;
                 self.clear_success();
             }
@@ -6090,6 +6127,12 @@ impl Sessions {
         }
     }
 
+    pub fn clear_notice(&mut self) {
+        self.layouts.leave();
+        self.added = None;
+        self.recording_added = None;
+    }
+
     pub fn show(
         &mut self,
         ui: &mut egui::Ui,
@@ -6097,6 +6140,15 @@ impl Sessions {
         book: &mut Book,
         plan: &Plan<'_>,
     ) {
+        let context = (self.selected, self.view);
+        if self
+            .notice_context
+            .is_some_and(|previous| previous != context)
+        {
+            self.clear_notice();
+            book.clear_notice();
+        }
+        self.notice_context = Some(context);
         if self.layouts.show_any(ui)
             && let Some(campaign) = &self.campaign
         {

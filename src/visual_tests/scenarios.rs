@@ -248,7 +248,19 @@ pub mod library_author {
             saved,
             "Ctrl+S saves a dirty note, as artifacts/ui-review.md says".into(),
         );
-        d.state("saved-with-ctrl-s", Sizes::Default);
+        d.observe_both(
+            "H1 Library save",
+            "One named Undo stays beside the Library save",
+            |d| {
+                d.has("Undo save")
+                    && d.nodes()
+                        .iter()
+                        .filter(|node| node.in_view() && node.name.starts_with("Undo"))
+                        .count()
+                        == 1
+            },
+        );
+        d.state("saved-with-ctrl-s", Sizes::All);
         d.goal("save with the keyboard");
 
         // External change: the draft stays, and each way out is a control that works.
@@ -267,7 +279,12 @@ pub mod library_author {
                 && d.visible_text("YOUR DRAFT"),
             "An external change keeps the draft's words, and offers overwrite, reload and the disk version",
         );
-        d.state("save-conflict", Sizes::Default);
+        d.observe_both(
+            "H1 Library conflict",
+            "A disk conflict clears the saved-layout notice and Undo save",
+            |d| !d.visible_text("saved in the new layout.") && !d.has("Undo save"),
+        );
+        d.state("save-conflict", Sizes::All);
         d.goal("handle a failed save");
         d.expect("IN THE FILE NOW");
         d.observe(
@@ -3288,6 +3305,16 @@ pub mod column_resize {
         d.state_prepared("session-events-fill-their-column", Sizes::All, |d| {
             show_plan(d);
             d.wait_for_text("Add to notes");
+            d.observe(
+                "H1 one plan Undo",
+                d.nodes()
+                    .iter()
+                    .filter(|node| node.in_view() && node.name.starts_with("Undo"))
+                    .count()
+                    == 1
+                    && d.has("Undo add"),
+                "The plan add has one named Undo at each window size",
+            );
         });
     }
 
@@ -5930,7 +5957,20 @@ pub mod session_recording {
         d.click(NAV_SESSIONS);
         d.click_containing("Add to timeline: Rest at the mill");
         d.expect("On the timeline");
-        d.state("marker-added", Sizes::Default);
+        d.observe_both(
+            "H1 recording add",
+            "The recording row owns one Undo and names Timeline.md",
+            |d| {
+                d.visible_text("Timeline.md now uses the new layout.")
+                    && d.has("Undo add")
+                    && d.nodes()
+                        .iter()
+                        .filter(|node| node.in_view() && node.name.starts_with("Undo"))
+                        .count()
+                        == 1
+            },
+        );
+        d.state("marker-added", Sizes::All);
         d.observe(
             "T11.7",
             d.has("Add to timeline: Wolves at the bridge (0)"),
@@ -7464,6 +7504,11 @@ pub mod session_plan {
         d.click("Add Long rest");
         d.expect("Everyone at full");
         assert!(d.has("Long rest added. Everyone starts the next fight at full."));
+        d.observe_both(
+            "H1 no stale notice",
+            "A later Timeline action has no earlier layout notice",
+            |d| !d.visible_text("Saved in the new layout."),
+        );
         d.state("timeline-long-rest-restores", Sizes::All);
         d.observe_both(
             "iter-18-B-S1",

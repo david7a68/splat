@@ -60,11 +60,45 @@ impl State {
         self.show(ui, None, path.as_deref())
     }
 
+    pub fn clear(&mut self) {
+        self.undo.clear();
+        self.notice_file = None;
+        self.error = None;
+    }
+
+    pub fn leave(&mut self) {
+        self.clear();
+        self.preview = None;
+        self.skipped.clear();
+    }
+
+    /// A notice only owns the bytes from this save, on this file.
+    pub fn current(&mut self, file: Option<&Path>) -> bool {
+        if self
+            .notice_file
+            .as_deref()
+            .is_some_and(|path| Some(path) != file)
+            || self
+                .undo
+                .iter()
+                .any(|change| fs::read(&change.path).ok() != change.after)
+        {
+            self.clear();
+        }
+        !self.undo.is_empty()
+    }
+
+    pub fn has_action(&self) -> bool {
+        self.notice_file.is_some() && !self.undo.is_empty()
+    }
+
     pub fn remember(&mut self, root: &Path, path: &str, before: &str, after: &str) {
+        self.clear();
         self.undo = vec![Change::text(root.join(path), Some(before), Some(after))];
         self.notice_file = Some(root.join(path));
     }
     pub fn remember_conversion(&mut self, root: &Path, path: &str, before: &str, after: &str) {
+        self.clear();
         if Entry::parse(path, before)
             .is_ok_and(|e| splat::content::formats::schema(&e.fields) == Ok(1))
             && Entry::parse(path, after)
@@ -75,6 +109,7 @@ impl State {
     }
 
     pub fn scan(&mut self, campaigns: &Campaigns) {
+        self.clear();
         let catalogue = crate::content_workspace::Catalogue::load(
             campaigns.modules(),
             campaigns.active_campaign().as_ref(),
@@ -230,47 +265,92 @@ impl State {
             })
             .collect();
         file_batch::apply(&changes)?;
-        self.undo.clear();
+        self.clear();
         Ok(())
+    }
+
+    pub fn show_conversion(
+        &mut self,
+        ui: &mut egui::Ui,
+        blocked: Option<&str>,
+        file: Option<&Path>,
+    ) -> bool {
+        self.show_inner(ui, blocked, file, false)
     }
 
     /// Returns true after disk writes, so the owner can reload its catalogue.
     pub fn show(&mut self, ui: &mut egui::Ui, blocked: Option<&str>, file: Option<&Path>) -> bool {
+        self.show_inner(ui, blocked, file, true)
+    }
+
+    pub fn show_saved(&mut self, ui: &mut egui::Ui, file: Option<&Path>) -> bool {
+        if self.notice_file.is_none() {
+            return false;
+        }
+        self.show_notice(ui, file)
+    }
+
+    fn show_notice(&mut self, ui: &mut egui::Ui, file: Option<&Path>) -> bool {
         let mut changed = false;
-        if !self.undo.is_empty()
-            && self
-                .notice_file
-                .as_deref()
-                .is_none_or(|path| Some(path) == file)
-            && design::message_with_action(ui, Tone::Success, "Saved in the new layout.", "Undo")
-        {
-            match self.undo() {
-                Ok(()) => changed = true,
-                Err(error) => self.error = Some(error),
+        if self.current(file) {
+            let (words, undo) = self.notice_file.as_ref().map_or_else(
+                || ("Saved in the new layout.".to_owned(), "Undo convert"),
+                |path| {
+                    let name = path.file_name().unwrap_or_default().to_string_lossy();
+                    (
+                        if name == "Campaign.md" {
+                            "Campaign selections saved. Campaign.md now uses the new layout.".into()
+                        } else {
+                            format!("{name} saved in the new layout.")
+                        },
+                        if name == "Campaign.md" {
+                            "Undo selections"
+                        } else {
+                            "Undo save"
+                        },
+                    )
+                },
+            );
+            if design::undo_message(ui, Tone::Success, &words, undo) {
+                match self.undo() {
+                    Ok(()) => changed = true,
+                    Err(error) => self.error = Some(error),
+                }
             }
         }
+        changed
+    }
+
+    fn show_inner(
+        &mut self,
+        ui: &mut egui::Ui,
+        blocked: Option<&str>,
+        file: Option<&Path>,
+        action: bool,
+    ) -> bool {
+        let changed_notice = self.current(file) && (action || self.notice_file.is_none());
+        let mut changed = changed_notice && self.show_notice(ui, file);
         if let Some(error) = &self.error {
             design::message(ui, Tone::Error, error);
         }
         if self.preview.is_some() {
             let mut apply = false;
             let mut close = false;
-            design::dialog(ui.ctx(), "convert_files", "Convert files", |ui| {
+            design::wide_dialog(ui.ctx(), "convert_files", "Convert files", |ui| {
+                ui.set_min_width(ui.available_width());
                 let files = self.preview.as_ref().unwrap();
-                egui::ScrollArea::vertical()
-                    .id_salt("conversion_owners")
-                    .max_height(design::XXL * 4.0)
-                    .auto_shrink([false, true])
-                    .show(ui, |ui| {
-                        for owner in &mut self.owners {
-                            ui.add_enabled_ui(owner.reason.is_none(), |ui| {
-                                ui.checkbox(&mut owner.checked, &owner.name);
-                                if let Some(reason) = owner.reason {
-                                    ui.label(Type::Small.rich(ui, reason));
-                                }
-                            });
-                        }
-                    });
+                ui.horizontal_wrapped(|ui| {
+                    for owner in &mut self.owners {
+                        ui.add_enabled_ui(owner.reason.is_none(), |ui| {
+                            ui.checkbox(&mut owner.checked, &owner.name);
+                        });
+                    }
+                });
+                for owner in &self.owners {
+                    if let Some(reason) = owner.reason {
+                        ui.label(Type::Small.rich(ui, format!("{}: {reason}", owner.name)));
+                    }
+                }
                 let selected_files: Vec<_> = files
                     .iter()
                     .filter(|file| {
@@ -278,8 +358,8 @@ impl State {
                     })
                     .collect();
                 ui.label(format!(
-                    "{} files can use the new layout.",
-                    selected_files.len()
+                    "{} use the new layout.",
+                    design::count(selected_files.len(), "file can", "files can")
                 ));
                 let mut kinds = std::collections::BTreeMap::<String, usize>::new();
                 for file in &selected_files {
@@ -303,9 +383,13 @@ impl State {
                                 let label = if kind == "world" {
                                     "World note".into()
                                 } else {
-                                    format!("{} file", kind.replace('_', " "))
+                                    kind.replace('_', " ")
                                 };
-                                design::count(*n, &label, &format!("{label}s"))
+                                if kind == "timeline" {
+                                    "the Timeline".into()
+                                } else {
+                                    design::count(*n, &label, &format!("{label}s"))
+                                }
                             })
                             .collect::<Vec<_>>()
                             .join(" · "),
@@ -313,6 +397,7 @@ impl State {
                 );
                 if let Some(file) = files.get(self.selected) {
                     let picker = egui::ComboBox::from_id_salt("convert_file")
+                        .icon(design::combo_icon)
                         .selected_text(&file.path)
                         .show_ui(ui, |ui| {
                             for (owner, group) in self.owners.iter().enumerate() {
@@ -331,15 +416,15 @@ impl State {
                         });
                     design::named(ui, &picker.response, "File to convert");
                     let file = &files[self.selected];
-                    let height = (ui.ctx().content_rect().height() * 0.4).min(design::XXL * 8.0);
+                    let height = (ui.ctx().content_rect().height() * 0.6).min(
+                        (ui.available_height() - design::Density::Read.control() - design::L)
+                            .max(design::XXL),
+                    );
                     ui.allocate_ui(egui::vec2(ui.available_width(), height), |ui| {
-                        design::draft_comparison_labeled(
+                        design::source_comparison(
                             ui,
                             [&file.before, &file.after],
-                            ["Before", "After"],
                             ("convert_file", &file.root, &file.path, &file.before),
-                            Type::Mono.font(ui),
-                            Type::Mono.line(),
                         );
                     });
                 }
@@ -381,8 +466,128 @@ impl State {
 }
 
 #[cfg(test)]
+pub(crate) fn test_notice_labels(state: &mut State, file: &Path) -> Vec<String> {
+    let ctx = egui::Context::default();
+    crate::design::theme::install(&ctx);
+    ctx.enable_accesskit();
+    let mut output = None;
+    for _ in 0..3 {
+        output = Some(ctx.run(Default::default(), |ctx| {
+            egui::CentralPanel::default().show(ctx, |ui| {
+                state.show(ui, None, Some(file));
+            });
+        }));
+    }
+    output
+        .unwrap()
+        .platform_output
+        .accesskit_update
+        .unwrap()
+        .nodes
+        .into_iter()
+        .filter_map(|(_, node)| node.label().map(str::to_owned))
+        .collect()
+}
+
+#[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn i19_u4_conversion_preview_counts_one_file_and_many_files() {
+        for count in [1, 2] {
+            let root = std::path::PathBuf::from("/campaign");
+            let mut state = State {
+                owners: vec![OwnerPreview::new(root.clone(), "Campaign".into(), true)],
+                preview: Some(
+                    (0..count)
+                        .map(|at| Preview {
+                            owner: 0,
+                            root: root.clone(),
+                            path: format!("Rule {at}.md"),
+                            before: "old".into(),
+                            after: "new".into(),
+                        })
+                        .collect(),
+                ),
+                ..Default::default()
+            };
+            let ctx = egui::Context::default();
+            crate::design::theme::install(&ctx);
+            let mut output = None;
+            for _ in 0..3 {
+                output = Some(ctx.run(
+                    egui::RawInput {
+                        screen_rect: Some(egui::Rect::from_min_size(
+                            egui::Pos2::ZERO,
+                            egui::vec2(960.0, 640.0),
+                        )),
+                        ..Default::default()
+                    },
+                    |ctx| {
+                        egui::CentralPanel::default().show(ctx, |ui| {
+                            state.show_conversion(ui, None, None);
+                        });
+                    },
+                ));
+            }
+            fn texts(shape: &egui::Shape, words: &mut Vec<String>) {
+                match shape {
+                    egui::Shape::Text(shape) => words.push(shape.galley.text().to_owned()),
+                    egui::Shape::Vec(shapes) => {
+                        for shape in shapes {
+                            texts(shape, words);
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            let mut labels = Vec::new();
+            for shape in output.unwrap().shapes {
+                texts(&shape.shape, &mut labels);
+            }
+            let expected = if count == 1 {
+                "1 file can use the new layout."
+            } else {
+                "2 files can use the new layout."
+            };
+            assert!(labels.iter().any(|label| label == expected), "{labels:?}");
+        }
+    }
+
+    #[test]
+    fn i19_h1_named_save_notice_clears_after_outside_edit_and_second_save() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("Rook.md");
+        let mut state = State::default();
+        fs::write(&path, "saved").unwrap();
+        state.remember(dir.path(), "Rook.md", "old", "saved");
+        let labels = test_notice_labels(&mut state, &path);
+        assert_eq!(
+            labels
+                .iter()
+                .filter(|s| s.starts_with("Undo"))
+                .collect::<Vec<_>>(),
+            [&"Undo save"]
+        );
+        fs::write(&path, "Outside edit").unwrap();
+        assert!(
+            !test_notice_labels(&mut state, &path)
+                .iter()
+                .any(|s| s.contains("new layout") || s.starts_with("Undo"))
+        );
+        state.undo().unwrap();
+        assert_eq!(fs::read_to_string(&path).unwrap(), "Outside edit");
+        fs::write(&path, "saved").unwrap();
+        state.remember(dir.path(), "Rook.md", "old", "saved");
+        state.remember_conversion(dir.path(), "Rook.md", "saved", "second save");
+        fs::write(&path, "second save").unwrap();
+        assert!(
+            !test_notice_labels(&mut state, &path)
+                .iter()
+                .any(|s| s.starts_with("Undo"))
+        );
+    }
 
     fn snapshot(root: &Path) -> Vec<(PathBuf, Vec<u8>)> {
         let mut files = Vec::new();

@@ -92,4 +92,11 @@ pub fn run(d: &mut Driver<'_>) {
     d.state("group-flagged-changes-cell", Sizes::All);
     let text = fs::read_to_string(campaign.path.join("Encounter Groups/Bridge guards.md")).unwrap();
     assert!(text.contains("HP lots | Keep this row"));
+
+    let text = fs::read_to_string(&path).unwrap();
+    fs::write(&path, text.replace("## Day 1:", "## Day 5:")).unwrap();
+    d.app_mut().timeline.reload();
+    d.click(NAV_TIMELINE);
+    d.expect("Day number comes from the order of days");
+    d.state("timeline-item-edited-and-flagged-in-obsidian", Sizes::All);
 }

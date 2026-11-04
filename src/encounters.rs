@@ -1737,6 +1737,7 @@ impl Encounters {
     }
     /// Assemble a group where the plan is, with the session's note still beside it.
     pub fn new_group_in_plan(&mut self) {
+        self.clear_notice();
         self.group_draft = Some(GroupDraft::new());
         self.discarded_group = None;
         self.group_in_plan = true;
@@ -1749,6 +1750,7 @@ impl Encounters {
     }
     /// Returns false when the group cannot be read. Encounters says why.
     pub fn open_group_in_plan(&mut self, path: &str, active: &Campaign) -> bool {
+        self.clear_notice();
         match GroupDraft::open(&active.path, path) {
             Ok(draft) => {
                 if self
@@ -1827,6 +1829,7 @@ impl Encounters {
         self.plan_on_save = true;
     }
     fn start_new_draft(&mut self) {
+        self.clear_notice();
         self.search.clear();
         let mut draft = Draft::new();
         // Nearly every fight has the party in it, so nearly every draft starts that way.
@@ -1845,6 +1848,7 @@ impl Encounters {
     }
     /// Start a fight from a saved encounter, with no editor left open.
     pub fn edit_path(&mut self, path: &str, active: &Campaign) {
+        self.clear_notice();
         match Draft::open(&active.path, path) {
             Ok(draft) => {
                 self.search.clear();
@@ -2024,6 +2028,7 @@ impl Encounters {
         }
     }
     fn save_draft(&mut self, ctx: &egui::Context, active: &Campaign, modules: &[Module]) {
+        self.layouts.clear();
         let Some(draft) = self.draft.as_mut() else {
             return;
         };
@@ -2094,6 +2099,7 @@ impl Encounters {
             self.error = Some(BLOCKED_BY_CREATURE.to_owned());
             return;
         }
+        self.clear_notice();
         let result = (|| -> Result<CreatureEditor, String> {
             let snapshot = self
                 .snapshot
@@ -2179,6 +2185,7 @@ impl Encounters {
         }
     }
     fn save_creature(&mut self, active: &Campaign, modules: &[Module]) {
+        self.creature_layout = None;
         let Some(editor) = &mut self.creature else {
             return;
         };
@@ -2332,6 +2339,7 @@ impl Encounters {
         match step {
             Some(CreatureStep::Save) => self.save_creature(active, modules),
             Some(CreatureStep::Close) => {
+                self.clear_notice();
                 self.creature = None;
                 self.clear_creature_block();
                 self.focus_search = true;
@@ -2534,9 +2542,6 @@ impl Encounters {
         let Some(active) = campaigns.active_campaign() else {
             return;
         };
-        if self.layout_notice(ui, &active, campaigns.modules()) {
-            return;
-        }
         if self
             .active
             .as_ref()
@@ -2551,21 +2556,6 @@ impl Encounters {
         }
         if self.draft_dirty() {
             self.message = None;
-        }
-        if self
-            .creature_layout
-            .as_mut()
-            .is_some_and(|(path, layouts)| {
-                path.starts_with(&active.path) && layouts.show(ui, None, Some(path))
-            })
-        {
-            self.reload_snapshot(&active, campaigns.modules());
-            self.saved = true;
-        }
-        if let Some(warning) = &self.creature_layout_warning
-            && design::message_with_action(ui, Tone::Warning, warning, "Dismiss")
-        {
-            self.creature_layout_warning = None;
         }
         if self.group_draft.is_some() {
             // Taken up on this page, it is this page's. Its save stays here, and links nothing.
@@ -2659,8 +2649,23 @@ impl Encounters {
         }
     }
 
+    pub fn clear_notice(&mut self) {
+        self.layouts.leave();
+        self.creature_layout = None;
+        self.creature_layout_warning = None;
+    }
+
     fn layout_notice(&mut self, ui: &mut egui::Ui, active: &Campaign, modules: &[Module]) -> bool {
-        if !self.layouts.show_any(ui) {
+        let path = self
+            .draft
+            .as_ref()
+            .map(|draft| active.path.join(&draft.path))
+            .or_else(|| {
+                self.group_draft
+                    .as_ref()
+                    .map(|draft| active.path.join(draft.path()))
+            });
+        if !self.layouts.show(ui, None, path.as_deref()) {
             return false;
         }
         if let Some(draft) = &self.draft {
@@ -2935,6 +2940,7 @@ impl Encounters {
         let Some(action) = action else {
             return;
         };
+        self.clear_notice();
         match action {
             ListAction::BackToRun => self.go_to_run = true,
             ListAction::OpenGroup(path) => match GroupDraft::open(&active.path, &path) {
@@ -3068,6 +3074,14 @@ impl Encounters {
         // The title and its actions need more room than the panes do.
         let has_run = self.has_run();
         let loading = self.pending.is_some();
+        let notice_path = self
+            .draft
+            .as_ref()
+            .map(|draft| active.path.join(&draft.path));
+        if self.layouts.has_action() && !self.layouts.current(notice_path.as_deref()) {
+            self.message = None;
+        }
+        let layout_notice = !dirty && self.layouts.current(notice_path.as_deref());
         let saved_note = self.message.clone();
         let unfinished = self
             .draft
@@ -3203,12 +3217,14 @@ impl Encounters {
             } else {
                 (icons::OK, "No changes", colors().muted)
             };
-            discard = editor_save_state(
-                ui,
-                Status { icon, word, color },
-                dirty,
-                creature_dirty.then_some(BLOCKED_BY_CREATURE),
-            );
+            if !layout_notice {
+                discard = editor_save_state(
+                    ui,
+                    Status { icon, word, color },
+                    dirty,
+                    creature_dirty.then_some(BLOCKED_BY_CREATURE),
+                );
+            }
             if dirty {
                 blocked_reason(ui, Some(draft_switch_reason()));
             }
@@ -3239,6 +3255,10 @@ impl Encounters {
                     ),
             );
         });
+        if layout_notice && self.layout_notice(ui, active, campaigns.modules()) {
+            self.message = None;
+            return;
+        }
         if unfinished.is_some() {
             blocked_reason(
                 ui,
@@ -3247,6 +3267,7 @@ impl Encounters {
         }
         design::rule(ui);
         if back {
+            self.clear_notice();
             self.draft = None;
             self.message = None;
             self.error = None;
@@ -3256,6 +3277,7 @@ impl Encounters {
             return;
         }
         if discard {
+            self.clear_notice();
             self.creature = None;
             self.plan_on_save = false;
             let draft = self.draft.take().expect("the editor has a draft");
@@ -3314,6 +3336,9 @@ impl Encounters {
         };
         let mut make_yours = None;
         let mut creature_step = None;
+        let mut creature_undone = false;
+        let creature_layout = &mut self.creature_layout;
+        let creature_warning = &mut self.creature_layout_warning;
         let open_creature = self.creature.is_some();
         let draft = self.draft.as_mut().expect("the editor has a draft");
         let mut pane = self.editor_pane;
@@ -3361,6 +3386,7 @@ impl Encounters {
                     true,
                 ),
                 EditorPane::Add => {
+                    creature_undone = Self::creature_notice(ui, creature_layout, creature_warning);
                     match &mut self.creature {
                         Some(editor) => creature_step = Self::creature_pane(ui, editor),
                         None => {
@@ -3372,6 +3398,10 @@ impl Encounters {
             };
             if go_to_search {
                 self.editor_pane = EditorPane::Add;
+            }
+            if creature_undone {
+                self.reload_snapshot(active, campaigns.modules());
+                self.saved = true;
             }
             self.after_panes(creature_step, make_yours, active, campaigns.modules());
             return;
@@ -3394,9 +3424,12 @@ impl Encounters {
             top: design::S as i8,
             bottom: 0,
         }))
-        .show_inside(ui, |ui| match creature {
-            Some(editor) => creature_step = Self::creature_pane(ui, editor),
-            None => Self::add_pane(ui, draft, snapshot, search, focus_search, peek, compact),
+        .show_inside(ui, |ui| {
+            creature_undone = Self::creature_notice(ui, creature_layout, creature_warning);
+            match creature {
+                Some(editor) => creature_step = Self::creature_pane(ui, editor),
+                None => Self::add_pane(ui, draft, snapshot, search, focus_search, peek, compact),
+            }
         });
         egui::CentralPanel::default()
             // The panel's drag handle lies on this edge, so the roster stops short of it.
@@ -3422,7 +3455,28 @@ impl Encounters {
                     false,
                 );
             });
+        if creature_undone {
+            self.reload_snapshot(active, campaigns.modules());
+            self.saved = true;
+        }
         self.after_panes(creature_step, make_yours, active, campaigns.modules());
+    }
+
+    fn creature_notice(
+        ui: &mut egui::Ui,
+        layout: &mut Option<(std::path::PathBuf, crate::formats_ui::State)>,
+        warning: &mut Option<String>,
+    ) -> bool {
+        let undone = layout
+            .as_mut()
+            .is_some_and(|(path, state)| state.show_saved(ui, Some(path)));
+        if warning
+            .as_ref()
+            .is_some_and(|words| design::message_with_action(ui, Tone::Warning, words, "Dismiss"))
+        {
+            *warning = None;
+        }
+        undone
     }
 
     fn add_pane(
@@ -4824,7 +4878,7 @@ mod tests {
     }
 
     #[test]
-    fn fmt_f2_creature_save_converts_once_and_shared_undo_restores_old_bytes() {
+    fn i19_h1_creature_save_converts_once_and_shared_undo_restores_old_bytes() {
         let dir = tempfile::tempdir().unwrap();
         let campaign = campaign(dir.path());
         let text = format!(
@@ -4844,6 +4898,9 @@ mod tests {
         assert!(saved.contains("| Hit Points | 23 (4d8 + 4) |"));
         let (path, layouts) = encounters.creature_layout.as_mut().unwrap();
         assert_eq!(*path, dir.path().join("Wolf.md"));
+        let labels = crate::formats_ui::test_notice_labels(layouts, path);
+        assert!(labels.iter().any(|s| s == "Undo save"), "{labels:?}");
+        assert!(!labels.iter().any(|s| s == "Undo"));
         layouts.undo().unwrap();
         assert_eq!(fs::read_to_string(path).unwrap(), text);
     }

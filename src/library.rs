@@ -1241,6 +1241,7 @@ struct IdentityUndo {
 #[derive(Default)]
 pub struct Library {
     layouts: crate::formats_ui::State,
+    layout_scope: Option<Scope>,
     /// The list should scroll to the selected entry, which arrived by a link.
     reveal_row: bool,
     list_hidden: bool,
@@ -1637,6 +1638,7 @@ impl Library {
             self.scope = Scope::All;
             self.scope_notice = Some(format!("Scope is now Everything, to show {}.", note.name()));
         }
+        self.layouts.clear();
         self.selected = Some(index);
         self.draft = note.text.clone();
         self.disk_change = None;
@@ -1670,6 +1672,10 @@ impl Library {
             .and_then(|l| self.selected.and_then(|i| l.notes.get(i)))
             .is_some_and(|n| n.text != self.draft)
     }
+    pub fn clear_notice(&mut self) {
+        self.layouts.leave();
+    }
+
     pub fn form_open(&self) -> bool {
         self.form || self.new_form || self.confirm_unregister.is_some()
     }
@@ -1983,45 +1989,76 @@ impl Library {
                         }
                     });
                 });
-                if let Some(loaded) = &self.loaded
-                    && !loaded.diagnostics.is_empty()
-                {
-                    let word = design::count(
-                        loaded
-                            .diagnostics
-                            .iter()
-                            .map(|message| message.split(": ").next().unwrap_or(message))
-                            .collect::<std::collections::HashSet<_>>()
-                            .len(),
-                        "file needs fixing",
-                        "files need fixing",
-                    );
-                    let response = design::status_link(
-                        ui,
-                        Status {
-                            icon: icons::WARN,
-                            word: &word,
-                            color: colors().result.warning,
-                        },
-                    );
-                    egui::Popup::menu(&response).show(|ui| {
-                        ui.set_max_width(design::READER_MEASURE);
-                        egui::ScrollArea::vertical()
-                            .max_height(design::XXL * 6.0)
-                            .show(ui, |ui| {
-                                for message in &loaded.diagnostics {
-                                    ui.add(
-                                        egui::Label::new(
-                                            Type::Small.rich(ui, message).color(colors().muted),
-                                        )
-                                        .wrap(),
-                                    );
-                                }
-                            });
-                    });
-                }
             },
         );
+        ui.horizontal_wrapped(|ui| {
+            if let Some(loaded) = &self.loaded {
+                let old = loaded
+                    .notes
+                    .iter()
+                    .filter(|note| {
+                        note.entry.as_ref().is_some_and(|entry| {
+                            content::formats::eligible(entry)
+                                && content::formats::schema(&entry.fields) == Ok(1)
+                        })
+                    })
+                    .count();
+                if old > 0
+                    && design::status_link(
+                        ui,
+                        Status {
+                            icon: icons::INFO,
+                            word: &design::count(
+                                old,
+                                "file uses the old layout",
+                                "files use the old layout",
+                            ),
+                            color: colors().muted,
+                        },
+                    )
+                    .clicked()
+                {
+                    self.layouts.scan(campaigns);
+                }
+            }
+            if let Some(loaded) = &self.loaded
+                && !loaded.diagnostics.is_empty()
+            {
+                let word = design::count(
+                    loaded
+                        .diagnostics
+                        .iter()
+                        .map(|message| message.split(": ").next().unwrap_or(message))
+                        .collect::<std::collections::HashSet<_>>()
+                        .len(),
+                    "file needs fixing",
+                    "files need fixing",
+                );
+                let response = design::status_link(
+                    ui,
+                    Status {
+                        icon: icons::WARN,
+                        word: &word,
+                        color: colors().result.warning,
+                    },
+                );
+                egui::Popup::menu(&response).show(|ui| {
+                    ui.set_max_width(design::READER_MEASURE);
+                    egui::ScrollArea::vertical()
+                        .max_height(design::XXL * 6.0)
+                        .show(ui, |ui| {
+                            for message in &loaded.diagnostics {
+                                ui.add(
+                                    egui::Label::new(
+                                        Type::Small.rich(ui, message).color(colors().muted),
+                                    )
+                                    .wrap(),
+                                );
+                            }
+                        });
+                });
+            }
+        });
         if new_entry {
             self.new_form = true;
             self.new_folder = kind_folder(&self.new_kind).into();
@@ -2036,9 +2073,13 @@ impl Library {
             let note = loaded.notes.get(self.selected?)?;
             Some(note.owner.root()?.join(&note.path))
         });
+        if self.form || self.new_form || self.layout_scope.is_some_and(|scope| scope != self.scope)
+        {
+            self.layouts.clear();
+        }
         if self
             .layouts
-            .show(ui, convert_blocked.as_deref(), file.as_deref())
+            .show_conversion(ui, convert_blocked.as_deref(), file.as_deref())
         {
             self.stale = true;
             self.content_changed = campaigns.active_campaign().map(|c| c.path.clone());
@@ -3566,6 +3607,8 @@ impl Library {
     }
 
     fn save_selected(&mut self, file_gone: bool) {
+        self.layouts.clear();
+        self.layout_scope = Some(self.scope);
         let Some(i) = self.selected else {
             return;
         };
@@ -3999,7 +4042,10 @@ impl Library {
                 },
             }
         };
-        let save_row = editable && (self.source || dirty);
+        let notice_path = note.owner.root().map(|root| root.join(&note.path));
+        let conversion_notice = !dirty && !conflict && self.layouts.current(notice_path.as_deref());
+        let mut undo_save = false;
+        let save_row = editable && (self.source || dirty || conversion_notice);
         let mut go_back =
             ui.input_mut(|input| input.consume_key(egui::Modifiers::ALT, egui::Key::ArrowLeft));
         let can_copy = note
@@ -4365,7 +4411,10 @@ impl Library {
                     .show(ui)
                     .clicked();
                     ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
-                        if design::save_row_state(ui, state, dirty && !conflict, None) {
+                        if !conversion_notice
+                            && design::save_row_state(ui, state, dirty && !conflict, None)
+                        {
+                            self.layouts.clear();
                             self.discarded =
                                 Some((note.owner.id(), note.path.clone(), self.draft.clone()));
                             self.draft = note.text.clone();
@@ -4388,14 +4437,19 @@ impl Library {
                 .max(Density::Read.control() + design::XS);
             let (slot, _) =
                 ui.allocate_exact_size(egui::vec2(editor_width, height), egui::Sense::hover());
-            if draft_reason.is_some() || discard_is_for(self.discarded.as_ref(), note) {
+            if conversion_notice
+                || draft_reason.is_some()
+                || discard_is_for(self.discarded.as_ref(), note)
+            {
                 let mut slot_ui = ui.new_child(
                     egui::UiBuilder::new()
                         .max_rect(slot)
                         .layout(egui::Layout::left_to_right(egui::Align::Center)),
                 );
                 let ui = &mut slot_ui;
-                if discard_is_for(self.discarded.as_ref(), note) && self.draft == note.text {
+                if conversion_notice {
+                    undo_save = self.layouts.show_saved(ui, notice_path.as_deref());
+                } else if discard_is_for(self.discarded.as_ref(), note) && self.draft == note.text {
                     ui.label(Type::Small.rich(ui, format!("{} draft discarded.", note.name())));
                     if Action::quiet("Undo discard")
                         .name(&format!("Undo discard of {}", note.name()))
@@ -4850,6 +4904,19 @@ impl Library {
                 Err(error) => self.error = Some(error),
             }
         }
+        if undo_save {
+            let note = &mut self.loaded.as_mut().unwrap().notes[i];
+            if let Some(root) = note.owner.root() {
+                self.content_changed = Some(root.to_path_buf());
+                if let Ok(text) = fs::read_to_string(root.join(&note.path)) {
+                    note.entry = Entry::parse(&note.path, &text).ok();
+                    self.draft.clone_from(&text);
+                    note.text = text;
+                    self.just_saved = false;
+                    self.loaded.as_mut().unwrap().invalidate();
+                }
+            }
+        }
         if save {
             self.save_selected(file_gone);
         }
@@ -4980,6 +5047,53 @@ mod tests {
         loaded.invalidate();
         check(&loaded);
         assert!(loaded.duplicate_ids().is_empty());
+    }
+
+    #[test]
+    fn i19_h1_library_save_undo_restores_bytes_and_expires_on_second_save() {
+        let dir = tempfile::tempdir().unwrap();
+        let module = create_module(&dir.path().join("book"), "Book", "book").unwrap();
+        let text = format!(
+            "---\nsplat_schema: 1\nsplat_id: {}\nsplat_kind: rule\nsplat_name: Ruling\nsplat_rule: {{}}\n---\n\nOld ruling.\n",
+            Uuid::new_v4()
+        );
+        let path = module.path.join("Ruling.md");
+        fs::write(&path, &text).unwrap();
+        let loaded = load(Some(&module)).unwrap();
+        let selected = loaded
+            .notes
+            .iter()
+            .position(|n| n.path == "Ruling.md")
+            .unwrap();
+        let mut library = Library {
+            loaded: Some(loaded),
+            selected: Some(selected),
+            draft: format!("{text}New ruling.\n"),
+            ..Default::default()
+        };
+        library.save_selected(false);
+        assert!(library.error.is_none(), "{:?}", library.error);
+        let labels = crate::formats_ui::test_notice_labels(&mut library.layouts, &path);
+        assert!(labels.iter().any(|s| s == "Undo save"), "{labels:?}");
+        library.layouts.undo().unwrap();
+        assert_eq!(fs::read_to_string(&path).unwrap(), text);
+        // Start again and save twice. Undo for the first save must be gone.
+        library.loaded.as_mut().unwrap().notes[selected].text = text.clone();
+        library.draft = format!("{text}New ruling.\n");
+        library.save_selected(false);
+        library.draft.push_str("Second ruling.\n");
+        library.save_selected(false);
+        assert!(
+            !crate::formats_ui::test_notice_labels(&mut library.layouts, &path)
+                .iter()
+                .any(|s| s.starts_with("Undo"))
+        );
+        library.layouts.undo().unwrap();
+        assert!(
+            fs::read_to_string(&path)
+                .unwrap()
+                .contains("Second ruling.")
+        );
     }
 
     #[test]

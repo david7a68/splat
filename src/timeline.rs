@@ -589,6 +589,7 @@ pub struct Book {
     run_write: bool,
     pub run_open: bool,
     layouts: crate::formats_ui::State,
+    converted_add: Option<String>,
     baseline: Option<Vec<u8>>,
     /// The generated body last written, even while frontmatter is edited elsewhere.
     written_body: Option<String>,
@@ -655,6 +656,8 @@ impl Book {
 
     /// Read the file, and drop any edit not yet saved.
     pub fn reload(&mut self) {
+        self.layouts.clear();
+        self.written_body = None;
         self.rest_undo = None;
         self.dirty = false;
         self.reordered.clear();
@@ -778,20 +781,6 @@ impl Book {
         }
     }
 
-    /// Keep an edited legacy body in view even when saving also converts the schema.
-    fn conflict_body_line(&self, disk: &str) -> Option<usize> {
-        if !self.body_changed {
-            return None;
-        }
-        let generated = render(&self.events, &self.session_links).ok()?;
-        let expected: Vec<_> = crate::sessions::body_of(&generated).lines().collect();
-        let body: Vec<_> = crate::sessions::body_of(disk).lines().collect();
-        let offset = disk.lines().count().saturating_sub(body.len());
-        (0..expected.len().max(body.len()))
-            .find(|&line| expected.get(line) != body.get(line))
-            .map(|line| (offset + line).min(disk.lines().count().saturating_sub(1)))
-    }
-
     pub fn conflict_comparison(&self) -> Result<(String, String), String> {
         let path = self.path.as_ref().ok_or("No campaign is open.")?;
         let disk = fs::read_to_string(path).map_err(|e| format!("{}: {e}", path.display()))?;
@@ -802,16 +791,13 @@ impl Book {
                 event.extra.extend(disk.extra.clone());
             }
         }
+        // Compare like layouts. Overwrite performs conversion after the choice.
         let draft = self.text_for(&events, Some(&disk))?;
-        let draft = if self.run_open {
-            draft
-        } else {
-            formats::convert(&draft, &self.session_links)?
-        };
         Ok((draft, disk))
     }
 
     fn write(&mut self) -> Result<(), String> {
+        self.layouts.clear();
         let path = self.path.as_ref().ok_or("No campaign is open.")?;
         let source = self
             .baseline
@@ -852,6 +838,12 @@ impl Book {
         .map_err(|e| e.to_string())?;
         crate::sessions::sync_folder(parent)?;
         if let Some(before) = conversion {
+            self.converted_add = self
+                .events
+                .iter()
+                .rev()
+                .find(|event| !self.saved_events.iter().any(|old| old.id == event.id))
+                .map(|event| event.id.clone());
             self.layouts.remember(parent, FILE, &before, &text);
         }
         self.baseline = Some(text.into_bytes());
@@ -871,6 +863,7 @@ impl Book {
             return;
         }
         if self.body_changed {
+            self.layouts.clear();
             self.conflict = true;
             return;
         }
@@ -879,6 +872,7 @@ impl Book {
         };
         let current = fs::read(path).ok();
         if current != self.baseline {
+            self.layouts.clear();
             self.conflict = true;
             return;
         }
@@ -1029,6 +1023,35 @@ impl Book {
         );
         self.touch();
         id
+    }
+
+    pub fn clear_notice(&mut self) {
+        self.layouts.clear();
+    }
+
+    pub fn add_notice_current(&mut self, id: &str) -> bool {
+        self.converted_add.as_deref() != Some(id)
+            || (!self.dirty && !self.conflict && self.layouts.current(self.path.as_deref()))
+    }
+
+    pub fn added_words(&mut self, id: &str, words: &str) -> String {
+        if self.converted_add.as_deref() == Some(id) && self.layouts.current(self.path.as_deref()) {
+            format!("{words} Timeline.md now uses the new layout.")
+        } else {
+            words.to_owned()
+        }
+    }
+
+    /// The converting save is the whole add, including the old layout.
+    pub fn undo_add(&mut self, id: &str) {
+        if self.converted_add.as_deref() == Some(id) && self.layouts.current(self.path.as_deref()) {
+            match self.layouts.undo() {
+                Ok(()) => self.reload(),
+                Err(error) => self.error = Some(error),
+            }
+        } else {
+            self.remove(id);
+        }
     }
 
     /// A rest added by the DM on either page includes the full-HP ruling.
@@ -1276,6 +1299,107 @@ mod tests {
     use super::*;
 
     #[test]
+    fn i19_s2_legacy_conflict_shows_the_changed_paragraph_at_both_sizes() {
+        use eframe::egui;
+        for (width, height) in [(960.0, 640.0), (1200.0, 800.0)] {
+            let dir = tempfile::tempdir().unwrap();
+            let mut book = book(dir.path());
+            book.run_open = true;
+            book.add(Kind::Travel, None);
+            book.events[0].notes = (1..=48)
+                .map(|day| format!("Day {day}: The party followed the river."))
+                .collect::<Vec<_>>()
+                .join("\n");
+            book.save();
+            book.run_open = false;
+            let path = dir.path().join(FILE);
+            fs::write(
+                &path,
+                format!("{}DM's paragraph.\n", fs::read_to_string(&path).unwrap()),
+            )
+            .unwrap();
+            book.reload();
+            book.touch();
+            book.save();
+            let ctx = egui::Context::default();
+            crate::design::theme::install(&ctx);
+            let output = ctx.run(
+                egui::RawInput {
+                    screen_rect: Some(egui::Rect::from_min_size(
+                        egui::Pos2::ZERO,
+                        egui::vec2(width, height),
+                    )),
+                    ..Default::default()
+                },
+                |ctx| {
+                    egui::CentralPanel::default().show(ctx, |ui| {
+                        page::problems(ui, &mut book);
+                    });
+                },
+            );
+            fn visible(shape: &egui::Shape, clip: egui::Rect) -> bool {
+                match shape {
+                    egui::Shape::Text(shape) => {
+                        shape.galley.text() == "DM's paragraph."
+                            && clip.contains_rect(shape.visual_bounding_rect())
+                    }
+                    egui::Shape::Vec(shapes) => shapes.iter().any(|shape| visible(shape, clip)),
+                    _ => false,
+                }
+            }
+            assert!(
+                output
+                    .shapes
+                    .iter()
+                    .any(|shape| visible(&shape.shape, shape.clip_rect)),
+                "changed paragraph is hidden at {width}×{height}"
+            );
+        }
+    }
+
+    #[test]
+    fn i19_h1_plan_and_recording_add_undo_restore_exact_legacy_bytes() {
+        for recording in [false, true] {
+            let dir = tempfile::tempdir().unwrap();
+            let path = dir.path().join(FILE);
+            let old = render(&[], &BTreeMap::new()).unwrap();
+            fs::write(&path, &old).unwrap();
+            let mut book = Book::default();
+            book.open(Some(dir.path()));
+            let id = if recording {
+                book.add_marker(
+                    &Marker {
+                        kind: Kind::Event,
+                        title: "Gate opens".into(),
+                        at: String::new(),
+                        place: String::new(),
+                        duration: String::new(),
+                    },
+                    "recording:0",
+                    None,
+                )
+            } else {
+                book.add(Kind::LongRest, None)
+            };
+            book.save();
+            assert!(!book.conflict);
+            assert!(book.add_notice_current(&id));
+            book.undo_add(&id);
+            assert_eq!(fs::read_to_string(&path).unwrap(), old);
+            assert!(book.events.is_empty());
+            book = Book::default();
+            book.open(Some(dir.path()));
+            book.add(Kind::Event, None);
+            book.save();
+            book.add(Kind::Travel, None);
+            book.save();
+            assert!(!book.conflict);
+            let labels = crate::formats_ui::test_notice_labels(&mut book.layouts, &path);
+            assert!(!labels.iter().any(|s| s.starts_with("Undo")), "{labels:?}");
+        }
+    }
+
+    #[test]
     fn fight_summary_uses_run_state_words_without_changing_stored_result() {
         let mut event = event(Kind::Encounter, "");
         for (stored, open, shown) in [
@@ -1380,9 +1504,10 @@ mod tests {
         fs::write(&path, &text).unwrap();
         let (draft, disk) = book.conflict_comparison().unwrap();
         assert_eq!(disk, text);
+        let (_, changed) = crate::design::comparison_changes(&draft, &disk);
         assert_eq!(
-            disk.lines().nth(book.conflict_body_line(&disk).unwrap()),
-            Some("")
+            disk.lines().nth(*changed.last().unwrap()),
+            Some("DM's paragraph.")
         );
         assert!(!draft.contains("DM's paragraph."));
         assert!(draft.contains("tags: [DM]") && draft.contains("weather: rain"));
