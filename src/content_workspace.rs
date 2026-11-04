@@ -764,7 +764,7 @@ impl Catalogue {
                 .collect();
             names.sort();
             let path = duplicate_repair_path(first.cloned().into_iter().chain([path])).unwrap();
-            if private && entry.kind == "world" {
+            if private && ["world", "creature"].contains(&entry.kind.as_str()) {
                 if let Some(original) = self.entries.remove(&entry.id) {
                     self.duplicate_world.push(original);
                 }

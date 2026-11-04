@@ -2909,7 +2909,6 @@ impl Run {
             .iter()
             .any(|member| !member.overrides.is_empty());
         let change_hint = if changed { " Changed." } else { "" };
-        let creatures = group.creature_count();
         let grip = ui.allocate_response(
             vec2(ui.available_width(), Density::Read.control()),
             egui::Sense::DRAG,
@@ -2925,15 +2924,20 @@ impl Run {
                 ),
             )
         });
-        let totals = ui.painter().text(
-            grip.rect.right_center(),
-            Align2::RIGHT_CENTER,
+        let totals_text = if group.warnings.is_empty() {
             format!(
                 "{} · {} · {}",
                 style::human_label(&group.side),
-                design::count(creatures as usize, "member", "members"),
+                group.count_label(),
                 group.xp_label()
-            ),
+            )
+        } else {
+            group.xp_label()
+        };
+        let totals = ui.painter().text(
+            grip.rect.right_center(),
+            Align2::RIGHT_CENTER,
+            totals_text,
             Type::Small.font(ui),
             c.muted,
         );
@@ -2990,6 +2994,23 @@ impl Run {
                 painter.galley(place, galley, c.accent);
             }
         }
+        if !group.warnings.is_empty() {
+            ui.add(
+                egui::Label::new(
+                    Type::Small
+                        .rich(
+                            ui,
+                            format!(
+                                "{} · {}",
+                                style::human_label(&group.side),
+                                group.count_label()
+                            ),
+                        )
+                        .color(c.muted),
+                )
+                .wrap(),
+            );
+        }
         let members = group.member_summary_wrapped();
         let added = self
             .state
@@ -3023,12 +3044,18 @@ impl Run {
             status.push_str("Changed");
         }
         let mut add = false;
+        let add_word = if group.warnings.is_empty() {
+            "Add".to_owned()
+        } else {
+            format!("Add {}", group.joinable_count())
+        };
         ui.horizontal(|ui| {
             let controls = design::number_width(ui, "Total", &Type::Small.font(ui))
                 + 72.0
                 + design::XS
-                + design::number_width(ui, "Add", &Type::Strong.font(ui))
-                + 2.0 * design::M
+                + Action::secondary(&add_word)
+                    .density(Density::Read)
+                    .natural_width(ui)
                 + 3.0 * ui.spacing().item_spacing.x;
             let width = (ui.available_width() - controls).max(design::XXL);
             ui.allocate_ui(vec2(width, Density::Read.control()), |ui| {
@@ -3073,7 +3100,7 @@ impl Run {
                 && may_roll
                 && leader.is_some_and(|leader| leader.initiative_bonus.is_none()))
             .then_some("The first member has no initiative bonus. Type a total."));
-            add = Action::secondary("Add")
+            add = Action::secondary(&add_word)
                 .density(Density::Read)
                 .name(&format!("Add {name} to the initiative list"))
                 .blocked(blocked)
@@ -3081,7 +3108,12 @@ impl Run {
                 .clicked()
                 || (enter && blocked.is_none());
         });
-        if let Some(problem) = &group.problem {
+        let warnings = group.warnings.join("\n");
+        if let Some(problem) = group
+            .problem
+            .as_deref()
+            .or((!warnings.is_empty()).then_some(warnings.as_str()))
+        {
             for fault in problem.lines() {
                 ui.add(
                     egui::Label::new(
@@ -4701,7 +4733,9 @@ fn snapshot_notice(snapshot: &Entry, current: Option<&Entry>, unreadable: bool) 
 
 fn change_origin(p: &Participant) -> Option<String> {
     let mut parts = Vec::new();
-    if let Some(added) = &p.added_from {
+    if let Some(added) = &p.added_from
+        && (!p.stat_changes() || added.group.is_empty())
+    {
         parts.push(if added.group.is_empty() {
             "Added by hand".into()
         } else {
@@ -4723,27 +4757,33 @@ fn change_origin(p: &Participant) -> Option<String> {
 
 fn changes_block(ui: &mut egui::Ui, p: &Participant, above_stat_block: bool) {
     let c = colors();
-    if let Some(origin) = change_origin(p) {
-        ui.add(egui::Label::new(Type::Small.rich(ui, origin).color(c.muted)).wrap());
-    }
-    let Some(changes) = p.changes.as_ref().filter(|_| p.stat_changes()) else {
-        return;
-    };
-    design::status(
-        ui,
-        Status {
-            icon: icons::CHANGED,
-            word: &p
+    let heading = |ui: &mut egui::Ui| {
+        if let Some(origin) = change_origin(p) {
+            ui.add(egui::Label::new(Type::Small.rich(ui, origin).color(c.muted)).wrap());
+        }
+        if p.stat_changes() {
+            let word = p
                 .added_from
                 .as_ref()
-                .filter(|a| !a.group.is_empty())
+                .filter(|added| !added.group.is_empty())
                 .map_or_else(
                     || "Changed".to_owned(),
-                    |a| format!("Changed in {}", a.group),
-                ),
-            color: c.participant.changed,
-        },
-    );
+                    |added| format!("Changed · arrived with {}", added.group),
+                );
+            design::status(
+                ui,
+                Status {
+                    icon: icons::CHANGED,
+                    word: &word,
+                    color: c.participant.changed,
+                },
+            );
+        }
+    };
+    let Some(changes) = p.changes.as_ref().filter(|_| p.stat_changes()) else {
+        heading(ui);
+        return;
+    };
     let rows: Vec<_> = changes
         .overrides
         .rows(&changes.base)
@@ -4776,6 +4816,7 @@ fn changes_block(ui: &mut egui::Ui, p: &Participant, above_stat_block: bool) {
                 .wrap(),
             );
         }
+        heading(ui);
         change_rows(
             ui,
             &rows
@@ -4785,6 +4826,7 @@ fn changes_block(ui: &mut egui::Ui, p: &Participant, above_stat_block: bool) {
                 .collect::<Vec<_>>(),
         );
     } else {
+        heading(ui);
         change_rows(ui, &rows);
     }
     let note = (!above_stat_block && rows.iter().any(|row| row.by_hand)).then_some(BY_HAND);
@@ -5972,10 +6014,25 @@ mod tests {
             round: 1,
             group_id: None,
         });
+        assert_eq!(change_origin(&p).as_deref(), None);
+        use egui_kittest::kittest::Queryable;
+        let card = p.clone();
+        let mut harness = egui_kittest::Harness::new(move |ctx| {
+            egui::CentralPanel::default().show(ctx, |ui| changes_block(ui, &card, true));
+        });
+        design::theme::install(&harness.ctx);
+        harness.run_steps(2);
+        harness.get_by_label(&format!(
+            "{} Changed · arrived with Rival Team",
+            icons::CHANGED
+        ));
+        assert!(harness.query_by_label("Arrived with Rival Team").is_none());
+        let changed = p.changes.take();
         assert_eq!(
             change_origin(&p).as_deref(),
             Some("Arrived with Rival Team")
         );
+        p.changes = changed;
         Arc::make_mut(&mut p.definition)
             .fields
             .insert("splat_run_npc_name".into(), "Captain".into());

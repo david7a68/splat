@@ -1241,7 +1241,15 @@ pub fn world_note_duplicated(d: &mut Driver<'_>) {
     d.focus_window(false);
     d.focus_window(true);
     d.expect("6. Rook Ambry");
+    d.replace_text_in(FIND_CREATURE, "Rook Ambry");
+    d.expect("Rook Ambry copy.md and Rook Ambry.md share one ID.");
+    d.expect("New identity for Rook Ambry copy.md");
     d.state("copied-world-npc-encounter-keeps-guard", Sizes::All);
+    d.click("New identity for Rook Ambry copy.md");
+    d.wait_for_text("Undo new identity");
+    d.state("duplicate-npc-repaired-from-encounter", Sizes::All);
+    d.click("Undo new identity");
+    d.wait_for_text("New identity for Rook Ambry copy.md");
     d.click(NAV_WORLD);
     d.click_starting("Rook Ambry.md ·");
     d.expect("New identity for Rook Ambry copy.md");

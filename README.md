@@ -839,8 +839,14 @@ converts the saved file and keeps the outside tags and prose shown in the draft.
 - Encounter groups use a member table. Saved encounters use a roster table, with slot
   keys in comments in the Note cell. New files use the entry name.
   Creature cells accept a unique name or `[[Name]]`; save writes a named link.
-  Copying a roster row creates another slot; save writes its separate key.
-  Starting HP is visible as `Start HP 12` in Changes.
+  Copying a roster row creates another slot with only its visible values; a copied party member is flagged.
+  Wiki-link pipes in table cells use `\|`. Both forms are read. The visible link wins
+  over a stale ID; the ID is a fallback for a moved file. Note text on both sides of
+  machine comments is kept. Group sides travel with their row as `Side rivals`.
+  Starting HP is visible as `Start HP 12` in roster Changes. Speed accepts `40`,
+  `40 ft`, or `40 ft.` and saves as `Speed 40 ft.`.
+  A group with an unread row shows how many members can join in Groups, Arrivals,
+  and the plan. Edit opens the normal change form and keeps the name and note.
 
 Bad rows stay in the file and have a line warning. Saves keep other prose and properties.
 Run files stay JSON. Turn on Obsidian Sync's **other file types** option to sync them.

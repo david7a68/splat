@@ -1989,6 +1989,13 @@ impl eframe::App for Splat {
             .poll(ctx, epoch, session.is_some(), &mut self.campaigns);
         self.art.poll(ctx, self.campaigns.modules());
         art::show_viewer(ctx);
+        if ctx
+            .data_mut(|data| data.remove_temp::<bool>(egui::Id::new("encounter_identity_changed")))
+            .is_some()
+        {
+            self.lookup.refresh();
+            self.lookup.files_changed = true;
+        }
         self.lookup.poll(ctx, &self.campaigns);
         if std::mem::take(&mut self.lookup.files_changed) {
             let roots: Vec<_> = self

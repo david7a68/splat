@@ -106,6 +106,7 @@ pub struct Item {
 /// Every entry the active campaign can see, including all registered packages.
 #[derive(Default)]
 pub struct ContentIndex {
+    pub(crate) campaign: Option<Campaign>,
     pub items: Vec<Item>,
     usable: Option<HashSet<Uuid>>,
     package_owners: HashMap<Uuid, Uuid>,
@@ -249,7 +250,7 @@ fn note_items(
 }
 
 impl ContentIndex {
-    fn load(modules: &[Module], campaign: Option<&Campaign>) -> Result<Self, String> {
+    pub(crate) fn load(modules: &[Module], campaign: Option<&Campaign>) -> Result<Self, String> {
         let catalogue = Catalogue::load(modules, campaign)?;
         let usable = campaign.map(|campaign| {
             let mut usable: HashSet<_> = catalogue
@@ -362,6 +363,7 @@ impl ContentIndex {
         }
         items.sort_by(|a, b| a.lower.cmp(&b.lower).then(a.entry.id.cmp(&b.entry.id)));
         let mut index = Self {
+            campaign: campaign.cloned(),
             usable,
             package_owners: catalogue
                 .entries

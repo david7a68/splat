@@ -981,7 +981,32 @@ fn changed_detail(ui: &egui::Ui, detail: &str, word: &str, width: f32) -> String
     }
     let mut parts: Vec<_> = detail.split(" · ").collect();
     while !parts.is_empty() {
-        parts.pop();
+        let priority = |part: &str| {
+            if part.starts_with("as ") {
+                0
+            } else if !(["CR ", "HP ", "AC "]
+                .iter()
+                .any(|prefix| part.starts_with(prefix)))
+                && !["Enemies", "Party", "Rivals"].contains(&part)
+            {
+                1
+            } else if part.starts_with("CR ") {
+                2
+            } else if part.starts_with("AC ") {
+                3
+            } else if part.starts_with("HP ") {
+                4
+            } else {
+                5
+            }
+        };
+        let remove = parts
+            .iter()
+            .enumerate()
+            .min_by_key(|(at, part)| if *at == 0 { 5 } else { priority(part) })
+            .map(|(at, _)| at)
+            .unwrap();
+        parts.remove(remove);
         let text = if parts.is_empty() {
             "…".into()
         } else {
@@ -1055,6 +1080,82 @@ fn creature_result_row(
         });
     });
     (chosen, read)
+}
+
+/// A copied note is still a search result, with the same repair used by Lookup.
+fn duplicate_creature_results(ui: &mut egui::Ui, query: &str) -> bool {
+    let Some(index) = ui.ctx().data(|data| {
+        data.get_temp::<Arc<crate::lookup::ContentIndex>>(egui::Id::new("reader_link_index"))
+    }) else {
+        return false;
+    };
+    let Some(campaign) = &index.campaign else {
+        return false;
+    };
+    let undo_key = egui::Id::new(("encounter_identity_undo", campaign.id));
+    let undo = ui.data(|data| data.get_temp::<crate::world::Change>(undo_key));
+    if let Some(undo) = undo
+        && Action::quiet("Undo new identity").show(ui).clicked()
+    {
+        match undo.undo(campaign) {
+            Ok(()) => {
+                ui.data_mut(|data| {
+                    data.remove::<crate::world::Change>(undo_key);
+                    data.insert_temp(egui::Id::new("encounter_identity_changed"), true);
+                });
+            }
+            Err(error) => {
+                design::message(ui, Tone::Warning, &error);
+            }
+        }
+    }
+    let mut seen = BTreeSet::new();
+    for item in &index.items {
+        if !item.entry.name.to_lowercase().contains(query)
+            || !(item.entry.kind == "creature"
+                || item
+                    .entry
+                    .fields
+                    .get("splat_world")
+                    .and_then(|world| world.get("type"))
+                    .and_then(Value::as_str)
+                    == Some("npc"))
+        {
+            continue;
+        }
+        let Some(paths) = index.duplicate_world.get(&item.entry.path) else {
+            continue;
+        };
+        let mut identity = paths.clone();
+        identity.sort();
+        if !seen.insert(identity) {
+            continue;
+        }
+        let files = paths
+            .iter()
+            .map(|path| path.rsplit('/').next().unwrap_or(path))
+            .collect::<Vec<_>>()
+            .join(" and ");
+        design::message(ui, Tone::Warning, &format!("{files} share one ID."));
+        for path in paths {
+            let filename = path.rsplit('/').next().unwrap_or(path);
+            if Action::quiet(&format!("New identity for {filename}"))
+                .show(ui)
+                .clicked()
+            {
+                match crate::world::new_identity(campaign, path) {
+                    Ok((undo, _)) => ui.data_mut(|data| {
+                        data.insert_temp(undo_key, undo);
+                        data.insert_temp(egui::Id::new("encounter_identity_changed"), true);
+                    }),
+                    Err(error) => {
+                        design::message(ui, Tone::Warning, &error);
+                    }
+                }
+            }
+        }
+    }
+    !seen.is_empty()
 }
 
 fn replace_missing_creature(
@@ -3689,7 +3790,8 @@ impl Encounters {
             chosen = Some((first.id, first.party));
             *focus_search = true;
         }
-        if matches.is_empty() {
+        let hidden_duplicates = duplicate_creature_results(ui, &query);
+        if matches.is_empty() && !hidden_duplicates {
             let index = ui.ctx().data(|data| {
                 data.get_temp::<Arc<crate::lookup::ContentIndex>>(egui::Id::new(
                     "reader_link_index",
@@ -4410,6 +4512,107 @@ mod tests {
     }
 
     #[test]
+    fn i20_w1_search_finds_a_hidden_duplicate_and_repairs_it_with_undo() {
+        use egui_kittest::kittest::Queryable;
+        let dir = tempfile::tempdir().unwrap();
+        let active = campaign(dir.path());
+        creature(dir.path(), "Rook", false);
+        let original = fs::read_to_string(dir.path().join("Rook.md")).unwrap();
+        fs::write(dir.path().join("Rook copy.md"), &original).unwrap();
+        let index = Arc::new(crate::lookup::ContentIndex::load(&[], Some(&active)).unwrap());
+        let mut harness = egui_kittest::Harness::new(move |ctx| {
+            ctx.data_mut(|data| {
+                data.insert_temp(egui::Id::new("reader_link_index"), index.clone())
+            });
+            egui::CentralPanel::default().show(ctx, |ui| {
+                Encounters::creature_search(
+                    ui,
+                    std::iter::empty(),
+                    &mut "Rook".to_owned(),
+                    &mut false,
+                    &mut None,
+                    SearchRoster {
+                        already: &|_| false,
+                    },
+                );
+            });
+        });
+        design::theme::install(&harness.ctx);
+        harness.run_steps(2);
+        assert!(harness.query_by_label("No creatures match").is_none());
+        harness
+            .get_by_label("New identity for Rook copy.md")
+            .click();
+        harness.run_steps(2);
+        let snapshot = Snapshot::load(&active, &[]).unwrap();
+        assert_eq!(
+            snapshot
+                .creatures
+                .iter()
+                .filter(|c| c.name.starts_with("Rook"))
+                .count(),
+            2
+        );
+        harness.get_by_label("Undo new identity").click();
+        harness.run_steps(2);
+        assert_eq!(
+            fs::read_to_string(dir.path().join("Rook copy.md")).unwrap(),
+            original
+        );
+    }
+
+    #[test]
+    fn i20_w1_duplicate_npc_has_one_warning_and_one_action_per_file() {
+        use egui_kittest::kittest::Queryable;
+        let dir = tempfile::tempdir().unwrap();
+        let active = campaign(dir.path());
+        let original = format!(
+            "---\nsplat_schema: 1\nsplat_id: {}\nsplat_kind: world\nsplat_name: Rook\nsplat_world: {{type: npc}}\n---\n",
+            Uuid::new_v4()
+        );
+        fs::write(dir.path().join("Rook.md"), &original).unwrap();
+        fs::write(dir.path().join("Rook copy.md"), &original).unwrap();
+        let index = Arc::new(crate::lookup::ContentIndex::load(&[], Some(&active)).unwrap());
+        let mut harness = egui_kittest::Harness::new(move |ctx| {
+            ctx.data_mut(|data| {
+                data.insert_temp(egui::Id::new("reader_link_index"), index.clone())
+            });
+            egui::CentralPanel::default().show(ctx, |ui| {
+                Encounters::creature_search(
+                    ui,
+                    std::iter::empty(),
+                    &mut "Rook".to_owned(),
+                    &mut false,
+                    &mut None,
+                    SearchRoster {
+                        already: &|_| false,
+                    },
+                );
+            });
+        });
+        design::theme::install(&harness.ctx);
+        harness.run_steps(2);
+        assert_eq!(
+            harness
+                .query_all_by_label("New identity for Rook copy.md")
+                .count(),
+            1
+        );
+        assert_eq!(
+            harness
+                .query_all_by_label("New identity for Rook.md")
+                .count(),
+            1
+        );
+        assert_eq!(
+            harness
+                .query_all_by_label("Rook copy.md and Rook.md share one ID.")
+                .count(),
+            1
+        );
+    }
+
+    #[test]
     fn changed_row_cuts_long_source_before_the_full_hand_change_link() {
         let ctx = egui::Context::default();
         design::theme::install(&ctx);
@@ -4417,16 +4620,16 @@ mod tests {
             egui::CentralPanel::default().show(ctx, |ui| {
                 let detail = "Enemies · CR 2 · HP 43 · AC 15 · A very long source name from the Ashen Marches · as Ember Cultist";
                 let word = "Changed · 3 to add by hand";
-                for width in [280.0, 320.0, 400.0] {
+                for width in [280.0, 320.0, 356.0, 400.0] {
                     let fitted = changed_detail(ui, detail, word, width);
                     assert!(fitted.ends_with('…'), "{fitted}");
                     assert!(!fitted.contains(word));
                     let shown = fitted.trim_end_matches(" …").trim_end_matches('…');
-                    assert!(shown.is_empty() || detail.split(" · ").scan(String::new(), |prefix, part| {
-                        if !prefix.is_empty() { prefix.push_str(" · "); }
-                        prefix.push_str(part);
-                        Some(prefix.clone())
-                    }).any(|prefix| prefix == shown), "{fitted}");
+                    let mut previous = 0;
+                    for part in shown.split(" · ").filter(|part| !part.is_empty()) {
+                        let at = detail[previous..].find(part).unwrap(); previous += at + part.len();
+                    }
+                    if width == 356.0 { assert!(fitted.contains("AC 15"), "{fitted}"); }
                     let font = Type::Small.font(ui);
                     let used = design::number_width(ui, &fitted, &font)
                         + design::number_width(ui, word, &font)

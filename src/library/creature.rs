@@ -344,6 +344,25 @@ fn prose(
     }
 }
 
+/// These stat rows share the reader's label column, including changed values.
+fn stat_detail(ui: &mut egui::Ui, label: &str, value: &str, color: egui::Color32) {
+    ui.horizontal_top(|ui| {
+        ui.spacing_mut().item_spacing.x = design::S;
+        let (rect, _) = ui.allocate_exact_size(
+            egui::vec2(7.0 * design::L, Type::Stat.line()),
+            egui::Sense::hover(),
+        );
+        ui.painter().text(
+            rect.min,
+            egui::Align2::LEFT_TOP,
+            label,
+            Type::StatLabel.font(ui),
+            colors().text,
+        );
+        ui.add(egui::Label::new(Type::Stat.rich(ui, value).color(color)).wrap());
+    });
+}
+
 fn changed_speed(ui: &mut egui::Ui, printed: &str, speed: &str) {
     let preview = crate::encounter_run::change_preview(&splat::content::overrides::Row {
         label: "Speed",
@@ -351,14 +370,7 @@ fn changed_speed(ui: &mut egui::Ui, printed: &str, speed: &str) {
         changed: speed.into(),
         by_hand: true,
     });
-    ui.add(
-        egui::Label::new(
-            Type::Small
-                .rich(ui, format!("Speed {preview}"))
-                .color(colors().participant.changed),
-        )
-        .wrap(),
-    );
+    stat_detail(ui, "Speed", &preview, colors().participant.changed);
 }
 
 /// One ability row of the stat block's attribute table.

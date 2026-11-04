@@ -80,8 +80,26 @@ pub fn run(d: &mut Driver<'_>) {
 
     d.click(NAV_ENCOUNTERS);
     d.click_starting("GROUPS");
+    d.expect("2 of 3 members can join");
+    d.expect("Goblin Warrior needs fixing");
+    d.state("flagged-group-in-groups-list", Sizes::All);
+    d.click(NAV_SESSIONS);
+    new_session(d, "Bridge watch");
+    show_plan(d);
+    d.click("Add a group");
+    d.click("Plan Bridge guards");
+    d.expect("2 of 3 members can join");
+    d.state("flagged-group-in-the-plan", Sizes::All);
+    d.click(NAV_ENCOUNTERS);
+    run_saved_encounter(d, "Shrine of Cinders");
+    fight_tab(d, "Arrivals");
+    d.expect("Goblin Warrior needs fixing");
+    d.expect("Edit group");
+    d.state("flagged-group-in-arrivals", Sizes::All);
+    close_run(d);
+    d.click(NAV_ENCOUNTERS);
     d.click("Edit group Bridge guards");
-    d.expect("Bridge guards.md, line 15: Changes \"HP lots\" not read.");
+    d.expect("Line 15: Changes \"HP lots\" not read.");
     d.expect("Goblin Warrior");
     d.observe_both(
         "F3 member warning",
@@ -89,10 +107,10 @@ pub fn run(d: &mut Driver<'_>) {
         |d| {
             let nodes = d.nodes();
             let find = |name: &str| nodes.iter().find(|node| node.name == name);
-            let first = find("1. Goblin Warrior");
+            let first = find("1. Scout");
             let next = find("2. Goblin Warrior");
-            let warning = find("Bridge guards.md, line 15: Changes \"HP lots\" not read.");
-            let summary = find("Count 1 · CR 1/4 · HP 10 · AC 15");
+            let warning = find("Line 15: Changes \"HP lots\" not read.");
+            let summary = find("Count 1 · CR 1/4 · HP 10 · AC 15 · as Goblin Warrior");
             first.zip(summary).zip(warning).zip(next).is_some_and(
                 |(((first, summary), warning), next)| {
                     first.rect.bottom() <= summary.rect.top()
@@ -107,24 +125,56 @@ pub fn run(d: &mut Driver<'_>) {
     d.expect("XP 100 + unknown");
     d.expect("Edit in Obsidian");
     d.expect("Show file");
-    d.expect("Edit flagged member");
+    d.expect("Changes for Scout");
     d.state("group-flagged-changes-cell", Sizes::All);
     let text = fs::read_to_string(campaign.path.join("Encounter Groups/Bridge guards.md")).unwrap();
     assert!(text.contains("HP lots | Keep this row"));
-    d.click("More actions for flagged member");
+    d.click("More actions for Scout");
     d.expect("Remove member");
     d.state("flagged-member-menu", Sizes::All);
     d.press(Key::Escape);
-    d.click("Edit flagged member");
-    d.expect("Changes cell");
+    d.click("Changes for Scout");
+    d.expect("Display name");
+    d.expect("For example: HP +5, AC +2, Speed 40 ft.");
     d.state("group-repair-changes-cell", Sizes::All);
-    d.replace_text_in("Changes cell", "HP +5");
-    d.click("Done");
+    d.click("Maximum HP: how it changes");
+    d.click("Maximum HP: Add");
+    d.click("Maximum HP: amount");
+    d.press_ctrl(Key::A);
+    d.type_text("5");
+    d.press(Key::Enter);
+    d.click("Done with changes");
     d.click("Save group");
     let saved =
         fs::read_to_string(campaign.path.join("Encounter Groups/Bridge guards.md")).unwrap();
     assert_eq!(saved, text.replace("HP lots", "HP +5"));
     d.state("group-changes-cell-repaired", Sizes::All);
+
+    d.click("Back to encounters");
+    let catalogue =
+        crate::content_workspace::Catalogue::load(d.app_mut().campaigns.modules(), Some(&campaign))
+            .unwrap();
+    let encounter = catalogue
+        .entries
+        .values()
+        .find(|entry| entry.entry.name == "Shrine of Cinders" && entry.entry.kind == "encounter")
+        .unwrap();
+    let roster_path = campaign.path.join(&encounter.entry.path);
+    let roster_text = fs::read_to_string(&roster_path).unwrap();
+    let mut flagged_roster = roster_text.clone();
+    let table = splat::content::layout::Document::new(&roster_text)
+        .table(splat::content::list_formats::ROSTER)
+        .unwrap();
+    let cell = &table.rows.last().unwrap()[3];
+    flagged_roster.replace_range(cell.range.clone(), "HP lots");
+    fs::write(&roster_path, &flagged_roster).unwrap();
+    d.click("Reload from disk");
+    open_saved_encounter(d, "Shrine of Cinders");
+    d.expect("Changes: HP lots not read");
+    d.state("encounter-roster-cell-flagged-in-obsidian", Sizes::All);
+    d.click("Start fight");
+    d.state("flagged-roster-at-start-fight", Sizes::All);
+    fs::write(&roster_path, &roster_text).unwrap();
 
     let text = fs::read_to_string(&path).unwrap();
     fs::write(&path, text.replace("## Day 1:", "## Day 5:")).unwrap();

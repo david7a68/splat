@@ -72,7 +72,8 @@ pub(super) struct GroupDraft {
     saved_setup: GroupSetup,
     saved_notes: String,
     flags: Vec<splat::content::layout::Flag>,
-    repair: Option<(usize, String)>,
+    repair: Option<(usize, Mapping)>,
+    removed_unread: Option<(usize, String)>,
     repair_error: Option<String>,
 }
 
@@ -119,6 +120,7 @@ impl GroupDraft {
             saved_notes: String::new(),
             flags: Vec::new(),
             repair: None,
+            removed_unread: None,
             repair_error: None,
         }
     }
@@ -148,6 +150,7 @@ impl GroupDraft {
             source: text,
             flags: entry.flags.clone(),
             repair: None,
+            removed_unread: None,
             repair_error: None,
             saved_name: entry.name.clone(),
             name: entry.name,
@@ -235,7 +238,7 @@ impl GroupDraft {
     fn repair_member(
         &mut self,
         line: usize,
-        changes: Option<&str>,
+        changes: Option<&Mapping>,
         snapshot: &Snapshot,
     ) -> Result<(), String> {
         use splat::content::{layout::Document, list_formats};
@@ -253,8 +256,31 @@ impl GroupDraft {
             .ok_or("Member row not found")?;
         let mut source = self.source.clone();
         if let Some(changes) = changes {
-            list_formats::changes(changes, &row[2].value, &row[4].value)?;
-            source.replace_range(row[3].range.clone(), &changes.replace('|', "\\|"));
+            Overrides::parse(changes)?;
+            for (cell, value) in [
+                (
+                    4,
+                    changes
+                        .get("note")
+                        .and_then(Value::as_str)
+                        .unwrap_or("")
+                        .to_owned(),
+                ),
+                (
+                    3,
+                    list_formats::show_changes(&Value::Mapping(changes.clone())),
+                ),
+                (
+                    2,
+                    changes
+                        .get("name")
+                        .and_then(Value::as_str)
+                        .unwrap_or("")
+                        .to_owned(),
+                ),
+            ] {
+                source.replace_range(row[cell].range.clone(), &value.replace('|', "\\|"));
+            }
         } else {
             let start = source[..row[0].range.start]
                 .rfind('\n')
@@ -262,6 +288,7 @@ impl GroupDraft {
             let end = source[row[0].range.start..]
                 .find('\n')
                 .map_or(source.len(), |at| row[0].range.start + at + 1);
+            self.removed_unread = Some((line, source[start..end].to_owned()));
             source.replace_range(start..end, "");
         }
         let mut entry = Entry::parse(&self.path, &source)?;
@@ -558,7 +585,26 @@ pub(super) fn load(
         .values()
         .filter(|e| e.private && e.owner == campaign && e.entry.kind == "encounter_group")
         .filter_map(|e| {
-            let group = EncounterGroup::of(&e.entry).ok()?;
+            let unread = splat::content::list_formats::unread_group_members(
+                &format!("{}{}", "\n".repeat(e.entry.body_line - 1), e.entry.body),
+                &e.entry.flags,
+            );
+            let group = match EncounterGroup::of(&e.entry) {
+                Ok(group) => group,
+                Err(error) if !unread.is_empty() && error == "This group is empty. Add at least one creature." => {
+                    // Keep an all-unread table visible without relaxing save validation.
+                    let setup: GroupSetup = serde_yaml_ng::from_value(
+                        e.entry.fields.get("splat_encounter_group")?.clone(),
+                    ).ok()?;
+                    if !setup.members.is_empty() || !setup.extra.is_empty() { return None; }
+                    EncounterGroup {
+                        side: setup.side.trim().to_owned(),
+                        encounter: setup.encounter.and_then(|reference| reference.id),
+                        members: Vec::new(),
+                    }
+                }
+                Err(_) => return None,
+            };
             let mut members = Vec::new();
             let mut problems = Vec::new();
             let mut unavailable = 0_u64;
@@ -615,6 +661,20 @@ pub(super) fn load(
                     overrides: member.overrides.clone(),
                 });
             }
+            let mut warnings = Vec::new();
+            for member in unread {
+                let name = member.creature.clone()
+                    .and_then(|value| serde_yaml_ng::from_value::<EntryRef>(value).ok())
+                    .and_then(|reference| catalogue.resolve_ref(&reference).ok())
+                    .and_then(|id| catalogue.entries.get(&id))
+                    .map_or_else(|| missing_member_name(None, Some(&member.label)), |entry| entry.entry.name.clone());
+                warnings.push(format!("{name} needs fixing"));
+                let count = member.count.unwrap_or(1);
+                unavailable = unavailable.saturating_add(count);
+                let shown = if member.name.is_empty() { &name } else { &member.name };
+                unavailable_members.push((member.before, count, format!("{shown} (not read)")));
+            }
+            if members.is_empty() && !warnings.is_empty() { problems.push("No members can join. Edit group to fix them.".into()); }
             Some(Arc::new(RunGroup {
                 id: e.entry.id,
                 path: e.entry.path.clone(),
@@ -634,6 +694,7 @@ pub(super) fn load(
                 xp_unknown,
                 unavailable,
                 unavailable_members,
+                warnings,
                 problem: (!problems.is_empty()).then(|| problems.join("\n")),
             }))
         })
@@ -649,6 +710,16 @@ fn list_row(
     blocked: Option<&'static str>,
     action: &mut Option<super::ListAction>,
 ) {
+    let summary = if group.warnings.is_empty() {
+        group.summary()
+    } else {
+        format!(
+            "{} · {} · {}",
+            design::reader::human_label(&group.side),
+            group.count_label(),
+            group.xp_label()
+        )
+    };
     super::list::list_row(
         ui,
         group.id,
@@ -660,7 +731,7 @@ fn list_row(
             } else {
                 ""
             },
-            group.summary()
+            summary
         ),
         false,
         |ui| {
@@ -669,17 +740,31 @@ fn list_row(
                     *action = Some(super::ListAction::RemoveGroup(group.path.clone()));
                 }
             });
-            if Action::quiet("Edit")
-                .density(Density::Read)
-                .name(&format!("Edit group {}", group.name))
-                .blocked(blocked)
-                .show(ui)
-                .clicked()
+            if Action::quiet(if group.warnings.is_empty() {
+                "Edit"
+            } else {
+                "Edit group"
+            })
+            .density(Density::Read)
+            .name(&format!("Edit group {}", group.name))
+            .blocked(blocked)
+            .show(ui)
+            .clicked()
             {
                 *action = Some(super::ListAction::OpenGroup(group.path.clone()));
             }
         },
     );
+    for warning in &group.warnings {
+        ui.add(
+            egui::Label::new(
+                Type::Small
+                    .rich(ui, format!("{} {warning}", icons::WARN))
+                    .color(colors().result.warning),
+            )
+            .wrap(),
+        );
+    }
     if let Some(problem) = &group.problem {
         ui.add_space(-design::S);
         ui.scope(|ui| {
@@ -1267,10 +1352,9 @@ fn change_row(
                 {
                     *value = Some(Change::Set(low));
                 }
-                if ui
-                    .selectable_label(matches!(value, Some(Change::Add(_))), "Add")
-                    .clicked()
-                {
+                let add_option = ui.selectable_label(matches!(value, Some(Change::Add(_))), "Add");
+                design::named(ui, &add_option, &format!("{label}: Add"));
+                if add_option.clicked() {
                     *value = Some(Change::Add(1));
                 }
             });
@@ -2151,7 +2235,9 @@ fn members(
             let detail = entry
                 .and_then(|entry| {
                     let creature = snapshot.creatures.iter().find(|c| c.id == entry.id)?;
-                    Some(shown_detail(&member.overrides, entry, &side, creature))
+                    let mut detail = shown_detail(&member.overrides, entry, &side, creature);
+                    if member.overrides.contains_key("name") { detail.push_str(&format!(" · as {}", entry.name)); }
+                    Some(detail)
                 })
                 .unwrap_or_default();
             let key = format!("{path}:member_{index}");
@@ -2203,6 +2289,21 @@ fn members(
             design::rule(ui);
         });
     }
+    if draft.removed_unread.is_some()
+        && Action::quiet("Undo remove member").show(ui).clicked()
+        && let Some((line, row)) = draft.removed_unread.take()
+    {
+        let at = draft
+            .source
+            .split_inclusive('\n')
+            .take(line - 1)
+            .map(str::len)
+            .sum();
+        draft.source.insert_str(at, &row);
+        if let Ok(entry) = Entry::parse(&draft.path, &draft.source) {
+            draft.flags = entry.flags;
+        }
+    }
     // An open form is keyed by place. Left open, it would now edit another member.
     if remove.or(raise).or(lower).is_some() {
         *expanded = None;
@@ -2231,10 +2332,30 @@ fn unread_member(
         .as_ref()
         .and_then(|reference| snapshot.catalogue.resolve_ref(reference).ok())
         .and_then(|id| snapshot.catalogue.entries.get(&id));
-    let name = entry.map_or_else(
+    let base_name = entry.map_or_else(
         || missing_member_name(None, Some(&member.label)),
         |entry| entry.entry.name.clone(),
     );
+    let row = splat::content::layout::Document::new(&draft.source)
+        .table(splat::content::list_formats::GROUP)
+        .and_then(|table| {
+            table
+                .rows
+                .into_iter()
+                .find(|row| row[0].line == member.flag.line)
+        });
+    let name = row
+        .as_ref()
+        .and_then(|row| row.get(2))
+        .map(|cell| cell.value.trim())
+        .filter(|name| !name.is_empty())
+        .unwrap_or(&base_name)
+        .to_owned();
+    let raw = row
+        .as_ref()
+        .and_then(|row| row.get(3))
+        .map(|cell| cell.value.clone())
+        .unwrap_or_default();
     ui.label(
         Type::Strong
             .rich(ui, format!("{number}. {name}"))
@@ -2243,11 +2364,14 @@ fn unread_member(
     let count = member
         .count
         .map_or_else(|| "Count not read".into(), |count| format!("Count {count}"));
-    let detail = entry
+    let mut detail = entry
         .and_then(|entry| snapshot.creatures.iter().find(|c| c.id == entry.entry.id))
         .map_or(count.clone(), |creature| {
             format!("{count} · {}", creature.detail)
         });
+    if name != base_name {
+        detail.push_str(&format!(" · as {base_name}"));
+    }
     let summary = ui.add(
         egui::Label::new(
             Type::Small
@@ -2269,11 +2393,7 @@ fn unread_member(
     design::message(
         ui,
         Tone::Warning,
-        &format!(
-            "{}, line {}: {problem}.",
-            draft.path.rsplit('/').next().unwrap_or(&draft.path),
-            member.flag.line
-        ),
+        &format!("Line {}: {problem}.", member.flag.line),
     );
     let blocked = if member.flag.message.starts_with("Changes:") {
         "This member cannot join a fight until its Changes cell is fixed. Other members can join."
@@ -2285,40 +2405,76 @@ fn unread_member(
     let line = member.flag.line;
     let mut remove = false;
     ui.horizontal(|ui| {
-        if Action::quiet("Edit")
-            .density(Density::Read)
-            .name("Edit flagged member")
-            .show(ui)
-            .clicked()
-        {
-            let text = splat::content::layout::Document::new(&draft.source)
-                .table(splat::content::list_formats::GROUP)
-                .and_then(|table| table.rows.into_iter().find(|row| row[0].line == line))
-                .and_then(|row| row.get(3).map(|cell| cell.value.clone()))
-                .unwrap_or_default();
-            draft.repair = Some((line, text));
-        }
-        super::row_menu(ui, "flagged member", |ui| {
-            if super::menu_action(ui, "Remove member", None) {
-                remove = true;
+        ui.label(Type::Small.rich(ui, &count).color(colors().muted));
+        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            super::row_menu(ui, &name, |ui| {
+                if super::menu_action(ui, "Remove member", None) {
+                    remove = true;
+                }
+            });
+            if Action::quiet("Edit")
+                .density(Density::Read)
+                .name(&format!("Changes for {name}"))
+                .show(ui)
+                .clicked()
+            {
+                let mut block = Mapping::new();
+                if let Some(row) = &row {
+                    block = splat::content::list_formats::changes("", &row[2].value, &row[4].value)
+                        .unwrap_or_default();
+                    for term in raw.split(',') {
+                        if let Ok(read) = splat::content::list_formats::changes(term.trim(), "", "")
+                        {
+                            block.extend(read);
+                        }
+                    }
+                }
+                draft.repair = Some((line, block));
+                ui.data_mut(|data| {
+                    data.insert_temp(egui::Id::new(("unread_form_opened", line)), true)
+                });
             }
         });
     });
     let mut apply = None;
-    if let Some((repair_line, text)) = &mut draft.repair
+    if let Some((repair_line, block)) = &mut draft.repair
         && *repair_line == line
     {
-        design::text_input(ui, "Changes cell", text, "HP +5", ui.available_width());
-        if Action::secondary("Done")
-            .density(Density::Read)
-            .show(ui)
-            .clicked()
+        let unread = ui.add(
+            egui::Label::new(
+                Type::Small
+                    .rich(ui, format!("Not read: {raw} · {}", member.flag.message))
+                    .color(colors().result.warning),
+            )
+            .wrap(),
+        );
+        if ui
+            .data_mut(|data| data.remove_temp::<bool>(egui::Id::new(("unread_form_opened", line))))
+            .is_some()
         {
-            apply = Some(text.clone());
+            let mut rect = unread.rect;
+            rect.min.y -= design::L;
+            ui.scroll_to_rect(rect, Some(egui::Align::Min));
+        }
+        ui.label(
+            Type::Small
+                .rich(ui, "For example: HP +5, AC +2, Speed 40 ft.")
+                .color(colors().muted),
+        );
+        if let Some(entry) = entry {
+            if overrides_form(ui, block, &entry.entry, &draft.setup.side, None) {
+                apply = Some(block.clone());
+            }
+        } else {
+            design::message(
+                ui,
+                Tone::Warning,
+                "Fix the creature link in Obsidian first.",
+            );
         }
     }
     if (remove || apply.is_some())
-        && let Err(error) = draft.repair_member(line, apply.as_deref(), snapshot)
+        && let Err(error) = draft.repair_member(line, apply.as_ref(), snapshot)
     {
         draft.repair_error = Some(error);
     }
@@ -2375,75 +2531,56 @@ mod tests {
     }
 
     #[test]
-    fn i19_w2_flagged_member_offers_repair_and_remove() {
+    fn i20_p2_flagged_member_uses_the_normal_form_and_keeps_name_and_note() {
         use egui_kittest::kittest::Queryable;
         let dir = tempfile::tempdir().unwrap();
         let active = campaign(dir.path());
-        let id = creature(dir.path(), "Scout");
-        let mut group = GroupDraft::new();
-        group.name = "Scouts".into();
-        group.add(id);
-        group.save(&active, &[]).unwrap();
-        let path = dir.path().join(group.path());
-        let original = fs::read_to_string(&path).unwrap();
-        let line = original
-            .lines()
-            .find(|line| line.starts_with("| 1 |"))
-            .unwrap();
-        let bad = line.replace("|  |  |", "|  | HP lots |");
-        assert_ne!(line, bad);
-        let source = original.replace(line, &format!("{bad}\n{line}"));
-        fs::write(&path, &source).unwrap();
-        group = GroupDraft::open(dir.path(), group.path()).unwrap();
-        assert_eq!(group.flags.len(), 1);
+        creature(dir.path(), "Goblin");
+        let source = format!(
+            "---\nsplat_schema: 2\nsplat_id: {}\nsplat_kind: encounter_group\nsplat_name: Guards\nsplat_side: enemies\n---\n\n## Members\n\n| Count | Creature | Name | Changes | Note |\n| --- | --- | --- | --- | --- |\n| 1 | [[Goblin]] | Scout | HP lots, AC +2 | Keep this row |\n",
+            Uuid::new_v4()
+        );
+        fs::write(dir.path().join("Guards.md"), &source).unwrap();
+        let draft = GroupDraft::open(dir.path(), "Guards.md").unwrap();
         let snapshot = Snapshot::load(&active, &[]).unwrap();
         let mut harness = egui_kittest::Harness::builder()
-            .with_size(egui::vec2(880.0, 800.0))
+            .with_size(egui::vec2(880.0, 1000.0))
             .build_state(
                 move |ctx, state: &mut (GroupDraft, Option<String>)| {
                     egui::CentralPanel::default()
                         .show(ctx, |ui| members(ui, &mut state.0, &snapshot, &mut state.1));
                 },
-                (group, None),
+                (draft, None),
             );
         design::theme::install(&harness.ctx);
         harness.run_steps(2);
-        harness.get_by_label("Edit in Obsidian");
-        harness.get_by_label("Show file");
-        harness.get_by_label("Edit flagged member").click();
-        harness.run_steps(2);
-        harness.get_by_label("Changes cell");
-        harness
-            .get_by_label("More actions for flagged member")
-            .click();
+        harness.get_by_label("More actions for Scout").click();
         harness.run_steps(2);
         harness.get_by_label("Remove member").click();
         harness.run_steps(2);
-        let group = &mut harness.state_mut().0;
-        group.save(&active, &[]).unwrap();
-        assert_eq!(fs::read_to_string(&path).unwrap(), original);
-        fs::write(&path, &source).unwrap();
-        harness.state_mut().0 = GroupDraft::open(dir.path(), harness.state().0.path()).unwrap();
+        harness.get_by_label("Undo remove member").click();
         harness.run_steps(2);
-        harness.get_by_label("Edit flagged member").click();
+        harness.get_by_label("Changes for Scout").click();
         harness.run_steps(2);
         assert_eq!(
-            harness.get_by_label("Changes cell").value().as_deref(),
-            Some("HP lots")
+            harness.get_by_label("Display name").value().as_deref(),
+            Some("Scout")
         );
-        harness.get_by_label("Changes cell").click();
-        harness.key_press_modifiers(egui::Modifiers::COMMAND, egui::Key::A);
-        harness.run_steps(1);
-        harness.get_by_label("Changes cell").type_text("HP +5");
-        harness.run_steps(2);
-        harness.get_by_label("Done").click();
+        assert_eq!(
+            harness.get_by_label("Note").value().as_deref(),
+            Some("Keep this row")
+        );
+        harness.get_by_label("Maximum HP: how it changes");
+        harness.get_by_label("AC: amount");
+        harness.get_by_label("Done with changes").click();
         harness.run_steps(2);
         harness.state_mut().0.save(&active, &[]).unwrap();
-        assert_eq!(
-            fs::read_to_string(path).unwrap(),
-            source.replace("HP lots", "HP +5")
-        );
-        assert!(harness.state().0.flags.is_empty());
+        let fixed = GroupDraft::open(dir.path(), "Guards.md").unwrap();
+        assert!(fixed.flags.is_empty());
+        let changes = Overrides::parse(&fixed.setup.members[0].overrides).unwrap();
+        assert_eq!(changes.name.as_deref(), Some("Scout"));
+        assert_eq!(changes.note.as_deref(), Some("Keep this row"));
+        assert_eq!(changes.armor_class, Some(Change::Add(2)));
     }
 
     #[test]
@@ -2806,9 +2943,12 @@ mod tests {
         assert_eq!(group.members[0].entry.id, scout);
         assert_eq!(
             group.creature_count(),
-            2,
-            "the seven bad members cannot join"
+            9,
+            "all named members remain visible"
         );
+        assert!(group.summary().contains("2 of 9 members can join"));
+        assert!(group.summary().contains("Scout needs fixing"));
+        assert_eq!(group.xp_label(), "XP 100 + unknown");
         let draft = GroupDraft::open(dir.path(), "Broken row.md").unwrap();
         let unread =
             splat::content::list_formats::unread_group_members(&draft.source, &draft.flags);
@@ -2822,6 +2962,19 @@ mod tests {
             fs::read_to_string(dir.path().join("Broken row.md")).unwrap(),
             source
         );
+        fs::write(
+            dir.path().join("Broken row.md"),
+            source.replace("| 2 | [[Scout]] | | | |\n", ""),
+        )
+        .unwrap();
+        let snapshot = Snapshot::load(&active, &[]).unwrap();
+        let group = snapshot
+            .groups
+            .iter()
+            .find(|group| group.name == "Broken row")
+            .expect("a group with only unread members stays visible");
+        assert!(group.summary().contains("0 of 7 members can join"));
+        assert!(group.problem.is_some());
     }
 
     #[test]

@@ -195,7 +195,7 @@ fn missing_folders(
             let message = nodes
                 .iter()
                 .find(|node| node.name.starts_with("Session folder not found:"));
-            let action = nodes.iter().find(|node| node.name == "Choose folder…");
+            let action = nodes.iter().find(|node| node.name == "Choose folder");
             !d.has_containing("1 session")
                 && d.visible_text("It may have been moved or renamed.")
                 && !d.has_containing("Choose folder.")
