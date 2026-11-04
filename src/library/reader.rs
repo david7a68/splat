@@ -290,6 +290,10 @@ pub(super) fn show(
     builtin: bool,
     has_summary: bool,
 ) {
+    let table_stats = entry.is_some_and(|e| {
+        e.fields.get("splat_schema").and_then(|v| v.as_u64()) == Some(2)
+            && ["spell", "item"].contains(&e.kind.as_str())
+    });
     if !has_summary {
         ui.add_space(crate::design::L);
     }
@@ -297,7 +301,7 @@ pub(super) fn show(
         let printed = sections
             .iter()
             .find(|section| section.title == "Source text")
-            .filter(|_| builtin)
+            .filter(|_| builtin && !table_stats)
             .and_then(|section| {
                 source_facts(section.body)
                     .0
@@ -306,7 +310,11 @@ pub(super) fn show(
                     .map(|(_, identity)| identity)
             });
         item_summary(ui, entry, printed.as_deref());
-        preparation_summary(ui, entry, sections.iter().any(|s| s.title == "Source text"));
+        preparation_summary(
+            ui,
+            entry,
+            !table_stats && sections.iter().any(|s| s.title == "Source text"),
+        );
     }
     for section in sections {
         if section.title == "Source text" && has_summary {
@@ -326,8 +334,11 @@ pub(super) fn show(
             {
                 continue;
             }
-            if section.title == "Source text" && builtin {
+            if section.title == "Source text" && (builtin || table_stats) {
                 let (mut facts, prose) = source_facts(section.body);
+                if table_stats {
+                    facts.clear();
+                }
                 if let Some(index) = facts.iter().position(|(label, _)| label == "Identity") {
                     let identity = facts.remove(index).1;
                     // An item's is already its identity line, above.

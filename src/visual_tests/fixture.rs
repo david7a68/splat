@@ -153,11 +153,36 @@ fn seed_campaigns(
 
     seed_list_layouts(&active, &quiet, &unlinked, &module, scenario, seed)?;
 
+    let mut modules = vec![module];
+    if seed == Seed::Formats {
+        let generated_root = root.join("modules/generated-book");
+        let id = stable_id("visual:generated-book");
+        write_note(
+            &generated_root,
+            "Package.md",
+            &format!(
+                "---\nsplat_schema: 1\nsplat_id: {id}\nsplat_kind: package\nsplat_name: Generated Book\nsplat_namespace: generated_book\nsplat_generated: true\n---\n\n# Generated Book\n"
+            ),
+        )?;
+        write_note(
+            &generated_root,
+            "Creatures/Book Wolf.md",
+            &format!(
+                "---\nsplat_schema: 1\nsplat_id: {}\nsplat_kind: creature\nsplat_key: generated_book:creatures/book_wolf\nsplat_name: Book Wolf\nsplat_creature: {{size: medium, type: beast}}\nsplat_stats: {{max_hp: {{value: 22}}, armor_class: {{value: 13}}}}\n---\n\n# Book Wolf\n\nA creature from an outside converter.\n",
+                stable_id("visual:book-wolf")
+            ),
+        )?;
+        modules.push(Module {
+            id,
+            name: "Generated Book".into(),
+            path: generated_root,
+        });
+    }
     let data = UserData {
         version: 3,
         active_campaign_id: Some(active.id),
         campaigns: vec![active, quiet, unlinked],
-        modules: vec![module],
+        modules,
         unregistered_modules: Vec::new(),
     };
     let mut store = Store::at(settings.to_path_buf());
@@ -218,7 +243,7 @@ fn write_module(root: &Path) -> Result<Module, String> {
             ""
         };
         format!(
-            "---\nsplat_schema: 1\nsplat_id: {}\nsplat_kind: creature\nsplat_key: ashen_marches:creatures/{slug}\nsplat_name: {name}\n{requires}splat_creature: {{size: medium, type: {identity}}}\nsplat_stats:\n  max_hp: {{value: {hp}}}\n  armor_class: {{value: {ac}}}\n  initiative: {{value: {init}}}\n---\n\n# {name}\n\n## Source text\n\nMedium {identity}, Unaligned\\\nAC {ac}  Initiative +{init} ({})\\\nHP {hp} (4d8 + 4)\\\nSpeed 30 ft.\\\nCR 1 (XP 200; PB +2)\\\n\n### Actions\n\n{prose}\n",
+            "---\nsplat_schema: 1\nsplat_id: {}\nsplat_kind: creature\nsplat_key: ashen_marches:creatures/{slug}\nsplat_name: {name}\n{requires}splat_creature: {{size: medium, type: {identity}, cr_text: '1 (XP 200; PB +2)', movement_text: '30 ft.', hit_points_text: '{hp} (4d8 + 4)'}}\nsplat_stats:\n  speed: {{value: 30, unit: ft}}\n  max_hp: {{value: {hp}}}\n  armor_class: {{value: {ac}}}\n  initiative: {{value: {init}}}\n---\n\n# {name}\n\n## Source text\n\nMedium {identity}, Unaligned\\\nAC {ac}  Initiative +{init} ({})\\\nHP {hp} (4d8 + 4)\\\nSpeed 30 ft.\\\nCR 1 (XP 200; PB +2)\\\n\n### Actions\n\n{prose}\n",
             module_entry_id(slug),
             10 + init,
         )
@@ -294,6 +319,17 @@ fn write_module(root: &Path) -> Result<Module, String> {
             ),
         ),
     ] {
+        let text = if [
+            "Creatures/Ash Wraith.md",
+            "Spells/Ashfall.md",
+            "Items/Veilglass Lantern.md",
+        ]
+        .contains(&path)
+        {
+            splat::content::formats::convert(path, &text)?
+        } else {
+            text
+        };
         write_note(root, path, &text)?;
     }
     write_art(root)?;
@@ -394,6 +430,23 @@ fn write_world_notes(root: &Path) -> Result<(), String> {
 }
 
 fn write_format_notes(root: &Path) -> Result<(), String> {
+    let old = format!(
+        "---\nsplat_schema: 1\nsplat_id: {}\nsplat_kind: creature\nsplat_name: Slate Wolf\nsplat_creature: {{size: medium, type: beast, alignment: Unaligned, hit_points_text: '22 (4d8 + 4)', cr_text: '1 (XP 200; PB +2)'}}\nsplat_stats: {{max_hp: {{value: 22}}, armor_class: {{value: 13}}, initiative: {{value: 2}}, speed: {{value: 40, unit: ft}}, strength: {{value: 12}}, dexterity: {{value: 15}}}}\n---\n\n# Slate Wolf\n\n## Actions\n\nBite. Melee Attack Roll: +4, reach 5 ft. Hit: 7 Piercing damage.\n",
+        stable_id("slate-wolf")
+    );
+    let new = splat::content::formats::convert("Creatures/Slate Wolf.md", &old)?;
+    write_note(root, "Creatures/Slate Wolf.md", &new)?;
+    let bad = new
+        .replace(
+            &stable_id("slate-wolf").to_string(),
+            &stable_id("flagged-wolf").to_string(),
+        )
+        .replace("Slate Wolf", "Flagged Wolf")
+        .replace(
+            "| Hit Points | 22 (4d8 + 4) |",
+            "| Hit Points | about twenty |",
+        );
+    write_note(root, "Creatures/Flagged Wolf.md", &bad)?;
     for (path, schema, name, data) in [
         (
             "NPCs/Rook.md",
@@ -427,13 +480,18 @@ fn write_format_notes(root: &Path) -> Result<(), String> {
 }
 
 fn write_campaign_notes(root: &Path) -> Result<(), String> {
+    // Native creatures use the current template layout. Format scenarios cover
+    // legacy conversion; ordinary saves keep testing a stable editor.
     write_note(
         root,
         "Notes/Captain Varra.md",
-        &format!(
-            "---\nsplat_schema: 1\nsplat_id: {}\nsplat_kind: creature\nsplat_name: Captain Varra\nsplat_creature: {{size: medium, type: humanoid}}\nsplat_stats:\n  max_hp: {{value: 52}}\n  armor_class: {{value: 16}}\n  initiative: {{value: 2}}\n---\n\n# Captain Varra\n\nThe last commander of the Emberfall watch. She trusts the party until they side with the cult.\n\n## Actions\n\nLongsword. Melee Attack Roll: +5, reach 5 ft. Hit: 7 (1d8 + 3) Slashing damage.\n",
-            stable_id("visual:note:varra"),
-        ),
+        &splat::content::formats::convert(
+            "Notes/Captain Varra.md",
+            &format!(
+                "---\nsplat_schema: 1\nsplat_id: {}\nsplat_kind: creature\nsplat_name: Captain Varra\nsplat_creature: {{size: medium, type: humanoid}}\nsplat_stats:\n  max_hp: {{value: 52}}\n  armor_class: {{value: 16}}\n  initiative: {{value: 2}}\n---\n\n# Captain Varra\n\nThe last commander of the Emberfall watch. She trusts the party until they side with the cult.\n\n## Actions\n\nLongsword. Melee Attack Roll: +5, reach 5 ft. Hit: 7 (1d8 + 3) Slashing damage.\n",
+                stable_id("visual:note:varra"),
+            ),
+        )?,
     )?;
     write_note(
         root,

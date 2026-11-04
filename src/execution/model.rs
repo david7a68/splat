@@ -233,7 +233,14 @@ fn read<T: serde::de::DeserializeOwned>(entry: &Entry, name: &str) -> Result<Opt
         .fields
         .get(Value::String(name.into()))
         .map(|v| {
-            serde_yaml_ng::from_value(v.clone()).map_err(|e| format!("{} {name}: {e}", entry.name))
+            let value = if name == "splat_creature"
+                && let Some(fields) = v.as_mapping()
+            {
+                Value::Mapping(crate::content::stat_blocks::creature_mechanics(fields))
+            } else {
+                v.clone()
+            };
+            serde_yaml_ng::from_value(value).map_err(|e| format!("{} {name}: {e}", entry.name))
         })
         .transpose()
 }

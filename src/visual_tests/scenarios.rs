@@ -17,6 +17,7 @@ use eframe::egui::{self, Key, Pos2, pos2};
 pub mod file_formats;
 pub mod integrity;
 pub mod list_formats;
+pub mod stat_formats;
 pub mod world_build;
 
 /// The middle of the reading pane and of the entry list, at the minimum window.
@@ -676,12 +677,13 @@ pub mod campaign_content {
         d.goal("open a campaign entry for editing");
 
         let editor_top = |d: &Driver<'_>| {
-            d.nodes()
+            let node = d
+                .nodes()
                 .into_iter()
                 .find(|node| node.role == egui::accesskit::Role::MultilineTextInput)
-                .unwrap()
-                .rect
-                .top()
+                .unwrap();
+            // A long source scrolls inside the editor. Its visible viewport must stay put.
+            node.shown.top()
         };
         let clean_top = editor_top(d);
         d.type_into_editor("Scarred by the fire at the bridge. ");
@@ -7713,12 +7715,10 @@ pub mod package_to_table {
         go_library(d);
         let text = d.editor_text().expect("new creature editor");
         let edited = text
-            .replace(
-                "splat_stats:\n",
-                "splat_stats:\n  max_hp: {value: 22}\n  armor_class: {value: 15}\n",
-            )
-            .replace("strength: {value: 10}", "strength: {value: 18}")
-            .replace("dexterity: {value: 10}", "dexterity: {value: 14}");
+            .replace("| Hit Points |  |", "| Hit Points | 22 |")
+            .replace("| Armor Class |  |", "| Armor Class | 15 |")
+            .replace("| Str | 10 | +0 |", "| Str | 18 | +4 |")
+            .replace("| Dex | 10 | +0 |", "| Dex | 14 | +2 |");
         assert_ne!(text, edited);
         d.replace_editor_text(&edited);
         d.click("Save");

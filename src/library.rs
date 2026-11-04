@@ -715,40 +715,40 @@ pub(crate) fn note_text(name: &str, kind: &str, namespace: Option<&str>) -> Stri
             .expect("creature fields"),
         );
     }
-    let mut yaml = serde_yaml_ng::to_string(&fields).expect("string fields");
-    if kind == "creature" {
-        for (key, value) in [
-            ("max_hp", 1),
-            ("armor_class", 10),
-            ("initiative", 0),
-            ("strength", 10),
-            ("dexterity", 10),
-            ("constitution", 10),
-            ("intelligence", 10),
-            ("wisdom", 10),
-            ("charisma", 10),
-        ] {
-            yaml = yaml.replace(
-                &format!("  {key}:\n    value: {value}"),
-                &format!("  {key}: {{value: {value}}}"),
-            );
-        }
-        yaml = yaml.replace(
-            "  speed:\n    value: 30\n    unit: ft",
-            "  speed: {value: 30, unit: ft}",
+    if kind == "spell" {
+        fields.insert("splat_spell".into(), serde_yaml_ng::from_str::<serde_yaml_ng::Value>("level: 1\nschool: evocation\ncasting_time: Action\nrange_text: 60 feet\ncomponents: [verbal, somatic]\nduration: Instantaneous\n").expect("spell fields"));
+    }
+    if kind == "item" {
+        fields.insert(
+            "splat_item".into(),
+            serde_yaml_ng::from_str::<serde_yaml_ng::Value>(
+                "category: wondrous_item\nrarity: common\nequipment: {attunement: none}\n",
+            )
+            .expect("item fields"),
         );
     }
+    if ["creature", "spell", "item"].contains(&kind) {
+        fields.insert("splat_schema".into(), 2.into());
+        let table = content::stat_blocks::render(&fields, kind);
+        for key in content::stat_blocks::data_roots(kind) {
+            fields.remove(*key);
+        }
+        let yaml = serde_yaml_ng::to_string(&fields).expect("string fields");
+        return format!(
+            "---\n{yaml}---\n\n# {name}\n\n{table}{}",
+            if kind == "creature" {
+                "## Traits\n\n**Trait.** Describe the trait.\n\n## Actions\n\n**Attack.** Describe the attack.\n\n"
+            } else if kind == "spell" {
+                "Describe the spell.\n"
+            } else {
+                "Describe the item and its use.\n"
+            }
+        );
+    }
+    let yaml = serde_yaml_ng::to_string(&fields).expect("string fields");
     format!(
-        "---\n{}---\n\n# {}\n\n{}",
-        yaml,
-        name,
-        if kind == "creature" {
-            "## Traits\n\n**Trait.** Describe the trait.\n\n## Actions\n\n**Attack.** Describe the attack.\n\n"
-        } else if kind == "spell" {
-            "Level 1 Evocation\n\n**Casting Time:** Action\n\n**Range:** 60 feet\n\n**Components:** V, S\n\n**Duration:** Instantaneous\n\nDescribe the spell.\n"
-        } else if kind == "item" {
-            "Describe the item and its use.\n"
-        } else if kind == "effect" {
+        "---\n{yaml}---\n\n# {name}\n\n{}",
+        if kind == "effect" {
             "## Effect\n\nDescribe what changes and when it ends.\n"
         } else if kind == "rule" {
             "## Rule\n\nDescribe when and how this rule applies.\n"
@@ -3638,16 +3638,24 @@ impl Library {
                 return Err("Another entry already uses this UUID or key.".into());
             }
             let baseline = (!file_gone).then_some(note.text.as_str());
-            let after = content::formats::convert_resolved(
-                &note.path,
-                &self.draft,
-                self.loaded
-                    .as_ref()
-                    .unwrap()
-                    .notes
-                    .iter()
-                    .filter_map(|note| note.entry.as_ref()),
-            )?;
+            let after = if matches!(note.owner, Owner::Package(_))
+                && (crate::content_workspace::generated_package(&root)
+                    || (note.path == "Package.md"
+                        && crate::content_workspace::generated_manifest(&self.draft)))
+            {
+                self.draft.clone()
+            } else {
+                content::formats::convert_resolved(
+                    &note.path,
+                    &self.draft,
+                    self.loaded
+                        .as_ref()
+                        .unwrap()
+                        .notes
+                        .iter()
+                        .filter_map(|note| note.entry.as_ref()),
+                )?
+            };
             let entry = write_note(&root, &note.path, baseline, &after)?;
             if after != self.draft {
                 self.layouts
@@ -4875,6 +4883,50 @@ mod tests {
     use super::*;
 
     #[test]
+    fn fmt_f2_generated_package_save_keeps_schema_one_without_conversion_undo() {
+        let dir = tempfile::tempdir().unwrap();
+        let module =
+            create_module(&dir.path().join("book"), "Generated book", "generated_book").unwrap();
+        let manifest = fs::read_to_string(module.path.join("Module.md")).unwrap();
+        fs::write(
+            module.path.join("Package.md"),
+            content::patch_fields(&manifest, &[("splat_generated", Some(true.into()))]).unwrap(),
+        )
+        .unwrap();
+        fs::remove_file(module.path.join("Module.md")).unwrap();
+        let text = format!(
+            "---\nsplat_schema: 1\nsplat_id: {}\nsplat_kind: creature\nsplat_name: Book Wolf\nsplat_creature: {{size: medium, type: beast}}\nsplat_stats: {{max_hp: {{value: 22}}}}\n---\n\n# Book Wolf\n",
+            Uuid::new_v4()
+        );
+        fs::write(module.path.join("Wolf.md"), &text).unwrap();
+        let loaded = load(Some(&module)).unwrap();
+        let selected = loaded
+            .notes
+            .iter()
+            .position(|note| note.path == "Wolf.md")
+            .unwrap();
+        let draft = format!("{text}\nThe DM's words.\n");
+        let mut library = Library {
+            loaded: Some(loaded),
+            selected: Some(selected),
+            draft: draft.clone(),
+            ..Default::default()
+        };
+        library.save_selected(false);
+        assert!(library.error.is_none(), "{:?}", library.error);
+        assert_eq!(
+            fs::read_to_string(module.path.join("Wolf.md")).unwrap(),
+            draft
+        );
+        library.layouts.undo().unwrap();
+        assert_eq!(
+            fs::read_to_string(module.path.join("Wolf.md")).unwrap(),
+            draft,
+            "No conversion notice or Undo was created"
+        );
+    }
+
+    #[test]
     fn copy_registration_and_undo_keep_campaign_choices_and_later_edits() {
         let temp = tempfile::tempdir().unwrap();
         let world = crate::visual_tests::fixture::World::build(
@@ -5397,7 +5449,9 @@ mod tests {
                 .lines()
                 .any(|line| line.trim_start().starts_with("value:"))
         );
-        assert!(text.contains("speed: {value: 30, unit: ft}"));
+        assert!(text.contains("| Speed | 30 ft. |"));
+        assert!(text.contains("splat_schema: 2"));
+        assert!(!text.contains("splat_stats:"));
         let entry = Entry::parse("Copper Drake.md", &text).unwrap();
         assert!(entry.fields["splat_stats"]["max_hp"].get("value").is_none());
         assert!(

@@ -678,6 +678,10 @@ pub fn package_file_changed(d: &mut Driver<'_>) {
     let before = fs::read_to_string(&path).unwrap();
     let changed = before
         .replace("max_hp: {value: 22}", "max_hp: {value: 28}")
+        .replace(
+            "hit_points_text: '22 (4d8 + 4)'",
+            "hit_points_text: '28 (4d8 + 10)'",
+        )
         .replace("HP 22 (4d8 + 4)", "HP 28 (4d8 + 10)")
         .replace("Bite.", "Cinder Bite.");
     fs::write(&path, &changed).unwrap();
@@ -1019,7 +1023,7 @@ pub fn book_to_package(d: &mut Driver<'_>) {
     d.click("Edit the copy");
     d.expect("Markdown editor");
     let original = d.editor_text().unwrap();
-    let changed = original.replace("150 (20d10 + 40)", "180 (20d10 + 70)");
+    let changed = original.replace("HP 150 (20d10 + 40)", "HP 180 (20d10 + 70)");
     assert_ne!(original, changed);
     d.replace_text_in("Markdown editor", &changed);
     d.expect("Hit Points line says 180, but max_hp is 150. The fight uses max_hp.");
@@ -1029,12 +1033,12 @@ pub fn book_to_package(d: &mut Driver<'_>) {
     d.expect("Undo stat change");
     let edited = d.editor_text().unwrap();
     assert!(
-        edited.contains("splat_stats:\n  max_hp: {value: 180}\n"),
+        edited.contains("| Hit Points | 180 (20d10 + 40) |"),
         "{}",
         edited.chars().take(1800).collect::<String>()
     );
     assert!(!edited.contains("    value:"));
-    reveal_editor_passage(d, "max_hp:");
+    reveal_editor_passage(d, "| Hit Points |");
     d.state("book-creature-stats-updated", Sizes::All);
     d.observe_both(
         "W1/C1",
@@ -1048,7 +1052,7 @@ pub fn book_to_package(d: &mut Driver<'_>) {
     d.click("Read");
     d.expect("Watch Aboleth");
     d.scroll_up_at(READER, 30);
-    d.expect("180 (20d10 + 70)");
+    d.expect("180 (20d10 + 40)");
     assert!(
         fs::read_to_string(
             d.root

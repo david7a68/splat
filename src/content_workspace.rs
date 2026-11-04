@@ -32,6 +32,29 @@ pub(crate) fn note_id(text: &str) -> Option<Uuid> {
 
 pub(crate) const DELETED_MANIFEST: &str = "Package.md was deleted. Entries are still available. Write it again, or restore it from a backup.";
 
+/// Read only the manifest, so a large generated book is never scanned for conversion.
+pub(crate) fn generated_package(root: &Path) -> bool {
+    fs::read_to_string(root.join("Package.md")).is_ok_and(|text| generated_manifest(&text))
+}
+
+pub(crate) fn generated_manifest(text: &str) -> bool {
+    let mut lines = text.trim_start_matches('\u{feff}').lines();
+    if lines.next().map(str::trim) != Some("---") {
+        return false;
+    }
+    // Keep the guard even when another property or the package body needs repair.
+    lines.take_while(|line| line.trim() != "---").any(|line| {
+        let Some((key, value)) = line.split_once(':') else {
+            return false;
+        };
+        !line.starts_with(char::is_whitespace)
+            && serde_yaml_ng::from_str::<Value>(key)
+                .is_ok_and(|key| key.as_str() == Some("splat_generated"))
+            && serde_yaml_ng::from_str::<Value>(value)
+                .is_ok_and(|value| value.as_bool() == Some(true))
+    })
+}
+
 pub(crate) fn package_manifest_path(module: &Module) -> String {
     if let Ok((entries, errors)) = content::read_directory(&module.path) {
         if let Some(entry) = entries.iter().find(|entry| entry.kind == "package") {
@@ -1750,6 +1773,7 @@ pub struct CopyPlan {
     pub root: PathBuf,
     pub relative: String,
     pub text: String,
+    pub layout_warning: Option<String>,
     source_path: Option<PathBuf>,
     source_text: String,
     dependency_files: Vec<(PathBuf, String)>,
@@ -2160,9 +2184,22 @@ impl CopyPlan {
                 "A note already exists at this destination. Choose another name or folder.".into(),
             );
         }
-        let text = content::formats::convert(&relative, &text)?;
+        let converted = if generated_package(destination) {
+            Ok(text.clone())
+        } else {
+            content::formats::convert(&relative, &text)
+        };
+        let (text, layout_warning) = match converted {
+            Ok(converted) => (converted, None),
+            Err(error) if ["creature", "spell", "item"].contains(&source.entry.kind.as_str()) => (
+                text,
+                Some(format!("The copy keeps the old layout. {error}")),
+            ),
+            Err(error) => return Err(error),
+        };
         Entry::parse(&relative, &text)?;
         Ok(Self {
+            layout_warning,
             root: destination.into(),
             shared: Vec::new(),
             relative,
@@ -2233,6 +2270,21 @@ impl CopyPlan {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn fmt_f2_generated_marker_is_a_flat_boolean_in_the_manifest() {
+        assert!(super::generated_manifest(
+            "\u{feff}---\r\n\"splat_generated\": true # converter\r\nother: [broken\r\n---\r\n"
+        ));
+        for text in [
+            "---\nsplat_generated: 'true'\n---\n",
+            "---\nsplat_generated: false\n---\n",
+            "---\nsplat_other:\n  splat_generated: true\n---\n",
+            "---\nsplat_schema: 1\n---\n\nsplat_generated: true\n",
+        ] {
+            assert!(!super::generated_manifest(text));
+        }
+    }
+
     use super::*;
 
     #[test]
@@ -2633,7 +2685,7 @@ mod tests {
     }
 
     #[test]
-    fn copied_aboleth_keeps_book_stats_as_front_matter() {
+    fn copied_aboleth_keeps_book_stats_in_readable_tables() {
         let catalogue = Catalogue::load(&[], None).unwrap();
         let entry = catalogue
             .entries
@@ -2652,47 +2704,20 @@ mod tests {
         let plan =
             CopyPlan::prepare(&source, temp.path(), None, "Watch Aboleth", "", &catalogue).unwrap();
         let copied = Entry::parse(&plan.relative, &plan.text).unwrap();
-        let stats = plan.text.split("splat_stats:\n").nth(1).unwrap();
-        assert!(stats.starts_with("  max_hp: {value: 150}\n"));
-        let names: Vec<_> = stats
-            .lines()
-            .take_while(|line| line.starts_with(' '))
-            .map(|line| {
-                assert!(
-                    line.starts_with("  ") && !line.starts_with("    "),
-                    "one line per stat: {line}"
-                );
-                line.trim().split(':').next().unwrap()
-            })
-            .collect();
-        assert_eq!(
-            &names[..11],
-            &[
-                "max_hp",
-                "armor_class",
-                "initiative",
-                "speed",
-                "swim_speed",
-                "strength",
-                "dexterity",
-                "constitution",
-                "intelligence",
-                "wisdom",
-                "charisma"
-            ]
-        );
-        assert!(stats.contains("speed: {value: 10, unit: ft}"));
-        assert!(plan.text.contains("size: large"));
+        assert!(plan.text.contains("| Hit Points | 150 (20d10 + 40) |"));
+        assert!(plan.text.contains("| Speed | 10 ft., Swim 40 ft. |"));
+        assert!(plan.text.contains("| Size | Large |"));
         for key in ["splat_creature", "splat_stats"] {
             assert_eq!(copied.fields.get(key), source.entry.fields.get(key));
             assert!(
-                plan.text
+                !plan
+                    .text
                     .split("\n---")
                     .next()
                     .unwrap()
                     .contains(&format!("{key}:"))
             );
-            assert!(!copied.body.contains(&format!("path={key}")));
+            assert!(!copied.body.contains(&format!("path={key} ")));
         }
         assert!(
             copied
@@ -3098,6 +3123,10 @@ mod tests {
             )
             .unwrap_or_else(|e| panic!("{name}: {e}"));
             let copy = Entry::parse(&plan.relative, &plan.text).unwrap();
+            if name == "Werewolf" {
+                assert!(plan.layout_warning.is_some());
+                assert!(plan.text.contains("splat_schema: 1"));
+            }
             assert_ne!(copy.id, indexed.entry.id);
             let own_key = indexed.entry.key.clone().unwrap();
             let references = content::required_references(&copy).unwrap();
@@ -3265,7 +3294,7 @@ mod tests {
         id
     }
     fn write_creature(folder: &Path, name: &str, requires: &str) {
-        let text = patch_fields(
+        let text = content::formats::patch_model(
             &note_text(name, "creature", None),
             &[(
                 "splat_requires",

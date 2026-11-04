@@ -32,6 +32,7 @@ pub mod layout;
 pub mod list_formats;
 mod markdown;
 mod shared;
+pub mod stat_blocks;
 pub use shared::validate_with_builtin;
 mod table_mapping;
 
@@ -215,7 +216,19 @@ impl Entry {
             None => None,
         };
         let body = rest.get(end + 5..).unwrap_or("").to_owned();
-        markdown::read(&body, &mut fields)?;
+        let tables = schema == 2
+            && stat_blocks::owns(
+                &kind,
+                fields.contains_key("splat_character") || body.contains("path=splat_payload"),
+            );
+        if tables {
+            markdown::read(&stat_blocks::without_legacy(&body, &kind), &mut fields)?;
+        } else {
+            markdown::read(&body, &mut fields)?;
+        }
+        if schema == 1 && kind == "creature" && !fields.contains_key("splat_character") {
+            stat_blocks::read_legacy_identity(&body, &mut fields);
+        }
         let flags = formats::read(schema, &text, &mut fields);
         let (inventory, inventory_containers) = inventory(&body)?;
         let entry = Self {

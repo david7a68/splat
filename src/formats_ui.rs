@@ -13,15 +13,40 @@ use std::{
 };
 
 pub struct Preview {
+    owner: usize,
     root: PathBuf,
     path: String,
     before: String,
     after: String,
 }
 
+const GENERATED_REASON: &str = "Generated package; its converter writes the layout";
+
+struct OwnerPreview {
+    root: PathBuf,
+    name: String,
+    checked: bool,
+    package: bool,
+    reason: Option<&'static str>,
+}
+
+impl OwnerPreview {
+    fn new(root: PathBuf, name: String, campaign: bool) -> Self {
+        let generated = !campaign && crate::content_workspace::generated_package(&root);
+        Self {
+            root,
+            name,
+            checked: campaign,
+            package: !campaign,
+            reason: generated.then_some(GENERATED_REASON),
+        }
+    }
+}
+
 #[derive(Default)]
 pub struct State {
     preview: Option<Vec<Preview>>,
+    owners: Vec<OwnerPreview>,
     selected: usize,
     undo: Vec<Change>,
     notice_file: Option<PathBuf>,
@@ -55,17 +80,27 @@ impl State {
             campaigns.active_campaign().as_ref(),
         )
         .ok();
-        let mut roots: Vec<_> = campaigns
+        self.owners = campaigns
             .active_campaign()
-            .map(|c| c.path.clone())
+            .map(|c| OwnerPreview::new(c.path.clone(), c.name.clone(), true))
             .into_iter()
             .collect();
-        roots.extend(campaigns.modules().iter().map(|m| m.path.clone()));
+        let mut modules: Vec<_> = campaigns.modules().iter().collect();
+        modules.sort_by_key(|m| m.name.to_lowercase());
+        self.owners.extend(
+            modules
+                .into_iter()
+                .map(|m| OwnerPreview::new(m.path.clone(), m.name.clone(), false)),
+        );
         self.skipped.clear();
         let mut preview = Vec::new();
         let mut seen = std::collections::BTreeSet::new();
-        for root in roots {
-            let Ok((entries, errors)) = splat::content::read_directory(&root) else {
+        for (owner, group) in self.owners.iter().enumerate() {
+            if group.reason.is_some() {
+                continue;
+            }
+            let root = &group.root;
+            let Ok((entries, errors)) = splat::content::read_directory(root) else {
                 continue;
             };
             self.skipped.extend(
@@ -78,7 +113,7 @@ impl State {
                     continue;
                 }
                 let result = (|| {
-                    let path = note_path(&root, &entry.path)?;
+                    let path = note_path(root, &entry.path)?;
                     if !seen.insert(path.clone()) {
                         return Ok(None);
                     }
@@ -98,6 +133,7 @@ impl State {
                             .flat_map(|cat| cat.entries.values().map(|item| &item.entry)),
                     )?;
                     Ok::<_, String>(Some(Preview {
+                        owner,
                         root: root.clone(),
                         path: entry.path.clone(),
                         before,
@@ -124,6 +160,7 @@ impl State {
                         Ok((before, after))
                     }) {
                     Ok((before, after)) if before != after => preview.push(Preview {
+                        owner: 0,
                         root: folder,
                         path: crate::timeline::FILE.into(),
                         before,
@@ -134,7 +171,7 @@ impl State {
                 }
             }
         }
-        preview.sort_by(|a, b| a.root.cmp(&b.root).then(a.path.cmp(&b.path)));
+        preview.sort_by(|a, b| a.owner.cmp(&b.owner).then(a.path.cmp(&b.path)));
         self.selected = 0;
         self.preview = Some(preview);
     }
@@ -146,12 +183,37 @@ impl State {
         self.undo.clear();
         self.notice_file = None;
         for file in files {
-            match write_note(&file.root, &file.path, Some(&file.before), &file.after) {
-                Ok(_) => self.undo.push(Change::text(
-                    file.root.join(&file.path),
-                    Some(&file.before),
-                    Some(&file.after),
-                )),
+            if !self
+                .owners
+                .get(file.owner)
+                .is_some_and(|owner| owner.checked && owner.reason.is_none())
+                || self.owners.get(file.owner).is_some_and(|owner| {
+                    owner.package && crate::content_workspace::generated_package(&file.root)
+                })
+            {
+                continue;
+            }
+            let change = Change::text(
+                file.root.join(&file.path),
+                Some(&file.before),
+                Some(&file.after),
+            );
+            let result = if file.path == crate::timeline::FILE {
+                (|| {
+                    let path = note_path(&file.root, &file.path)?;
+                    if [&path, &file.root]
+                        .iter()
+                        .any(|p| fs::metadata(p).is_ok_and(|m| m.permissions().readonly()))
+                    {
+                        return Err("This file is read only.".into());
+                    }
+                    file_batch::apply(std::slice::from_ref(&change))
+                })()
+            } else {
+                write_note(&file.root, &file.path, Some(&file.before), &file.after).map(|_| ())
+            };
+            match result {
+                Ok(()) => self.undo.push(change),
                 Err(error) => self.skipped.push(format!("{}: {error}", file.path)),
             }
         }
@@ -195,9 +257,32 @@ impl State {
             let mut close = false;
             design::dialog(ui.ctx(), "convert_files", "Convert files", |ui| {
                 let files = self.preview.as_ref().unwrap();
-                ui.label(format!("{} files can use the new layout.", files.len()));
+                egui::ScrollArea::vertical()
+                    .id_salt("conversion_owners")
+                    .max_height(design::XXL * 4.0)
+                    .auto_shrink([false, true])
+                    .show(ui, |ui| {
+                        for owner in &mut self.owners {
+                            ui.add_enabled_ui(owner.reason.is_none(), |ui| {
+                                ui.checkbox(&mut owner.checked, &owner.name);
+                                if let Some(reason) = owner.reason {
+                                    ui.label(Type::Small.rich(ui, reason));
+                                }
+                            });
+                        }
+                    });
+                let selected_files: Vec<_> = files
+                    .iter()
+                    .filter(|file| {
+                        self.owners[file.owner].checked && self.owners[file.owner].reason.is_none()
+                    })
+                    .collect();
+                ui.label(format!(
+                    "{} files can use the new layout.",
+                    selected_files.len()
+                ));
                 let mut kinds = std::collections::BTreeMap::<String, usize>::new();
-                for file in files {
+                for file in &selected_files {
                     if file.path == crate::timeline::FILE {
                         *kinds.entry("timeline".into()).or_default() += 1;
                     } else if let Ok(entry) = Entry::parse(&file.path, &file.before) {
@@ -230,13 +315,23 @@ impl State {
                     let picker = egui::ComboBox::from_id_salt("convert_file")
                         .selected_text(&file.path)
                         .show_ui(ui, |ui| {
-                            for (at, file) in files.iter().enumerate() {
-                                ui.selectable_value(&mut self.selected, at, &file.path);
+                            for (owner, group) in self.owners.iter().enumerate() {
+                                if group.reason.is_some() {
+                                    continue;
+                                }
+                                ui.label(Type::Small.rich(ui, &group.name));
+                                for (at, file) in files
+                                    .iter()
+                                    .enumerate()
+                                    .filter(|(_, file)| file.owner == owner)
+                                {
+                                    ui.selectable_value(&mut self.selected, at, &file.path);
+                                }
                             }
                         });
                     design::named(ui, &picker.response, "File to convert");
                     let file = &files[self.selected];
-                    let height = (ui.available_height() - design::XXL).min(design::XXL * 10.0);
+                    let height = (ui.ctx().content_rect().height() * 0.4).min(design::XXL * 8.0);
                     ui.allocate_ui(egui::vec2(ui.available_width(), height), |ui| {
                         design::draft_comparison_labeled(
                             ui,
@@ -258,7 +353,9 @@ impl State {
                 ui.horizontal(|ui| {
                     apply = Action::primary("Convert files")
                         .blocked(
-                            blocked.or(files.is_empty().then_some("No files need conversion.")),
+                            blocked.or(selected_files
+                                .is_empty()
+                                .then_some("Select an owner with files to convert.")),
                         )
                         .show(ui)
                         .clicked();
@@ -287,6 +384,188 @@ impl State {
 mod tests {
     use super::*;
 
+    fn snapshot(root: &Path) -> Vec<(PathBuf, Vec<u8>)> {
+        let mut files = Vec::new();
+        for item in fs::read_dir(root).unwrap() {
+            let path = item.unwrap().path();
+            if path.is_dir() {
+                files.extend(snapshot(&path));
+            } else {
+                files.push((path.clone(), fs::read(path).unwrap()));
+            }
+        }
+        files.sort();
+        files
+    }
+
+    #[test]
+    fn fmt_f2_f3_owner_filter_keeps_lists_and_timeline_with_their_owner() {
+        let dir = tempfile::tempdir().unwrap();
+        let world = crate::visual_tests::fixture::World::build(
+            dir.path(),
+            &dir.path().join("cache"),
+            "conversion-list-owners",
+            crate::visual_tests::fixture::Seed::Formats,
+        )
+        .unwrap();
+        let app = world.app();
+        let campaign = app.campaigns.active_campaign().unwrap();
+        let manifest = campaign.path.join("Campaign.md");
+        let mut fields = (*Entry::parse("Campaign.md", &fs::read_to_string(&manifest).unwrap())
+            .unwrap()
+            .fields)
+            .clone();
+        fields.insert("splat_schema".into(), 1.into());
+        fs::write(
+            manifest,
+            format!("---\n{}---\n", serde_yaml_ng::to_string(&fields).unwrap()),
+        )
+        .unwrap();
+        for root in
+            std::iter::once(&campaign.path).chain(app.campaigns.modules().iter().map(|m| &m.path))
+        {
+            fs::write(root.join("Legacy guards.md"), format!("---\nsplat_schema: 1\nsplat_id: {}\nsplat_kind: encounter_group\nsplat_name: Legacy guards\nsplat_encounter_group: {{side: enemies, members: [{{creature: {{key: 'dnd2024:creatures/goblin_warrior'}}, count: 2, overrides: {{name: Scout, note: Quiet}}}}]}}\n---\n", uuid::Uuid::new_v4())).unwrap();
+        }
+        let timeline = crate::sessions::open_folder(&campaign)
+            .unwrap()
+            .join(crate::timeline::FILE);
+        let old_timeline = "---\ntimeline_version: 1\ntimeline:\n- id: t-owner-day\n  kind: day\n  title: The crossing\n---\n\n# Timeline\n";
+        fs::write(&timeline, old_timeline).unwrap();
+        let campaign_before = snapshot(&campaign.path);
+        let generated = app
+            .campaigns
+            .modules()
+            .iter()
+            .find(|m| m.name == "Generated Book")
+            .unwrap();
+        let generated_before = snapshot(&generated.path);
+        let mut state = State::default();
+        state.scan(&app.campaigns);
+        let files = state.preview.as_ref().unwrap();
+        for kind in ["campaign", "encounter_group", "encounter"] {
+            assert!(
+                files.iter().any(|f| f.owner == 0
+                    && Entry::parse(&f.path, &f.before).is_ok_and(|e| e.kind == kind)),
+                "{kind}: {:?}",
+                state.skipped
+            );
+        }
+        assert!(
+            files
+                .iter()
+                .any(|f| f.owner == 0 && f.path == crate::timeline::FILE)
+        );
+        for owner in &mut state.owners {
+            owner.checked = owner.name == "Ashen Marches";
+        }
+        state.apply();
+        assert_eq!(snapshot(&campaign.path), campaign_before);
+        assert_eq!(snapshot(&generated.path), generated_before);
+        let package = app
+            .campaigns
+            .modules()
+            .iter()
+            .find(|m| m.name == "Ashen Marches")
+            .unwrap();
+        assert!(
+            fs::read_to_string(package.path.join("Legacy guards.md"))
+                .unwrap()
+                .contains("splat_schema: 2")
+        );
+        state.scan(&app.campaigns);
+        state.apply();
+        assert!(
+            fs::read_to_string(&timeline)
+                .unwrap()
+                .contains("timeline_version: 2")
+        );
+        assert!(
+            fs::read_to_string(campaign.path.join("Legacy guards.md"))
+                .unwrap()
+                .contains("splat_schema: 2")
+        );
+        assert_eq!(snapshot(&generated.path), generated_before);
+        state.undo().unwrap();
+        assert_eq!(snapshot(&campaign.path), campaign_before);
+    }
+
+    #[test]
+    fn fmt_f2_conversion_defaults_to_campaign_and_never_writes_generated_or_unticked_packages() {
+        let dir = tempfile::tempdir().unwrap();
+        let world = crate::visual_tests::fixture::World::build(
+            dir.path(),
+            &dir.path().join("cache"),
+            "conversion-owners",
+            crate::visual_tests::fixture::Seed::Formats,
+        )
+        .unwrap();
+        let app = world.app();
+        let before: Vec<_> = app
+            .campaigns
+            .modules()
+            .iter()
+            .map(|m| snapshot(&m.path))
+            .collect();
+        let mut state = State::default();
+        state.scan(&app.campaigns);
+        assert!(state.owners[0].checked);
+        assert!(state.owners[1..].iter().all(|owner| !owner.checked));
+        let generated = state
+            .owners
+            .iter()
+            .position(|owner| owner.name == "Generated Book")
+            .unwrap();
+        assert_eq!(state.owners[generated].reason, Some(GENERATED_REASON));
+        assert!(
+            state
+                .preview
+                .as_ref()
+                .unwrap()
+                .iter()
+                .all(|file| file.owner != generated)
+        );
+        // Even a stale or forged selection cannot opt a generated package in.
+        state.owners[generated].checked = true;
+        state.apply();
+        assert!(!state.undo.is_empty(), "campaign files converted");
+        for (module, before) in app.campaigns.modules().iter().zip(before) {
+            assert_eq!(snapshot(&module.path), before, "{}", module.name);
+        }
+    }
+
+    #[test]
+    fn fmt_f2_generated_marker_added_after_preview_still_blocks_conversion() {
+        let dir = tempfile::tempdir().unwrap();
+        let world = crate::visual_tests::fixture::World::build(
+            dir.path(),
+            &dir.path().join("cache"),
+            "conversion-marker-race",
+            crate::visual_tests::fixture::Seed::Formats,
+        )
+        .unwrap();
+        let app = world.app();
+        let mut state = State::default();
+        state.scan(&app.campaigns);
+        let group = state
+            .owners
+            .iter_mut()
+            .find(|owner| owner.name == "Ashen Marches")
+            .unwrap();
+        group.checked = true;
+        fs::copy(group.root.join("Module.md"), group.root.join("Package.md")).unwrap();
+        let manifest = fs::read_to_string(group.root.join("Package.md")).unwrap();
+        fs::write(
+            group.root.join("Package.md"),
+            splat::content::patch_fields(&manifest, &[("splat_generated", Some(true.into()))])
+                .unwrap(),
+        )
+        .unwrap();
+        let before = snapshot(&group.root);
+        let root = group.root.clone();
+        state.apply();
+        assert_eq!(snapshot(&root), before);
+    }
+
     #[test]
     #[cfg(unix)]
     fn fmt_f1_conversion_skips_read_only_files() {
@@ -297,7 +576,13 @@ mod tests {
         fs::write(&path, before).unwrap();
         fs::set_permissions(&path, fs::Permissions::from_mode(0o444)).unwrap();
         let mut state = State {
+            owners: vec![OwnerPreview::new(
+                dir.path().into(),
+                "Campaign".into(),
+                true,
+            )],
             preview: Some(vec![Preview {
+                owner: 0,
                 root: dir.path().into(),
                 path: "Rook.md".into(),
                 before: before.into(),
@@ -317,6 +602,11 @@ mod tests {
         let old = "---\nsplat_schema: 1\nsplat_id: 00000000-0000-0000-0000-000000000001\nsplat_kind: world\nsplat_name: Rook\nsplat_world: {type: npc}\n---\n";
         let after = formats::convert("Rook.md", old).unwrap();
         let mut state = State::default();
+        state.owners.push(OwnerPreview::new(
+            dir.path().into(),
+            "Campaign".into(),
+            true,
+        ));
         for name in ["Rook.md", "Second.md", "Changed.md"] {
             fs::write(dir.path().join(name), old).unwrap();
         }
@@ -324,6 +614,7 @@ mod tests {
             ["Rook.md", "Second.md", "Changed.md"]
                 .into_iter()
                 .map(|name| Preview {
+                    owner: 0,
                     root: dir.path().into(),
                     path: name.into(),
                     before: old.into(),

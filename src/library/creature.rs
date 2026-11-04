@@ -111,7 +111,7 @@ pub(super) fn without_vitals(entry: &Entry, body: &str) -> String {
         }
     }
     output.push_str(&body[start..]);
-    output
+    splat::content::stat_blocks::reading_body(entry, &output)
 }
 
 pub(super) fn use_vital(
@@ -120,6 +120,11 @@ pub(super) fn use_vital(
     key: &str,
     value: i64,
 ) -> Result<String, String> {
+    if entry.fields.get("splat_schema").and_then(|v| v.as_u64()) == Some(2) {
+        let mut stats = entry.fields["splat_stats"].clone();
+        stats[key]["value"] = value.into();
+        return splat::content::formats::patch_model(text, &[("splat_stats", Some(stats))]);
+    }
     // Book copies keep stats in a marked Markdown map. Change its value cell only.
     let mut in_stats = false;
     let mut offset = 0;
@@ -419,7 +424,8 @@ fn vital_rows(entry: &Entry) -> Vec<(&'static str, String)> {
                     .map(|text| text.trim_end_matches('\\').trim().to_owned())
             })
         })
-        .or_else(|| stat(entry, "max_hp").map(|hp| hp.to_string()));
+        .or_else(|| stat(entry, "max_hp").map(|hp| hp.to_string()))
+        .or_else(|| splat::content::stat_blocks::invalid_vital(entry, "max_hp"));
     let armor_class = field(entry, "armor_class_text")
         .filter(|text| {
             text.split_whitespace()
@@ -428,11 +434,17 @@ fn vital_rows(entry: &Entry) -> Vec<(&'static str, String)> {
                 == stat(entry, "armor_class")
         })
         .map(str::to_owned)
-        .or_else(|| stat(entry, "armor_class").map(|ac| ac.to_string()));
+        .or_else(|| stat(entry, "armor_class").map(|ac| ac.to_string()))
+        .or_else(|| splat::content::stat_blocks::invalid_vital(entry, "armor_class"));
     [
         ("ARMOR CLASS", armor_class),
         ("HIT POINTS", hp),
-        ("INITIATIVE", stat(entry, "initiative").map(design::signed)),
+        (
+            "INITIATIVE",
+            stat(entry, "initiative")
+                .map(design::signed)
+                .or_else(|| splat::content::stat_blocks::invalid_vital(entry, "initiative")),
+        ),
     ]
     .into_iter()
     .filter_map(|(label, text)| text.map(|text| (label, text)))
@@ -474,8 +486,21 @@ pub(super) fn vitals(ui: &mut egui::Ui, entry: &Entry, values: Option<&super::vi
                             .map_or_else(|| "Unknown".to_owned(), |hp| hp.to_string())
                     )
                 });
+                let printed = match label {
+                    "ARMOR CLASS" => stat(entry, "armor_class"),
+                    "HIT POINTS" => stat(entry, "max_hp"),
+                    _ => stat(entry, "initiative"),
+                };
+                let invalid = entry.fields.get("splat_schema").and_then(|v| v.as_u64()) == Some(2)
+                    && printed.is_none()
+                    && text != "Unknown";
+                let display = if invalid {
+                    format!("{} {text}", design::icons::WARN)
+                } else {
+                    text.clone()
+                };
                 let width = design::number_width(ui, label, &Type::Label.font(ui))
-                    .max(design::number_width(ui, &text, &Type::Prose.font(ui)))
+                    .max(design::number_width(ui, &display, &Type::Prose.font(ui)))
                     .max(design::number_width(
                         ui,
                         run_hp.as_deref().unwrap_or(&text),
@@ -493,11 +518,6 @@ pub(super) fn vitals(ui: &mut egui::Ui, entry: &Entry, values: Option<&super::vi
                             "HIT POINTS" => values.hp,
                             _ => values.initiative,
                         });
-                        let printed = match label {
-                            "ARMOR CLASS" => stat(entry, "armor_class"),
-                            "HIT POINTS" => stat(entry, "max_hp"),
-                            _ => stat(entry, "initiative"),
-                        };
                         let shown = live.map_or_else(
                             || text.clone(),
                             |n| {
@@ -513,7 +533,16 @@ pub(super) fn vitals(ui: &mut egui::Ui, entry: &Entry, values: Option<&super::vi
                                 )
                             },
                         );
-                        ui.label(Type::Prose.rich(ui, run_hp.unwrap_or(shown)).color(c.text));
+                        let shown = run_hp.unwrap_or(shown);
+                        if invalid {
+                            ui.label(
+                                Type::Prose
+                                    .rich(ui, format!("{} {shown}", design::icons::WARN))
+                                    .color(c.result.warning),
+                            );
+                        } else {
+                            ui.label(Type::Prose.rich(ui, shown).color(c.text));
+                        }
                         if let Some(live) = live
                             && live != printed
                         {
@@ -548,6 +577,9 @@ fn unbroken_dice(text: &str) -> String {
 /// The body line that gives this creature's hit points, such as `HP 22 (4d8 + 4)`. The
 /// vitals show it, with the dice, so the page says it once.
 fn hit_points_line(entry: &Entry) -> Option<&str> {
+    if entry.fields.get("splat_schema").and_then(|v| v.as_u64()) == Some(2) {
+        return None;
+    }
     let max = stat(entry, "max_hp")?;
     entry.body.lines().map(str::trim).find(|line| {
         line.strip_prefix("HP ")
@@ -601,6 +633,9 @@ fn detail(entry: &Entry, key: &str) -> Option<String> {
         .collect::<Vec<_>>();
     if !movement.is_empty() {
         return Some(movement.join(", "));
+    }
+    if entry.fields.get("splat_schema").and_then(|v| v.as_u64()) == Some(2) {
+        return None;
     }
     entry.body.lines().find_map(|line| {
         line.trim()
@@ -717,6 +752,14 @@ mod tests {
     fn legacy_source_cr_and_speed_are_shown_once_without_markdown_breaks() {
         let text = crate::library::note_text("Cinder Wolf", "creature", None);
         let mut entry = Entry::parse("Cinder Wolf.md", &text).unwrap();
+        entry.fields.insert("splat_schema".into(), 1.into());
+        entry
+            .fields
+            .get_mut("splat_creature")
+            .unwrap()
+            .as_mapping_mut()
+            .unwrap()
+            .remove("movement_text");
         entry
             .fields
             .get_mut("splat_creature")
@@ -753,13 +796,32 @@ mod tests {
     }
 
     #[test]
+    fn fmt_f2_rejected_hp_uses_the_vital_row_without_becoming_a_stat() {
+        let text = crate::library::note_text("Bad HP", "creature", None)
+            .replace("| Hit Points |  |", "| Hit Points | about twenty |");
+        let entry = Entry::parse("Bad HP.md", &text).unwrap();
+        assert_eq!(stat(&entry, "max_hp"), None);
+        assert!(vital_rows(&entry).contains(&("HIT POINTS", "about twenty".into())));
+        assert!(!without_vitals(&entry, &entry.body).contains("| Hit Points |"));
+        assert!(text.contains("| Hit Points | about twenty |"));
+        let repaired = use_vital(&text, &entry, "max_hp", 22).unwrap();
+        let repaired = Entry::parse("Bad HP.md", &repaired).unwrap();
+        assert_eq!(stat(&repaired, "max_hp"), Some(22));
+        assert!(
+            repaired
+                .flags
+                .iter()
+                .all(|flag| !flag.message.starts_with("Hit Points"))
+        );
+    }
+
+    #[test]
     fn prose_vitals_warn_and_use_updates_the_fight_source() {
         let text = format!(
             "{}\n**Hit Points** 45\n\n**Armor Class** 17\n",
-            crate::library::note_text("Guard", "creature", None).replace(
-                "splat_stats:\n",
-                "splat_stats:\n  max_hp: {value: 1}\n  armor_class: {value: 10}\n"
-            )
+            crate::library::note_text("Guard", "creature", None)
+                .replace("| Hit Points |  |", "| Hit Points | 1 |")
+                .replace("| Armor Class |  |", "| Armor Class | 10 |")
         );
         let entry = Entry::parse("Guard.md", &text).unwrap();
         let checks = vital_checks(&entry);

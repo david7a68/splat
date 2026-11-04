@@ -201,7 +201,11 @@ fn show_inner(
             design::message(
                 ui,
                 crate::design::Tone::Warning,
-                &format!("Line {}: {}", flag.line, flag.message),
+                &if flag.message.starts_with("Hit Points \"") {
+                    format!("{} (line {}).", flag.message, flag.line)
+                } else {
+                    format!("Line {}: {}", flag.line, flag.message)
+                },
             );
         }
     }
@@ -210,12 +214,27 @@ fn show_inner(
     let body = if let Some(entry) = entry.filter(|entry| creature::has_stats(entry)) {
         clean_body = creature::without_vitals(entry, body);
         clean_body.as_str()
+    } else if let Some(entry) = entry.filter(|entry| {
+        entry.fields.get("splat_schema").and_then(|v| v.as_u64()) == Some(2)
+            && ["spell", "item"].contains(&entry.kind.as_str())
+    }) {
+        clean_body = splat::content::stat_blocks::reading_body(entry, body);
+        clean_body.as_str()
     } else {
         body
     };
     let sections: Vec<_> = presentation::reading_sections(body, name)
         .into_iter()
         .filter(|section| {
+            if entry.is_some_and(|e| {
+                e.fields.get("splat_schema").and_then(|v| v.as_u64()) == Some(2)
+                    && ["creature", "spell", "item"].contains(&e.kind.as_str())
+            }) && presentation::overview_markdown(section.body)
+                .trim()
+                .is_empty()
+            {
+                return false;
+            }
             section.title != "Personal notes"
                 || section.body.trim() != "This section is kept when the sheet refreshes."
         })

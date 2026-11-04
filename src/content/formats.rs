@@ -189,6 +189,14 @@ pub fn read(schema: u64, text: &str, fields: &mut Mapping) -> Vec<Flag> {
             }
         }
     }
+    let kind = fields
+        .get("splat_kind")
+        .and_then(Value::as_str)
+        .unwrap_or("")
+        .to_owned();
+    if schema == 2 && super::stat_blocks::owns(&kind, fields.contains_key("splat_character")) {
+        super::stat_blocks::read_tables(&kind, text, fields, &mut flags);
+    }
     flags
 }
 
@@ -218,6 +226,9 @@ fn expand_pages(value: &Value) -> Option<Value> {
 pub fn eligible(entry: &Entry) -> bool {
     [
         "world",
+        "creature",
+        "spell",
+        "item",
         "campaign",
         "encounter_group",
         "encounter",
@@ -239,6 +250,30 @@ pub fn patch_model(text: &str, changes: &[(&str, Option<Value>)]) -> Result<Stri
     let original = Entry::parse("note.md", text)?;
     if schema(&original.fields)? == 1 {
         return patch_fields(text, changes);
+    }
+    if super::stat_blocks::owns(
+        &original.kind,
+        original.fields.contains_key("splat_character"),
+    ) && changes
+        .iter()
+        .any(|(key, _)| super::stat_blocks::data_roots(&original.kind).contains(key))
+    {
+        let table_changes: Vec<_> = changes
+            .iter()
+            .filter(|(key, _)| super::stat_blocks::data_roots(&original.kind).contains(key))
+            .cloned()
+            .collect();
+        let after = super::stat_blocks::patch(text, &table_changes)?;
+        let others: Vec<_> = changes
+            .iter()
+            .filter(|(key, _)| !super::stat_blocks::data_roots(&original.kind).contains(key))
+            .cloned()
+            .collect();
+        return if others.is_empty() {
+            Ok(after)
+        } else {
+            patch_model(&after, &others)
+        };
     }
     if ["campaign", "encounter_group", "encounter"].contains(&original.kind.as_str()) {
         return super::list_formats::patch(text, changes);
@@ -423,6 +458,16 @@ pub fn convert(path: &str, text: &str) -> Result<String, String> {
     }
     let newline = if text.contains("\r\n") { "\r\n" } else { "\n" };
     let mut changes = vec![("splat_schema", Some(2.into()))];
+    let stat_kind =
+        super::stat_blocks::owns(&entry.kind, entry.fields.contains_key("splat_character"));
+    let mut stat_body = String::new();
+    let mut stat_extras = Vec::new();
+    if stat_kind {
+        (stat_body, stat_extras) = super::stat_blocks::conversion(&entry.fields, &entry.kind)?;
+        for key in super::stat_blocks::data_roots(&entry.kind) {
+            changes.push((*key, None));
+        }
+    }
     if let Some(world) = entry.fields.get("splat_world").and_then(Value::as_mapping) {
         if world.keys().any(|key| {
             !WORLD_FIELDS
@@ -465,6 +510,9 @@ pub fn convert(path: &str, text: &str) -> Result<String, String> {
         let Some(key) = key.as_str() else {
             continue;
         };
+        if stat_kind && super::stat_blocks::data_roots(&entry.kind).contains(&key) {
+            continue;
+        }
         if key == "splat_world"
             || key == "splat_sources"
             || key == "splat_origin"
@@ -519,6 +567,12 @@ pub fn convert(path: &str, text: &str) -> Result<String, String> {
             ));
         }
     }
+    for (key, value) in stat_extras {
+        fences.push_str(&format!(
+            "\n<!-- splat:yaml path={key} -->\n\n```yaml\n{}```\n",
+            serde_yaml_ng::to_string(&value).map_err(|e| e.to_string())?
+        ));
+    }
     if character {
         fences.push_str(&format!(
             "\n<!-- splat:yaml path=splat_payload -->\n\n```yaml\n{}```\n",
@@ -533,7 +587,15 @@ pub fn convert(path: &str, text: &str) -> Result<String, String> {
     {
         changes.push(("splat_pages", Some(pages.clone())));
     }
-    let mut after = patch_fields(text, &changes)?;
+    let source = if stat_kind {
+        super::stat_blocks::without_legacy(text, &entry.kind)
+    } else {
+        text.into()
+    };
+    let mut after = patch_fields(&source, &changes)?;
+    if stat_kind {
+        after = super::stat_blocks::insert_section(&after, &stat_body);
+    }
     if !fences.is_empty() {
         after.push_str(&format!(
             "{newline}## {}{newline}",
