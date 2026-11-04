@@ -3,9 +3,6 @@ use super::*;
 use std::fs;
 
 pub fn run(d: &mut Driver<'_>) {
-    open_saved_encounter(d, "Shrine of Cinders");
-    d.clear_text_in("Encounter name");
-    d.type_into("Encounter name", "Cinders at dawn");
     let campaign = d.app_mut().campaigns.active_campaign().unwrap();
     let entries = splat::content::read_directory(&campaign.path).unwrap().0;
     let entry = entries
@@ -13,16 +10,49 @@ pub fn run(d: &mut Driver<'_>) {
         .find(|entry| entry.name == "Shrine of Cinders")
         .unwrap();
     let path = campaign.path.join(&entry.path);
-    let disk = fs::read_to_string(&path)
-        .unwrap()
-        .replace("splat_schema: 1", "tags: [dawn]\nsplat_schema: 1");
+    // Seed this legacy conflict in the draft writer's block style, so the
+    // comparison measures the name change rather than fixture YAML formatting.
+    let source = fs::read_to_string(&path).unwrap();
+    let source = splat::content::patch_fields(
+        &source,
+        &[(
+            "splat_encounter",
+            entry.fields.get("splat_encounter").cloned(),
+        )],
+    )
+    .unwrap();
+    fs::write(&path, &source).unwrap();
+    open_saved_encounter(d, "Shrine of Cinders");
+    d.clear_text_in("Encounter name");
+    d.type_into("Encounter name", "Cinders at dawn");
+    let disk = source.replace("splat_schema: 1", "tags: [dawn]\nsplat_schema: 1");
     fs::write(&path, format!("{disk}\nDM's outside account.\n")).unwrap();
     d.press_ctrl(Key::S);
     d.expect("Overwrite with my draft");
     d.expect("Reload and lose my draft");
+    d.observe_both(
+        "i19-E comparison",
+        "Only the encounter name differs in the disk's layout",
+        |d| {
+            d.visible_text("1 line differs")
+                && d.visible_text("YOUR DRAFT")
+                && d.visible_text("IN THE FILE NOW")
+        },
+    );
     d.state("encounter-disk-comparison", Sizes::All);
     d.click("Overwrite with my draft");
     d.expect("saved in the new layout.");
+    d.observe_both(
+        "i19-E save",
+        "Overwrite has one save message and one named Undo",
+        |d| {
+            let nodes = d.nodes();
+            nodes.iter().filter(|node| node.name == "Undo save").count() == 1
+                && !d.has("Undo")
+                && !d.has("Encounter saved.")
+                && !d.has("Saved in the new layout.")
+        },
+    );
     d.observe(
         "D8",
         fs::read_to_string(&path).unwrap().contains("tags: [dawn]"),

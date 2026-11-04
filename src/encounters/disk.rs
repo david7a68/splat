@@ -129,6 +129,29 @@ fn read(root: &Path, path: &str) -> Result<Option<String>, String> {
     }
 }
 
+/// Compare like layouts. Overwrite performs conversion after the choice.
+/// Schema 2 keeps the save writer's readable-reference updates.
+pub(super) fn comparison_text(
+    path: &str,
+    text: String,
+    snapshot: &super::Snapshot,
+) -> Result<String, String> {
+    use splat::content::{Entry, formats};
+    if formats::schema(&Entry::parse(path, &text)?.fields) == Ok(1) {
+        Ok(text)
+    } else {
+        formats::convert_resolved(
+            path,
+            &text,
+            snapshot
+                .catalogue
+                .entries
+                .values()
+                .map(|entry| &entry.entry),
+        )
+    }
+}
+
 impl super::Encounters {
     pub(super) fn encounter_disk_view(
         &mut self,
@@ -160,7 +183,7 @@ impl super::Encounters {
         }
         let choice = draft
             .recovery
-            .show(ui, &draft.write_text(snapshot).unwrap_or_default());
+            .show(ui, &draft.comparison_text(snapshot).unwrap_or_default());
         if let Some(keep) = choice {
             if keep {
                 if let Some(change) = draft.recovery.accept() {
