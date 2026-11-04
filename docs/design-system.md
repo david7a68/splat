@@ -184,6 +184,15 @@ Encounter and group conflict comparisons use the disk's layout. The draft includ
 outside properties and prose that Overwrite keeps. Conversion follows the choice.
 It is blocked while a run is open. Malformed flat properties stay in the
 file; the reader shows a warning with the line number and keeps the note available. Timeline version 2 uses event lists and day IDs in comments below the headings.
+
+Every write renumbers day headings to match the displayed clock. File items use Fight
+and Major event; the reader also accepts Encounter and Event, in any case, with or
+without a colon. Separate app and outside event edits save together with a quiet
+notice. Edits to the same event require a choice. Timeline flags name the file and
+line and offer the shared file actions; flagged days have a warning icon. The rail
+uses Timeline changed on disk in warning colour for conflicts, and Timeline not saved
+in error colour for write failures.
+
 Campaign packages use tasks; a toggle changes one character. Rule choices, group members,
 and saved encounter rosters use tables. A bad cell names its line and stays on disk.
 Encounter and group notes forms show the DM's prose and keep the managed table outside
@@ -301,7 +310,7 @@ The Session page is a list the DM works down, beside the note. A row is an icon,
 the right. A row opens in place, and its fields use the same form parts as the Timeline page. The first fight to come has
 the primary button when no run is open, and the others the secondary. A saved unfinished run offers Resume, with Start a new run and Delete the saved run in its menu. The open run has a status link; the strip owns the primary. The word for a fight is **Start
 fight**, on this page and on Encounters. Plan rows with actions reserve the same right-aligned action slot and a separate row-menu slot. Each planned fight has Remove from tonight in its menu. It removes one plan link, keeps other words and has Undo remove below that row. Add buttons stay at the foot of the plan, and a message opens above them, so
-that they do not move under the pointer. An empty plan uses `empty_state` above the strip. A played fight shows its result and last round once, on its second line. Its final party HP uses first names in a grid of two or three cells per line, then quiet Log, Whole run and Timeline links. Hover gives full names and conditions. Remove stays in its row menu, aligned with the name. Session and Timeline add a long rest with the same full-HP ruling, message and Undo add. Both show Everyone at full. The opened plan row and Timeline detail offer Not at full and Everyone at full, with Undo ruling until the next edit. In a page narrower than 720 px, the plan and the note have a tab each.
+that they do not move under the pointer. An empty plan uses `empty_state` above the strip. A played fight shows its result and last round once, on its second line. Its final party HP uses first names in a grid of two or three cells per line, then quiet Log, Whole run and Timeline links. Hover gives full names and conditions. Remove stays in its row menu, aligned with the name. Session and Timeline add a long rest with the same full-HP ruling, message and Undo add. Closed rows show Everyone at full. An open rest row hides its summary so the ruling stays in place. The opened plan row and Timeline detail offer Not at full and Everyone at full, with Undo ruling until the next edit. In a page narrower than 720 px, the plan and the note have a tab each.
 
 ## The encounter ledger and editor
 
@@ -445,8 +454,8 @@ The app-close dialog uses Keep running for a run, Keep recording for audio, and 
 Storage recovery uses the existing warning, comparison and save controls. A copied session names
 both files and offers **New identity** with Undo. A moved draft offers its new path and **Let it go**.
 Missing session and run folders show **Choose folder**. Recording results remain visible with
-**Audio removed** after the WAV is deleted. An outside edit to the Timeline body opens its existing
-disk-conflict comparison at the first difference. Overwrite comes before Reload and lose my timeline,
+**Audio removed** after the WAV is deleted. An outside edit to a legacy Timeline body opens its existing
+disk-conflict comparison at the first difference. A new-layout Timeline keeps outside prose and separate event edits on save. Overwrite comes before Reload and lose my timeline,
 which uses the destructive action style. Unknown Timeline properties and event fields survive saves.
 
 Timeline measures the title line with `Copy link` and `Saving blocked`, so copy and

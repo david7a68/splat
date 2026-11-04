@@ -100,6 +100,12 @@ or set `SPLAT_VISUAL_CONTACT_SHEET=1` to make it with a full `visual-test` run.
   clears scenario filters and baseline-update mode, and enforces the baseline.
   Video and optional contact-sheet settings work as for `visual-test`.
 
+Timeline files use `Fight`, `Travel`, `Short rest`, `Long rest` and `Major event`.
+The reader also accepts `Encounter` and `Event`, in any case, with or without a colon.
+Each save renumbers day headings. Separate edits in Splat and in Obsidian save together;
+changes to the same event require a choice. A flagged day names the file and line and
+provides `Edit in Obsidian` and `Show file`.
+
 Converted creature, spell and item files use readable tables. The reader shows
 each set fact once and hides machine lines. A creature's CR supplies missing XP
 and PB; mismatches are flagged unless they describe a lair. Printed creature stats
