@@ -534,8 +534,10 @@ pub fn package_rename(d: &mut Driver<'_>) {
             })
     });
     d.state("draft-file-moved-on-disk", Sizes::All);
+    let before_save = fs::read_to_string(&moved).unwrap();
     d.click("Save my draft to Moved/Ash Exposure.md");
-    d.wait_for_text("Saved");
+    d.wait_for_text("Ash Exposure.md saved in the new layout.");
+    d.expect("Undo save");
     assert!(!old.exists());
     let saved = fs::read_to_string(&moved).unwrap();
     assert!(saved.contains("My moved draft."));
@@ -545,6 +547,11 @@ pub fn package_rename(d: &mut Driver<'_>) {
     assert_eq!(entries.iter().filter(|entry| entry.id == id).count(), 1);
     reveal_editor_passage(d, "My moved draft.");
     d.state("draft-saved-at-moved-path", Sizes::All);
+    d.click("Undo save");
+    d.expect(UNSAVED_NOTE);
+    assert_eq!(fs::read_to_string(&moved).unwrap(), before_save);
+    assert!(d.editor_text().unwrap().contains("My moved draft."));
+    d.state("moved-save-undone-with-draft", Sizes::All);
 }
 
 pub fn package_about(d: &mut Driver<'_>) {

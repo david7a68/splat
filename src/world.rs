@@ -1834,6 +1834,11 @@ impl Reader {
             let value_width = Self::relationship_width(ui);
             if !self.status_editing {
                 let value = status(&item.entry);
+                let unread = item
+                    .entry
+                    .flags
+                    .iter()
+                    .any(|flag| flag.message.starts_with("Status "));
                 if Self::relationship_row(
                     ui,
                     "Status",
@@ -1841,8 +1846,21 @@ impl Reader {
                     |ui| {
                         ui.label(
                             Type::Small
-                                .rich(ui, if value.is_empty() { "not set" } else { value })
-                                .color(colors().muted),
+                                .rich(
+                                    ui,
+                                    if unread {
+                                        "not read"
+                                    } else if value.is_empty() {
+                                        "not set"
+                                    } else {
+                                        value
+                                    },
+                                )
+                                .color(if unread {
+                                    colors().result.warning
+                                } else {
+                                    colors().muted
+                                }),
                         );
                     },
                     None,

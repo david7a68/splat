@@ -77,9 +77,23 @@ pub fn read(schema: u64, text: &str, fields: &mut Mapping) -> Vec<Flag> {
     };
     if schema == 2 {
         super::list_formats::read(text, fields, &mut flags);
-        if fields.get("splat_kind").and_then(Value::as_str) == Some("rule") {
+        let kind = fields
+            .get("splat_kind")
+            .and_then(Value::as_str)
+            .unwrap_or("")
+            .to_owned();
+        if [
+            "rule",
+            "effect",
+            "sequence",
+            "strategy",
+            "seed",
+            "rule_group",
+        ]
+        .contains(&kind.as_str())
+        {
             fields
-                .entry(Value::from("splat_rule"))
+                .entry(Value::from(format!("splat_{kind}")))
                 .or_insert_with(|| Value::Mapping(Mapping::new()));
         }
         for key in ["splat_origin", "splat_sources", "splat_requires"] {
@@ -215,6 +229,9 @@ pub fn read(schema: u64, text: &str, fields: &mut Mapping) -> Vec<Flag> {
         .to_owned();
     if schema == 2 && super::stat_blocks::owns(&kind, fields.contains_key("splat_character")) {
         super::stat_blocks::read_tables(&kind, text, fields, &mut flags);
+    }
+    if kind == "creature" && !fields.contains_key("splat_character") {
+        super::stat_blocks::normalize_plain_stats(fields);
     }
     flags
 }
@@ -373,6 +390,7 @@ pub fn patch_model(text: &str, changes: &[(&str, Option<Value>)]) -> Result<Stri
                 let encoded =
                     serde_yaml_ng::to_string(flat.as_ref().unwrap()).map_err(|e| e.to_string())?;
                 after.push_str(&format!("\n## Splat data\n\n<!-- splat:yaml path={key} -->\n\n```yaml\n{encoded}```\n").replace('\n', newline));
+                after = folded_data(&after);
                 continue;
             }
             after = patch_fields(&after, &[(*key, flat)])?;
@@ -467,7 +485,7 @@ pub fn resolve_readable<'a>(
     }
 }
 
-fn folded_data(text: &str) -> String {
+pub(super) fn folded_data(text: &str) -> String {
     let Some(at) = text.find("\n## Splat data") else {
         return text.into();
     };
@@ -479,7 +497,11 @@ fn folded_data(text: &str) -> String {
         return text.into();
     };
     let end = title_end + close + "\n```".len();
-    let title = text[at + 4..title_end].trim();
+    let title = if text[at + 4..title_end].trim().contains("from D&D Beyond") {
+        "Splat data (from D&D Beyond; do not edit)"
+    } else {
+        "Splat data (edit in Splat)"
+    };
     let newline = if text.contains("\r\n") { "\r\n" } else { "\n" };
     let mut folded = format!("{newline}> [!note]- {title}{newline}");
     for line in text[title_end..end].trim_matches(['\n', '\r']).lines() {
@@ -523,13 +545,7 @@ pub fn convert(path: &str, text: &str) -> Result<String, String> {
     }
     let entry = Entry::parse(path, text)?;
     if schema(&entry.fields)? == 2 || !eligible(&entry) {
-        return Ok(
-            if entry.kind == "package" || entry.fields.contains_key("splat_character") {
-                folded_data(text)
-            } else {
-                text.into()
-            },
-        );
+        return Ok(folded_data(text));
     }
     if !entry.flags.is_empty() {
         return Err("Fix flagged values before converting this file.".into());
@@ -630,7 +646,10 @@ pub fn convert(path: &str, text: &str) -> Result<String, String> {
             continue;
         }
         changes.push((key, None));
-        if key == "splat_rule" && value.as_mapping().is_some_and(Mapping::is_empty) && !character {
+        if value.as_mapping().is_some_and(Mapping::is_empty)
+            && !character
+            && key == format!("splat_{}", entry.kind)
+        {
             continue;
         }
         if character {
@@ -693,9 +712,7 @@ pub fn convert(path: &str, text: &str) -> Result<String, String> {
         ));
         after.push_str(&fences.replace('\n', newline));
     }
-    if character || entry.kind == "package" {
-        after = folded_data(&after);
-    }
+    after = folded_data(&after);
     let checked = Entry::parse(path, &after)?;
     let mut before = (*entry.fields).clone();
     let mut next = (*checked.fields).clone();

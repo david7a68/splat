@@ -1086,7 +1086,7 @@ pub fn convert(text: &str, entry: &Entry) -> Result<String, String> {
     if canonical(&entry.fields) != canonical(&checked.fields) || !checked.flags.is_empty() {
         return Err("Conversion changed a value. The old file was kept.".into());
     }
-    Ok(after)
+    Ok(formats::folded_data(&after))
 }
 
 pub fn patch(text: &str, changes: &[(&str, Option<Value>)]) -> Result<String, String> {
@@ -1510,15 +1510,29 @@ fn patch_data(text: &str, data: &Mapping) -> Result<String, String> {
         let open = text[at..].find("```yaml").ok_or("Missing data fence")? + at;
         let start = text[open..].find('\n').ok_or("Missing data line")? + open + 1;
         let end = text[start..].find("```").ok_or("Missing data end")? + start;
+        let folded = text[start..].starts_with('>');
+        let end = if folded {
+            text[..end].rfind('>').unwrap_or(end)
+        } else {
+            end
+        };
+        let encoded = if folded {
+            encoded
+                .lines()
+                .map(|line| format!("> {line}{newline}"))
+                .collect::<String>()
+        } else {
+            encoded
+        };
         let mut after = text.to_owned();
         after.replace_range(start..end, &encoded);
         Ok(after)
     } else if data.is_empty() {
         Ok(text.into())
     } else {
-        Ok(format!(
+        Ok(formats::folded_data(&format!(
             "{text}{newline}## Splat data{newline}{newline}{marker}{newline}{newline}```yaml{newline}{encoded}```{newline}"
-        ))
+        )))
     }
 }
 

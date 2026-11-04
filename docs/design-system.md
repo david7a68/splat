@@ -168,7 +168,9 @@ not report a changed creature. A removed package is named without saying its fil
 was deleted.
 
 A converting save keeps the action's own message and adds the layout change. Its one
-named Undo restores the whole action, including the previous bytes and layout. The notice
+named Undo restores the whole action, including the previous bytes and layout. Library keeps
+the typed text as an unsaved draft after Undo save; Discard drops it with Undo discard.
+Its save-state word stays visible, and the layout notice uses the same plain small text as Discard. The notice
 stays beside that action. The next save, discard, conflict, outside edit, entry or scope
 change, or page exit clears it. Only Convert files has its own `Saved in the new layout.`
 message with `Undo convert`. Convert files
@@ -895,3 +897,8 @@ comes first. Changed Speed uses the stat table's label and value columns.
 A missing Campaign.md states whether Splat holds the last read copy and counts its packages and rules. With no copy, the action says Write a new Campaign.md and explains that it uses default packages. The action sits beside that explanation. Writing Package.md shows a success message and Undo write Package.md, including when the file was missing.
 
 An off package with required entries shows None chosen and the needed count, an indeterminate checkbox, and the encounters that use its creatures. Unread World values name the field, bad value, source line and repair; the list and header flag the note.
+
+Library puts nonzero file status links in the header, before Packages. Generated packages do
+not add to the old-layout count. Flagged stat cells appear in list rows and the file warning count.
+Stat warnings name the field, bad value, line and repair. Magic items use book case and put
+attunement in their identity line. End fences use a folded Splat data callout; empty defaults need no fence.

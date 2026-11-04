@@ -114,23 +114,30 @@ fn checked<T>(
     match parse(&raw) {
         Ok(v) => Some(v),
         Err(message) => {
-            flags.push(Flag {
-                line: table
-                    .row(name)
-                    .or_else(|| {
-                        table.row(match name {
-                            "Hit Points" => "HP",
-                            "Armor Class" => "AC",
-                            "Challenge" => "CR",
-                            _ => name,
-                        })
+            let line = table
+                .row(name)
+                .or_else(|| {
+                    table.row(match name {
+                        "Hit Points" => "HP",
+                        "Armor Class" => "AC",
+                        "Challenge" => "CR",
+                        _ => name,
                     })
-                    .map_or(table.header[0].line, |r| r[0].line),
-                message: if name == "Hit Points" {
-                    format!("{name} {raw:?} {message}")
-                } else {
-                    format!("{name} {message}")
-                },
+                })
+                .map_or(table.header[0].line, |r| r[0].line);
+            let fix = match message.as_str() {
+                "needs a number first" => "Use a number first.".to_owned(),
+                message => format!(
+                    "Use {}.",
+                    message
+                        .strip_prefix("needs ")
+                        .unwrap_or(message)
+                        .trim_end_matches('.')
+                ),
+            };
+            flags.push(Flag {
+                line,
+                message: format!("{name} {raw:?} not read (line {line}). {fix}"),
             });
             None
         }
@@ -548,6 +555,9 @@ fn speed(raw: &str) -> Result<(i64, &str), String> {
         .parse()
         .map_err(|_| "needs a number followed by ft.".to_owned())?;
     let units = raw[end..].trim_start();
+    if units.is_empty() {
+        return Ok((n, ""));
+    }
     let tail = ["feet", "ft.", "ft"]
         .iter()
         .find_map(|unit| {
@@ -681,7 +691,7 @@ fn creature(table: &Table, source: &str, fields: &mut Mapping, flags: &mut Vec<F
             Ok((n, s.to_owned()))
         }) {
             stat(&mut stats, key, n);
-            if !prose.is_empty() {
+            if !prose.is_empty() && raw.trim().parse::<i64>().is_err() {
                 creature.insert(prose.into(), raw.clone().into());
             }
         }
@@ -696,8 +706,13 @@ fn creature(table: &Table, source: &str, fields: &mut Mapping, flags: &mut Vec<F
             .as_mapping_mut()
             .unwrap()
             .insert("unit".into(), "ft".into());
-        Ok(format!("{n} ft.{tail}"))
-    }) {
+        Ok(if s.parse::<i64>().is_ok() {
+            n.to_string()
+        } else {
+            format!("{n} ft.{tail}")
+        })
+    }) && raw.parse::<i64>().is_err()
+    {
         creature.insert("movement_text".into(), raw.into());
     }
     let raw = read(table, &["Challenge", "CR"], flags);
@@ -1063,8 +1078,6 @@ pub fn render(fields: &Mapping, kind: &str) -> String {
                     } else if key == "initiative" {
                         n.checked_add(10)
                             .map_or_else(|| signed(n), |passive| format!("{n:+} ({passive})"))
-                    } else if key == "speed" {
-                        format!("{n} ft.")
                     } else {
                         n.to_string()
                     }
@@ -1261,6 +1274,20 @@ fn remove_path(fields: &mut Mapping, path: &str) {
         map.remove(parts[parts.len() - 1]);
     }
 }
+pub(super) fn normalize_plain_stats(fields: &mut Mapping) {
+    for (path, stat) in OPTIONAL_PATHS[..3]
+        .iter()
+        .zip(["armor_class", "max_hp", "speed"])
+    {
+        if at_path(fields, path)
+            .and_then(Value::as_str)
+            .and_then(|s| s.parse::<i64>().ok())
+            .is_some_and(|n| numeric(fields, stat) == Some(n))
+        {
+            remove_path(fields, path);
+        }
+    }
+}
 fn remove_optional(fields: &mut Mapping, path: &str) {
     let Some(value) = at_path(fields, path) else {
         return;
@@ -1269,9 +1296,9 @@ fn remove_optional(fields: &mut Mapping, path: &str) {
         "splat_creature/armor_class_text" | "splat_creature/hit_points_text" => {
             value.as_str().is_some_and(|s| s.parse::<i64>().is_ok())
         }
-        "splat_creature/movement_text" => value
-            .as_str()
-            .is_some_and(|s| number(s, false).is_ok_and(|n| s == format!("{n} ft."))),
+        "splat_creature/movement_text" => value.as_str().is_some_and(|s| {
+            s.parse::<i64>().is_ok() || number(s, false).is_ok_and(|n| s == format!("{n} ft."))
+        }),
         "splat_stats/speed/unit" => value.as_str() == Some("ft"),
         "splat_stats" => value.as_mapping().is_some_and(Mapping::is_empty),
         _ => value.as_bool() == Some(false),

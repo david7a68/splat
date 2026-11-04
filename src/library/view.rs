@@ -13,6 +13,23 @@ pub(crate) fn title_with_art(
     subtitle: &str,
     entry: Option<&Entry>,
 ) {
+    let subtitle = if let Some(entry) = entry {
+        let rarity = entry
+            .fields
+            .get("splat_item")
+            .and_then(|item| item.get("rarity"))
+            .and_then(|value| value.as_str());
+        let mut parts = subtitle.split(" · ");
+        if !entry.flags.is_empty() && subtitle.starts_with(crate::design::icons::WARN) {
+            parts.next();
+        }
+        parts
+            .filter(|part| rarity.is_none_or(|rarity| *part != presentation::book_case(rarity)))
+            .collect::<Vec<_>>()
+            .join(" · ")
+    } else {
+        subtitle.to_owned()
+    };
     let art = entry.and_then(|entry| crate::art::entry_art(ui.ctx(), entry));
     ui.horizontal_top(|ui| {
         let width = (ui.available_width()
@@ -20,7 +37,7 @@ pub(crate) fn title_with_art(
         .max(design::XXL);
         ui.allocate_ui_with_layout(vec2(width, 0.0), Layout::top_down(Align::Min), |ui| {
             style::title(ui, title);
-            style::subtitle(ui, subtitle);
+            style::subtitle(ui, &subtitle);
         });
         if let Some(path) = art {
             crate::art::thumbnail(ui, &path, title);
@@ -203,8 +220,6 @@ fn show_inner(
                 crate::design::Tone::Warning,
                 &if flag.message.contains(" not read (line ") {
                     flag.message.clone()
-                } else if flag.message.starts_with("Hit Points \"") {
-                    format!("{} (line {}).", flag.message, flag.line)
                 } else {
                     format!("Line {}: {}", flag.line, flag.message)
                 },
