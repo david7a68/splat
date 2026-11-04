@@ -1505,10 +1505,9 @@ mod tests {
         let (draft, disk) = book.conflict_comparison().unwrap();
         assert_eq!(disk, text);
         let (_, changed) = crate::design::comparison_changes(&draft, &disk);
-        assert_eq!(
-            disk.lines().nth(*changed.last().unwrap()),
-            Some("DM's paragraph.")
-        );
+        let body_change = *changed.last().unwrap();
+        assert_eq!(disk.lines().nth(body_change), Some(""));
+        assert_eq!(disk.lines().nth(body_change + 1), Some("DM's paragraph."));
         assert!(!draft.contains("DM's paragraph."));
         assert!(draft.contains("tags: [DM]") && draft.contains("weather: rain"));
         book.overwrite();

@@ -1805,13 +1805,21 @@ mod tests {
         let campaign = campaign(dir.path());
         let path = dir.path().join("Campaign.md");
         let old = format!(
-            "---\nsplat_schema: 1\nsplat_id: {}\nsplat_kind: campaign\nsplat_name: Test campaign\nsplat_namespace: test_campaign\nsplat_campaign: {{}}\nsplat_packages: []\n---\n",
-            campaign.id
+            "---\nsplat_schema: 1\nsplat_id: {}\nsplat_kind: campaign\nsplat_name: Test campaign\nsplat_namespace: test_campaign\nsplat_campaign: {{}}\nsplat_packages: [{{name: Book, package: {{id: {}}}, selection: {{mode: all}}}}]\n---\n",
+            campaign.id,
+            Uuid::new_v4()
         );
         fs::write(&path, &old).unwrap();
         let mut document = CampaignDocument::load(&campaign).unwrap();
+        assert_eq!(document.selections.len(), 1);
         document.selections.clear();
         document.save().unwrap();
+        assert!(
+            CampaignDocument::load(&campaign)
+                .unwrap()
+                .selections
+                .is_empty()
+        );
         let mut layouts = crate::formats_ui::State::default();
         layouts.remember_conversion(dir.path(), "Campaign.md", &old, &document.text);
         let labels = crate::formats_ui::test_notice_labels(&mut layouts, &path);
