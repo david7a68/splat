@@ -474,7 +474,7 @@ impl Campaigns {
                 .map_or(0, serde_yaml_ng::Mapping::len);
             (
                 format!(
-                    "Splat still has the Campaign.md it last read ({}, {}).",
+                    "Splat still has the copy it last read: {}, {}.",
                     if packages == 0 {
                         "0 packages".into()
                     } else {
@@ -1323,9 +1323,7 @@ mod tests {
         assert!(CampaignDocument::load(&campaign).is_err());
         assert!(format!("{:?}", campaigns.error).contains("Campaign.md is missing"));
         let (preview, action) = campaigns.campaign_write_preview(&campaign);
-        assert!(
-            preview.contains("Splat still has the Campaign.md it last read (1 package, 0 rules).")
-        );
+        assert!(preview.contains("Splat still has the copy it last read: 1 package, 0 rules."));
         assert_eq!(action, "Write Campaign.md again");
         let fresh = Campaigns::at(temp.path().join("new-settings.json"));
         assert_eq!(

@@ -796,7 +796,9 @@ pub mod campaign_content {
         std::fs::remove_file(&manifest).unwrap();
         d.click(RELOAD);
         d.wait_for_text("Write Campaign.md again");
-        d.expect("Splat still has the Campaign.md it last read (2 packages, 0 rules).");
+        d.expect(
+            "Campaign.md is missing. Splat still has the copy it last read: 2 packages, 0 rules.",
+        );
         assert!(!manifest.exists());
         d.state("missing-campaign-manifest-needs-explicit-write", Sizes::All);
         d.click("Write Campaign.md again");

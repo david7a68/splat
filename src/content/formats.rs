@@ -435,7 +435,11 @@ pub fn resolve_readable<'a>(
             .collect();
         return match found.as_slice() {
             [entry] => Ok(entry.id),
-            _ => Err(format!("Requirement {raw} not found or ambiguous")),
+            [] => Err(format!("Requirement {raw} not found")),
+            many => Err(format!(
+                "Requirement {raw} matches {} entries; use a link",
+                many.len()
+            )),
         };
     }
     if let Some(entry) = entries
@@ -455,7 +459,11 @@ pub fn resolve_readable<'a>(
         .collect();
     match found.as_slice() {
         [entry] => Ok(entry.id),
-        _ => Err(format!("Requirement {raw} not found or ambiguous")),
+        [] => Err(format!("Requirement {raw} not found")),
+        many => Err(format!(
+            "Requirement {raw} matches {} entries; use a link",
+            many.len()
+        )),
     }
 }
 

@@ -73,7 +73,7 @@ pub fn run(d: &mut Driver<'_>) {
     d.click("Reload from disk");
     d.settle();
     d.expect("Imaginary initiative");
-    d.expect("not found or ambiguous");
+    d.expect("is not a rule in this campaign");
     d.state("campaign-flagged-rule-choice", Sizes::All);
     assert_eq!(fs::read_to_string(&manifest).unwrap(), flagged);
     fs::write(&manifest, &after).unwrap();

@@ -1450,7 +1450,20 @@ pub fn resolve(entry: &mut Entry, entries: &[Entry]) {
                         }
                         Err(_) => {
                             choices.remove(slot.as_str());
-                            entry.flags.push(Flag { line, message: format!("Choice \"{visible}\" not found or ambiguous. Use one rule name or link.") });
+                            let same_name = rules
+                                .iter()
+                                .filter(|rule| rule.name.eq_ignore_ascii_case(visible))
+                                .count();
+                            let message = if same_name > 1 {
+                                format!(
+                                    "Choice \"{visible}\" matches {same_name} rules. Use a link to one of them."
+                                )
+                            } else {
+                                format!(
+                                    "Choice \"{visible}\" is not a rule in this campaign. Use one rule name or link."
+                                )
+                            };
+                            entry.flags.push(Flag { line, message });
                         }
                     }
                 }

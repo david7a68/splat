@@ -478,10 +478,20 @@ impl CampaignContent {
             self.reload(ui.ctx(), campaigns, active.clone());
         }
         if let Some(error) = &self.error {
-            design::message(ui, Tone::Error, error);
+            // One cause, one message: a missing Campaign.md says what Splat can write
+            // and offers it on the same line.
+            let missing = error.contains("Campaign.md is missing");
+            if !missing {
+                design::message(ui, Tone::Error, error);
+            }
             let (preview, action) = campaigns.campaign_write_preview(&active);
-            if error.contains("Campaign.md is missing")
-                && design::message_with_action(ui, Tone::Warning, &preview, action)
+            if missing
+                && design::message_with_action(
+                    ui,
+                    Tone::Error,
+                    &format!("Campaign.md is missing. {preview}"),
+                    action,
+                )
             {
                 match campaigns.write_campaign_again(&active) {
                     Ok(write) => {
