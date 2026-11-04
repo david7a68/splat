@@ -287,13 +287,11 @@ pub fn read(text: &str, fields: &mut Mapping, flags: &mut Vec<Flag>) {
                         line: line + 1,
                         message: "Only: needs a package task first.".into(),
                     });
-                } else if !last_enabled {
-                    if let Err(message) = only_references(only.trim()) {
-                        flags.push(Flag {
-                            line: line + 1,
-                            message,
-                        });
-                    }
+                } else if !last_enabled && let Err(message) = only_references(only.trim()) {
+                    flags.push(Flag {
+                        line: line + 1,
+                        message,
+                    });
                 }
                 if last_enabled && let Some(last) = packages.last_mut() {
                     *last = set_selection(

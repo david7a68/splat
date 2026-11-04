@@ -541,7 +541,7 @@ fn same_but_read_time(previous: &str, next: &str) -> bool {
             .generated
             .lines()
             .filter(|line| {
-                let line = line.trim_start();
+                let line = line.trim_start().trim_start_matches('>').trim_start();
                 !line.starts_with("fetched_at:") && !line.starts_with("raw_fetched_at:")
             })
             .map(str::to_owned)
