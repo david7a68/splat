@@ -2706,7 +2706,7 @@ mod tests {
         let copied = Entry::parse(&plan.relative, &plan.text).unwrap();
         assert!(plan.text.contains("| Hit Points | 150 (20d10 + 40) |"));
         assert!(plan.text.contains("| Speed | 10 ft., Swim 40 ft. |"));
-        assert!(plan.text.contains("| Size | large |"));
+        assert!(plan.text.contains("| Size | Large |"));
         for key in ["splat_creature", "splat_stats"] {
             assert_eq!(copied.fields.get(key), source.entry.fields.get(key));
             assert!(
