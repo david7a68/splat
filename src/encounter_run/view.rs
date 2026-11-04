@@ -4056,6 +4056,9 @@ impl Run {
             let first_line = Density::Scan.control().max(title.size().y);
             let detail_width = ui.available_width() - 2.0 * design::S;
             let mut detail = detail;
+            if p.npc_identity() {
+                detail.push_str(&format!(" · as {}", p.definition.name));
+            }
             for (at, condition) in p.conditions.iter().enumerate() {
                 let next = format!("{detail} · {condition}");
                 let remaining = p.conditions.len() - at - 1;

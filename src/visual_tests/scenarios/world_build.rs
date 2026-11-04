@@ -1023,31 +1023,37 @@ pub fn book_to_package(d: &mut Driver<'_>) {
     d.click("Edit the copy");
     d.expect("Markdown editor");
     let original = d.editor_text().unwrap();
-    let changed = original.replace("HP 150 (20d10 + 40)", "HP 180 (20d10 + 70)");
-    assert_ne!(original, changed);
-    d.replace_text_in("Markdown editor", &changed);
-    d.expect("Hit Points line says 180, but max_hp is 150. The fight uses max_hp.");
-    reveal_editor_passage(d, "HP 180 (20d10 + 70)");
-    d.state("book-creature-stat-check", Sizes::All);
-    d.click("Use 180");
-    d.expect("Undo stat change");
-    let edited = d.editor_text().unwrap();
-    assert!(
-        edited.contains("| Hit Points | 180 (20d10 + 40) |"),
-        "{}",
-        edited.chars().take(1800).collect::<String>()
+    assert!(original.contains("> [!quote]- Printed stat block (not read; edit the table above)"));
+    let archived = original.replace("HP 150 (20d10 + 40)", "HP 180 (20d10 + 70)");
+    assert_ne!(original, archived);
+    d.replace_text_in("Markdown editor", &archived);
+    d.observe_both("X2", "Archived printed HP is not used or checked", |d| {
+        !d.has_containing("Hit Points line says") && !d.has("Use 180")
+    });
+    reveal_editor_passage(d, "> [!quote]- Printed stat block");
+    d.state("book-creature-printed-record", Sizes::All);
+    d.click("Read");
+    d.scroll_up_at(READER, 30);
+    d.expect("150 (20d10 + 40)");
+    d.observe_both(
+        "X2",
+        "The reader uses the table and hides the printed record",
+        |d| !d.has_containing("Printed stat block") && !d.has("180 (20d10 + 70)"),
     );
+    d.state("book-creature-printed-record-ignored", Sizes::All);
+    d.click("Edit Markdown");
+    let edited = archived.replace(
+        "| Hit Points | 150 (20d10 + 40) |",
+        "| Hit Points | 180 (20d10 + 40) |",
+    );
+    assert_ne!(archived, edited);
+    d.replace_text_in("Markdown editor", &edited);
     assert!(!edited.contains("    value:"));
-    reveal_editor_passage(d, "| Hit Points |");
-    d.state("book-creature-stats-updated", Sizes::All);
     d.observe_both(
         "W1/C1",
         "A book copy has no false broken-link warning",
         |d| !d.has_containing("broken link"),
     );
-    d.click("Undo stat change");
-    d.expect("Use 180");
-    d.click("Use 180");
     d.click("Save");
     d.click("Read");
     d.expect("Watch Aboleth");
