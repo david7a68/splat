@@ -644,21 +644,43 @@ fn detail(entry: &Entry, key: &str) -> Option<String> {
     })
 }
 
-/// Identity, vitals, abilities and details: what the entry has, and no empty cells.
-pub(super) fn stat_head(ui: &mut egui::Ui, entry: &Entry, values: Option<&super::view::RunValues>) {
-    ui.add_space(design::S);
+fn stat_identity(entry: &Entry) -> String {
     let kind = field(entry, "type_options_text")
         .or_else(|| field(entry, "type"))
-        .map(|kind| match field(entry, "tags_text") {
-            Some(tags) => format!("{kind} {tags}"),
-            None => kind.to_owned(),
+        .map(|kind| {
+            let mut chars = kind.chars();
+            let kind = chars.next().map_or_else(String::new, |first| {
+                first.to_uppercase().chain(chars).collect()
+            });
+            match field(entry, "tags_text") {
+                Some(tags) => format!("{kind} {tags}"),
+                None => kind,
+            }
         });
-    let identity = [size(entry), kind.as_deref(), field(entry, "alignment")]
+    let alignment = field(entry, "alignment").map(|value| {
+        value
+            .split_whitespace()
+            .map(|word| {
+                let mut chars = word.chars();
+                chars.next().map_or_else(String::new, |first| {
+                    first.to_uppercase().chain(chars).collect()
+                })
+            })
+            .collect::<Vec<_>>()
+            .join(" ")
+    });
+    let identity = [size(entry), kind.as_deref(), alignment.as_deref()]
         .into_iter()
         .flatten()
         .collect::<Vec<_>>()
         .join(" · ");
-    reader_style::identity(ui, &reader_style::human_label(&identity));
+    reader_style::human_label(&identity)
+}
+
+/// Identity, vitals, abilities and details: what the entry has, and no empty cells.
+pub(super) fn stat_head(ui: &mut egui::Ui, entry: &Entry, values: Option<&super::view::RunValues>) {
+    ui.add_space(design::S);
+    reader_style::identity(ui, &stat_identity(entry));
     heavy_rule(ui);
     ui.add_space(design::S);
     vitals(ui, entry, values);
@@ -747,6 +769,25 @@ pub(super) fn show(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn creature_identity_uses_book_case_and_keeps_tags() {
+        let source =
+            splat::content::definitions::source_file("definitions/creatures/aboleth.md").unwrap();
+        let entry = Entry::parse("Aboleth.md", source).unwrap();
+        assert_eq!(stat_identity(&entry), "Large · Aberration · Lawful Evil");
+        let converted = splat::content::formats::convert("Aboleth.md", source).unwrap();
+        let mut entry = Entry::parse("Aboleth.md", &converted).unwrap();
+        assert_eq!(stat_identity(&entry), "Large · Aberration · Lawful Evil");
+        entry.fields.get_mut("splat_creature").unwrap()["type"] = "dragon".into();
+        entry.fields.get_mut("splat_creature").unwrap()["tags_text"] = "(Chromatic)".into();
+        assert_eq!(
+            stat_identity(&entry),
+            "Large · Dragon (Chromatic) · Lawful Evil"
+        );
+        let template = crate::library::note_text("New", "creature", None);
+        assert!(template.contains("| Alignment | Neutral |"));
+    }
 
     #[test]
     fn legacy_source_cr_and_speed_are_shown_once_without_markdown_breaks() {

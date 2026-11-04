@@ -959,7 +959,23 @@ fn changed_detail(ui: &egui::Ui, detail: &str, word: &str, width: f32) -> String
     let reserved = design::number_width(ui, word, &font)
         + design::number_width(ui, " · ", &font)
         + design::XS * 2.0;
-    design::words_that_fit(ui, detail, &font, (width - reserved).max(0.0))
+    let width = (width - reserved).max(0.0);
+    if design::number_width(ui, detail, &font) <= width {
+        return detail.into();
+    }
+    let mut parts: Vec<_> = detail.split(" · ").collect();
+    while !parts.is_empty() {
+        parts.pop();
+        let text = if parts.is_empty() {
+            "…".into()
+        } else {
+            format!("{} …", parts.join(" · "))
+        };
+        if design::number_width(ui, &text, &font) <= width {
+            return text;
+        }
+    }
+    String::new()
 }
 
 fn stat_line(text: &str) -> String {
@@ -1320,15 +1336,15 @@ impl Snapshot {
             creatures
                 .iter()
                 .filter(|creature| !creature.linked)
-                .filter_map(|creature| {
-                    Some(Arc::new(crate::encounter_run::RunCreature {
-                        entry: Arc::new(catalogue.entries.get(&creature.id)?.entry.clone()),
+                .map(|creature| {
+                    Arc::new(crate::encounter_run::RunCreature {
+                        entry: Arc::new(catalogue.run_entry(creature.id)),
                         lower: creature.lower.clone(),
                         detail: crate::library::presentation::list_subtitle(
                             &creature.detail,
                             creature.source.as_deref(),
                         ),
-                    }))
+                    })
                 })
                 .collect(),
         );
@@ -2372,7 +2388,7 @@ impl Encounters {
                 .as_ref()
                 .ok_or("Party-slot bindings are not supported by this runner yet.")?;
             let id = snapshot.catalogue.resolve_ref(reference)?;
-            let mut entry = snapshot.catalogue.entries[&id].entry.clone();
+            let mut entry = snapshot.catalogue.run_entry(id);
             if let Some(name) = snapshot.npc_name_for(&entry, &slot.overrides) {
                 entry
                     .fields
@@ -4320,10 +4336,16 @@ mod tests {
             egui::CentralPanel::default().show(ctx, |ui| {
                 let detail = "Enemies · CR 2 · HP 43 · AC 15 · A very long source name from the Ashen Marches · as Ember Cultist";
                 let word = "Changed · 3 to add by hand";
-                for width in [280.0, 400.0] {
+                for width in [280.0, 320.0, 400.0] {
                     let fitted = changed_detail(ui, detail, word, width);
                     assert!(fitted.ends_with('…'), "{fitted}");
                     assert!(!fitted.contains(word));
+                    let shown = fitted.trim_end_matches(" …").trim_end_matches('…');
+                    assert!(shown.is_empty() || detail.split(" · ").scan(String::new(), |prefix, part| {
+                        if !prefix.is_empty() { prefix.push_str(" · "); }
+                        prefix.push_str(part);
+                        Some(prefix.clone())
+                    }).any(|prefix| prefix == shown), "{fitted}");
                     let font = Type::Small.font(ui);
                     let used = design::number_width(ui, &fitted, &font)
                         + design::number_width(ui, word, &font)

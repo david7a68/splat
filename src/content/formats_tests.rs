@@ -579,9 +579,7 @@ fn fmt_f2_malformed_cells_stay_first_alias_wins_and_old_yaml_is_ignored() {
     for words in [
         "Hit Points \"about twenty\" needs a number first",
         "Duplicate Hit Points",
-        "Mod differs",
         "Save needs",
-        "passive value",
         "Old data ignored",
     ] {
         assert!(
@@ -628,7 +626,9 @@ fn fmt_f2_missing_rows_insert_in_order_and_unrelated_flags_do_not_block_edit() {
     .unwrap();
     assert_eq!(
         changed,
-        missing.replace("| Hit Points |", "| Armor Class | 14 |\n| Hit Points |")
+        missing
+            .replace("| Hit Points |", "| Armor Class | 14 |\n| Hit Points |")
+            .replace("| Dex | 15 | +9 |", "| Dex | 15 | +2 |")
     );
 }
 
@@ -665,7 +665,9 @@ fn fmt_f2_every_book_stat_block_converts_or_refuses_conflicting_legacy_values() 
                 }
                 assert!(
                     error.contains("unsupported")
-                        || error == "The printed stats and saved stats disagree."
+                        || error == "The printed stats and saved stats disagree.",
+                    "{}: {error}",
+                    entry.path
                 );
             }
         }
@@ -720,8 +722,8 @@ fn fmt_f2_spell_item_edits_preserve_other_cells_and_extras() {
             "splat_item",
             "rarity",
             Value::from("rare"),
-            "| Rarity | uncommon |",
-            "| Rarity | rare |",
+            "| Rarity | Uncommon |",
+            "| Rarity | Rare |",
         ),
     ] {
         let old = note(kind, data, "# Rook\n\nKeep prose.\n");
@@ -966,6 +968,190 @@ fn fmt_f3_campaign_name_only_package_gets_id_on_save() {
     )
     .unwrap();
     assert_eq!(off, external.replace("[x]", "[ ]"));
+}
+
+#[test]
+fn i19_challenge_derives_missing_xp_and_pb_and_flags_explicit_mismatches() {
+    let (_, new) = creature_pair();
+    for (raw, expected, warning) in [
+        ("3", "3 (XP 700; PB +2)", None),
+        ("1/8", "1/8 (XP 25; PB +2)", None),
+        ("5", "5 (XP 1800; PB +3)", None),
+        (
+            "3 (XP 200; PB +2)",
+            "3 (XP 200; PB +2)",
+            Some("CR 3 is XP 700; XP 200 is used"),
+        ),
+        (
+            "5 (XP 1800; PB +2)",
+            "5 (XP 1800; PB +2)",
+            Some("CR 5 is PB +3; PB +2 is used"),
+        ),
+        (
+            "3 (XP 200 in lair; PB +2)",
+            "3 (XP 200 in lair; PB +2)",
+            None,
+        ),
+    ] {
+        let text = new.replace("1 (XP 200; PB +2)", raw);
+        let entry = Entry::parse("Rook.md", &text).unwrap();
+        assert_eq!(
+            entry.fields["splat_creature"]["cr_text"].as_str(),
+            Some(expected)
+        );
+        if let Some(warning) = warning {
+            assert!(
+                entry.flags.iter().any(|flag| flag.message == warning
+                    && text
+                        .lines()
+                        .nth(flag.line - 1)
+                        .unwrap()
+                        .contains("Challenge")),
+                "{:?}",
+                entry.flags
+            );
+        } else {
+            assert!(entry.flags.is_empty(), "{:?}", entry.flags);
+        }
+        let saved = super::stat_blocks::render(&entry.fields, "creature");
+        assert!(saved.contains(&format!("| Challenge | {expected} |")));
+    }
+}
+
+#[test]
+fn i19_conversion_folds_printed_stats_and_keeps_book_text() {
+    let old = note(
+        "creature",
+        "splat_creature: {size: medium, type: beast, cr_text: '1 (XP 200; PB +2)'}\nsplat_stats: {max_hp: {value: 22}, armor_class: {value: 13}}",
+        "# Rook\n\n## Source text\n\nMedium beast, Unaligned\\\nAC 13  Initiative +2 (12)\\\nHP 22 (4d8 + 4)\\\nSpeed 30 ft.\\\nCR 1 (XP 200; PB +2)\\\n\n### Traits\n\nKeen Hearing. Keep this rule.\n\n### Actions\n\nBite. Keep this attack.\n",
+    );
+    let converted = formats::convert("Rook.md", &old).unwrap();
+    assert!(converted.contains("> [!quote]- Printed stat block (not read; edit the table above)"));
+    for line in [
+        "Medium beast, Unaligned",
+        "AC 13  Initiative +2 (12)",
+        "HP 22 (4d8 + 4)",
+        "Speed 30 ft.",
+        "CR 1 (XP 200; PB +2)",
+    ] {
+        assert!(converted.contains(&format!("> {line}")), "{line}");
+    }
+    assert!(converted.contains("Keen Hearing. Keep this rule."));
+    assert!(converted.contains("Bite. Keep this attack."));
+    let entry = Entry::parse("Rook.md", &converted).unwrap();
+    let reading = super::stat_blocks::reading_body(&entry, &entry.body);
+    assert!(!reading.contains("HP 22"));
+    assert!(!reading.contains("[!quote]"));
+    assert!(reading.contains("Keen Hearing. Keep this rule."));
+    assert_eq!(converted, formats::convert("Rook.md", &converted).unwrap());
+}
+
+#[test]
+fn i19_derived_cells_and_speed_spellings_read_without_flags_and_write_back() {
+    let (_, new) = creature_pair();
+    for speed in ["30 ft", "30 ft.", "30 feet", "30ft."] {
+        let text = new
+            .replace("40 ft.", speed)
+            .replace("| Dex | 15 | +2 | +4 |", "| Dex | 16 | | +4 |")
+            .replace("+2 (12)", "+3 (12)")
+            .replace("1 (XP 200; PB +2)", "3");
+        let entry = Entry::parse("Rook.md", &text).unwrap();
+        assert!(entry.flags.is_empty(), "{:?}", entry.flags);
+        assert_eq!(
+            entry.fields["splat_stats"]["speed"]["value"],
+            Value::from(30)
+        );
+        let saved = formats::patch_model(
+            &text,
+            &[("splat_stats", Some(entry.fields["splat_stats"].clone()))],
+        )
+        .unwrap();
+        for row in [
+            "| Dex | 16 | +3| +4 |",
+            "| Initiative | +3 (13) |",
+            "| Speed | 30 ft. |",
+            "| Challenge | 3 (XP 700; PB +2) |",
+        ] {
+            assert!(saved.contains(row), "{row}: {saved}");
+        }
+    }
+}
+
+#[test]
+fn i19_conversion_writes_human_words_and_puts_hints_after_tables() {
+    for (kind, fields, rows) in [
+        (
+            "spell",
+            "splat_spell: {level: 0, school: evocation, classes: [wizard, sorcerer], casting_time: {amount: 1, unit: action}}",
+            vec![
+                "| Level | Cantrip |",
+                "| School | Evocation |",
+                "| Classes | Wizard, Sorcerer |",
+            ],
+        ),
+        (
+            "item",
+            "splat_item: {category: wondrous_item, rarity: uncommon, equipment: {attunement: none}}",
+            vec![
+                "| Type | Wondrous Item |",
+                "| Rarity | Uncommon |",
+                "| Attunement | No |",
+            ],
+        ),
+    ] {
+        let text = formats::convert("Rook.md", &note(kind, fields, "# Rook\n")).unwrap();
+        for row in rows {
+            assert!(text.contains(row), "{row}: {text}");
+        }
+        if let Some(hint) = text.find("%% splat") {
+            assert!(hint > text.rfind("|\n").unwrap());
+        }
+    }
+    let old = super::definitions::source_file("definitions/creatures/wolf.md").unwrap();
+    let text = formats::convert("Wolf.md", old).unwrap();
+    for heading in ["## Creature\n", "## Abilities\n", "## Stats\n"] {
+        assert!(!text.contains(heading), "{heading}");
+    }
+    let health = note(
+        "creature",
+        "splat_creature: {}",
+        "# Rook\n\n## Health\n\n<!-- splat:map path=splat_stats -->\n\n| Key | value |\n| --- | --- |\n| max_hp | 22 |\n",
+    );
+    assert!(
+        !formats::convert("Rook.md", &health)
+            .unwrap()
+            .contains("## Health\n")
+    );
+    let with_empty_heading = old.replace("## Abilities", "## My next creature\n\n## Abilities");
+    assert!(
+        formats::convert("Wolf.md", &with_empty_heading)
+            .unwrap()
+            .contains("## My next creature\n")
+    );
+    let with_prose = old.replace("## Abilities", "Do not lose this prose.\n\n## Abilities");
+    assert!(
+        formats::convert("Wolf.md", &with_prose)
+            .unwrap()
+            .contains("Do not lose this prose.")
+    );
+}
+
+#[test]
+fn i19_conversion_keeps_explicit_challenge_mismatch_and_flags_it() {
+    let text = note(
+        "creature",
+        "splat_creature: {cr_text: '3 (XP 200; PB +2)'}\nsplat_stats: {}",
+        "# Rook\n",
+    );
+    let converted = formats::convert("Rook.md", &text).unwrap();
+    let entry = Entry::parse("Rook.md", &converted).unwrap();
+    assert_eq!(model(&text), model(&converted));
+    assert!(
+        entry
+            .flags
+            .iter()
+            .any(|flag| flag.message == "CR 3 is XP 700; XP 200 is used")
+    );
 }
 
 #[test]
