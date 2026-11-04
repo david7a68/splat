@@ -51,6 +51,7 @@ pub struct State {
     undo: Vec<Change>,
     notice_file: Option<PathBuf>,
     skipped: Vec<String>,
+    undone: bool,
     error: Option<String>,
 }
 
@@ -64,6 +65,8 @@ impl State {
         self.undo.clear();
         self.notice_file = None;
         self.error = None;
+        self.skipped.clear();
+        self.undone = false;
     }
 
     pub fn leave(&mut self) {
@@ -141,7 +144,7 @@ impl State {
             self.skipped.extend(
                 errors
                     .into_iter()
-                    .map(|e| format!("{}: {}", e.path, e.message)),
+                    .map(|e| skipped_file(&e.path, &e.message)),
             );
             for entry in entries {
                 if !formats::eligible(&entry) || formats::schema(&entry.fields) != Ok(1) {
@@ -178,7 +181,7 @@ impl State {
                 match result {
                     Ok(Some(file)) => preview.push(file),
                     Ok(None) => {}
-                    Err(error) => self.skipped.push(format!("{}: {error}", entry.path)),
+                    Err(error) => self.skipped.push(skipped_file(&entry.path, &error)),
                 }
             }
         }
@@ -202,7 +205,7 @@ impl State {
                         after,
                     }),
                     Ok(_) => {}
-                    Err(error) => self.skipped.push(format!("Timeline.md: {error}")),
+                    Err(error) => self.skipped.push(skipped_file("Timeline.md", &error)),
                 }
             }
         }
@@ -249,12 +252,13 @@ impl State {
             };
             match result {
                 Ok(()) => self.undo.push(change),
-                Err(error) => self.skipped.push(format!("{}: {error}", file.path)),
+                Err(error) => self.skipped.push(skipped_file(&file.path, &error)),
             }
         }
     }
 
     pub fn undo(&mut self) -> Result<(), String> {
+        let batch = self.notice_file.is_none();
         let changes: Vec<_> = self
             .undo
             .iter()
@@ -266,6 +270,7 @@ impl State {
             .collect();
         file_batch::apply(&changes)?;
         self.clear();
+        self.undone = batch;
         Ok(())
     }
 
@@ -294,7 +299,25 @@ impl State {
         let mut changed = false;
         if self.current(file) {
             let (words, undo) = self.notice_file.as_ref().map_or_else(
-                || ("Saved in the new layout.".to_owned(), "Undo convert"),
+                || {
+                    let mut words = format!(
+                        "{} now use{} the new layout.",
+                        design::count(self.undo.len(), "file", "files"),
+                        if self.undo.len() == 1 { "s" } else { "" }
+                    );
+                    if !self.skipped.is_empty() {
+                        words.push_str(&format!(
+                            " {} {} skipped.",
+                            design::count(self.skipped.len(), "file", "files"),
+                            if self.skipped.len() == 1 {
+                                "was"
+                            } else {
+                                "were"
+                            }
+                        ));
+                    }
+                    (words, "Undo convert")
+                },
                 |path| {
                     let name = path.file_name().unwrap_or_default().to_string_lossy();
                     (
@@ -311,7 +334,12 @@ impl State {
                     )
                 },
             );
-            if design::undo_message(ui, Tone::Success, &words, undo) {
+            let tone = if self.skipped.is_empty() {
+                Tone::Success
+            } else {
+                Tone::Warning
+            };
+            if design::undo_message(ui, tone, &words, undo) {
                 match self.undo() {
                     Ok(()) => changed = true,
                     Err(error) => self.error = Some(error),
@@ -332,6 +360,13 @@ impl State {
         let mut changed = changed_notice && self.show_notice(ui, file);
         if let Some(error) = &self.error {
             design::message(ui, Tone::Error, error);
+        }
+        if self.undone {
+            design::message(
+                ui,
+                Tone::Info,
+                "Conversion undone. The converted files use the old layout again.",
+            );
         }
         if self.preview.is_some() {
             let mut apply = false;
@@ -416,11 +451,18 @@ impl State {
                         });
                     design::named(ui, &picker.response, "File to convert");
                     let file = &files[self.selected];
-                    let height = (ui.ctx().content_rect().height() * 0.6).min(
-                        (ui.available_height() - design::Density::Read.control() - design::L)
-                            .max(design::XXL),
-                    );
+                    let content_height = file.before.lines().count().max(file.after.lines().count())
+                        as f32
+                        * Type::Mono.line()
+                        + design::Density::Read.control() * 2.0;
+                    let height = content_height
+                        .min(ui.ctx().content_rect().height() * 0.6)
+                        .min(
+                            (ui.available_height() - design::Density::Read.control() - design::L)
+                                .max(design::XXL),
+                        );
                     ui.allocate_ui(egui::vec2(ui.available_width(), height), |ui| {
+                        ui.set_min_height(height);
                         design::source_comparison(
                             ui,
                             [&file.before, &file.after],
@@ -429,11 +471,7 @@ impl State {
                     });
                 }
                 if !self.skipped.is_empty() {
-                    design::quiet_section(ui, "Files skipped", |ui| {
-                        for file in &self.skipped {
-                            ui.label(file);
-                        }
-                    });
+                    skipped_list(ui, &self.skipped);
                 }
                 ui.horizontal(|ui| {
                     apply = Action::primary("Convert files")
@@ -455,13 +493,44 @@ impl State {
                 self.preview = None;
             }
         } else if !self.skipped.is_empty() {
-            design::quiet_section(ui, "Files skipped", |ui| {
-                for file in &self.skipped {
-                    ui.label(file);
-                }
-            });
+            if self.undo.is_empty() {
+                design::message(
+                    ui,
+                    Tone::Warning,
+                    &format!(
+                        "No files converted. {} {} skipped.",
+                        design::count(self.skipped.len(), "file", "files"),
+                        if self.skipped.len() == 1 {
+                            "was"
+                        } else {
+                            "were"
+                        }
+                    ),
+                );
+            }
+            skipped_list(ui, &self.skipped);
         }
         changed
+    }
+}
+
+fn skipped_file(path: &str, error: &str) -> String {
+    if error.contains("changed on disk") {
+        format!("{path} changed on disk after the preview. Open Convert files again to convert it.")
+    } else if error.to_lowercase().contains("read only") {
+        format!("{path} is read only. Allow changes to the file, then open Convert files again.")
+    } else {
+        format!(
+            "{path}: {}. Fix the file in Obsidian, then open Convert files again.",
+            error.trim_end_matches('.')
+        )
+    }
+}
+
+fn skipped_list(ui: &mut egui::Ui, files: &[String]) {
+    design::group_label(ui, "Files skipped");
+    for file in files {
+        ui.label(file);
     }
 }
 

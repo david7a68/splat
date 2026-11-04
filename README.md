@@ -169,7 +169,7 @@ ones they share are in `steps.rs`. Goals use the test IDs in `docs/ux-intent.md`
 World notes support `splat_schema: 1` and `2`. New notes use flat properties such as
 `splat_type`, `splat_status`, `splat_stat_block`, `splat_in`, and Obsidian `aliases`.
 Library's **Packages** menu and Campaign offer **Convert files…**. The preview lists
-each supported file before and after conversion. Lines wrap, changes are marked,
+each supported file before and after conversion. Changes are marked,
 and both sides scroll together from the first difference. Files changed on disk are skipped.
 One **Undo** restores the saved bytes and refuses to replace later edits.
 Library shows the old-layout file count in its header and Packages menu.
@@ -180,6 +180,10 @@ In Library, Undo save keeps the typed text as an unsaved draft. Save writes it a
 Discard drops it, with Undo discard.
 Reading and polling do not convert files. Convert files has its own **Undo convert**.
 Convert files is unavailable during a run and skips read-only files.
+The result counts converted and skipped files. Skipped files stay in view with a
+next step. A skipped file gives the result a warning tone. Undo restores only the
+converted files. Missing comparison rows are blank with a muted hatch; screen
+readers name them `No line`.
 Its wide preview groups files by owner. Source lines do not wrap, and the two panes
 scroll together. Only the campaign is selected at first.
 Packages with `splat_generated: true` in `Package.md` keep their converter's layout,

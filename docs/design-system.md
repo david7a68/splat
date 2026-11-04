@@ -1,5 +1,12 @@
 # Splat design system
 
+Comparison panes leave missing rows blank with a muted hatch and the accessible
+name `No line`. Convert files shrinks short previews to their content; long previews
+use about 60% of the window height. Its
+result counts changed and skipped files, uses warning tone for any skip, and keeps
+each skipped file and its next step in view. An open run disables old-layout links
+with the reason on hover.
+
 The brief is `docs/ux-intent.md`. This document records the visual decisions and why
 they were made. The code is `src/design/`. Tokens are the only source of colour, size
 and type. A lint test (`src/design/lint.rs`) keeps other code from adding raw values.

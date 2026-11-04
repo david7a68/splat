@@ -773,9 +773,22 @@ pub fn convert_resolved<'a>(
                     .and_then(Value::as_str)
                 {
                     let visible = row[1].value.split("%%").next().unwrap_or("").trim();
+                    let shown = if resolve_readable(
+                        visible,
+                        entries.iter().copied().filter(|entry| entry.kind == "rule"),
+                    )
+                    .is_ok()
+                    {
+                        visible
+                    } else {
+                        entries
+                            .iter()
+                            .find(|entry| entry.id.to_string() == id)
+                            .map_or(visible, |entry| entry.name.as_str())
+                    };
                     after.replace_range(
                         row[1].range.clone(),
-                        &format!("{visible} %% splat rule={slot} id={id} %%"),
+                        &format!("{shown} %% splat rule={slot} id={id} %%"),
                     );
                 }
             }

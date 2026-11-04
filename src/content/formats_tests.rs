@@ -1205,6 +1205,48 @@ fn i19_x5_unknown_rule_choice_is_flagged_and_not_used() {
 }
 
 #[test]
+fn i20_x29_renamed_rule_uses_id_and_writes_current_name() {
+    let target = Entry::parse(
+        "Rules/Side.md",
+        &note("rule", "splat_rule: {}", "")
+            .replace("splat_name: Rook", "splat_name: Side initiative"),
+    )
+    .unwrap();
+    let source = note("campaign", "splat_namespace: rook", &format!(
+        "## Rule choices\n\n| Rule | Choice |\n| --- | --- |\n| Combat initiative | Campaign initiative %% splat rule=dnd2024:rules/combat_initiative id={} %% |\n", target.id))
+        .replace("splat_schema: 1", "splat_schema: 2");
+    let mut entry = Entry::parse("Campaign.md", &source).unwrap();
+    super::list_formats::resolve(&mut entry, std::slice::from_ref(&target), &source);
+    assert!(entry.flags.is_empty(), "{:?}", entry.flags);
+    assert_eq!(
+        entry.fields["splat_rule_choices"]["dnd2024:rules/combat_initiative"]["id"],
+        Value::from(target.id.to_string())
+    );
+    let saved = formats::convert_resolved("Campaign.md", &source, [&target]).unwrap();
+    assert!(saved.contains("| Combat initiative | Side initiative %%"));
+}
+
+#[test]
+fn i20_x31_package_prose_is_kept_and_bad_list_items_are_flagged() {
+    let source = note(
+        "campaign",
+        "splat_namespace: rook",
+        "## Packages\n\nWe use the 2024 rules.\n\n- Not a package task\n",
+    )
+    .replace("splat_schema: 1", "splat_schema: 2");
+    let entry = Entry::parse("Campaign.md", &source).unwrap();
+    assert_eq!(entry.flags.len(), 1);
+    assert!(
+        source
+            .lines()
+            .nth(entry.flags[0].line - 1)
+            .unwrap()
+            .starts_with("- Not")
+    );
+    assert_eq!(formats::convert("Campaign.md", &source).unwrap(), source);
+}
+
+#[test]
 fn i19_world_properties_accept_case_and_explain_bad_values() {
     for (typed, stored) in [("NPC", "npc"), ("Location", "location")] {
         let source = note(
@@ -1333,7 +1375,7 @@ fn i19_package_tasks_and_only_links_accept_obsidian_lists_without_selecting_all(
         )
         .unwrap();
         assert_eq!(edited, source.replace("[x]", "[ ]"));
-        let bad = source.replace("\t+ Only:", "Unrecognised:");
+        let bad = source.replace("\t+ Only:", "- Unrecognised:");
         assert_eq!(Entry::parse("Campaign.md", &bad).unwrap().flags.len(), 1);
         let bad = source.replace("[[Creatures/Rook, elder|Rook, elder]]", "[[Unclosed");
         let entry = Entry::parse("Campaign.md", &bad).unwrap();

@@ -1278,7 +1278,7 @@ pub struct Library {
     discarded: Option<(Option<Uuid>, String, String)>,
     discarded_note: Option<Note>,
     identity_undo: Option<IdentityUndo>,
-    identities_undo: Option<crate::content_workspace::ContentEdits>,
+    identities_undo: Option<(crate::content_workspace::ContentEdits, String)>,
     manifest_write: Option<crate::content_workspace::ManifestWrite>,
     package_copy: Option<crate::content_workspace::PackageCopy>,
     copy_not_used: bool,
@@ -4389,12 +4389,11 @@ impl Library {
                 }
             }
         }
-        if self.identities_undo.is_some() {
-            undo_identities = Action::quiet("Undo folder identities")
-                .icon(icons::UNDO)
-                .blocked(draft_reason)
-                .show(ui)
-                .clicked();
+        if let Some((_, words)) = &self.identities_undo {
+            design::locked(ui, draft_reason, |ui| {
+                undo_identities =
+                    design::undo_message(ui, Tone::Success, words, "Undo folder identities");
+            });
         }
         if self.identity_undo.is_some() {
             undo_identity = Action::quiet("Undo new identity")
@@ -4950,12 +4949,19 @@ impl Library {
         }
         let identity_result = if let Some((root, paths)) = new_identities {
             crate::content_workspace::ContentEdits::new_identities(&root, &paths).map(|edits| {
-                self.identities_undo = Some(edits);
+                let folder = root.file_name().unwrap_or_default().to_string_lossy();
+                self.identities_undo = Some((
+                    edits,
+                    format!(
+                        "New IDs for {} in {folder}/.",
+                        design::count(paths.len(), "file", "files")
+                    ),
+                ));
                 self.stale = true;
                 self.content_changed = Some(root);
             })
         } else if undo_identities {
-            self.identities_undo.as_ref().unwrap().undo().map(|()| {
+            self.identities_undo.as_ref().unwrap().0.undo().map(|()| {
                 self.identities_undo = None;
                 self.stale = true;
                 self.content_changed = campaigns.active_campaign().map(|campaign| campaign.path);

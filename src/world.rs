@@ -1720,7 +1720,7 @@ impl Reader {
         if self.compact {
             ui.horizontal_wrapped(|ui| {
                 let targets = [
-                    ("Fights as", index.world_target(&item.entry, "creature")),
+                    ("Stat block", index.world_target(&item.entry, "creature")),
                     ("In", index.place_of(item.entry.id)),
                 ];
                 let mut first = true;
@@ -1743,7 +1743,7 @@ impl Reader {
                     design::Status {
                         icon: design::icons::WARN,
                         word: &format!(
-                            "Fights as {} · Not found",
+                            "Stat block: {} · Not found",
                             world_field(&item.entry, "creature")
                                 .map(|v| link_name(v, "Stat block"))
                                 .unwrap_or_else(|| "Stat block".into())
@@ -1976,7 +1976,20 @@ impl Reader {
                         )
                     });
                     match set_world_field(campaign, &item.entry, "creature", stored.into()) {
-                        Ok(change) => self.undo = Some(change),
+                        Ok(mut change) => {
+                            change.word = format!(
+                                "Stat block: not set → {}.{}",
+                                stat_block.name,
+                                if Entry::parse(&item.entry.path, &change.before).is_ok_and(
+                                    |entry| splat::content::formats::schema(&entry.fields) == Ok(1)
+                                ) {
+                                    " Saved in the new layout."
+                                } else {
+                                    ""
+                                }
+                            );
+                            self.undo = Some(change);
+                        }
                         Err(error) => self.error = Some(error),
                     }
                 }
