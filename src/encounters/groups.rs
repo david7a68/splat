@@ -3086,7 +3086,7 @@ mod tests {
     }
 
     #[test]
-    fn xp_comes_from_the_text_and_is_never_invented() {
+    fn xp_uses_printed_values_or_standard_cr_rewards() {
         let entry = |creature: &str, body: &str| {
             Entry::parse(
                 "c.md",
@@ -3109,6 +3109,7 @@ mod tests {
             Some(8400)
         );
         assert_eq!(creature_xp(&entry("{}", "CR 3 (XP 700; PB +2)")), Some(700));
+        assert_eq!(creature_xp(&entry("{cr_text: '3'}", "")), Some(700));
         assert_eq!(creature_xp(&entry("{}", "No such line.")), None);
         assert_eq!(
             creature_xp(&entry("{cr_text: '2 (450 XP; PB +2)'}", "")),

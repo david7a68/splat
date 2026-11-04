@@ -37,6 +37,16 @@ pub fn run(d: &mut Driver<'_>) {
         "The bad cell has a line warning; the effect stays readable without raw data",
     );
     d.state("flagged-spell-cell", Sizes::All);
+    search_library(d, "Bound Charm");
+    d.click_containing("Bound Charm · ");
+    d.expect("Yes");
+    d.expect("Keep the charm effect.");
+    d.observe(
+        "i19 converted item",
+        d.visible_text("Attunement") && !d.visible_text("%% splat") && !d.visible_text("Field"),
+        "The converted item keeps its Attunement fact without raw data",
+    );
+    d.state("converted-item-facts", Sizes::All);
 
     go_encounters(d);
     open_saved_encounter(d, RUN);

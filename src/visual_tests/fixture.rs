@@ -454,6 +454,15 @@ fn write_format_notes(root: &Path) -> Result<(), String> {
     let spell = splat::content::formats::convert("Spells/Flagged Spark.md", &spell)?
         .replace("| Level | 1 |", "| Level | many |");
     write_note(root, "Spells/Flagged Spark.md", &spell)?;
+    let item = format!(
+        "---\nsplat_schema: 1\nsplat_id: {}\nsplat_kind: item\nsplat_name: Bound Charm\nsplat_item: {{category: wondrous_item, rarity: uncommon, equipment: {{attunement: required}}}}\n---\n\n# Bound Charm\n\nKeep the charm effect.\n",
+        stable_id("bound-charm")
+    );
+    write_note(
+        root,
+        "Items/Bound Charm.md",
+        &splat::content::formats::convert("Items/Bound Charm.md", &item)?,
+    )?;
     for (path, schema, name, data) in [
         (
             "NPCs/Rook.md",
