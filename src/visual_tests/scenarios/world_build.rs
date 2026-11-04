@@ -380,7 +380,7 @@ pub fn npc_in_lookup(d: &mut Driver<'_>) {
     reload(d);
     resume_run_from_cold_start(d);
     look_up(d, "Rook Ambry");
-    d.wait_for_text("Fights as");
+    d.wait_for_text("Stat block");
     d.expect("Watch House");
     d.observe(
         "W2",
@@ -1403,6 +1403,9 @@ pub fn package_folder_copied(d: &mut Driver<'_>) {
         "New identity for all {count} files in ashen-marches-copy/"
     ));
     d.wait_for_text("Undo folder identities");
+    d.expect(&format!(
+        "New IDs for {count} files in ashen-marches-copy/."
+    ));
     d.state("copied-folder-identities-repaired-together", Sizes::All);
     d.click("Undo folder identities");
     d.wait_for_text("New identity for Cinder Wolf.md in ashen-marches-copy/");

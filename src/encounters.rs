@@ -4256,6 +4256,14 @@ impl Encounters {
             return;
         };
         ui.add_space(design::S);
+        let rule_flags: Vec<_> = snapshot
+            .catalogue
+            .entries
+            .get(&active.id)
+            .into_iter()
+            .flat_map(|item| &item.entry.flags)
+            .filter(|flag| flag.message.starts_with("Combat initiative choice "))
+            .collect();
         let closed_while = draft_open.then_some("Save or discard the open encounter first.");
         ui.scope_builder(egui::UiBuilder::new().max_rect(egui::Rect::from_min_size(
             ui.cursor().min, egui::vec2(ui.available_width().min(design::FORM_WIDTH), ui.available_height()))), |ui| {
@@ -4267,6 +4275,12 @@ impl Encounters {
                 Some("Relative to the campaign folder, or an absolute path."),
                 None,
             );
+            for flag in &rule_flags {
+                design::message(ui, Tone::Warning, &format!("Campaign.md, line {}: {}", flag.line, flag.message));
+            }
+            if !rule_flags.is_empty() {
+                crate::world::file_actions(ui, &active, "Campaign.md");
+            }
             design::field(ui, "Roll NPC initiative", None, None, |ui| {
                 let combo = egui::ComboBox::from_id_salt("campaign_initiative")
                     .icon(design::combo_icon)
@@ -4298,7 +4312,7 @@ impl Encounters {
             let folder_changed = snapshot.options.directory(&active).ok() != snapshot.saved_options.directory(&active).ok();
             let blocked = if run_open { Some("Close the open run to save run settings.") }
                 else if folder_changed && left.is_err() { Some("Could not read saved runs. Check the old run folder before saving.") }
-                else if !changed { Some("No changes to save.") } else { None };
+                else if !changed && rule_flags.is_empty() { Some("No changes to save.") } else { None };
             if run_files > 0 {
                 let runs: Vec<_> = left.as_ref().ok().into_iter().flatten()
                     .filter_map(|path| crate::encounter_run::Run::open(path, active.id).ok())

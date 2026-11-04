@@ -1545,6 +1545,9 @@ impl Splat {
                 match self.campaign_tab {
                     CampaignTab::Packages => {
                         self.campaign_content.show(ui, &self.campaigns);
+                        if std::mem::take(&mut self.campaign_content.open_run_settings) {
+                            self.campaign_tab = CampaignTab::RunSettings;
+                        }
                     }
                     CampaignTab::RunSettings => {
                         self.encounters.run_settings(ui, &self.campaigns);
