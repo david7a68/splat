@@ -4073,9 +4073,6 @@ impl Run {
                 }
                 detail = next;
             }
-            if p.named_stat_block() {
-                detail = format!("as {} · {detail}", p.definition.name);
-            }
             let row_name = format!("{name} · {detail}");
             let detail = detail
                 .split(" · ")
@@ -4655,12 +4652,30 @@ fn snapshot_notice(snapshot: &Entry, current: Option<&Entry>, unreadable: bool) 
         .unwrap_or_default()
         .to_string_lossy();
     let Some(current) = current else {
+        if !unreadable
+            && let Some(path) = snapshot
+                .fields
+                .get("splat_run_source_path")
+                .and_then(|value| value.as_str())
+            && std::path::Path::new(path).is_file()
+        {
+            let owner = snapshot
+                .fields
+                .get("splat_run_source_owner")
+                .and_then(|value| value.as_str())
+                .unwrap_or("This package");
+            return Some(format!(
+                "As at the start of this fight. {owner} is not used in this campaign now."
+            ));
+        }
         return Some(format!(
             "As at the start of this fight. {name} {}.",
             if unreadable {
                 "cannot be read now"
-            } else {
+            } else if snapshot.fields.contains_key("splat_run_source_path") {
                 "was deleted"
+            } else {
+                "is not available in this campaign now"
             }
         ));
     };
@@ -4670,40 +4685,43 @@ fn snapshot_notice(snapshot: &Entry, current: Option<&Entry>, unreadable: bool) 
             .iter()
             .filter(|(key, _)| {
                 !key.as_str()
-                    .is_some_and(|key| key.starts_with("splat_run_"))
+                    .is_some_and(|key| key == "splat_schema" || key.starts_with("splat_run_"))
             })
             .map(|(key, value)| (key.clone(), value.clone()))
             .collect::<serde_yaml_ng::Mapping>()
     };
-    (snapshot.body != current.body || fields(snapshot) != fields(current))
-        .then(|| format!("As at the start of this fight. {name} has changed since."))
+    (splat::content::stat_blocks::comparison_body(snapshot)
+        != splat::content::stat_blocks::comparison_body(current)
+        || fields(snapshot) != fields(current))
+    .then(|| format!("As at the start of this fight. {name} has changed since."))
+}
+
+fn change_origin(p: &Participant) -> Option<String> {
+    let mut parts = Vec::new();
+    if let Some(added) = &p.added_from {
+        parts.push(if added.group.is_empty() {
+            "Added by hand".into()
+        } else {
+            format!("Arrived with {}", added.group)
+        });
+    }
+    let has_name_row = p.changes.as_ref().is_some_and(|changes| {
+        changes
+            .overrides
+            .rows(&changes.base)
+            .iter()
+            .any(|row| row.label == "Name")
+    });
+    if p.named_stat_block() && (p.npc_identity() || !has_name_row) {
+        parts.push(format!("as {}", p.definition.name));
+    }
+    (!parts.is_empty()).then(|| parts.join(" · "))
 }
 
 fn changes_block(ui: &mut egui::Ui, p: &Participant, above_stat_block: bool) {
     let c = colors();
-    if let Some(added) = &p.added_from {
-        ui.add(
-            egui::Label::new(
-                Type::Small
-                    .rich(
-                        ui,
-                        if added.group.is_empty() {
-                            "Added by hand".to_owned()
-                        } else {
-                            format!("Arrived with {}", added.group)
-                        },
-                    )
-                    .color(c.muted),
-            )
-            .wrap(),
-        );
-    }
-    if p.named_stat_block() {
-        ui.label(
-            Type::Small
-                .rich(ui, format!("as {}", p.definition.name))
-                .color(c.muted),
-        );
+    if let Some(origin) = change_origin(p) {
+        ui.add(egui::Label::new(Type::Small.rich(ui, origin).color(c.muted)).wrap());
     }
     let Some(changes) = p.changes.as_ref().filter(|_| p.stat_changes()) else {
         return;
@@ -5889,6 +5907,84 @@ mod tests {
     use splat::content::{Entry, overrides::Overrides};
 
     #[test]
+    fn run_copy_ignores_conversion_but_reports_hp_and_source_removal() {
+        let source =
+            splat::content::definitions::source_file("definitions/creatures/wolf.md").unwrap();
+        let mut snapshot = Entry::parse("Wolf.md", source).unwrap();
+        let converted = splat::content::formats::convert("Wolf.md", source).unwrap();
+        let current = Entry::parse("Wolf.md", &converted).unwrap();
+        assert!(snapshot_notice(&snapshot, Some(&current), false).is_none());
+        let changed = Entry::parse(
+            "Wolf.md",
+            &converted.replace("| Hit Points | 11", "| Hit Points | 12"),
+        )
+        .unwrap();
+        assert!(
+            snapshot_notice(&snapshot, Some(&changed), false)
+                .unwrap()
+                .contains("has changed since")
+        );
+        let folder = tempfile::tempdir().unwrap();
+        let path = folder.path().join("Wolf.md");
+        std::fs::write(&path, source).unwrap();
+        snapshot.fields.insert(
+            "splat_run_source_path".into(),
+            path.to_string_lossy().to_string().into(),
+        );
+        snapshot
+            .fields
+            .insert("splat_run_source_owner".into(), "Ashen Marches".into());
+        assert!(
+            snapshot_notice(&snapshot, None, false)
+                .unwrap()
+                .contains("Ashen Marches is not used in this campaign now")
+        );
+        std::fs::remove_file(path).unwrap();
+        assert!(
+            snapshot_notice(&snapshot, None, false)
+                .unwrap()
+                .contains("was deleted")
+        );
+    }
+
+    #[test]
+    fn card_origin_does_not_repeat_a_name_change_and_joins_group_and_npc() {
+        let text = crate::library::note_text("Guard", "creature", None);
+        let mut p = Participant::with_overrides(
+            "guard".into(),
+            "Enemies".into(),
+            Entry::parse("Guard.md", &text).unwrap(),
+            &Mapping::new(),
+            &Overrides {
+                name: Some("Captain".into()),
+                ..Default::default()
+            },
+            true,
+        )
+        .unwrap();
+        assert_eq!(change_origin(&p), None);
+        p.added_from = Some(super::super::AddedFrom {
+            group: "Rival Team".into(),
+            instance: "arrival".into(),
+            round: 1,
+            group_id: None,
+        });
+        assert_eq!(
+            change_origin(&p).as_deref(),
+            Some("Arrived with Rival Team")
+        );
+        Arc::make_mut(&mut p.definition)
+            .fields
+            .insert("splat_run_npc_name".into(), "Captain".into());
+        assert_eq!(
+            change_origin(&p).as_deref(),
+            Some("Arrived with Rival Team · as Guard")
+        );
+        p.added_from = None;
+        assert_eq!(change_origin(&p).as_deref(), Some("as Guard"));
+    }
+
+    #[test]
     fn run_snapshot_notice_distinguishes_unchanged_changed_unreadable_and_deleted() {
         let text = crate::library::note_text("Wolf", "creature", None);
         let snapshot = Entry::parse("Wolf.md", &text).unwrap();
@@ -5908,7 +6004,7 @@ mod tests {
         assert!(
             snapshot_notice(&snapshot, None, false)
                 .unwrap()
-                .contains("was deleted")
+                .contains("is not available in this campaign now")
         );
     }
 

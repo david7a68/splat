@@ -447,6 +447,13 @@ fn write_format_notes(root: &Path) -> Result<(), String> {
             "| Hit Points | about twenty |",
         );
     write_note(root, "Creatures/Flagged Wolf.md", &bad)?;
+    let spell = format!(
+        "---\nsplat_schema: 1\nsplat_id: {}\nsplat_kind: spell\nsplat_name: Flagged Spark\nsplat_spell: {{level: 1, range_text: Self}}\n---\n\n# Flagged Spark\n\nKeep the spark effect.\n",
+        stable_id("flagged-spark")
+    );
+    let spell = splat::content::formats::convert("Spells/Flagged Spark.md", &spell)?
+        .replace("| Level | 1 |", "| Level | many |");
+    write_note(root, "Spells/Flagged Spark.md", &spell)?;
     for (path, schema, name, data) in [
         (
             "NPCs/Rook.md",
@@ -747,7 +754,17 @@ fn write_run(
                 Participant::new(
                     format!("actor_enemy_{kind}_{index}"),
                     "enemies".into(),
-                    Entry::parse(file, &text)?,
+                    {
+                        let mut entry = Entry::parse(file, &text)?;
+                        entry.fields.insert(
+                            "splat_run_source_path".into(),
+                            module.join(file).to_string_lossy().to_string().into(),
+                        );
+                        entry
+                            .fields
+                            .insert("splat_run_source_owner".into(), MODULE.into());
+                        entry
+                    },
                     &Mapping::new(),
                     true,
                 )?,

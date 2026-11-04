@@ -100,6 +100,11 @@ or set `SPLAT_VISUAL_CONTACT_SHEET=1` to make it with a full `visual-test` run.
   clears scenario filters and baseline-update mode, and enforces the baseline.
   Video and optional contact-sheet settings work as for `visual-test`.
 
+Converted creature, spell and item files use readable tables. The reader shows
+each set fact once and hides machine lines. A creature's CR supplies missing XP
+and PB; mismatches are flagged unless they describe a lair. Printed creature stats
+stay in a folded quote as a record; edit the table above it to change the values.
+
 A live initiative change says `acts next round` when its place has passed. Setup counts
 rows below the visible list, including missing initiatives and ties between independent rolls. Shared rolls do not produce a tie warning. Session note boxes
 keep their edges visible while the text scrolls. Saved runs keep the last change in the

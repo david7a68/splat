@@ -440,27 +440,10 @@ impl GroupDraft {
     }
 }
 
-/// What an entry's text says it is worth. Nothing is invented when it says nothing.
+/// Explicit XP wins; a bare CR supplies its standard reward.
 fn creature_xp(entry: &Entry) -> Option<u64> {
-    crate::library::presentation::challenge_text(entry).and_then(xp_in_text)
-}
-
-/// Both forms the sources use: `XP 450`, and `450 XP`.
-fn xp_in_text(text: &str) -> Option<u64> {
-    let number = |digits: Vec<char>| -> Option<u64> {
-        let digits: String = digits.into_iter().filter(char::is_ascii_digit).collect();
-        digits.parse().ok()
-    };
-    let in_number = |c: &char| c.is_ascii_digit() || *c == ',';
-    if let Some((_, after)) = text.split_once("XP ")
-        && let Some(xp) = number(after.chars().take_while(in_number).collect())
-    {
-        return Some(xp);
-    }
-    let (before, _) = text.split_once(" XP")?;
-    let mut digits: Vec<char> = before.chars().rev().take_while(in_number).collect();
-    digits.reverse();
-    number(digits)
+    crate::library::presentation::challenge_text(entry)
+        .and_then(splat::content::stat_blocks::challenge_xp)
 }
 
 /// A creature's name in an editor: the one it will have. Its changes say which entry it is.
@@ -546,7 +529,7 @@ pub(super) fn load(
                     None => xp_unknown.push(entry.name.clone()),
                 }
                 members.push(GroupMember {
-                    entry: Arc::new(entry.clone()),
+                    entry: Arc::new(catalogue.run_entry(id)),
                     count: member.count,
                     overrides: member.overrides.clone(),
                 });

@@ -157,13 +157,18 @@ fn numeric(fields: &Mapping, key: &str) -> Option<i64> {
     val(fields, "splat_stats", key)?.get("value")?.as_i64()
 }
 
-/// Remove only obsolete marked data blocks, keeping headings and all unmarked prose.
+/// Remove obsolete marked data blocks and the headings they leave empty.
 /// Used before the legacy marker reader too, so stale YAML cannot mask table data.
 pub fn without_legacy(text: &str, kind: &str) -> String {
     let mut ranges = Vec::new();
     let mut pending = None;
+    let mut heading = None;
+    let mut touched = std::collections::HashSet::new();
     for (event, range) in Parser::new_ext(text, Options::ENABLE_TABLES).into_offset_iter() {
         match event {
+            Event::Start(Tag::Heading { .. }) => {
+                heading = Some(text[range].trim().trim_start_matches('#').trim().to_owned());
+            }
             Event::Html(ref raw)
                 if raw.starts_with("<!-- splat:")
                     && roots(kind).iter().any(|root| {
@@ -172,6 +177,9 @@ pub fn without_legacy(text: &str, kind: &str) -> String {
                     }) =>
             {
                 pending = Some(range.start);
+                if let Some(heading) = &heading {
+                    touched.insert(heading.clone());
+                }
             }
             Event::End(TagEnd::Table) | Event::End(TagEnd::CodeBlock) => {
                 if let Some(start) = pending.take() {
@@ -184,6 +192,99 @@ pub fn without_legacy(text: &str, kind: &str) -> String {
     let mut out = text.to_owned();
     for range in ranges.into_iter().rev() {
         out.replace_range(range, "");
+    }
+    let headings: Vec<_> = Parser::new(&out)
+        .into_offset_iter()
+        .filter_map(|(event, range)| {
+            matches!(event, Event::Start(Tag::Heading { .. })).then_some(range)
+        })
+        .collect();
+    for (index, range) in headings.iter().enumerate().rev() {
+        let end = headings.get(index + 1).map_or(out.len(), |next| next.start);
+        let name = out[range.clone()].trim().trim_start_matches('#').trim();
+        if touched.contains(name) && out[range.end..end].trim().is_empty() {
+            out.replace_range(range.clone(), "");
+        }
+    }
+    out
+}
+
+const PRINTED_BLOCK: &str = "> [!quote]- Printed stat block (not read; edit the table above)";
+
+/// Keep the book's printed header as a record, separate from the editable table.
+pub fn fold_printed_stats(text: &str) -> String {
+    let Some(source) =
+        Document::new(text).section_at_level("Source text", Some(pulldown_cmark::HeadingLevel::H2))
+    else {
+        return text.into();
+    };
+    let source = source.range();
+    let mut ranges = Vec::new();
+    let mut offset = source.start;
+    for raw in text[source].split_inclusive('\n') {
+        let line = raw.trim().trim_end_matches('\\').trim();
+        if line.starts_with('#') {
+            break;
+        }
+        let plain = line.replace('*', "");
+        let identity = plain.split_once(' ').is_some_and(|(size, rest)| {
+            identity_value("size", size).is_some()
+                && identity_value(
+                    "type",
+                    rest.split_whitespace()
+                        .next()
+                        .unwrap_or(rest)
+                        .trim_end_matches(','),
+                )
+                .is_some()
+        });
+        let stat = [
+            "AC ",
+            "HP ",
+            "Armor Class ",
+            "Hit Points ",
+            "Initiative ",
+            "Speed ",
+            "CR ",
+            "Challenge ",
+            "MOD SAVE",
+            "Str ",
+            "Dex ",
+            "Con ",
+            "Int ",
+            "Wis ",
+            "Cha ",
+            "Skills ",
+            "Saving Throws ",
+            "Senses ",
+            "Languages ",
+            "Gear ",
+            "Resistances ",
+            "Immunities ",
+            "Vulnerabilities ",
+        ]
+        .iter()
+        .any(|prefix| plain.starts_with(prefix));
+        if identity || stat {
+            if let Some(last) = ranges
+                .last_mut()
+                .filter(|last: &&mut std::ops::Range<usize>| last.end == offset)
+            {
+                last.end += raw.len();
+            } else {
+                ranges.push(offset..offset + raw.len());
+            }
+        }
+        offset += raw.len();
+    }
+    let newline = if text.contains("\r\n") { "\r\n" } else { "\n" };
+    let mut out = text.to_owned();
+    for range in ranges.into_iter().rev() {
+        let quote = text[range.clone()]
+            .lines()
+            .map(|line| format!("> {line}{newline}"))
+            .collect::<String>();
+        out.replace_range(range, &format!("{PRINTED_BLOCK}{newline}{quote}{newline}"));
     }
     out
 }
@@ -440,6 +541,112 @@ pub fn read_legacy_identity(body: &str, fields: &mut Mapping) {
     }
 }
 
+fn speed(raw: &str) -> Result<(i64, &str), String> {
+    let raw = raw.trim();
+    let end = raw.find(|c: char| !c.is_ascii_digit()).unwrap_or(raw.len());
+    let n = raw[..end]
+        .parse()
+        .map_err(|_| "needs a number followed by ft.".to_owned())?;
+    let units = raw[end..].trim_start();
+    let tail = ["feet", "ft.", "ft"]
+        .iter()
+        .find_map(|unit| {
+            units
+                .strip_prefix(unit)
+                .filter(|tail| tail.is_empty() || tail.starts_with([',', ' ']))
+        })
+        .ok_or("needs a number followed by ft.")?;
+    Ok((n, tail))
+}
+
+/// Standard CR rewards. Explicit printed values still take precedence.
+fn challenge_defaults(raw: &str) -> Option<(u64, i64)> {
+    const XP: &[u64] = &[
+        10, 200, 450, 700, 1100, 1800, 2300, 2900, 3900, 5000, 5900, 7200, 8400, 10000, 11500,
+        13000, 15000, 18000, 20000, 22000, 25000, 33000, 41000, 50000, 62000, 75000, 90000, 105000,
+        120000, 135000, 155000,
+    ];
+    let cr = raw.split_whitespace().next()?;
+    match cr {
+        "1/8" => Some((25, 2)),
+        "1/4" => Some((50, 2)),
+        "1/2" => Some((100, 2)),
+        _ => {
+            let cr = cr.parse::<usize>().ok()?;
+            Some((*XP.get(cr)?, 2 + cr.saturating_sub(1) as i64 / 4))
+        }
+    }
+}
+
+fn printed_xp(raw: &str) -> Option<u64> {
+    let raw = raw.to_uppercase();
+    let digits = if let Some((_, tail)) = raw.split_once("XP ") {
+        tail.chars()
+            .take_while(|c| c.is_ascii_digit() || *c == ',')
+            .collect::<String>()
+    } else {
+        raw.split_once(" XP")?
+            .0
+            .chars()
+            .rev()
+            .take_while(|c| c.is_ascii_digit() || *c == ',')
+            .collect::<String>()
+            .chars()
+            .rev()
+            .collect()
+    };
+    digits.replace(',', "").parse().ok()
+}
+
+fn printed_pb(raw: &str) -> Option<i64> {
+    number(
+        raw.to_uppercase()
+            .split_once("PB ")?
+            .1
+            .split([';', ')'])
+            .next()?
+            .trim(),
+        true,
+    )
+    .ok()
+}
+
+pub fn challenge_xp(raw: &str) -> Option<u64> {
+    printed_xp(raw).or_else(|| challenge_defaults(raw).map(|(xp, _)| xp))
+}
+
+fn complete_challenge(raw: &str) -> String {
+    let Some((xp, pb)) = challenge_defaults(raw) else {
+        return raw.into();
+    };
+    let mut missing = Vec::new();
+    if printed_xp(raw).is_none() {
+        missing.push(format!("XP {xp}"));
+    }
+    if printed_pb(raw).is_none() {
+        missing.push(format!("PB {pb:+}"));
+    }
+    if missing.is_empty() {
+        return raw.into();
+    }
+    if let Some(prefix) = raw.trim_end().strip_suffix(')') {
+        format!("{prefix}; {})", missing.join("; "))
+    } else {
+        format!("{raw} ({})", missing.join("; "))
+    }
+}
+
+pub(crate) fn complete_challenge_fields(fields: &mut Mapping) {
+    if let Some(creature) = fields
+        .get_mut("splat_creature")
+        .and_then(Value::as_mapping_mut)
+        && let Some(raw) = creature.get("cr_text").and_then(Value::as_str)
+    {
+        let completed = complete_challenge(raw);
+        creature.insert("cr_text".into(), completed.into());
+    }
+}
+
 fn creature(table: &Table, source: &str, fields: &mut Mapping, flags: &mut Vec<Flag>) {
     let mut creature = Mapping::new();
     let mut stats = Mapping::new();
@@ -477,30 +684,11 @@ fn creature(table: &Table, source: &str, fields: &mut Mapping, flags: &mut Vec<F
             if !prose.is_empty() {
                 creature.insert(prose.into(), raw.clone().into());
             }
-            if key == "initiative"
-                && let Some((_, tail)) = raw.split_once('(')
-            {
-                let printed = tail.strip_suffix(')').and_then(|s| s.parse::<i64>().ok());
-                if printed != n.checked_add(10) {
-                    flags.push(Flag {
-                        line: table.row("Initiative").unwrap()[0].line,
-                        message: "Initiative passive value differs; the bonus is used".into(),
-                    });
-                }
-            }
         }
     }
     let raw = read(table, &["Speed"], flags);
     if let Some(raw) = checked(raw, "Speed", table, flags, |s| {
-        let n = number(s, false)?;
-        if n < 0
-            || !s
-                .split_whitespace()
-                .nth(1)
-                .is_some_and(|u| u == "ft." || u == "ft.,")
-        {
-            return Err("needs a number followed by ft.".into());
-        }
+        let (n, tail) = speed(s)?;
         stat(&mut stats, "speed", n);
         stats
             .get_mut("speed")
@@ -508,7 +696,7 @@ fn creature(table: &Table, source: &str, fields: &mut Mapping, flags: &mut Vec<F
             .as_mapping_mut()
             .unwrap()
             .insert("unit".into(), "ft".into());
-        Ok(s.to_owned())
+        Ok(format!("{n} ft.{tail}"))
     }) {
         creature.insert("movement_text".into(), raw.into());
     }
@@ -522,7 +710,31 @@ fn creature(table: &Table, source: &str, fields: &mut Mapping, flags: &mut Vec<F
             .then(|| s.to_owned())
             .ok_or_else(|| "needs a challenge rating first".into())
     }) {
-        creature.insert("cr_text".into(), raw.into());
+        if !raw.to_lowercase().contains("lair")
+            && let Some((xp, pb)) = challenge_defaults(&raw)
+        {
+            let cr = raw.split_whitespace().next().unwrap();
+            let line = table.row("Challenge").or_else(|| table.row("CR")).unwrap()[0].line;
+            if let Some(printed) = printed_xp(&raw)
+                && printed != xp
+                // CR 0 can award either 0 or 10 XP in the books.
+                && !(cr == "0" && printed == 0)
+            {
+                flags.push(Flag {
+                    line,
+                    message: format!("CR {cr} is XP {xp}; XP {printed} is used"),
+                });
+            }
+            if let Some(printed) = printed_pb(&raw)
+                && printed != pb
+            {
+                flags.push(Flag {
+                    line,
+                    message: format!("CR {cr} is PB {pb:+}; PB {printed:+} is used"),
+                });
+            }
+        }
+        creature.insert("cr_text".into(), complete_challenge(&raw).into());
     }
     for (name, key) in DETAILS {
         text(&mut creature, key, read(table, &[*name], flags));
@@ -554,16 +766,7 @@ fn creature(table: &Table, source: &str, fields: &mut Mapping, flags: &mut Vec<F
                 .flatten();
             if let Some(score) = score {
                 stat(&mut stats, key, score);
-                let modifier = (score - 10).div_euclid(2);
                 let row = table.row(short).unwrap();
-                if number(&row[2].value, true) != Ok(modifier)
-                    || row[2].value.split_whitespace().count() != 1
-                {
-                    flags.push(Flag {
-                        line: row[2].line,
-                        message: format!("{short} Mod differs; the score is used"),
-                    });
-                }
                 if !row[3].value.is_empty() {
                     match number(&row[3].value, true) {
                         Ok(n) if row[3].value.split_whitespace().count() == 1 => {
@@ -807,6 +1010,14 @@ fn printed_identity(value: String) -> String {
     })
 }
 
+fn title_words(raw: String) -> String {
+    raw.replace('_', " ")
+        .split_whitespace()
+        .map(|word| printed_identity(word.into()))
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
 pub fn render(fields: &Mapping, kind: &str) -> String {
     let mut rows: Vec<(&str, String)> = Vec::new();
     match kind {
@@ -850,7 +1061,8 @@ pub fn render(fields: &Mapping, kind: &str) -> String {
                     if !printed.is_empty() {
                         printed
                     } else if key == "initiative" {
-                        signed(n)
+                        n.checked_add(10)
+                            .map_or_else(|| signed(n), |passive| format!("{n:+} ({passive})"))
                     } else if key == "speed" {
                         format!("{n} ft.")
                     } else {
@@ -872,13 +1084,20 @@ pub fn render(fields: &Mapping, kind: &str) -> String {
                 let value = match *name {
                     "Level" => val(fields, "splat_spell", "level")
                         .and_then(Value::as_u64)
-                        .map_or_else(String::new, |n| n.to_string()),
-                    "School" => string(fields, "splat_spell", "school"),
+                        .map_or_else(String::new, |n| {
+                            if n == 0 {
+                                "Cantrip".into()
+                            } else {
+                                n.to_string()
+                            }
+                        }),
+                    "School" => title_words(string(fields, "splat_spell", "school")),
                     "Classes" => val(fields, "splat_spell", "classes")
                         .and_then(Value::as_sequence)
                         .map(|s| {
                             s.iter()
                                 .filter_map(Value::as_str)
+                                .map(|value| title_words(value.into()))
                                 .collect::<Vec<_>>()
                                 .join(", ")
                         })
@@ -958,17 +1177,22 @@ pub fn render(fields: &Mapping, kind: &str) -> String {
         _ => {
             rows.push((
                 "Type",
-                string(fields, "splat_item", "category").replace('_', " "),
+                title_words(string(fields, "splat_item", "category")),
             ));
             rows.push((
                 "Rarity",
-                string(fields, "splat_item", "rarity").replace('_', " "),
+                title_words(string(fields, "splat_item", "rarity")),
             ));
             rows.push((
                 "Attunement",
                 val(fields, "splat_item", "equipment")
                     .and_then(|m| m.get("attunement"))
                     .and_then(Value::as_str)
+                    .map(|value| match value {
+                        "none" => "No",
+                        "required" => "Yes",
+                        _ => value,
+                    })
                     .unwrap_or("")
                     .into(),
             ));
@@ -1075,8 +1299,7 @@ pub fn conversion(fields: &Mapping, kind: &str) -> Result<(String, Vec<(String, 
         shapes.push("duration_plain");
     }
     if !shapes.is_empty() {
-        let at = rendered.find("\n\n").unwrap() + 2;
-        rendered.insert_str(at, &format!("%% splat shape={} %%\n\n", shapes.join(",")));
+        rendered.push_str(&format!("%% splat shape={} %%\n\n", shapes.join(",")));
     }
     let mut parsed = Mapping::new();
     let mut flags = Vec::new();
@@ -1092,8 +1315,7 @@ pub fn conversion(fields: &Mapping, kind: &str) -> Result<(String, Vec<(String, 
         }
     }
     if !omit.is_empty() {
-        let at = rendered.find("\n\n").unwrap() + 2;
-        rendered.insert_str(at, &format!("%% splat omit={} %%\n\n", omit.join(",")));
+        rendered.push_str(&format!("%% splat omit={} %%\n\n", omit.join(",")));
     }
     let mut extras = Vec::new();
     for root in roots(kind) {
@@ -1263,7 +1485,20 @@ pub fn patch(text: &str, changes: &[(&str, Option<Value>)]) -> Result<String, St
     let mut after = text.to_owned();
     for row in &desired.rows {
         let name = &row[0].value;
-        if old.row(name).and_then(|r| r.get(1)).map(|c| &c.value) != Some(&row[1].value) {
+        let derived_changed = kind == "creature"
+            && ["Challenge", "Initiative", "Speed"].contains(&name.as_str())
+            && Document::new(&after)
+                .section_at_level(section(kind), Some(pulldown_cmark::HeadingLevel::H2))
+                .and_then(|s| s.table(headers(kind)))
+                .and_then(|t| t.row(name).map(<[_]>::to_vec))
+                .is_some_and(|r| {
+                    r[1].value != row[1].value
+                        && !r[1].value.is_empty()
+                        && !entry.flags.iter().any(|flag| flag.line == r[1].line)
+                });
+        if derived_changed
+            || old.row(name).and_then(|r| r.get(1)).map(|c| &c.value) != Some(&row[1].value)
+        {
             after = set_cell(&after, kind, headers(kind), name, 1, &row[1].value)?;
         }
     }
@@ -1302,9 +1537,9 @@ pub fn patch(text: &str, changes: &[(&str, Option<Value>)]) -> Result<String, St
                     .and_then(|r| r.get(column))
                     .map(|c| c.value.as_str());
                 let should_edit = if column == 2 {
-                    old_score != new_score
-                        || numeric(&entry.fields, &format!("save_{full}"))
-                            != numeric(&expected, &format!("save_{full}"))
+                    new_score.is_some()
+                        && previous.and_then(|raw| number(raw, true).ok())
+                            != number(&row[2].value, true).ok()
                 } else if column == 3 {
                     numeric(&entry.fields, &format!("save_{full}"))
                         != numeric(&expected, &format!("save_{full}"))
@@ -1388,6 +1623,7 @@ fn set_cell(
                 && name == "Initiative"
                 && let Some(old) = table.row(&actual_name).and_then(|r| r.get(column))
                 && old.value.contains('(')
+                && !value.contains('(')
                 && let Ok(n) = number(&value, true)
                 && let Some(passive) = n.checked_add(10)
             {
@@ -1504,12 +1740,48 @@ pub fn invalid_vital(entry: &Entry, key: &str) -> Option<String> {
         .filter(|raw| !raw.is_empty())
 }
 
+fn without_printed_record(body: &str) -> String {
+    let mut out = body.to_owned();
+    let ranges: Vec<_> = Parser::new(body)
+        .into_offset_iter()
+        .filter_map(|(event, range)| {
+            (matches!(event, Event::Start(Tag::BlockQuote(_)))
+                && body[range.clone()].starts_with(PRINTED_BLOCK))
+            .then_some(range)
+        })
+        .collect();
+    for range in ranges.into_iter().rev() {
+        out.replace_range(range, "");
+    }
+    out
+}
+
+/// Compare the words and model, independent of the on-disk layout.
+pub fn comparison_body(entry: &Entry) -> String {
+    let mut body = entry.body.clone();
+    for root in roots(&entry.kind) {
+        body = body.replace(&format!("path={root}_extras "), &format!("path={root} "));
+    }
+    body = without_legacy(&body, &entry.kind);
+    if entry.kind == "creature" {
+        body = fold_printed_stats(&body);
+    }
+    let mut comparable = entry.clone();
+    comparable.fields.insert("splat_schema".into(), 2.into());
+    reading_body(&comparable, &body)
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
 /// Omit model-backed rows and rejected vitals shown in the reader's stat area.
 /// Unknown rows remain visible as text.
 pub fn reading_body(entry: &Entry, body: &str) -> String {
     if entry.fields.get("splat_schema").and_then(Value::as_u64) != Some(2) {
         return body.into();
     }
+    let clean_body = without_printed_record(body);
+    let body = clean_body.as_str();
     let kind = entry.kind.as_str();
     let Some(stat_section) =
         Document::new(body).section_at_level(section(kind), Some(pulldown_cmark::HeadingLevel::H2))
@@ -1579,9 +1851,13 @@ pub fn reading_body(entry: &Entry, body: &str) -> String {
                     if key.is_none_or(|key| {
                         raw.is_empty()
                             || invalid_vital(entry, key).as_deref() == Some(raw)
-                            || number(raw, key == "initiative")
-                                .ok()
-                                .is_some_and(|n| Some(n) == numeric(&entry.fields, key))
+                            || (if key == "speed" {
+                                speed(raw).map(|(n, _)| n)
+                            } else {
+                                number(raw, key == "initiative")
+                            })
+                            .ok()
+                            .is_some_and(|n| Some(n) == numeric(&entry.fields, key))
                     }) {
                         ranges.push(start..end);
                     }

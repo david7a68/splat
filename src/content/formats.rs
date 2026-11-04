@@ -588,7 +588,12 @@ pub fn convert(path: &str, text: &str) -> Result<String, String> {
         changes.push(("splat_pages", Some(pages.clone())));
     }
     let source = if stat_kind {
-        super::stat_blocks::without_legacy(text, &entry.kind)
+        let source = super::stat_blocks::without_legacy(text, &entry.kind);
+        if entry.kind == "creature" {
+            super::stat_blocks::fold_printed_stats(&source)
+        } else {
+            source
+        }
     } else {
         text.into()
     };
@@ -612,7 +617,11 @@ pub fn convert(path: &str, text: &str) -> Result<String, String> {
     let mut next = (*checked.fields).clone();
     before.remove("splat_schema");
     next.remove("splat_schema");
-    if before != next || !checked.flags.is_empty() {
+    let blocking_flag = checked
+        .flags
+        .iter()
+        .any(|flag| !(flag.message.starts_with("CR ") && flag.message.ends_with(" is used")));
+    if before != next || blocking_flag {
         return Err("Conversion changed a value. The old file was kept.".into());
     }
     Ok(after)
