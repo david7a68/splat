@@ -494,6 +494,7 @@ struct CreatureEditor {
     saved: CreatureFields,
     error: Option<String>,
     focus: bool,
+    layout_warning: Option<String>,
 }
 impl CreatureEditor {
     fn open(root: &std::path::Path, path: &str) -> Result<Self, String> {
@@ -522,6 +523,7 @@ impl CreatureEditor {
             fields,
             error: None,
             focus: true,
+            layout_warning: None,
         })
     }
     fn dirty(&self) -> bool {
@@ -610,13 +612,48 @@ impl CreatureEditor {
             changes.push(("splat_stats", Some(Value::Mapping(stats))));
         }
         let text = patch_fields(&self.baseline, &changes)?;
-        Ok(with_body(&text, &body))
+        let text = with_body(&text, &body);
+        let updated = Entry::parse(&self.path, &text)?;
+        let mut creature = updated.fields["splat_creature"].clone();
+        for (changed, key, number) in [
+            (*hp != self.saved.hp, "hit_points_text", new_hp),
+            (
+                *armor_class != self.saved.armor_class,
+                "armor_class_text",
+                new_armor_class,
+            ),
+        ] {
+            if changed
+                && let Some(raw) = entry.fields["splat_creature"]
+                    .get(key)
+                    .and_then(Value::as_str)
+            {
+                let tail = raw.find(char::is_whitespace).map_or("", |at| &raw[at..]);
+                creature[key] = format!("{number}{tail}").into();
+            }
+        }
+        if creature != updated.fields["splat_creature"] {
+            let text = crate::content_workspace::creature_copy_fields(&text, &updated)?;
+            return patch_fields(&text, &[("splat_creature", Some(creature))]);
+        }
+        Ok(text)
     }
     fn save(&mut self, root: &std::path::Path) -> Result<(), String> {
         self.recovery
             .check(root, &mut self.path, Some(&self.baseline))?;
         let text = self.text()?;
-        let text = content::formats::convert(&self.path, &text)?;
+        let text = match content::formats::convert(&self.path, &text) {
+            Ok(converted) => {
+                self.layout_warning = None;
+                converted
+            }
+            Err(error) => {
+                self.layout_warning = Some(format!(
+                    "Saved in the old layout. Review this creature before converting. {error}"
+                ));
+                text
+            }
+        };
         Entry::parse(&self.path, &text)?;
         write_note(root, &self.path, Some(&self.baseline), &text)?;
         self.fields.body = Entry::parse(&self.path, &text)?.body.trim().to_owned();
@@ -1296,6 +1333,7 @@ pub struct Encounters {
     creature: Option<CreatureEditor>,
     /// The shared conversion notice and Undo for a creature saved here.
     creature_layout: Option<(std::path::PathBuf, crate::formats_ui::State)>,
+    creature_layout_warning: Option<String>,
     /// The open encounter came from the Session page, and goes back there.
     pub from_session: bool,
     /// A new encounter joins the session's plan when it is first saved.
@@ -1815,6 +1853,7 @@ impl Encounters {
     fn reload(&mut self, ctx: &egui::Context, campaign: Campaign, modules: Vec<Module>) {
         self.creature = None;
         self.history_read = None;
+        self.creature_layout_warning = None;
         // A discarded draft belongs to its campaign. Undo must not save it into another.
         if self.active.as_ref().is_none_or(|old| old.id != campaign.id) {
             self.discarded = None;
@@ -2071,7 +2110,8 @@ impl Encounters {
             .is_ok_and(|entry| content::formats::schema(&entry.fields) == Ok(1));
         match editor.save(&active.path) {
             Ok(()) => {
-                if old_layout {
+                self.creature_layout_warning = editor.layout_warning.clone();
+                if old_layout && editor.layout_warning.is_none() {
                     let mut layouts = crate::formats_ui::State::default();
                     layouts.remember(&active.path, &editor.path, &before, &editor.baseline);
                     self.creature_layout = Some((active.path.join(&editor.path), layouts));
@@ -2433,6 +2473,11 @@ impl Encounters {
         {
             self.reload_snapshot(&active, campaigns.modules());
             self.saved = true;
+        }
+        if let Some(warning) = &self.creature_layout_warning
+            && design::message_with_action(ui, Tone::Warning, warning, "Dismiss")
+        {
+            self.creature_layout_warning = None;
         }
         if self.group_draft.is_some() {
             // Taken up on this page, it is this page's. Its save stays here, and links nothing.
@@ -4661,7 +4706,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let campaign = campaign(dir.path());
         let text = format!(
-            "---\nsplat_schema: 1\nsplat_id: {}\nsplat_kind: creature\nsplat_name: Wolf\nsplat_creature: {{}}\nsplat_stats: {{max_hp: {{value: 22}}, armor_class: {{value: 13}}}}\n---\n\n# Wolf\n",
+            "---\nsplat_schema: 1\nsplat_id: {}\nsplat_kind: creature\nsplat_name: Wolf\nsplat_creature: {{hit_points_text: '22 (4d8 + 4)'}}\nsplat_stats: {{max_hp: {{value: 22}}, armor_class: {{value: 13}}}}\n---\n\n# Wolf\n",
             Uuid::new_v4()
         );
         fs::write(dir.path().join("Wolf.md"), &text).unwrap();
@@ -4674,11 +4719,47 @@ mod tests {
         assert!(encounters.creature.is_none());
         let saved = fs::read_to_string(dir.path().join("Wolf.md")).unwrap();
         assert!(saved.contains("splat_schema: 2"));
-        assert!(saved.contains("| Hit Points | 23 |"));
+        assert!(saved.contains("| Hit Points | 23 (4d8 + 4) |"));
         let (path, layouts) = encounters.creature_layout.as_mut().unwrap();
         assert_eq!(*path, dir.path().join("Wolf.md"));
         layouts.undo().unwrap();
         assert_eq!(fs::read_to_string(path).unwrap(), text);
+    }
+
+    #[test]
+    fn fmt_f2_ambiguous_legacy_creature_can_still_be_edited_without_loss() {
+        let dir = tempfile::tempdir().unwrap();
+        let text = format!(
+            "---\nsplat_schema: 1\nsplat_id: {}\nsplat_kind: creature\nsplat_name: Wolf\nsplat_creature: {{movement_text: '40 ft.'}}\nsplat_stats: {{max_hp: {{value: 22}}, armor_class: {{value: 13}}, speed: {{value: 30}}}}\n---\n\n# Wolf\n\nKeep my words.\n",
+            Uuid::new_v4()
+        );
+        fs::write(dir.path().join("Wolf.md"), &text).unwrap();
+        let mut editor = CreatureEditor::open(dir.path(), "Wolf.md").unwrap();
+        editor.fields.hp = "90".into();
+        editor.save(dir.path()).unwrap();
+        assert!(
+            editor
+                .layout_warning
+                .as_ref()
+                .unwrap()
+                .contains("old layout")
+        );
+        let saved = fs::read_to_string(dir.path().join("Wolf.md")).unwrap();
+        let entry = Entry::parse("Wolf.md", &saved).unwrap();
+        assert_eq!(entry.fields["splat_schema"], Value::from(1));
+        assert_eq!(
+            entry.fields["splat_stats"]["max_hp"]["value"],
+            Value::from(90)
+        );
+        assert_eq!(
+            entry.fields["splat_stats"]["speed"]["value"],
+            Value::from(30)
+        );
+        assert_eq!(
+            entry.fields["splat_creature"]["movement_text"],
+            Value::from("40 ft.")
+        );
+        assert!(saved.contains("Keep my words."));
     }
 
     #[test]

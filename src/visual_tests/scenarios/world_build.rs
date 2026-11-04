@@ -678,6 +678,10 @@ pub fn package_file_changed(d: &mut Driver<'_>) {
     let before = fs::read_to_string(&path).unwrap();
     let changed = before
         .replace("max_hp: {value: 22}", "max_hp: {value: 28}")
+        .replace(
+            "hit_points_text: '22 (4d8 + 4)'",
+            "hit_points_text: '28 (4d8 + 10)'",
+        )
         .replace("HP 22 (4d8 + 4)", "HP 28 (4d8 + 10)")
         .replace("Bite.", "Cinder Bite.");
     fs::write(&path, &changed).unwrap();

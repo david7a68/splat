@@ -1035,7 +1035,7 @@ fn subtract(extra: &mut Mapping, printed: &Mapping) -> Result<(), String> {
             } else if old == value {
                 extra.remove(key);
             } else {
-                return Err(format!("{key:?} cannot be converted without changing it"));
+                return Err("The printed stats and saved stats disagree.".into());
             }
         }
     }

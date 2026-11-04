@@ -3638,16 +3638,24 @@ impl Library {
                 return Err("Another entry already uses this UUID or key.".into());
             }
             let baseline = (!file_gone).then_some(note.text.as_str());
-            let after = content::formats::convert_resolved(
-                &note.path,
-                &self.draft,
-                self.loaded
-                    .as_ref()
-                    .unwrap()
-                    .notes
-                    .iter()
-                    .filter_map(|note| note.entry.as_ref()),
-            )?;
+            let after = if matches!(note.owner, Owner::Package(_))
+                && (crate::content_workspace::generated_package(&root)
+                    || (note.path == "Package.md"
+                        && crate::content_workspace::generated_manifest(&self.draft)))
+            {
+                self.draft.clone()
+            } else {
+                content::formats::convert_resolved(
+                    &note.path,
+                    &self.draft,
+                    self.loaded
+                        .as_ref()
+                        .unwrap()
+                        .notes
+                        .iter()
+                        .filter_map(|note| note.entry.as_ref()),
+                )?
+            };
             let entry = write_note(&root, &note.path, baseline, &after)?;
             if after != self.draft {
                 self.layouts
@@ -4873,6 +4881,50 @@ impl Library {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn fmt_f2_generated_package_save_keeps_schema_one_without_conversion_undo() {
+        let dir = tempfile::tempdir().unwrap();
+        let module =
+            create_module(&dir.path().join("book"), "Generated book", "generated_book").unwrap();
+        let manifest = fs::read_to_string(module.path.join("Module.md")).unwrap();
+        fs::write(
+            module.path.join("Package.md"),
+            content::patch_fields(&manifest, &[("splat_generated", Some(true.into()))]).unwrap(),
+        )
+        .unwrap();
+        fs::remove_file(module.path.join("Module.md")).unwrap();
+        let text = format!(
+            "---\nsplat_schema: 1\nsplat_id: {}\nsplat_kind: creature\nsplat_name: Book Wolf\nsplat_creature: {{size: medium, type: beast}}\nsplat_stats: {{max_hp: {{value: 22}}}}\n---\n\n# Book Wolf\n",
+            Uuid::new_v4()
+        );
+        fs::write(module.path.join("Wolf.md"), &text).unwrap();
+        let loaded = load(Some(&module)).unwrap();
+        let selected = loaded
+            .notes
+            .iter()
+            .position(|note| note.path == "Wolf.md")
+            .unwrap();
+        let draft = format!("{text}\nThe DM's words.\n");
+        let mut library = Library {
+            loaded: Some(loaded),
+            selected: Some(selected),
+            draft: draft.clone(),
+            ..Default::default()
+        };
+        library.save_selected(false);
+        assert!(library.error.is_none(), "{:?}", library.error);
+        assert_eq!(
+            fs::read_to_string(module.path.join("Wolf.md")).unwrap(),
+            draft
+        );
+        library.layouts.undo().unwrap();
+        assert_eq!(
+            fs::read_to_string(module.path.join("Wolf.md")).unwrap(),
+            draft,
+            "No conversion notice or Undo was created"
+        );
+    }
 
     #[test]
     fn copy_registration_and_undo_keep_campaign_choices_and_later_edits() {

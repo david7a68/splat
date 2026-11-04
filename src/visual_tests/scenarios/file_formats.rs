@@ -52,7 +52,7 @@ pub fn run(d: &mut Driver<'_>) {
                 && d.visible_text("splat_schema: 2")
                 && d.visible_text(identity)
                 && d.visible_text(world)
-                && d.visible_text("3 creature files · 1 package file · 2 rule files · 1 World note")
+                && d.visible_text("1 rule file · 1 World note")
                 && d.visible_text("Next difference")
                 && d.visible_text("Convert files")
                 && d.visible_text("Cancel")

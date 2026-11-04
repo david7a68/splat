@@ -676,12 +676,13 @@ pub mod campaign_content {
         d.goal("open a campaign entry for editing");
 
         let editor_top = |d: &Driver<'_>| {
-            d.nodes()
+            let node = d
+                .nodes()
                 .into_iter()
                 .find(|node| node.role == egui::accesskit::Role::MultilineTextInput)
-                .unwrap()
-                .rect
-                .top()
+                .unwrap();
+            // A long source scrolls inside the editor. Its visible viewport must stay put.
+            node.shown.top()
         };
         let clean_top = editor_top(d);
         d.type_into_editor("Scarred by the fire at the bridge. ");

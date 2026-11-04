@@ -151,6 +151,10 @@ supplies each value once. A bad cell shows a warning with its file line; valid
 values still lead in the reader and beside a run. Unknown rows stay readable.
 
 A schema conversion shows `Saved in the new layout.` with `Undo`. Convert files
+groups files by owner, with only the campaign checked at first. Generated packages
+are disabled and say `Generated package; its converter writes the layout`.
+Counts include checked owners only. The file picker groups paths by owner too.
+Convert files
 opens a modal with each file's before and after text, the counts by kind in words,
 and files skipped. It uses the shared comparison: lines wrap, changed lines are
 marked, both sides scroll together, and it opens at the first difference.

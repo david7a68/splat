@@ -32,6 +32,29 @@ pub(crate) fn note_id(text: &str) -> Option<Uuid> {
 
 pub(crate) const DELETED_MANIFEST: &str = "Package.md was deleted. Entries are still available. Write it again, or restore it from a backup.";
 
+/// Read only the manifest, so a large generated book is never scanned for conversion.
+pub(crate) fn generated_package(root: &Path) -> bool {
+    fs::read_to_string(root.join("Package.md")).is_ok_and(|text| generated_manifest(&text))
+}
+
+pub(crate) fn generated_manifest(text: &str) -> bool {
+    let mut lines = text.trim_start_matches('\u{feff}').lines();
+    if lines.next().map(str::trim) != Some("---") {
+        return false;
+    }
+    // Keep the guard even when another property or the package body needs repair.
+    lines.take_while(|line| line.trim() != "---").any(|line| {
+        let Some((key, value)) = line.split_once(':') else {
+            return false;
+        };
+        !line.starts_with(char::is_whitespace)
+            && serde_yaml_ng::from_str::<Value>(key)
+                .is_ok_and(|key| key.as_str() == Some("splat_generated"))
+            && serde_yaml_ng::from_str::<Value>(value)
+                .is_ok_and(|value| value.as_bool() == Some(true))
+    })
+}
+
 pub(crate) fn package_manifest_path(module: &Module) -> String {
     if let Ok((entries, errors)) = content::read_directory(&module.path) {
         if let Some(entry) = entries.iter().find(|entry| entry.kind == "package") {
@@ -2075,7 +2098,12 @@ impl CopyPlan {
                 "A note already exists at this destination. Choose another name or folder.".into(),
             );
         }
-        let (text, layout_warning) = match content::formats::convert(&relative, &text) {
+        let converted = if generated_package(destination) {
+            Ok(text.clone())
+        } else {
+            content::formats::convert(&relative, &text)
+        };
+        let (text, layout_warning) = match converted {
             Ok(converted) => (converted, None),
             Err(error) if ["creature", "spell", "item"].contains(&source.entry.kind.as_str()) => (
                 text,
@@ -2156,6 +2184,21 @@ impl CopyPlan {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn fmt_f2_generated_marker_is_a_flat_boolean_in_the_manifest() {
+        assert!(super::generated_manifest(
+            "\u{feff}---\r\n\"splat_generated\": true # converter\r\nother: [broken\r\n---\r\n"
+        ));
+        for text in [
+            "---\nsplat_generated: 'true'\n---\n",
+            "---\nsplat_generated: false\n---\n",
+            "---\nsplat_other:\n  splat_generated: true\n---\n",
+            "---\nsplat_schema: 1\n---\n\nsplat_generated: true\n",
+        ] {
+            assert!(!super::generated_manifest(text));
+        }
+    }
+
     use super::*;
 
     #[test]

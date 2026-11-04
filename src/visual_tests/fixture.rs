@@ -149,11 +149,36 @@ fn seed_campaigns(
         write_format_notes(&active.path)?;
     }
 
+    let mut modules = vec![module];
+    if seed == Seed::Formats {
+        let generated_root = root.join("modules/generated-book");
+        let id = stable_id("visual:generated-book");
+        write_note(
+            &generated_root,
+            "Package.md",
+            &format!(
+                "---\nsplat_schema: 1\nsplat_id: {id}\nsplat_kind: package\nsplat_name: Generated Book\nsplat_namespace: generated_book\nsplat_generated: true\n---\n\n# Generated Book\n"
+            ),
+        )?;
+        write_note(
+            &generated_root,
+            "Creatures/Book Wolf.md",
+            &format!(
+                "---\nsplat_schema: 1\nsplat_id: {}\nsplat_kind: creature\nsplat_key: generated_book:creatures/book_wolf\nsplat_name: Book Wolf\nsplat_creature: {{size: medium, type: beast}}\nsplat_stats: {{max_hp: {{value: 22}}, armor_class: {{value: 13}}}}\n---\n\n# Book Wolf\n\nA creature from an outside converter.\n",
+                stable_id("visual:book-wolf")
+            ),
+        )?;
+        modules.push(Module {
+            id,
+            name: "Generated Book".into(),
+            path: generated_root,
+        });
+    }
     let data = UserData {
         version: 3,
         active_campaign_id: Some(active.id),
         campaigns: vec![active, quiet, unlinked],
-        modules: vec![module],
+        modules,
         unregistered_modules: Vec::new(),
     };
     let mut store = Store::at(settings.to_path_buf());
@@ -451,13 +476,18 @@ fn write_format_notes(root: &Path) -> Result<(), String> {
 }
 
 fn write_campaign_notes(root: &Path) -> Result<(), String> {
+    // Native creatures use the current template layout. Format scenarios cover
+    // legacy conversion; ordinary saves keep testing a stable editor.
     write_note(
         root,
         "Notes/Captain Varra.md",
-        &format!(
-            "---\nsplat_schema: 1\nsplat_id: {}\nsplat_kind: creature\nsplat_name: Captain Varra\nsplat_creature: {{size: medium, type: humanoid}}\nsplat_stats:\n  max_hp: {{value: 52}}\n  armor_class: {{value: 16}}\n  initiative: {{value: 2}}\n---\n\n# Captain Varra\n\nThe last commander of the Emberfall watch. She trusts the party until they side with the cult.\n\n## Actions\n\nLongsword. Melee Attack Roll: +5, reach 5 ft. Hit: 7 (1d8 + 3) Slashing damage.\n",
-            stable_id("visual:note:varra"),
-        ),
+        &splat::content::formats::convert(
+            "Notes/Captain Varra.md",
+            &format!(
+                "---\nsplat_schema: 1\nsplat_id: {}\nsplat_kind: creature\nsplat_name: Captain Varra\nsplat_creature: {{size: medium, type: humanoid}}\nsplat_stats:\n  max_hp: {{value: 52}}\n  armor_class: {{value: 16}}\n  initiative: {{value: 2}}\n---\n\n# Captain Varra\n\nThe last commander of the Emberfall watch. She trusts the party until they side with the cult.\n\n## Actions\n\nLongsword. Melee Attack Roll: +5, reach 5 ft. Hit: 7 (1d8 + 3) Slashing damage.\n",
+                stable_id("visual:note:varra"),
+            ),
+        )?,
     )?;
     write_note(
         root,

@@ -30,6 +30,10 @@ pub fn run(d: &mut Driver<'_>) {
     close_run(d);
     go_campaign(d);
     d.click("Convert files…");
+    d.expect("Generated package; its converter writes the layout");
+    d.expect("1 rule file · 1 World note");
+    d.state("grouped-conversion-preview", Sizes::All);
+    d.click("Ashen Marches");
     d.click("File to convert");
     d.click("Creatures/Cinder Wolf.md");
     d.expect("BEFORE");
