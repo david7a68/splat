@@ -30,9 +30,23 @@ pub struct State {
 }
 
 impl State {
+    pub fn show_any(&mut self, ui: &mut egui::Ui) -> bool {
+        let path = self.notice_file.clone();
+        self.show(ui, None, path.as_deref())
+    }
+
     pub fn remember(&mut self, root: &Path, path: &str, before: &str, after: &str) {
         self.undo = vec![Change::text(root.join(path), Some(before), Some(after))];
         self.notice_file = Some(root.join(path));
+    }
+    pub fn remember_conversion(&mut self, root: &Path, path: &str, before: &str, after: &str) {
+        if Entry::parse(path, before)
+            .is_ok_and(|e| splat::content::formats::schema(&e.fields) == Ok(1))
+            && Entry::parse(path, after)
+                .is_ok_and(|e| splat::content::formats::schema(&e.fields) == Ok(2))
+        {
+            self.remember(root, path, before, after);
+        }
     }
 
     pub fn scan(&mut self, campaigns: &Campaigns) {
@@ -94,6 +108,29 @@ impl State {
                     Ok(Some(file)) => preview.push(file),
                     Ok(None) => {}
                     Err(error) => self.skipped.push(format!("{}: {error}", entry.path)),
+                }
+            }
+        }
+        if let Some(campaign) = campaigns.active_campaign()
+            && let Ok(folder) = crate::sessions::folder(&campaign)
+        {
+            let path = folder.join(crate::timeline::FILE);
+            if path.is_file() && !fs::metadata(&path).is_ok_and(|m| m.permissions().readonly()) {
+                match fs::read_to_string(&path)
+                    .map_err(|e| e.to_string())
+                    .and_then(|before| {
+                        let after =
+                            crate::timeline::formats::convert(&before, &Default::default())?;
+                        Ok((before, after))
+                    }) {
+                    Ok((before, after)) if before != after => preview.push(Preview {
+                        root: folder,
+                        path: crate::timeline::FILE.into(),
+                        before,
+                        after,
+                    }),
+                    Ok(_) => {}
+                    Err(error) => self.skipped.push(format!("Timeline.md: {error}")),
                 }
             }
         }
@@ -161,7 +198,9 @@ impl State {
                 ui.label(format!("{} files can use the new layout.", files.len()));
                 let mut kinds = std::collections::BTreeMap::<String, usize>::new();
                 for file in files {
-                    if let Ok(entry) = Entry::parse(&file.path, &file.before) {
+                    if file.path == crate::timeline::FILE {
+                        *kinds.entry("timeline".into()).or_default() += 1;
+                    } else if let Ok(entry) = Entry::parse(&file.path, &file.before) {
                         let kind = if entry.fields.contains_key("splat_character") {
                             "character".into()
                         } else {

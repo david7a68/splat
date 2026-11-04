@@ -81,19 +81,30 @@ pub(crate) fn open_folder(campaign: &Campaign) -> Result<PathBuf, String> {
     let document = CampaignDocument::load(campaign)?;
     let entry = Entry::parse(&document.path, &document.text)?;
     if !entry.fields.contains_key(FOLDER_FIELD) {
-        save_folder(campaign, &folder_setting(campaign)?)
+        write_folder(campaign, &folder_setting(campaign)?, false)
     } else {
         folder(campaign)
     }
 }
 
 pub fn save_folder(campaign: &Campaign, name: &str) -> Result<PathBuf, String> {
+    write_folder(campaign, name, true)
+}
+fn write_folder(campaign: &Campaign, name: &str, convert: bool) -> Result<PathBuf, String> {
     let path = resolve(campaign, name)?;
     fs::create_dir_all(&path).map_err(|e| format!("Could not create session folder: {e}"))?;
     let document = CampaignDocument::load(campaign)?;
     let mut map = serde_yaml_ng::Mapping::new();
     map.insert("directory".into(), Value::String(name.trim().to_owned()));
-    let text = patch_fields(&document.text, &[(FOLDER_FIELD, Some(Value::Mapping(map)))])?;
+    let text = splat::content::formats::patch_model(
+        &document.text,
+        &[(FOLDER_FIELD, Some(Value::Mapping(map)))],
+    )?;
+    let text = if convert {
+        splat::content::formats::convert(&document.path, &text)?
+    } else {
+        text
+    };
     write_note(
         &campaign.path,
         &document.path,

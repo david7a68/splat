@@ -6,7 +6,7 @@ use super::{
 };
 use crate::{
     campaigns::Campaigns,
-    content_workspace::{CampaignDocument, Catalogue, EntryRef, patch_fields},
+    content_workspace::{CampaignDocument, Catalogue, EntryRef},
     design::{self, Action, Density, Status, Tone, Type, colors, icons},
     encounter_run::{GroupMember, RunGroup, change_rows},
     library::{note_path, write_note},
@@ -71,6 +71,7 @@ pub(super) struct GroupDraft {
     saved_name: String,
     saved_setup: GroupSetup,
     saved_notes: String,
+    flags: Vec<splat::content::layout::Flag>,
 }
 
 /// The note with this text after its frontmatter. The frontmatter stays as it is.
@@ -114,6 +115,7 @@ impl GroupDraft {
             saved_setup: setup,
             notes: String::new(),
             saved_notes: String::new(),
+            flags: Vec::new(),
         }
     }
     /// A new group that belongs to this encounter. Saving it is what makes it so.
@@ -124,7 +126,9 @@ impl GroupDraft {
     }
     pub(super) fn open(root: &std::path::Path, path: &str) -> Result<Self, String> {
         let text = fs::read_to_string(note_path(root, path)?).map_err(|e| e.to_string())?;
-        let entry = Entry::parse(path, &text)?;
+        let mut entry = Entry::parse(path, &text)?;
+        let (entries, _) = splat::content::read_directory(root)?;
+        splat::content::list_formats::resolve(&mut entry, &entries);
         if entry.kind != "encounter_group" {
             return Err("Select an encounter group note.".into());
         }
@@ -132,12 +136,13 @@ impl GroupDraft {
             entry.fields["splat_encounter_group"].clone(),
         )
         .map_err(|e| format!("This group needs repair in Campaign → Campaign entries: {e}"))?;
-        let notes = entry.body.trim().to_owned();
+        let notes = splat::content::list_formats::prose(&entry);
         Ok(Self {
             recovery: Default::default(),
             path: path.into(),
             baseline: Some(text.clone()),
             source: text,
+            flags: entry.flags.clone(),
             saved_name: entry.name.clone(),
             name: entry.name,
             saved_setup: setup.clone(),
@@ -148,6 +153,9 @@ impl GroupDraft {
     }
     pub(super) fn name(&self) -> String {
         self.name.clone()
+    }
+    pub(super) fn set_new_path(&mut self, path: String) {
+        self.path = path;
     }
     pub(super) fn path(&self) -> &str {
         &self.path
@@ -169,8 +177,23 @@ impl GroupDraft {
             || self.notes != self.saved_notes
     }
     fn text(&self) -> Result<String, String> {
-        let text = patch_fields(
-            &self.source,
+        let source = if self.notes == self.saved_notes {
+            self.source.clone()
+        } else if self.baseline.is_some()
+            && splat::content::formats::schema(&Entry::parse(&self.path, &self.source)?.fields)
+                == Ok(2)
+        {
+            splat::content::list_formats::with_prose(&self.source, &self.notes)?
+        } else {
+            with_notes(&self.source, &self.notes)?
+        };
+        let patch = if self.baseline.is_none() {
+            splat::content::patch_fields
+        } else {
+            splat::content::formats::patch_model
+        };
+        let text = patch(
+            &source,
             &[
                 ("splat_name", Some(self.name.clone().into())),
                 (
@@ -179,12 +202,7 @@ impl GroupDraft {
                 ),
             ],
         )?;
-        // Text the DM did not change keeps its exact form.
-        if self.notes == self.saved_notes {
-            Ok(text)
-        } else {
-            with_notes(&text, &self.notes)
-        }
+        Ok(text)
     }
     pub(super) fn add(&mut self, id: Uuid) {
         // The same creature again is one more of it, unless that member has its own changes.
@@ -323,6 +341,11 @@ impl GroupDraft {
     ) -> Result<String, String> {
         self.validate(snapshot, saving)?;
         let text = self.text()?;
+        let text = splat::content::formats::convert_resolved(
+            &self.path,
+            &text,
+            snapshot.catalogue.entries.values().map(|e| &e.entry),
+        )?;
         let entry = Entry::parse(&self.path, &text)?;
         if snapshot.catalogue.entries.values().any(|e| {
             e.entry.id == entry.id
@@ -354,6 +377,9 @@ impl GroupDraft {
         self.write(campaign, &text)
     }
     pub(super) fn check_disk(&mut self, campaign: &Campaign) -> Result<(), String> {
+        if self.baseline.is_none() {
+            self.path = super::named_note_path(&campaign.path, FOLDER, &self.name)?;
+        }
         self.recovery
             .check(&campaign.path, &mut self.path, self.baseline.as_deref())
     }
@@ -536,7 +562,7 @@ pub(super) fn load(
                     })
                     .map(|owner| owner.entry.name.clone()),
                 members,
-                notes: e.entry.body.trim().to_owned(),
+                notes: splat::content::list_formats::prose(&e.entry),
                 xp,
                 xp_unknown,
                 unavailable,
@@ -1535,6 +1561,7 @@ impl Encounters {
         // Only a group for any encounter can be linked in a plan.
         let was_linkable = draft.saved_setup.encounter.is_none();
         let path = draft.path.clone();
+        let before = draft.baseline.clone();
         match draft.save(active, modules) {
             Ok(()) => {
                 let name = draft.name.trim().to_owned();
@@ -1542,6 +1569,14 @@ impl Encounters {
                 self.saved = true;
                 self.error = None;
                 self.message = Some("Group saved.".into());
+                if let Some(before) = before {
+                    self.layouts.remember_conversion(
+                        &active.path,
+                        &draft.path,
+                        &before,
+                        &draft.source,
+                    );
+                }
                 // The list and an open run read groups from the snapshot.
                 self.refreshing = true;
                 self.start_load(ctx, active.clone(), modules.to_vec());
@@ -1601,6 +1636,9 @@ impl Encounters {
         campaigns: &Campaigns,
         in_plan: bool,
     ) {
+        if in_plan && self.layout_notice(ui, active, campaigns.modules()) {
+            return;
+        }
         if self.group_disk_view(ui, active, campaigns.modules()) {
             return;
         }
@@ -1625,6 +1663,13 @@ impl Encounters {
         let saved_note = self.message.clone();
         let focus_name = std::mem::take(&mut self.focus_name);
         let draft = self.group_draft.as_mut().expect("the editor has a draft");
+        for flag in &draft.flags {
+            design::message(
+                ui,
+                Tone::Warning,
+                &format!("Line {}: {}", flag.line, flag.message),
+            );
+        }
         let (mut back, mut save, mut discard) = (false, false, false);
         ui.horizontal(|ui| {
             back = Action::quiet(icons::BACK)
@@ -2173,8 +2218,8 @@ mod tests {
         let draft = encounters.group_draft.as_mut().unwrap();
         draft.name = "Ash Pack".into();
         draft.add(scout);
-        let path = draft.path.clone();
         encounters.save_group_draft(&ctx, &campaign, &[]);
+        let path = "Encounter Groups/Ash Pack.md".to_owned();
         assert_eq!(
             encounters.saved_for_plan.take().as_deref(),
             Some("Ash Pack")
@@ -2206,8 +2251,8 @@ mod tests {
             let draft = encounters.group_draft.as_mut().unwrap();
             draft.name = name.into();
             draft.add(scout);
-            paths.push(draft.path.clone());
             encounters.save_group_draft(&ctx, &campaign, &[]);
+            paths.push(format!("Encounter Groups/{name}.md"));
         }
         assert!(encounters.open_group_in_plan(&paths[0], &campaign));
         encounters.search = "wolf".into();
