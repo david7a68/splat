@@ -233,6 +233,9 @@ impl Entry {
             stat_blocks::read_legacy_identity(&body, &mut fields);
         }
         let flags = formats::read(schema, &text, &mut fields);
+        if kind == "creature" && !fields.contains_key("splat_character") {
+            stat_blocks::complete_challenge_fields(&mut fields);
+        }
         let (inventory, inventory_containers) = inventory(&body)?;
         let entry = Self {
             path: path.into(),

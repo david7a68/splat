@@ -11,7 +11,7 @@ pub fn run(d: &mut Driver<'_>) {
     d.state("schema-2-creature-library", Sizes::All);
     search_library(d, "Flagged Wolf");
     d.click_containing("Flagged Wolf · Creature");
-    d.expect("Hit Points \"about twenty\" needs a number first (line 21).");
+    d.expect("Hit Points \"about twenty\" needs a number first (line 19).");
     d.expect("about twenty");
     d.expect("HIT POINTS");
     d.observe(
@@ -20,6 +20,33 @@ pub fn run(d: &mut Driver<'_>) {
         "Rejected HP uses the reader's vital row, without raw table text",
     );
     d.state("flagged-hp-cell", Sizes::All);
+
+    search_library(d, "Flagged Spark");
+    d.click_containing("Flagged Spark · Spell");
+    d.expect("Level needs a number from 0 to 9");
+    d.expect("Keep the spark effect.");
+    d.observe(
+        "i19 valid spell fact",
+        d.visible_text("Range"),
+        "The valid Range fact stays visible beside the bad Level warning",
+    );
+    d.expect("Self");
+    d.observe(
+        "i19 bad spell cell",
+        !d.visible_text("%% splat") && !d.visible_text("Field"),
+        "The bad cell has a line warning; the effect stays readable without raw data",
+    );
+    d.state("flagged-spell-cell", Sizes::All);
+    search_library(d, "Bound Charm");
+    d.click_containing("Bound Charm · ");
+    d.expect("Yes");
+    d.expect("Keep the charm effect.");
+    d.observe(
+        "i19 converted item",
+        d.visible_text("Attunement") && !d.visible_text("%% splat") && !d.visible_text("Field"),
+        "The converted item keeps its Attunement fact without raw data",
+    );
+    d.state("converted-item-facts", Sizes::All);
 
     go_encounters(d);
     open_saved_encounter(d, RUN);

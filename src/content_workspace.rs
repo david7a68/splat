@@ -709,6 +709,23 @@ fn needed_by(names: &BTreeSet<String>) -> String {
     }
 }
 impl Catalogue {
+    /// Run copies keep enough provenance to distinguish a removed package from a deleted file.
+    pub(crate) fn run_entry(&self, id: Uuid) -> Entry {
+        let indexed = &self.entries[&id];
+        let mut entry = indexed.entry.clone();
+        if let Some((path, _)) = self.files.get(&id) {
+            entry.fields.insert(
+                "splat_run_source_path".into(),
+                path.to_string_lossy().to_string().into(),
+            );
+            entry.fields.insert(
+                "splat_run_source_owner".into(),
+                self.package_name(indexed.owner).into(),
+            );
+        }
+        entry
+    }
+
     fn insert_file(
         &mut self,
         entry: Entry,

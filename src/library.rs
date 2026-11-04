@@ -735,7 +735,7 @@ pub(crate) fn note_text(name: &str, kind: &str, namespace: Option<&str>) -> Stri
         fields.insert(
             "splat_creature".into(),
             serde_yaml_ng::from_str::<serde_yaml_ng::Value>(
-                "size: medium\ntype: humanoid\nalignment: neutral\ncr_text: '1 (XP 200; PB +2)'\n",
+                "size: medium\ntype: humanoid\nalignment: Neutral\ncr_text: '1 (XP 200; PB +2)'\n",
             )
             .expect("creature identity"),
         );
