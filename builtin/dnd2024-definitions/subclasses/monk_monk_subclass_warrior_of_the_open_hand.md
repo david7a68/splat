@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 13143fc7-f575-57c2-8aba-013c1ad33eb0
 splat_kind: rule_group
 splat_key: dnd2024:subclasses/monk_monk_subclass_warrior_of_the_open_hand
 splat_name: 'Monk Subclass: Warrior of the Open Hand'
-splat_origin:
-  key: dnd2024:reference/pages/052
+splat_origin: dnd2024:reference/pages/052
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 52
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 52, https://www.dndbeyond.com/srd
 ---
 
 # Monk Subclass: Warrior of the Open Hand

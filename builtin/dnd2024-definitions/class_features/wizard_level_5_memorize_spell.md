@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 4d84c83d-12cd-5247-a158-4881b408170c
 splat_kind: rule
 splat_key: dnd2024:class_features/wizard_level_5_memorize_spell
 splat_name: 'Level 5: Memorize Spell'
-splat_origin:
-  key: dnd2024:reference/pages/079
+splat_origin: dnd2024:reference/pages/079
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 79
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 79, https://www.dndbeyond.com/srd
 ---
 
 # Level 5: Memorize Spell

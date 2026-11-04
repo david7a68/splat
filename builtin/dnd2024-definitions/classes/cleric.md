@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: bdda2fb9-a1ef-5e7b-a9bf-b25a82d74042
 splat_kind: rule_group
 splat_key: dnd2024:classes/cleric
 splat_name: Cleric
-splat_origin:
-  key: dnd2024:reference/pages/036
+splat_origin: dnd2024:reference/pages/036
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 36
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 36, https://www.dndbeyond.com/srd
 ---
 
 # Cleric

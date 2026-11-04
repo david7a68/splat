@@ -1,34 +1,60 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 6ab88a22-af92-500a-9df9-44cebb0110d0
 splat_kind: creature
 splat_key: dnd2024:creatures/spirit_naga
 splat_name: Spirit Naga
-splat_origin:
-  key: dnd2024:reference/creature/spirit_naga
+splat_origin: dnd2024:reference/creature/spirit_naga
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 329
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 329, https://www.dndbeyond.com/srd
 ---
 
 # Spirit Naga
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Large |
+| Type | Fiend |
+| Alignment | Chaotic Evil |
+| Armor Class | 17 |
+| Hit Points | 135 (18d10 + 36) |
+| Initiative | +3 (13) |
+| Speed | 40 ft. |
+| Challenge | 8 (XP 3,900; PB +3) |
+| Senses | Darkvision 60 ft.; Passive Perception 12 |
+| Languages | Abyssal, Common |
+| Immunities | Poison; Charmed, Poisoned |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 18 | +4 | +4 |
+| Dex | 17 | +3 | +6 |
+| Con | 14 | +2 | +5 |
+| Int | 16 | +3 | +3 |
+| Wis | 15 | +2 | +5 |
+| Cha | 16 | +3 | +6 |
+
 
 ## Source text
 
 <!-- SRD page 329 -->
 
-Large Fiend, Chaotic Evil\
-AC 17 Initiative +3 (13)\
-HP 135 (18d10 + 36)\
-Speed 40 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 18 +4 +4 Dex 17 +3 +6 Con 14 +2 +5\
-Int 16 +3 +3 Wis 15 +2 +5 Cha 16 +3 +6\
-Immunities Poison; Charmed, Poisoned\
-Senses Darkvision 60 ft.; Passive Perception 12\
-Languages Abyssal, Common\
-CR 8 (XP 3,900; PB +3)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Large Fiend, Chaotic Evil\
+> AC 17 Initiative +3 (13)\
+> HP 135 (18d10 + 36)\
+> Speed 40 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 18 +4 +4 Dex 17 +3 +6 Con 14 +2 +5\
+> Int 16 +3 +3 Wis 15 +2 +5 Cha 16 +3 +6\
+> Immunities Poison; Charmed, Poisoned\
+> Senses Darkvision 60 ft.; Passive Perception 12\
+> Languages Abyssal, Common\
+> CR 8 (XP 3,900; PB +3)
+
 
 ### Traits
 
@@ -49,45 +75,11 @@ At Will: Detect Magic, Mage Hand, Minor Illusion, Water Breathing\
 
 Original layout: [[../../srd-5.2.1/pages/329|page 329]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` large ` |
-| ` type ` | ` fiend ` |
-| ` alignment ` | ` Chaotic Evil ` |
-| ` movement_text ` | ` 40 ft. ` |
-| ` immunities_text ` | ` Poison; Charmed, Poisoned ` |
-| ` senses_text ` | ` Darkvision 60 ft.; Passive Perception 12 ` |
-| ` languages_text ` | ` Abyssal, Common ` |
-| ` cr_text ` | ` 8 (XP 3,900; PB +3) ` |
-| ` hit_points_text ` | ` 135 (18d10 + 36) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 18 ` | ` 4 ` |
-| ` Dexterity ` | ` 17 ` | ` 6 ` |
-| ` Constitution ` | ` 14 ` | ` 5 ` |
-| ` Intelligence ` | ` 16 ` | ` 3 ` |
-| ` Wisdom ` | ` 15 ` | ` 5 ` |
-| ` Charisma ` | ` 16 ` | ` 6 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 17 ` |  |
-| ` max_hp ` | ` 135 ` |  |
-| ` initiative ` | ` 3 ` |  |
-| ` speed ` | ` 40 ` | ` ft ` |
 
 ## Health
 

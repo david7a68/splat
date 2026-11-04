@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 865c298e-3797-559d-8907-54fc43e851a1
 splat_kind: rule
 splat_key: dnd2024:tables/paladin_progression
 splat_name: Paladin Progression
-splat_origin:
-  key: dnd2024:reference/pages/053
+splat_origin: dnd2024:reference/pages/053
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 53
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 53, https://www.dndbeyond.com/srd
 ---
 
 # Paladin Progression

@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 38bc921e-b3ab-5d83-a3d6-c2bccda83ee3
 splat_kind: spell
 splat_key: dnd2024:spells/detect_thoughts
 splat_name: Detect Thoughts
-splat_origin:
-  key: dnd2024:reference/spell/detect_thoughts
+splat_origin: dnd2024:reference/spell/detect_thoughts
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 123
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 123, https://www.dndbeyond.com/srd
 ---
 
 # Detect Thoughts
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 2 |
+| School | Divination |
+| Classes | Bard, Sorcerer, Wizard |
+| Casting Time | Action |
+| Range |  |
+| Components | V, S, M (1 Copper Piece) |
+| Duration | Concentration, up to 1 minute |
+
 
 ## Source text
 
@@ -36,37 +47,11 @@ As a Magic action on your next turn, you can try to probe deeper into the target
 
 Original layout: [[../../srd-5.2.1/pages/123|page 123]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 2 ` |
-| ` school ` | ` divination ` |
-| ` classes ` | ` ["bard", "sorcerer", "wizard"] ` |
-| ` components ` | ` ["verbal", "somatic", "material"] ` |
-| ` concentration ` | ` true ` |
-| ` duration ` | ` Concentration, up to 1 minute ` |
-| ` casting_time ` | ` Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
 
-<!-- splat:values path=splat_spell/range -->
 
-| Field | Value |
-| --- | --- |
-| ` mode ` | ` self ` |
-
-### Material
-
-<!-- splat:values path=splat_spell/material -->
-
-| Field | Value |
-| --- | --- |
-| ` description ` | ` 1 Copper Piece ` |
-| ` consumed ` | ` false ` |
 
 ## Rule
 
@@ -215,3 +200,14 @@ columns:
 | ` source ` | ` supplied_world_geometry ` |
 | ` unknown_facts ` | ` require_resolution ` |
 | ` infer_unprovided_geometry ` | ` false ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_spell_extras -->
+> 
+> ```yaml
+> material:
+>   consumed: false
+> range:
+>   mode: self
+> ```
+

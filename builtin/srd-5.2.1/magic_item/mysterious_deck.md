@@ -1,10 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "7ff7d118-29d5-55f6-991f-6583791339e3"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/magic_item/mysterious_deck"
 splat_name: "Mysterious Deck"
-splat_reference: {"source": "SRD 5.2.1", "category": "magic_item", "pages": [231, 232], "executable": false}
+splat_pages:
+- 231
+- 232
 ---
 
 # Mysterious Deck
@@ -122,3 +124,13 @@ Multiattack. The avatar makes a number of Reaping Scythe attacks equal to half t
 Reaping Scythe. Melee Attack Roll: Automatic hit, reach 5 ft. Hit: 7 (1d8 + 3) Slashing damage plus 4 (1d8) Necrotic damage.
 
 Original layout: [[../pages/231|page 231]], [[../pages/232|page 232]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: magic_item
+> executable: false
+> ```
+

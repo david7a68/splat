@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "419dfc11-79e8-5340-9a4c-bd0471727577"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/glossary/sphere_area_of_effect"
 splat_name: "Sphere [Area of Effect]"
-splat_reference: {"source": "SRD 5.2.1", "category": "glossary", "pages": [188], "executable": false}
+splat_pages:
+- 188
 ---
 
 # Sphere [Area of Effect]
@@ -16,3 +17,13 @@ A Sphere is an area of effect that extends in straight lines from a point of ori
 A Sphere’s point of origin is included in the Sphere’s area of effect.
 
 Original layout: [[../pages/188|page 188]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: glossary
+> executable: false
+> ```
+

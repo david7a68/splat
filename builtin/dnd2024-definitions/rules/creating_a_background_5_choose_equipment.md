@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 26ea07ed-dd70-53d2-909f-323829f0c8fb
 splat_kind: rule
 splat_key: dnd2024:rules/creating_a_background_5_choose_equipment
 splat_name: '5: Choose Equipment'
-splat_origin:
-  key: dnd2024:reference/pages/193
+splat_origin: dnd2024:reference/pages/193
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 193
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 193, https://www.dndbeyond.com/srd
 ---
 
 # 5: Choose Equipment

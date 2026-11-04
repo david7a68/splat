@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: d4f23084-9bb3-5bee-a9a5-3af40aae9d48
 splat_kind: rule_group
 splat_key: dnd2024:subclasses/paladin_paladin_subclass_oath_of_devotion
 splat_name: 'Paladin Subclass: Oath of Devotion'
-splat_origin:
-  key: dnd2024:reference/pages/056
+splat_origin: dnd2024:reference/pages/056
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 56
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 56, https://www.dndbeyond.com/srd
 ---
 
 # Paladin Subclass: Oath of Devotion

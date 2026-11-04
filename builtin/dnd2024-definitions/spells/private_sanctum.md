@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 56396d62-7912-5e51-9052-467334315b70
 splat_kind: spell
 splat_key: dnd2024:spells/private_sanctum
 splat_name: Private Sanctum
-splat_origin:
-  key: dnd2024:reference/spell/private_sanctum
+splat_origin: dnd2024:reference/spell/private_sanctum
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 156
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 156, https://www.dndbeyond.com/srd
 ---
 
 # Private Sanctum
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 4 |
+| School | Abjuration |
+| Classes | Wizard |
+| Casting Time | 10 minutes |
+| Range | 120 feet |
+| Components | V, S, M (a thin sheet of lead) |
+| Duration | 24 hours |
+
 
 ## Source text
 
@@ -46,37 +57,11 @@ Using a Higher-Level Spell Slot. You can increase the size of the Cube by 100 fe
 
 Original layout: [[../../srd-5.2.1/pages/156|page 156]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 4 ` |
-| ` school ` | ` abjuration ` |
-| ` classes ` | ` ["wizard"] ` |
-| ` components ` | ` ["verbal", "somatic", "material"] ` |
-| ` concentration ` | ` false ` |
-| ` duration ` | ` 24 hours ` |
-| ` casting_time ` | ` 10 minutes ` |
-| ` ritual ` | ` false ` |
 
-### Range
 
-<!-- splat:values path=splat_spell/range -->
 
-| Field | Value |
-| --- | --- |
-| ` feet ` | ` 120 ` |
-
-### Material
-
-<!-- splat:values path=splat_spell/material -->
-
-| Field | Value |
-| --- | --- |
-| ` description ` | ` a thin sheet of lead ` |
-| ` consumed ` | ` false ` |
 
 ## Rule
 
@@ -147,3 +132,12 @@ maximum:
   value: 24
   unit: hour
 ```
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_spell_extras -->
+> 
+> ```yaml
+> material:
+>   consumed: false
+> ```
+

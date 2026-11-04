@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: a5bcb9fa-4c3b-5e4a-be4d-fc4c65d7ddac
 splat_kind: rule
 splat_key: dnd2024:rules/armor_one_at_a_time
 splat_name: One at a Time
-splat_origin:
-  key: dnd2024:reference/pages/092
+splat_origin: dnd2024:reference/pages/092
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 92
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 92, https://www.dndbeyond.com/srd
 ---
 
 # One at a Time

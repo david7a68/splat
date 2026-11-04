@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 143844d5-cccb-5c09-ae59-0074289a55e7
 splat_kind: rule
 splat_key: dnd2024:rules/lifestyle_expenses
 splat_name: Lifestyle Expenses
-splat_origin:
-  key: dnd2024:reference/pages/101
+splat_origin: dnd2024:reference/pages/101
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 101
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 101, https://www.dndbeyond.com/srd
 ---
 
 # Lifestyle Expenses

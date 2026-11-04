@@ -1,33 +1,58 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 4e85999e-74ec-59f9-83c4-f05e2801c75a
 splat_kind: creature
 splat_key: dnd2024:creatures/merfolk_skirmisher
 splat_name: Merfolk Skirmisher
-splat_origin:
-  key: dnd2024:reference/creature/merfolk_skirmisher
+splat_origin: dnd2024:reference/creature/merfolk_skirmisher
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 308
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 308, https://www.dndbeyond.com/srd
 ---
 
 # Merfolk Skirmisher
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Medium |
+| Type | Elemental |
+| Alignment | Neutral |
+| Armor Class | 11 |
+| Hit Points | 11 (2d8 + 2) |
+| Initiative | +1 (11) |
+| Speed | 10 ft., Swim 40 ft. |
+| Challenge | 1/8 (XP 25; PB +2) |
+| Senses | Passive Perception 12 |
+| Languages | Common, Primordial (Aquan) |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 10 | +0 | +0 |
+| Dex | 13 | +1 | +1 |
+| Con | 12 | +1 | +1 |
+| Int | 11 | +0 | +0 |
+| Wis | 14 | +2 | +2 |
+| Cha | 12 | +1 | +1 |
+
 
 ## Source text
 
 <!-- SRD page 308 -->
 
-Medium Elemental, Neutral\
-AC 11 Initiative +1 (11)\
-HP 11 (2d8 + 2)\
-Speed 10 ft., Swim 40 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 10 +0 +0 Dex 13 +1 +1 Con 12 +1 +1\
-Int 11 +0 +0 Wis 14 +2 +2 Cha 12 +1 +1\
-Senses Passive Perception 12\
-Languages Common, Primordial (Aquan)\
-CR 1/8 (XP 25; PB +2)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Medium Elemental, Neutral\
+> AC 11 Initiative +1 (11)\
+> HP 11 (2d8 + 2)\
+> Speed 10 ft., Swim 40 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 10 +0 +0 Dex 13 +1 +1 Con 12 +1 +1\
+> Int 11 +0 +0 Wis 14 +2 +2 Cha 12 +1 +1\
+> Senses Passive Perception 12\
+> Languages Common, Primordial (Aquan)\
+> CR 1/8 (XP 25; PB +2)
+
 
 ### Traits
 
@@ -39,45 +64,11 @@ Ocean Spear. Melee or Ranged Attack Roll: +2, reach 5 ft. or range 20/60 ft. Hit
 
 Original layout: [[../../srd-5.2.1/pages/308|page 308]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` medium ` |
-| ` type ` | ` elemental ` |
-| ` alignment ` | ` Neutral ` |
-| ` movement_text ` | ` 10 ft., Swim 40 ft. ` |
-| ` senses_text ` | ` Passive Perception 12 ` |
-| ` languages_text ` | ` Common, Primordial (Aquan) ` |
-| ` cr_text ` | ` 1/8 (XP 25; PB +2) ` |
-| ` hit_points_text ` | ` 11 (2d8 + 2) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 10 ` | ` 0 ` |
-| ` Dexterity ` | ` 13 ` | ` 1 ` |
-| ` Constitution ` | ` 12 ` | ` 1 ` |
-| ` Intelligence ` | ` 11 ` | ` 0 ` |
-| ` Wisdom ` | ` 14 ` | ` 2 ` |
-| ` Charisma ` | ` 12 ` | ` 1 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 11 ` |  |
-| ` max_hp ` | ` 11 ` |  |
-| ` initiative ` | ` 1 ` |  |
-| ` speed ` | ` 10 ` | ` ft ` |
-| ` swim_speed ` | ` 40 ` | ` ft ` |
 
 ## Health
 
@@ -201,3 +192,13 @@ after_attack:
 | ` provider ` | ` caller ` |
 | ` required_facts ` | ` ["distance", "area_membership", "visibility", "occupancy", "movement_path"] ` |
 | ` validate_against_typed_constraints ` | ` true ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_stats_extras -->
+> 
+> ```yaml
+> swim_speed:
+>   unit: ft
+>   value: 40
+> ```
+

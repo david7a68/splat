@@ -1,35 +1,62 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 752e6d53-c0bb-5ee5-8cdb-c522a0e75279
 splat_kind: creature
 splat_key: dnd2024:creatures/sahuagin_warrior
 splat_name: Sahuagin Warrior
-splat_origin:
-  key: dnd2024:reference/creature/sahuagin_warrior
+splat_origin: dnd2024:reference/creature/sahuagin_warrior
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 321
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 321, https://www.dndbeyond.com/srd
 ---
 
 # Sahuagin Warrior
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Medium |
+| Type | Fiend |
+| Alignment | Lawful Evil |
+| Armor Class | 12 |
+| Hit Points | 22 (4d8 + 4) |
+| Initiative | +0 (10) |
+| Speed | 30 ft., Swim 40 ft. |
+| Challenge | 1/2 (XP 100; PB +2) |
+| Skills | Perception +5 |
+| Senses | Darkvision 120 ft.; Passive Perception 15 |
+| Languages | Sahuagin |
+| Resistances | Acid, Cold |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 13 | +1 | +1 |
+| Dex | 11 | +0 | +0 |
+| Con | 12 | +1 | +1 |
+| Int | 12 | +1 | +1 |
+| Wis | 13 | +1 | +1 |
+| Cha | 9 | -1 | -1 |
+
 
 ## Source text
 
 <!-- SRD page 321 -->
 
-Medium Fiend, Lawful Evil\
-AC 12 Initiative +0 (10)\
-HP 22 (4d8 + 4)\
-Speed 30 ft., Swim 40 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 13 +1 +1 Dex 11 +0 +0 Con 12 +1 +1\
-Int 12 +1 +1 Wis 13 +1 +1 Cha 9 −1 −1\
-Skills Perception +5\
-Resistances Acid, Cold\
-Senses Darkvision 120 ft.; Passive Perception 15\
-Languages Sahuagin\
-CR 1/2 (XP 100; PB +2)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Medium Fiend, Lawful Evil\
+> AC 12 Initiative +0 (10)\
+> HP 22 (4d8 + 4)\
+> Speed 30 ft., Swim 40 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 13 +1 +1 Dex 11 +0 +0 Con 12 +1 +1\
+> Int 12 +1 +1 Wis 13 +1 +1 Cha 9 −1 −1\
+> Skills Perception +5\
+> Resistances Acid, Cold\
+> Senses Darkvision 120 ft.; Passive Perception 15\
+> Languages Sahuagin\
+> CR 1/2 (XP 100; PB +2)
+
 
 ### Traits
 
@@ -51,47 +78,11 @@ Aquatic Charge. The sahuagin swims up to its Swim Speed straight toward an enemy
 
 Original layout: [[../../srd-5.2.1/pages/321|page 321]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` medium ` |
-| ` type ` | ` fiend ` |
-| ` alignment ` | ` Lawful Evil ` |
-| ` movement_text ` | ` 30 ft., Swim 40 ft. ` |
-| ` skills_text ` | ` Perception +5 ` |
-| ` resistances_text ` | ` Acid, Cold ` |
-| ` senses_text ` | ` Darkvision 120 ft.; Passive Perception 15 ` |
-| ` languages_text ` | ` Sahuagin ` |
-| ` cr_text ` | ` 1/2 (XP 100; PB +2) ` |
-| ` hit_points_text ` | ` 22 (4d8 + 4) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 13 ` | ` 1 ` |
-| ` Dexterity ` | ` 11 ` | ` 0 ` |
-| ` Constitution ` | ` 12 ` | ` 1 ` |
-| ` Intelligence ` | ` 12 ` | ` 1 ` |
-| ` Wisdom ` | ` 13 ` | ` 1 ` |
-| ` Charisma ` | ` 9 ` | ` -1 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 12 ` |  |
-| ` max_hp ` | ` 22 ` |  |
-| ` initiative ` | ` 0 ` |  |
-| ` speed ` | ` 30 ` | ` ft ` |
-| ` swim_speed ` | ` 40 ` | ` ft ` |
 
 ## Health
 
@@ -284,3 +275,13 @@ geometry_assumptions:
   - plane
   - form_appearance
 ```
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_stats_extras -->
+> 
+> ```yaml
+> swim_speed:
+>   unit: ft
+>   value: 40
+> ```
+

@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: ed2f014c-4bfa-5ece-a9c2-dee0563e61d9
 splat_kind: spell
 splat_key: dnd2024:spells/blink
 splat_name: Blink
-splat_origin:
-  key: dnd2024:reference/spell/blink
+splat_origin: dnd2024:reference/spell/blink
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 113, 114
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 113, 114, https://www.dndbeyond.com/srd
 ---
 
 # Blink
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 3 |
+| School | Transmutation |
+| Classes | Sorcerer, Wizard |
+| Casting Time | Action |
+| Range |  |
+| Components | V, S |
+| Duration | 1 minute |
+
 
 ## Source text
 
@@ -32,28 +43,9 @@ You return to the other plane at the start of your next turn and when the spell 
 
 Original layout: [[../../srd-5.2.1/pages/113|page 113]], [[../../srd-5.2.1/pages/114|page 114]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 3 ` |
-| ` school ` | ` transmutation ` |
-| ` classes ` | ` ["sorcerer", "wizard"] ` |
-| ` components ` | ` ["verbal", "somatic"] ` |
-| ` concentration ` | ` false ` |
-| ` duration ` | ` 1 minute ` |
-| ` casting_time ` | ` Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
-
-<!-- splat:values path=splat_spell/range -->
-
-| Field | Value |
-| --- | --- |
-| ` mode ` | ` self ` |
 
 ## Rule
 
@@ -125,3 +117,12 @@ maximum:
   value: 1
   unit: minute
 ```
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_spell_extras -->
+> 
+> ```yaml
+> range:
+>   mode: self
+> ```
+

@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "86bb2347-6508-5bfe-902a-b5093b38a17d"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/word_of_recall"
 splat_name: "Word of Recall"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [175], "executable": false}
+splat_pages:
+- 175
 ---
 
 # Word of Recall
@@ -22,3 +23,13 @@ You and up to five willing creatures within 5 feet of you instantly teleport to 
 You must designate a location, such as a temple, as a sanctuary by casting this spell there.
 
 Original layout: [[../pages/175|page 175]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

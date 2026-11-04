@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 07e6945f-0ea0-58cd-84e9-59c41d125c5a
 splat_kind: item
 splat_key: dnd2024:items/ioun_stone
 splat_name: Ioun Stone
-splat_origin:
-  key: dnd2024:reference/magic_item/ioun_stone
+splat_origin: dnd2024:reference/magic_item/ioun_stone
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 227, 228
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 227, 228, https://www.dndbeyond.com/srd
 ---
 
 # Ioun Stone
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Wondrous Item |
+| Rarity | Rarity Varies |
+| Attunement | Yes |
+
 
 ## Source text
 
@@ -64,22 +71,9 @@ Sustenance (Rare). You don’t need to eat or drink while this clear spindle orb
 
 Original layout: [[../../srd-5.2.1/pages/227|page 227]], [[../../srd-5.2.1/pages/228|page 228]].
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` wondrous_item ` |
-| ` rarity ` | ` rarity_varies ` |
 
-### Equipment
-
-<!-- splat:values path=splat_item/equipment -->
-
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` required ` |
 
 ## Rule
 

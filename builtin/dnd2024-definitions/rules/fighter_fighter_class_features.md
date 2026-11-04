@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 333d4f3b-01cd-5438-af55-d83cf82d06ff
 splat_kind: rule
 splat_key: dnd2024:rules/fighter_fighter_class_features
 splat_name: Fighter Class Features
-splat_origin:
-  key: dnd2024:reference/pages/047
+splat_origin: dnd2024:reference/pages/047
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 47
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 47, https://www.dndbeyond.com/srd
 ---
 
 # Fighter Class Features

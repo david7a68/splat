@@ -1,33 +1,58 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 83a28d81-b401-51e6-a020-e6523168810e
 splat_kind: creature
 splat_key: dnd2024:creatures/rust_monster
 splat_name: Rust Monster
-splat_origin:
-  key: dnd2024:reference/creature/rust_monster
+splat_origin: dnd2024:reference/creature/rust_monster
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 320, 321
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 320, 321, https://www.dndbeyond.com/srd
 ---
 
 # Rust Monster
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Medium |
+| Type | Monstrosity |
+| Alignment | Unaligned |
+| Armor Class | 14 |
+| Hit Points | 33 (6d8 + 6) |
+| Initiative | +1 (11) |
+| Speed | 40 ft. |
+| Challenge | 1/2 (XP 100; PB +2) |
+| Senses | Darkvision 60 ft.; Passive Perception 11 |
+| Languages | None |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 13 | +1 | +1 |
+| Dex | 12 | +1 | +1 |
+| Con | 13 | +1 | +1 |
+| Int | 2 | -4 | -4 |
+| Wis | 13 | +1 | +1 |
+| Cha | 6 | -2 | -2 |
+
 
 ## Source text
 
 <!-- SRD page 320 -->
 
-Medium Monstrosity, Unaligned\
-AC 14  Initiative +1 (11)\
-HP 33 (6d8 + 6)\
-Speed 40 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 13 +1 +1 Dex 12 +1 +1 Con 13 +1 +1\
-Int 2 −4 −4 Wis 13 +1 +1 Cha 6 −2 −2\
-Senses Darkvision 60 ft.; Passive Perception 11\
-Languages None\
-CR 1/2 (XP 100; PB +2)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Medium Monstrosity, Unaligned\
+> AC 14  Initiative +1 (11)\
+> HP 33 (6d8 + 6)\
+> Speed 40 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 13 +1 +1 Dex 12 +1 +1 Con 13 +1 +1\
+> Int 2 −4 −4 Wis 13 +1 +1 Cha 6 −2 −2\
+> Senses Darkvision 60 ft.; Passive Perception 11\
+> Languages None\
+> CR 1/2 (XP 100; PB +2)
+
 
 ### Traits
 
@@ -51,44 +76,11 @@ Reflexive Antennae. Trigger: An attack roll hits the rust monster. Response: The
 
 Original layout: [[../../srd-5.2.1/pages/320|page 320]], [[../../srd-5.2.1/pages/321|page 321]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` medium ` |
-| ` type ` | ` monstrosity ` |
-| ` alignment ` | ` Unaligned ` |
-| ` movement_text ` | ` 40 ft. ` |
-| ` senses_text ` | ` Darkvision 60 ft.; Passive Perception 11 ` |
-| ` languages_text ` | ` None ` |
-| ` cr_text ` | ` 1/2 (XP 100; PB +2) ` |
-| ` hit_points_text ` | ` 33 (6d8 + 6) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 13 ` | ` 1 ` |
-| ` Dexterity ` | ` 12 ` | ` 1 ` |
-| ` Constitution ` | ` 13 ` | ` 1 ` |
-| ` Intelligence ` | ` 2 ` | ` -4 ` |
-| ` Wisdom ` | ` 13 ` | ` 1 ` |
-| ` Charisma ` | ` 6 ` | ` -2 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 14 ` |  |
-| ` max_hp ` | ` 33 ` |  |
-| ` initiative ` | ` 1 ` |  |
-| ` speed ` | ` 40 ` | ` ft ` |
 
 ## Health
 

@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 87aea1b6-3224-5ccb-8dba-46af7a6ca1ae
 splat_kind: rule
 splat_key: dnd2024:rules/bard_bard_class_features
 splat_name: Bard Class Features
-splat_origin:
-  key: dnd2024:reference/pages/031
+splat_origin: dnd2024:reference/pages/031
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 31
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 31, https://www.dndbeyond.com/srd
 ---
 
 # Bard Class Features

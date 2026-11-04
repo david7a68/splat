@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 963f89d2-fadc-5614-a4b8-15170424c831
 splat_kind: item
 splat_key: dnd2024:items/giant_slayer
 splat_name: Giant Slayer
-splat_origin:
-  key: dnd2024:reference/magic_item/giant_slayer
+splat_origin: dnd2024:reference/magic_item/giant_slayer
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 223
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 223, https://www.dndbeyond.com/srd
 ---
 
 # Giant Slayer
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Weapon |
+| Rarity | Rare |
+| Attunement | No |
+
 
 ## Source text
 
@@ -26,22 +33,9 @@ When you hit a Giant with this weapon, the Giant takes an extra 2d6 damage of th
 
 Original layout: [[../../srd-5.2.1/pages/223|page 223]].
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` weapon ` |
-| ` rarity ` | ` rare ` |
 
-### Equipment
-
-<!-- splat:values path=splat_item/equipment -->
-
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` none ` |
 
 ## Rule
 

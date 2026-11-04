@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "d9cd3ee1-1fd8-53b4-a82d-1326b82870a0"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/magic_item/mace_of_disruption"
 splat_name: "Mace of Disruption"
-splat_reference: {"source": "SRD 5.2.1", "category": "magic_item", "pages": [229], "executable": false}
+splat_pages:
+- 229
 ---
 
 # Mace of Disruption
@@ -18,3 +19,13 @@ When you hit a Fiend or an Undead with this magic weapon, that creature takes an
 Light. While you hold this weapon, it sheds Bright Light in a 20-foot radius and Dim Light for an additional 20 feet.
 
 Original layout: [[../pages/229|page 229]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: magic_item
+> executable: false
+> ```
+

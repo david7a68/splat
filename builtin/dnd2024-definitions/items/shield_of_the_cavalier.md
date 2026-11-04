@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: ac7030aa-bbb1-54a0-8d11-9dcc37d6c5fe
 splat_kind: item
 splat_key: dnd2024:items/shield_of_the_cavalier
 splat_name: Shield of the Cavalier
-splat_origin:
-  key: dnd2024:reference/magic_item/shield_of_the_cavalier
+splat_origin: dnd2024:reference/magic_item/shield_of_the_cavalier
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 243
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 243, https://www.dndbeyond.com/srd
 ---
 
 # Shield of the Cavalier
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Armor |
+| Rarity | Very Rare |
+| Attunement | Yes |
+
 
 ## Source text
 
@@ -30,22 +37,9 @@ Protective Field. As a Reaction, when you or an ally you can see within 5 feet o
 
 Original layout: [[../../srd-5.2.1/pages/243|page 243]].
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` armor ` |
-| ` rarity ` | ` very_rare ` |
 
-### Equipment
-
-<!-- splat:values path=splat_item/equipment -->
-
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` required ` |
 
 ## Rule
 

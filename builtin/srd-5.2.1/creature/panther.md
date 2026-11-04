@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "9662a4fd-d121-5b06-9b96-18b9e5e81f1f"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/panther"
 splat_name: "Panther"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [358], "executable": false}
+splat_pages:
+- 358
 ---
 
 # Panther
@@ -32,3 +33,13 @@ Rend. Melee Attack Roll: +5, reach 5 ft. Hit: 6 (1d6 + 3) Slashing damage.
 Nimble Escape. The panther takes the Disengage or Hide action.
 
 Original layout: [[../pages/358|page 358]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

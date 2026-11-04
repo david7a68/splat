@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: ed93c742-1183-5696-b3b5-c0574dc8a89e
 splat_kind: spell
 splat_key: dnd2024:spells/arcane_hand
 splat_name: Arcane Hand
-splat_origin:
-  key: dnd2024:reference/spell/arcane_hand
+splat_origin: dnd2024:reference/spell/arcane_hand
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 110
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 110, https://www.dndbeyond.com/srd
 ---
 
 # Arcane Hand
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 5 |
+| School | Evocation |
+| Classes | Sorcerer, Wizard |
+| Casting Time | Action |
+| Range | 120 feet |
+| Components | V, S, M (an eggshell and a glove) |
+| Duration | Concentration, up to 1 minute |
+
 
 ## Source text
 
@@ -42,37 +53,11 @@ Using a Higher-Level Spell Slot. The damage of the Clenched Fist increases by 2d
 
 Original layout: [[../../srd-5.2.1/pages/110|page 110]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 5 ` |
-| ` school ` | ` evocation ` |
-| ` classes ` | ` ["sorcerer", "wizard"] ` |
-| ` components ` | ` ["verbal", "somatic", "material"] ` |
-| ` concentration ` | ` true ` |
-| ` duration ` | ` Concentration, up to 1 minute ` |
-| ` casting_time ` | ` Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
 
-<!-- splat:values path=splat_spell/range -->
 
-| Field | Value |
-| --- | --- |
-| ` feet ` | ` 120 ` |
-
-### Material
-
-<!-- splat:values path=splat_spell/material -->
-
-| Field | Value |
-| --- | --- |
-| ` description ` | ` an eggshell and a glove ` |
-| ` consumed ` | ` false ` |
 
 ## Rule
 
@@ -209,3 +194,12 @@ interposing_hand:
   - passes_through_hand_space
   hand_space_difficult_terrain_for: caster_enemies
 ```
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_spell_extras -->
+> 
+> ```yaml
+> material:
+>   consumed: false
+> ```
+

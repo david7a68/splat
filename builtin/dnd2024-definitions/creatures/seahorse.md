@@ -1,34 +1,60 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 4716d703-8690-5db4-80ac-cd5400ee9f4b
 splat_kind: creature
 splat_key: dnd2024:creatures/seahorse
 splat_name: Seahorse
-splat_origin:
-  key: dnd2024:reference/creature/seahorse
+splat_origin: dnd2024:reference/creature/seahorse
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 361
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 361, https://www.dndbeyond.com/srd
 ---
 
 # Seahorse
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Tiny |
+| Type | Beast |
+| Alignment | Unaligned |
+| Armor Class | 12 |
+| Hit Points | 1 (1d4 - 1) |
+| Initiative | +1 (11) |
+| Speed | 5 ft., Swim 20 ft. |
+| Challenge | 0 (XP 0; PB +2) |
+| Skills | Perception +2, Stealth +5 |
+| Senses | Passive Perception 12 |
+| Languages | None |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 1 | -5 | -5 |
+| Dex | 12 | +1 | +1 |
+| Con | 8 | -1 | -1 |
+| Int | 1 | -5 | -5 |
+| Wis | 10 | +0 | +0 |
+| Cha | 2 | -4 | -4 |
+
 
 ## Source text
 
 <!-- SRD page 361 -->
 
-Tiny Beast, Unaligned\
-AC 12  Initiative +1 (11)\
-HP 1 (1d4 − 1)\
-Speed 5 ft., Swim 20 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 1 −5 −5 Dex 12 +1 +1 Con 8 −1 −1\
-Int 1 −5 −5 Wis 10 +0 +0 Cha 2 −4 −4\
-Skills Perception +2, Stealth +5\
-Senses Passive Perception 12\
-Languages None\
-CR 0 (XP 0; PB +2)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Tiny Beast, Unaligned\
+> AC 12  Initiative +1 (11)\
+> HP 1 (1d4 − 1)\
+> Speed 5 ft., Swim 20 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 1 −5 −5 Dex 12 +1 +1 Con 8 −1 −1\
+> Int 1 −5 −5 Wis 10 +0 +0 Cha 2 −4 −4\
+> Skills Perception +2, Stealth +5\
+> Senses Passive Perception 12\
+> Languages None\
+> CR 0 (XP 0; PB +2)
+
 
 ### Traits
 
@@ -40,46 +66,11 @@ Bubble Dash. While underwater, the seahorse moves up to its Swim Speed without p
 
 Original layout: [[../../srd-5.2.1/pages/361|page 361]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` tiny ` |
-| ` type ` | ` beast ` |
-| ` alignment ` | ` Unaligned ` |
-| ` movement_text ` | ` 5 ft., Swim 20 ft. ` |
-| ` skills_text ` | ` Perception +2, Stealth +5 ` |
-| ` senses_text ` | ` Passive Perception 12 ` |
-| ` languages_text ` | ` None ` |
-| ` cr_text ` | ` 0 (XP 0; PB +2) ` |
-| ` hit_points_text ` | ` 1 (1d4 - 1) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 1 ` | ` -5 ` |
-| ` Dexterity ` | ` 12 ` | ` 1 ` |
-| ` Constitution ` | ` 8 ` | ` -1 ` |
-| ` Intelligence ` | ` 1 ` | ` -5 ` |
-| ` Wisdom ` | ` 10 ` | ` 0 ` |
-| ` Charisma ` | ` 2 ` | ` -4 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 12 ` |  |
-| ` max_hp ` | ` 1 ` |  |
-| ` initiative ` | ` 1 ` |  |
-| ` speed ` | ` 5 ` | ` ft ` |
-| ` swim_speed ` | ` 20 ` | ` ft ` |
 
 ## Health
 
@@ -212,3 +203,13 @@ geometry_assumptions:
   - plane
   - form_appearance
 ```
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_stats_extras -->
+> 
+> ```yaml
+> swim_speed:
+>   unit: ft
+>   value: 20
+> ```
+

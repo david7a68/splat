@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "618badb3-ea7a-5d86-ae21-98b3c373685c"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/assassin"
 splat_name: "Assassin"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [260], "executable": false}
+splat_pages:
+- 260
 ---
 
 # Assassin
@@ -42,3 +43,13 @@ Light Crossbow. Ranged Attack Roll: +7, range 80/320 ft. Hit: 8 (1d8 + 4) Pierci
 Cunning Action. The assassin takes the Dash, Disengage, or Hide action.
 
 Original layout: [[../pages/260|page 260]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

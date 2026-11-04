@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: a8941e4b-da5a-5490-aed3-a271872d1611
 splat_kind: rule
 splat_key: dnd2024:tables/fighter_progression
 splat_name: Fighter Progression
-splat_origin:
-  key: dnd2024:reference/pages/047
+splat_origin: dnd2024:reference/pages/047
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 47
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 47, https://www.dndbeyond.com/srd
 ---
 
 # Fighter Progression

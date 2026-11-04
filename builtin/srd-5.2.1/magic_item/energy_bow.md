@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "fa3ecc97-7e29-559b-8da2-65fcbe519c01"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/magic_item/energy_bow"
 splat_name: "Energy Bow"
-splat_reference: {"source": "SRD 5.2.1", "category": "magic_item", "pages": [220], "executable": false}
+splat_pages:
+- 220
 ---
 
 # Energy Bow
@@ -24,3 +25,13 @@ Arrow of Transport. As a Magic action, you can fire one energy arrow from this w
 Energy Ladder. As a Magic action, you can loose a flurry of energy arrows from this weapon at a wall up to 60 feet away from yourself. The arrows become glowing rungs that stick out of the wall, forming a magical ladder up to 60 feet long on the wall. This ladder lasts for 1 minute before disappearing.
 
 Original layout: [[../pages/220|page 220]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: magic_item
+> executable: false
+> ```
+

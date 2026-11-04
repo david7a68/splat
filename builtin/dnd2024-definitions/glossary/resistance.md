@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: d22e5548-f5fd-5cc5-b1b6-7a3037ad2e02
 splat_kind: rule
 splat_key: dnd2024:glossary/resistance
 splat_name: Resistance
-splat_origin:
-  key: dnd2024:reference/glossary/resistance
+splat_origin: dnd2024:reference/glossary/resistance
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 187
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 187, https://www.dndbeyond.com/srd
 ---
 
 # Resistance

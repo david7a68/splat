@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 06649811-baac-5864-9a11-e2a7d49c340c
 splat_kind: item
 splat_key: dnd2024:equipment/artisan_s_tools_brewer_s_supplies_20_gp
 splat_name: Brewer’s Supplies (20 GP)
-splat_origin:
-  key: dnd2024:reference/pages/093
+splat_origin: dnd2024:reference/pages/093
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 93
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 93, https://www.dndbeyond.com/srd
 ---
 
 # Brewer’s Supplies (20 GP)
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Adventuring Gear |
+| Rarity |  |
+| Attunement | No |
+
 
 ## Source text
 
@@ -22,39 +29,13 @@ Ability: Intelligence Weight: 9 lb.\
 Utilize: Detect poisoned drink (DC 15), or identify alcohol (DC 10)\
 Craft: Antitoxin
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` adventuring_gear ` |
 
-### Equipment
 
-<!-- splat:values path=splat_item/equipment -->
 
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` none ` |
 
-### Price
 
-<!-- splat:values path=splat_item/price -->
-
-| Field | Value |
-| --- | --- |
-| ` value ` | ` 20 ` |
-| ` unit ` | ` gp ` |
-
-### Mass
-
-<!-- splat:values path=splat_item/mass -->
-
-| Field | Value |
-| --- | --- |
-| ` value ` | ` 9 ` |
-| ` unit ` | ` lb ` |
 
 ## Rule
 
@@ -103,3 +84,16 @@ crafting_rule:
 | --- | --- |
 | ` value ` | ` 9 ` |
 | ` unit ` | ` lb ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_item_extras -->
+> 
+> ```yaml
+> price:
+>   unit: gp
+>   value: 20
+> mass:
+>   unit: lb
+>   value: 9
+> ```
+

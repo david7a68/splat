@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 917826ed-6fb1-50a9-bf0b-d900c688c292
 splat_kind: item
 splat_key: dnd2024:items/horn_of_blasting
 splat_name: Horn of Blasting
-splat_origin:
-  key: dnd2024:reference/magic_item/horn_of_blasting
+splat_origin: dnd2024:reference/magic_item/horn_of_blasting
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 226
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 226, https://www.dndbeyond.com/srd
 ---
 
 # Horn of Blasting
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Wondrous Item |
+| Rarity | Rare |
+| Attunement | No |
+
 
 ## Source text
 
@@ -26,22 +33,9 @@ Each use of the horn’s magic has a 20 percent chance of causing the horn to ex
 
 Original layout: [[../../srd-5.2.1/pages/226|page 226]].
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` wondrous_item ` |
-| ` rarity ` | ` rare ` |
 
-### Equipment
-
-<!-- splat:values path=splat_item/equipment -->
-
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` none ` |
 
 ## Rule
 

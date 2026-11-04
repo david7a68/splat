@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "81a60552-6b61-55e5-88b6-411c1570f9a8"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/imprisonment"
 splat_name: "Imprisonment"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [142], "executable": false}
+splat_pages:
+- 142
 ---
 
 # Imprisonment
@@ -34,3 +35,13 @@ Slumber. The target has the Unconscious condition and can’t be awoken.
 Ending the Spell. When you cast the spell, specify a trigger that will end it. The trigger can be as simple or as elaborate as you choose, but the GM must agree that it has a high likelihood of happening within the next decade. The trigger must be an observable action, such as someone making a particular offering at the temple of your god, saving your true love, or defeating a specific monster. A Dispel Magic spell can end the spell only if it is cast with a level 9 spell slot, targeting either the prison or the component used to create it.
 
 Original layout: [[../pages/142|page 142]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

@@ -1,35 +1,62 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: e528d14d-5b02-5a4a-abbc-d72f5aaa14cf
 splat_kind: creature
 splat_key: dnd2024:creatures/ancient_silver_dragon
 splat_name: Ancient Silver Dragon
-splat_origin:
-  key: dnd2024:reference/creature/ancient_silver_dragon
+splat_origin: dnd2024:reference/creature/ancient_silver_dragon
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 325
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 325, https://www.dndbeyond.com/srd
 ---
 
 # Ancient Silver Dragon
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Gargantuan |
+| Type | Dragon (Metallic) |
+| Alignment | Lawful Good |
+| Armor Class | 22 |
+| Hit Points | 468 (24d20 + 216) |
+| Initiative | +14 (24) |
+| Speed | 40 ft., Fly 80 ft. |
+| Challenge | 23 (XP 50,000, or 62,000 in lair; PB +7) |
+| Skills | History +11, Perception +16, Stealth +7 |
+| Senses | Blindsight 60 ft., Darkvision 120 ft.; Passive Perception 26 |
+| Languages | Common, Draconic |
+| Immunities | Cold |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 30 | +10 | +10 |
+| Dex | 10 | +0 | +7 |
+| Con | 29 | +9 | +9 |
+| Int | 18 | +4 | +4 |
+| Wis | 15 | +2 | +9 |
+| Cha | 26 | +8 | +8 |
+
 
 ## Source text
 
 <!-- SRD page 325 -->
 
-Gargantuan Dragon (Metallic), Lawful Good\
-AC 22  Initiative +14 (24)\
-HP 468 (24d20 + 216)\
-Speed 40 ft., Fly 80 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 30 +10 +10 Dex 10 +0 +7 Con 29 +9 +9\
-Int 18 +4 +4 Wis 15 +2 +9 Cha 26 +8 +8\
-Skills History +11, Perception +16, Stealth +7\
-Immunities Cold\
-Senses Blindsight 60 ft., Darkvision 120 ft.; Passive Perception 26\
-Languages Common, Draconic\
-CR 23 (XP 50,000, or 62,000 in lair; PB +7)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Gargantuan Dragon (Metallic), Lawful Good\
+> AC 22  Initiative +14 (24)\
+> HP 468 (24d20 + 216)\
+> Speed 40 ft., Fly 80 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 30 +10 +10 Dex 10 +0 +7 Con 29 +9 +9\
+> Int 18 +4 +4 Wis 15 +2 +9 Cha 26 +8 +8\
+> Skills History +11, Perception +16, Stealth +7\
+> Immunities Cold\
+> Senses Blindsight 60 ft., Darkvision 120 ft.; Passive Perception 26\
+> Languages Common, Draconic\
+> CR 23 (XP 50,000, or 62,000 in lair; PB +7)
+
 
 ### Traits
 
@@ -63,48 +90,11 @@ Pounce. The dragon moves up to half its Speed, and it makes one Rend attack.
 
 Original layout: [[../../srd-5.2.1/pages/325|page 325]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` gargantuan ` |
-| ` type ` | ` dragon ` |
-| ` alignment ` | ` Lawful Good ` |
-| ` tags_text ` | ` (Metallic) ` |
-| ` movement_text ` | ` 40 ft., Fly 80 ft. ` |
-| ` skills_text ` | ` History +11, Perception +16, Stealth +7 ` |
-| ` immunities_text ` | ` Cold ` |
-| ` senses_text ` | ` Blindsight 60 ft., Darkvision 120 ft.; Passive Perception 26 ` |
-| ` languages_text ` | ` Common, Draconic ` |
-| ` cr_text ` | ` 23 (XP 50,000, or 62,000 in lair; PB +7) ` |
-| ` hit_points_text ` | ` 468 (24d20 + 216) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 30 ` | ` 10 ` |
-| ` Dexterity ` | ` 10 ` | ` 7 ` |
-| ` Constitution ` | ` 29 ` | ` 9 ` |
-| ` Intelligence ` | ` 18 ` | ` 4 ` |
-| ` Wisdom ` | ` 15 ` | ` 9 ` |
-| ` Charisma ` | ` 26 ` | ` 8 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 22 ` |  |
-| ` max_hp ` | ` 468 ` |  |
-| ` initiative ` | ` 14 ` |  |
-| ` speed ` | ` 40 ` | ` ft ` |
-| ` fly_speed ` | ` 80 ` | ` ft ` |
 
 ## Health
 
@@ -539,3 +529,13 @@ geometry:
 unlisted_success_branch: no_effect
 unlisted_duration: until_removed_by_applicable_rule
 ```
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_stats_extras -->
+> 
+> ```yaml
+> fly_speed:
+>   unit: ft
+>   value: 80
+> ```
+

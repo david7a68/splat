@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 4631b98c-b97b-5963-b59b-93504593601c
 splat_kind: rule
 splat_key: dnd2024:glossary/unoccupied_space
 splat_name: Unoccupied Space
-splat_origin:
-  key: dnd2024:reference/glossary/unoccupied_space
+splat_origin: dnd2024:reference/glossary/unoccupied_space
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 191
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 191, https://www.dndbeyond.com/srd
 ---
 
 # Unoccupied Space

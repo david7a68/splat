@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: e65baf9f-5f63-571a-8be6-01a7317efcf6
 splat_kind: rule
 splat_key: dnd2024:class_features/paladin_level_6_aura_of_protection
 splat_name: 'Level 6: Aura of Protection'
-splat_origin:
-  key: dnd2024:reference/pages/055
+splat_origin: dnd2024:reference/pages/055
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 55
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 55, https://www.dndbeyond.com/srd
 ---
 
 # Level 6: Aura of Protection

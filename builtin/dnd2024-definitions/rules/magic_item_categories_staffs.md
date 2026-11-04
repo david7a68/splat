@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 3bb900e6-1df4-5633-b918-8ccf28dfdbea
 splat_kind: rule
 splat_key: dnd2024:rules/magic_item_categories_staffs
 splat_name: Staffs
-splat_origin:
-  key: dnd2024:reference/pages/205
+splat_origin: dnd2024:reference/pages/205
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 205
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 205, https://www.dndbeyond.com/srd
 ---
 
 # Staffs

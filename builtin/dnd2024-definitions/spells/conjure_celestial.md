@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 424a4d39-1fae-5d61-8690-67878afe728d
 splat_kind: spell
 splat_key: dnd2024:spells/conjure_celestial
 splat_name: Conjure Celestial
-splat_origin:
-  key: dnd2024:reference/spell/conjure_celestial
+splat_origin: dnd2024:reference/spell/conjure_celestial
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 118
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 118, https://www.dndbeyond.com/srd
 ---
 
 # Conjure Celestial
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 7 |
+| School | Conjuration |
+| Classes | Cleric |
+| Casting Time | Action |
+| Range | 90 feet |
+| Components | V, S |
+| Duration | Concentration, up to 10 minutes |
+
 
 ## Source text
 
@@ -38,28 +49,9 @@ Using a Higher-Level Spell Slot. The healing and damage increase by 1d12 for eac
 
 Original layout: [[../../srd-5.2.1/pages/118|page 118]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 7 ` |
-| ` school ` | ` conjuration ` |
-| ` classes ` | ` ["cleric"] ` |
-| ` components ` | ` ["verbal", "somatic"] ` |
-| ` concentration ` | ` true ` |
-| ` duration ` | ` Concentration, up to 10 minutes ` |
-| ` casting_time ` | ` Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
-
-<!-- splat:values path=splat_spell/range -->
-
-| Field | Value |
-| --- | --- |
-| ` feet ` | ` 90 ` |
 
 ## Rule
 

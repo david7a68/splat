@@ -6238,7 +6238,7 @@ mod tests {
 
     #[test]
     fn undo_keeps_actions_directions_amounts_and_copy_numbers() {
-        let entry = Entry::parse("wolf.md", &format!("---\nsplat_schema: 1\nsplat_id: {}\nsplat_kind: creature\nsplat_name: Cinder Wolf 3\nsplat_creature: {{type: beast}}\nsplat_stats: {{max_hp: {{value: 33}}}}\n---\n", Uuid::new_v4())).unwrap();
+        let entry = Entry::parse("wolf.md", &splat::content::formats::convert("Fixture.md", &format!("---\nsplat_schema: 1\nsplat_id: {}\nsplat_kind: creature\nsplat_name: Cinder Wolf 3\nsplat_creature: {{type: beast}}\nsplat_stats: {{max_hp: {{value: 33}}}}\n---\n", Uuid::new_v4())).expect("schema-2 fixture")).unwrap();
         let p = Participant::new(
             "wolf".into(),
             "enemies".into(),
@@ -6343,7 +6343,7 @@ mod tests {
 
     #[test]
     fn wrapped_row_details_stay_above_the_rule_at_every_scale() {
-        let entry = Entry::parse("captain.md", &format!("---\nsplat_schema: 1\nsplat_id: {}\nsplat_kind: creature\nsplat_name: Rival Captain\nsplat_creature: {{type: humanoid}}\nsplat_stats:\n  max_hp: {{value: 33}}\n  armor_class: {{value: 12}}\n---\n", Uuid::new_v4())).unwrap();
+        let entry = Entry::parse("captain.md", &splat::content::formats::convert("Fixture.md", &format!("---\nsplat_schema: 1\nsplat_id: {}\nsplat_kind: creature\nsplat_name: Rival Captain\nsplat_creature: {{type: humanoid}}\nsplat_stats:\n  max_hp: {{value: 33}}\n  armor_class: {{value: 12}}\n---\n", Uuid::new_v4())).expect("schema-2 fixture")).unwrap();
         let overrides = Overrides::parse(
             &serde_yaml_ng::from_str(
                 "{attack_bonus: {add: 1}, damage_bonus: {add: 1}, speed: {set: 40}}",

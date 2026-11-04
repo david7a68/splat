@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 4f0f395a-ed54-5d6b-b89b-fd9cc60369b5
 splat_kind: spell
 splat_key: dnd2024:spells/eyebite
 splat_name: Eyebite
-splat_origin:
-  key: dnd2024:reference/spell/eyebite
+splat_origin: dnd2024:reference/spell/eyebite
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 129
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 129, https://www.dndbeyond.com/srd
 ---
 
 # Eyebite
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 6 |
+| School | Necromancy |
+| Classes | Bard, Sorcerer, Warlock, Wizard |
+| Casting Time | Action |
+| Range |  |
+| Components | V, S |
+| Duration | Concentration, up to 1 minute |
+
 
 ## Source text
 
@@ -36,28 +47,9 @@ Sickened. The target has the Poisoned condition.
 
 Original layout: [[../../srd-5.2.1/pages/129|page 129]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 6 ` |
-| ` school ` | ` necromancy ` |
-| ` classes ` | ` ["bard", "sorcerer", "warlock", "wizard"] ` |
-| ` components ` | ` ["verbal", "somatic"] ` |
-| ` concentration ` | ` true ` |
-| ` duration ` | ` Concentration, up to 1 minute ` |
-| ` casting_time ` | ` Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
-
-<!-- splat:values path=splat_spell/range -->
-
-| Field | Value |
-| --- | --- |
-| ` mode ` | ` self ` |
 
 ## Rule
 
@@ -132,3 +124,12 @@ panicked:
 sickened:
   condition: poisoned
 ```
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_spell_extras -->
+> 
+> ```yaml
+> range:
+>   mode: self
+> ```
+

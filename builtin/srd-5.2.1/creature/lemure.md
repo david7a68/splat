@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "27f5ba33-e822-52df-944f-3bf035ae0fe4"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/lemure"
 splat_name: "Lemure"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [304], "executable": false}
+splat_pages:
+- 304
 ---
 
 # Lemure
@@ -33,3 +34,13 @@ Hellish Restoration. If the lemure dies in the Nine Hells, it revives with all i
 Vile Slime. Melee Attack Roll: +2, reach 5 ft. Hit: 2 (1d4) Poison damage.
 
 Original layout: [[../pages/304|page 304]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

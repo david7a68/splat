@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 2bac9887-e161-5870-b542-59c077890473
 splat_kind: rule
 splat_key: dnd2024:class_features/ranger_level_1_weapon_mastery
 splat_name: 'Level 1: Weapon Mastery'
-splat_origin:
-  key: dnd2024:reference/pages/058
+splat_origin: dnd2024:reference/pages/058
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 58, 59
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 58, 59, https://www.dndbeyond.com/srd
 ---
 
 # Level 1: Weapon Mastery

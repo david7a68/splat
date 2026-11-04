@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: cfa9ee0c-f55d-575e-bd99-cfca3340c430
 splat_kind: rule
 splat_key: dnd2024:rules/the_six_abilities
 splat_name: The Six Abilities
-splat_origin:
-  key: dnd2024:reference/pages/005
+splat_origin: dnd2024:reference/pages/005
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 5
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 5, https://www.dndbeyond.com/srd
 ---
 
 # The Six Abilities

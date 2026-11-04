@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: ac3a4cff-efca-5a56-9b47-30dadf90a898
 splat_kind: rule
 splat_key: dnd2024:rules/warlock_lessons_of_the_first_ones
 splat_name: Lessons of the First Ones
-splat_origin:
-  key: dnd2024:reference/pages/073
+splat_origin: dnd2024:reference/pages/073
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 73
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 73, https://www.dndbeyond.com/srd
 ---
 
 # Lessons of the First Ones

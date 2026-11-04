@@ -447,7 +447,7 @@ const IDENTITY: &[(&str, &str, &[&str])] = &[
     ),
 ];
 
-fn identity_value(key: &str, raw: &str) -> Option<Mapping> {
+pub(super) fn identity_value(key: &str, raw: &str) -> Option<Mapping> {
     let (_, _, allowed) = IDENTITY.iter().find(|(_, k, _)| *k == key)?;
     let lower = raw.to_lowercase();
     let valid = if key == "size" {
@@ -486,66 +486,6 @@ fn identity_value(key: &str, raw: &str) -> Option<Mapping> {
         creature.insert(key.into(), lower.into());
     }
     Some(creature)
-}
-
-/// Legacy printed identity supplies only properties missing from its YAML model.
-pub fn read_legacy_identity(body: &str, fields: &mut Mapping) {
-    let source = Document::new(body)
-        .section_at_level("Source text", Some(pulldown_cmark::HeadingLevel::H2))
-        .map(|s| &body[s.range()])
-        .unwrap_or(body);
-    for (event, range) in Parser::new_ext(source, Options::ENABLE_TABLES).into_offset_iter() {
-        if !matches!(event, Event::Start(Tag::Paragraph)) {
-            continue;
-        }
-        let line = source[range]
-            .lines()
-            .next()
-            .unwrap_or("")
-            .trim()
-            .trim_end_matches('\\')
-            .trim()
-            .trim_matches('*');
-        let mut depth = 0_i32;
-        let mut comma = None;
-        for (at, ch) in line.char_indices() {
-            match ch {
-                '(' => depth += 1,
-                ')' => depth -= 1,
-                ',' if depth == 0 => comma = Some(at),
-                _ => {}
-            }
-        }
-        if depth != 0 {
-            continue;
-        }
-        let (identity, alignment) = comma.map_or((line, None), |at| {
-            (&line[..at], Some(line[at + 1..].trim()))
-        });
-        let Some((size, kind)) = identity.split_once(' ') else {
-            continue;
-        };
-        let Some(mut printed) = identity_value("size", size) else {
-            continue;
-        };
-        let Some(kind) = identity_value("type", kind) else {
-            continue;
-        };
-        printed.extend(kind);
-        if let Some(alignment) = alignment.filter(|s| !s.is_empty()) {
-            printed.insert("alignment".into(), alignment.into());
-        }
-        if let Some(creature) = fields
-            .entry(Value::from("splat_creature"))
-            .or_insert_with(|| Value::Mapping(Mapping::new()))
-            .as_mapping_mut()
-        {
-            for (key, value) in printed {
-                creature.entry(key).or_insert(value);
-            }
-        }
-        break;
-    }
 }
 
 fn speed(raw: &str) -> Result<(i64, &str), String> {
@@ -683,6 +623,29 @@ fn creature(table: &Table, source: &str, fields: &mut Mapping, flags: &mut Vec<F
         (&["Initiative"][..], "initiative", ""),
     ] {
         let raw = read(table, names, flags);
+        if let Some(expression) = raw.as_deref().and_then(|raw| raw.strip_prefix("= ")) {
+            match serde_yaml_ng::from_str::<Value>(expression) {
+                Ok(expression) if expression.is_mapping() => {
+                    stats.insert(
+                        key.into(),
+                        Value::Mapping([("derive".into(), expression)].into_iter().collect()),
+                    );
+                }
+                _ => flags.push(Flag {
+                    line: table.row(names[0]).map_or(1, |row| row[0].line),
+                    message: format!("{} formula not read", names[0]),
+                }),
+            }
+            continue;
+        }
+        if metadata(source, "creature", "shape").iter().any(|s| {
+            s.split(',').any(|s| {
+                (key == "max_hp" && s == "hp_text") || (key == "armor_class" && s == "ac_text")
+            })
+        }) {
+            text(&mut creature, prose, raw);
+            continue;
+        }
         if let Some((n, raw)) = checked(raw, names[0], table, flags, |s| {
             let n = number(s, key == "initiative")?;
             if key != "initiative" && n < 0 {
@@ -699,6 +662,23 @@ fn creature(table: &Table, source: &str, fields: &mut Mapping, flags: &mut Vec<F
     let raw = read(table, &["Speed"], flags);
     if let Some(raw) = checked(raw, "Speed", table, flags, |s| {
         let (n, tail) = speed(s)?;
+        if metadata(source, "creature", "shape")
+            .iter()
+            .any(|s| s.split(',').any(|s| s == "speed_text"))
+        {
+            return Ok(s.to_owned());
+        }
+        let n = if metadata(source, "creature", "shape")
+            .iter()
+            .any(|s| s.split(',').any(|s| s == "speed_max"))
+        {
+            s.split(',')
+                .filter_map(|part| speed(part.trim()).ok().map(|(n, _)| n))
+                .max()
+                .unwrap_or(n)
+        } else {
+            n
+        };
         stat(&mut stats, "speed", n);
         stats
             .get_mut("speed")
@@ -706,11 +686,18 @@ fn creature(table: &Table, source: &str, fields: &mut Mapping, flags: &mut Vec<F
             .as_mapping_mut()
             .unwrap()
             .insert("unit".into(), "ft".into());
-        Ok(if s.parse::<i64>().is_ok() {
-            n.to_string()
-        } else {
-            format!("{n} ft.{tail}")
-        })
+        Ok(
+            if metadata(source, "creature", "shape")
+                .iter()
+                .any(|s| s.split(',').any(|s| s == "speed_max"))
+            {
+                s.to_owned()
+            } else if s.parse::<i64>().is_ok() {
+                n.to_string()
+            } else {
+                format!("{n} ft.{tail}")
+            },
+        )
     }) && raw.parse::<i64>().is_err()
     {
         creature.insert("movement_text".into(), raw.into());
@@ -732,6 +719,7 @@ fn creature(table: &Table, source: &str, fields: &mut Mapping, flags: &mut Vec<F
             let line = table.row("Challenge").or_else(|| table.row("CR")).unwrap()[0].line;
             if let Some(printed) = printed_xp(&raw)
                 && printed != xp
+                && !metadata(source, "creature", "reward").contains(&"printed")
                 // CR 0 can award either 0 or 10 XP in the books.
                 && !(cr == "0" && printed == 0)
             {
@@ -1071,17 +1059,27 @@ pub fn render(fields: &Mapping, kind: &str) -> String {
                 ("Initiative", "initiative", ""),
                 ("Speed", "speed", "movement_text"),
             ] {
-                let value = numeric(fields, key).map_or_else(String::new, |n| {
-                    let printed = string(fields, "splat_creature", prose);
-                    if !printed.is_empty() {
-                        printed
-                    } else if key == "initiative" {
-                        n.checked_add(10)
-                            .map_or_else(|| signed(n), |passive| format!("{n:+} ({passive})"))
-                    } else {
-                        n.to_string()
-                    }
-                });
+                let value = numeric(fields, key).map_or_else(
+                    || {
+                        val(fields, "splat_stats", key)
+                            .and_then(|s| s.get("derive"))
+                            .map(|expression| {
+                                format!("= {}", serde_json::to_string(expression).expect("formula"))
+                            })
+                            .unwrap_or_else(|| string(fields, "splat_creature", prose))
+                    },
+                    |n| {
+                        let printed = string(fields, "splat_creature", prose);
+                        if !printed.is_empty() {
+                            printed
+                        } else if key == "initiative" {
+                            n.checked_add(10)
+                                .map_or_else(|| signed(n), |passive| format!("{n:+} ({passive})"))
+                        } else {
+                            n.to_string()
+                        }
+                    },
+                );
                 rows.push((name, value));
             }
             rows.push(("Challenge", string(fields, "splat_creature", "cr_text")));
@@ -1312,6 +1310,28 @@ fn remove_optional(fields: &mut Mapping, path: &str) {
 pub fn conversion(fields: &Mapping, kind: &str) -> Result<(String, Vec<(String, Value)>), String> {
     let mut rendered = render(fields, kind);
     let mut shapes = Vec::new();
+    if kind == "creature" {
+        if numeric(fields, "max_hp").is_none()
+            && val(fields, "splat_creature", "hit_points_text").is_some()
+        {
+            shapes.push("hp_text");
+        }
+        if numeric(fields, "armor_class").is_none()
+            && val(fields, "splat_creature", "armor_class_text").is_some()
+        {
+            shapes.push("ac_text");
+        }
+        let movement = string(fields, "splat_creature", "movement_text");
+        if numeric(fields, "speed").is_none() && !movement.is_empty() {
+            shapes.push("speed_text");
+        }
+
+        if numeric(fields, "speed")
+            .is_some_and(|n| speed(&movement).is_ok_and(|(first, _)| n != first))
+        {
+            shapes.push("speed_max");
+        }
+    }
     if val(fields, "splat_spell", "casting_time").is_some_and(Value::is_mapping) {
         shapes.push("casting_time");
     }
@@ -1584,6 +1604,23 @@ pub fn patch(text: &str, changes: &[(&str, Option<Value>)]) -> Result<String, St
                     )?;
                 }
             }
+        }
+    }
+    let (_, old_extras) = conversion(&entry.fields, kind)?;
+    let (_, new_extras) = conversion(&expected, kind)?;
+    for root in roots(kind) {
+        let key = format!("{root}_extras");
+        let empty = Value::Mapping(Mapping::new());
+        let before = old_extras
+            .iter()
+            .find(|(k, _)| k == &key)
+            .map_or(&empty, |(_, v)| v);
+        let desired = new_extras
+            .iter()
+            .find(|(k, _)| k == &key)
+            .map_or(&empty, |(_, v)| v);
+        if desired != before {
+            after = super::formats::patch_fence(&after, &key, desired)?;
         }
     }
     let checked = Entry::parse("note.md", &after)?;

@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "4f6b3626-bf53-5c6b-80c4-9f981d3c85c6"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/flame_blade"
 splat_name: "Flame Blade"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [132], "executable": false}
+splat_pages:
+- 132
 ---
 
 # Flame Blade
@@ -26,3 +27,13 @@ The flaming blade sheds Bright Light in a 10-foot radius and Dim Light for an ad
 Using a Higher-Level Spell Slot. The damage increases by 1d6 for each spell slot level above 2.
 
 Original layout: [[../pages/132|page 132]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

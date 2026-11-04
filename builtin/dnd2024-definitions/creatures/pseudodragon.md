@@ -1,34 +1,60 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 19456839-4a0c-5fe3-9215-4852c1a02028
 splat_kind: creature
 splat_key: dnd2024:creatures/pseudodragon
 splat_name: Pseudodragon
-splat_origin:
-  key: dnd2024:reference/creature/pseudodragon
+splat_origin: dnd2024:reference/creature/pseudodragon
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 316
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 316, https://www.dndbeyond.com/srd
 ---
 
 # Pseudodragon
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Tiny |
+| Type | Dragon |
+| Alignment | Neutral Good |
+| Armor Class | 14 |
+| Hit Points | 10 (3d4 + 3) |
+| Initiative | +2 (12) |
+| Speed | 15 ft., Fly 60 ft. |
+| Challenge | 1/4 (XP 50; PB +2) |
+| Skills | Perception +5, Stealth +4 |
+| Senses | Blindsight 10 ft., Darkvision 60 ft.; Passive Perception 15 |
+| Languages | Understands Common and Draconic but can’t speak |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 6 | -2 | -2 |
+| Dex | 15 | +2 | +2 |
+| Con | 13 | +1 | +1 |
+| Int | 10 | +0 | +0 |
+| Wis | 12 | +1 | +1 |
+| Cha | 10 | +0 | +0 |
+
 
 ## Source text
 
 <!-- SRD page 316 -->
 
-Tiny Dragon, Neutral Good\
-AC 14  Initiative +2 (12)\
-HP 10 (3d4 + 3)\
-Speed 15 ft., Fly 60 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 6 −2 −2 Dex 15 +2 +2 Con 13 +1 +1\
-Int 10 +0 +0 Wis 12 +1 +1 Cha 10 +0 +0\
-Skills Perception +5, Stealth +4\
-Senses Blindsight 10 ft., Darkvision 60 ft.; Passive Perception 15\
-Languages Understands Common and Draconic but can’t speak\
-CR 1/4 (XP 50; PB +2)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Tiny Dragon, Neutral Good\
+> AC 14  Initiative +2 (12)\
+> HP 10 (3d4 + 3)\
+> Speed 15 ft., Fly 60 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 6 −2 −2 Dex 15 +2 +2 Con 13 +1 +1\
+> Int 10 +0 +0 Wis 12 +1 +1 Cha 10 +0 +0\
+> Skills Perception +5, Stealth +4\
+> Senses Blindsight 10 ft., Darkvision 60 ft.; Passive Perception 15\
+> Languages Understands Common and Draconic but can’t speak\
+> CR 1/4 (XP 50; PB +2)
+
 
 ### Traits
 
@@ -44,46 +70,11 @@ Sting. Constitution Saving Throw: DC 12, one creature the pseudodragon can see w
 
 Original layout: [[../../srd-5.2.1/pages/316|page 316]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` tiny ` |
-| ` type ` | ` dragon ` |
-| ` alignment ` | ` Neutral Good ` |
-| ` movement_text ` | ` 15 ft., Fly 60 ft. ` |
-| ` skills_text ` | ` Perception +5, Stealth +4 ` |
-| ` senses_text ` | ` Blindsight 10 ft., Darkvision 60 ft.; Passive Perception 15 ` |
-| ` languages_text ` | ` Understands Common and Draconic but can’t speak ` |
-| ` cr_text ` | ` 1/4 (XP 50; PB +2) ` |
-| ` hit_points_text ` | ` 10 (3d4 + 3) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 6 ` | ` -2 ` |
-| ` Dexterity ` | ` 15 ` | ` 2 ` |
-| ` Constitution ` | ` 13 ` | ` 1 ` |
-| ` Intelligence ` | ` 10 ` | ` 0 ` |
-| ` Wisdom ` | ` 12 ` | ` 1 ` |
-| ` Charisma ` | ` 10 ` | ` 0 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 14 ` |  |
-| ` max_hp ` | ` 10 ` |  |
-| ` initiative ` | ` 2 ` |  |
-| ` speed ` | ` 15 ` | ` ft ` |
-| ` fly_speed ` | ` 60 ` | ` ft ` |
 
 ## Health
 
@@ -246,3 +237,13 @@ geometry:
 unlisted_success_branch: no_effect
 unlisted_duration: until_removed_by_applicable_rule
 ```
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_stats_extras -->
+> 
+> ```yaml
+> fly_speed:
+>   unit: ft
+>   value: 60
+> ```
+

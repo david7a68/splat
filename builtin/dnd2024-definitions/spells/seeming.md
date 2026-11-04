@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: d651b2ce-1539-507f-aaf0-009ae6bda075
 splat_kind: spell
 splat_key: dnd2024:spells/seeming
 splat_name: Seeming
-splat_origin:
-  key: dnd2024:reference/spell/seeming
+splat_origin: dnd2024:reference/spell/seeming
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 160, 161
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 160, 161, https://www.dndbeyond.com/srd
 ---
 
 # Seeming
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 5 |
+| School | Illusion |
+| Classes | Bard, Sorcerer, Wizard |
+| Casting Time | Action |
+| Range | 30 feet |
+| Components | V, S |
+| Duration | 8 hours |
+
 
 ## Source text
 
@@ -36,28 +47,9 @@ A creature that takes the Study action to examine a target can make an Intellige
 
 Original layout: [[../../srd-5.2.1/pages/160|page 160]], [[../../srd-5.2.1/pages/161|page 161]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 5 ` |
-| ` school ` | ` illusion ` |
-| ` classes ` | ` ["bard", "sorcerer", "wizard"] ` |
-| ` components ` | ` ["verbal", "somatic"] ` |
-| ` concentration ` | ` false ` |
-| ` duration ` | ` 8 hours ` |
-| ` casting_time ` | ` Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
-
-<!-- splat:values path=splat_spell/range -->
-
-| Field | Value |
-| --- | --- |
-| ` feet ` | ` 30 ` |
 
 ## Rule
 

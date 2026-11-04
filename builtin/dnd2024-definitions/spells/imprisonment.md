@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 62767181-90ee-5077-b4b3-73e185eb0d10
 splat_kind: spell
 splat_key: dnd2024:spells/imprisonment
 splat_name: Imprisonment
-splat_origin:
-  key: dnd2024:reference/spell/imprisonment
+splat_origin: dnd2024:reference/spell/imprisonment
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 142
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 142, https://www.dndbeyond.com/srd
 ---
 
 # Imprisonment
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 9 |
+| School | Abjuration |
+| Classes | Warlock, Wizard |
+| Casting Time | 1 minute |
+| Range | 30 feet |
+| Components | V, S, M (a statuette of the target worth 5,000+ GP) |
+| Duration | Until dispelled |
+
 
 ## Source text
 
@@ -42,37 +53,11 @@ Ending the Spell. When you cast the spell, specify a trigger that will end it. T
 
 Original layout: [[../../srd-5.2.1/pages/142|page 142]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 9 ` |
-| ` school ` | ` abjuration ` |
-| ` classes ` | ` ["warlock", "wizard"] ` |
-| ` components ` | ` ["verbal", "somatic", "material"] ` |
-| ` concentration ` | ` false ` |
-| ` duration ` | ` Until dispelled ` |
-| ` casting_time ` | ` 1 minute ` |
-| ` ritual ` | ` false ` |
 
-### Range
 
-<!-- splat:values path=splat_spell/range -->
 
-| Field | Value |
-| --- | --- |
-| ` feet ` | ` 30 ` |
-
-### Material
-
-<!-- splat:values path=splat_spell/material -->
-
-| Field | Value |
-| --- | --- |
-| ` description ` | ` a statuette of the target worth 5,000+ GP ` |
-| ` consumed ` | ` false ` |
 
 ## Rule
 
@@ -180,3 +165,12 @@ chosen_at: cast
 | --- | --- |
 | ` required_slot_level ` | ` 9 ` |
 | ` eligible_targets ` | ` ["prison", "casting_component"] ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_spell_extras -->
+> 
+> ```yaml
+> material:
+>   consumed: false
+> ```
+

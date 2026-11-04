@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 19de9a9b-8f93-58bd-9a7d-2b61d133bed4
 splat_kind: spell
 splat_key: dnd2024:spells/guardian_of_faith
 splat_name: Guardian of Faith
-splat_origin:
-  key: dnd2024:reference/spell/guardian_of_faith
+splat_origin: dnd2024:reference/spell/guardian_of_faith
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 137
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 137, https://www.dndbeyond.com/srd
 ---
 
 # Guardian of Faith
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 4 |
+| School | Conjuration |
+| Classes | Cleric |
+| Casting Time | Action |
+| Range | 30 feet |
+| Components | V |
+| Duration | 8 hours |
+
 
 ## Source text
 
@@ -30,28 +41,9 @@ Any enemy that moves to a space within 10 feet of the guardian for the first tim
 
 Original layout: [[../../srd-5.2.1/pages/137|page 137]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 4 ` |
-| ` school ` | ` conjuration ` |
-| ` classes ` | ` ["cleric"] ` |
-| ` components ` | ` ["verbal"] ` |
-| ` concentration ` | ` false ` |
-| ` duration ` | ` 8 hours ` |
-| ` casting_time ` | ` Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
-
-<!-- splat:values path=splat_spell/range -->
-
-| Field | Value |
-| --- | --- |
-| ` feet ` | ` 30 ` |
 
 ## Rule
 

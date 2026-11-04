@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "0ba47497-feb1-5961-a0e9-8a72ae41cf31"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/color_spray"
 splat_name: "Color Spray"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [116], "executable": false}
+splat_pages:
+- 116
 ---
 
 # Color Spray
@@ -20,3 +21,13 @@ Duration: Instantaneous
 You launch a dazzling array of flashing, colorful light. Each creature in a 15-foot Cone originating from you must succeed on a Constitution saving throw or have the Blinded condition until the end of your next turn.
 
 Original layout: [[../pages/116|page 116]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

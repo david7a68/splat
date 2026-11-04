@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 90f2f9db-29eb-5ade-a417-c59abc81984c
 splat_kind: rule_group
 splat_key: dnd2024:species/human
 splat_name: Human
-splat_origin:
-  key: dnd2024:reference/pages/086
+splat_origin: dnd2024:reference/pages/086
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 86
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 86, https://www.dndbeyond.com/srd
 ---
 
 # Human

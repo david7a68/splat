@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: eca12d19-b2e3-5925-b1d6-0dda3bb92d61
 splat_kind: item
 splat_key: dnd2024:equipment/artisan_s_tools_glassblower_s_tools_30_gp
 splat_name: Glassblower’s Tools (30 GP)
-splat_origin:
-  key: dnd2024:reference/pages/093
+splat_origin: dnd2024:reference/pages/093
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 93
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 93, https://www.dndbeyond.com/srd
 ---
 
 # Glassblower’s Tools (30 GP)
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Adventuring Gear |
+| Rarity |  |
+| Attunement | No |
+
 
 ## Source text
 
@@ -22,39 +29,13 @@ Ability: Intelligence Weight: 5 lb.\
 Utilize: Discern what a glass object held in the past 24 hours (DC 15)\
 Craft: Glass Bottle, Magnifying Glass, Spyglass, Vial
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` adventuring_gear ` |
 
-### Equipment
 
-<!-- splat:values path=splat_item/equipment -->
 
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` none ` |
 
-### Price
 
-<!-- splat:values path=splat_item/price -->
-
-| Field | Value |
-| --- | --- |
-| ` value ` | ` 30 ` |
-| ` unit ` | ` gp ` |
-
-### Mass
-
-<!-- splat:values path=splat_item/mass -->
-
-| Field | Value |
-| --- | --- |
-| ` value ` | ` 5 ` |
-| ` unit ` | ` lb ` |
 
 ## Rule
 
@@ -105,3 +86,16 @@ crafting_rule:
 | --- | --- |
 | ` value ` | ` 5 ` |
 | ` unit ` | ` lb ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_item_extras -->
+> 
+> ```yaml
+> price:
+>   unit: gp
+>   value: 30
+> mass:
+>   unit: lb
+>   value: 5
+> ```
+

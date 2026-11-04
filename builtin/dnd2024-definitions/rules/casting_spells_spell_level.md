@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: e5459183-a32f-5c7f-8a3c-9d0db511de4e
 splat_kind: rule
 splat_key: dnd2024:rules/casting_spells_spell_level
 splat_name: Spell Level
-splat_origin:
-  key: dnd2024:reference/pages/104
+splat_origin: dnd2024:reference/pages/104
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 104
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 104, https://www.dndbeyond.com/srd
 ---
 
 # Spell Level

@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "4e69fda4-24b2-5954-b182-01453b2ceb26"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/magic_item/potion_of_giant_strength"
 splat_name: "Potion of Giant Strength"
-splat_reference: {"source": "SRD 5.2.1", "category": "magic_item", "pages": [235], "executable": false}
+splat_pages:
+- 235
 ---
 
 # Potion of Giant Strength
@@ -26,3 +27,13 @@ This potion’s transparent liquid has floating in it a sliver of light resembli
 | Potion of Giant Strength (storm) | 29 | Legendary |
 
 Original layout: [[../pages/235|page 235]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: magic_item
+> executable: false
+> ```
+

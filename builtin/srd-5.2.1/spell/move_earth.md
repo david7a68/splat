@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "537a573b-768f-537a-85a6-dfcc7ce2e9ee"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/move_earth"
 splat_name: "Move Earth"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [151], "executable": false}
+splat_pages:
+- 151
 ---
 
 # Move Earth
@@ -26,3 +27,13 @@ This spell can’t manipulate natural stone or stone construction. Rocks and str
 Similarly, this spell doesn’t directly affect plant growth. The moved earth carries any plants along with it.
 
 Original layout: [[../pages/151|page 151]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

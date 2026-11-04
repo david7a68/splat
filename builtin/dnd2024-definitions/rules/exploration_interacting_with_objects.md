@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 62e99a49-b5bb-5d85-ae8f-d0b7c3591d8e
 splat_kind: rule
 splat_key: dnd2024:rules/exploration_interacting_with_objects
 splat_name: Interacting with Objects
-splat_origin:
-  key: dnd2024:reference/pages/011
+splat_origin: dnd2024:reference/pages/011
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 11, 12
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 11, 12, https://www.dndbeyond.com/srd
 ---
 
 # Interacting with Objects

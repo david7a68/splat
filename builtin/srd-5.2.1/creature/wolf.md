@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "6512fffb-0831-59db-9f06-35b6a49f9464"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/wolf"
 splat_name: "Wolf"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [364], "executable": false}
+splat_pages:
+- 364
 ---
 
 # Wolf
@@ -32,3 +33,13 @@ Pack Tactics. The wolf has Advantage on attack rolls against a creature if at le
 Bite. Melee Attack Roll: +4, reach 5 ft. Hit: 5 (1d6 + 2) Piercing damage. If the target is a Medium or smaller creature, it has the Prone condition.
 
 Original layout: [[../pages/364|page 364]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

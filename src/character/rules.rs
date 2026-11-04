@@ -182,16 +182,39 @@ pub(super) fn rendered(fields: Value, body: &str) -> Result<String, String> {
         body.trim_start_matches('\n').trim_end_matches('\n'),
     ))
 }
-fn note(path: String, fields: Value, body: &str) -> Result<ContentNote, String> {
+pub(super) fn source_body(entry: &Entry) -> String {
+    let body = if crate::content::stat_blocks::owns(
+        &entry.kind,
+        entry.fields.contains_key("splat_character"),
+    ) {
+        crate::content::stat_blocks::reading_body(entry, &entry.body)
+    } else {
+        entry.body.clone()
+    };
+    body.split("\n> [!note]- Splat data")
+        .next()
+        .unwrap_or(&body)
+        .to_owned()
+}
+
+fn note(path: String, mut fields: Value, body: &str) -> Result<ContentNote, String> {
+    fields["splat_schema"] = 1.into();
+    let body = body
+        .split("\n> [!note]- Splat data")
+        .next()
+        .unwrap_or(body)
+        .to_owned();
+    let text = format!(
+        "---\n{}---\n\n{body}\n",
+        serde_yaml_ng::to_string(&fields).map_err(|e| e.to_string())?
+    );
     Ok(ContentNote {
-        relative_path: path,
-        markdown: format!(
-            "---\n{}---\n\n{body}\n",
-            serde_yaml_ng::to_string(&fields).map_err(|e| e.to_string())?
-        ),
+        relative_path: path.clone(),
+        markdown: crate::content::formats::convert(&path, &text)?,
         sources: Vec::new(),
     })
 }
+
 struct Rules<'a> {
     record: &'a EntitySnapshot,
     notes: BTreeMap<Uuid, ContentNote>,
@@ -409,7 +432,7 @@ pub(super) fn complete(
             rules.apply(&identity, source, &mut fields)?;
         }
         let sources = std::mem::take(&mut original.sources);
-        *original = note(original.relative_path.clone(), fields, &entry.body)?;
+        *original = note(original.relative_path.clone(), fields, &source_body(&entry))?;
         original.sources = sources;
     }
     let entry = Entry::parse(&creature.relative_path, &creature.markdown)?;

@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 79520559-71ad-5f31-ae29-eec98d09f594
 splat_kind: rule
 splat_key: dnd2024:rules/parts_of_a_stat_block_ammunition_and_ranged_attacks
 splat_name: Ammunition and Ranged Attacks
-splat_origin:
-  key: dnd2024:reference/pages/255
+splat_origin: dnd2024:reference/pages/255
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 255
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 255, https://www.dndbeyond.com/srd
 ---
 
 # Ammunition and Ranged Attacks

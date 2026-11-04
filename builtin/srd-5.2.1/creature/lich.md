@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "19e96f2a-e699-5bf2-b8c9-83310d860a10"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/lich"
 splat_name: "Lich"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [304], "executable": false}
+splat_pages:
+- 304
 ---
 
 # Lich
@@ -62,3 +63,13 @@ Disrupt Life. Constitution Saving Throw: DC 20, each creature that isn’t an Un
 Frightening Gaze. The lich casts Fear, using the same spellcasting ability as Spellcasting. The lich can’t take this action again until the start of its next turn.
 
 Original layout: [[../pages/304|page 304]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

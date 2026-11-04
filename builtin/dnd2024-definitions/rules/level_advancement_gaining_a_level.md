@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: dd975fbb-07cb-584a-9d14-9f7f3c0f42b7
 splat_kind: rule
 splat_key: dnd2024:rules/level_advancement_gaining_a_level
 splat_name: Gaining a Level
-splat_origin:
-  key: dnd2024:reference/pages/023
+splat_origin: dnd2024:reference/pages/023
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 23
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 23, https://www.dndbeyond.com/srd
 ---
 
 # Gaining a Level

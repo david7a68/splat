@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 1fdd3059-d5ea-5f9b-b97a-4262ccdc3324
 splat_kind: spell
 splat_key: dnd2024:spells/minor_illusion
 splat_name: Minor Illusion
-splat_origin:
-  key: dnd2024:reference/spell/minor_illusion
+splat_origin: dnd2024:reference/spell/minor_illusion
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 149
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 149, https://www.dndbeyond.com/srd
 ---
 
 # Minor Illusion
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | Cantrip |
+| School | Illusion |
+| Classes | Bard, Sorcerer, Warlock, Wizard |
+| Casting Time | Action |
+| Range | 30 feet |
+| Components | S, M (a bit of fleece) |
+| Duration | 1 minute |
+
 
 ## Source text
 
@@ -34,37 +45,11 @@ Image. If you create an image of an object—such as a chair, muddy footprints, 
 
 Original layout: [[../../srd-5.2.1/pages/149|page 149]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 0 ` |
-| ` school ` | ` illusion ` |
-| ` classes ` | ` ["bard", "sorcerer", "warlock", "wizard"] ` |
-| ` components ` | ` ["somatic", "material"] ` |
-| ` concentration ` | ` false ` |
-| ` duration ` | ` 1 minute ` |
-| ` casting_time ` | ` Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
 
-<!-- splat:values path=splat_spell/range -->
 
-| Field | Value |
-| --- | --- |
-| ` feet ` | ` 30 ` |
-
-### Material
-
-<!-- splat:values path=splat_spell/material -->
-
-| Field | Value |
-| --- | --- |
-| ` description ` | ` a bit of fleece ` |
-| ` consumed ` | ` false ` |
 
 ## Rule
 
@@ -127,3 +112,12 @@ check:
 success: recognize_illusion
 recognized_illusion_appearance: faint
 ```
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_spell_extras -->
+> 
+> ```yaml
+> material:
+>   consumed: false
+> ```
+

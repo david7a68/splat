@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 10682190-5b2d-5668-bc9a-5e9efe7ba78d
 splat_kind: rule
 splat_key: dnd2024:rules/poison_burnt_othur_fumes_500_gp
 splat_name: Burnt Othur Fumes (500 GP)
-splat_origin:
-  key: dnd2024:reference/pages/197
+splat_origin: dnd2024:reference/pages/197
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 197
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 197, https://www.dndbeyond.com/srd
 ---
 
 # Burnt Othur Fumes (500 GP)

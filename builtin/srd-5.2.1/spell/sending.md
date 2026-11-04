@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "d16f9c24-7af7-51b9-a4ad-2a3c703d3a79"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/sending"
 splat_name: "Sending"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [161], "executable": false}
+splat_pages:
+- 161
 ---
 
 # Sending
@@ -24,3 +25,13 @@ You can send the message across any distance and even to other planes of existen
 Upon receiving your message, a creature can block your ability to reach it again with this spell for 8 hours. If you try to send another message during that time, you learn that you are blocked, and the spell fails.
 
 Original layout: [[../pages/161|page 161]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

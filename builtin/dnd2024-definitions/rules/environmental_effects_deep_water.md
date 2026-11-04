@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 7da65499-488c-5f4f-942a-103c2a1e1dcf
 splat_kind: rule
 splat_key: dnd2024:rules/environmental_effects_deep_water
 splat_name: Deep Water
-splat_origin:
-  key: dnd2024:reference/pages/195
+splat_origin: dnd2024:reference/pages/195
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 195
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 195, https://www.dndbeyond.com/srd
 ---
 
 # Deep Water

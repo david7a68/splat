@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 1391bf67-98a7-54ef-ae03-29cb242ada2c
 splat_kind: rule
 splat_key: dnd2024:rules/combat_moving_around_other_creatures
 splat_name: Moving around Other Creatures
-splat_origin:
-  key: dnd2024:reference/pages/014
+splat_origin: dnd2024:reference/pages/014
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 14
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 14, https://www.dndbeyond.com/srd
 ---
 
 # Moving around Other Creatures

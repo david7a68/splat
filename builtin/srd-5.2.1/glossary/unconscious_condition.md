@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "27312e3b-3d55-54ca-a766-e39eee84b028"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/glossary/unconscious_condition"
 splat_name: "Unconscious [Condition]"
-splat_reference: {"source": "SRD 5.2.1", "category": "glossary", "pages": [191], "executable": false}
+splat_pages:
+- 191
 ---
 
 # Unconscious [Condition]
@@ -26,3 +27,13 @@ Automatic Critical Hits. Any attack roll that hits you is a Critical Hit if the 
 Unaware. You’re unaware of your surroundings.
 
 Original layout: [[../pages/191|page 191]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: glossary
+> executable: false
+> ```
+

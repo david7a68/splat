@@ -1,35 +1,64 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: a9727af5-4b2b-5b0e-a005-383c8eec0ac7
 splat_kind: creature
 splat_key: dnd2024:creatures/werebear
 splat_name: Werebear
-splat_origin:
-  key: dnd2024:reference/creature/werebear
+splat_origin: dnd2024:reference/creature/werebear
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 337, 338
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 337, 338, https://www.dndbeyond.com/srd
 ---
 
 # Werebear
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Medium or Small |
+| Type | Monstrosity (Lycanthrope) |
+| Alignment | Neutral Good |
+| Armor Class | 15 |
+| Hit Points | 135 (18d8 + 54) |
+| Initiative | +3 (13) |
+| Speed | 30 ft., 40 ft. (bear form only), Climb 30 ft. (bear form only) |
+| Challenge | 5 (XP 1,800; PB +3) |
+| Skills | Perception +7 |
+| Senses | Darkvision 60 ft.; Passive Perception 17 |
+| Languages | Common (can’t speak in bear form) |
+| Gear | Handaxes (4) |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 19 | +4 | +4 |
+| Dex | 10 | +0 | +0 |
+| Con | 17 | +3 | +3 |
+| Int | 11 | +0 | +0 |
+| Wis | 12 | +1 | +1 |
+| Cha | 12 | +1 | +1 |
+
+%% splat shape=speed_max %%
+
 
 ## Source text
 
 <!-- SRD page 337 -->
 
 Medium or Small Monstrosity (Lycanthrope), Neutral Good\
-AC 15 Initiative +3 (13)\
-HP 135 (18d8 + 54)\
-Speed 30 ft., 40 ft. (bear form only), Climb 30 ft. (bear form only)\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 19 +4 +4 Dex 10 +0 +0 Con 17 +3 +3\
-Int 11 +0 +0 Wis 12 +1 +1 Cha 12 +1 +1\
-Skills Perception +7\
-Gear Handaxes (4)\
-Senses Darkvision 60 ft.; Passive Perception 17\
-Languages Common (can’t speak in bear form)\
-CR 5 (XP 1,800; PB +3)
+> [!quote]- Printed stat block (not read; edit the table above)
+> AC 15 Initiative +3 (13)\
+> HP 135 (18d8 + 54)\
+> Speed 30 ft., 40 ft. (bear form only), Climb 30 ft. (bear form only)\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 19 +4 +4 Dex 10 +0 +0 Con 17 +3 +3\
+> Int 11 +0 +0 Wis 12 +1 +1 Cha 12 +1 +1\
+> Skills Perception +7\
+> Gear Handaxes (4)\
+> Senses Darkvision 60 ft.; Passive Perception 17\
+> Languages Common (can’t speak in bear form)\
+> CR 5 (XP 1,800; PB +3)
+
 
 ### Actions
 
@@ -49,49 +78,11 @@ Shape-Shift. The werebear shape-shifts into a Large bear-humanoid hybrid form or
 
 Original layout: [[../../srd-5.2.1/pages/337|page 337]], [[../../srd-5.2.1/pages/338|page 338]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` medium ` |
-| ` type ` | ` monstrosity ` |
-| ` alignment ` | ` Neutral Good ` |
-| ` size_options_text ` | ` Medium or Small ` |
-| ` tags_text ` | ` (Lycanthrope) ` |
-| ` movement_text ` | ` 30 ft., 40 ft. (bear form only), Climb 30 ft. (bear form only) ` |
-| ` skills_text ` | ` Perception +7 ` |
-| ` gear_text ` | ` Handaxes (4) ` |
-| ` senses_text ` | ` Darkvision 60 ft.; Passive Perception 17 ` |
-| ` languages_text ` | ` Common (can’t speak in bear form) ` |
-| ` cr_text ` | ` 5 (XP 1,800; PB +3) ` |
-| ` hit_points_text ` | ` 135 (18d8 + 54) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 19 ` | ` 4 ` |
-| ` Dexterity ` | ` 10 ` | ` 0 ` |
-| ` Constitution ` | ` 17 ` | ` 3 ` |
-| ` Intelligence ` | ` 11 ` | ` 0 ` |
-| ` Wisdom ` | ` 12 ` | ` 1 ` |
-| ` Charisma ` | ` 12 ` | ` 1 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 15 ` |  |
-| ` max_hp ` | ` 135 ` |  |
-| ` initiative ` | ` 3 ` |  |
-| ` speed ` | ` 40 ` | ` ft ` |
-| ` climb_speed ` | ` 30 ` | ` ft ` |
 
 ## Health
 
@@ -361,3 +352,13 @@ bear:
 | ` provider ` | ` caller ` |
 | ` required_facts ` | ` ["distance", "area_membership", "visibility", "occupancy", "movement_path"] ` |
 | ` validate_against_typed_constraints ` | ` true ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_stats_extras -->
+> 
+> ```yaml
+> climb_speed:
+>   unit: ft
+>   value: 30
+> ```
+

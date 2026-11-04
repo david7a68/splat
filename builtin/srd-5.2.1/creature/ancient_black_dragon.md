@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "aaf02fd1-885f-5217-b445-de1e3e4c85eb"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/ancient_black_dragon"
 splat_name: "Ancient Black Dragon"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [265], "executable": false}
+splat_pages:
+- 265
 ---
 
 # Ancient Black Dragon
@@ -54,3 +55,13 @@ Frightful Presence. The dragon uses Spellcasting to cast Fear. The dragon can’
 Pounce. The dragon moves up to half its Speed, and it makes one Rend attack.
 
 Original layout: [[../pages/265|page 265]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: c73aa5d8-490d-50b8-b117-d86eccae5c96
 splat_kind: spell
 splat_key: dnd2024:spells/sunbeam
 splat_name: Sunbeam
-splat_origin:
-  key: dnd2024:reference/spell/sunbeam
+splat_origin: dnd2024:reference/spell/sunbeam
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 166
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 166, https://www.dndbeyond.com/srd
 ---
 
 # Sunbeam
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 6 |
+| School | Evocation |
+| Classes | Cleric, Druid, Sorcerer, Wizard |
+| Casting Time | Action |
+| Range |  |
+| Components | V, S, M (a magnifying glass) |
+| Duration | Concentration, up to 1 minute |
+
 
 ## Source text
 
@@ -32,37 +43,11 @@ For the duration, a mote of brilliant radiance shines above you. It sheds Bright
 
 Original layout: [[../../srd-5.2.1/pages/166|page 166]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 6 ` |
-| ` school ` | ` evocation ` |
-| ` classes ` | ` ["cleric", "druid", "sorcerer", "wizard"] ` |
-| ` components ` | ` ["verbal", "somatic", "material"] ` |
-| ` concentration ` | ` true ` |
-| ` duration ` | ` Concentration, up to 1 minute ` |
-| ` casting_time ` | ` Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
 
-<!-- splat:values path=splat_spell/range -->
 
-| Field | Value |
-| --- | --- |
-| ` mode ` | ` self ` |
-
-### Material
-
-<!-- splat:values path=splat_spell/material -->
-
-| Field | Value |
-| --- | --- |
-| ` description ` | ` a magnifying glass ` |
-| ` consumed ` | ` false ` |
 
 ## Rule
 
@@ -137,3 +122,14 @@ maximum:
   value: 1
   unit: minute
 ```
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_spell_extras -->
+> 
+> ```yaml
+> material:
+>   consumed: false
+> range:
+>   mode: self
+> ```
+

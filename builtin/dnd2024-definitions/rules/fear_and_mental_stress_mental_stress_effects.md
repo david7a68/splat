@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 6f2e880d-4f14-5820-a14c-228a2bc55e20
 splat_kind: rule
 splat_key: dnd2024:rules/fear_and_mental_stress_mental_stress_effects
 splat_name: Mental Stress Effects
-splat_origin:
-  key: dnd2024:reference/pages/196
+splat_origin: dnd2024:reference/pages/196
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 196
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 196, https://www.dndbeyond.com/srd
 ---
 
 # Mental Stress Effects

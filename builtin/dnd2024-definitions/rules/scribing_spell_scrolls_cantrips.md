@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 1c510fca-c984-5d0a-80e7-6a53fa65f24e
 splat_kind: rule
 splat_key: dnd2024:rules/scribing_spell_scrolls_cantrips
 splat_name: Cantrips
-splat_origin:
-  key: dnd2024:reference/pages/103
+splat_origin: dnd2024:reference/pages/103
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 103
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 103, https://www.dndbeyond.com/srd
 ---
 
 # Cantrips

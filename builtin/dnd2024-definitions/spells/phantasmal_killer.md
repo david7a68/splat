@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 4cb693a0-2527-531e-952e-cbbbc19e9261
 splat_kind: spell
 splat_key: dnd2024:spells/phantasmal_killer
 splat_name: Phantasmal Killer
-splat_origin:
-  key: dnd2024:reference/spell/phantasmal_killer
+splat_origin: dnd2024:reference/spell/phantasmal_killer
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 152
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 152, https://www.dndbeyond.com/srd
 ---
 
 # Phantasmal Killer
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 4 |
+| School | Illusion |
+| Classes | Bard, Wizard |
+| Casting Time | Action |
+| Range | 120 feet |
+| Components | V, S |
+| Duration | Concentration, up to 1 minute |
+
 
 ## Source text
 
@@ -32,28 +43,9 @@ Using a Higher-Level Spell Slot. The damage increases by 1d10 for each spell slo
 
 Original layout: [[../../srd-5.2.1/pages/152|page 152]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 4 ` |
-| ` school ` | ` illusion ` |
-| ` classes ` | ` ["bard", "wizard"] ` |
-| ` components ` | ` ["verbal", "somatic"] ` |
-| ` concentration ` | ` true ` |
-| ` duration ` | ` Concentration, up to 1 minute ` |
-| ` casting_time ` | ` Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
-
-<!-- splat:values path=splat_spell/range -->
-
-| Field | Value |
-| --- | --- |
-| ` feet ` | ` 120 ` |
 
 ## Rule
 

@@ -1,33 +1,58 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 3ddc1ac6-e9a6-55e1-86b8-acebc64ab05e
 splat_kind: creature
 splat_key: dnd2024:creatures/harpy
 splat_name: Harpy
-splat_origin:
-  key: dnd2024:reference/creature/harpy
+splat_origin: dnd2024:reference/creature/harpy
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 297
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 297, https://www.dndbeyond.com/srd
 ---
 
 # Harpy
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Medium |
+| Type | Monstrosity |
+| Alignment | Chaotic Evil |
+| Armor Class | 11 |
+| Hit Points | 38 (7d8 + 7) |
+| Initiative | +1 (11) |
+| Speed | 20 ft., Fly 40 ft. |
+| Challenge | 1 (XP 200; PB +2) |
+| Senses | Passive Perception 10 |
+| Languages | Common |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 12 | +1 | +1 |
+| Dex | 13 | +1 | +1 |
+| Con | 12 | +1 | +1 |
+| Int | 7 | -2 | -2 |
+| Wis | 10 | +0 | +0 |
+| Cha | 13 | +1 | +1 |
+
 
 ## Source text
 
 <!-- SRD page 297 -->
 
-Medium Monstrosity, Chaotic Evil\
-AC 11 Initiative +1 (11)\
-HP 38 (7d8 + 7)\
-Speed 20 ft., Fly 40 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 12 +1 +1 Dex 13 +1 +1 Con 12 +1 +1\
-Int 7 −2 −2 Wis 10 +0 +0 Cha 13 +1 +1\
-Senses Passive Perception 10\
-Languages Common\
-CR 1 (XP 200; PB +2)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Medium Monstrosity, Chaotic Evil\
+> AC 11 Initiative +1 (11)\
+> HP 38 (7d8 + 7)\
+> Speed 20 ft., Fly 40 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 12 +1 +1 Dex 13 +1 +1 Con 12 +1 +1\
+> Int 7 −2 −2 Wis 10 +0 +0 Cha 13 +1 +1\
+> Senses Passive Perception 10\
+> Languages Common\
+> CR 1 (XP 200; PB +2)
+
 
 ### Actions
 
@@ -37,45 +62,11 @@ Luring Song. The harpy sings a magical melody, which lasts until the harpy’s C
 
 Original layout: [[../../srd-5.2.1/pages/297|page 297]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` medium ` |
-| ` type ` | ` monstrosity ` |
-| ` alignment ` | ` Chaotic Evil ` |
-| ` movement_text ` | ` 20 ft., Fly 40 ft. ` |
-| ` senses_text ` | ` Passive Perception 10 ` |
-| ` languages_text ` | ` Common ` |
-| ` cr_text ` | ` 1 (XP 200; PB +2) ` |
-| ` hit_points_text ` | ` 38 (7d8 + 7) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 12 ` | ` 1 ` |
-| ` Dexterity ` | ` 13 ` | ` 1 ` |
-| ` Constitution ` | ` 12 ` | ` 1 ` |
-| ` Intelligence ` | ` 7 ` | ` -2 ` |
-| ` Wisdom ` | ` 10 ` | ` 0 ` |
-| ` Charisma ` | ` 13 ` | ` 1 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 11 ` |  |
-| ` max_hp ` | ` 38 ` |  |
-| ` initiative ` | ` 1 ` |  |
-| ` speed ` | ` 20 ` | ` ft ` |
-| ` fly_speed ` | ` 40 ` | ` ft ` |
 
 ## Health
 
@@ -216,3 +207,13 @@ geometry:
 unlisted_success_branch: no_effect
 unlisted_duration: until_removed_by_applicable_rule
 ```
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_stats_extras -->
+> 
+> ```yaml
+> fly_speed:
+>   unit: ft
+>   value: 40
+> ```
+

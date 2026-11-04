@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "b8c7a418-64b4-57bd-a066-f6912be5a937"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/sahuagin_warrior"
 splat_name: "Sahuagin Warrior"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [321], "executable": false}
+splat_pages:
+- 321
 ---
 
 # Sahuagin Warrior
@@ -43,3 +44,13 @@ Claw. Melee Attack Roll: +3, reach 5 ft. Hit: 4 (1d6 + 1) Slashing damage.
 Aquatic Charge. The sahuagin swims up to its Swim Speed straight toward an enemy it can see.
 
 Original layout: [[../pages/321|page 321]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

@@ -1,10 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "e577c6f3-4105-59ad-be42-c80d76c46a74"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/charm_monster"
 splat_name: "Charm Monster"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [114, 115], "executable": false}
+splat_pages:
+- 114
+- 115
 ---
 
 # Charm Monster
@@ -24,3 +26,13 @@ One creature you can see within range makes a Wisdom saving throw. It does so wi
 Using a Higher-Level Spell Slot. You can target one additional creature for each spell slot level above 4.
 
 Original layout: [[../pages/114|page 114]], [[../pages/115|page 115]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

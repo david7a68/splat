@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "ae0f1d6a-03cf-56e4-8934-968b235fb692"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/gust_of_wind"
 splat_name: "Gust of Wind"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [138], "executable": false}
+splat_pages:
+- 138
 ---
 
 # Gust of Wind
@@ -26,3 +27,13 @@ The gust disperses gas or vapor, and it extinguishes candles and similar unprote
 As a Bonus Action on your later turns, you can change the direction in which the Line blasts from you.
 
 Original layout: [[../pages/138|page 138]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

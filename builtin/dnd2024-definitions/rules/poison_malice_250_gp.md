@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 33a773d0-815d-50c6-b92f-fff4b138a5ce
 splat_kind: rule
 splat_key: dnd2024:rules/poison_malice_250_gp
 splat_name: Malice (250 GP)
-splat_origin:
-  key: dnd2024:reference/pages/197
+splat_origin: dnd2024:reference/pages/197
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 197
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 197, https://www.dndbeyond.com/srd
 ---
 
 # Malice (250 GP)

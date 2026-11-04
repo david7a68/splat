@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: a7433f8d-e2a1-5936-81d8-5bb4a482b18c
 splat_kind: item
 splat_key: dnd2024:equipment/blanket_5_sp
 splat_name: Blanket (5 SP)
-splat_origin:
-  key: dnd2024:reference/pages/096
+splat_origin: dnd2024:reference/pages/096
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 96
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 96, https://www.dndbeyond.com/srd
 ---
 
 # Blanket (5 SP)
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Adventuring Gear |
+| Rarity |  |
+| Attunement | No |
+
 
 ## Source text
 
@@ -20,39 +27,13 @@ splat_sources:
 
 While wrapped in a blanket, you have Advantage on saving throws against extreme cold (see “Gameplay Toolbox”).
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` adventuring_gear ` |
 
-### Equipment
 
-<!-- splat:values path=splat_item/equipment -->
 
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` none ` |
 
-### Price
 
-<!-- splat:values path=splat_item/price -->
-
-| Field | Value |
-| --- | --- |
-| ` value ` | ` 5 ` |
-| ` unit ` | ` sp ` |
-
-### Mass
-
-<!-- splat:values path=splat_item/mass -->
-
-| Field | Value |
-| --- | --- |
-| ` value ` | ` 3.0 ` |
-| ` unit ` | ` lb ` |
 
 ## Rule
 
@@ -83,3 +64,16 @@ While wrapped in a blanket, you have Advantage on saving throws against extreme 
 | --- | --- |
 | ` value ` | ` 3.0 ` |
 | ` unit ` | ` lb ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_item_extras -->
+> 
+> ```yaml
+> price:
+>   unit: sp
+>   value: 5
+> mass:
+>   unit: lb
+>   value: 3.0
+> ```
+

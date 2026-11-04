@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "19fb0064-9438-5138-9c8b-234620e71fd8"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/seahorse"
 splat_name: "Seahorse"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [361], "executable": false}
+splat_pages:
+- 361
 ---
 
 # Seahorse
@@ -32,3 +33,13 @@ Water Breathing. The seahorse can breathe only underwater.
 Bubble Dash. While underwater, the seahorse moves up to its Swim Speed without provoking Opportunity Attacks.
 
 Original layout: [[../pages/361|page 361]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

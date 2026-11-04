@@ -1,10 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "94c15fa5-c758-52dd-936e-de73227edab5"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/horned_devil"
 splat_name: "Horned Devil"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [299, 300], "executable": false}
+splat_pages:
+- 299
+- 300
 ---
 
 # Horned Devil
@@ -43,3 +45,13 @@ Hurl Flame. Ranged Attack Roll: +8, range 150 ft. Hit: 26 (5d8 + 4) Fire damage.
 Infernal Tail. Dexterity Saving Throw: DC 17, one creature the devil can see within 10 feet. Failure: 10 (1d8 + 6) Necrotic damage, and the target receives an infernal wound if it doesn’t have one. While wounded, the target loses 10 (3d6) Hit Points at the start of each of its turns. The wound closes after 1 minute, after a spell restores Hit Points to the target, or after the target or a creature within 5 feet of it takes an action to stanch the wound, doing so by succeeding on a DC 17 Wisdom (Medicine) check.
 
 Original layout: [[../pages/299|page 299]], [[../pages/300|page 300]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

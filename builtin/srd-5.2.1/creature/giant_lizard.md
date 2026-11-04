@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "40499ff8-8e2a-597f-8c0c-ba9adc7973d5"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/giant_lizard"
 splat_name: "Giant Lizard"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [352], "executable": false}
+splat_pages:
+- 352
 ---
 
 # Giant Lizard
@@ -31,3 +32,13 @@ Spider Climb. The lizard can climb difficult surfaces, including along ceilings,
 Bite. Melee Attack Roll: +4, reach 5 ft. Hit: 6 (1d8 + 2) Piercing damage.
 
 Original layout: [[../pages/352|page 352]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: fa3e0b6e-00cb-5252-aa37-be08cf4e2434
 splat_kind: spell
 splat_key: dnd2024:spells/longstrider
 splat_name: Longstrider
-splat_origin:
-  key: dnd2024:reference/spell/longstrider
+splat_origin: dnd2024:reference/spell/longstrider
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 145
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 145, https://www.dndbeyond.com/srd
 ---
 
 # Longstrider
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 1 |
+| School | Transmutation |
+| Classes | Bard, Druid, Ranger, Wizard |
+| Casting Time | Action |
+| Range |  |
+| Components | V, S, M (a pinch of dirt) |
+| Duration | 1 hour |
+
 
 ## Source text
 
@@ -30,37 +41,11 @@ Using a Higher-Level Spell Slot. You can target one additional creature for each
 
 Original layout: [[../../srd-5.2.1/pages/145|page 145]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 1 ` |
-| ` school ` | ` transmutation ` |
-| ` classes ` | ` ["bard", "druid", "ranger", "wizard"] ` |
-| ` components ` | ` ["verbal", "somatic", "material"] ` |
-| ` concentration ` | ` false ` |
-| ` duration ` | ` 1 hour ` |
-| ` casting_time ` | ` Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
 
-<!-- splat:values path=splat_spell/range -->
 
-| Field | Value |
-| --- | --- |
-| ` mode ` | ` touch ` |
-
-### Material
-
-<!-- splat:values path=splat_spell/material -->
-
-| Field | Value |
-| --- | --- |
-| ` description ` | ` a pinch of dirt ` |
-| ` consumed ` | ` false ` |
 
 ## Rule
 
@@ -105,3 +90,14 @@ maximum:
   value: 1
   unit: hour
 ```
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_spell_extras -->
+> 
+> ```yaml
+> material:
+>   consumed: false
+> range:
+>   mode: touch
+> ```
+

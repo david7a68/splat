@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: a00d37c5-3843-50df-8b89-64582a44a633
 splat_kind: rule_group
 splat_key: dnd2024:subclasses/rogue_rogue_subclass_thief
 splat_name: 'Rogue Subclass: Thief'
-splat_origin:
-  key: dnd2024:reference/pages/064
+splat_origin: dnd2024:reference/pages/064
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 64
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 64, https://www.dndbeyond.com/srd
 ---
 
 # Rogue Subclass: Thief

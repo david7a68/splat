@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: f9868b1e-e538-5f44-b7a1-900adb0fca9c
 splat_kind: item
 splat_key: dnd2024:items/ring_of_shooting_stars
 splat_name: Ring of Shooting Stars
-splat_origin:
-  key: dnd2024:reference/magic_item/ring_of_shooting_stars
+splat_origin: dnd2024:reference/magic_item/ring_of_shooting_stars
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 238, 239
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 238, 239, https://www.dndbeyond.com/srd
 ---
 
 # Ring of Shooting Stars
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Ring |
+| Rarity | Very Rare |
+| Attunement | Yes |
+
 
 ## Source text
 
@@ -43,22 +50,9 @@ Shooting Stars. You can expend 1 to 3 charges as a Magic action. For every charg
 
 Original layout: [[../../srd-5.2.1/pages/238|page 238]], [[../../srd-5.2.1/pages/239|page 239]].
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` ring ` |
-| ` rarity ` | ` very_rare ` |
 
-### Equipment
-
-<!-- splat:values path=splat_item/equipment -->
-
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` required ` |
 
 ## Rule
 

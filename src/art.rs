@@ -485,17 +485,17 @@ mod tests {
         let index = Arc::new(ArtIndex::load([root.path()]));
         ctx.data_mut(|data| data.insert_temp(index_id(), index));
         let creature = |fields: &str| {
-            let text = format!(
+            let text = splat::content::formats::convert("Fixture.md", &format!(
                 "---\nsplat_schema: 1\nsplat_id: {}\nsplat_kind: creature\nsplat_name: C\n{fields}---\n",
                 uuid::Uuid::new_v4()
-            );
+            )).expect("schema-2 fixture");
             Entry::parse("c.md", &text).unwrap()
         };
         let art = |fields: &str| {
             let path = entry_art(&ctx, &creature(fields))?;
             Some(path.file_name()?.to_str()?.to_owned())
         };
-        let beast = "splat_creature: {size: medium, type: Beast}\n";
+        let beast = "splat_creature: {size: medium, type: beast}\n";
         assert_eq!(
             art(&format!("splat_key: pack:creatures/own\n{beast}")).as_deref(),
             Some("own.png")

@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 97528665-617f-569a-90be-475da1c599f7
 splat_kind: rule
 splat_key: dnd2024:rules/crafting_nonmagical_items_time
 splat_name: Time
-splat_origin:
-  key: dnd2024:reference/pages/103
+splat_origin: dnd2024:reference/pages/103
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 103
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 103, https://www.dndbeyond.com/srd
 ---
 
 # Time

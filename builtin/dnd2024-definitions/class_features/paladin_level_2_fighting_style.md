@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 8578a387-b95e-5caf-a050-54fdf7e0c833
 splat_kind: rule
 splat_key: dnd2024:class_features/paladin_level_2_fighting_style
 splat_name: 'Level 2: Fighting Style'
-splat_origin:
-  key: dnd2024:reference/pages/054
+splat_origin: dnd2024:reference/pages/054
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 54
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 54, https://www.dndbeyond.com/srd
 ---
 
 # Level 2: Fighting Style

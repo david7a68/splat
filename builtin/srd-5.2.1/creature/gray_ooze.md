@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "4b5a7709-d865-56ef-91fd-89c1b5221e05"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/gray_ooze"
 splat_name: "Gray Ooze"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [293], "executable": false}
+splat_pages:
+- 293
 ---
 
 # Gray Ooze
@@ -38,3 +39,13 @@ The ooze can eat through 2-inch-thick, nonmagical metal or wood in 1 round.
 Pseudopod. Melee Attack Roll: +3, reach 5 ft. Hit: 10 (2d8 + 1) Acid damage. Nonmagical armor worn by the target takes a −1 penalty to the AC it offers. The armor is destroyed if the penalty reduces its AC to 10. The penalty can be removed by casting the Mending spell on the armor.
 
 Original layout: [[../pages/293|page 293]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

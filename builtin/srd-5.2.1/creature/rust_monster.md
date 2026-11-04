@@ -1,10 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "d1587bfe-d5d4-5fec-a4f1-ac37a92b1848"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/rust_monster"
 splat_name: "Rust Monster"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [320, 321], "executable": false}
+splat_pages:
+- 320
+- 321
 ---
 
 # Rust Monster
@@ -43,3 +45,13 @@ Destroy Metal. The rust monster touches a nonmagical metal object within 5 feet 
 Reflexive Antennae. Trigger: An attack roll hits the rust monster. Response: The rust monster uses Antennae.
 
 Original layout: [[../pages/320|page 320]], [[../pages/321|page 321]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

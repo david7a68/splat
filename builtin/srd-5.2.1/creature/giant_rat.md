@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "2c421ee0-08b8-58fe-9491-65e37b79b8ab"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/giant_rat"
 splat_name: "Giant Rat"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [353], "executable": false}
+splat_pages:
+- 353
 ---
 
 # Giant Rat
@@ -32,3 +33,13 @@ Pack Tactics. The rat has Advantage on an attack roll against a creature if at l
 Bite. Melee Attack Roll: +5, reach 5 feet. Hit: 5 (1d4 + 3) Piercing damage.
 
 Original layout: [[../pages/353|page 353]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

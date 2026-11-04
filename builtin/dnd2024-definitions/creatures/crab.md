@@ -1,34 +1,60 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: eaba7510-634f-5ec3-ab74-10343020a7ba
 splat_kind: creature
 splat_key: dnd2024:creatures/crab
 splat_name: Crab
-splat_origin:
-  key: dnd2024:reference/creature/crab
+splat_origin: dnd2024:reference/creature/crab
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 347
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 347, https://www.dndbeyond.com/srd
 ---
 
 # Crab
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Tiny |
+| Type | Beast |
+| Alignment | Unaligned |
+| Armor Class | 11 |
+| Hit Points | 3 (1d4 + 1) |
+| Initiative | +0 (10) |
+| Speed | 20 ft., Swim 20 ft. |
+| Challenge | 0 (XP 10; PB +2) |
+| Skills | Stealth +2 |
+| Senses | Blindsight 30 ft.; Passive Perception 9 |
+| Languages | None |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 6 | -2 | -2 |
+| Dex | 11 | +0 | +0 |
+| Con | 12 | +1 | +1 |
+| Int | 1 | -5 | -5 |
+| Wis | 8 | -1 | -1 |
+| Cha | 2 | -4 | -4 |
+
 
 ## Source text
 
 <!-- SRD page 347 -->
 
-Tiny Beast, Unaligned\
-AC 11  Initiative +0 (10)\
-HP 3 (1d4 + 1)\
-Speed 20 ft., Swim 20 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 6 −2 −2 Dex 11 +0 +0 Con 12 +1 +1\
-Int 1 −5 −5 Wis 8 −1 −1 Cha 2 −4 −4\
-Skills Stealth +2\
-Senses Blindsight 30 ft.; Passive Perception 9\
-Languages None\
-CR 0 (XP 10; PB +2)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Tiny Beast, Unaligned\
+> AC 11  Initiative +0 (10)\
+> HP 3 (1d4 + 1)\
+> Speed 20 ft., Swim 20 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 6 −2 −2 Dex 11 +0 +0 Con 12 +1 +1\
+> Int 1 −5 −5 Wis 8 −1 −1 Cha 2 −4 −4\
+> Skills Stealth +2\
+> Senses Blindsight 30 ft.; Passive Perception 9\
+> Languages None\
+> CR 0 (XP 10; PB +2)
+
 
 ### Traits
 
@@ -40,46 +66,11 @@ Claw. Melee Attack Roll: +2, reach 5 ft. Hit: 1 Bludgeoning damage.
 
 Original layout: [[../../srd-5.2.1/pages/347|page 347]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` tiny ` |
-| ` type ` | ` beast ` |
-| ` alignment ` | ` Unaligned ` |
-| ` movement_text ` | ` 20 ft., Swim 20 ft. ` |
-| ` skills_text ` | ` Stealth +2 ` |
-| ` senses_text ` | ` Blindsight 30 ft.; Passive Perception 9 ` |
-| ` languages_text ` | ` None ` |
-| ` cr_text ` | ` 0 (XP 10; PB +2) ` |
-| ` hit_points_text ` | ` 3 (1d4 + 1) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 6 ` | ` -2 ` |
-| ` Dexterity ` | ` 11 ` | ` 0 ` |
-| ` Constitution ` | ` 12 ` | ` 1 ` |
-| ` Intelligence ` | ` 1 ` | ` -5 ` |
-| ` Wisdom ` | ` 8 ` | ` -1 ` |
-| ` Charisma ` | ` 2 ` | ` -4 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 11 ` |  |
-| ` max_hp ` | ` 3 ` |  |
-| ` initiative ` | ` 0 ` |  |
-| ` speed ` | ` 20 ` | ` ft ` |
-| ` swim_speed ` | ` 20 ` | ` ft ` |
 
 ## Health
 
@@ -185,3 +176,13 @@ hit:
 | ` provider ` | ` caller ` |
 | ` required_facts ` | ` ["distance", "area_membership", "visibility", "occupancy", "movement_path"] ` |
 | ` validate_against_typed_constraints ` | ` true ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_stats_extras -->
+> 
+> ```yaml
+> swim_speed:
+>   unit: ft
+>   value: 20
+> ```
+

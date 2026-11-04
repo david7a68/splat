@@ -1,33 +1,58 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: e05c3bfb-3cc6-5042-a194-c0ff7ddc6f96
 splat_kind: creature
 splat_key: dnd2024:creatures/baboon
 splat_name: Baboon
-splat_origin:
-  key: dnd2024:reference/creature/baboon
+splat_origin: dnd2024:reference/creature/baboon
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 345
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 345, https://www.dndbeyond.com/srd
 ---
 
 # Baboon
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Small |
+| Type | Beast |
+| Alignment | Unaligned |
+| Armor Class | 12 |
+| Hit Points | 3 (1d6) |
+| Initiative | +2 (12) |
+| Speed | 30 ft., Climb 30 ft. |
+| Challenge | 0 (XP 10; PB +2) |
+| Senses | Passive Perception 11 |
+| Languages | None |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 8 | -1 | -1 |
+| Dex | 14 | +2 | +2 |
+| Con | 11 | +0 | +0 |
+| Int | 4 | -3 | -3 |
+| Wis | 12 | +1 | +1 |
+| Cha | 6 | -2 | -2 |
+
 
 ## Source text
 
 <!-- SRD page 345 -->
 
-Small Beast, Unaligned\
-AC 12  Initiative +2 (12)\
-HP 3 (1d6)\
-Speed 30 ft., Climb 30 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 8 −1 −1 Dex 14 +2 +2 Con 11 +0 +0\
-Int 4 −3 −3 Wis 12 +1 +1 Cha 6 −2 −2\
-Senses Passive Perception 11\
-Languages None\
-CR 0 (XP 10; PB +2)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Small Beast, Unaligned\
+> AC 12  Initiative +2 (12)\
+> HP 3 (1d6)\
+> Speed 30 ft., Climb 30 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 8 −1 −1 Dex 14 +2 +2 Con 11 +0 +0\
+> Int 4 −3 −3 Wis 12 +1 +1 Cha 6 −2 −2\
+> Senses Passive Perception 11\
+> Languages None\
+> CR 0 (XP 10; PB +2)
+
 
 ### Traits
 
@@ -39,45 +64,11 @@ Bite. Melee Attack Roll: +1, reach 5 ft. Hit: 1 (1d4 − 1) Piercing damage.
 
 Original layout: [[../../srd-5.2.1/pages/345|page 345]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` small ` |
-| ` type ` | ` beast ` |
-| ` alignment ` | ` Unaligned ` |
-| ` movement_text ` | ` 30 ft., Climb 30 ft. ` |
-| ` senses_text ` | ` Passive Perception 11 ` |
-| ` languages_text ` | ` None ` |
-| ` cr_text ` | ` 0 (XP 10; PB +2) ` |
-| ` hit_points_text ` | ` 3 (1d6) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 8 ` | ` -1 ` |
-| ` Dexterity ` | ` 14 ` | ` 2 ` |
-| ` Constitution ` | ` 11 ` | ` 0 ` |
-| ` Intelligence ` | ` 4 ` | ` -3 ` |
-| ` Wisdom ` | ` 12 ` | ` 1 ` |
-| ` Charisma ` | ` 6 ` | ` -2 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 12 ` |  |
-| ` max_hp ` | ` 3 ` |  |
-| ` initiative ` | ` 2 ` |  |
-| ` speed ` | ` 30 ` | ` ft ` |
-| ` climb_speed ` | ` 30 ` | ` ft ` |
 
 ## Health
 
@@ -184,3 +175,13 @@ hit:
 | ` provider ` | ` caller ` |
 | ` required_facts ` | ` ["distance", "area_membership", "visibility", "occupancy", "movement_path"] ` |
 | ` validate_against_typed_constraints ` | ` true ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_stats_extras -->
+> 
+> ```yaml
+> climb_speed:
+>   unit: ft
+>   value: 30
+> ```
+

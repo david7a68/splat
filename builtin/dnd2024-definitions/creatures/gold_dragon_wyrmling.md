@@ -1,35 +1,62 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: ffc85f48-2e29-56ea-b9ba-62b03db90a4b
 splat_kind: creature
 splat_key: dnd2024:creatures/gold_dragon_wyrmling
 splat_name: Gold Dragon Wyrmling
-splat_origin:
-  key: dnd2024:reference/creature/gold_dragon_wyrmling
+splat_origin: dnd2024:reference/creature/gold_dragon_wyrmling
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 290, 291
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 290, 291, https://www.dndbeyond.com/srd
 ---
 
 # Gold Dragon Wyrmling
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Medium |
+| Type | Dragon (Metallic) |
+| Alignment | Lawful Good |
+| Armor Class | 17 |
+| Hit Points | 60 (8d8 + 24) |
+| Initiative | +4 (14) |
+| Speed | 30 ft., Fly 60 ft., Swim 30 ft. |
+| Challenge | 3 (700 XP; PB +2) |
+| Skills | Perception +4, Stealth +4 |
+| Senses | Blindsight 10 ft., Darkvision 60 ft.; Passive Perception 14 |
+| Languages | Draconic |
+| Immunities | Fire |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 19 | +4 | +4 |
+| Dex | 14 | +2 | +4 |
+| Con | 17 | +3 | +3 |
+| Int | 14 | +2 | +2 |
+| Wis | 11 | +0 | +2 |
+| Cha | 16 | +3 | +3 |
+
 
 ## Source text
 
 <!-- SRD page 290 -->
 
-Medium Dragon (Metallic), Lawful Good\
-AC 17 Initiative +4 (14)\
-HP 60 (8d8 + 24)\
-Speed 30 ft., Fly 60 ft., Swim 30 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 19 +4 +4 Dex 14 +2 +4 Con 17 +3 +3\
-Int 14 +2 +2 Wis 11 +0 +2 Cha 16 +3 +3\
-Skills Perception +4, Stealth +4\
-Immunities Fire\
-Senses Blindsight 10 ft., Darkvision 60 ft.; Passive Perception 14\
-Languages Draconic\
-CR 3 (700 XP; PB +2)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Medium Dragon (Metallic), Lawful Good\
+> AC 17 Initiative +4 (14)\
+> HP 60 (8d8 + 24)\
+> Speed 30 ft., Fly 60 ft., Swim 30 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 19 +4 +4 Dex 14 +2 +4 Con 17 +3 +3\
+> Int 14 +2 +2 Wis 11 +0 +2 Cha 16 +3 +3\
+> Skills Perception +4, Stealth +4\
+> Immunities Fire\
+> Senses Blindsight 10 ft., Darkvision 60 ft.; Passive Perception 14\
+> Languages Draconic\
+> CR 3 (700 XP; PB +2)
+
 
 <!-- SRD page 291 -->
 
@@ -49,49 +76,11 @@ Weakening Breath. Strength Saving Throw: DC 13, each creature that isn’t curre
 
 Original layout: [[../../srd-5.2.1/pages/290|page 290]], [[../../srd-5.2.1/pages/291|page 291]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` medium ` |
-| ` type ` | ` dragon ` |
-| ` alignment ` | ` Lawful Good ` |
-| ` tags_text ` | ` (Metallic) ` |
-| ` movement_text ` | ` 30 ft., Fly 60 ft., Swim 30 ft. ` |
-| ` skills_text ` | ` Perception +4, Stealth +4 ` |
-| ` immunities_text ` | ` Fire ` |
-| ` senses_text ` | ` Blindsight 10 ft., Darkvision 60 ft.; Passive Perception 14 ` |
-| ` languages_text ` | ` Draconic ` |
-| ` cr_text ` | ` 3 (700 XP; PB +2) ` |
-| ` hit_points_text ` | ` 60 (8d8 + 24) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 19 ` | ` 4 ` |
-| ` Dexterity ` | ` 14 ` | ` 4 ` |
-| ` Constitution ` | ` 17 ` | ` 3 ` |
-| ` Intelligence ` | ` 14 ` | ` 2 ` |
-| ` Wisdom ` | ` 11 ` | ` 2 ` |
-| ` Charisma ` | ` 16 ` | ` 3 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 17 ` |  |
-| ` max_hp ` | ` 60 ` |  |
-| ` initiative ` | ` 4 ` |  |
-| ` speed ` | ` 30 ` | ` ft ` |
-| ` fly_speed ` | ` 60 ` | ` ft ` |
-| ` swim_speed ` | ` 30 ` | ` ft ` |
 
 ## Health
 
@@ -306,3 +295,16 @@ geometry:
 unlisted_success_branch: no_effect
 unlisted_duration: until_removed_by_applicable_rule
 ```
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_stats_extras -->
+> 
+> ```yaml
+> fly_speed:
+>   unit: ft
+>   value: 60
+> swim_speed:
+>   unit: ft
+>   value: 30
+> ```
+

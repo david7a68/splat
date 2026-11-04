@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 0a5955ef-690d-5d69-89d2-f2ee734745b3
 splat_kind: rule
 splat_key: dnd2024:glossary/unarmed_strike
 splat_name: Unarmed Strike
-splat_origin:
-  key: dnd2024:reference/glossary/unarmed_strike
+splat_origin: dnd2024:reference/glossary/unarmed_strike
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 190
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 190, https://www.dndbeyond.com/srd
 ---
 
 # Unarmed Strike

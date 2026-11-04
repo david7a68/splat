@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 950eac6e-a446-58bb-b123-959d6cebb0f3
 splat_kind: rule
 splat_key: dnd2024:rules/combat_your_turn
 splat_name: Your Turn
-splat_origin:
-  key: dnd2024:reference/pages/013
+splat_origin: dnd2024:reference/pages/013
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 13, 14
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 13, 14, https://www.dndbeyond.com/srd
 ---
 
 # Your Turn

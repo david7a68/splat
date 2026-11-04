@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: b2b774d9-ecd2-5cd8-aaa3-e53ec6194472
 splat_kind: rule
 splat_key: dnd2024:class_features/life_domain_level_3_life_domain_spells
 splat_name: 'Level 3: Life Domain Spells'
-splat_origin:
-  key: dnd2024:reference/pages/040
+splat_origin: dnd2024:reference/pages/040
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 40
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 40, https://www.dndbeyond.com/srd
 ---
 
 # Level 3: Life Domain Spells

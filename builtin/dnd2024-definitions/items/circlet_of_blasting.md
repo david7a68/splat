@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 4dbe2137-d0a6-5ecd-9dce-fc02548f2a1c
 splat_kind: item
 splat_key: dnd2024:items/circlet_of_blasting
 splat_name: Circlet of Blasting
-splat_origin:
-  key: dnd2024:reference/magic_item/circlet_of_blasting
+splat_origin: dnd2024:reference/magic_item/circlet_of_blasting
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 215
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 215, https://www.dndbeyond.com/srd
 ---
 
 # Circlet of Blasting
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Wondrous Item |
+| Rarity | Uncommon |
+| Attunement | No |
+
 
 ## Source text
 
@@ -24,22 +31,9 @@ While wearing this circlet, you can cast Scorching Ray with it (+5 to hit). The 
 
 Original layout: [[../../srd-5.2.1/pages/215|page 215]].
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` wondrous_item ` |
-| ` rarity ` | ` uncommon ` |
 
-### Equipment
-
-<!-- splat:values path=splat_item/equipment -->
-
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` none ` |
 
 ## Rule
 

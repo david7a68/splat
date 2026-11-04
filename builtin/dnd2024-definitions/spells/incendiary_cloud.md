@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 5df3db72-49ee-5d1c-aa5e-51e6b7e2496c
 splat_kind: spell
 splat_key: dnd2024:spells/incendiary_cloud
 splat_name: Incendiary Cloud
-splat_origin:
-  key: dnd2024:reference/spell/incendiary_cloud
+splat_origin: dnd2024:reference/spell/incendiary_cloud
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 142, 143
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 142, 143, https://www.dndbeyond.com/srd
 ---
 
 # Incendiary Cloud
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 8 |
+| School | Conjuration |
+| Classes | Druid, Sorcerer, Wizard |
+| Casting Time | Action |
+| Range | 150 feet |
+| Components | V, S |
+| Duration | Concentration, up to 1 minute |
+
 
 ## Source text
 
@@ -34,28 +45,9 @@ The cloud moves 10 feet away from you in a direction you choose at the start of 
 
 Original layout: [[../../srd-5.2.1/pages/142|page 142]], [[../../srd-5.2.1/pages/143|page 143]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 8 ` |
-| ` school ` | ` conjuration ` |
-| ` classes ` | ` ["druid", "sorcerer", "wizard"] ` |
-| ` components ` | ` ["verbal", "somatic"] ` |
-| ` concentration ` | ` true ` |
-| ` duration ` | ` Concentration, up to 1 minute ` |
-| ` casting_time ` | ` Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
-
-<!-- splat:values path=splat_spell/range -->
-
-| Field | Value |
-| --- | --- |
-| ` feet ` | ` 150 ` |
 
 ## Rule
 

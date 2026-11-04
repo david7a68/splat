@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "b5c10081-bf10-5aea-b748-3d5bebe84fde"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/magic_item/horn_of_blasting"
 splat_name: "Horn of Blasting"
-splat_reference: {"source": "SRD 5.2.1", "category": "magic_item", "pages": [226], "executable": false}
+splat_pages:
+- 226
 ---
 
 # Horn of Blasting
@@ -18,3 +19,13 @@ You can take a Magic action to blow the horn, which emits a thunderous blast in 
 Each use of the horn’s magic has a 20 percent chance of causing the horn to explode. The explosion deals 10d6 Force damage to the user and destroys the horn.
 
 Original layout: [[../pages/226|page 226]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: magic_item
+> executable: false
+> ```
+

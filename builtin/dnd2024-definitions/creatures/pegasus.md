@@ -1,34 +1,60 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 9e1ea0e7-23c3-5691-a57c-b9970b82c0bb
 splat_kind: creature
 splat_key: dnd2024:creatures/pegasus
 splat_name: Pegasus
-splat_origin:
-  key: dnd2024:reference/creature/pegasus
+splat_origin: dnd2024:reference/creature/pegasus
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 313
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 313, https://www.dndbeyond.com/srd
 ---
 
 # Pegasus
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Large |
+| Type | Celestial |
+| Alignment | Chaotic Good |
+| Armor Class | 12 |
+| Hit Points | 59 (7d10 + 21) |
+| Initiative | +2 (12) |
+| Speed | 60 ft., Fly 90 ft. |
+| Challenge | 2 (XP 450; PB +2) |
+| Skills | Perception +6 |
+| Senses | Passive Perception 16 |
+| Languages | Understands Celestial, Common, Elvish, and Sylvan but can’t speak |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 18 | +4 | +4 |
+| Dex | 15 | +2 | +4 |
+| Con | 16 | +3 | +5 |
+| Int | 10 | +0 | +0 |
+| Wis | 15 | +2 | +4 |
+| Cha | 13 | +1 | +3 |
+
 
 ## Source text
 
 <!-- SRD page 313 -->
 
-Large Celestial, Chaotic Good\
-AC 12 Initiative +2 (12)\
-HP 59 (7d10 + 21)\
-Speed 60 ft., Fly 90 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 18 +4 +4 Dex 15 +2 +4 Con 16 +3 +5\
-Int 10 +0 +0 Wis 15 +2 +4 Cha 13 +1 +3\
-Skills Perception +6\
-Senses Passive Perception 16\
-Languages Understands Celestial, Common, Elvish, and Sylvan but can’t speak\
-CR 2 (XP 450; PB +2)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Large Celestial, Chaotic Good\
+> AC 12 Initiative +2 (12)\
+> HP 59 (7d10 + 21)\
+> Speed 60 ft., Fly 90 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 18 +4 +4 Dex 15 +2 +4 Con 16 +3 +5\
+> Int 10 +0 +0 Wis 15 +2 +4 Cha 13 +1 +3\
+> Skills Perception +6\
+> Senses Passive Perception 16\
+> Languages Understands Celestial, Common, Elvish, and Sylvan but can’t speak\
+> CR 2 (XP 450; PB +2)
+
 
 ### Actions
 
@@ -36,46 +62,11 @@ Hooves. Melee Attack Roll: +6, reach 5 ft. Hit: 7 (1d6 + 4) Bludgeoning damage p
 
 Original layout: [[../../srd-5.2.1/pages/313|page 313]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` large ` |
-| ` type ` | ` celestial ` |
-| ` alignment ` | ` Chaotic Good ` |
-| ` movement_text ` | ` 60 ft., Fly 90 ft. ` |
-| ` skills_text ` | ` Perception +6 ` |
-| ` senses_text ` | ` Passive Perception 16 ` |
-| ` languages_text ` | ` Understands Celestial, Common, Elvish, and Sylvan but can’t speak ` |
-| ` cr_text ` | ` 2 (XP 450; PB +2) ` |
-| ` hit_points_text ` | ` 59 (7d10 + 21) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 18 ` | ` 4 ` |
-| ` Dexterity ` | ` 15 ` | ` 4 ` |
-| ` Constitution ` | ` 16 ` | ` 5 ` |
-| ` Intelligence ` | ` 10 ` | ` 0 ` |
-| ` Wisdom ` | ` 15 ` | ` 4 ` |
-| ` Charisma ` | ` 13 ` | ` 3 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 12 ` |  |
-| ` max_hp ` | ` 59 ` |  |
-| ` initiative ` | ` 2 ` |  |
-| ` speed ` | ` 60 ` | ` ft ` |
-| ` fly_speed ` | ` 90 ` | ` ft ` |
 
 ## Health
 
@@ -211,3 +202,13 @@ geometry:
 unlisted_success_branch: no_effect
 unlisted_duration: until_removed_by_applicable_rule
 ```
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_stats_extras -->
+> 
+> ```yaml
+> fly_speed:
+>   unit: ft
+>   value: 90
+> ```
+

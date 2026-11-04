@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 0070177d-b32f-5469-a218-258baba75211
 splat_kind: item
 splat_key: dnd2024:items/wings_of_flying
 splat_name: Wings of Flying
-splat_origin:
-  key: dnd2024:reference/magic_item/wings_of_flying
+splat_origin: dnd2024:reference/magic_item/wings_of_flying
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 253
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 253, https://www.dndbeyond.com/srd
 ---
 
 # Wings of Flying
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Wondrous Item |
+| Rarity | Rare |
+| Attunement | Yes |
+
 
 ## Source text
 
@@ -24,22 +31,9 @@ While wearing this cloak, you can take a Magic action to turn the cloak into a p
 
 Original layout: [[../../srd-5.2.1/pages/253|page 253]].
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` wondrous_item ` |
-| ` rarity ` | ` rare ` |
 
-### Equipment
-
-<!-- splat:values path=splat_item/equipment -->
-
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` required ` |
 
 ## Rule
 

@@ -1,10 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "448c955e-58dc-57e1-a68c-6132148cdb81"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/fire_elemental"
 splat_name: "Fire Elemental"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [284, 285], "executable": false}
+splat_pages:
+- 284
+- 285
 ---
 
 # Fire Elemental
@@ -43,3 +45,13 @@ Multiattack. The elemental makes two Burn attacks.
 Burn. Melee Attack Roll: +6, reach 5 ft. Hit: 10 (2d6 + 3) Fire damage. If the target is a creature or a flammable object, it starts burning.
 
 Original layout: [[../pages/284|page 284]], [[../pages/285|page 285]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

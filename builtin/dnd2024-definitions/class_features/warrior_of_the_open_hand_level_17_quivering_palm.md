@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 9fdaa056-6bc5-5ad5-b58e-23b119e5f15a
 splat_kind: rule
 splat_key: dnd2024:class_features/warrior_of_the_open_hand_level_17_quivering_palm
 splat_name: 'Level 17: Quivering Palm'
-splat_origin:
-  key: dnd2024:reference/pages/052
+splat_origin: dnd2024:reference/pages/052
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 52
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 52, https://www.dndbeyond.com/srd
 ---
 
 # Level 17: Quivering Palm

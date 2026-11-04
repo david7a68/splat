@@ -1,33 +1,58 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 95a127ec-d2fb-5908-8987-dd8846ede461
 splat_kind: creature
 splat_key: dnd2024:creatures/triceratops
 splat_name: Triceratops
-splat_origin:
-  key: dnd2024:reference/creature/triceratops
+splat_origin: dnd2024:reference/creature/triceratops
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 363
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 363, https://www.dndbeyond.com/srd
 ---
 
 # Triceratops
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Huge |
+| Type | Beast (Dinosaur) |
+| Alignment | Unaligned |
+| Armor Class | 14 |
+| Hit Points | 114 (12d12 + 36) |
+| Initiative | -1 (9) |
+| Speed | 50 ft. |
+| Challenge | 5 (XP 1,800; PB +3) |
+| Senses | Passive Perception 10 |
+| Languages | None |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 22 | +6 | +6 |
+| Dex | 9 | -1 | -1 |
+| Con | 17 | +3 | +3 |
+| Int | 2 | -4 | -4 |
+| Wis | 11 | +0 | +0 |
+| Cha | 5 | -3 | -3 |
+
 
 ## Source text
 
 <!-- SRD page 363 -->
 
-Huge Beast (Dinosaur), Unaligned\
-AC 14  Initiative −1 (9)\
-HP 114 (12d12 + 36)\
-Speed 50 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 22 +6 +6 Dex 9 −1 −1 Con 17 +3 +3\
-Int 2 −4 −4 Wis 11 +0 +0 Cha  5 −3 −3\
-Senses Passive Perception 10\
-Languages None\
-CR 5 (XP 1,800; PB +3)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Huge Beast (Dinosaur), Unaligned\
+> AC 14  Initiative −1 (9)\
+> HP 114 (12d12 + 36)\
+> Speed 50 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 22 +6 +6 Dex 9 −1 −1 Con 17 +3 +3\
+> Int 2 −4 −4 Wis 11 +0 +0 Cha  5 −3 −3\
+> Senses Passive Perception 10\
+> Languages None\
+> CR 5 (XP 1,800; PB +3)
+
 
 ### Actions
 
@@ -37,45 +62,11 @@ Gore. Melee Attack Roll: +9, reach 5 ft. Hit: 19 (2d12 + 6) Piercing damage. If 
 
 Original layout: [[../../srd-5.2.1/pages/363|page 363]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` huge ` |
-| ` type ` | ` beast ` |
-| ` alignment ` | ` Unaligned ` |
-| ` tags_text ` | ` (Dinosaur) ` |
-| ` movement_text ` | ` 50 ft. ` |
-| ` senses_text ` | ` Passive Perception 10 ` |
-| ` languages_text ` | ` None ` |
-| ` cr_text ` | ` 5 (XP 1,800; PB +3) ` |
-| ` hit_points_text ` | ` 114 (12d12 + 36) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 22 ` | ` 6 ` |
-| ` Dexterity ` | ` 9 ` | ` -1 ` |
-| ` Constitution ` | ` 17 ` | ` 3 ` |
-| ` Intelligence ` | ` 2 ` | ` -4 ` |
-| ` Wisdom ` | ` 11 ` | ` 0 ` |
-| ` Charisma ` | ` 5 ` | ` -3 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 14 ` |  |
-| ` max_hp ` | ` 114 ` |  |
-| ` initiative ` | ` -1 ` |  |
-| ` speed ` | ` 50 ` | ` ft ` |
 
 ## Health
 

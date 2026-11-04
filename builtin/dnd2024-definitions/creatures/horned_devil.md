@@ -1,35 +1,62 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 95f04799-9101-5d44-ae70-280d00dde719
 splat_kind: creature
 splat_key: dnd2024:creatures/horned_devil
 splat_name: Horned Devil
-splat_origin:
-  key: dnd2024:reference/creature/horned_devil
+splat_origin: dnd2024:reference/creature/horned_devil
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 299, 300
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 299, 300, https://www.dndbeyond.com/srd
 ---
 
 # Horned Devil
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Large |
+| Type | Fiend (Devil) |
+| Alignment | Lawful Evil |
+| Armor Class | 18 |
+| Hit Points | 199 (19d10 + 95) |
+| Initiative | +7 (17) |
+| Speed | 30 ft., Fly 60 ft. |
+| Challenge | 11 (XP 7,200; PB +4) |
+| Senses | Darkvision 150 ft. (unimpeded by magical Darkness); Passive Perception 13 |
+| Languages | Infernal; telepathy 120 ft. |
+| Resistances | Cold |
+| Immunities | Fire, Poison; Poisoned |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 22 | +6 | +10 |
+| Dex | 17 | +3 | +7 |
+| Con | 21 | +5 | +5 |
+| Int | 12 | +1 | +1 |
+| Wis | 16 | +3 | +7 |
+| Cha | 18 | +4 | +8 |
+
 
 ## Source text
 
 <!-- SRD page 299 -->
 
-Large Fiend (Devil), Lawful Evil\
-AC 18 Initiative +7 (17)\
-HP 199 (19d10 + 95)\
-Speed 30 ft., Fly 60 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 22 +6 +10 Dex 17 +3 +7 Con 21 +5 +5\
-Int 12 +1 +1 Wis 16 +3 +7 Cha 18 +4 +8\
-Resistances Cold\
-Immunities Fire, Poison; Poisoned\
-Senses Darkvision 150 ft. (unimpeded by magical Darkness); Passive Perception 13\
-Languages Infernal; telepathy 120 ft.\
-CR 11 (XP 7,200; PB +4)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Large Fiend (Devil), Lawful Evil\
+> AC 18 Initiative +7 (17)\
+> HP 199 (19d10 + 95)\
+> Speed 30 ft., Fly 60 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 22 +6 +10 Dex 17 +3 +7 Con 21 +5 +5\
+> Int 12 +1 +1 Wis 16 +3 +7 Cha 18 +4 +8\
+> Resistances Cold\
+> Immunities Fire, Poison; Poisoned\
+> Senses Darkvision 150 ft. (unimpeded by magical Darkness); Passive Perception 13\
+> Languages Infernal; telepathy 120 ft.\
+> CR 11 (XP 7,200; PB +4)
+
 
 ### Traits
 
@@ -51,48 +78,11 @@ Infernal Tail. Dexterity Saving Throw: DC 17, one creature the devil can see wit
 
 Original layout: [[../../srd-5.2.1/pages/299|page 299]], [[../../srd-5.2.1/pages/300|page 300]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` large ` |
-| ` type ` | ` fiend ` |
-| ` alignment ` | ` Lawful Evil ` |
-| ` tags_text ` | ` (Devil) ` |
-| ` movement_text ` | ` 30 ft., Fly 60 ft. ` |
-| ` resistances_text ` | ` Cold ` |
-| ` immunities_text ` | ` Fire, Poison; Poisoned ` |
-| ` senses_text ` | ` Darkvision 150 ft. (unimpeded by magical Darkness); Passive Perception 13 ` |
-| ` languages_text ` | ` Infernal; telepathy 120 ft. ` |
-| ` cr_text ` | ` 11 (XP 7,200; PB +4) ` |
-| ` hit_points_text ` | ` 199 (19d10 + 95) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 22 ` | ` 10 ` |
-| ` Dexterity ` | ` 17 ` | ` 7 ` |
-| ` Constitution ` | ` 21 ` | ` 5 ` |
-| ` Intelligence ` | ` 12 ` | ` 1 ` |
-| ` Wisdom ` | ` 16 ` | ` 7 ` |
-| ` Charisma ` | ` 18 ` | ` 8 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 18 ` |  |
-| ` max_hp ` | ` 199 ` |  |
-| ` initiative ` | ` 7 ` |  |
-| ` speed ` | ` 30 ` | ` ft ` |
-| ` fly_speed ` | ` 60 ` | ` ft ` |
 
 ## Health
 
@@ -397,3 +387,13 @@ geometry_assumptions:
   - plane
   - form_appearance
 ```
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_stats_extras -->
+> 
+> ```yaml
+> fly_speed:
+>   unit: ft
+>   value: 60
+> ```
+

@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: e085ecb5-245e-57d4-a4bb-67796e1be499
 splat_kind: rule
 splat_key: dnd2024:glossary/search_action
 splat_name: Search [Action]
-splat_origin:
-  key: dnd2024:reference/glossary/search_action
+splat_origin: dnd2024:reference/glossary/search_action
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 187
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 187, https://www.dndbeyond.com/srd
 ---
 
 # Search [Action]

@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "fa02664c-e501-55ef-b4cc-2ab0b578ec2c"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/glossary/dead"
 splat_name: "Dead"
-splat_reference: {"source": "SRD 5.2.1", "category": "glossary", "pages": [180], "executable": false}
+splat_pages:
+- 180
 ---
 
 # Dead
@@ -16,3 +17,13 @@ A dead creature has no Hit Points and can’t regain them unless it is first rev
 If the creature returns to life, the revival effect determines the creature’s current Hit Points. Unless otherwise stated, the creature returns to life with any conditions, magical contagions, or curses that were affecting it at death if the durations of those effects are still ongoing. If the creature died with any Exhaustion levels, it returns with 1 fewer level. If the creature had Attunement to one or more magic items, it is no longer attuned to them.
 
 Original layout: [[../pages/180|page 180]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: glossary
+> executable: false
+> ```
+

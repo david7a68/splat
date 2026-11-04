@@ -1,35 +1,62 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 273b9cd7-f749-5b98-a216-65592f4c1360
 splat_kind: creature
 splat_key: dnd2024:creatures/ghast
 splat_name: Ghast
-splat_origin:
-  key: dnd2024:reference/creature/ghast
+splat_origin: dnd2024:reference/creature/ghast
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 287
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 287, https://www.dndbeyond.com/srd
 ---
 
 # Ghast
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Medium |
+| Type | Undead |
+| Alignment | Chaotic Evil |
+| Armor Class | 13 |
+| Hit Points | 36 (8d8) |
+| Initiative | +3 (13) |
+| Speed | 30 ft. |
+| Challenge | 2 (XP 450; PB +2) |
+| Senses | Darkvision 60 ft.; Passive Perception 10 |
+| Languages | Common |
+| Resistances | Necrotic |
+| Immunities | Poison; Charmed, Exhaustion, Poisoned |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 16 | +3 | +3 |
+| Dex | 17 | +3 | +3 |
+| Con | 10 | +0 | +0 |
+| Int | 11 | +0 | +0 |
+| Wis | 10 | +0 | +2 |
+| Cha | 8 | -1 | -1 |
+
 
 ## Source text
 
 <!-- SRD page 287 -->
 
-Medium Undead, Chaotic Evil\
-AC 13 Initiative +3 (13)\
-HP 36 (8d8)\
-Speed 30 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 16 +3 +3 Dex 17 +3 +3 Con 10 +0 +0\
-Int 11 +0 +0 Wis 10 +0 +2 Cha 8 −1 −1\
-Resistances Necrotic\
-Immunities Poison; Charmed, Exhaustion, Poisoned\
-Senses Darkvision 60 ft.; Passive Perception 10\
-Languages Common\
-CR 2 (XP 450; PB +2)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Medium Undead, Chaotic Evil\
+> AC 13 Initiative +3 (13)\
+> HP 36 (8d8)\
+> Speed 30 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 16 +3 +3 Dex 17 +3 +3 Con 10 +0 +0\
+> Int 11 +0 +0 Wis 10 +0 +2 Cha 8 −1 −1\
+> Resistances Necrotic\
+> Immunities Poison; Charmed, Exhaustion, Poisoned\
+> Senses Darkvision 60 ft.; Passive Perception 10\
+> Languages Common\
+> CR 2 (XP 450; PB +2)
+
 
 ### Traits
 
@@ -43,46 +70,11 @@ Claw. Melee Attack Roll: +5, reach 5 ft. Hit: 10 (2d6 + 3) Slashing damage. If t
 
 Original layout: [[../../srd-5.2.1/pages/287|page 287]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` medium ` |
-| ` type ` | ` undead ` |
-| ` alignment ` | ` Chaotic Evil ` |
-| ` movement_text ` | ` 30 ft. ` |
-| ` resistances_text ` | ` Necrotic ` |
-| ` immunities_text ` | ` Poison; Charmed, Exhaustion, Poisoned ` |
-| ` senses_text ` | ` Darkvision 60 ft.; Passive Perception 10 ` |
-| ` languages_text ` | ` Common ` |
-| ` cr_text ` | ` 2 (XP 450; PB +2) ` |
-| ` hit_points_text ` | ` 36 (8d8) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 16 ` | ` 3 ` |
-| ` Dexterity ` | ` 17 ` | ` 3 ` |
-| ` Constitution ` | ` 10 ` | ` 0 ` |
-| ` Intelligence ` | ` 11 ` | ` 0 ` |
-| ` Wisdom ` | ` 10 ` | ` 2 ` |
-| ` Charisma ` | ` 8 ` | ` -1 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 13 ` |  |
-| ` max_hp ` | ` 36 ` |  |
-| ` initiative ` | ` 3 ` |  |
-| ` speed ` | ` 30 ` | ` ft ` |
 
 ## Health
 

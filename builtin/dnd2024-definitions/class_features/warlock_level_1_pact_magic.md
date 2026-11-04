@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 184bfb4e-d9b3-57e5-8cc9-a7e99c76dbdf
 splat_kind: rule
 splat_key: dnd2024:class_features/warlock_level_1_pact_magic
 splat_name: 'Level 1: Pact Magic'
-splat_origin:
-  key: dnd2024:reference/pages/071
+splat_origin: dnd2024:reference/pages/071
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 71, 72
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 71, 72, https://www.dndbeyond.com/srd
 ---
 
 # Level 1: Pact Magic

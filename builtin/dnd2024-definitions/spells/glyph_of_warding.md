@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 0ceb28b0-5941-5176-852a-7ff58d127cf5
 splat_kind: spell
 splat_key: dnd2024:spells/glyph_of_warding
 splat_name: Glyph of Warding
-splat_origin:
-  key: dnd2024:reference/spell/glyph_of_warding
+splat_origin: dnd2024:reference/spell/glyph_of_warding
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 136, 137
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 136, 137, https://www.dndbeyond.com/srd
 ---
 
 # Glyph of Warding
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 3 |
+| School | Abjuration |
+| Classes | Bard, Cleric, Wizard |
+| Casting Time | 1 hour |
+| Range |  |
+| Components | V, S, M (powdered diamond worth 200+ GP, which the spell consumes) |
+| Duration | Until dispelled or triggered |
+
 
 ## Source text
 
@@ -46,37 +57,11 @@ Using a Higher-Level Spell Slot. The damage of an explosive rune increases by 1d
 
 Original layout: [[../../srd-5.2.1/pages/136|page 136]], [[../../srd-5.2.1/pages/137|page 137]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 3 ` |
-| ` school ` | ` abjuration ` |
-| ` classes ` | ` ["bard", "cleric", "wizard"] ` |
-| ` components ` | ` ["verbal", "somatic", "material"] ` |
-| ` concentration ` | ` false ` |
-| ` duration ` | ` Until dispelled or triggered ` |
-| ` casting_time ` | ` 1 hour ` |
-| ` ritual ` | ` false ` |
 
-### Range
 
-<!-- splat:values path=splat_spell/range -->
 
-| Field | Value |
-| --- | --- |
-| ` mode ` | ` touch ` |
-
-### Material
-
-<!-- splat:values path=splat_spell/material -->
-
-| Field | Value |
-| --- | --- |
-| ` description ` | ` powdered diamond worth 200+ GP, which the spell consumes ` |
-| ` consumed ` | ` true ` |
 
 ## Rule
 
@@ -227,3 +212,14 @@ concentration: false
 maximum:
   kind: until_dispelled_or_triggered
 ```
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_spell_extras -->
+> 
+> ```yaml
+> material:
+>   consumed: true
+> range:
+>   mode: touch
+> ```
+

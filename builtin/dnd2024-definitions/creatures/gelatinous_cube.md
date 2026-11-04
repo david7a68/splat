@@ -1,34 +1,60 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 67b895f2-bf1b-5105-b40c-2ed954a893da
 splat_kind: creature
 splat_key: dnd2024:creatures/gelatinous_cube
 splat_name: Gelatinous Cube
-splat_origin:
-  key: dnd2024:reference/creature/gelatinous_cube
+splat_origin: dnd2024:reference/creature/gelatinous_cube
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 286, 287
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 286, 287, https://www.dndbeyond.com/srd
 ---
 
 # Gelatinous Cube
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Large |
+| Type | Ooze |
+| Alignment | Unaligned |
+| Armor Class | 6 |
+| Hit Points | 63 (6d10 + 30) |
+| Initiative | -4 (6) |
+| Speed | 15 ft. |
+| Challenge | 2 (XP 450; PB +2) |
+| Senses | Blindsight 60 ft.; Passive Perception 8 |
+| Languages | None |
+| Immunities | Acid; Blinded, Charmed, Deafened, Exhaustion, Frightened, Prone |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 14 | +2 | +2 |
+| Dex | 3 | -4 | -4 |
+| Con | 20 | +5 | +5 |
+| Int | 1 | -5 | -5 |
+| Wis | 6 | -2 | -2 |
+| Cha | 1 | -5 | -5 |
+
 
 ## Source text
 
 <!-- SRD page 286 -->
 
-Large Ooze, Unaligned\
-AC 6 Initiative −4 (6)\
-HP 63 (6d10 + 30)\
-Speed 15 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 14 +2 +2 Dex 3 −4 −4 Con 20 +5 +5\
-Int 1 −5 −5 Wis 6 −2 −2 Cha 1 −5 −5\
-Immunities Acid; Blinded, Charmed, Deafened, Exhaustion, Frightened, Prone\
-Senses Blindsight 60 ft.; Passive Perception 8\
-Languages None\
-CR 2 (XP 450; PB +2)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Large Ooze, Unaligned\
+> AC 6 Initiative −4 (6)\
+> HP 63 (6d10 + 30)\
+> Speed 15 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 14 +2 +2 Dex 3 −4 −4 Con 20 +5 +5\
+> Int 1 −5 −5 Wis 6 −2 −2 Cha 1 −5 −5\
+> Immunities Acid; Blinded, Charmed, Deafened, Exhaustion, Frightened, Prone\
+> Senses Blindsight 60 ft.; Passive Perception 8\
+> Languages None\
+> CR 2 (XP 450; PB +2)
+
 
 <!-- SRD page 287 -->
 
@@ -50,45 +76,11 @@ Engulf. The cube moves up to its Speed without provoking Opportunity Attacks. Th
 
 Original layout: [[../../srd-5.2.1/pages/286|page 286]], [[../../srd-5.2.1/pages/287|page 287]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` large ` |
-| ` type ` | ` ooze ` |
-| ` alignment ` | ` Unaligned ` |
-| ` movement_text ` | ` 15 ft. ` |
-| ` immunities_text ` | ` Acid; Blinded, Charmed, Deafened, Exhaustion, Frightened, Prone ` |
-| ` senses_text ` | ` Blindsight 60 ft.; Passive Perception 8 ` |
-| ` languages_text ` | ` None ` |
-| ` cr_text ` | ` 2 (XP 450; PB +2) ` |
-| ` hit_points_text ` | ` 63 (6d10 + 30) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 14 ` | ` 2 ` |
-| ` Dexterity ` | ` 3 ` | ` -4 ` |
-| ` Constitution ` | ` 20 ` | ` 5 ` |
-| ` Intelligence ` | ` 1 ` | ` -5 ` |
-| ` Wisdom ` | ` 6 ` | ` -2 ` |
-| ` Charisma ` | ` 1 ` | ` -5 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 6 ` |  |
-| ` max_hp ` | ` 63 ` |  |
-| ` initiative ` | ` -4 ` |  |
-| ` speed ` | ` 15 ` | ` ft ` |
 
 ## Health
 

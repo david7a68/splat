@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "d84481ca-0a94-5154-b0c2-6119c78d0a95"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/acid_arrow"
 splat_name: "Acid Arrow"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [107], "executable": false}
+splat_pages:
+- 107
 ---
 
 # Acid Arrow
@@ -22,3 +23,13 @@ A shimmering green arrow streaks toward a target within range and bursts in a sp
 Using a Higher-Level Spell Slot. The damage (both initial and later) increases by 1d4 for each spell slot level above 2.
 
 Original layout: [[../pages/107|page 107]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

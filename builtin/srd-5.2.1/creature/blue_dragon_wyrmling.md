@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "2368c0da-e365-5d02-b6ba-20c2beb46a4e"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/blue_dragon_wyrmling"
 splat_name: "Blue Dragon Wyrmling"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [266], "executable": false}
+splat_pages:
+- 266
 ---
 
 # Blue Dragon Wyrmling
@@ -33,3 +34,13 @@ Rend. Melee Attack Roll: +5, reach 5 ft. Hit: 8 (1d10 + 3) Slashing damage plus 
 Lightning Breath (Recharge 5–6). Dexterity Saving Throw: DC 12, each creature in a 30-foot-long, 5-foot-wide Line. Failure: 21 (6d6) Lightning damage. Success: Half damage.
 
 Original layout: [[../pages/266|page 266]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

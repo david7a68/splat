@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 8810a2db-3adb-5a4b-a668-b8554c1f841f
 splat_kind: spell
 splat_key: dnd2024:spells/comprehend_languages
 splat_name: Comprehend Languages
-splat_origin:
-  key: dnd2024:reference/spell/comprehend_languages
+splat_origin: dnd2024:reference/spell/comprehend_languages
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 117
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 117, https://www.dndbeyond.com/srd
 ---
 
 # Comprehend Languages
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 1 |
+| School | Divination |
+| Classes | Bard, Sorcerer, Warlock, Wizard |
+| Casting Time | Action or Ritual |
+| Range |  |
+| Components | V, S, M (a pinch of soot and salt) |
+| Duration | 1 hour |
+
 
 ## Source text
 
@@ -28,37 +39,11 @@ For the duration, you understand the literal meaning of any language that you he
 
 Original layout: [[../../srd-5.2.1/pages/117|page 117]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 1 ` |
-| ` school ` | ` divination ` |
-| ` classes ` | ` ["bard", "sorcerer", "warlock", "wizard"] ` |
-| ` components ` | ` ["verbal", "somatic", "material"] ` |
-| ` concentration ` | ` false ` |
-| ` duration ` | ` 1 hour ` |
-| ` casting_time ` | ` Action or Ritual ` |
-| ` ritual ` | ` true ` |
 
-### Range
 
-<!-- splat:values path=splat_spell/range -->
 
-| Field | Value |
-| --- | --- |
-| ` mode ` | ` self ` |
-
-### Material
-
-<!-- splat:values path=splat_spell/material -->
-
-| Field | Value |
-| --- | --- |
-| ` description ` | ` a pinch of soot and salt ` |
-| ` consumed ` | ` false ` |
 
 ## Rule
 
@@ -108,3 +93,14 @@ written_language:
 | --- | --- |
 | ` symbols ` | ` false ` |
 | ` secret_messages ` | ` false ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_spell_extras -->
+> 
+> ```yaml
+> material:
+>   consumed: false
+> range:
+>   mode: self
+> ```
+

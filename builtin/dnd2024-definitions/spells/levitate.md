@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: fa97a2c5-10f1-5117-95cd-2cdbb3d2e4a8
 splat_kind: spell
 splat_key: dnd2024:spells/levitate
 splat_name: Levitate
-splat_origin:
-  key: dnd2024:reference/spell/levitate
+splat_origin: dnd2024:reference/spell/levitate
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 144
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 144, https://www.dndbeyond.com/srd
 ---
 
 # Levitate
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 2 |
+| School | Transmutation |
+| Classes | Sorcerer, Wizard |
+| Casting Time | Action |
+| Range | 60 feet |
+| Components | V, S, M (a metal spring) |
+| Duration | Concentration, up to 10 minutes |
+
 
 ## Source text
 
@@ -32,37 +43,11 @@ When the spell ends, the target floats gently to the ground if it is still aloft
 
 Original layout: [[../../srd-5.2.1/pages/144|page 144]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 2 ` |
-| ` school ` | ` transmutation ` |
-| ` classes ` | ` ["sorcerer", "wizard"] ` |
-| ` components ` | ` ["verbal", "somatic", "material"] ` |
-| ` concentration ` | ` true ` |
-| ` duration ` | ` Concentration, up to 10 minutes ` |
-| ` casting_time ` | ` Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
 
-<!-- splat:values path=splat_spell/range -->
 
-| Field | Value |
-| --- | --- |
-| ` feet ` | ` 60 ` |
-
-### Material
-
-<!-- splat:values path=splat_spell/material -->
-
-| Field | Value |
-| --- | --- |
-| ` description ` | ` a metal spring ` |
-| ` consumed ` | ` false ` |
 
 ## Rule
 
@@ -170,3 +155,12 @@ other_target:
 | ` source ` | ` supplied_world_geometry ` |
 | ` unknown_facts ` | ` require_resolution ` |
 | ` infer_unprovided_geometry ` | ` false ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_spell_extras -->
+> 
+> ```yaml
+> material:
+>   consumed: false
+> ```
+

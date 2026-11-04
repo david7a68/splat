@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 4c34296c-7b48-55e3-8f65-6ce15204d024
 splat_kind: item
 splat_key: dnd2024:items/boots_of_speed
 splat_name: Boots of Speed
-splat_origin:
-  key: dnd2024:reference/magic_item/boots_of_speed
+splat_origin: dnd2024:reference/magic_item/boots_of_speed
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 214
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 214, https://www.dndbeyond.com/srd
 ---
 
 # Boots of Speed
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Wondrous Item |
+| Rarity | Rare |
+| Attunement | Yes |
+
 
 ## Source text
 
@@ -26,22 +33,9 @@ When you’ve used the boots’ property for a total of 10 minutes, the magic ce
 
 Original layout: [[../../srd-5.2.1/pages/214|page 214]].
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` wondrous_item ` |
-| ` rarity ` | ` rare ` |
 
-### Equipment
-
-<!-- splat:values path=splat_item/equipment -->
-
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` required ` |
 
 ## Rule
 

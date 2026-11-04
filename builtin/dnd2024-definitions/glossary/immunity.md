@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 4251d30c-ae5b-50cc-b428-8cea8d7222a6
 splat_kind: rule
 splat_key: dnd2024:glossary/immunity
 splat_name: Immunity
-splat_origin:
-  key: dnd2024:reference/glossary/immunity
+splat_origin: dnd2024:reference/glossary/immunity
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 183
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 183, https://www.dndbeyond.com/srd
 ---
 
 # Immunity

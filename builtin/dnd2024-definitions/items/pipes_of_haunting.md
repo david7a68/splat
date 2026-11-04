@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 82fa3bfa-6986-51ce-b6cf-60eef480f825
 splat_kind: item
 splat_key: dnd2024:items/pipes_of_haunting
 splat_name: Pipes of Haunting
-splat_origin:
-  key: dnd2024:reference/magic_item/pipes_of_haunting
+splat_origin: dnd2024:reference/magic_item/pipes_of_haunting
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 234
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 234, https://www.dndbeyond.com/srd
 ---
 
 # Pipes of Haunting
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Wondrous Item |
+| Rarity | Uncommon |
+| Attunement | No |
+
 
 ## Source text
 
@@ -24,22 +31,9 @@ These pipes have 3 charges and regain 1d3 expended charges daily at dawn. You ca
 
 Original layout: [[../../srd-5.2.1/pages/234|page 234]].
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` wondrous_item ` |
-| ` rarity ` | ` uncommon ` |
 
-### Equipment
-
-<!-- splat:values path=splat_item/equipment -->
-
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` none ` |
 
 ## Rule
 

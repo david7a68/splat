@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 33e0cba6-30a4-5de9-98df-c9152ea6c596
 splat_kind: spell
 splat_key: dnd2024:spells/shield
 splat_name: Shield
-splat_origin:
-  key: dnd2024:reference/spell/shield
+splat_origin: dnd2024:reference/spell/shield
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 161, 162
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 161, 162, https://www.dndbeyond.com/srd
 ---
 
 # Shield
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 1 |
+| School | Abjuration |
+| Classes | Sorcerer, Wizard |
+| Casting Time | Reaction, which you take when you are hit by an attack roll or targeted by the Magic Missile spell |
+| Range |  |
+| Components | V, S |
+| Duration | 1 round |
+
 
 ## Source text
 
@@ -28,28 +39,9 @@ An imperceptible barrier of magical force protects you. Until the start of your 
 
 Original layout: [[../../srd-5.2.1/pages/161|page 161]], [[../../srd-5.2.1/pages/162|page 162]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 1 ` |
-| ` school ` | ` abjuration ` |
-| ` classes ` | ` ["sorcerer", "wizard"] ` |
-| ` components ` | ` ["verbal", "somatic"] ` |
-| ` concentration ` | ` false ` |
-| ` duration ` | ` 1 round ` |
-| ` casting_time ` | ` Reaction, which you take when you are hit by an attack roll or targeted by the Magic Missile spell ` |
-| ` ritual ` | ` false ` |
 
-### Range
-
-<!-- splat:values path=splat_spell/range -->
-
-| Field | Value |
-| --- | --- |
-| ` mode ` | ` self ` |
 
 ## Rule
 
@@ -81,3 +73,12 @@ includes_triggering_attack: true
 no_damage_from_spell:
   key: dnd2024:spells/magic_missile
 ```
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_spell_extras -->
+> 
+> ```yaml
+> range:
+>   mode: self
+> ```
+

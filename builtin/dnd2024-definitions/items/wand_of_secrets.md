@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 3073ecdd-0616-53e2-bf40-6218a391d1f3
 splat_kind: item
 splat_key: dnd2024:items/wand_of_secrets
 splat_name: Wand of Secrets
-splat_origin:
-  key: dnd2024:reference/magic_item/wand_of_secrets
+splat_origin: dnd2024:reference/magic_item/wand_of_secrets
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 251
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 251, https://www.dndbeyond.com/srd
 ---
 
 # Wand of Secrets
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Wand |
+| Rarity | Uncommon |
+| Attunement | No |
+
 
 ## Source text
 
@@ -24,22 +31,9 @@ This wand has 3 charges and regains 1d3 expended charges daily at dawn. While ho
 
 Original layout: [[../../srd-5.2.1/pages/251|page 251]].
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` wand ` |
-| ` rarity ` | ` uncommon ` |
 
-### Equipment
-
-<!-- splat:values path=splat_item/equipment -->
-
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` none ` |
 
 ## Rule
 

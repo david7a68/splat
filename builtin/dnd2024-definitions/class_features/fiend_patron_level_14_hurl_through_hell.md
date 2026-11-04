@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: b1148ee6-a4c1-5ce0-b1df-5b1068550c28
 splat_kind: rule
 splat_key: dnd2024:class_features/fiend_patron_level_14_hurl_through_hell
 splat_name: 'Level 14: Hurl Through Hell'
-splat_origin:
-  key: dnd2024:reference/pages/076
+splat_origin: dnd2024:reference/pages/076
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 76
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 76, https://www.dndbeyond.com/srd
 ---
 
 # Level 14: Hurl Through Hell

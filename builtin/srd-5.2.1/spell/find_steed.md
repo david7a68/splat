@@ -1,10 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "686a9c39-bcc7-544f-a475-d567be165784"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/find_steed"
 splat_name: "Find Steed"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [130, 131], "executable": false}
+splat_pages:
+- 130
+- 131
 ---
 
 # Find Steed
@@ -59,3 +61,13 @@ Fey Step (Fey Only; Recharges after a Long Rest). The steed teleports, along wit
 Healing Touch (Celestial Only; Recharges after a Long Rest). One creature within 5 feet of the steed regains a number of Hit Points equal to 2d8 plus the spell’s level.
 
 Original layout: [[../pages/130|page 130]], [[../pages/131|page 131]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

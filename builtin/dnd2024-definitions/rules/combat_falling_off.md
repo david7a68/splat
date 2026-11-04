@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: bddaacc1-13c0-5d9c-9fbc-38adfae6d250
 splat_kind: rule
 splat_key: dnd2024:rules/combat_falling_off
 splat_name: Falling Off
-splat_origin:
-  key: dnd2024:reference/pages/016
+splat_origin: dnd2024:reference/pages/016
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 16
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 16, https://www.dndbeyond.com/srd
 ---
 
 # Falling Off

@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: b2368195-f6cb-56fe-8385-2ee5e1d60623
 splat_kind: spell
 splat_key: dnd2024:spells/polymorph
 splat_name: Polymorph
-splat_origin:
-  key: dnd2024:reference/spell/polymorph
+splat_origin: dnd2024:reference/spell/polymorph
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 153, 154
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 153, 154, https://www.dndbeyond.com/srd
 ---
 
 # Polymorph
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 4 |
+| School | Transmutation |
+| Classes | Bard, Druid, Sorcerer, Wizard |
+| Casting Time | Action |
+| Range | 60 feet |
+| Components | V, S, M (a caterpillar cocoon) |
+| Duration | Concentration, up to 1 hour |
+
 
 ## Source text
 
@@ -36,37 +47,11 @@ The target’s gear melds into the new form. The creature can’t use or otherwi
 
 Original layout: [[../../srd-5.2.1/pages/153|page 153]], [[../../srd-5.2.1/pages/154|page 154]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 4 ` |
-| ` school ` | ` transmutation ` |
-| ` classes ` | ` ["bard", "druid", "sorcerer", "wizard"] ` |
-| ` components ` | ` ["verbal", "somatic", "material"] ` |
-| ` concentration ` | ` true ` |
-| ` duration ` | ` Concentration, up to 1 hour ` |
-| ` casting_time ` | ` Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
 
-<!-- splat:values path=splat_spell/range -->
 
-| Field | Value |
-| --- | --- |
-| ` feet ` | ` 60 ` |
-
-### Material
-
-<!-- splat:values path=splat_spell/material -->
-
-| Field | Value |
-| --- | --- |
-| ` description ` | ` a caterpillar cocoon ` |
-| ` consumed ` | ` false ` |
 
 ## Rule
 
@@ -153,3 +138,12 @@ maximum:
   value: 1
   unit: hour
 ```
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_spell_extras -->
+> 
+> ```yaml
+> material:
+>   consumed: false
+> ```
+

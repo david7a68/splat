@@ -1,36 +1,64 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 9ebd4f75-7afe-5367-b0a2-cfc7a7a5309e
 splat_kind: creature
 splat_key: dnd2024:creatures/sphinx_of_valor
 splat_name: Sphinx of Valor
-splat_origin:
-  key: dnd2024:reference/creature/sphinx_of_valor
+splat_origin: dnd2024:reference/creature/sphinx_of_valor
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 328
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 328, https://www.dndbeyond.com/srd
 ---
 
 # Sphinx of Valor
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Large |
+| Type | Celestial |
+| Alignment | Lawful Neutral |
+| Armor Class | 17 |
+| Hit Points | 199 (19d10 + 95) |
+| Initiative | +12 (22) |
+| Speed | 40 ft., Fly 60 ft. |
+| Challenge | 17 (XP 18,000, or 20,000 in lair; PB +6) |
+| Skills | Arcana +9, Perception +12, Religion +15 |
+| Senses | Truesight 120 ft.; Passive Perception 22 |
+| Languages | Celestial, Common |
+| Resistances | Necrotic, Radiant |
+| Immunities | Psychic; Charmed, Frightened |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 22 | +6 | +6 |
+| Dex | 10 | +0 | +6 |
+| Con | 20 | +5 | +11 |
+| Int | 16 | +3 | +9 |
+| Wis | 23 | +6 | +12 |
+| Cha | 18 | +4 | +4 |
+
 
 ## Source text
 
 <!-- SRD page 328 -->
 
-Large Celestial, Lawful Neutral\
-AC 17 Initiative +12 (22)\
-HP 199 (19d10 + 95)\
-Speed 40 ft., Fly 60 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 22 +6 +6 Dex 10 +0 +6 Con 20 +5 +11\
-Int 16 +3 +9 Wis 23 +6 +12 Cha 18 +4 +4\
-Skills Arcana +9, Perception +12, Religion +15\
-Resistances Necrotic, Radiant\
-Immunities Psychic; Charmed, Frightened\
-Senses Truesight 120 ft.; Passive Perception 22\
-Languages Celestial, Common\
-CR 17 (XP 18,000, or 20,000 in lair; PB +6)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Large Celestial, Lawful Neutral\
+> AC 17 Initiative +12 (22)\
+> HP 199 (19d10 + 95)\
+> Speed 40 ft., Fly 60 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 22 +6 +6 Dex 10 +0 +6 Con 20 +5 +11\
+> Int 16 +3 +9 Wis 23 +6 +12 Cha 18 +4 +4\
+> Skills Arcana +9, Perception +12, Religion +15\
+> Resistances Necrotic, Radiant\
+> Immunities Psychic; Charmed, Frightened\
+> Senses Truesight 120 ft.; Passive Perception 22\
+> Languages Celestial, Common\
+> CR 17 (XP 18,000, or 20,000 in lair; PB +6)
+
 
 ### Traits
 
@@ -67,48 +95,11 @@ Weight of Years. Constitution Saving Throw: DC 16, one creature the sphinx can s
 
 Original layout: [[../../srd-5.2.1/pages/328|page 328]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` large ` |
-| ` type ` | ` celestial ` |
-| ` alignment ` | ` Lawful Neutral ` |
-| ` movement_text ` | ` 40 ft., Fly 60 ft. ` |
-| ` skills_text ` | ` Arcana +9, Perception +12, Religion +15 ` |
-| ` resistances_text ` | ` Necrotic, Radiant ` |
-| ` immunities_text ` | ` Psychic; Charmed, Frightened ` |
-| ` senses_text ` | ` Truesight 120 ft.; Passive Perception 22 ` |
-| ` languages_text ` | ` Celestial, Common ` |
-| ` cr_text ` | ` 17 (XP 18,000, or 20,000 in lair; PB +6) ` |
-| ` hit_points_text ` | ` 199 (19d10 + 95) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 22 ` | ` 6 ` |
-| ` Dexterity ` | ` 10 ` | ` 6 ` |
-| ` Constitution ` | ` 20 ` | ` 11 ` |
-| ` Intelligence ` | ` 16 ` | ` 9 ` |
-| ` Wisdom ` | ` 23 ` | ` 12 ` |
-| ` Charisma ` | ` 18 ` | ` 4 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 17 ` |  |
-| ` max_hp ` | ` 199 ` |  |
-| ` initiative ` | ` 12 ` |  |
-| ` speed ` | ` 40 ` | ` ft ` |
-| ` fly_speed ` | ` 60 ` | ` ft ` |
 
 ## Health
 
@@ -504,3 +495,13 @@ other_components: spell_definition_unless_waived
 | ` provider ` | ` caller ` |
 | ` required_facts ` | ` ["distance", "area_membership", "visibility", "occupancy", "movement_path"] ` |
 | ` validate_against_typed_constraints ` | ` true ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_stats_extras -->
+> 
+> ```yaml
+> fly_speed:
+>   unit: ft
+>   value: 60
+> ```
+

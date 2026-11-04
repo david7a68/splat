@@ -1,34 +1,60 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: d51ed266-40a6-5815-a688-fc8ff8b17603
 splat_kind: creature
 splat_key: dnd2024:creatures/giant_goat
 splat_name: Giant Goat
-splat_origin:
-  key: dnd2024:reference/creature/giant_goat
+splat_origin: dnd2024:reference/creature/giant_goat
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 351
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 351, https://www.dndbeyond.com/srd
 ---
 
 # Giant Goat
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Large |
+| Type | Beast |
+| Alignment | Unaligned |
+| Armor Class | 11 |
+| Hit Points | 19 (3d10 + 3) |
+| Initiative | +1 (11) |
+| Speed | 40 ft., Climb 30 ft. |
+| Challenge | 1/2 (XP 100; PB +2) |
+| Skills | Perception +3 |
+| Senses | Darkvision 60 ft.; Passive Perception 13 |
+| Languages | None |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 17 | +3 | +5 |
+| Dex | 13 | +1 | +1 |
+| Con | 12 | +1 | +1 |
+| Int | 3 | -4 | -4 |
+| Wis | 12 | +1 | +1 |
+| Cha | 6 | -2 | -2 |
+
 
 ## Source text
 
 <!-- SRD page 351 -->
 
-Large Beast, Unaligned\
-AC 11  Initiative +1 (11)\
-HP 19 (3d10 + 3)\
-Speed 40 ft., Climb 30 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 17 +3 +5 Dex 13 +1 +1 Con 12 +1 +1\
-Int 3 −4 −4 Wis 12 +1 +1 Cha 6 −2 −2\
-Skills Perception +3\
-Senses Darkvision 60 ft.; Passive Perception 13\
-Languages None\
-CR 1/2 (XP 100; PB +2)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Large Beast, Unaligned\
+> AC 11  Initiative +1 (11)\
+> HP 19 (3d10 + 3)\
+> Speed 40 ft., Climb 30 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 17 +3 +5 Dex 13 +1 +1 Con 12 +1 +1\
+> Int 3 −4 −4 Wis 12 +1 +1 Cha 6 −2 −2\
+> Skills Perception +3\
+> Senses Darkvision 60 ft.; Passive Perception 13\
+> Languages None\
+> CR 1/2 (XP 100; PB +2)
+
 
 ### Actions
 
@@ -36,46 +62,11 @@ Ram. Melee Attack Roll: +5, reach 5 ft. Hit: 6 (1d6 + 3) Bludgeoning damage. If 
 
 Original layout: [[../../srd-5.2.1/pages/351|page 351]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` large ` |
-| ` type ` | ` beast ` |
-| ` alignment ` | ` Unaligned ` |
-| ` movement_text ` | ` 40 ft., Climb 30 ft. ` |
-| ` skills_text ` | ` Perception +3 ` |
-| ` senses_text ` | ` Darkvision 60 ft.; Passive Perception 13 ` |
-| ` languages_text ` | ` None ` |
-| ` cr_text ` | ` 1/2 (XP 100; PB +2) ` |
-| ` hit_points_text ` | ` 19 (3d10 + 3) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 17 ` | ` 5 ` |
-| ` Dexterity ` | ` 13 ` | ` 1 ` |
-| ` Constitution ` | ` 12 ` | ` 1 ` |
-| ` Intelligence ` | ` 3 ` | ` -4 ` |
-| ` Wisdom ` | ` 12 ` | ` 1 ` |
-| ` Charisma ` | ` 6 ` | ` -2 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 11 ` |  |
-| ` max_hp ` | ` 19 ` |  |
-| ` initiative ` | ` 1 ` |  |
-| ` speed ` | ` 40 ` | ` ft ` |
-| ` climb_speed ` | ` 30 ` | ` ft ` |
 
 ## Health
 
@@ -192,3 +183,13 @@ hit:
 | ` provider ` | ` caller ` |
 | ` required_facts ` | ` ["distance", "area_membership", "visibility", "occupancy", "movement_path"] ` |
 | ` validate_against_typed_constraints ` | ` true ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_stats_extras -->
+> 
+> ```yaml
+> climb_speed:
+>   unit: ft
+>   value: 30
+> ```
+

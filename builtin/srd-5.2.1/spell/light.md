@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "4d469c4c-82c6-5891-b340-6551ee2b6a96"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/light"
 splat_name: "Light"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [144], "executable": false}
+splat_pages:
+- 144
 ---
 
 # Light
@@ -22,3 +23,13 @@ You touch one Large or smaller object that isn’t being worn or carried by some
 Covering the object with something opaque blocks the light. The spell ends if you cast it again.
 
 Original layout: [[../pages/144|page 144]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

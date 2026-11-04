@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "5b63df58-89c0-53d8-84b1-b6dcddb7a86e"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/glossary/knocking_out_a_creature"
 splat_name: "Knocking Out a Creature"
-splat_reference: {"source": "SRD 5.2.1", "category": "glossary", "pages": [184], "executable": false}
+splat_pages:
+- 184
 ---
 
 # Knocking Out a Creature
@@ -16,3 +17,13 @@ When you would reduce a creature to 0 Hit Points with a melee attack, you can in
 The creature remains Unconscious until it regains any Hit Points or until someone uses an action to administer first aid to it, which requires a successful DC 10 Wisdom (Medicine) check.
 
 Original layout: [[../pages/184|page 184]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: glossary
+> executable: false
+> ```
+

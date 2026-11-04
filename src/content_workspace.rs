@@ -1116,7 +1116,6 @@ impl Catalogue {
                 .map_or("", |(_, source)| source.as_str());
             content::list_formats::resolve(&mut indexed.entry, &list_entries, source);
             if indexed.entry.kind == "campaign"
-                && content::formats::schema(&indexed.entry.fields) == Ok(2)
                 && let Some((_, source)) = result.files.get(&indexed.entry.id)
             {
                 let mut packages = false;
@@ -1519,7 +1518,6 @@ impl CampaignDocument {
                 ),
             ],
         )?;
-        let text = content::formats::convert(&document.path, &text)?;
         Ok(crate::file_batch::Change::text(
             note_path(&campaign.path, &document.path)?,
             document.baseline.as_deref(),
@@ -1534,7 +1532,7 @@ impl CampaignDocument {
             "campaign",
             Some(&format!("campaign_{}", campaign.id.simple())),
         );
-        let text = patch_fields(
+        let text = content::formats::patch_model(
             &text,
             &[
                 ("splat_id", Some(campaign.id.to_string().into())),
@@ -1655,7 +1653,7 @@ impl CampaignDocument {
         )?;
         let mut entries = content::read_directory(&self.campaign.path)?.0;
         entries.extend(content::builtin::entries().iter().cloned());
-        let text = content::formats::convert_resolved(&self.path, &text, &entries)?;
+        let text = content::list_formats::write_references(&text, &entries)?;
         write_note(
             &self.campaign.path,
             &self.path,
@@ -1823,169 +1821,11 @@ pub struct CopyPlan {
     pub root: PathBuf,
     pub relative: String,
     pub text: String,
-    pub layout_warning: Option<String>,
     source_path: Option<PathBuf>,
     source_text: String,
     dependency_files: Vec<(PathBuf, String)>,
     pub dependencies: Vec<String>,
     pub shared: Vec<CopyPlan>,
-}
-
-/// Copies use the same creature fields as a new note. Keep every prose block.
-pub(crate) fn creature_copy_fields(text: &str, entry: &Entry) -> Result<String, String> {
-    use pulldown_cmark::{Event, Options, Parser, Tag, TagEnd};
-    if entry.kind != "creature"
-        || entry.fields.get("splat_schema").and_then(Value::as_u64) == Some(2)
-    {
-        return Ok(text.to_owned());
-    }
-    let mut heading = None;
-    let mut pending = None;
-    let mut ranges = Vec::new();
-    for (event, range) in Parser::new_ext(text, Options::ENABLE_TABLES).into_offset_iter() {
-        match event {
-            Event::Start(Tag::Heading { .. }) => heading = Some(range.clone()),
-            Event::Html(ref html)
-                if html.starts_with("<!-- splat:")
-                    && ["splat_creature", "splat_stats"]
-                        .iter()
-                        .any(|key| html.contains(&format!("path={key} -->"))) =>
-            {
-                let start = heading
-                    .as_ref()
-                    .filter(|heading| text[heading.end..range.start].trim().is_empty())
-                    .map_or(range.start, |heading| heading.start);
-                pending = Some(start);
-            }
-            Event::End(TagEnd::Table) => {
-                if let Some(start) = pending.take() {
-                    ranges.push(start..range.end);
-                }
-            }
-            _ => {}
-        }
-    }
-    let mut output = text.to_owned();
-    for range in ranges.into_iter().rev() {
-        output.replace_range(range, "");
-    }
-    let changes: Vec<_> = ["splat_creature", "splat_stats"]
-        .into_iter()
-        .filter_map(|key| {
-            entry
-                .fields
-                .get(key)
-                .map(|value| (key, Some(value.clone())))
-        })
-        .collect();
-    let mut output = patch_fields(&output, &changes)?;
-    for (key, order) in [
-        (
-            "splat_creature",
-            &["size", "type", "alignment", "cr_text"][..],
-        ),
-        (
-            "splat_stats",
-            &[
-                "max_hp",
-                "armor_class",
-                "initiative",
-                "speed",
-                "swim_speed",
-                "strength",
-                "dexterity",
-                "constitution",
-                "intelligence",
-                "wisdom",
-                "charisma",
-                "save_strength",
-                "save_dexterity",
-                "save_constitution",
-                "save_intelligence",
-                "save_wisdom",
-                "save_charisma",
-            ][..],
-        ),
-    ] {
-        let Some(map) = entry.fields.get(key).and_then(Value::as_mapping) else {
-            continue;
-        };
-        if map.is_empty() {
-            continue;
-        }
-        let start = output
-            .find(&format!("\n{key}:\n"))
-            .ok_or("Missing creature fields")?
-            + 1;
-        let end = output[start..].find('\n').unwrap() + start + 1;
-        let length = output[end..]
-            .split_inclusive('\n')
-            .take_while(|line| line.starts_with(' '))
-            .map(str::len)
-            .sum::<usize>();
-        let mut keys: Vec<_> = map.keys().filter_map(Value::as_str).collect();
-        keys.sort_by_key(|name| {
-            (
-                order
-                    .iter()
-                    .position(|key| key == name || (*key == "speed" && name.ends_with("_speed")))
-                    .unwrap_or(order.len()),
-                *name,
-            )
-        });
-        let mut block = format!("{key}:\n");
-        for name in keys {
-            block.push_str(&format!("  {name}: {}\n", flow_yaml(&map[name])?));
-        }
-        output.replace_range(start..end + length, &block);
-    }
-    Ok(output)
-}
-
-fn flow_yaml(value: &Value) -> Result<String, String> {
-    Ok(match value {
-        Value::String(_) => serde_yaml_ng::to_string(value)
-            .map_err(|e| e.to_string())?
-            .trim()
-            .to_owned(),
-        Value::Mapping(map) => format!(
-            "{{{}}}",
-            {
-                let mut fields: Vec<_> = map.iter().collect();
-                fields.sort_by_key(|(key, _)| match key.as_str() {
-                    Some("value") => (0, ""),
-                    Some("unit") => (1, ""),
-                    _ => (2, key.as_str().unwrap_or("")),
-                });
-                fields
-            }
-            .into_iter()
-            .map(|(key, value)| {
-                let key = key
-                    .as_str()
-                    .filter(|key| {
-                        !key.is_empty()
-                            && key.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
-                    })
-                    .map_or_else(|| flow_yaml(key), |key| Ok(key.to_owned()))?;
-                Ok(format!("{key}: {}", flow_yaml(value)?))
-            })
-            .collect::<Result<Vec<_>, String>>()?
-            .join(", ")
-        ),
-        Value::Sequence(items) => format!(
-            "[{}]",
-            items
-                .iter()
-                .map(flow_yaml)
-                .collect::<Result<Vec<_>, _>>()?
-                .join(", ")
-        ),
-        _ => serde_yaml_ng::to_string(value)
-            .map_err(|e| e.to_string())?
-            .trim()
-            .to_owned(),
-    })
 }
 
 impl CopyPlan {
@@ -2179,7 +2019,7 @@ impl CopyPlan {
         let new_id = Uuid::new_v4();
         // A were-creature's curse makes more of this creature, and the copy's makes more of the
         // copy. Prose that only names the original keeps its words.
-        let normalized = creature_copy_fields(&source.text, &source.entry)?;
+        let normalized = source.text.clone();
         let normalized = if let Some((generated, tail)) =
             normalized.rsplit_once("\n<!-- splat-generated-sha256:")
             && let Some((_, notes)) = tail.split_once(" -->\n")
@@ -2234,22 +2074,8 @@ impl CopyPlan {
                 "A note already exists at this destination. Choose another name or folder.".into(),
             );
         }
-        let converted = if generated_package(destination) {
-            Ok(text.clone())
-        } else {
-            content::formats::convert(&relative, &text)
-        };
-        let (text, layout_warning) = match converted {
-            Ok(converted) => (converted, None),
-            Err(error) if ["creature", "spell", "item"].contains(&source.entry.kind.as_str()) => (
-                text,
-                Some(format!("The copy keeps the old layout. {error}")),
-            ),
-            Err(error) => return Err(error),
-        };
         Entry::parse(&relative, &text)?;
         Ok(Self {
-            layout_warning,
             root: destination.into(),
             shared: Vec::new(),
             relative,
@@ -2336,6 +2162,7 @@ mod tests {
     }
 
     use super::*;
+    use splat::content::formats::patch_model as patch_fields;
 
     #[test]
     fn changed_package_id_keeps_entries_and_repairs_the_actual_manifest() {
@@ -2667,10 +2494,10 @@ mod tests {
         let id = Entry::parse("Wolf.md", &text).unwrap().id;
         fs::write(temp.path().join("Wolf.md"), text).unwrap();
         let manifest = temp.path().join("Package.md");
-        let before = format!(
+        let before = splat::content::formats::convert("Fixture.md", &format!(
             "---\nsplat_schema: 1\nsplat_id: {}\nsplat_kind: package\nsplat_name: Test\nsplat_namespace: test\n---\n",
             module.id
-        );
+        )).expect("schema-2 fixture");
         fs::write(&manifest, "---\nsplat_id: [\n---\n").unwrap();
         for deleted in [false, true] {
             if deleted {
@@ -2717,10 +2544,10 @@ mod tests {
             name: "Test".into(),
             path: temp.path().into(),
         };
-        fs::write(module.path.join("Package.md"), format!("---\nsplat_schema: 1\nsplat_id: {}\nsplat_kind: package\nsplat_name: Test\nsplat_namespace: test\n---\n", module.id)).unwrap();
+        fs::write(module.path.join("Package.md"), splat::content::formats::convert("Fixture.md", &format!("---\nsplat_schema: 1\nsplat_id: {}\nsplat_kind: package\nsplat_name: Test\nsplat_namespace: test\n---\n", module.id)).expect("schema-2 fixture")).unwrap();
         let id = Uuid::new_v4();
         let text = format!(
-            "---\nsplat_schema: 1\nsplat_id: '{id}' # keep identity\nsplat_kind: [\nsplat_key: test:creatures/wolf\n---\n"
+            "---\nsplat_schema: 2\nsplat_id: '{id}' # keep identity\nsplat_kind: [\nsplat_key: test:creatures/wolf\n---\n"
         );
         fs::write(module.path.join("Wolf.md"), &text).unwrap();
         let catalogue = Catalogue::load(std::slice::from_ref(&module), None).unwrap();
@@ -2969,17 +2796,17 @@ mod tests {
     #[test]
     fn reconnecting_a_related_entry_preserves_prose_and_unrelated_fields() {
         let old = entry("Captain Varra", "creature");
-        let original = format!(
+        let original = splat::content::formats::convert("Fixture.md", &format!(
             "---\nsplat_schema: 1\nsplat_id: {}\nsplat_kind: rule\nsplat_name: Ash Exposure\nsplat_rule: {{}}\nsplat_reading:\n  title: Ash Exposure\n  summary: Keep these words.\n  related:\n    {}: Read Captain Varra\ncustom: 'keep the quotes'\n---\n\nCaptain Varra keeps her name here.\n",
             Uuid::new_v4(),
             old.id
-        );
+        )).expect("schema-2 fixture");
         let new_id = Uuid::new_v4();
         let changed = redirect_reference(&original, &old, new_id).unwrap();
         assert!(changed.contains(&new_id.to_string()));
         assert!(!changed.contains(&old.id.to_string()));
         assert!(changed.contains("custom: 'keep the quotes'"));
-        assert!(changed.ends_with("Captain Varra keeps her name here.\n"));
+        assert!(changed.contains("Captain Varra keeps her name here.\n"));
     }
 
     #[test]
@@ -3072,7 +2899,7 @@ mod tests {
     #[test]
     fn patch_preserves_unrelated_frontmatter_comments_and_body() {
         let text = "---\r\n# owner comment\r\nsplat_id: old\r\ntags: [one, two] # keep\r\nsplat_packages:\r\n  - package: {key: 'old:module'}\r\n    selection: {mode: all}\r\ncustom: |\r\n  Keep this text\r\n---\r\n# Body\r\nUnchanged.\r\n";
-        let patched = patch_fields(
+        let patched = content::patch_fields(
             text,
             &[
                 ("splat_id", Some("new".into())),
@@ -3203,10 +3030,6 @@ mod tests {
             )
             .unwrap_or_else(|e| panic!("{name}: {e}"));
             let copy = Entry::parse(&plan.relative, &plan.text).unwrap();
-            if name == "Werewolf" {
-                assert!(plan.layout_warning.is_some());
-                assert!(plan.text.contains("splat_schema: 1"));
-            }
             assert_ne!(copy.id, indexed.entry.id);
             let own_key = indexed.entry.key.clone().unwrap();
             let references = content::required_references(&copy).unwrap();
@@ -3366,9 +3189,9 @@ mod tests {
         fs::create_dir(folder).unwrap();
         fs::write(
             folder.join("Package.md"),
-            format!(
+            splat::content::formats::convert("Fixture.md", &format!(
                 "---\nsplat_schema: 1\nsplat_id: \"{id}\"\nsplat_kind: \"package\"\nsplat_key: \"{namespace}:package\"\nsplat_name: \"{name}\"\nsplat_namespace: \"{namespace}\"\nsplat_requires:\n  - key: \"{requires}\"\n---\n"
-            ),
+            )).expect("schema-2 fixture"),
         )
         .unwrap();
         id
@@ -3446,18 +3269,18 @@ mod tests {
         fs::create_dir_all(&folder).unwrap();
         fs::write(
             root.path().join("Campaign.md"),
-            format!("---\nsplat_schema: 1\nsplat_id: {id}\nsplat_kind: campaign\nsplat_name: Test\nsplat_namespace: test_campaign\n---\n"),
+            splat::content::formats::convert("Fixture.md", &format!("---\nsplat_schema: 1\nsplat_id: {id}\nsplat_kind: campaign\nsplat_name: Test\nsplat_namespace: test_campaign\n---\n")).expect("schema-2 fixture"),
         )
         .unwrap();
         fs::write(
             root.path().join("Campaign Package/Package.md"),
-            format!("---\nsplat_schema: 1\nsplat_id: {package}\nsplat_kind: package\nsplat_name: Campaign Package\nsplat_namespace: test_campaign_package\n---\n"),
+            splat::content::formats::convert("Fixture.md", &format!("---\nsplat_schema: 1\nsplat_id: {package}\nsplat_kind: package\nsplat_name: Campaign Package\nsplat_namespace: test_campaign_package\n---\n")).expect("schema-2 fixture"),
         )
         .unwrap();
         let rule = Uuid::new_v4();
         fs::write(
             folder.join("Rule.md"),
-            format!("---\nsplat_schema: 1\nsplat_id: {rule}\nsplat_kind: rule\nsplat_name: Rule\nsplat_rule: {{}}\n---\n"),
+            splat::content::formats::convert("Fixture.md", &format!("---\nsplat_schema: 1\nsplat_id: {rule}\nsplat_kind: rule\nsplat_name: Rule\nsplat_rule: {{}}\n---\n")).expect("schema-2 fixture"),
         )
         .unwrap();
         let discovered = CampaignDocument::discover(root.path()).unwrap().unwrap();
@@ -3484,13 +3307,13 @@ mod tests {
         );
         fs::write(
             folder.join("Package.md"),
-            format!("---\nsplat_schema: 1\nsplat_id: {package}\nsplat_kind: package\nsplat_name: P\nsplat_namespace: p\n---\n"),
+            splat::content::formats::convert("Fixture.md", &format!("---\nsplat_schema: 1\nsplat_id: {package}\nsplat_kind: package\nsplat_name: P\nsplat_namespace: p\n---\n")).expect("schema-2 fixture"),
         )
         .unwrap();
         let item = |id: Uuid, name: &str, extra: &str| {
             fs::write(
                 folder.join(format!("{name}.md")),
-                format!("---\nsplat_schema: 1\nsplat_id: {id}\nsplat_kind: item\nsplat_name: {name}\nsplat_item:\n  category: gear\n{extra}---\n"),
+                splat::content::formats::convert("Fixture.md", &format!("---\nsplat_schema: 1\nsplat_id: {id}\nsplat_kind: item\nsplat_name: {name}\nsplat_item:\n  category: gear\n{extra}---\n")).expect("schema-2 fixture"),
             )
             .unwrap();
         };
@@ -3503,7 +3326,7 @@ mod tests {
         item(other, "Other", "splat_dndbeyond_ids:\n- item:other\n");
         fs::write(
             campaign_root.join("Campaign.md"),
-            format!("---\nsplat_schema: 1\nsplat_id: {}\nsplat_kind: campaign\nsplat_name: C\nsplat_namespace: c\nsplat_packages:\n- package:\n    id: {package}\n  selection:\n    mode: selected\n    entries:\n    - id: {chosen}\n---\n", Uuid::new_v4()),
+            splat::content::formats::convert("Fixture.md", &format!("---\nsplat_schema: 1\nsplat_id: {}\nsplat_kind: campaign\nsplat_name: C\nsplat_namespace: c\nsplat_packages:\n- package:\n    id: {package}\n  selection:\n    mode: selected\n    entries:\n    - id: {chosen}\n---\n", Uuid::new_v4())).expect("schema-2 fixture"),
         )
         .unwrap();
         let modules = [Module {

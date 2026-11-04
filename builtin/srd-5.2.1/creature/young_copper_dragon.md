@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "b1b60ea1-452a-5fd2-8883-0c9f57309477"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/young_copper_dragon"
 splat_name: "Young Copper Dragon"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [276], "executable": false}
+splat_pages:
+- 276
 ---
 
 # Young Copper Dragon
@@ -35,3 +36,13 @@ Acid Breath (Recharge 5–6). Dexterity Saving Throw: DC 14, each creature in a 
 Slowing Breath. Constitution Saving Throw: DC 14, each creature in a 30-foot Cone. Failure: The target can’t take Reactions; its Speed is halved; and it can take either an action or a Bonus Action on its turn, not both. This effect lasts until the end of its next turn.
 
 Original layout: [[../pages/276|page 276]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 87bf41fd-c017-5c9e-aeb8-4307c9489216
 splat_kind: rule_group
 splat_key: dnd2024:classes/barbarian
 splat_name: Barbarian
-splat_origin:
-  key: dnd2024:reference/pages/028
+splat_origin: dnd2024:reference/pages/028
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 28
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 28, https://www.dndbeyond.com/srd
 ---
 
 # Barbarian

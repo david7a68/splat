@@ -1,10 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "5b8ade4f-e11e-5be3-990e-15c9420502af"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/sphinx_of_lore"
 splat_name: "Sphinx of Lore"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [327, 328], "executable": false}
+splat_pages:
+- 327
+- 328
 ---
 
 # Sphinx of Lore
@@ -55,3 +57,13 @@ Arcane Prowl. The sphinx can teleport up to 30 feet to an unoccupied space it ca
 Weight of Years. Constitution Saving Throw: DC 16, one creature the sphinx can see within 120 feet. Failure: The target gains 1 Exhaustion level. While the target has any Exhaustion levels, it appears 3d10 years older. Failure or Success: The sphinx can’t take this action again until the start of its next turn.
 
 Original layout: [[../pages/327|page 327]], [[../pages/328|page 328]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

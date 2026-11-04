@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "6150073e-3e00-5de5-b4b0-2e54807d5667"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/magic_item/folding_boat"
 splat_name: "Folding Boat"
-splat_reference: {"source": "SRD 5.2.1", "category": "magic_item", "pages": [223], "executable": false}
+splat_pages:
+- 223
 ---
 
 # Folding Boat
@@ -26,3 +27,13 @@ When the box becomes a vessel, its weight becomes that of a normal vessel its si
 Statistics for the Rowboat and Keelboat appear in “Equipment.” If either vessel is reduced to 0 Hit Points, the Folding Boat is destroyed.
 
 Original layout: [[../pages/223|page 223]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: magic_item
+> executable: false
+> ```
+

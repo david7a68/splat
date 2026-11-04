@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "f0eb4eda-b555-5200-99d7-abb89da655c9"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/giant_owl"
 splat_name: "Giant Owl"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [352], "executable": false}
+splat_pages:
+- 352
 ---
 
 # Giant Owl
@@ -38,3 +39,13 @@ At Will: Detect Evil and Good, Detect Magic\
 1/Day: Clairvoyance
 
 Original layout: [[../pages/352|page 352]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

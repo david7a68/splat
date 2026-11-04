@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: de89f23a-b9fe-52d8-9655-8050444b3228
 splat_kind: rule
 splat_key: dnd2024:rules/character_backgrounds_skill_proficiencies
 splat_name: Skill Proficiencies
-splat_origin:
-  key: dnd2024:reference/pages/083
+splat_origin: dnd2024:reference/pages/083
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 83
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 83, https://www.dndbeyond.com/srd
 ---
 
 # Skill Proficiencies

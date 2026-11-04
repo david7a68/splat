@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "10a6342b-134d-5ed9-bea1-6b9fcf4f9093"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/true_polymorph"
 splat_name: "True Polymorph"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [170], "executable": false}
+splat_pages:
+- 170
 ---
 
 # True Polymorph
@@ -36,3 +37,13 @@ If the spell lasts more than an hour, you no longer control the creature. It mig
 Creature into Object. If you turn a creature into an object, it transforms along with whatever it is wearing and carrying into that form, as long as the object’s size is no larger than the creature’s size. The creature’s statistics become those of the object, and the creature has no memory of time spent in this form after the spell ends and it returns to normal.
 
 Original layout: [[../pages/170|page 170]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

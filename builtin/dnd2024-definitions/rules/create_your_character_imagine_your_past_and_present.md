@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 1e0ec8a4-91f4-5774-b71a-1662f349ad41
 splat_kind: rule
 splat_key: dnd2024:rules/create_your_character_imagine_your_past_and_present
 splat_name: Imagine Your Past and Present
-splat_origin:
-  key: dnd2024:reference/pages/020
+splat_origin: dnd2024:reference/pages/020
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 20
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 20, https://www.dndbeyond.com/srd
 ---
 
 # Imagine Your Past and Present

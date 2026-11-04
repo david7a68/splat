@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: dd2dee6b-6886-5627-8f43-68108c51a0d0
 splat_kind: rule
 splat_key: dnd2024:class_features/evoker_level_3_evocation_savant
 splat_name: 'Level 3: Evocation Savant'
-splat_origin:
-  key: dnd2024:reference/pages/082
+splat_origin: dnd2024:reference/pages/082
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 82
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 82, https://www.dndbeyond.com/srd
 ---
 
 # Level 3: Evocation Savant

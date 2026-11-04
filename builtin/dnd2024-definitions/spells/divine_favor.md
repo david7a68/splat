@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 0533a1be-f938-5436-908d-f50e2c3a505b
 splat_kind: spell
 splat_key: dnd2024:spells/divine_favor
 splat_name: Divine Favor
-splat_origin:
-  key: dnd2024:reference/spell/divine_favor
+splat_origin: dnd2024:reference/spell/divine_favor
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 125
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 125, https://www.dndbeyond.com/srd
 ---
 
 # Divine Favor
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 1 |
+| School | Transmutation |
+| Classes | Paladin |
+| Casting Time | Bonus Action |
+| Range |  |
+| Components | V, S |
+| Duration | 1 minute |
+
 
 ## Source text
 
@@ -28,28 +39,9 @@ Until the spell ends, your attacks with weapons deal an extra 1d4 Radiant damage
 
 Original layout: [[../../srd-5.2.1/pages/125|page 125]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 1 ` |
-| ` school ` | ` transmutation ` |
-| ` classes ` | ` ["paladin"] ` |
-| ` components ` | ` ["verbal", "somatic"] ` |
-| ` concentration ` | ` false ` |
-| ` duration ` | ` 1 minute ` |
-| ` casting_time ` | ` Bonus Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
-
-<!-- splat:values path=splat_spell/range -->
-
-| Field | Value |
-| --- | --- |
-| ` mode ` | ` self ` |
 
 ## Rule
 
@@ -89,3 +81,12 @@ Original layout: [[../../srd-5.2.1/pages/125|page 125]].
 | --- | --- |
 | ` dice ` | ` 1d4 ` |
 | ` type ` | ` radiant ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_spell_extras -->
+> 
+> ```yaml
+> range:
+>   mode: self
+> ```
+

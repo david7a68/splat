@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 0c3a1349-5ee0-5340-a9ab-d57829167f14
 splat_kind: spell
 splat_key: dnd2024:spells/barkskin
 splat_name: Barkskin
-splat_origin:
-  key: dnd2024:reference/spell/barkskin
+splat_origin: dnd2024:reference/spell/barkskin
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 112
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 112, https://www.dndbeyond.com/srd
 ---
 
 # Barkskin
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 2 |
+| School | Transmutation |
+| Classes | Druid, Ranger |
+| Casting Time | Bonus Action |
+| Range |  |
+| Components | V, S, M (a handful of bark) |
+| Duration | 1 hour |
+
 
 ## Source text
 
@@ -28,37 +39,11 @@ You touch a willing creature. Until the spell ends, the target’s skin assumes 
 
 Original layout: [[../../srd-5.2.1/pages/112|page 112]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 2 ` |
-| ` school ` | ` transmutation ` |
-| ` classes ` | ` ["druid", "ranger"] ` |
-| ` components ` | ` ["verbal", "somatic", "material"] ` |
-| ` concentration ` | ` false ` |
-| ` duration ` | ` 1 hour ` |
-| ` casting_time ` | ` Bonus Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
 
-<!-- splat:values path=splat_spell/range -->
 
-| Field | Value |
-| --- | --- |
-| ` mode ` | ` touch ` |
-
-### Material
-
-<!-- splat:values path=splat_spell/material -->
-
-| Field | Value |
-| --- | --- |
-| ` description ` | ` a handful of bark ` |
-| ` consumed ` | ` false ` |
 
 ## Rule
 
@@ -96,3 +81,14 @@ Original layout: [[../../srd-5.2.1/pages/112|page 112]].
 | Field | Value |
 | --- | --- |
 | ` minimum ` | ` 17 ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_spell_extras -->
+> 
+> ```yaml
+> material:
+>   consumed: false
+> range:
+>   mode: touch
+> ```
+

@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 725d861d-fce4-55f8-b9c5-b5416518d9a2
 splat_kind: item
 splat_key: dnd2024:equipment/ink_pen_2_cp
 splat_name: Ink Pen (2 CP)
-splat_origin:
-  key: dnd2024:reference/pages/098
+splat_origin: dnd2024:reference/pages/098
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 98
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 98, https://www.dndbeyond.com/srd
 ---
 
 # Ink Pen (2 CP)
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Adventuring Gear |
+| Rarity |  |
+| Attunement | No |
+
 
 ## Source text
 
@@ -20,39 +27,13 @@ splat_sources:
 
 Using Ink, an Ink Pen is used to write or draw.
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` adventuring_gear ` |
 
-### Equipment
 
-<!-- splat:values path=splat_item/equipment -->
 
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` none ` |
 
-### Price
 
-<!-- splat:values path=splat_item/price -->
-
-| Field | Value |
-| --- | --- |
-| ` value ` | ` 2 ` |
-| ` unit ` | ` cp ` |
-
-### Mass
-
-<!-- splat:values path=splat_item/mass -->
-
-| Field | Value |
-| --- | --- |
-| ` value ` | ` 0.0 ` |
-| ` unit ` | ` lb ` |
 
 ## Rule
 
@@ -88,3 +69,16 @@ Using Ink, an Ink Pen is used to write or draw.
 | ` value ` | ` 0.0 ` |
 | ` unit ` | ` lb ` |
 | ` negligible ` | ` true ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_item_extras -->
+> 
+> ```yaml
+> price:
+>   unit: cp
+>   value: 2
+> mass:
+>   unit: lb
+>   value: 0.0
+> ```
+

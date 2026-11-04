@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 423f448d-388d-5cc1-9cc0-cbce88f96c2e
 splat_kind: item
 splat_key: dnd2024:items/crystal_ball_of_mind_reading
 splat_name: Crystal Ball of Mind Reading
-splat_origin:
-  key: dnd2024:reference/magic_item/crystal_ball_of_mind_reading
+splat_origin: dnd2024:reference/magic_item/crystal_ball_of_mind_reading
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 216
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 216, https://www.dndbeyond.com/srd
 ---
 
 # Crystal Ball of Mind Reading
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Wondrous Item |
+| Rarity | Legendary |
+| Attunement | Yes |
+
 
 ## Source text
 
@@ -24,22 +31,9 @@ While touching this crystal orb, you can cast Scrying (save DC 17) with it. In a
 
 Original layout: [[../../srd-5.2.1/pages/216|page 216]].
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` wondrous_item ` |
-| ` rarity ` | ` legendary ` |
 
-### Equipment
-
-<!-- splat:values path=splat_item/equipment -->
-
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` required ` |
 
 ## Rule
 

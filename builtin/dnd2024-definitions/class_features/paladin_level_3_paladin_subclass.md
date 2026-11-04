@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 39d77ca4-da27-593c-ac77-25bcf215fc20
 splat_kind: rule
 splat_key: dnd2024:class_features/paladin_level_3_paladin_subclass
 splat_name: 'Level 3: Paladin Subclass'
-splat_origin:
-  key: dnd2024:reference/pages/055
+splat_origin: dnd2024:reference/pages/055
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 55
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 55, https://www.dndbeyond.com/srd
 ---
 
 # Level 3: Paladin Subclass

@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "585d84b9-49a7-5e85-a150-8a04b551a5d9"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/magic_item/sun_blade"
 splat_name: "Sun Blade"
-splat_reference: {"source": "SRD 5.2.1", "category": "magic_item", "pages": [248], "executable": false}
+splat_pages:
+- 248
 ---
 
 # Sun Blade
@@ -22,3 +23,13 @@ You gain a +2 bonus to attack rolls and damage rolls made with this weapon, whic
 Sunlight. The sword’s luminous blade emits Bright Light in a 15-foot radius and Dim Light for an additional 15 feet. The light is sunlight. While the blade persists, you can take a Magic action to expand or reduce its radius of Bright Light and Dim Light by 5 feet each, to a maximum of 30 feet each or a minimum of 10 feet each.
 
 Original layout: [[../pages/248|page 248]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: magic_item
+> executable: false
+> ```
+

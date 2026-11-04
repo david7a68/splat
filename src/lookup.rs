@@ -1944,7 +1944,7 @@ mod tests {
             dndbeyond_campaign_id: None,
             dndbeyond_campaign_name: None,
         };
-        let before = crate::content_workspace::patch_fields(
+        let before = splat::content::formats::patch_model(
             &crate::library::note_text("Rook", "world", None),
             &[(
                 "splat_world",
@@ -2095,9 +2095,9 @@ mod tests {
     }
 
     fn entry_note(id: Uuid, name: &str, world: &str) -> String {
-        format!(
+        splat::content::formats::convert("Fixture.md", &format!(
             "---\nsplat_schema: 1\nsplat_id: {id}\nsplat_kind: world\nsplat_name: {name}\nsplat_world:\n{world}\n---\n"
-        )
+        )).expect("schema-2 fixture")
     }
 
     #[test]

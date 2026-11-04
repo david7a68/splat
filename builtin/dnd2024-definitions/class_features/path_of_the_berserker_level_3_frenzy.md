@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: f2e4240c-f3bf-5302-9f6c-66c6657609e2
 splat_kind: rule
 splat_key: dnd2024:class_features/path_of_the_berserker_level_3_frenzy
 splat_name: 'Level 3: Frenzy'
-splat_origin:
-  key: dnd2024:reference/pages/030
+splat_origin: dnd2024:reference/pages/030
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 30
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 30, https://www.dndbeyond.com/srd
 ---
 
 # Level 3: Frenzy

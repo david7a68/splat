@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 2184a1f9-c762-552d-918f-af1845528517
 splat_kind: item
 splat_key: dnd2024:items/efreeti_bottle
 splat_name: Efreeti Bottle
-splat_origin:
-  key: dnd2024:reference/magic_item/efreeti_bottle
+splat_origin: dnd2024:reference/magic_item/efreeti_bottle
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 220
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 220, https://www.dndbeyond.com/srd
 ---
 
 # Efreeti Bottle
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Wondrous Item |
+| Rarity | Very Rare |
+| Attunement | No |
+
 
 ## Source text
 
@@ -32,22 +39,9 @@ The first time the bottle is opened, the GM rolls on the following table to dete
 
 Original layout: [[../../srd-5.2.1/pages/220|page 220]].
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` wondrous_item ` |
-| ` rarity ` | ` very_rare ` |
 
-### Equipment
-
-<!-- splat:values path=splat_item/equipment -->
-
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` none ` |
 
 ## Rule
 

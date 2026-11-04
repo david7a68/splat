@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: c13bbdbf-5ce6-5d07-8de8-3dbf07247a63
 splat_kind: spell
 splat_key: dnd2024:spells/planar_ally
 splat_name: Planar Ally
-splat_origin:
-  key: dnd2024:reference/spell/planar_ally
+splat_origin: dnd2024:reference/spell/planar_ally
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 152
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 152, https://www.dndbeyond.com/srd
 ---
 
 # Planar Ally
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 6 |
+| School | Conjuration |
+| Classes | Cleric |
+| Casting Time | 10 minutes |
+| Range | 60 feet |
+| Components | V, S |
+| Duration | Instantaneous |
+
 
 ## Source text
 
@@ -36,28 +47,9 @@ After the creature completes the task, or when the agreed-upon duration of servi
 
 Original layout: [[../../srd-5.2.1/pages/152|page 152]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 6 ` |
-| ` school ` | ` conjuration ` |
-| ` classes ` | ` ["cleric"] ` |
-| ` components ` | ` ["verbal", "somatic"] ` |
-| ` concentration ` | ` false ` |
-| ` duration ` | ` Instantaneous ` |
-| ` casting_time ` | ` 10 minutes ` |
-| ` ritual ` | ` false ` |
 
-### Range
-
-<!-- splat:values path=splat_spell/range -->
-
-| Field | Value |
-| --- | --- |
-| ` feet ` | ` 60 ` |
 
 ## Rule
 

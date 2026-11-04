@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "1fa7af9a-5ac2-546c-9a5f-3022afb76bf8"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/hobgoblin_captain"
 splat_name: "Hobgoblin Captain"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [299], "executable": false}
+splat_pages:
+- 299
 ---
 
 # Hobgoblin Captain
@@ -36,3 +37,13 @@ Greatsword. Melee Attack Roll: +4, reach 5 ft. Hit: 9 (2d6 + 2) Slashing damage 
 Longbow. Ranged Attack Roll: +4, range 150/600 ft. Hit: 6 (1d8 + 2) Piercing damage plus 5 (2d4) Poison damage.
 
 Original layout: [[../pages/299|page 299]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

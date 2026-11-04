@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "bcaa7738-6c4a-58b1-9272-ccb1dfd6bfc1"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/magic_item/potion_of_resistance"
 splat_name: "Potion of Resistance"
-splat_reference: {"source": "SRD 5.2.1", "category": "magic_item", "pages": [236], "executable": false}
+splat_pages:
+- 236
 ---
 
 # Potion of Resistance
@@ -24,3 +25,13 @@ When you drink this potion, you have Resistance to one type of damage for 1 hour
 | 5 | Lightning | 10 | Thunder |
 
 Original layout: [[../pages/236|page 236]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: magic_item
+> executable: false
+> ```
+

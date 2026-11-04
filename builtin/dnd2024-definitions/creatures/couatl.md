@@ -1,35 +1,62 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: d4c20ad9-5f3e-5c66-9df0-6af616fc1ec9
 splat_kind: creature
 splat_key: dnd2024:creatures/couatl
 splat_name: Couatl
-splat_origin:
-  key: dnd2024:reference/creature/couatl
+splat_origin: dnd2024:reference/creature/couatl
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 277, 278
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 277, 278, https://www.dndbeyond.com/srd
 ---
 
 # Couatl
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Medium |
+| Type | Celestial |
+| Alignment | Lawful Good |
+| Armor Class | 19 |
+| Hit Points | 60 (8d8 + 24) |
+| Initiative | +5 (15) |
+| Speed | 30 ft., Fly 90 ft. |
+| Challenge | 4 (XP 1,100; PB +2) |
+| Senses | Truesight 120 ft.; Passive Perception 15 |
+| Languages | All; telepathy 120 ft. |
+| Resistances | Bludgeoning, Piercing, Slashing |
+| Immunities | Psychic, Radiant |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 16 | +3 | +3 |
+| Dex | 20 | +5 | +5 |
+| Con | 17 | +3 | +5 |
+| Int | 18 | +4 | +4 |
+| Wis | 20 | +5 | +7 |
+| Cha | 18 | +4 | +4 |
+
 
 ## Source text
 
 <!-- SRD page 277 -->
 
-Medium Celestial, Lawful Good\
-AC 19 Initiative +5 (15)\
-HP 60 (8d8 + 24)\
-Speed 30 ft., Fly 90 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 16 +3 +3 Dex 20 +5 +5 Con 17 +3 +5\
-Int 18 +4 +4 Wis 20 +5 +7 Cha 18 +4 +4\
-Resistances Bludgeoning, Piercing, Slashing\
-Immunities Psychic, Radiant\
-Senses Truesight 120 ft.; Passive Perception 15\
-Languages All; telepathy 120 ft.\
-CR 4 (XP 1,100; PB +2)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Medium Celestial, Lawful Good\
+> AC 19 Initiative +5 (15)\
+> HP 60 (8d8 + 24)\
+> Speed 30 ft., Fly 90 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 16 +3 +3 Dex 20 +5 +5 Con 17 +3 +5\
+> Int 18 +4 +4 Wis 20 +5 +7 Cha 18 +4 +4\
+> Resistances Bludgeoning, Piercing, Slashing\
+> Immunities Psychic, Radiant\
+> Senses Truesight 120 ft.; Passive Perception 15\
+> Languages All; telepathy 120 ft.\
+> CR 4 (XP 1,100; PB +2)
+
 
 ### Traits
 
@@ -55,47 +82,11 @@ Divine Aid (2/Day). The couatl casts Bless, Lesser Restoration, or Sanctuary, re
 
 Original layout: [[../../srd-5.2.1/pages/277|page 277]], [[../../srd-5.2.1/pages/278|page 278]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` medium ` |
-| ` type ` | ` celestial ` |
-| ` alignment ` | ` Lawful Good ` |
-| ` movement_text ` | ` 30 ft., Fly 90 ft. ` |
-| ` resistances_text ` | ` Bludgeoning, Piercing, Slashing ` |
-| ` immunities_text ` | ` Psychic, Radiant ` |
-| ` senses_text ` | ` Truesight 120 ft.; Passive Perception 15 ` |
-| ` languages_text ` | ` All; telepathy 120 ft. ` |
-| ` cr_text ` | ` 4 (XP 1,100; PB +2) ` |
-| ` hit_points_text ` | ` 60 (8d8 + 24) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 16 ` | ` 3 ` |
-| ` Dexterity ` | ` 20 ` | ` 5 ` |
-| ` Constitution ` | ` 17 ` | ` 5 ` |
-| ` Intelligence ` | ` 18 ` | ` 4 ` |
-| ` Wisdom ` | ` 20 ` | ` 7 ` |
-| ` Charisma ` | ` 18 ` | ` 4 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 19 ` |  |
-| ` max_hp ` | ` 60 ` |  |
-| ` initiative ` | ` 5 ` |  |
-| ` speed ` | ` 30 ` | ` ft ` |
-| ` fly_speed ` | ` 90 ` | ` ft ` |
 
 ## Health
 
@@ -402,3 +393,13 @@ geometry_assumptions:
   - plane
   - form_appearance
 ```
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_stats_extras -->
+> 
+> ```yaml
+> fly_speed:
+>   unit: ft
+>   value: 90
+> ```
+

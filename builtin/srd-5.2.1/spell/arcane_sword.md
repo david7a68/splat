@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "7544e44e-408d-53fe-a636-959a2fe6f998"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/arcane_sword"
 splat_name: "Arcane Sword"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [110], "executable": false}
+splat_pages:
+- 110
 ---
 
 # Arcane Sword
@@ -24,3 +25,13 @@ When the sword appears, you make a melee spell attack against a target within 5 
 On your later turns, you can take a Bonus Action to move the sword up to 30 feet to a spot you can see and repeat the attack against the same target or a different one.
 
 Original layout: [[../pages/110|page 110]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

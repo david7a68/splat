@@ -1,33 +1,58 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 6675cf17-efcf-52a9-a89f-e9b7a8bac680
 splat_kind: creature
 splat_key: dnd2024:creatures/ankylosaurus
 splat_name: Ankylosaurus
-splat_origin:
-  key: dnd2024:reference/creature/ankylosaurus
+splat_origin: dnd2024:reference/creature/ankylosaurus
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 344
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 344, https://www.dndbeyond.com/srd
 ---
 
 # Ankylosaurus
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Huge |
+| Type | Beast (Dinosaur) |
+| Alignment | Unaligned |
+| Armor Class | 15 |
+| Hit Points | 68 (8d12 + 16) |
+| Initiative | +0 (10) |
+| Speed | 30 ft. |
+| Challenge | 3 (XP 700; PB +2) |
+| Senses | Passive Perception 11 |
+| Languages | None |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 19 | +4 | +6 |
+| Dex | 11 | +0 | +0 |
+| Con | 15 | +2 | +2 |
+| Int | 2 | -4 | -4 |
+| Wis | 12 | +1 | +1 |
+| Cha | 5 | -3 | -3 |
+
 
 ## Source text
 
 <!-- SRD page 344 -->
 
-Huge Beast (Dinosaur), Unaligned\
-AC 15   Initiative +0 (10)\
-HP 68 (8d12 + 16)\
-Speed 30 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 19 +4 +6 Dex 11 +0 +0 Con 15 +2 +2\
-Int 2 −4 −4 Wis 12 +1 +1 Cha 5 −3 −3\
-Senses Passive Perception 11\
-Languages None\
-CR 3 (XP 700; PB +2)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Huge Beast (Dinosaur), Unaligned\
+> AC 15   Initiative +0 (10)\
+> HP 68 (8d12 + 16)\
+> Speed 30 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 19 +4 +6 Dex 11 +0 +0 Con 15 +2 +2\
+> Int 2 −4 −4 Wis 12 +1 +1 Cha 5 −3 −3\
+> Senses Passive Perception 11\
+> Languages None\
+> CR 3 (XP 700; PB +2)
+
 
 ### Actions
 
@@ -37,45 +62,11 @@ Tail. Melee Attack Roll: +6, reach 10 ft. Hit: 9 (1d10 + 4) Bludgeoning damage. 
 
 Original layout: [[../../srd-5.2.1/pages/344|page 344]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` huge ` |
-| ` type ` | ` beast ` |
-| ` alignment ` | ` Unaligned ` |
-| ` tags_text ` | ` (Dinosaur) ` |
-| ` movement_text ` | ` 30 ft. ` |
-| ` senses_text ` | ` Passive Perception 11 ` |
-| ` languages_text ` | ` None ` |
-| ` cr_text ` | ` 3 (XP 700; PB +2) ` |
-| ` hit_points_text ` | ` 68 (8d12 + 16) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 19 ` | ` 6 ` |
-| ` Dexterity ` | ` 11 ` | ` 0 ` |
-| ` Constitution ` | ` 15 ` | ` 2 ` |
-| ` Intelligence ` | ` 2 ` | ` -4 ` |
-| ` Wisdom ` | ` 12 ` | ` 1 ` |
-| ` Charisma ` | ` 5 ` | ` -3 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 15 ` |  |
-| ` max_hp ` | ` 68 ` |  |
-| ` initiative ` | ` 0 ` |  |
-| ` speed ` | ` 30 ` | ` ft ` |
 
 ## Health
 

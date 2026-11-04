@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 28b395b2-3cf1-51df-b7c9-4a3388036ea6
 splat_kind: rule
 splat_key: dnd2024:glossary/sphere_area_of_effect
 splat_name: Sphere [Area of Effect]
-splat_origin:
-  key: dnd2024:reference/glossary/sphere_area_of_effect
+splat_origin: dnd2024:reference/glossary/sphere_area_of_effect
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 188
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 188, https://www.dndbeyond.com/srd
 ---
 
 # Sphere [Area of Effect]

@@ -1,35 +1,62 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: fe1f5e23-0df2-50cc-a56c-77412a9a8bdb
 splat_kind: creature
 splat_key: dnd2024:creatures/sphinx_of_wonder
 splat_name: Sphinx of Wonder
-splat_origin:
-  key: dnd2024:reference/creature/sphinx_of_wonder
+splat_origin: dnd2024:reference/creature/sphinx_of_wonder
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 327
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 327, https://www.dndbeyond.com/srd
 ---
 
 # Sphinx of Wonder
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Tiny |
+| Type | Celestial |
+| Alignment | Lawful Good |
+| Armor Class | 13 |
+| Hit Points | 24 (7d4 + 7) |
+| Initiative | +3 (13) |
+| Speed | 20 ft., Fly 40 ft. |
+| Challenge | 1 (XP 200; PB +2) |
+| Skills | Arcana +4, Religion +4, Stealth +5 |
+| Senses | Darkvision 60 ft.; Passive Perception 11 |
+| Languages | Celestial, Common |
+| Resistances | Necrotic, Psychic, Radiant |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 6 | -2 | -2 |
+| Dex | 17 | +3 | +3 |
+| Con | 13 | +1 | +1 |
+| Int | 15 | +2 | +2 |
+| Wis | 12 | +1 | +1 |
+| Cha | 11 | +0 | +0 |
+
 
 ## Source text
 
 <!-- SRD page 327 -->
 
-Tiny Celestial, Lawful Good\
-AC 13  Initiative +3 (13)\
-HP 24 (7d4 + 7)\
-Speed 20 ft., Fly 40 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 6 −2 −2 Dex 17 +3 +3 Con 13 +1 +1\
-Int 15 +2 +2 Wis 12 +1 +1 Cha 11 +0 +0\
-Skills Arcana +4, Religion +4, Stealth +5\
-Resistances Necrotic, Psychic, Radiant\
-Senses Darkvision 60 ft.; Passive Perception 11\
-Languages Celestial, Common\
-CR 1 (XP 200; PB +2)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Tiny Celestial, Lawful Good\
+> AC 13  Initiative +3 (13)\
+> HP 24 (7d4 + 7)\
+> Speed 20 ft., Fly 40 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 6 −2 −2 Dex 17 +3 +3 Con 13 +1 +1\
+> Int 15 +2 +2 Wis 12 +1 +1 Cha 11 +0 +0\
+> Skills Arcana +4, Religion +4, Stealth +5\
+> Resistances Necrotic, Psychic, Radiant\
+> Senses Darkvision 60 ft.; Passive Perception 11\
+> Languages Celestial, Common\
+> CR 1 (XP 200; PB +2)
+
 
 ### Traits
 
@@ -45,47 +72,11 @@ Burst of Ingenuity (2/Day). Trigger: The sphinx or another creature within 30 fe
 
 Original layout: [[../../srd-5.2.1/pages/327|page 327]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` tiny ` |
-| ` type ` | ` celestial ` |
-| ` alignment ` | ` Lawful Good ` |
-| ` movement_text ` | ` 20 ft., Fly 40 ft. ` |
-| ` skills_text ` | ` Arcana +4, Religion +4, Stealth +5 ` |
-| ` resistances_text ` | ` Necrotic, Psychic, Radiant ` |
-| ` senses_text ` | ` Darkvision 60 ft.; Passive Perception 11 ` |
-| ` languages_text ` | ` Celestial, Common ` |
-| ` cr_text ` | ` 1 (XP 200; PB +2) ` |
-| ` hit_points_text ` | ` 24 (7d4 + 7) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 6 ` | ` -2 ` |
-| ` Dexterity ` | ` 17 ` | ` 3 ` |
-| ` Constitution ` | ` 13 ` | ` 1 ` |
-| ` Intelligence ` | ` 15 ` | ` 2 ` |
-| ` Wisdom ` | ` 12 ` | ` 1 ` |
-| ` Charisma ` | ` 11 ` | ` 0 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 13 ` |  |
-| ` max_hp ` | ` 24 ` |  |
-| ` initiative ` | ` 3 ` |  |
-| ` speed ` | ` 20 ` | ` ft ` |
-| ` fly_speed ` | ` 40 ` | ` ft ` |
 
 ## Health
 
@@ -287,3 +278,13 @@ geometry:
 unlisted_success_branch: no_effect
 unlisted_duration: until_removed_by_applicable_rule
 ```
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_stats_extras -->
+> 
+> ```yaml
+> fly_speed:
+>   unit: ft
+>   value: 40
+> ```
+

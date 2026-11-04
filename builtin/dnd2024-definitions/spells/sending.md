@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: ce7e7bb7-5224-5d68-a9ff-1501a5266ca0
 splat_kind: spell
 splat_key: dnd2024:spells/sending
 splat_name: Sending
-splat_origin:
-  key: dnd2024:reference/spell/sending
+splat_origin: dnd2024:reference/spell/sending
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 161
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 161, https://www.dndbeyond.com/srd
 ---
 
 # Sending
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 3 |
+| School | Divination |
+| Classes | Bard, Cleric, Wizard |
+| Casting Time | Action |
+| Range |  |
+| Components | V, S, M (a copper wire) |
+| Duration | Instantaneous |
+
 
 ## Source text
 
@@ -32,37 +43,11 @@ Upon receiving your message, a creature can block your ability to reach it again
 
 Original layout: [[../../srd-5.2.1/pages/161|page 161]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 3 ` |
-| ` school ` | ` divination ` |
-| ` classes ` | ` ["bard", "cleric", "wizard"] ` |
-| ` components ` | ` ["verbal", "somatic", "material"] ` |
-| ` concentration ` | ` false ` |
-| ` duration ` | ` Instantaneous ` |
-| ` casting_time ` | ` Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
 
-<!-- splat:values path=splat_spell/range -->
 
-| Field | Value |
-| --- | --- |
-| ` mode ` | ` unlimited ` |
-
-### Material
-
-<!-- splat:values path=splat_spell/material -->
-
-| Field | Value |
-| --- | --- |
-| ` description ` | ` a copper wire ` |
-| ` consumed ` | ` false ` |
 
 ## Rule
 
@@ -123,3 +108,14 @@ attempt_while_blocked:
   spell_fails: true
   caster_learns_blocked: true
 ```
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_spell_extras -->
+> 
+> ```yaml
+> material:
+>   consumed: false
+> range:
+>   mode: unlimited
+> ```
+

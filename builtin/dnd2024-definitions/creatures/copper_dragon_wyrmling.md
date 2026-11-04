@@ -1,35 +1,62 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 70559458-749b-5963-9488-df9d343109c8
 splat_kind: creature
 splat_key: dnd2024:creatures/copper_dragon_wyrmling
 splat_name: Copper Dragon Wyrmling
-splat_origin:
-  key: dnd2024:reference/creature/copper_dragon_wyrmling
+splat_origin: dnd2024:reference/creature/copper_dragon_wyrmling
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 275, 276
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 275, 276, https://www.dndbeyond.com/srd
 ---
 
 # Copper Dragon Wyrmling
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Medium |
+| Type | Dragon (Metallic) |
+| Alignment | Chaotic Good |
+| Armor Class | 16 |
+| Hit Points | 22 (4d8 + 4) |
+| Initiative | +3 (13) |
+| Speed | 30 ft., Climb 30 ft., Fly 60 ft. |
+| Challenge | 1 (XP 200; PB +2) |
+| Skills | Perception +4, Stealth +3 |
+| Senses | Blindsight 10 ft., Darkvision 60 ft.; Passive Perception 14 |
+| Languages | Draconic |
+| Immunities | Acid |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 15 | +2 | +2 |
+| Dex | 12 | +1 | +3 |
+| Con | 13 | +1 | +1 |
+| Int | 14 | +2 | +2 |
+| Wis | 11 | +0 | +2 |
+| Cha | 13 | +1 | +1 |
+
 
 ## Source text
 
 <!-- SRD page 275 -->
 
-Medium Dragon (Metallic), Chaotic Good\
-AC 16 Initiative +3 (13)\
-HP 22 (4d8 + 4)\
-Speed 30 ft., Climb 30 ft., Fly 60 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 15 +2 +2 Dex 12 +1 +3 Con 13 +1 +1\
-Int 14 +2 +2 Wis 11 +0 +2 Cha 13 +1 +1\
-Skills Perception +4, Stealth +3\
-Immunities Acid\
-Senses Blindsight 10 ft., Darkvision 60 ft.; Passive Perception 14\
-Languages Draconic\
-CR 1 (XP 200; PB +2)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Medium Dragon (Metallic), Chaotic Good\
+> AC 16 Initiative +3 (13)\
+> HP 22 (4d8 + 4)\
+> Speed 30 ft., Climb 30 ft., Fly 60 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 15 +2 +2 Dex 12 +1 +3 Con 13 +1 +1\
+> Int 14 +2 +2 Wis 11 +0 +2 Cha 13 +1 +1\
+> Skills Perception +4, Stealth +3\
+> Immunities Acid\
+> Senses Blindsight 10 ft., Darkvision 60 ft.; Passive Perception 14\
+> Languages Draconic\
+> CR 1 (XP 200; PB +2)
+
 
 <!-- SRD page 276 -->
 
@@ -43,49 +70,11 @@ Slowing Breath. Constitution Saving Throw: DC 11, each creature in a 15-foot Con
 
 Original layout: [[../../srd-5.2.1/pages/275|page 275]], [[../../srd-5.2.1/pages/276|page 276]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` medium ` |
-| ` type ` | ` dragon ` |
-| ` alignment ` | ` Chaotic Good ` |
-| ` tags_text ` | ` (Metallic) ` |
-| ` movement_text ` | ` 30 ft., Climb 30 ft., Fly 60 ft. ` |
-| ` skills_text ` | ` Perception +4, Stealth +3 ` |
-| ` immunities_text ` | ` Acid ` |
-| ` senses_text ` | ` Blindsight 10 ft., Darkvision 60 ft.; Passive Perception 14 ` |
-| ` languages_text ` | ` Draconic ` |
-| ` cr_text ` | ` 1 (XP 200; PB +2) ` |
-| ` hit_points_text ` | ` 22 (4d8 + 4) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 15 ` | ` 2 ` |
-| ` Dexterity ` | ` 12 ` | ` 3 ` |
-| ` Constitution ` | ` 13 ` | ` 1 ` |
-| ` Intelligence ` | ` 14 ` | ` 2 ` |
-| ` Wisdom ` | ` 11 ` | ` 2 ` |
-| ` Charisma ` | ` 13 ` | ` 1 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 16 ` |  |
-| ` max_hp ` | ` 22 ` |  |
-| ` initiative ` | ` 3 ` |  |
-| ` speed ` | ` 30 ` | ` ft ` |
-| ` climb_speed ` | ` 30 ` | ` ft ` |
-| ` fly_speed ` | ` 60 ` | ` ft ` |
 
 ## Health
 
@@ -272,3 +261,16 @@ geometry:
 unlisted_success_branch: no_effect
 unlisted_duration: until_removed_by_applicable_rule
 ```
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_stats_extras -->
+> 
+> ```yaml
+> fly_speed:
+>   unit: ft
+>   value: 60
+> climb_speed:
+>   unit: ft
+>   value: 30
+> ```
+

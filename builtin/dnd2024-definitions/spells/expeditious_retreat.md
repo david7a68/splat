@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 4dfeb27b-06b6-55e8-af6d-e8fe7a8f2948
 splat_kind: spell
 splat_key: dnd2024:spells/expeditious_retreat
 splat_name: Expeditious Retreat
-splat_origin:
-  key: dnd2024:reference/spell/expeditious_retreat
+splat_origin: dnd2024:reference/spell/expeditious_retreat
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 129
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 129, https://www.dndbeyond.com/srd
 ---
 
 # Expeditious Retreat
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 1 |
+| School | Transmutation |
+| Classes | Sorcerer, Warlock, Wizard |
+| Casting Time | Bonus Action |
+| Range |  |
+| Components | V, S |
+| Duration | Concentration, up to 10 minutes |
+
 
 ## Source text
 
@@ -28,28 +39,9 @@ You take the Dash action, and until the spell ends, you can take that action aga
 
 Original layout: [[../../srd-5.2.1/pages/129|page 129]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 1 ` |
-| ` school ` | ` transmutation ` |
-| ` classes ` | ` ["sorcerer", "warlock", "wizard"] ` |
-| ` components ` | ` ["verbal", "somatic"] ` |
-| ` concentration ` | ` true ` |
-| ` duration ` | ` Concentration, up to 10 minutes ` |
-| ` casting_time ` | ` Bonus Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
-
-<!-- splat:values path=splat_spell/range -->
-
-| Field | Value |
-| --- | --- |
-| ` mode ` | ` self ` |
 
 ## Rule
 
@@ -99,3 +91,12 @@ maximum:
   value: 10
   unit: minute
 ```
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_spell_extras -->
+> 
+> ```yaml
+> range:
+>   mode: self
+> ```
+

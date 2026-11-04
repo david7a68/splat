@@ -1,10 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "fd08e612-aea6-594f-8203-6f808cdf656c"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/magic_item/manual_of_golems"
 splat_name: "Manual of Golems"
-splat_reference: {"source": "SRD 5.2.1", "category": "magic_item", "pages": [229, 230], "executable": false}
+splat_pages:
+- 229
+- 230
 ---
 
 # Manual of Golems
@@ -29,3 +31,13 @@ Once you finish creating the golem, the book is consumed in eldritch flames. The
 | 19–20 | Stone Golem | 90 days | 80,000 GP |
 
 Original layout: [[../pages/229|page 229]], [[../pages/230|page 230]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: magic_item
+> executable: false
+> ```
+

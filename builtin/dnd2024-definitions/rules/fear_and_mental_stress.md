@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 1ea2233b-d3b5-5466-9115-c3d270f0858c
 splat_kind: rule
 splat_key: dnd2024:rules/fear_and_mental_stress
 splat_name: Fear and Mental Stress
-splat_origin:
-  key: dnd2024:reference/pages/196
+splat_origin: dnd2024:reference/pages/196
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 196
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 196, https://www.dndbeyond.com/srd
 ---
 
 # Fear and Mental Stress

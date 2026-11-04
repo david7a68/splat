@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 00c4d51c-6a19-583b-a094-926faacd71a7
 splat_kind: rule
 splat_key: dnd2024:rules/damage_and_healing_dropping_to_0_hit_points
 splat_name: Dropping to 0 Hit Points
-splat_origin:
-  key: dnd2024:reference/pages/017
+splat_origin: dnd2024:reference/pages/017
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 17
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 17, https://www.dndbeyond.com/srd
 ---
 
 # Dropping to 0 Hit Points

@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "60f325f6-957d-5ad0-8903-4dcbf14b9049"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/magic_missile"
 splat_name: "Magic Missile"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [146], "executable": false}
+splat_pages:
+- 146
 ---
 
 # Magic Missile
@@ -22,3 +23,13 @@ You create three glowing darts of magical force. Each dart strikes a creature of
 Using a Higher-Level Spell Slot. The spell creates one more dart for each spell slot level above 1.
 
 Original layout: [[../pages/146|page 146]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

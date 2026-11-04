@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 6e678613-a17d-5a78-bd4a-867bb558c13f
 splat_kind: rule
 splat_key: dnd2024:class_features/barbarian_level_2_danger_sense
 splat_name: 'Level 2: Danger Sense'
-splat_origin:
-  key: dnd2024:reference/pages/029
+splat_origin: dnd2024:reference/pages/029
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 29
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 29, https://www.dndbeyond.com/srd
 ---
 
 # Level 2: Danger Sense

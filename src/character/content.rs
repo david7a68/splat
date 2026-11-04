@@ -53,10 +53,13 @@ pub(super) fn spell_identity(definition: &Value) -> String {
     format!("spell:{source}")
 }
 fn note(fields: Value, body: &str) -> Result<String, String> {
-    Ok(format!(
-        "---\n{}---\n\n{body}\n",
-        serde_yaml_ng::to_string(&fields).map_err(|e| e.to_string())?
-    ))
+    crate::content::formats::convert(
+        "Import.md",
+        &format!(
+            "---\n{}---\n\n{body}\n",
+            serde_yaml_ng::to_string(&fields).map_err(|e| e.to_string())?
+        ),
+    )
 }
 
 pub(super) fn character_filename(name: &str) -> String {
@@ -746,9 +749,6 @@ impl EntitySnapshot {
             markdown: note(fields, &body)?,
         });
         super::rules::complete(self, &mut notes)?;
-        for note in &mut notes {
-            note.markdown = crate::content::formats::convert(&note.relative_path, &note.markdown)?;
-        }
         let entries = notes
             .iter()
             .map(|n| Entry::parse(&n.relative_path, &n.markdown))

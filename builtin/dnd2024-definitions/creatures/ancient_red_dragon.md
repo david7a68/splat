@@ -1,35 +1,62 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 86bad936-8264-59f8-8911-7f25a067cb15
 splat_kind: creature
 splat_key: dnd2024:creatures/ancient_red_dragon
 splat_name: Ancient Red Dragon
-splat_origin:
-  key: dnd2024:reference/creature/ancient_red_dragon
+splat_origin: dnd2024:reference/creature/ancient_red_dragon
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 319
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 319, https://www.dndbeyond.com/srd
 ---
 
 # Ancient Red Dragon
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Gargantuan |
+| Type | Dragon (Chromatic) |
+| Alignment | Chaotic Evil |
+| Armor Class | 22 |
+| Hit Points | 507 (26d20 + 234) |
+| Initiative | +14 (24) |
+| Speed | 40 ft., Climb 40 ft., Fly 80 ft. |
+| Challenge | 24 (XP 62,000, or 75,000 in lair; PB +7) |
+| Skills | Perception +16, Stealth +7 |
+| Senses | Blindsight 60 ft., Darkvision 120 ft.; Passive Perception 26 |
+| Languages | Common, Draconic |
+| Immunities | Fire |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 30 | +10 | +10 |
+| Dex | 10 | +0 | +7 |
+| Con | 29 | +9 | +9 |
+| Int | 18 | +4 | +4 |
+| Wis | 15 | +2 | +9 |
+| Cha | 27 | +8 | +8 |
+
 
 ## Source text
 
 <!-- SRD page 319 -->
 
-Gargantuan Dragon (Chromatic), Chaotic Evil\
-AC 22 Initiative +14 (24)\
-HP 507 (26d20 + 234)\
-Speed 40 ft., Climb 40 ft., Fly 80 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 30 +10 +10 Dex 10 +0 +7 Con 29 +9 +9\
-Int 18 +4 +4 Wis 15 +2 +9 Cha 27 +8 +8\
-Skills Perception +16, Stealth +7\
-Immunities Fire\
-Senses Blindsight 60 ft., Darkvision 120 ft.; Passive Perception 26\
-Languages Common, Draconic\
-CR 24 (XP 62,000, or 75,000 in lair; PB +7)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Gargantuan Dragon (Chromatic), Chaotic Evil\
+> AC 22 Initiative +14 (24)\
+> HP 507 (26d20 + 234)\
+> Speed 40 ft., Climb 40 ft., Fly 80 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 30 +10 +10 Dex 10 +0 +7 Con 29 +9 +9\
+> Int 18 +4 +4 Wis 15 +2 +9 Cha 27 +8 +8\
+> Skills Perception +16, Stealth +7\
+> Immunities Fire\
+> Senses Blindsight 60 ft., Darkvision 120 ft.; Passive Perception 26\
+> Languages Common, Draconic\
+> CR 24 (XP 62,000, or 75,000 in lair; PB +7)
+
 
 ### Traits
 
@@ -60,49 +87,11 @@ Pounce. The dragon moves up to half its Speed, and it makes one Rend attack.
 
 Original layout: [[../../srd-5.2.1/pages/319|page 319]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` gargantuan ` |
-| ` type ` | ` dragon ` |
-| ` alignment ` | ` Chaotic Evil ` |
-| ` tags_text ` | ` (Chromatic) ` |
-| ` movement_text ` | ` 40 ft., Climb 40 ft., Fly 80 ft. ` |
-| ` skills_text ` | ` Perception +16, Stealth +7 ` |
-| ` immunities_text ` | ` Fire ` |
-| ` senses_text ` | ` Blindsight 60 ft., Darkvision 120 ft.; Passive Perception 26 ` |
-| ` languages_text ` | ` Common, Draconic ` |
-| ` cr_text ` | ` 24 (XP 62,000, or 75,000 in lair; PB +7) ` |
-| ` hit_points_text ` | ` 507 (26d20 + 234) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 30 ` | ` 10 ` |
-| ` Dexterity ` | ` 10 ` | ` 7 ` |
-| ` Constitution ` | ` 29 ` | ` 9 ` |
-| ` Intelligence ` | ` 18 ` | ` 4 ` |
-| ` Wisdom ` | ` 15 ` | ` 9 ` |
-| ` Charisma ` | ` 27 ` | ` 8 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 22 ` |  |
-| ` max_hp ` | ` 507 ` |  |
-| ` initiative ` | ` 14 ` |  |
-| ` speed ` | ` 40 ` | ` ft ` |
-| ` climb_speed ` | ` 40 ` | ` ft ` |
-| ` fly_speed ` | ` 80 ` | ` ft ` |
 
 ## Health
 
@@ -456,3 +445,16 @@ other_components: spell_definition_unless_waived
 | ` provider ` | ` caller ` |
 | ` required_facts ` | ` ["distance", "area_membership", "visibility", "occupancy", "movement_path"] ` |
 | ` validate_against_typed_constraints ` | ` true ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_stats_extras -->
+> 
+> ```yaml
+> fly_speed:
+>   unit: ft
+>   value: 80
+> climb_speed:
+>   unit: ft
+>   value: 40
+> ```
+

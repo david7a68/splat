@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: ea3231b8-486e-50f6-b3a8-0802bac13882
 splat_kind: item
 splat_key: dnd2024:items/wind_fan
 splat_name: Wind Fan
-splat_origin:
-  key: dnd2024:reference/magic_item/wind_fan
+splat_origin: dnd2024:reference/magic_item/wind_fan
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 253
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 253, https://www.dndbeyond.com/srd
 ---
 
 # Wind Fan
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Wondrous Item |
+| Rarity | Uncommon |
+| Attunement | No |
+
 
 ## Source text
 
@@ -24,22 +31,9 @@ While holding this fan, you can cast Gust of Wind (save DC 13) from it. Each sub
 
 Original layout: [[../../srd-5.2.1/pages/253|page 253]].
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` wondrous_item ` |
-| ` rarity ` | ` uncommon ` |
 
-### Equipment
-
-<!-- splat:values path=splat_item/equipment -->
-
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` none ` |
 
 ## Rule
 

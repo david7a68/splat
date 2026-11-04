@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "e7f1713b-966c-571e-bf1c-e09534ba1116"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/magic_item/well_of_many_worlds"
 splat_name: "Well of Many Worlds"
-splat_reference: {"source": "SRD 5.2.1", "category": "magic_item", "pages": [253], "executable": false}
+splat_pages:
+- 253
 ---
 
 # Well of Many Worlds
@@ -20,3 +21,13 @@ You can take a Magic action to unfold the Well of Many Worlds and place it on a 
 Once the Well of Many Worlds has opened a portal, it can’t do so again for 1d8 hours.
 
 Original layout: [[../pages/253|page 253]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: magic_item
+> executable: false
+> ```
+

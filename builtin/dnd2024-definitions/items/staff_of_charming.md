@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 948ae061-ee5e-5a75-b00a-ecc98ed4cbfc
 splat_kind: item
 splat_key: dnd2024:items/staff_of_charming
 splat_name: Staff of Charming
-splat_origin:
-  key: dnd2024:reference/magic_item/staff_of_charming
+splat_origin: dnd2024:reference/magic_item/staff_of_charming
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 245
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 245, https://www.dndbeyond.com/srd
 ---
 
 # Staff of Charming
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Staff |
+| Rarity | Rare |
+| Attunement | Yes |
+
 
 ## Source text
 
@@ -32,23 +39,9 @@ Regaining Charges. The staff regains 1d8 + 2 expended charges daily at dawn. If 
 
 Original layout: [[../../srd-5.2.1/pages/245|page 245]].
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` staff ` |
-| ` rarity ` | ` rare ` |
 
-### Equipment
-
-<!-- splat:values path=splat_item/equipment -->
-
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` required ` |
-| ` attunement_requirement_text ` | ` a Bard, Cleric, Druid, Sorcerer, Warlock, or Wizard ` |
 
 ## Rule
 
@@ -162,3 +155,12 @@ eligibility:
   - warlock
   - wizard
 ```
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_item_extras -->
+> 
+> ```yaml
+> equipment:
+>   attunement_requirement_text: a Bard, Cleric, Druid, Sorcerer, Warlock, or Wizard
+> ```
+

@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 8d2df17b-dfa9-5c3e-9f69-1436ccfb79a0
 splat_kind: rule
 splat_key: dnd2024:class_features/rogue_level_7_evasion
 splat_name: 'Level 7: Evasion'
-splat_origin:
-  key: dnd2024:reference/pages/063
+splat_origin: dnd2024:reference/pages/063
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 63
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 63, https://www.dndbeyond.com/srd
 ---
 
 # Level 7: Evasion

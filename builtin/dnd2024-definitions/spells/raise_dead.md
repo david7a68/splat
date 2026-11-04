@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 0670f084-a1af-5192-ad4e-b7804324279a
 splat_kind: spell
 splat_key: dnd2024:spells/raise_dead
 splat_name: Raise Dead
-splat_origin:
-  key: dnd2024:reference/spell/raise_dead
+splat_origin: dnd2024:reference/spell/raise_dead
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 157
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 157, https://www.dndbeyond.com/srd
 ---
 
 # Raise Dead
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 5 |
+| School | Necromancy |
+| Classes | Bard, Cleric, Paladin |
+| Casting Time | 1 hour |
+| Range |  |
+| Components | V, S, M (a diamond worth 500+ GP, which the spell consumes) |
+| Duration | Instantaneous |
+
 
 ## Source text
 
@@ -34,37 +45,11 @@ Coming back from the dead is an ordeal. The target takes a −4 penalty to D20 T
 
 Original layout: [[../../srd-5.2.1/pages/157|page 157]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 5 ` |
-| ` school ` | ` necromancy ` |
-| ` classes ` | ` ["bard", "cleric", "paladin"] ` |
-| ` components ` | ` ["verbal", "somatic", "material"] ` |
-| ` concentration ` | ` false ` |
-| ` duration ` | ` Instantaneous ` |
-| ` casting_time ` | ` 1 hour ` |
-| ` ritual ` | ` false ` |
 
-### Range
 
-<!-- splat:values path=splat_spell/range -->
 
-| Field | Value |
-| --- | --- |
-| ` mode ` | ` touch ` |
-
-### Material
-
-<!-- splat:values path=splat_spell/material -->
-
-| Field | Value |
-| --- | --- |
-| ` description ` | ` a diamond worth 500+ GP, which the spell consumes ` |
-| ` consumed ` | ` true ` |
 
 ## Rule
 
@@ -127,3 +112,14 @@ concentration: false
 maximum:
   kind: instantaneous
 ```
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_spell_extras -->
+> 
+> ```yaml
+> material:
+>   consumed: true
+> range:
+>   mode: touch
+> ```
+

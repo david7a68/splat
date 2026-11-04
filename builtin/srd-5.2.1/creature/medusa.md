@@ -1,10 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "e0fe738f-6ebf-56bd-b0ba-523d31f9b133"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/medusa"
 splat_name: "Medusa"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [306, 307], "executable": false}
+splat_pages:
+- 306
+- 307
 ---
 
 # Medusa
@@ -40,3 +42,13 @@ Poison Ray. Ranged Attack Roll: +5, range 150 ft. Hit: 11 (2d8 + 2) Poison damag
 Petrifying Gaze (Recharge 5–6). Constitution Saving Throw: DC 13, each creature in a 30-foot Cone. If the medusa sees its reflection in the Cone, the medusa must make this save. First Failure: The target has the Restrained condition and repeats the save at the end of its next turn if it is still Restrained, ending the effect on itself on a success. Second Failure: The target has the Petrified condition instead of the Restrained condition.
 
 Original layout: [[../pages/306|page 306]], [[../pages/307|page 307]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

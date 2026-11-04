@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: b780ade2-e0a3-5faa-9abf-90701505a948
 splat_kind: item
 splat_key: dnd2024:items/ring_of_elemental_command
 splat_name: Ring of Elemental Command
-splat_origin:
-  key: dnd2024:reference/magic_item/ring_of_elemental_command
+splat_origin: dnd2024:reference/magic_item/ring_of_elemental_command
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 237, 238
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 237, 238, https://www.dndbeyond.com/srd
 ---
 
 # Ring of Elemental Command
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Ring |
+| Rarity | Legendary |
+| Attunement | Yes |
+
 
 ## Source text
 
@@ -49,22 +56,9 @@ Spellcasting. The ring has 5 charges and regains 1d4 + 1 expended charges daily 
 
 Original layout: [[../../srd-5.2.1/pages/237|page 237]], [[../../srd-5.2.1/pages/238|page 238]].
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` ring ` |
-| ` rarity ` | ` legendary ` |
 
-### Equipment
-
-<!-- splat:values path=splat_item/equipment -->
-
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` required ` |
 
 ## Rule
 

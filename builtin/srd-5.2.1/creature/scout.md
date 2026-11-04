@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "6edfd207-496e-5f46-8813-5bcc15edf04b"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/scout"
 splat_name: "Scout"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [322], "executable": false}
+splat_pages:
+- 322
 ---
 
 # Scout
@@ -33,3 +34,13 @@ Shortsword. Melee Attack Roll: +4, reach 5 ft. Hit: 5 (1d6 + 2) Piercing damage.
 Longbow. Ranged Attack Roll: +4, range 150/600 ft. Hit: 6 (1d8 + 2) Piercing damage.
 
 Original layout: [[../pages/322|page 322]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

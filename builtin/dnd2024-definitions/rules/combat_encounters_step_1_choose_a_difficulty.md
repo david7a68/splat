@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: f7aee4ca-8b37-5611-9756-d44db9129b95
 splat_kind: rule
 splat_key: dnd2024:rules/combat_encounters_step_1_choose_a_difficulty
 splat_name: 'Step 1: Choose a Difficulty'
-splat_origin:
-  key: dnd2024:reference/pages/202
+splat_origin: dnd2024:reference/pages/202
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 202
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 202, https://www.dndbeyond.com/srd
 ---
 
 # Step 1: Choose a Difficulty

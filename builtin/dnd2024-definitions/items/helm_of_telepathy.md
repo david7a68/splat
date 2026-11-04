@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: d0f2dd2f-9c3d-592f-85f4-8423d591d3ce
 splat_kind: item
 splat_key: dnd2024:items/helm_of_telepathy
 splat_name: Helm of Telepathy
-splat_origin:
-  key: dnd2024:reference/magic_item/helm_of_telepathy
+splat_origin: dnd2024:reference/magic_item/helm_of_telepathy
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 226
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 226, https://www.dndbeyond.com/srd
 ---
 
 # Helm of Telepathy
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Wondrous Item |
+| Rarity | Uncommon |
+| Attunement | Yes |
+
 
 ## Source text
 
@@ -24,22 +31,9 @@ While wearing this helm, you have telepathy with a range of 30 feet, and you can
 
 Original layout: [[../../srd-5.2.1/pages/226|page 226]].
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` wondrous_item ` |
-| ` rarity ` | ` uncommon ` |
 
-### Equipment
-
-<!-- splat:values path=splat_item/equipment -->
-
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` required ` |
 
 ## Rule
 

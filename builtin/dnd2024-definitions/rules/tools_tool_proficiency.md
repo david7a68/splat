@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: ac696a4c-7355-59a2-a72d-a4bb01a883a9
 splat_kind: rule
 splat_key: dnd2024:rules/tools_tool_proficiency
 splat_name: Tool Proficiency
-splat_origin:
-  key: dnd2024:reference/pages/093
+splat_origin: dnd2024:reference/pages/093
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 93
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 93, https://www.dndbeyond.com/srd
 ---
 
 # Tool Proficiency

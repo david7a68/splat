@@ -1,10 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "2984c38d-8409-5d32-8391-3d19309337ce"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/magmin"
 splat_name: "Magmin"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [305, 306], "executable": false}
+splat_pages:
+- 305
+- 306
 ---
 
 # Magmin
@@ -38,3 +40,13 @@ Touch. Melee Attack Roll: +4, reach 5 ft. Hit: 7 (2d4 + 2) Fire damage. If the t
 Ignited Illumination. The magmin sets itself ablaze or extinguishes its flames. While ablaze, the magmin sheds Bright Light in a 10-foot radius and Dim Light for an additional 10 feet.
 
 Original layout: [[../pages/305|page 305]], [[../pages/306|page 306]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

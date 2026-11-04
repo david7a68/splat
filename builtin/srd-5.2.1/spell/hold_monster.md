@@ -1,10 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "9107b81d-294c-5402-8cf2-83e2d07a54ad"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/hold_monster"
 splat_name: "Hold Monster"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [140, 141], "executable": false}
+splat_pages:
+- 140
+- 141
 ---
 
 # Hold Monster
@@ -24,3 +26,13 @@ Choose a creature that you can see within range. The target must succeed on a Wi
 Using a Higher-Level Spell Slot. You can target one additional creature for each spell slot level above 5.
 
 Original layout: [[../pages/140|page 140]], [[../pages/141|page 141]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

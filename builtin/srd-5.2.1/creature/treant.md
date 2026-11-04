@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "5c52bf79-26d5-5275-86e5-f99510b2a8f2"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/treant"
 splat_name: "Treant"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [333], "executable": false}
+splat_pages:
+- 333
 ---
 
 # Treant
@@ -39,3 +40,13 @@ Hail of Bark. Ranged Attack Roll: +10, range 180 ft. Hit: 28 (4d10 + 6) Piercing
 Animate Trees (1/Day). The treant magically animates up to two trees it can see within 60 feet of itself. Each tree uses the Treant stat block, except it has Intelligence and Charisma scores of 1, it can’t speak, and it lacks this action. The tree takes its turn immediately after the treant on the same Initiative count, and it obeys the treant. A tree remains animate for 1 day or until it dies, the treant dies, or it is more than 120 feet from the treant. The tree then takes root if possible.
 
 Original layout: [[../pages/333|page 333]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

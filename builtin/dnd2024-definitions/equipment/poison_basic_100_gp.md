@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 38f61356-3ddd-523a-8a52-548a6cdfe034
 splat_kind: item
 splat_key: dnd2024:equipment/poison_basic_100_gp
 splat_name: Poison, Basic (100 GP)
-splat_origin:
-  key: dnd2024:reference/pages/099
+splat_origin: dnd2024:reference/pages/099
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 99
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 99, https://www.dndbeyond.com/srd
 ---
 
 # Poison, Basic (100 GP)
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Adventuring Gear |
+| Rarity |  |
+| Attunement | No |
+
 
 ## Source text
 
@@ -20,39 +27,13 @@ splat_sources:
 
 As a Bonus Action, you can use a vial of Basic Poison to coat one weapon or up to three pieces of ammunition. A creature that takes Piercing or Slashing damage from the poisoned weapon or ammunition takes an extra 1d4 Poison damage. Once applied, the poison retains potency for 1 minute or until its damage is dealt, whichever comes first.
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` adventuring_gear ` |
 
-### Equipment
 
-<!-- splat:values path=splat_item/equipment -->
 
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` none ` |
 
-### Price
 
-<!-- splat:values path=splat_item/price -->
-
-| Field | Value |
-| --- | --- |
-| ` value ` | ` 100 ` |
-| ` unit ` | ` gp ` |
-
-### Mass
-
-<!-- splat:values path=splat_item/mass -->
-
-| Field | Value |
-| --- | --- |
-| ` value ` | ` 0.0 ` |
-| ` unit ` | ` lb ` |
 
 ## Rule
 
@@ -144,3 +125,16 @@ type: poison
 | ` value ` | ` 0.0 ` |
 | ` unit ` | ` lb ` |
 | ` negligible ` | ` true ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_item_extras -->
+> 
+> ```yaml
+> price:
+>   unit: gp
+>   value: 100
+> mass:
+>   unit: lb
+>   value: 0.0
+> ```
+

@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "21007234-4b71-5ec9-9d51-fb301fdf677c"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/confusion"
 splat_name: "Confusion"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [117], "executable": false}
+splat_pages:
+- 117
 ---
 
 # Confusion
@@ -31,3 +32,13 @@ At the end of each of its turns, an affected target repeats the save, ending the
 Using a Higher-Level Spell Slot. The Sphere’s radius increases by 5 feet for each spell slot level above 4.
 
 Original layout: [[../pages/117|page 117]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

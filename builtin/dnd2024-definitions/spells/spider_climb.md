@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: c0b0eb2c-04e7-5e92-932b-2ad461c3a302
 splat_kind: spell
 splat_key: dnd2024:spells/spider_climb
 splat_name: Spider Climb
-splat_origin:
-  key: dnd2024:reference/spell/spider_climb
+splat_origin: dnd2024:reference/spell/spider_climb
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 164
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 164, https://www.dndbeyond.com/srd
 ---
 
 # Spider Climb
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 2 |
+| School | Transmutation |
+| Classes | Sorcerer, Warlock, Wizard |
+| Casting Time | Action |
+| Range |  |
+| Components | V, S, M (a drop of bitumen and a spider) |
+| Duration | Concentration, up to 1 hour |
+
 
 ## Source text
 
@@ -30,37 +41,11 @@ Using a Higher-Level Spell Slot. You can target one additional creature for each
 
 Original layout: [[../../srd-5.2.1/pages/164|page 164]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 2 ` |
-| ` school ` | ` transmutation ` |
-| ` classes ` | ` ["sorcerer", "warlock", "wizard"] ` |
-| ` components ` | ` ["verbal", "somatic", "material"] ` |
-| ` concentration ` | ` true ` |
-| ` duration ` | ` Concentration, up to 1 hour ` |
-| ` casting_time ` | ` Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
 
-<!-- splat:values path=splat_spell/range -->
 
-| Field | Value |
-| --- | --- |
-| ` mode ` | ` touch ` |
-
-### Material
-
-<!-- splat:values path=splat_spell/material -->
-
-| Field | Value |
-| --- | --- |
-| ` description ` | ` a drop of bitumen and a spider ` |
-| ` consumed ` | ` false ` |
 
 ## Rule
 
@@ -105,3 +90,14 @@ touched: true
 | ` surfaces ` | ` ["vertical_up", "vertical_down", "vertical_across", "ceilings"] ` |
 | ` hands_remain_free ` | ` true ` |
 | ` climb_speed ` | ` target_speed ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_spell_extras -->
+> 
+> ```yaml
+> material:
+>   consumed: false
+> range:
+>   mode: touch
+> ```
+

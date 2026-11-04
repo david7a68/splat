@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: f4823d01-8fa3-5e60-9f72-1af3248f7d9f
 splat_kind: rule_group
 splat_key: dnd2024:classes/paladin
 splat_name: Paladin
-splat_origin:
-  key: dnd2024:reference/pages/053
+splat_origin: dnd2024:reference/pages/053
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 53
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 53, https://www.dndbeyond.com/srd
 ---
 
 # Paladin

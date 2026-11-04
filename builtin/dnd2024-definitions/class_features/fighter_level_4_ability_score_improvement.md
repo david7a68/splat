@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 433830ab-3fc4-5e39-84bb-882a97aa6945
 splat_kind: rule
 splat_key: dnd2024:class_features/fighter_level_4_ability_score_improvement
 splat_name: 'Level 4: Ability Score Improvement'
-splat_origin:
-  key: dnd2024:reference/pages/048
+splat_origin: dnd2024:reference/pages/048
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 48
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 48, https://www.dndbeyond.com/srd
 ---
 
 # Level 4: Ability Score Improvement

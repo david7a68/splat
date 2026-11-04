@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "a8d90ac7-5495-5662-89cb-48bf5d35c496"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/reverse_gravity"
 splat_name: "Reverse Gravity"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [159], "executable": false}
+splat_pages:
+- 159
 ---
 
 # Reverse Gravity
@@ -22,3 +23,13 @@ This spell reverses gravity in a 50-foot-radius, 100-foot high Cylinder centered
 If a ceiling or an anchored object is encountered in this upward fall, creatures and objects strike it just as they would during a downward fall. If an affected creature or object reaches the Cylinder’s top without striking anything, it hovers there for the duration. When the spell ends, affected objects and creatures fall downward.
 
 Original layout: [[../pages/159|page 159]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

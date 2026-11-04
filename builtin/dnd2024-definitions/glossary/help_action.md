@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 7ae08674-eedb-525a-8926-276aeb4843fd
 splat_kind: rule
 splat_key: dnd2024:glossary/help_action
 splat_name: Help [Action]
-splat_origin:
-  key: dnd2024:reference/glossary/help_action
+splat_origin: dnd2024:reference/glossary/help_action
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 182, 183
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 182, 183, https://www.dndbeyond.com/srd
 ---
 
 # Help [Action]

@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 5f147a6f-13c7-5507-8da3-e355a113d025
 splat_kind: item
 splat_key: dnd2024:items/horn_of_valhalla
 splat_name: Horn of Valhalla
-splat_origin:
-  key: dnd2024:reference/magic_item/horn_of_valhalla
+splat_origin: dnd2024:reference/magic_item/horn_of_valhalla
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 226
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 226, https://www.dndbeyond.com/srd
 ---
 
 # Horn of Valhalla
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Wondrous Item |
+| Rarity | Varies |
+| Attunement | No |
+
 
 ## Source text
 
@@ -35,22 +42,9 @@ If you blow the horn without meeting its requirement, the summoned spirits attac
 
 Original layout: [[../../srd-5.2.1/pages/226|page 226]].
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` wondrous_item ` |
-| ` rarity ` | ` varies ` |
 
-### Equipment
-
-<!-- splat:values path=splat_item/equipment -->
-
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` none ` |
 
 ## Rule
 

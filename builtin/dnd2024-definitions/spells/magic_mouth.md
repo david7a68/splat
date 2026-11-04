@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: e15d7476-d650-5b00-a02a-e6254044cf76
 splat_kind: spell
 splat_key: dnd2024:spells/magic_mouth
 splat_name: Magic Mouth
-splat_origin:
-  key: dnd2024:reference/spell/magic_mouth
+splat_origin: dnd2024:reference/spell/magic_mouth
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 146
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 146, https://www.dndbeyond.com/srd
 ---
 
 # Magic Mouth
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 2 |
+| School | Illusion |
+| Classes | Bard, Wizard |
+| Casting Time | 1 minute or Ritual |
+| Range | 30 feet |
+| Components | V, S, M (jade dust worth 10+ GP, which the spell consumes) |
+| Duration | Until dispelled |
+
 
 ## Source text
 
@@ -32,37 +43,11 @@ The trigger can be as general or as detailed as you like, though it must be base
 
 Original layout: [[../../srd-5.2.1/pages/146|page 146]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 2 ` |
-| ` school ` | ` illusion ` |
-| ` classes ` | ` ["bard", "wizard"] ` |
-| ` components ` | ` ["verbal", "somatic", "material"] ` |
-| ` concentration ` | ` false ` |
-| ` duration ` | ` Until dispelled ` |
-| ` casting_time ` | ` 1 minute or Ritual ` |
-| ` ritual ` | ` true ` |
 
-### Range
 
-<!-- splat:values path=splat_spell/range -->
 
-| Field | Value |
-| --- | --- |
-| ` feet ` | ` 30 ` |
-
-### Material
-
-<!-- splat:values path=splat_spell/material -->
-
-| Field | Value |
-| --- | --- |
-| ` description ` | ` jade dust worth 10+ GP, which the spell consumes ` |
-| ` consumed ` | ` true ` |
 
 ## Rule
 
@@ -138,3 +123,12 @@ Original layout: [[../../srd-5.2.1/pages/146|page 146]].
 | ` chooser ` | ` caster ` |
 | ` timing ` | ` cast ` |
 | ` options ` | ` ["end_after_delivery", "repeat_on_each_trigger"] ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_spell_extras -->
+> 
+> ```yaml
+> material:
+>   consumed: true
+> ```
+

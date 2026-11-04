@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 4f4a42a4-7be8-5409-835f-5cbc741e0753
 splat_kind: rule
 splat_key: dnd2024:rules/magical_contagions_rest_and_recuperation
 splat_name: Rest and Recuperation
-splat_origin:
-  key: dnd2024:reference/pages/194
+splat_origin: dnd2024:reference/pages/194
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 194
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 194, https://www.dndbeyond.com/srd
 ---
 
 # Rest and Recuperation

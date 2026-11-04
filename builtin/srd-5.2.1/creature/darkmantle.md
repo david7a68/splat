@@ -1,10 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "1d08d2db-991f-5a09-96b5-f759846a8e08"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/darkmantle"
 splat_name: "Darkmantle"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [278, 279], "executable": false}
+splat_pages:
+- 278
+- 279
 ---
 
 # Darkmantle
@@ -36,3 +38,13 @@ A creature can take an action to try to detach the darkmantle from itself, doing
 Darkness Aura (1/Day). Magical Darkness fills a 15-foot Emanation originating from the darkmantle. This effect lasts while the darkmantle maintains Concentration on it, up to 10 minutes. Darkvision can’t penetrate this area, and no light can illuminate it.
 
 Original layout: [[../pages/278|page 278]], [[../pages/279|page 279]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: d450f4a1-1cc0-53ea-baae-52a966ed4bff
 splat_kind: rule
 splat_key: dnd2024:rules/casting_spells_material_m
 splat_name: Material (M)
-splat_origin:
-  key: dnd2024:reference/pages/105
+splat_origin: dnd2024:reference/pages/105
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 105, 106
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 105, 106, https://www.dndbeyond.com/srd
 ---
 
 # Material (M)

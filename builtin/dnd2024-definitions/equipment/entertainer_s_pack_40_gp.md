@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 61429588-f735-549e-9b5e-38558a098248
 splat_kind: item
 splat_key: dnd2024:equipment/entertainer_s_pack_40_gp
 splat_name: Entertainer’s Pack (40 GP)
-splat_origin:
-  key: dnd2024:reference/pages/097
+splat_origin: dnd2024:reference/pages/097
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 97
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 97, https://www.dndbeyond.com/srd
 ---
 
 # Entertainer’s Pack (40 GP)
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Adventuring Gear |
+| Rarity |  |
+| Attunement | No |
+
 
 ## Source text
 
@@ -20,39 +27,13 @@ splat_sources:
 
 An Entertainer’s Pack contains the following items: Backpack, Bedroll, Bell, Bullseye Lantern, 3 Costumes, Mirror, 8 flasks of Oil, 9 days of Rations, Tinderbox, and Waterskin.
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` adventuring_gear ` |
 
-### Equipment
 
-<!-- splat:values path=splat_item/equipment -->
 
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` none ` |
 
-### Price
 
-<!-- splat:values path=splat_item/price -->
-
-| Field | Value |
-| --- | --- |
-| ` value ` | ` 40 ` |
-| ` unit ` | ` gp ` |
-
-### Mass
-
-<!-- splat:values path=splat_item/mass -->
-
-| Field | Value |
-| --- | --- |
-| ` value ` | ` 58.5 ` |
-| ` unit ` | ` lb ` |
 
 ## Rule
 
@@ -121,3 +102,16 @@ columns:
 | --- | --- |
 | ` value ` | ` 58.5 ` |
 | ` unit ` | ` lb ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_item_extras -->
+> 
+> ```yaml
+> price:
+>   unit: gp
+>   value: 40
+> mass:
+>   unit: lb
+>   value: 58.5
+> ```
+

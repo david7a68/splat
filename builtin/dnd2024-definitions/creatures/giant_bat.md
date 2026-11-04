@@ -1,33 +1,58 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 3e305169-1950-5fa9-b74f-21fa4f6bc77c
 splat_kind: creature
 splat_key: dnd2024:creatures/giant_bat
 splat_name: Giant Bat
-splat_origin:
-  key: dnd2024:reference/creature/giant_bat
+splat_origin: dnd2024:reference/creature/giant_bat
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 349
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 349, https://www.dndbeyond.com/srd
 ---
 
 # Giant Bat
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Large |
+| Type | Beast |
+| Alignment | Unaligned |
+| Armor Class | 13 |
+| Hit Points | 22 (4d10) |
+| Initiative | +3 (13) |
+| Speed | 10 ft., Fly 60 ft. |
+| Challenge | 1/4 (XP 50; PB +2) |
+| Senses | Blindsight 120 ft.; Passive Perception 11 |
+| Languages | None |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 15 | +2 | +2 |
+| Dex | 16 | +3 | +3 |
+| Con | 11 | +0 | +0 |
+| Int | 2 | -4 | -4 |
+| Wis | 12 | +1 | +1 |
+| Cha | 6 | -2 | -2 |
+
 
 ## Source text
 
 <!-- SRD page 349 -->
 
-Large Beast, Unaligned\
-AC 13  Initiative +3 (13)\
-HP 22 (4d10)\
-Speed 10 ft., Fly 60 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 15 +2 +2 Dex 16 +3 +3 Con 11 +0 +0\
-Int 2 −4 −4 Wis 12 +1 +1 Cha 6 −2 −2\
-Senses Blindsight 120 ft.; Passive Perception 11\
-Languages None\
-CR 1/4 (XP 50; PB +2)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Large Beast, Unaligned\
+> AC 13  Initiative +3 (13)\
+> HP 22 (4d10)\
+> Speed 10 ft., Fly 60 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 15 +2 +2 Dex 16 +3 +3 Con 11 +0 +0\
+> Int 2 −4 −4 Wis 12 +1 +1 Cha 6 −2 −2\
+> Senses Blindsight 120 ft.; Passive Perception 11\
+> Languages None\
+> CR 1/4 (XP 50; PB +2)
+
 
 ### Actions
 
@@ -35,45 +60,11 @@ Bite. Melee Attack Roll: +5, reach 5 ft. Hit: 6 (1d6 + 3) Piercing damage.
 
 Original layout: [[../../srd-5.2.1/pages/349|page 349]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` large ` |
-| ` type ` | ` beast ` |
-| ` alignment ` | ` Unaligned ` |
-| ` movement_text ` | ` 10 ft., Fly 60 ft. ` |
-| ` senses_text ` | ` Blindsight 120 ft.; Passive Perception 11 ` |
-| ` languages_text ` | ` None ` |
-| ` cr_text ` | ` 1/4 (XP 50; PB +2) ` |
-| ` hit_points_text ` | ` 22 (4d10) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 15 ` | ` 2 ` |
-| ` Dexterity ` | ` 16 ` | ` 3 ` |
-| ` Constitution ` | ` 11 ` | ` 0 ` |
-| ` Intelligence ` | ` 2 ` | ` -4 ` |
-| ` Wisdom ` | ` 12 ` | ` 1 ` |
-| ` Charisma ` | ` 6 ` | ` -2 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 13 ` |  |
-| ` max_hp ` | ` 22 ` |  |
-| ` initiative ` | ` 3 ` |  |
-| ` speed ` | ` 10 ` | ` ft ` |
-| ` fly_speed ` | ` 60 ` | ` ft ` |
 
 ## Health
 
@@ -165,3 +156,13 @@ geometry:
 unlisted_success_branch: no_effect
 unlisted_duration: until_removed_by_applicable_rule
 ```
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_stats_extras -->
+> 
+> ```yaml
+> fly_speed:
+>   unit: ft
+>   value: 60
+> ```
+

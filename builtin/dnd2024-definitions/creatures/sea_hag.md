@@ -1,33 +1,58 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: eab8c6aa-2a19-5d7b-a4d0-a327cfe7bc90
 splat_kind: creature
 splat_key: dnd2024:creatures/sea_hag
 splat_name: Sea Hag
-splat_origin:
-  key: dnd2024:reference/creature/sea_hag
+splat_origin: dnd2024:reference/creature/sea_hag
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 322
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 322, https://www.dndbeyond.com/srd
 ---
 
 # Sea Hag
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Medium |
+| Type | Fey |
+| Alignment | Chaotic Evil |
+| Armor Class | 14 |
+| Hit Points | 52 (7d8 + 21) |
+| Initiative | +1 (11) |
+| Speed | 30 ft., Swim 40 ft. |
+| Challenge | 2 (XP 450; PB +2) |
+| Senses | Darkvision 60 ft.; Passive Perception 11 |
+| Languages | Common, Giant, Primordial (Aquan) |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 16 | +3 | +3 |
+| Dex | 13 | +1 | +1 |
+| Con | 16 | +3 | +3 |
+| Int | 12 | +1 | +1 |
+| Wis | 12 | +1 | +1 |
+| Cha | 13 | +1 | +1 |
+
 
 ## Source text
 
 <!-- SRD page 322 -->
 
-Medium Fey, Chaotic Evil\
-AC 14  Initiative +1 (11)\
-HP 52 (7d8 + 21)\
-Speed 30 ft., Swim 40 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 16 +3 +3 Dex 13 +1 +1 Con 16 +3 +3\
-Int 12 +1 +1 Wis 12 +1 +1 Cha 13 +1 +1\
-Senses Darkvision 60 ft.; Passive Perception 11\
-Languages Common, Giant, Primordial (Aquan)\
-CR 2 (XP 450; PB +2)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Medium Fey, Chaotic Evil\
+> AC 14  Initiative +1 (11)\
+> HP 52 (7d8 + 21)\
+> Speed 30 ft., Swim 40 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 16 +3 +3 Dex 13 +1 +1 Con 16 +3 +3\
+> Int 12 +1 +1 Wis 12 +1 +1 Cha 13 +1 +1\
+> Senses Darkvision 60 ft.; Passive Perception 11\
+> Languages Common, Giant, Primordial (Aquan)\
+> CR 2 (XP 450; PB +2)
+
 
 ### Traits
 
@@ -47,45 +72,11 @@ Illusory Appearance. The hag casts Disguise Self, using Constitution as the spel
 
 Original layout: [[../../srd-5.2.1/pages/322|page 322]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` medium ` |
-| ` type ` | ` fey ` |
-| ` alignment ` | ` Chaotic Evil ` |
-| ` movement_text ` | ` 30 ft., Swim 40 ft. ` |
-| ` senses_text ` | ` Darkvision 60 ft.; Passive Perception 11 ` |
-| ` languages_text ` | ` Common, Giant, Primordial (Aquan) ` |
-| ` cr_text ` | ` 2 (XP 450; PB +2) ` |
-| ` hit_points_text ` | ` 52 (7d8 + 21) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 16 ` | ` 3 ` |
-| ` Dexterity ` | ` 13 ` | ` 1 ` |
-| ` Constitution ` | ` 16 ` | ` 3 ` |
-| ` Intelligence ` | ` 12 ` | ` 1 ` |
-| ` Wisdom ` | ` 12 ` | ` 1 ` |
-| ` Charisma ` | ` 13 ` | ` 1 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 14 ` |  |
-| ` max_hp ` | ` 52 ` |  |
-| ` initiative ` | ` 1 ` |  |
-| ` speed ` | ` 30 ` | ` ft ` |
-| ` swim_speed ` | ` 40 ` | ` ft ` |
 
 ## Health
 
@@ -340,3 +331,13 @@ geometry:
 unlisted_success_branch: no_effect
 unlisted_duration: until_removed_by_applicable_rule
 ```
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_stats_extras -->
+> 
+> ```yaml
+> swim_speed:
+>   unit: ft
+>   value: 40
+> ```
+

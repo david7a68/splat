@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 59d7c58e-2545-588d-bfdf-13318952f1a4
 splat_kind: item
 splat_key: dnd2024:equipment/artisan_s_tools_jeweler_s_tools_25_gp
 splat_name: Jeweler’s Tools (25 GP)
-splat_origin:
-  key: dnd2024:reference/pages/093
+splat_origin: dnd2024:reference/pages/093
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 93
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 93, https://www.dndbeyond.com/srd
 ---
 
 # Jeweler’s Tools (25 GP)
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Adventuring Gear |
+| Rarity |  |
+| Attunement | No |
+
 
 ## Source text
 
@@ -22,39 +29,13 @@ Ability: Intelligence Weight: 2 lb.\
 Utilize: Discern a gem’s value (DC 15)\
 Craft: Arcane Focus, Holy Symbol
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` adventuring_gear ` |
 
-### Equipment
 
-<!-- splat:values path=splat_item/equipment -->
 
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` none ` |
 
-### Price
 
-<!-- splat:values path=splat_item/price -->
-
-| Field | Value |
-| --- | --- |
-| ` value ` | ` 25 ` |
-| ` unit ` | ` gp ` |
-
-### Mass
-
-<!-- splat:values path=splat_item/mass -->
-
-| Field | Value |
-| --- | --- |
-| ` value ` | ` 2 ` |
-| ` unit ` | ` lb ` |
 
 ## Rule
 
@@ -99,3 +80,16 @@ crafting_rule:
 | --- | --- |
 | ` value ` | ` 2 ` |
 | ` unit ` | ` lb ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_item_extras -->
+> 
+> ```yaml
+> price:
+>   unit: gp
+>   value: 25
+> mass:
+>   unit: lb
+>   value: 2
+> ```
+

@@ -1,10 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "db5fcd52-e2d9-5af6-a04c-61d539a4a8c9"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/magic_item/candle_of_invocation"
 splat_name: "Candle of Invocation"
-splat_reference: {"source": "SRD 5.2.1", "category": "magic_item", "pages": [214, 215], "executable": false}
+splat_pages:
+- 214
+- 215
 ---
 
 # Candle of Invocation
@@ -33,3 +35,13 @@ Alternatively, when you light the candle for the first time, you can cast Gate w
 | 47–54 | Elysium | 96–00 | Ysgard |
 
 Original layout: [[../pages/214|page 214]], [[../pages/215|page 215]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: magic_item
+> executable: false
+> ```
+

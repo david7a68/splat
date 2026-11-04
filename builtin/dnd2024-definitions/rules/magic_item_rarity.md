@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 9743460d-03fc-5d9f-8e27-0bb09f864f0c
 splat_kind: rule
 splat_key: dnd2024:rules/magic_item_rarity
 splat_name: Magic Item Rarity
-splat_origin:
-  key: dnd2024:reference/pages/205
+splat_origin: dnd2024:reference/pages/205
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 205
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 205, https://www.dndbeyond.com/srd
 ---
 
 # Magic Item Rarity

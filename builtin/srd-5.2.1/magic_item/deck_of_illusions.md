@@ -1,10 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "ceb53020-a2a1-5b8b-ace1-95160f618e2d"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/magic_item/deck_of_illusions"
 splat_name: "Deck of Illusions"
-splat_reference: {"source": "SRD 5.2.1", "category": "magic_item", "pages": [217, 218], "executable": false}
+splat_pages:
+- 217
+- 218
 ---
 
 # Deck of Illusions
@@ -65,3 +67,13 @@ Any physical interaction with the illusory creature reveals it to be false, beca
 *Stat blocks for these creatures (except the card drawer) appear in “Monsters.”
 
 Original layout: [[../pages/217|page 217]], [[../pages/218|page 218]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: magic_item
+> executable: false
+> ```
+

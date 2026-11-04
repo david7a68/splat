@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: cdf3eb74-6d96-578f-88ad-9aa3b89bcd14
 splat_kind: spell
 splat_key: dnd2024:spells/guiding_bolt
 splat_name: Guiding Bolt
-splat_origin:
-  key: dnd2024:reference/spell/guiding_bolt
+splat_origin: dnd2024:reference/spell/guiding_bolt
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 138
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 138, https://www.dndbeyond.com/srd
 ---
 
 # Guiding Bolt
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 1 |
+| School | Evocation |
+| Classes | Cleric |
+| Casting Time | Action |
+| Range | 120 feet |
+| Components | V, S |
+| Duration | 1 round |
+
 
 ## Source text
 
@@ -30,28 +41,9 @@ Using a Higher-Level Spell Slot. The damage increases by 1d6 for each spell slot
 
 Original layout: [[../../srd-5.2.1/pages/138|page 138]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 1 ` |
-| ` school ` | ` evocation ` |
-| ` classes ` | ` ["cleric"] ` |
-| ` components ` | ` ["verbal", "somatic"] ` |
-| ` concentration ` | ` false ` |
-| ` duration ` | ` 1 round ` |
-| ` casting_time ` | ` Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
-
-<!-- splat:values path=splat_spell/range -->
-
-| Field | Value |
-| --- | --- |
-| ` feet ` | ` 120 ` |
 
 ## Rule
 

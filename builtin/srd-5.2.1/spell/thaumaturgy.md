@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "780bf545-267c-5208-ac7c-7033958c2153"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/thaumaturgy"
 splat_name: "Thaumaturgy"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [169], "executable": false}
+splat_pages:
+- 169
 ---
 
 # Thaumaturgy
@@ -32,3 +33,13 @@ Phantom Sound. You create an instantaneous sound that originates from a point of
 Tremors. You cause harmless tremors in the ground for 1 minute.
 
 Original layout: [[../pages/169|page 169]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

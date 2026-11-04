@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 35b2e639-26f3-5173-9847-68f8312e20c2
 splat_kind: item
 splat_key: dnd2024:items/portable_hole
 splat_name: Portable Hole
-splat_origin:
-  key: dnd2024:reference/magic_item/portable_hole
+splat_origin: dnd2024:reference/magic_item/portable_hole
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 234, 235
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 234, 235, https://www.dndbeyond.com/srd
 ---
 
 # Portable Hole
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Wondrous Item |
+| Rarity | Rare |
+| Attunement | No |
+
 
 ## Source text
 
@@ -34,22 +41,9 @@ Placing a Portable Hole inside an extradimensional space created by a Bag of Hol
 
 Original layout: [[../../srd-5.2.1/pages/234|page 234]], [[../../srd-5.2.1/pages/235|page 235]].
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` wondrous_item ` |
-| ` rarity ` | ` rare ` |
 
-### Equipment
-
-<!-- splat:values path=splat_item/equipment -->
-
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` none ` |
 
 ## Rule
 

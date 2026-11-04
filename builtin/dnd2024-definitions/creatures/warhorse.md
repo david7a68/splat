@@ -1,33 +1,58 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 9bb302df-2d68-5311-9182-d160654ad979
 splat_kind: creature
 splat_key: dnd2024:creatures/warhorse
 splat_name: Warhorse
-splat_origin:
-  key: dnd2024:reference/creature/warhorse
+splat_origin: dnd2024:reference/creature/warhorse
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 364
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 364, https://www.dndbeyond.com/srd
 ---
 
 # Warhorse
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Large |
+| Type | Beast |
+| Alignment | Unaligned |
+| Armor Class | 11 |
+| Hit Points | 19 (3d10 + 3) |
+| Initiative | +1 (11) |
+| Speed | 60 ft. |
+| Challenge | 1/2 (XP 100; PB +2) |
+| Senses | Passive Perception 11 |
+| Languages | None |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 18 | +4 | +4 |
+| Dex | 12 | +1 | +1 |
+| Con | 13 | +1 | +1 |
+| Int | 2 | -4 | -4 |
+| Wis | 12 | +1 | +3 |
+| Cha | 7 | -2 | -2 |
+
 
 ## Source text
 
 <!-- SRD page 364 -->
 
-Large Beast, Unaligned\
-AC 11  Initiative +1 (11)\
-HP 19 (3d10 + 3)\
-Speed 60 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 18 +4 +4 Dex 12 +1 +1 Con 13 +1 +1\
-Int 2 −4 −4 Wis 12 +1 +3 Cha 7 −2 −2\
-Senses Passive Perception 11\
-Languages None\
-CR 1/2 (XP 100; PB +2)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Large Beast, Unaligned\
+> AC 11  Initiative +1 (11)\
+> HP 19 (3d10 + 3)\
+> Speed 60 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 18 +4 +4 Dex 12 +1 +1 Con 13 +1 +1\
+> Int 2 −4 −4 Wis 12 +1 +3 Cha 7 −2 −2\
+> Senses Passive Perception 11\
+> Languages None\
+> CR 1/2 (XP 100; PB +2)
+
 
 ### Actions
 
@@ -35,44 +60,11 @@ Hooves. Melee Attack Roll: +6, reach 5 ft. Hit: 9 (2d4 + 4) Bludgeoning damage. 
 
 Original layout: [[../../srd-5.2.1/pages/364|page 364]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` large ` |
-| ` type ` | ` beast ` |
-| ` alignment ` | ` Unaligned ` |
-| ` movement_text ` | ` 60 ft. ` |
-| ` senses_text ` | ` Passive Perception 11 ` |
-| ` languages_text ` | ` None ` |
-| ` cr_text ` | ` 1/2 (XP 100; PB +2) ` |
-| ` hit_points_text ` | ` 19 (3d10 + 3) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 18 ` | ` 4 ` |
-| ` Dexterity ` | ` 12 ` | ` 1 ` |
-| ` Constitution ` | ` 13 ` | ` 1 ` |
-| ` Intelligence ` | ` 2 ` | ` -4 ` |
-| ` Wisdom ` | ` 12 ` | ` 3 ` |
-| ` Charisma ` | ` 7 ` | ` -2 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 11 ` |  |
-| ` max_hp ` | ` 19 ` |  |
-| ` initiative ` | ` 1 ` |  |
-| ` speed ` | ` 60 ` | ` ft ` |
 
 ## Health
 

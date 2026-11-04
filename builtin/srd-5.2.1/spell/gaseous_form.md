@@ -1,10 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "e749f887-08ea-5f82-9e2a-d12031dbda14"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/gaseous_form"
 splat_name: "Gaseous Form"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [134, 135], "executable": false}
+splat_pages:
+- 134
+- 135
 ---
 
 # Gaseous Form
@@ -28,3 +30,13 @@ The target can’t talk or manipulate objects, and any objects it was carrying o
 Using a Higher-Level Spell Slot. You can target one additional creature for each spell slot level above 3.
 
 Original layout: [[../pages/134|page 134]], [[../pages/135|page 135]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

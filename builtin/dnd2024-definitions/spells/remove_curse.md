@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 4d28de7e-cb68-587c-8897-1ccc428b74a1
 splat_kind: spell
 splat_key: dnd2024:spells/remove_curse
 splat_name: Remove Curse
-splat_origin:
-  key: dnd2024:reference/spell/remove_curse
+splat_origin: dnd2024:reference/spell/remove_curse
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 158
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 158, https://www.dndbeyond.com/srd
 ---
 
 # Remove Curse
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 3 |
+| School | Abjuration |
+| Classes | Cleric, Paladin, Warlock, Wizard |
+| Casting Time | Action |
+| Range |  |
+| Components | V, S |
+| Duration | Instantaneous |
+
 
 ## Source text
 
@@ -28,28 +39,9 @@ At your touch, all curses affecting one creature or object end. If the object is
 
 Original layout: [[../../srd-5.2.1/pages/158|page 158]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 3 ` |
-| ` school ` | ` abjuration ` |
-| ` classes ` | ` ["cleric", "paladin", "warlock", "wizard"] ` |
-| ` components ` | ` ["verbal", "somatic"] ` |
-| ` concentration ` | ` false ` |
-| ` duration ` | ` Instantaneous ` |
-| ` casting_time ` | ` Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
-
-<!-- splat:values path=splat_spell/range -->
-
-| Field | Value |
-| --- | --- |
-| ` mode ` | ` touch ` |
 
 ## Rule
 
@@ -107,3 +99,12 @@ Original layout: [[../../srd-5.2.1/pages/158|page 158]].
 | --- | --- |
 | ` exactly_one ` | ` ["target_creature", "target_object"] ` |
 | ` must_match_selected_mode ` | ` true ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_spell_extras -->
+> 
+> ```yaml
+> range:
+>   mode: touch
+> ```
+

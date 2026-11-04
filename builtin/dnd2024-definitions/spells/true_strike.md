@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: ae0c00ab-82fb-57bf-aebd-52aba223b012
 splat_kind: spell
 splat_key: dnd2024:spells/true_strike
 splat_name: True Strike
-splat_origin:
-  key: dnd2024:reference/spell/true_strike
+splat_origin: dnd2024:reference/spell/true_strike
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 171
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 171, https://www.dndbeyond.com/srd
 ---
 
 # True Strike
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | Cantrip |
+| School | Divination |
+| Classes | Bard, Sorcerer, Warlock, Wizard |
+| Casting Time | Action |
+| Range |  |
+| Components | S, M (a weapon with which you have proficiency and that is worth 1+ CP) |
+| Duration | Instantaneous |
+
 
 ## Source text
 
@@ -30,37 +41,11 @@ Cantrip Upgrade. Whether you deal Radiant damage or the weapon’s normal damage
 
 Original layout: [[../../srd-5.2.1/pages/171|page 171]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 0 ` |
-| ` school ` | ` divination ` |
-| ` classes ` | ` ["bard", "sorcerer", "warlock", "wizard"] ` |
-| ` components ` | ` ["somatic", "material"] ` |
-| ` concentration ` | ` false ` |
-| ` duration ` | ` Instantaneous ` |
-| ` casting_time ` | ` Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
 
-<!-- splat:values path=splat_spell/range -->
 
-| Field | Value |
-| --- | --- |
-| ` mode ` | ` self ` |
-
-### Material
-
-<!-- splat:values path=splat_spell/material -->
-
-| Field | Value |
-| --- | --- |
-| ` description ` | ` a weapon with which you have proficiency and that is worth 1+ CP ` |
-| ` consumed ` | ` false ` |
 
 ## Rule
 
@@ -133,3 +118,14 @@ columns:
 | ` row_2 ` | ` 5 ` | ` 1 ` |
 | ` row_3 ` | ` 11 ` | ` 2 ` |
 | ` row_4 ` | ` 17 ` | ` 3 ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_spell_extras -->
+> 
+> ```yaml
+> material:
+>   consumed: false
+> range:
+>   mode: self
+> ```
+

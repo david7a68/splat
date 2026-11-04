@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "2e019bb3-a04d-59ef-b99d-a80ffb61776a"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/animated_rug_of_smothering"
 splat_name: "Animated Rug of Smothering"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [259], "executable": false}
+splat_pages:
+- 259
 ---
 
 # Animated Rug of Smothering
@@ -30,3 +31,13 @@ Smother. Melee Attack Roll: +5, reach 5 ft. Hit: 10 (2d6 + 3) Bludgeoning damage
 While grappling the target, the rug can’t take this action, the rug halves the damage it takes (round down), and the target takes the same amount of damage.
 
 Original layout: [[../pages/259|page 259]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

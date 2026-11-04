@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "41753ef8-3585-5b19-939e-aa4cc9971e22"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/magic_item/ring_of_resistance"
 splat_name: "Ring of Resistance"
-splat_reference: {"source": "SRD 5.2.1", "category": "magic_item", "pages": [238], "executable": false}
+splat_pages:
+- 238
 ---
 
 # Ring of Resistance
@@ -29,3 +30,13 @@ You have Resistance to one damage type while wearing this ring. The gemstone in 
 | 10 | Thunder | Spinel |
 
 Original layout: [[../pages/238|page 238]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: magic_item
+> executable: false
+> ```
+

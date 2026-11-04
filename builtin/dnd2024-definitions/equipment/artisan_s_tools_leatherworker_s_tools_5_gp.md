@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 675c7a41-552f-588c-8c8b-132b716a8f85
 splat_kind: item
 splat_key: dnd2024:equipment/artisan_s_tools_leatherworker_s_tools_5_gp
 splat_name: Leatherworker’s Tools (5 GP)
-splat_origin:
-  key: dnd2024:reference/pages/093
+splat_origin: dnd2024:reference/pages/093
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 93
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 93, https://www.dndbeyond.com/srd
 ---
 
 # Leatherworker’s Tools (5 GP)
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Adventuring Gear |
+| Rarity |  |
+| Attunement | No |
+
 
 ## Source text
 
@@ -22,39 +29,13 @@ Ability: Dexterity Weight: 5 lb.\
 Utilize: Add a design to a leather item (DC 10)\
 Craft: Sling, Whip, Hide Armor, Leather Armor, Studded Leather Armor, Backpack, Crossbow Bolt Case, Map or Scroll Case, Parchment, Pouch, Quiver, Waterskin
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` adventuring_gear ` |
 
-### Equipment
 
-<!-- splat:values path=splat_item/equipment -->
 
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` none ` |
 
-### Price
 
-<!-- splat:values path=splat_item/price -->
-
-| Field | Value |
-| --- | --- |
-| ` value ` | ` 5 ` |
-| ` unit ` | ` gp ` |
-
-### Mass
-
-<!-- splat:values path=splat_item/mass -->
-
-| Field | Value |
-| --- | --- |
-| ` value ` | ` 5 ` |
-| ` unit ` | ` lb ` |
 
 ## Rule
 
@@ -109,3 +90,16 @@ crafting_rule:
 | --- | --- |
 | ` value ` | ` 5 ` |
 | ` unit ` | ` lb ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_item_extras -->
+> 
+> ```yaml
+> price:
+>   unit: gp
+>   value: 5
+> mass:
+>   unit: lb
+>   value: 5
+> ```
+

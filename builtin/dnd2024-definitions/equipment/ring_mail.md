@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: b228ce26-626e-5cf9-a96d-9834db85a2bb
 splat_kind: item
 splat_key: dnd2024:equipment/ring_mail
 splat_name: Ring Mail
-splat_origin:
-  key: dnd2024:reference/pages/092
+splat_origin: dnd2024:reference/pages/092
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 92
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 92, https://www.dndbeyond.com/srd
 ---
 
 # Ring Mail
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Armor |
+| Rarity |  |
+| Attunement |  |
+
 
 ## Source text
 
@@ -36,42 +43,13 @@ Source table, SRD 5.2.1 page 92.
   "category": "armor"
 }
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` armor ` |
 
-### Armor
 
-<!-- splat:values path=splat_item/armor -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` heavy armor ` |
-| ` stealth_disadvantage ` | ` true ` |
-| ` base_ac ` | ` 14 ` |
-| ` add_dexterity_modifier ` | ` false ` |
 
-### Price
 
-<!-- splat:values path=splat_item/price -->
-
-| Field | Value |
-| --- | --- |
-| ` value ` | ` 30 ` |
-| ` unit ` | ` gp ` |
-
-### Mass
-
-<!-- splat:values path=splat_item/mass -->
-
-| Field | Value |
-| --- | --- |
-| ` value ` | ` 40.0 ` |
-| ` unit ` | ` lb ` |
 
 ## Rule
 
@@ -147,3 +125,21 @@ without_training:
 | ` actor ` | ` equipper ` |
 | ` item ` | ` equipped_instance ` |
 | ` inactive_if_not_equipped ` | ` true ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_item_extras -->
+> 
+> ```yaml
+> armor:
+>   add_dexterity_modifier: false
+>   base_ac: 14
+>   category: heavy armor
+>   stealth_disadvantage: true
+> price:
+>   unit: gp
+>   value: 30
+> mass:
+>   unit: lb
+>   value: 40.0
+> ```
+

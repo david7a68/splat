@@ -1,36 +1,64 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 8533ab51-d920-544c-ac08-8d714f8de7fe
 splat_kind: creature
 splat_key: dnd2024:creatures/swarm_of_ravens
 splat_name: Swarm of Ravens
-splat_origin:
-  key: dnd2024:reference/creature/swarm_of_ravens
+splat_origin: dnd2024:reference/creature/swarm_of_ravens
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 362
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 362, https://www.dndbeyond.com/srd
 ---
 
 # Swarm of Ravens
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Medium Swarm of Tiny |
+| Type | Beast |
+| Alignment | Unaligned |
+| Armor Class | 12 |
+| Hit Points | 11 (2d8 + 2) |
+| Initiative | +2 (12) |
+| Speed | 10 ft., Fly 50 ft. |
+| Challenge | 1/4 (XP 50; PB +2) |
+| Skills | Perception +5 |
+| Senses | Passive Perception 15 |
+| Languages | None |
+| Resistances | Bludgeoning, Piercing, Slashing |
+| Immunities | Charmed, Frightened, Grappled, Paralyzed, Petrified, Prone, Restrained, Stunned |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 6 | -2 | -2 |
+| Dex | 14 | +2 | +2 |
+| Con | 12 | +1 | +1 |
+| Int | 5 | -3 | -3 |
+| Wis | 12 | +1 | +1 |
+| Cha | 6 | -2 | -2 |
+
 
 ## Source text
 
 <!-- SRD page 362 -->
 
 Medium Swarm of Tiny Beasts, Unaligned\
-AC 12 Initiative +2 (12)\
-HP 11 (2d8 + 2)\
-Speed 10 ft., Fly 50 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 6 −2 −2 Dex 14 +2 +2 Con 12 +1 +1\
-Int  5 −3 −3 Wis 12 +1 +1 Cha 6 −2 −2\
-Skills Perception +5\
-Resistances Bludgeoning, Piercing, Slashing\
-Immunities Charmed, Frightened, Grappled, Paralyzed, Petrified, Prone, Restrained, Stunned\
-Senses Passive Perception 15\
-Languages None\
-CR 1/4 (XP 50; PB +2)
+> [!quote]- Printed stat block (not read; edit the table above)
+> AC 12 Initiative +2 (12)\
+> HP 11 (2d8 + 2)\
+> Speed 10 ft., Fly 50 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 6 −2 −2 Dex 14 +2 +2 Con 12 +1 +1\
+> Int  5 −3 −3 Wis 12 +1 +1 Cha 6 −2 −2\
+> Skills Perception +5\
+> Resistances Bludgeoning, Piercing, Slashing\
+> Immunities Charmed, Frightened, Grappled, Paralyzed, Petrified, Prone, Restrained, Stunned\
+> Senses Passive Perception 15\
+> Languages None\
+> CR 1/4 (XP 50; PB +2)
+
 
 ### Traits
 
@@ -44,49 +72,11 @@ Cacophony (Recharge 6). Wisdom Saving Throw: DC 10, one creature in the swarm’
 
 Original layout: [[../../srd-5.2.1/pages/362|page 362]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` medium ` |
-| ` type ` | ` beast ` |
-| ` alignment ` | ` Unaligned ` |
-| ` size_options_text ` | ` Medium Swarm of Tiny ` |
-| ` movement_text ` | ` 10 ft., Fly 50 ft. ` |
-| ` skills_text ` | ` Perception +5 ` |
-| ` resistances_text ` | ` Bludgeoning, Piercing, Slashing ` |
-| ` immunities_text ` | ` Charmed, Frightened, Grappled, Paralyzed, Petrified, Prone, Restrained, Stunned ` |
-| ` senses_text ` | ` Passive Perception 15 ` |
-| ` languages_text ` | ` None ` |
-| ` cr_text ` | ` 1/4 (XP 50; PB +2) ` |
-| ` hit_points_text ` | ` 11 (2d8 + 2) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 6 ` | ` -2 ` |
-| ` Dexterity ` | ` 14 ` | ` 2 ` |
-| ` Constitution ` | ` 12 ` | ` 1 ` |
-| ` Intelligence ` | ` 5 ` | ` -3 ` |
-| ` Wisdom ` | ` 12 ` | ` 1 ` |
-| ` Charisma ` | ` 6 ` | ` -2 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 12 ` |  |
-| ` max_hp ` | ` 11 ` |  |
-| ` initiative ` | ` 2 ` |  |
-| ` speed ` | ` 10 ` | ` ft ` |
-| ` fly_speed ` | ` 50 ` | ` ft ` |
 
 ## Health
 
@@ -296,3 +286,13 @@ geometry_assumptions:
   - plane
   - form_appearance
 ```
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_stats_extras -->
+> 
+> ```yaml
+> fly_speed:
+>   unit: ft
+>   value: 50
+> ```
+

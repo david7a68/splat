@@ -1,35 +1,62 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: a841e2a2-3123-522d-9109-059fe039fb76
 splat_kind: creature
 splat_key: dnd2024:creatures/vampire
 splat_name: Vampire
-splat_origin:
-  key: dnd2024:reference/creature/vampire
+splat_origin: dnd2024:reference/creature/vampire
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 335, 336
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 335, 336, https://www.dndbeyond.com/srd
 ---
 
 # Vampire
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Medium or Small |
+| Type | Undead |
+| Alignment | Lawful Evil |
+| Armor Class | 16 |
+| Hit Points | 195 (23d8 + 92) |
+| Initiative | +14 (24) |
+| Speed | 40 ft., Climb 40 ft. |
+| Challenge | 13 (XP 10,000, or 11,500 in lair; PB +5) |
+| Skills | Perception +7, Stealth +9 |
+| Senses | Darkvision 120 ft.; Passive Perception 17 |
+| Languages | Common plus two other languages |
+| Resistances | Necrotic |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 18 | +4 | +4 |
+| Dex | 18 | +4 | +9 |
+| Con | 18 | +4 | +9 |
+| Int | 17 | +3 | +3 |
+| Wis | 15 | +2 | +7 |
+| Cha | 18 | +4 | +9 |
+
 
 ## Source text
 
 <!-- SRD page 335 -->
 
 Medium or Small Undead, Lawful Evil\
-AC 16 Initiative +14 (24)\
-HP 195 (23d8 + 92)\
-Speed 40 ft., Climb 40 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 18 +4 +4 Dex 18 +4 +9 Con 18 +4 +9\
-Int 17 +3 +3 Wis 15 +2 +7 Cha 18 +4 +9\
-Skills Perception +7, Stealth +9\
-Resistances Necrotic\
-Senses Darkvision 120 ft.; Passive Perception 17\
-Languages Common plus two other languages\
-CR 13 (XP 10,000, or 11,500 in lair; PB +5)
+> [!quote]- Printed stat block (not read; edit the table above)
+> AC 16 Initiative +14 (24)\
+> HP 195 (23d8 + 92)\
+> Speed 40 ft., Climb 40 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 18 +4 +4 Dex 18 +4 +9 Con 18 +4 +9\
+> Int 17 +3 +3 Wis 15 +2 +7 Cha 18 +4 +9\
+> Skills Perception +7, Stealth +9\
+> Resistances Necrotic\
+> Senses Darkvision 120 ft.; Passive Perception 17\
+> Languages Common plus two other languages\
+> CR 13 (XP 10,000, or 11,500 in lair; PB +5)
+
 
 ### Traits
 
@@ -81,48 +108,11 @@ Deathless Strike. The vampire moves up to half its Speed, and it makes one Grave
 
 Original layout: [[../../srd-5.2.1/pages/335|page 335]], [[../../srd-5.2.1/pages/336|page 336]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` medium ` |
-| ` type ` | ` undead ` |
-| ` alignment ` | ` Lawful Evil ` |
-| ` size_options_text ` | ` Medium or Small ` |
-| ` movement_text ` | ` 40 ft., Climb 40 ft. ` |
-| ` skills_text ` | ` Perception +7, Stealth +9 ` |
-| ` resistances_text ` | ` Necrotic ` |
-| ` senses_text ` | ` Darkvision 120 ft.; Passive Perception 17 ` |
-| ` languages_text ` | ` Common plus two other languages ` |
-| ` cr_text ` | ` 13 (XP 10,000, or 11,500 in lair; PB +5) ` |
-| ` hit_points_text ` | ` 195 (23d8 + 92) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 18 ` | ` 4 ` |
-| ` Dexterity ` | ` 18 ` | ` 9 ` |
-| ` Constitution ` | ` 18 ` | ` 9 ` |
-| ` Intelligence ` | ` 17 ` | ` 3 ` |
-| ` Wisdom ` | ` 15 ` | ` 7 ` |
-| ` Charisma ` | ` 18 ` | ` 9 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 16 ` |  |
-| ` max_hp ` | ` 195 ` |  |
-| ` initiative ` | ` 14 ` |  |
-| ` speed ` | ` 40 ` | ` ft ` |
-| ` climb_speed ` | ` 40 ` | ` ft ` |
 
 ## Health
 
@@ -640,3 +630,13 @@ geometry_assumptions:
   - plane
   - form_appearance
 ```
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_stats_extras -->
+> 
+> ```yaml
+> climb_speed:
+>   unit: ft
+>   value: 40
+> ```
+

@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 0711c1c0-69f4-58aa-af31-bcc55926bdf2
 splat_kind: rule
 splat_key: dnd2024:class_features/fighter_level_3_fighter_subclass
 splat_name: 'Level 3: Fighter Subclass'
-splat_origin:
-  key: dnd2024:reference/pages/048
+splat_origin: dnd2024:reference/pages/048
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 48
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 48, https://www.dndbeyond.com/srd
 ---
 
 # Level 3: Fighter Subclass

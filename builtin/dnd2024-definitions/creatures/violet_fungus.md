@@ -1,34 +1,60 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: eb0e0267-2c45-5fe5-b03e-29f5af103f9c
 splat_kind: creature
 splat_key: dnd2024:creatures/violet_fungus
 splat_name: Violet Fungus
-splat_origin:
-  key: dnd2024:reference/creature/violet_fungus
+splat_origin: dnd2024:reference/creature/violet_fungus
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 286
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 286, https://www.dndbeyond.com/srd
 ---
 
 # Violet Fungus
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Medium |
+| Type | Plant |
+| Alignment | Unaligned |
+| Armor Class | 5 |
+| Hit Points | 18 (4d8) |
+| Initiative | -5 (5) |
+| Speed | 5 ft. |
+| Challenge | 1/4 (XP 50; PB +2) |
+| Senses | Blindsight 30 ft.; Passive Perception 6 |
+| Languages | None |
+| Immunities | Blinded, Charmed, Deafened, Frightened |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 3 | -4 | -4 |
+| Dex | 1 | -5 | -5 |
+| Con | 10 | +0 | +0 |
+| Int | 1 | -5 | -5 |
+| Wis | 3 | -4 | -4 |
+| Cha | 1 | -5 | -5 |
+
 
 ## Source text
 
 <!-- SRD page 286 -->
 
-Medium Plant, Unaligned\
-AC 5 Initiative −5 (5)\
-HP 18 (4d8)\
-Speed 5 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 3 −4 −4 Dex 1 −5 −5 Con 10 +0 +0\
-Int 1 −5 −5 Wis 3 −4 −4 Cha 1 −5 −5\
-Immunities Blinded, Charmed, Deafened, Frightened\
-Senses Blindsight 30 ft.; Passive Perception 6\
-Languages None\
-CR 1/4 (XP 50; PB +2)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Medium Plant, Unaligned\
+> AC 5 Initiative −5 (5)\
+> HP 18 (4d8)\
+> Speed 5 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 3 −4 −4 Dex 1 −5 −5 Con 10 +0 +0\
+> Int 1 −5 −5 Wis 3 −4 −4 Cha 1 −5 −5\
+> Immunities Blinded, Charmed, Deafened, Frightened\
+> Senses Blindsight 30 ft.; Passive Perception 6\
+> Languages None\
+> CR 1/4 (XP 50; PB +2)
+
 
 ### Actions
 
@@ -38,45 +64,11 @@ Rotting Touch. Melee Attack Roll: +2, reach 10 ft. Hit: 4 (1d8) Necrotic damage.
 
 Original layout: [[../../srd-5.2.1/pages/286|page 286]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` medium ` |
-| ` type ` | ` plant ` |
-| ` alignment ` | ` Unaligned ` |
-| ` movement_text ` | ` 5 ft. ` |
-| ` immunities_text ` | ` Blinded, Charmed, Deafened, Frightened ` |
-| ` senses_text ` | ` Blindsight 30 ft.; Passive Perception 6 ` |
-| ` languages_text ` | ` None ` |
-| ` cr_text ` | ` 1/4 (XP 50; PB +2) ` |
-| ` hit_points_text ` | ` 18 (4d8) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 3 ` | ` -4 ` |
-| ` Dexterity ` | ` 1 ` | ` -5 ` |
-| ` Constitution ` | ` 10 ` | ` 0 ` |
-| ` Intelligence ` | ` 1 ` | ` -5 ` |
-| ` Wisdom ` | ` 3 ` | ` -4 ` |
-| ` Charisma ` | ` 1 ` | ` -5 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 5 ` |  |
-| ` max_hp ` | ` 18 ` |  |
-| ` initiative ` | ` -5 ` |  |
-| ` speed ` | ` 5 ` | ` ft ` |
 
 ## Health
 

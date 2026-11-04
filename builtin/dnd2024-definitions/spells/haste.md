@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 4402731c-08cc-5dd5-aed6-8f409703fdcc
 splat_kind: spell
 splat_key: dnd2024:spells/haste
 splat_name: Haste
-splat_origin:
-  key: dnd2024:reference/spell/haste
+splat_origin: dnd2024:reference/spell/haste
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 139
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 139, https://www.dndbeyond.com/srd
 ---
 
 # Haste
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 3 |
+| School | Transmutation |
+| Classes | Sorcerer, Wizard |
+| Casting Time | Action |
+| Range | 30 feet |
+| Components | V, S, M (a shaving of licorice root) |
+| Duration | Concentration, up to 1 minute |
+
 
 ## Source text
 
@@ -30,37 +41,11 @@ When the spell ends, the target is Incapacitated and has a Speed of 0 until the 
 
 Original layout: [[../../srd-5.2.1/pages/139|page 139]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 3 ` |
-| ` school ` | ` transmutation ` |
-| ` classes ` | ` ["sorcerer", "wizard"] ` |
-| ` components ` | ` ["verbal", "somatic", "material"] ` |
-| ` concentration ` | ` true ` |
-| ` duration ` | ` Concentration, up to 1 minute ` |
-| ` casting_time ` | ` Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
 
-<!-- splat:values path=splat_spell/range -->
 
-| Field | Value |
-| --- | --- |
-| ` feet ` | ` 30 ` |
-
-### Material
-
-<!-- splat:values path=splat_spell/material -->
-
-| Field | Value |
-| --- | --- |
-| ` description ` | ` a shaving of licorice root ` |
-| ` consumed ` | ` false ` |
 
 ## Rule
 
@@ -115,3 +100,12 @@ additional_action_each_target_turn:
 | ` condition ` | ` incapacitated ` |
 | ` speed ` | ` 0 ` |
 | ` until ` | ` target_next_turn_end ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_spell_extras -->
+> 
+> ```yaml
+> material:
+>   consumed: false
+> ```
+

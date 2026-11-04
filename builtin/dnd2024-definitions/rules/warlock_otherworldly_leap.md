@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 2cdbf241-d2da-5938-afc8-0850fddc7ffd
 splat_kind: rule
 splat_key: dnd2024:rules/warlock_otherworldly_leap
 splat_name: Otherworldly Leap
-splat_origin:
-  key: dnd2024:reference/pages/074
+splat_origin: dnd2024:reference/pages/074
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 74
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 74, https://www.dndbeyond.com/srd
 ---
 
 # Otherworldly Leap

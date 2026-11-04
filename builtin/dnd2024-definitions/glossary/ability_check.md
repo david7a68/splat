@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 4ce1c2c7-f289-5518-80fc-0fabc2dac658
 splat_kind: rule
 splat_key: dnd2024:glossary/ability_check
 splat_name: Ability Check
-splat_origin:
-  key: dnd2024:reference/glossary/ability_check
+splat_origin: dnd2024:reference/glossary/ability_check
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 176
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 176, https://www.dndbeyond.com/srd
 ---
 
 # Ability Check

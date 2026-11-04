@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "aa3552c3-d7a3-5d72-9247-ab8aeb7f6fb5"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/spy"
 splat_name: "Spy"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [329], "executable": false}
+splat_pages:
+- 329
 ---
 
 # Spy
@@ -35,3 +36,13 @@ Hand Crossbow. Ranged Attack Roll: +4, range 30/120 ft. Hit: 5 (1d6 + 2) Piercin
 Cunning Action. The spy takes the Dash, Disengage, or Hide action.
 
 Original layout: [[../pages/329|page 329]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

@@ -1,10 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "fccac7d8-1ff4-5cf0-a590-f58302d4d255"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/mimic"
 splat_name: "Mimic"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [308, 309], "executable": false}
+splat_pages:
+- 308
+- 309
 ---
 
 # Mimic
@@ -41,3 +43,13 @@ Pseudopod. Melee Attack Roll: +5, reach 5 ft. Hit: 7 (1d8 + 3) Bludgeoning damag
 Shape-Shift. The mimic shape-shifts to resemble a Medium or Small object while retaining its game statistics, or it returns to its true blob form. Any equipment it is wearing or carrying isn’t transformed.
 
 Original layout: [[../pages/308|page 308]], [[../pages/309|page 309]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

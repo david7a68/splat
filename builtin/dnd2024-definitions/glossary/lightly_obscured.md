@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 37c01dc0-bb92-5edb-b32f-c67cddbdcacc
 splat_kind: rule
 splat_key: dnd2024:glossary/lightly_obscured
 splat_name: Lightly Obscured
-splat_origin:
-  key: dnd2024:reference/glossary/lightly_obscured
+splat_origin: dnd2024:reference/glossary/lightly_obscured
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 184
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 184, https://www.dndbeyond.com/srd
 ---
 
 # Lightly Obscured

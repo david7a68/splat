@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 6681752d-18a3-575e-9ad6-34b2d6c70531
 splat_kind: item
 splat_key: dnd2024:items/staff_of_striking
 splat_name: Staff of Striking
-splat_origin:
-  key: dnd2024:reference/magic_item/staff_of_striking
+splat_origin: dnd2024:reference/magic_item/staff_of_striking
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 246
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 246, https://www.dndbeyond.com/srd
 ---
 
 # Staff of Striking
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Staff |
+| Rarity | Very Rare |
+| Attunement | Yes |
+
 
 ## Source text
 
@@ -28,22 +35,9 @@ Regaining Charges. The staff regains 1d6 + 4 expended charges daily at dawn. If 
 
 Original layout: [[../../srd-5.2.1/pages/246|page 246]].
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` staff ` |
-| ` rarity ` | ` very_rare ` |
 
-### Equipment
-
-<!-- splat:values path=splat_item/equipment -->
-
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` required ` |
 
 ## Rule
 

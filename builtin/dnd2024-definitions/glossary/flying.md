@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: f8b2a361-4eb9-5095-a2fc-165a470cecb6
 splat_kind: rule
 splat_key: dnd2024:glossary/flying
 splat_name: Flying
-splat_origin:
-  key: dnd2024:reference/glossary/flying
+splat_origin: dnd2024:reference/glossary/flying
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 182
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 182, https://www.dndbeyond.com/srd
 ---
 
 # Flying

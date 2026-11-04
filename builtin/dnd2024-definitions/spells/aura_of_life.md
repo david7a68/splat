@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: d3530c90-dbc4-5def-bda2-896fc7190e55
 splat_kind: spell
 splat_key: dnd2024:spells/aura_of_life
 splat_name: Aura of Life
-splat_origin:
-  key: dnd2024:reference/spell/aura_of_life
+splat_origin: dnd2024:reference/spell/aura_of_life
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 111
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 111, https://www.dndbeyond.com/srd
 ---
 
 # Aura of Life
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 4 |
+| School | Abjuration |
+| Classes | Cleric, Paladin |
+| Casting Time | Action |
+| Range |  |
+| Components | V |
+| Duration | Concentration, up to 10 minutes |
+
 
 ## Source text
 
@@ -28,28 +39,9 @@ An aura radiates from you in a 30-foot Emanation for the duration. While in the 
 
 Original layout: [[../../srd-5.2.1/pages/111|page 111]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 4 ` |
-| ` school ` | ` abjuration ` |
-| ` classes ` | ` ["cleric", "paladin"] ` |
-| ` components ` | ` ["verbal"] ` |
-| ` concentration ` | ` true ` |
-| ` duration ` | ` Concentration, up to 10 minutes ` |
-| ` casting_time ` | ` Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
-
-<!-- splat:values path=splat_spell/range -->
-
-| Field | Value |
-| --- | --- |
-| ` mode ` | ` self ` |
 
 ## Rule
 
@@ -98,3 +90,12 @@ Original layout: [[../../srd-5.2.1/pages/111|page 111]].
 | ` inside_aura ` | ` true ` |
 | ` hp_equals ` | ` 0 ` |
 | ` amount ` | ` 1 ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_spell_extras -->
+> 
+> ```yaml
+> range:
+>   mode: self
+> ```
+

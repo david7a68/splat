@@ -1,34 +1,60 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 9ba2827f-99b6-59da-a8c3-d724f26f2d8b
 splat_kind: creature
 splat_key: dnd2024:creatures/nightmare
 splat_name: Nightmare
-splat_origin:
-  key: dnd2024:reference/creature/nightmare
+splat_origin: dnd2024:reference/creature/nightmare
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 311
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 311, https://www.dndbeyond.com/srd
 ---
 
 # Nightmare
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Large |
+| Type | Fiend |
+| Alignment | Neutral Evil |
+| Armor Class | 13 |
+| Hit Points | 68 (8d10 + 24) |
+| Initiative | +2 (12) |
+| Speed | 60 ft., Fly 90 ft. (hover) |
+| Challenge | 3 (XP 700; PB +2) |
+| Senses | Passive Perception 11 |
+| Languages | Understands Abyssal, Common, and Infernal but can’t speak |
+| Immunities | Fire |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 18 | +4 | +4 |
+| Dex | 15 | +2 | +2 |
+| Con | 16 | +3 | +3 |
+| Int | 10 | +0 | +0 |
+| Wis | 13 | +1 | +1 |
+| Cha | 15 | +2 | +2 |
+
 
 ## Source text
 
 <!-- SRD page 311 -->
 
-Large Fiend, Neutral Evil\
-AC 13 Initiative +2 (12)\
-HP 68 (8d10 + 24)\
-Speed 60 ft., Fly 90 ft. (hover)\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 18 +4 +4 Dex 15 +2 +2 Con 16 +3 +3\
-Int 10 +0 +0 Wis 13 +1 +1 Cha 15 +2 +2\
-Immunities Fire\
-Senses Passive Perception 11\
-Languages Understands Abyssal, Common, and Infernal but can’t speak\
-CR 3 (XP 700; PB +2)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Large Fiend, Neutral Evil\
+> AC 13 Initiative +2 (12)\
+> HP 68 (8d10 + 24)\
+> Speed 60 ft., Fly 90 ft. (hover)\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 18 +4 +4 Dex 15 +2 +2 Con 16 +3 +3\
+> Int 10 +0 +0 Wis 13 +1 +1 Cha 15 +2 +2\
+> Immunities Fire\
+> Senses Passive Perception 11\
+> Languages Understands Abyssal, Common, and Infernal but can’t speak\
+> CR 3 (XP 700; PB +2)
+
 
 ### Traits
 
@@ -44,46 +70,11 @@ Ethereal Stride. The nightmare and up to three willing creatures within 5 feet o
 
 Original layout: [[../../srd-5.2.1/pages/311|page 311]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` large ` |
-| ` type ` | ` fiend ` |
-| ` alignment ` | ` Neutral Evil ` |
-| ` movement_text ` | ` 60 ft., Fly 90 ft. (hover) ` |
-| ` immunities_text ` | ` Fire ` |
-| ` senses_text ` | ` Passive Perception 11 ` |
-| ` languages_text ` | ` Understands Abyssal, Common, and Infernal but can’t speak ` |
-| ` cr_text ` | ` 3 (XP 700; PB +2) ` |
-| ` hit_points_text ` | ` 68 (8d10 + 24) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 18 ` | ` 4 ` |
-| ` Dexterity ` | ` 15 ` | ` 2 ` |
-| ` Constitution ` | ` 16 ` | ` 3 ` |
-| ` Intelligence ` | ` 10 ` | ` 0 ` |
-| ` Wisdom ` | ` 13 ` | ` 1 ` |
-| ` Charisma ` | ` 15 ` | ` 2 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 13 ` |  |
-| ` max_hp ` | ` 68 ` |  |
-| ` initiative ` | ` 2 ` |  |
-| ` speed ` | ` 60 ` | ` ft ` |
-| ` fly_speed ` | ` 90 ` | ` ft ` |
 
 ## Health
 
@@ -270,3 +261,13 @@ geometry:
 unlisted_success_branch: no_effect
 unlisted_duration: until_removed_by_applicable_rule
 ```
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_stats_extras -->
+> 
+> ```yaml
+> fly_speed:
+>   unit: ft
+>   value: 90
+> ```
+

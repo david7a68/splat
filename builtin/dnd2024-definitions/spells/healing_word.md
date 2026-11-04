@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 2108cd7b-cda7-54b0-94f1-220ff3ac75cc
 splat_kind: spell
 splat_key: dnd2024:spells/healing_word
 splat_name: Healing Word
-splat_origin:
-  key: dnd2024:reference/spell/healing_word
+splat_origin: dnd2024:reference/spell/healing_word
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 139
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 139, https://www.dndbeyond.com/srd
 ---
 
 # Healing Word
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 1 |
+| School | Abjuration |
+| Classes | Bard, Cleric, Druid |
+| Casting Time | Bonus Action |
+| Range | 60 feet |
+| Components | V |
+| Duration | Instantaneous |
+
 
 ## Source text
 
@@ -30,28 +41,9 @@ Using a Higher-Level Spell Slot. The healing increases by 2d4 for each spell slo
 
 Original layout: [[../../srd-5.2.1/pages/139|page 139]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 1 ` |
-| ` school ` | ` abjuration ` |
-| ` classes ` | ` ["bard", "cleric", "druid"] ` |
-| ` components ` | ` ["verbal"] ` |
-| ` concentration ` | ` false ` |
-| ` duration ` | ` Instantaneous ` |
-| ` casting_time ` | ` Bonus Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
-
-<!-- splat:values path=splat_spell/range -->
-
-| Field | Value |
-| --- | --- |
-| ` feet ` | ` 60 ` |
 
 ## Rule
 

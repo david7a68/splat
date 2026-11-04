@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "7c0e2624-0852-5ff6-ac9d-12bf81a26e61"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/riding_horse"
 splat_name: "Riding Horse"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [360], "executable": false}
+splat_pages:
+- 360
 ---
 
 # Riding Horse
@@ -27,3 +28,13 @@ CR 1/4 (XP 50; PB +2)
 Hooves. Melee Attack Roll: +5, reach 5 ft. Hit: 7 (1d8 + 3) Bludgeoning damage.
 
 Original layout: [[../pages/360|page 360]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

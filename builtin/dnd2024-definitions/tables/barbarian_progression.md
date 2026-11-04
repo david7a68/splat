@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 947560e8-cc55-5932-85a3-4cb7a9603d9b
 splat_kind: rule
 splat_key: dnd2024:tables/barbarian_progression
 splat_name: Barbarian Progression
-splat_origin:
-  key: dnd2024:reference/pages/028
+splat_origin: dnd2024:reference/pages/028
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 28
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 28, https://www.dndbeyond.com/srd
 ---
 
 # Barbarian Progression

@@ -1,10 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "d5a5023e-edb9-59fc-9e64-dae4b5f1a817"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/hippopotamus"
 splat_name: "Hippopotamus"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [355, 356], "executable": false}
+splat_pages:
+- 355
+- 356
 ---
 
 # Hippopotamus
@@ -36,3 +38,13 @@ Multiattack. The hippopotamus makes two Bite attacks.
 Bite. Melee Attack Roll: +7, reach 5 ft. Hit: 16 (2d10 + 5) Piercing damage.
 
 Original layout: [[../pages/355|page 355]], [[../pages/356|page 356]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

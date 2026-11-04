@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: b7741792-13aa-5dc6-98c9-614ed3bd581c
 splat_kind: item
 splat_key: dnd2024:equipment/ink_10_gp
 splat_name: Ink (10 GP)
-splat_origin:
-  key: dnd2024:reference/pages/098
+splat_origin: dnd2024:reference/pages/098
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 98
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 98, https://www.dndbeyond.com/srd
 ---
 
 # Ink (10 GP)
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Adventuring Gear |
+| Rarity |  |
+| Attunement | No |
+
 
 ## Source text
 
@@ -20,39 +27,13 @@ splat_sources:
 
 Ink comes in a 1-ounce bottle, which provides enough ink to write about 500 pages.
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` adventuring_gear ` |
 
-### Equipment
 
-<!-- splat:values path=splat_item/equipment -->
 
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` none ` |
 
-### Price
 
-<!-- splat:values path=splat_item/price -->
-
-| Field | Value |
-| --- | --- |
-| ` value ` | ` 10 ` |
-| ` unit ` | ` gp ` |
-
-### Mass
-
-<!-- splat:values path=splat_item/mass -->
-
-| Field | Value |
-| --- | --- |
-| ` value ` | ` 0.0 ` |
-| ` unit ` | ` lb ` |
 
 ## Rule
 
@@ -90,3 +71,16 @@ Ink comes in a 1-ounce bottle, which provides enough ink to write about 500 page
 | ` value ` | ` 0.0 ` |
 | ` unit ` | ` lb ` |
 | ` negligible ` | ` true ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_item_extras -->
+> 
+> ```yaml
+> price:
+>   unit: gp
+>   value: 10
+> mass:
+>   unit: lb
+>   value: 0.0
+> ```
+

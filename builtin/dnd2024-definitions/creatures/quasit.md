@@ -1,36 +1,64 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 85d3ac67-eb3a-59c1-9d26-3976f026a7be
 splat_kind: creature
 splat_key: dnd2024:creatures/quasit
 splat_name: Quasit
-splat_origin:
-  key: dnd2024:reference/creature/quasit
+splat_origin: dnd2024:reference/creature/quasit
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 317
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 317, https://www.dndbeyond.com/srd
 ---
 
 # Quasit
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Tiny |
+| Type | Fiend (Demon) |
+| Alignment | Chaotic Evil |
+| Armor Class | 13 |
+| Hit Points | 25 (10d4) |
+| Initiative | +3 (13) |
+| Speed | 40 ft. |
+| Challenge | 1 (XP 200; PB +2) |
+| Skills | Stealth +5 |
+| Senses | Darkvision 120 ft.; Passive Perception 10 |
+| Languages | Abyssal, Common |
+| Resistances | Cold, Fire, Lightning |
+| Immunities | Poison; Poisoned |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 5 | -3 | -3 |
+| Dex | 17 | +3 | +3 |
+| Con | 10 | +0 | +0 |
+| Int | 7 | -2 | -2 |
+| Wis | 10 | +0 | +0 |
+| Cha | 10 | +0 | +0 |
+
 
 ## Source text
 
 <!-- SRD page 317 -->
 
-Tiny Fiend (Demon), Chaotic Evil\
-AC 13  Initiative +3 (13)\
-HP 25 (10d4)\
-Speed 40 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 5 −3 −3 Dex 17 +3 +3 Con 10 +0 +0\
-Int 7 −2 −2 Wis 10 +0 +0 Cha 10 +0 +0\
-Skills Stealth +5\
-Resistances Cold, Fire, Lightning\
-Immunities Poison; Poisoned\
-Senses Darkvision 120 ft.; Passive Perception 10\
-Languages Abyssal, Common\
-CR 1 (XP 200; PB +2)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Tiny Fiend (Demon), Chaotic Evil\
+> AC 13  Initiative +3 (13)\
+> HP 25 (10d4)\
+> Speed 40 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 5 −3 −3 Dex 17 +3 +3 Con 10 +0 +0\
+> Int 7 −2 −2 Wis 10 +0 +0 Cha 10 +0 +0\
+> Skills Stealth +5\
+> Resistances Cold, Fire, Lightning\
+> Immunities Poison; Poisoned\
+> Senses Darkvision 120 ft.; Passive Perception 10\
+> Languages Abyssal, Common\
+> CR 1 (XP 200; PB +2)
+
 
 ### Traits
 
@@ -48,48 +76,11 @@ Shape-Shift. The quasit shape-shifts to resemble a bat (Speed 10 ft., Fly 40 ft.
 
 Original layout: [[../../srd-5.2.1/pages/317|page 317]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` tiny ` |
-| ` type ` | ` fiend ` |
-| ` alignment ` | ` Chaotic Evil ` |
-| ` tags_text ` | ` (Demon) ` |
-| ` movement_text ` | ` 40 ft. ` |
-| ` skills_text ` | ` Stealth +5 ` |
-| ` resistances_text ` | ` Cold, Fire, Lightning ` |
-| ` immunities_text ` | ` Poison; Poisoned ` |
-| ` senses_text ` | ` Darkvision 120 ft.; Passive Perception 10 ` |
-| ` languages_text ` | ` Abyssal, Common ` |
-| ` cr_text ` | ` 1 (XP 200; PB +2) ` |
-| ` hit_points_text ` | ` 25 (10d4) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 5 ` | ` -3 ` |
-| ` Dexterity ` | ` 17 ` | ` 3 ` |
-| ` Constitution ` | ` 10 ` | ` 0 ` |
-| ` Intelligence ` | ` 7 ` | ` -2 ` |
-| ` Wisdom ` | ` 10 ` | ` 0 ` |
-| ` Charisma ` | ` 10 ` | ` 0 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 13 ` |  |
-| ` max_hp ` | ` 25 ` |  |
-| ` initiative ` | ` 3 ` |  |
-| ` speed ` | ` 40 ` | ` ft ` |
 
 ## Health
 

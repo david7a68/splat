@@ -1,34 +1,60 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 95b8c704-07ab-5065-a7da-d47075365b7e
 splat_kind: creature
 splat_key: dnd2024:creatures/chimera
 splat_name: Chimera
-splat_origin:
-  key: dnd2024:reference/creature/chimera
+splat_origin: dnd2024:reference/creature/chimera
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 273
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 273, https://www.dndbeyond.com/srd
 ---
 
 # Chimera
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Large |
+| Type | Monstrosity |
+| Alignment | Chaotic Evil |
+| Armor Class | 14 |
+| Hit Points | 114 (12d10 + 48) |
+| Initiative | +0 (10) |
+| Speed | 30 ft., Fly 60 ft. |
+| Challenge | 6 (XP 2,300; PB +3) |
+| Skills | Perception +8 |
+| Senses | Darkvision 60 ft.; Passive Perception 18 |
+| Languages | Understands Draconic but can’t speak |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 19 | +4 | +4 |
+| Dex | 11 | +0 | +0 |
+| Con | 19 | +4 | +4 |
+| Int | 3 | -4 | -4 |
+| Wis | 14 | +2 | +2 |
+| Cha | 10 | +0 | +0 |
+
 
 ## Source text
 
 <!-- SRD page 273 -->
 
-Large Monstrosity, Chaotic Evil\
-AC 14 Initiative +0 (10)\
-HP 114 (12d10 + 48)\
-Speed 30 ft., Fly 60 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 19 +4 +4 Dex 11 +0 +0 Con 19 +4 +4\
-Int 3 −4 −4 Wis 14 +2 +2 Cha 10 +0 +0\
-Skills Perception +8\
-Senses Darkvision 60 ft.; Passive Perception 18\
-Languages Understands Draconic but can’t speak\
-CR 6 (XP 2,300; PB +3)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Large Monstrosity, Chaotic Evil\
+> AC 14 Initiative +0 (10)\
+> HP 114 (12d10 + 48)\
+> Speed 30 ft., Fly 60 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 19 +4 +4 Dex 11 +0 +0 Con 19 +4 +4\
+> Int 3 −4 −4 Wis 14 +2 +2 Cha 10 +0 +0\
+> Skills Perception +8\
+> Senses Darkvision 60 ft.; Passive Perception 18\
+> Languages Understands Draconic but can’t speak\
+> CR 6 (XP 2,300; PB +3)
+
 
 ### Actions
 
@@ -44,46 +70,11 @@ Fire Breath (Recharge 5–6). Dexterity Saving Throw: DC 15, each creature in a 
 
 Original layout: [[../../srd-5.2.1/pages/273|page 273]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` large ` |
-| ` type ` | ` monstrosity ` |
-| ` alignment ` | ` Chaotic Evil ` |
-| ` movement_text ` | ` 30 ft., Fly 60 ft. ` |
-| ` skills_text ` | ` Perception +8 ` |
-| ` senses_text ` | ` Darkvision 60 ft.; Passive Perception 18 ` |
-| ` languages_text ` | ` Understands Draconic but can’t speak ` |
-| ` cr_text ` | ` 6 (XP 2,300; PB +3) ` |
-| ` hit_points_text ` | ` 114 (12d10 + 48) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 19 ` | ` 4 ` |
-| ` Dexterity ` | ` 11 ` | ` 0 ` |
-| ` Constitution ` | ` 19 ` | ` 4 ` |
-| ` Intelligence ` | ` 3 ` | ` -4 ` |
-| ` Wisdom ` | ` 14 ` | ` 2 ` |
-| ` Charisma ` | ` 10 ` | ` 0 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 14 ` |  |
-| ` max_hp ` | ` 114 ` |  |
-| ` initiative ` | ` 0 ` |  |
-| ` speed ` | ` 30 ` | ` ft ` |
-| ` fly_speed ` | ` 60 ` | ` ft ` |
 
 ## Health
 
@@ -355,3 +346,13 @@ geometry_assumptions:
   - plane
   - form_appearance
 ```
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_stats_extras -->
+> 
+> ```yaml
+> fly_speed:
+>   unit: ft
+>   value: 60
+> ```
+

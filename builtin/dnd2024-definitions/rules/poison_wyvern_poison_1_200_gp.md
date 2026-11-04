@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: a7ccef37-0c61-5edd-9b61-3852277811a9
 splat_kind: rule
 splat_key: dnd2024:rules/poison_wyvern_poison_1_200_gp
 splat_name: Wyvern Poison (1,200 GP)
-splat_origin:
-  key: dnd2024:reference/pages/198
+splat_origin: dnd2024:reference/pages/198
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 198
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 198, https://www.dndbeyond.com/srd
 ---
 
 # Wyvern Poison (1,200 GP)

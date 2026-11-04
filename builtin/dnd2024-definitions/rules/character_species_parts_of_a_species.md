@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: e141bb07-e08e-5736-b25e-6181ae215255
 splat_kind: rule
 splat_key: dnd2024:rules/character_species_parts_of_a_species
 splat_name: Parts of a Species
-splat_origin:
-  key: dnd2024:reference/pages/083
+splat_origin: dnd2024:reference/pages/083
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 83
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 83, https://www.dndbeyond.com/srd
 ---
 
 # Parts of a Species

@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "5022e781-2384-5a10-a437-563550b79d84"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/flaming_sphere"
 splat_name: "Flaming Sphere"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [132], "executable": false}
+splat_pages:
+- 132
 ---
 
 # Flaming Sphere
@@ -26,3 +27,13 @@ When you move the sphere, you can direct it over barriers up to 5 feet tall and 
 Using a Higher-Level Spell Slot. The damage increases by 1d6 for each spell slot level above 2.
 
 Original layout: [[../pages/132|page 132]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

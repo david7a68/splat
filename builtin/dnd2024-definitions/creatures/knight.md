@@ -1,35 +1,62 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 3690316d-fb14-5b76-b9f8-5230a0c69e47
 splat_kind: creature
 splat_key: dnd2024:creatures/knight
 splat_name: Knight
-splat_origin:
-  key: dnd2024:reference/creature/knight
+splat_origin: dnd2024:reference/creature/knight
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 302
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 302, https://www.dndbeyond.com/srd
 ---
 
 # Knight
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Medium or Small |
+| Type | Humanoid |
+| Alignment | Neutral |
+| Armor Class | 18 |
+| Hit Points | 52 (8d8 + 16) |
+| Initiative | +0 (10) |
+| Speed | 30 ft. |
+| Challenge | 3 (XP 700; PB +2) |
+| Senses | Passive Perception 10 |
+| Languages | Common plus one other language |
+| Gear | Greatsword, Heavy Crossbow, Plate Armor |
+| Immunities | Frightened |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 16 | +3 | +3 |
+| Dex | 11 | +0 | +0 |
+| Con | 14 | +2 | +4 |
+| Int | 11 | +0 | +0 |
+| Wis | 11 | +0 | +2 |
+| Cha | 15 | +2 | +2 |
+
 
 ## Source text
 
 <!-- SRD page 302 -->
 
 Medium or Small Humanoid, Neutral\
-AC 18 Initiative +0 (10)\
-HP 52 (8d8 + 16)\
-Speed 30 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str  16 +3 +3 Dex 11 +0 +0 Con 14 +2 +4\
-Int  11 +0 +0 Wis  11 +0 +2 Cha 15 +2 +2\
-Immunities Frightened\
-Gear Greatsword, Heavy Crossbow, Plate Armor\
-Senses Passive Perception 10\
-Languages Common plus one other language\
-CR 3 (XP 700; PB +2)
+> [!quote]- Printed stat block (not read; edit the table above)
+> AC 18 Initiative +0 (10)\
+> HP 52 (8d8 + 16)\
+> Speed 30 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str  16 +3 +3 Dex 11 +0 +0 Con 14 +2 +4\
+> Int  11 +0 +0 Wis  11 +0 +2 Cha 15 +2 +2\
+> Immunities Frightened\
+> Gear Greatsword, Heavy Crossbow, Plate Armor\
+> Senses Passive Perception 10\
+> Languages Common plus one other language\
+> CR 3 (XP 700; PB +2)
+
 
 ### Actions
 
@@ -45,47 +72,11 @@ Parry. Trigger: The knight is hit by a melee attack roll while holding a weapon.
 
 Original layout: [[../../srd-5.2.1/pages/302|page 302]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` medium ` |
-| ` type ` | ` humanoid ` |
-| ` alignment ` | ` Neutral ` |
-| ` size_options_text ` | ` Medium or Small ` |
-| ` movement_text ` | ` 30 ft. ` |
-| ` immunities_text ` | ` Frightened ` |
-| ` gear_text ` | ` Greatsword, Heavy Crossbow, Plate Armor ` |
-| ` senses_text ` | ` Passive Perception 10 ` |
-| ` languages_text ` | ` Common plus one other language ` |
-| ` cr_text ` | ` 3 (XP 700; PB +2) ` |
-| ` hit_points_text ` | ` 52 (8d8 + 16) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 16 ` | ` 3 ` |
-| ` Dexterity ` | ` 11 ` | ` 0 ` |
-| ` Constitution ` | ` 14 ` | ` 4 ` |
-| ` Intelligence ` | ` 11 ` | ` 0 ` |
-| ` Wisdom ` | ` 11 ` | ` 2 ` |
-| ` Charisma ` | ` 15 ` | ` 2 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 18 ` |  |
-| ` max_hp ` | ` 52 ` |  |
-| ` initiative ` | ` 0 ` |  |
-| ` speed ` | ` 30 ` | ` ft ` |
 
 ## Health
 

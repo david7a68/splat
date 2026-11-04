@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "af9aed98-68f0-5088-bedb-4ea08d67da72"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/mass_healing_word"
 splat_name: "Mass Healing Word"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [148], "executable": false}
+splat_pages:
+- 148
 ---
 
 # Mass Healing Word
@@ -22,3 +23,13 @@ Up to six creatures of your choice that you can see within range regain Hit Poin
 Using a Higher-Level Spell Slot. The healing increases by 1d4 for each spell slot level above 3.
 
 Original layout: [[../pages/148|page 148]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 6e5c3914-970e-52ef-b80e-96ff9880e804
 splat_kind: rule
 splat_key: dnd2024:glossary/improvised_weapons
 splat_name: Improvised Weapons
-splat_origin:
-  key: dnd2024:reference/glossary/improvised_weapons
+splat_origin: dnd2024:reference/glossary/improvised_weapons
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 183
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 183, https://www.dndbeyond.com/srd
 ---
 
 # Improvised Weapons

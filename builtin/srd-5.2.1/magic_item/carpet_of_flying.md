@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "e9485182-42ae-5083-9cf4-5c4c3197a970"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/magic_item/carpet_of_flying"
 splat_name: "Carpet of Flying"
-splat_reference: {"source": "SRD 5.2.1", "category": "magic_item", "pages": [215], "executable": false}
+splat_pages:
+- 215
 ---
 
 # Carpet of Flying
@@ -25,3 +26,13 @@ Four sizes of Carpet of Flying exist. The GM chooses the size of a given carpet 
 | 81–00 | 6 ft. × 9 ft. | 800 lb. | 30 feet |
 
 Original layout: [[../pages/215|page 215]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: magic_item
+> executable: false
+> ```
+

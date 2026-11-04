@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: cb8eacdd-70dc-5c61-a8f3-6c6e12cefb0e
 splat_kind: item
 splat_key: dnd2024:items/potion_of_animal_friendship
 splat_name: Potion of Animal Friendship
-splat_origin:
-  key: dnd2024:reference/magic_item/potion_of_animal_friendship
+splat_origin: dnd2024:reference/magic_item/potion_of_animal_friendship
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 235
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 235, https://www.dndbeyond.com/srd
 ---
 
 # Potion of Animal Friendship
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Potion |
+| Rarity | Uncommon |
+| Attunement | No |
+
 
 ## Source text
 
@@ -26,22 +33,9 @@ Agitating this potion’s muddy liquid brings little bits into view: a fish scal
 
 Original layout: [[../../srd-5.2.1/pages/235|page 235]].
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` potion ` |
-| ` rarity ` | ` uncommon ` |
 
-### Equipment
-
-<!-- splat:values path=splat_item/equipment -->
-
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` none ` |
 
 ## Rule
 

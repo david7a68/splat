@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 0304382e-8fd5-501d-b7c9-a25fa0d8e15f
 splat_kind: rule
 splat_key: dnd2024:class_features/paladin_level_1_lay_on_hands
 splat_name: 'Level 1: Lay On Hands'
-splat_origin:
-  key: dnd2024:reference/pages/053
+splat_origin: dnd2024:reference/pages/053
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 53, 54
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 53, 54, https://www.dndbeyond.com/srd
 ---
 
 # Level 1: Lay On Hands

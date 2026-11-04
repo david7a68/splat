@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: b328bae9-3a97-5fa7-8ea8-29dc2f473890
 splat_kind: rule
 splat_key: dnd2024:rules/weapons_slow
 splat_name: Slow
-splat_origin:
-  key: dnd2024:reference/pages/090
+splat_origin: dnd2024:reference/pages/090
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 90
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 90, https://www.dndbeyond.com/srd
 ---
 
 # Slow

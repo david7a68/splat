@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: f90e1217-fb74-504e-981f-d809e6574934
 splat_kind: spell
 splat_key: dnd2024:spells/feather_fall
 splat_name: Feather Fall
-splat_origin:
-  key: dnd2024:reference/spell/feather_fall
+splat_origin: dnd2024:reference/spell/feather_fall
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 130
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 130, https://www.dndbeyond.com/srd
 ---
 
 # Feather Fall
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 1 |
+| School | Transmutation |
+| Classes | Bard, Sorcerer, Wizard |
+| Casting Time | Reaction, which you take when you or a creature you can see within 60 feet of you falls |
+| Range | 60 feet |
+| Components | V, M (a small feather or piece of down) |
+| Duration | 1 minute |
+
 
 ## Source text
 
@@ -28,37 +39,11 @@ Choose up to five falling creatures within range. A falling creature’s rate of
 
 Original layout: [[../../srd-5.2.1/pages/130|page 130]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 1 ` |
-| ` school ` | ` transmutation ` |
-| ` classes ` | ` ["bard", "sorcerer", "wizard"] ` |
-| ` components ` | ` ["verbal", "material"] ` |
-| ` concentration ` | ` false ` |
-| ` duration ` | ` 1 minute ` |
-| ` casting_time ` | ` Reaction, which you take when you or a creature you can see within 60 feet of you falls ` |
-| ` ritual ` | ` false ` |
 
-### Range
 
-<!-- splat:values path=splat_spell/range -->
 
-| Field | Value |
-| --- | --- |
-| ` feet ` | ` 60 ` |
-
-### Material
-
-<!-- splat:values path=splat_spell/material -->
-
-| Field | Value |
-| --- | --- |
-| ` description ` | ` a small feather or piece of down ` |
-| ` consumed ` | ` false ` |
 
 ## Rule
 
@@ -98,3 +83,12 @@ falling: true
 | ` before_spell_end ` | ` true ` |
 | ` fall_damage ` | ` 0 ` |
 | ` end_spell_on_landed_target ` | ` true ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_spell_extras -->
+> 
+> ```yaml
+> material:
+>   consumed: false
+> ```
+

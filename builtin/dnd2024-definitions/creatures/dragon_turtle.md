@@ -1,34 +1,60 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: e6257a3a-9490-5c23-9b3c-7c8a2f10f404
 splat_kind: creature
 splat_key: dnd2024:creatures/dragon_turtle
 splat_name: Dragon Turtle
-splat_origin:
-  key: dnd2024:reference/creature/dragon_turtle
+splat_origin: dnd2024:reference/creature/dragon_turtle
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 281
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 281, https://www.dndbeyond.com/srd
 ---
 
 # Dragon Turtle
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Gargantuan |
+| Type | Dragon |
+| Alignment | Neutral |
+| Armor Class | 20 |
+| Hit Points | 356 (23d20 + 115) |
+| Initiative | +6 (16) |
+| Speed | 20 ft., Swim 50 ft. |
+| Challenge | 17 (XP 18,000; PB +6) |
+| Senses | Darkvision 120 ft.; Passive Perception 11 |
+| Languages | Draconic, Primordial (Aquan) |
+| Resistances | Fire |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 25 | +7 | +7 |
+| Dex | 10 | +0 | +0 |
+| Con | 20 | +5 | +11 |
+| Int | 10 | +0 | +0 |
+| Wis | 12 | +1 | +7 |
+| Cha | 12 | +1 | +1 |
+
 
 ## Source text
 
 <!-- SRD page 281 -->
 
-Gargantuan Dragon, Neutral\
-AC 20 Initiative +6 (16)\
-HP 356 (23d20 + 115)\
-Speed 20 ft., Swim 50 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 25 +7 +7 Dex 10 +0 +0 Con 20 +5 +11\
-Int 10 +0 +0 Wis 12 +1 +7 Cha 12 +1 +1\
-Resistances Fire\
-Senses Darkvision 120 ft.; Passive Perception 11\
-Languages Draconic, Primordial (Aquan)\
-CR 17 (XP 18,000; PB +6)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Gargantuan Dragon, Neutral\
+> AC 20 Initiative +6 (16)\
+> HP 356 (23d20 + 115)\
+> Speed 20 ft., Swim 50 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 25 +7 +7 Dex 10 +0 +0 Con 20 +5 +11\
+> Int 10 +0 +0 Wis 12 +1 +7 Cha 12 +1 +1\
+> Resistances Fire\
+> Senses Darkvision 120 ft.; Passive Perception 11\
+> Languages Draconic, Primordial (Aquan)\
+> CR 17 (XP 18,000; PB +6)
+
 
 ### Traits
 
@@ -46,46 +72,11 @@ Steam Breath (Recharge 5–6). Constitution Saving Throw: DC 19, each creature i
 
 Original layout: [[../../srd-5.2.1/pages/281|page 281]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` gargantuan ` |
-| ` type ` | ` dragon ` |
-| ` alignment ` | ` Neutral ` |
-| ` movement_text ` | ` 20 ft., Swim 50 ft. ` |
-| ` resistances_text ` | ` Fire ` |
-| ` senses_text ` | ` Darkvision 120 ft.; Passive Perception 11 ` |
-| ` languages_text ` | ` Draconic, Primordial (Aquan) ` |
-| ` cr_text ` | ` 17 (XP 18,000; PB +6) ` |
-| ` hit_points_text ` | ` 356 (23d20 + 115) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 25 ` | ` 7 ` |
-| ` Dexterity ` | ` 10 ` | ` 0 ` |
-| ` Constitution ` | ` 20 ` | ` 11 ` |
-| ` Intelligence ` | ` 10 ` | ` 0 ` |
-| ` Wisdom ` | ` 12 ` | ` 7 ` |
-| ` Charisma ` | ` 12 ` | ` 1 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 20 ` |  |
-| ` max_hp ` | ` 356 ` |  |
-| ` initiative ` | ` 6 ` |  |
-| ` speed ` | ` 20 ` | ` ft ` |
-| ` swim_speed ` | ` 50 ` | ` ft ` |
 
 ## Health
 
@@ -319,3 +310,13 @@ geometry:
 unlisted_success_branch: no_effect
 unlisted_duration: until_removed_by_applicable_rule
 ```
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_stats_extras -->
+> 
+> ```yaml
+> swim_speed:
+>   unit: ft
+>   value: 50
+> ```
+

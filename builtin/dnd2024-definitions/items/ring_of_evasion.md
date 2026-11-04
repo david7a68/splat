@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 1c31d842-028f-537a-8aa5-09a959077099
 splat_kind: item
 splat_key: dnd2024:items/ring_of_evasion
 splat_name: Ring of Evasion
-splat_origin:
-  key: dnd2024:reference/magic_item/ring_of_evasion
+splat_origin: dnd2024:reference/magic_item/ring_of_evasion
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 238
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 238, https://www.dndbeyond.com/srd
 ---
 
 # Ring of Evasion
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Ring |
+| Rarity | Rare |
+| Attunement | Yes |
+
 
 ## Source text
 
@@ -24,22 +31,9 @@ This ring has 3 charges, and it regains 1d3 expended charges daily at dawn. When
 
 Original layout: [[../../srd-5.2.1/pages/238|page 238]].
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` ring ` |
-| ` rarity ` | ` rare ` |
 
-### Equipment
-
-<!-- splat:values path=splat_item/equipment -->
-
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` required ` |
 
 ## Rule
 

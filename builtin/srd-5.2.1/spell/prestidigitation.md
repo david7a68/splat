@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "b8bd16da-e932-5f99-9e48-c4932ade9b5f"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/prestidigitation"
 splat_name: "Prestidigitation"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [154], "executable": false}
+splat_pages:
+- 154
 ---
 
 # Prestidigitation
@@ -32,3 +33,13 @@ Magic Mark. You make a color, a small mark, or a symbol appear on an object or a
 Minor Creation. You create a nonmagical trinket or an illusory image that can fit in your hand. It lasts until the end of your next turn. A trinket can deal no damage and has no monetary worth.
 
 Original layout: [[../pages/154|page 154]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

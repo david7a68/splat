@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 9c0b220a-a3f4-5c12-b884-dc929fe32d70
 splat_kind: spell
 splat_key: dnd2024:spells/continual_flame
 splat_name: Continual Flame
-splat_origin:
-  key: dnd2024:reference/spell/continual_flame
+splat_origin: dnd2024:reference/spell/continual_flame
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 119
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 119, https://www.dndbeyond.com/srd
 ---
 
 # Continual Flame
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 2 |
+| School | Evocation |
+| Classes | Cleric, Druid, Wizard |
+| Casting Time | Action |
+| Range |  |
+| Components | V, S, M (ruby dust worth 50+ GP, which the spell consumes) |
+| Duration | Until dispelled |
+
 
 ## Source text
 
@@ -28,37 +39,11 @@ A flame springs from an object that you touch. The effect casts Bright Light in 
 
 Original layout: [[../../srd-5.2.1/pages/119|page 119]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 2 ` |
-| ` school ` | ` evocation ` |
-| ` classes ` | ` ["cleric", "druid", "wizard"] ` |
-| ` components ` | ` ["verbal", "somatic", "material"] ` |
-| ` concentration ` | ` false ` |
-| ` duration ` | ` Until dispelled ` |
-| ` casting_time ` | ` Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
 
-<!-- splat:values path=splat_spell/range -->
 
-| Field | Value |
-| --- | --- |
-| ` mode ` | ` touch ` |
-
-### Material
-
-<!-- splat:values path=splat_spell/material -->
-
-| Field | Value |
-| --- | --- |
-| ` description ` | ` ruby dust worth 50+ GP, which the spell consumes ` |
-| ` consumed ` | ` true ` |
 
 ## Rule
 
@@ -103,3 +88,14 @@ Original layout: [[../../srd-5.2.1/pages/119|page 119]].
 | ` hideable ` | ` true ` |
 | ` smotherable ` | ` false ` |
 | ` quenchable ` | ` false ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_spell_extras -->
+> 
+> ```yaml
+> material:
+>   consumed: true
+> range:
+>   mode: touch
+> ```
+

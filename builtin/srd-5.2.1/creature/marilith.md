@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "91658395-d0c8-54f3-a9e0-e3416ed9420c"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/marilith"
 splat_name: "Marilith"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [306], "executable": false}
+splat_pages:
+- 306
 ---
 
 # Marilith
@@ -50,3 +51,13 @@ Teleport (Recharge 5–6). The marilith teleports up to 120 feet to an unoccupie
 Parry. Trigger: The marilith is hit by a melee attack roll while holding a weapon. Response: The marilith adds 5 to its AC against that attack, possibly causing it to miss.
 
 Original layout: [[../pages/306|page 306]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

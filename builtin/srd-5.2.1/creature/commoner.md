@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "be3442d8-61eb-595d-aeda-a8eecfe31fe0"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/commoner"
 splat_name: "Commoner"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [275], "executable": false}
+splat_pages:
+- 275
 ---
 
 # Commoner
@@ -32,3 +33,13 @@ Training. The commoner has proficiency in one skill of the GM’s choice and has
 Club. Melee Attack Roll: +2, reach 5 ft. Hit: 2 (1d4) Bludgeoning damage.
 
 Original layout: [[../pages/275|page 275]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

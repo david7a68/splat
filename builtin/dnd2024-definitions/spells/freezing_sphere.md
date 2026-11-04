@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: f8c81e44-6985-58fe-a3fa-c3fda7f60022
 splat_kind: spell
 splat_key: dnd2024:spells/freezing_sphere
 splat_name: Freezing Sphere
-splat_origin:
-  key: dnd2024:reference/spell/freezing_sphere
+splat_origin: dnd2024:reference/spell/freezing_sphere
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 134
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 134, https://www.dndbeyond.com/srd
 ---
 
 # Freezing Sphere
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 6 |
+| School | Evocation |
+| Classes | Sorcerer, Wizard |
+| Casting Time | Action |
+| Range | 300 feet |
+| Components | V, S, M (a miniature crystal sphere) |
+| Duration | Instantaneous |
+
 
 ## Source text
 
@@ -34,37 +45,11 @@ Using a Higher-Level Spell Slot. The damage increases by 1d6 for each spell slot
 
 Original layout: [[../../srd-5.2.1/pages/134|page 134]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 6 ` |
-| ` school ` | ` evocation ` |
-| ` classes ` | ` ["sorcerer", "wizard"] ` |
-| ` components ` | ` ["verbal", "somatic", "material"] ` |
-| ` concentration ` | ` false ` |
-| ` duration ` | ` Instantaneous ` |
-| ` casting_time ` | ` Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
 
-<!-- splat:values path=splat_spell/range -->
 
-| Field | Value |
-| --- | --- |
-| ` feet ` | ` 300 ` |
-
-### Material
-
-<!-- splat:values path=splat_spell/material -->
-
-| Field | Value |
-| --- | --- |
-| ` description ` | ` a miniature crystal sphere ` |
-| ` consumed ` | ` false ` |
 
 ## Rule
 
@@ -185,3 +170,12 @@ concentration: false
 maximum:
   kind: instantaneous
 ```
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_spell_extras -->
+> 
+> ```yaml
+> material:
+>   consumed: false
+> ```
+

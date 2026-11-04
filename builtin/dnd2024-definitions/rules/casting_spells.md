@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: d7e7b44b-a196-53c8-97e2-1a0c79c26c4e
 splat_kind: rule
 splat_key: dnd2024:rules/casting_spells
 splat_name: Casting Spells
-splat_origin:
-  key: dnd2024:reference/pages/104
+splat_origin: dnd2024:reference/pages/104
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 104
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 104, https://www.dndbeyond.com/srd
 ---
 
 # Casting Spells

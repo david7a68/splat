@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "027343c6-7607-563a-ad55-228b9b49b41c"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/crocodile"
 splat_name: "Crocodile"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [347], "executable": false}
+splat_pages:
+- 347
 ---
 
 # Crocodile
@@ -32,3 +33,13 @@ Hold Breath. The crocodile can hold its breath for 1 hour.
 Bite. Melee Attack Roll: +4, reach 5 ft. Hit: 6 (1d8 + 2) Piercing damage. If the target is a Medium or smaller creature, it has the Grappled condition (escape DC 12). While Grappled, the target has the Restrained condition.
 
 Original layout: [[../pages/347|page 347]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

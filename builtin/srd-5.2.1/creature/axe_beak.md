@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "50d52211-bdd5-506d-b879-897de8f17171"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/axe_beak"
 splat_name: "Axe Beak"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [260], "executable": false}
+splat_pages:
+- 260
 ---
 
 # Axe Beak
@@ -27,3 +28,13 @@ CR 1/4 (XP 50; PB +2)
 Beak. Melee Attack Roll: +4, reach 5 ft. Hit: 6 (1d8 + 2) Slashing damage.
 
 Original layout: [[../pages/260|page 260]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

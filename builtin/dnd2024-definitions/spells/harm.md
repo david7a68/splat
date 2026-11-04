@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 87cc2289-5542-5c7f-ab89-d16e578280ee
 splat_kind: spell
 splat_key: dnd2024:spells/harm
 splat_name: Harm
-splat_origin:
-  key: dnd2024:reference/spell/harm
+splat_origin: dnd2024:reference/spell/harm
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 139
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 139, https://www.dndbeyond.com/srd
 ---
 
 # Harm
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 6 |
+| School | Necromancy |
+| Classes | Cleric |
+| Casting Time | Action |
+| Range | 60 feet |
+| Components | V, S |
+| Duration | Instantaneous |
+
 
 ## Source text
 
@@ -28,28 +39,9 @@ You unleash virulent magic on a creature you can see within range. The target ma
 
 Original layout: [[../../srd-5.2.1/pages/139|page 139]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 6 ` |
-| ` school ` | ` necromancy ` |
-| ` classes ` | ` ["cleric"] ` |
-| ` components ` | ` ["verbal", "somatic"] ` |
-| ` concentration ` | ` false ` |
-| ` duration ` | ` Instantaneous ` |
-| ` casting_time ` | ` Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
-
-<!-- splat:values path=splat_spell/range -->
-
-| Field | Value |
-| --- | --- |
-| ` feet ` | ` 60 ` |
 
 ## Rule
 

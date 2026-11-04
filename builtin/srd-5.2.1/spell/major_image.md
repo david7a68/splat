@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "f5a52a73-9e77-539d-9c94-43187694e748"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/major_image"
 splat_name: "Major Image"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [147], "executable": false}
+splat_pages:
+- 147
 ---
 
 # Major Image
@@ -26,3 +27,13 @@ Physical interaction with the image reveals it to be an illusion, for things can
 Using a Higher-Level Spell Slot. The spell lasts until dispelled, without requiring Concentration, if cast with a level 4+ spell slot.
 
 Original layout: [[../pages/147|page 147]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 5afb35f3-dc56-5f6d-8f4c-a92cecbc4719
 splat_kind: item
 splat_key: dnd2024:items/sun_blade
 splat_name: Sun Blade
-splat_origin:
-  key: dnd2024:reference/magic_item/sun_blade
+splat_origin: dnd2024:reference/magic_item/sun_blade
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 248
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 248, https://www.dndbeyond.com/srd
 ---
 
 # Sun Blade
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Weapon |
+| Rarity | Rare |
+| Attunement | Yes |
+
 
 ## Source text
 
@@ -30,22 +37,9 @@ Sunlight. The sword’s luminous blade emits Bright Light in a 15-foot radius an
 
 Original layout: [[../../srd-5.2.1/pages/248|page 248]].
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` weapon ` |
-| ` rarity ` | ` rare ` |
 
-### Equipment
-
-<!-- splat:values path=splat_item/equipment -->
-
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` required ` |
 
 ## Rule
 

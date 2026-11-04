@@ -1,10 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "0f96b593-3fdf-57cd-b463-d4c1e1ce035e"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/guards_and_wards"
 splat_name: "Guards and Wards"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [137, 138], "executable": false}
+splat_pages:
+- 137
+- 138
 ---
 
 # Guards and Wards
@@ -44,3 +46,13 @@ Other Spell Effect. Place one of the following magical effects within the warded
 •  Suggestion in one 5-foot square; any creature that enters that square receives the suggestion mentally
 
 Original layout: [[../pages/137|page 137]], [[../pages/138|page 138]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

@@ -1,10 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "0dff17d9-1cf3-5728-b470-b788a9518faf"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/lion"
 splat_name: "Lion"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [356, 357], "executable": false}
+splat_pages:
+- 356
+- 357
 ---
 
 # Lion
@@ -40,3 +42,13 @@ Rend. Melee Attack Roll: +5, reach 5 ft. Hit: 7 (1d8 + 3) Slashing damage.
 Roar. Wisdom Saving Throw: DC 11, one creature within 15 feet. Failure: The target has the Frightened condition until the start of the lion’s next turn.
 
 Original layout: [[../pages/356|page 356]], [[../pages/357|page 357]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

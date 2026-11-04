@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 337a282f-4f04-52dd-859f-d0f36b2b34e5
 splat_kind: rule
 splat_key: dnd2024:rules/combat_ranged_attacks
 splat_name: Ranged Attacks
-splat_origin:
-  key: dnd2024:reference/pages/015
+splat_origin: dnd2024:reference/pages/015
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 15
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 15, https://www.dndbeyond.com/srd
 ---
 
 # Ranged Attacks

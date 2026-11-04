@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: e0943043-c1da-5a0b-ba2a-0ae19c68589b
 splat_kind: rule
 splat_key: dnd2024:class_features/ranger_level_1_spellcasting
 splat_name: 'Level 1: Spellcasting'
-splat_origin:
-  key: dnd2024:reference/pages/057
+splat_origin: dnd2024:reference/pages/057
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 57, 58
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 57, 58, https://www.dndbeyond.com/srd
 ---
 
 # Level 1: Spellcasting

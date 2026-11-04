@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 27ea59e2-4ed9-586f-a6ce-133cf8776339
 splat_kind: item
 splat_key: dnd2024:items/oil_of_etherealness
 splat_name: Oil of Etherealness
-splat_origin:
-  key: dnd2024:reference/magic_item/oil_of_etherealness
+splat_origin: dnd2024:reference/magic_item/oil_of_etherealness
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 233
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 233, https://www.dndbeyond.com/srd
 ---
 
 # Oil of Etherealness
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Potion |
+| Rarity | Rare |
+| Attunement | No |
+
 
 ## Source text
 
@@ -26,22 +33,9 @@ Beads of this cloudy, gray oil form on the outside of its container and quickly 
 
 Original layout: [[../../srd-5.2.1/pages/233|page 233]].
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` potion ` |
-| ` rarity ` | ` rare ` |
 
-### Equipment
-
-<!-- splat:values path=splat_item/equipment -->
-
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` none ` |
 
 ## Rule
 

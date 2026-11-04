@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "b080dc7c-ac3c-5b82-bbbd-753a92b45663"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/magic_item/dust_of_sneezing_and_choking"
 splat_name: "Dust of Sneezing and Choking"
-splat_reference: {"source": "SRD 5.2.1", "category": "magic_item", "pages": [219], "executable": false}
+splat_pages:
+- 219
 ---
 
 # Dust of Sneezing and Choking
@@ -20,3 +21,13 @@ As a Utilize action, you can throw the dust into the air, forcing yourself and e
 On a failed save, a creature begins sneezing uncontrollably; it has the Incapacitated condition and is suffocating. The creature repeats the save at the end of each of its turns, ending the effect on itself on a success. The effect also ends on any creature targeted by a Lesser Restoration spell.
 
 Original layout: [[../pages/219|page 219]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: magic_item
+> executable: false
+> ```
+

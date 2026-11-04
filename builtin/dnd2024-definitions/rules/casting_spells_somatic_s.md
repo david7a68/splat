@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 9e1ed204-f430-5265-a98d-f8558da4656d
 splat_kind: rule
 splat_key: dnd2024:rules/casting_spells_somatic_s
 splat_name: Somatic (S)
-splat_origin:
-  key: dnd2024:reference/pages/105
+splat_origin: dnd2024:reference/pages/105
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 105
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 105, https://www.dndbeyond.com/srd
 ---
 
 # Somatic (S)

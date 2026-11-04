@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "b32ce4b0-3238-5c31-9cbb-3d4afbd5f47d"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/longstrider"
 splat_name: "Longstrider"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [145], "executable": false}
+splat_pages:
+- 145
 ---
 
 # Longstrider
@@ -22,3 +23,13 @@ You touch a creature. The target’s Speed increases by 10 feet until the spell 
 Using a Higher-Level Spell Slot. You can target one additional creature for each spell slot level above 1.
 
 Original layout: [[../pages/145|page 145]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

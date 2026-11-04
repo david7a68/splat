@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: d64bea02-ec56-53e9-a241-6854a12e1fe5
 splat_kind: spell
 splat_key: dnd2024:spells/animate_objects
 splat_name: Animate Objects
-splat_origin:
-  key: dnd2024:reference/spell/animate_objects
+splat_origin: dnd2024:reference/spell/animate_objects
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 108, 109
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 108, 109, https://www.dndbeyond.com/srd
 ---
 
 # Animate Objects
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 5 |
+| School | Transmutation |
+| Classes | Bard, Sorcerer, Wizard |
+| Casting Time | Action |
+| Range | 120 feet |
+| Components | V, S |
+| Duration | Concentration, up to 1 minute |
+
 
 ## Source text
 
@@ -54,28 +65,9 @@ Slam. Melee Attack Roll: Bonus equals your spell attack modifier, reach 5 ft. Hi
 
 Original layout: [[../../srd-5.2.1/pages/108|page 108]], [[../../srd-5.2.1/pages/109|page 109]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 5 ` |
-| ` school ` | ` transmutation ` |
-| ` classes ` | ` ["bard", "sorcerer", "wizard"] ` |
-| ` components ` | ` ["verbal", "somatic"] ` |
-| ` concentration ` | ` true ` |
-| ` duration ` | ` Concentration, up to 1 minute ` |
-| ` casting_time ` | ` Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
-
-<!-- splat:values path=splat_spell/range -->
-
-| Field | Value |
-| --- | --- |
-| ` feet ` | ` 120 ` |
 
 ## Rule
 

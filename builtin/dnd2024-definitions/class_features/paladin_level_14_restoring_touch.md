@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 0e1fd6f2-67cc-5333-85c7-7e56d13a5f46
 splat_kind: rule
 splat_key: dnd2024:class_features/paladin_level_14_restoring_touch
 splat_name: 'Level 14: Restoring Touch'
-splat_origin:
-  key: dnd2024:reference/pages/055
+splat_origin: dnd2024:reference/pages/055
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 55
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 55, https://www.dndbeyond.com/srd
 ---
 
 # Level 14: Restoring Touch

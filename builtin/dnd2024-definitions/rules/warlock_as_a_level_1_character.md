@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: e661b70d-3f6f-5fcb-ba3e-3506cf801465
 splat_kind: rule
 splat_key: dnd2024:rules/warlock_as_a_level_1_character
 splat_name: As a Level 1 Character
-splat_origin:
-  key: dnd2024:reference/pages/070
+splat_origin: dnd2024:reference/pages/070
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 70
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 70, https://www.dndbeyond.com/srd
 ---
 
 # As a Level 1 Character

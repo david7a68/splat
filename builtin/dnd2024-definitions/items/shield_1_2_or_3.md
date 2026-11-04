@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 1b29595a-8b0a-54a2-ac5a-12fe422c33e6
 splat_kind: item
 splat_key: dnd2024:items/shield_1_2_or_3
 splat_name: Shield, +1, +2, or +3
-splat_origin:
-  key: dnd2024:reference/magic_item/shield_1_2_or_3
+splat_origin: dnd2024:reference/magic_item/shield_1_2_or_3
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 243
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 243, https://www.dndbeyond.com/srd
 ---
 
 # Shield, +1, +2, or +3
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Armor |
+| Rarity | Varies |
+| Attunement | No |
+
 
 ## Source text
 
@@ -24,22 +31,9 @@ While holding this Shield, you have a bonus to Armor Class determined by the Shi
 
 Original layout: [[../../srd-5.2.1/pages/243|page 243]].
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` armor ` |
-| ` rarity ` | ` varies ` |
 
-### Equipment
-
-<!-- splat:values path=splat_item/equipment -->
-
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` none ` |
 
 ## Rule
 

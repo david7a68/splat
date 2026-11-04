@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "079e43d7-9909-5365-b8db-3c8aceb12516"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/dominate_beast"
 splat_name: "Dominate Beast"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [125], "executable": false}
+splat_pages:
+- 125
 ---
 
 # Dominate Beast
@@ -26,3 +27,13 @@ You can command the target to take a Reaction but must take your own Reaction to
 Using a Higher-Level Spell Slot. Your Concentration can last longer with a spell slot of level 5 (up to 10 minutes), 6 (up to 1 hour), or 7+ (up to 8 hours).
 
 Original layout: [[../pages/125|page 125]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "ffc45c05-8329-5e8d-aae1-43e977805832"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/barbed_devil"
 splat_name: "Barbed Devil"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [262], "executable": false}
+splat_pages:
+- 262
 ---
 
 # Barbed Devil
@@ -44,3 +45,13 @@ Tail. Melee Attack Roll: +6, reach 10 ft. Hit: 14 (2d10 + 3) Slashing damage.
 Hurl Flame. Ranged Attack Roll: +5, range 150 ft. Hit: 17 (5d6) Fire damage. If the target is a flammable object that isn’t being worn or carried, it starts burning.
 
 Original layout: [[../pages/262|page 262]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

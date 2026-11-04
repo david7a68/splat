@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "b4afb859-0be5-5514-ba63-6242294e3260"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/continual_flame"
 splat_name: "Continual Flame"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [119], "executable": false}
+splat_pages:
+- 119
 ---
 
 # Continual Flame
@@ -20,3 +21,13 @@ Duration: Until dispelled
 A flame springs from an object that you touch. The effect casts Bright Light in a 20-foot radius and Dim Light for an additional 20 feet. It looks like a regular flame, but it creates no heat and consumes no fuel. The flame can be covered or hidden but not smothered or quenched.
 
 Original layout: [[../pages/119|page 119]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

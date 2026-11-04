@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: f2af8a33-f692-53f2-b46a-7ff1e3a4fe3f
 splat_kind: rule
 splat_key: dnd2024:class_features/barbarian_level_3_barbarian_subclass
 splat_name: 'Level 3: Barbarian Subclass'
-splat_origin:
-  key: dnd2024:reference/pages/029
+splat_origin: dnd2024:reference/pages/029
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 29
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 29, https://www.dndbeyond.com/srd
 ---
 
 # Level 3: Barbarian Subclass

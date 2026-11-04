@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: d2c2ad7c-5657-584a-839d-b729a774bf16
 splat_kind: rule_group
 splat_key: dnd2024:subclasses/druid_circle_of_the_land
 splat_name: Circle of the Land
-splat_origin:
-  key: dnd2024:reference/pages/046
+splat_origin: dnd2024:reference/pages/046
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 46
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 46, https://www.dndbeyond.com/srd
 ---
 
 # Circle of the Land

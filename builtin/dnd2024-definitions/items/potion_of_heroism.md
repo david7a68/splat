@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: db471f07-b63f-599f-8670-4fa50832dc6f
 splat_kind: item
 splat_key: dnd2024:items/potion_of_heroism
 splat_name: Potion of Heroism
-splat_origin:
-  key: dnd2024:reference/magic_item/potion_of_heroism
+splat_origin: dnd2024:reference/magic_item/potion_of_heroism
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 236
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 236, https://www.dndbeyond.com/srd
 ---
 
 # Potion of Heroism
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Potion |
+| Rarity | Rare |
+| Attunement | No |
+
 
 ## Source text
 
@@ -26,22 +33,9 @@ This potion’s blue liquid bubbles and steams as if boiling.
 
 Original layout: [[../../srd-5.2.1/pages/236|page 236]].
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` potion ` |
-| ` rarity ` | ` rare ` |
 
-### Equipment
-
-<!-- splat:values path=splat_item/equipment -->
-
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` none ` |
 
 ## Rule
 

@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 7f2acf2e-b970-5d4d-a706-297e8c2e55a6
 splat_kind: spell
 splat_key: dnd2024:spells/detect_evil_and_good
 splat_name: Detect Evil and Good
-splat_origin:
-  key: dnd2024:reference/spell/detect_evil_and_good
+splat_origin: dnd2024:reference/spell/detect_evil_and_good
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 123
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 123, https://www.dndbeyond.com/srd
 ---
 
 # Detect Evil and Good
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 1 |
+| School | Divination |
+| Classes | Cleric, Paladin |
+| Casting Time | Action |
+| Range |  |
+| Components | V, S |
+| Duration | Concentration, up to 10 minutes |
+
 
 ## Source text
 
@@ -30,28 +41,9 @@ The spell is blocked by 1 foot of stone, dirt, or wood; 1 inch of metal; or a th
 
 Original layout: [[../../srd-5.2.1/pages/123|page 123]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 1 ` |
-| ` school ` | ` divination ` |
-| ` classes ` | ` ["cleric", "paladin"] ` |
-| ` components ` | ` ["verbal", "somatic"] ` |
-| ` concentration ` | ` true ` |
-| ` duration ` | ` Concentration, up to 10 minutes ` |
-| ` casting_time ` | ` Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
-
-<!-- splat:values path=splat_spell/range -->
-
-| Field | Value |
-| --- | --- |
-| ` mode ` | ` self ` |
 
 ## Rule
 
@@ -109,3 +101,12 @@ columns:
 | ` row_1 ` | ` ["stone", "dirt", "wood"] ` | ` 1 ` |  |  |
 | ` row_2 ` | ` ["metal"] ` |  | ` 1 ` |  |
 | ` row_3 ` | ` ["lead"] ` |  |  | ` Thin sheet ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_spell_extras -->
+> 
+> ```yaml
+> range:
+>   mode: self
+> ```
+

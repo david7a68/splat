@@ -1,35 +1,62 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 56739d5d-c675-5561-8eb4-4d331e83231c
 splat_kind: creature
 splat_key: dnd2024:creatures/behir
 splat_name: Behir
-splat_origin:
-  key: dnd2024:reference/creature/behir
+splat_origin: dnd2024:reference/creature/behir
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 263
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 263, https://www.dndbeyond.com/srd
 ---
 
 # Behir
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Huge |
+| Type | Monstrosity |
+| Alignment | Neutral Evil |
+| Armor Class | 17 |
+| Hit Points | 168 (16d12 + 64) |
+| Initiative | +3 (13) |
+| Speed | 50 ft., Climb 50 ft. |
+| Challenge | 11 (XP 7,200; PB +4) |
+| Skills | Perception +6, Stealth +7 |
+| Senses | Darkvision 90 ft.; Passive Perception 16 |
+| Languages | Draconic |
+| Immunities | Lightning |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 23 | +6 | +6 |
+| Dex | 16 | +3 | +3 |
+| Con | 18 | +4 | +4 |
+| Int | 7 | -2 | -2 |
+| Wis | 14 | +2 | +2 |
+| Cha | 12 | +1 | +1 |
+
 
 ## Source text
 
 <!-- SRD page 263 -->
 
-Huge Monstrosity, Neutral Evil\
-AC 17 Initiative +3 (13)\
-HP 168 (16d12 + 64)\
-Speed 50 ft., Climb 50 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 23 +6 +6 Dex 16 +3 +3 Con 18 +4 +4\
-Int 7 −2 −2 Wis 14 +2 +2 Cha 12 +1 +1\
-Skills Perception +6, Stealth +7\
-Immunities Lightning\
-Senses Darkvision 90 ft.; Passive Perception 16\
-Languages Draconic\
-CR 11 (XP 7,200; PB +4)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Huge Monstrosity, Neutral Evil\
+> AC 17 Initiative +3 (13)\
+> HP 168 (16d12 + 64)\
+> Speed 50 ft., Climb 50 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 23 +6 +6 Dex 16 +3 +3 Con 18 +4 +4\
+> Int 7 −2 −2 Wis 14 +2 +2 Cha 12 +1 +1\
+> Skills Perception +6, Stealth +7\
+> Immunities Lightning\
+> Senses Darkvision 90 ft.; Passive Perception 16\
+> Languages Draconic\
+> CR 11 (XP 7,200; PB +4)
+
 
 ### Actions
 
@@ -49,47 +76,11 @@ If the behir takes 30 damage or more on a single turn from the swallowed creatur
 
 Original layout: [[../../srd-5.2.1/pages/263|page 263]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` huge ` |
-| ` type ` | ` monstrosity ` |
-| ` alignment ` | ` Neutral Evil ` |
-| ` movement_text ` | ` 50 ft., Climb 50 ft. ` |
-| ` skills_text ` | ` Perception +6, Stealth +7 ` |
-| ` immunities_text ` | ` Lightning ` |
-| ` senses_text ` | ` Darkvision 90 ft.; Passive Perception 16 ` |
-| ` languages_text ` | ` Draconic ` |
-| ` cr_text ` | ` 11 (XP 7,200; PB +4) ` |
-| ` hit_points_text ` | ` 168 (16d12 + 64) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 23 ` | ` 6 ` |
-| ` Dexterity ` | ` 16 ` | ` 3 ` |
-| ` Constitution ` | ` 18 ` | ` 4 ` |
-| ` Intelligence ` | ` 7 ` | ` -2 ` |
-| ` Wisdom ` | ` 14 ` | ` 2 ` |
-| ` Charisma ` | ` 12 ` | ` 1 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 17 ` |  |
-| ` max_hp ` | ` 168 ` |  |
-| ` initiative ` | ` 3 ` |  |
-| ` speed ` | ` 50 ` | ` ft ` |
-| ` climb_speed ` | ` 50 ` | ` ft ` |
 
 ## Health
 
@@ -364,3 +355,13 @@ columns:
 | ` provider ` | ` caller ` |
 | ` required_facts ` | ` ["distance", "area_membership", "visibility", "occupancy", "movement_path"] ` |
 | ` validate_against_typed_constraints ` | ` true ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_stats_extras -->
+> 
+> ```yaml
+> climb_speed:
+>   unit: ft
+>   value: 50
+> ```
+

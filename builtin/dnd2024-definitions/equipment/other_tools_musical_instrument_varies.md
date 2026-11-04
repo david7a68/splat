@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: ad572d3b-16e7-5478-a402-ec28095e3c6e
 splat_kind: item
 splat_key: dnd2024:equipment/other_tools_musical_instrument_varies
 splat_name: Musical Instrument (Varies)
-splat_origin:
-  key: dnd2024:reference/pages/094
+splat_origin: dnd2024:reference/pages/094
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 94
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 94, https://www.dndbeyond.com/srd
 ---
 
 # Musical Instrument (Varies)
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Adventuring Gear |
+| Rarity |  |
+| Attunement | No |
+
 
 ## Source text
 
@@ -22,21 +29,9 @@ Ability: Charisma Weight: Varies\
 Utilize: Play a known tune (DC 10), or improvise a song (DC 15)\
 Variants: Bagpipes (30 GP, 6 lb.), drum (6 GP, 3 lb.), dulcimer (25 GP, 10 lb.), flute (2 GP, 1 lb.), horn (3 GP, 2 lb.), lute (35 GP, 2 lb.), lyre (30 GP, 2 lb.), pan flute (12 GP, 2 lb.), shawm (2 GP, 1 lb.), viol (30 GP, 1 lb.)
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` adventuring_gear ` |
 
-### Equipment
-
-<!-- splat:values path=splat_item/equipment -->
-
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` none ` |
 
 ## Rule
 

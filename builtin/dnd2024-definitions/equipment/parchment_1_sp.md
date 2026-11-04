@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: d850e5db-ed29-5640-9e75-b7dabbb6c54d
 splat_kind: item
 splat_key: dnd2024:equipment/parchment_1_sp
 splat_name: Parchment (1 SP)
-splat_origin:
-  key: dnd2024:reference/pages/099
+splat_origin: dnd2024:reference/pages/099
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 99
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 99, https://www.dndbeyond.com/srd
 ---
 
 # Parchment (1 SP)
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Adventuring Gear |
+| Rarity |  |
+| Attunement | No |
+
 
 ## Source text
 
@@ -20,39 +27,13 @@ splat_sources:
 
 One sheet of Parchment can hold about 250 handwritten words.
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` adventuring_gear ` |
 
-### Equipment
 
-<!-- splat:values path=splat_item/equipment -->
 
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` none ` |
 
-### Price
 
-<!-- splat:values path=splat_item/price -->
-
-| Field | Value |
-| --- | --- |
-| ` value ` | ` 1 ` |
-| ` unit ` | ` sp ` |
-
-### Mass
-
-<!-- splat:values path=splat_item/mass -->
-
-| Field | Value |
-| --- | --- |
-| ` value ` | ` 0.0 ` |
-| ` unit ` | ` lb ` |
 
 ## Rule
 
@@ -90,3 +71,16 @@ One sheet of Parchment can hold about 250 handwritten words.
 | ` value ` | ` 0.0 ` |
 | ` unit ` | ` lb ` |
 | ` negligible ` | ` true ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_item_extras -->
+> 
+> ```yaml
+> price:
+>   unit: sp
+>   value: 1
+> mass:
+>   unit: lb
+>   value: 0.0
+> ```
+

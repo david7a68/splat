@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: adaee6e3-5a29-5e3d-8d5b-3de170c7b8c9
 splat_kind: item
 splat_key: dnd2024:items/ring_of_jumping
 splat_name: Ring of Jumping
-splat_origin:
-  key: dnd2024:reference/magic_item/ring_of_jumping
+splat_origin: dnd2024:reference/magic_item/ring_of_jumping
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 238
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 238, https://www.dndbeyond.com/srd
 ---
 
 # Ring of Jumping
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Ring |
+| Rarity | Uncommon |
+| Attunement | Yes |
+
 
 ## Source text
 
@@ -24,22 +31,9 @@ While wearing this ring, you can cast Jump from it, but can target only yourself
 
 Original layout: [[../../srd-5.2.1/pages/238|page 238]].
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` ring ` |
-| ` rarity ` | ` uncommon ` |
 
-### Equipment
-
-<!-- splat:values path=splat_item/equipment -->
-
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` required ` |
 
 ## Rule
 

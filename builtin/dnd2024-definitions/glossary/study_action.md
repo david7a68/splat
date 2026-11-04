@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 062ec5a9-e058-554f-8e75-ac6cac62c9c5
 splat_kind: rule
 splat_key: dnd2024:glossary/study_action
 splat_name: Study [Action]
-splat_origin:
-  key: dnd2024:reference/glossary/study_action
+splat_origin: dnd2024:reference/glossary/study_action
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 189
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 189, https://www.dndbeyond.com/srd
 ---
 
 # Study [Action]

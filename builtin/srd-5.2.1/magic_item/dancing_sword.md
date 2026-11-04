@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "af8282e2-4315-5ca4-955b-ed9aaa94de8e"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/magic_item/dancing_sword"
 splat_name: "Dancing Sword"
-splat_reference: {"source": "SRD 5.2.1", "category": "magic_item", "pages": [217], "executable": false}
+splat_pages:
+- 217
 ---
 
 # Dancing Sword
@@ -20,3 +21,13 @@ While the weapon hovers, you can take a Bonus Action to cause it to fly up to 30
 After the hovering weapon attacks for the fourth time, it flies back to you and tries to return to your hand. If you have no hand free, the weapon falls to the ground in your space. If the weapon has no unobstructed path to you, it moves as close to you as it can and then falls to the ground. It also ceases to hover if you grasp it or are more than 30 feet away from it.
 
 Original layout: [[../pages/217|page 217]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: magic_item
+> executable: false
+> ```
+

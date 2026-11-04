@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 6082eb9f-8f75-5b5e-9a57-c69b64e83afc
 splat_kind: item
 splat_key: dnd2024:items/candle_of_invocation
 splat_name: Candle of Invocation
-splat_origin:
-  key: dnd2024:reference/magic_item/candle_of_invocation
+splat_origin: dnd2024:reference/magic_item/candle_of_invocation
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 214, 215
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 214, 215, https://www.dndbeyond.com/srd
 ---
 
 # Candle of Invocation
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Wondrous Item |
+| Rarity | Very Rare |
+| Attunement | Yes |
+
 
 ## Source text
 
@@ -41,22 +48,9 @@ Alternatively, when you light the candle for the first time, you can cast Gate w
 
 Original layout: [[../../srd-5.2.1/pages/214|page 214]], [[../../srd-5.2.1/pages/215|page 215]].
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` wondrous_item ` |
-| ` rarity ` | ` very_rare ` |
 
-### Equipment
-
-<!-- splat:values path=splat_item/equipment -->
-
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` required ` |
 
 ## Rule
 

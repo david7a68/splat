@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 1d55496c-347e-5683-9e18-a8d1419b207f
 splat_kind: rule
 splat_key: dnd2024:rules/magic_item_categories_weapons
 splat_name: Weapons
-splat_origin:
-  key: dnd2024:reference/pages/205
+splat_origin: dnd2024:reference/pages/205
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 205
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 205, https://www.dndbeyond.com/srd
 ---
 
 # Weapons

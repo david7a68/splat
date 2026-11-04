@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "d84b2608-0816-5f08-9333-e845ba99e087"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/glabrezu"
 splat_name: "Glabrezu"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [289], "executable": false}
+splat_pages:
+- 289
 ---
 
 # Glabrezu
@@ -45,3 +46,13 @@ At Will: Darkness, Detect Magic, Dispel Magic\
 1/Day Each: Confusion, Fly, Power Word Stun
 
 Original layout: [[../pages/289|page 289]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

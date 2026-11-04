@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: a3fca2a6-e22b-5e2d-8dd5-84182cd47df2
 splat_kind: rule
 splat_key: dnd2024:rules/paladin_paladin_spell_list
 splat_name: Paladin Spell List
-splat_origin:
-  key: dnd2024:reference/pages/055
+splat_origin: dnd2024:reference/pages/055
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 55, 56
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 55, 56, https://www.dndbeyond.com/srd
 ---
 
 # Paladin Spell List

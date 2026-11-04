@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 129a5122-8826-5942-890f-0418c4dad6e7
 splat_kind: spell
 splat_key: dnd2024:spells/call_lightning
 splat_name: Call Lightning
-splat_origin:
-  key: dnd2024:reference/spell/call_lightning
+splat_origin: dnd2024:reference/spell/call_lightning
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 114
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 114, https://www.dndbeyond.com/srd
 ---
 
 # Call Lightning
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 3 |
+| School | Conjuration |
+| Classes | Druid |
+| Casting Time | Action |
+| Range | 120 feet |
+| Components | V, S |
+| Duration | Concentration, up to 10 minutes |
+
 
 ## Source text
 
@@ -36,28 +47,9 @@ Using a Higher-Level Spell Slot. The damage increases by 1d10 for each spell slo
 
 Original layout: [[../../srd-5.2.1/pages/114|page 114]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 3 ` |
-| ` school ` | ` conjuration ` |
-| ` classes ` | ` ["druid"] ` |
-| ` components ` | ` ["verbal", "somatic"] ` |
-| ` concentration ` | ` true ` |
-| ` duration ` | ` Concentration, up to 10 minutes ` |
-| ` casting_time ` | ` Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
-
-<!-- splat:values path=splat_spell/range -->
-
-| Field | Value |
-| --- | --- |
-| ` feet ` | ` 120 ` |
 
 ## Rule
 

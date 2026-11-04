@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "6620e676-fc73-5508-9df2-ebae52832d2f"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/earthquake"
 splat_name: "Earthquake"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [127], "executable": false}
+splat_pages:
+- 127
 ---
 
 # Earthquake
@@ -30,3 +31,13 @@ Structures. The tremor deals 50 Bludgeoning damage to any structure in contact w
 A creature within a distance from a collapsing structure equal to half the structure’s height makes a Dexterity saving throw. On a failed save, the creature takes 12d6 Bludgeoning damage, has the Prone condition, and is buried in the rubble, requiring a DC 20 Strength (Athletics) check as an action to escape. On a successful save, the creature takes half as much damage only.
 
 Original layout: [[../pages/127|page 127]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

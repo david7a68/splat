@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 72531fa2-5662-5996-89fd-07c5b8af784c
 splat_kind: rule
 splat_key: dnd2024:glossary/hit_points
 splat_name: Hit Points
-splat_origin:
-  key: dnd2024:reference/glossary/hit_points
+splat_origin: dnd2024:reference/glossary/hit_points
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 183
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 183, https://www.dndbeyond.com/srd
 ---
 
 # Hit Points

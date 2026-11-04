@@ -355,18 +355,14 @@ impl Manifest {
     fn text(&self, campaign: Uuid) -> Result<String, String> {
         let base = self.previous.clone().unwrap_or_else(|| {
             format!(
-                "---\nsplat_schema: 1\nsplat_id: {}\nsplat_kind: package\nsplat_name: Campaign Package\nsplat_namespace: campaign_package_{}\n---\n\n# Campaign Package\n\nDefinitions from D&D Beyond that no enabled package note lists by ID. Splat writes this folder. Campaign > Packages lists the entries that can move to or from a package.\n",
+                "---\nsplat_schema: 2\nsplat_id: {}\nsplat_kind: package\nsplat_name: Campaign Package\nsplat_namespace: campaign_package_{}\n---\n\n# Campaign Package\n\nDefinitions from D&D Beyond that no enabled package note lists by ID. Splat writes this folder. Campaign > Packages lists the entries that can move to or from a package.\n",
                 package_id(campaign),
                 campaign.simple(),
             )
         });
         let routes = serde_yaml_ng::to_value(&self.routes).map_err(|e| e.to_string())?;
         let text = crate::content::formats::patch_model(&base, &[(ROUTES, Some(routes))])?;
-        if self.previous.is_none() {
-            crate::content::formats::convert(MANIFEST, &text)
-        } else {
-            Ok(text)
-        }
+        Ok(text)
     }
 }
 pub fn package_id(campaign: Uuid) -> Uuid {
@@ -458,17 +454,7 @@ fn rewritten(
         // Routing edits the model, then emits its one payload. Reusing the
         // previous fence here would create a second source for the same facts.
         fields["splat_schema"] = 1.into();
-        let body = replace(
-            entry
-                .body
-                .split("\n> [!note]- Splat data")
-                .next()
-                .unwrap()
-                .split("\n## Splat data")
-                .next()
-                .unwrap_or(&entry.body)
-                .to_owned(),
-        );
+        let body = replace(rules::source_body(&entry));
         let legacy = rules::rendered(fields, &body)?;
         return crate::content::formats::convert(relative_path, &legacy);
     }
@@ -1227,16 +1213,16 @@ mod tests {
         record
     }
     fn package_note(extra: &str, words: &str) -> String {
-        format!(
+        crate::content::formats::convert("Fixture.md", &format!(
             "---\nsplat_schema: 1\nsplat_id: {WAND}\nsplat_kind: item\nsplat_key: test:items/wand\nsplat_name: Rod\nsplat_item:\n  category: gear\n{extra}---\n\n# Rod\n\n## Source text\n\n*Gear*\n\n{words}\n"
-        )
+        )).expect("schema-2 fixture")
     }
     fn package_with(root: &Path, extra: &str, words: &str) -> PathBuf {
         let folder = root.join("package");
         fs::create_dir_all(folder.join("Items")).unwrap();
         fs::write(
             folder.join("Package.md"),
-            format!("---\nsplat_schema: 1\nsplat_id: {PACKAGE}\nsplat_kind: package\nsplat_name: Test\nsplat_namespace: test\n---\n"),
+            crate::content::formats::convert("Fixture.md", &format!("---\nsplat_schema: 1\nsplat_id: {PACKAGE}\nsplat_kind: package\nsplat_name: Test\nsplat_namespace: test\n---\n")).expect("schema-2 fixture"),
         )
         .unwrap();
         fs::write(folder.join("Items/Rod.md"), package_note(extra, words)).unwrap();
@@ -1260,9 +1246,8 @@ mod tests {
         Destinations::new(CAMPAIGN, Vec::new())
     }
     fn sheet_uses(record: &EntitySnapshot, campaign: &Path, id: Uuid) -> bool {
-        fs::read_to_string(record.campaign_path(campaign))
-            .unwrap()
-            .contains(&id.to_string())
+        let text = fs::read_to_string(record.campaign_path(campaign)).unwrap();
+        text.contains(&id.to_string())
     }
     /// Places an imported definition in the character's old folder, as older versions did.
     fn old_note(record: &EntitySnapshot, campaign: &Path) -> PathBuf {
@@ -1298,6 +1283,7 @@ mod tests {
         let (campaign, shared) = (tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap());
         let folder = package(shared.path());
         let record = with_words();
+
         record
             .save_campaign_copy_to(campaign.path(), &enabled(&folder))
             .unwrap();
@@ -1416,7 +1402,7 @@ mod tests {
         fs::create_dir_all(&folder).unwrap();
         fs::write(
             folder.join("Package.md"),
-            format!("---\nsplat_schema: 1\nsplat_id: {package}\nsplat_kind: package\nsplat_name: Other\nsplat_namespace: other{id}\n---\n"),
+            crate::content::formats::convert("Fixture.md", &format!("---\nsplat_schema: 1\nsplat_id: {package}\nsplat_kind: package\nsplat_name: Other\nsplat_namespace: other{id}\n---\n")).expect("schema-2 fixture"),
         )
         .unwrap();
         fs::write(
@@ -1646,7 +1632,7 @@ mod tests {
             let id = Uuid::from_u128(campaign_id);
             fs::write(
                 campaign.path().join("Campaign.md"),
-                format!("---\nsplat_schema: 1\nsplat_id: {id}\nsplat_kind: campaign\nsplat_name: C\nsplat_namespace: c{campaign_id}\n---\n"),
+                crate::content::formats::convert("Fixture.md", &format!("---\nsplat_schema: 1\nsplat_id: {id}\nsplat_kind: campaign\nsplat_name: C\nsplat_namespace: c{campaign_id}\n---\n")).expect("schema-2 fixture"),
             )
             .unwrap();
             with_words().save_campaign_copy(campaign.path()).unwrap();
@@ -1952,7 +1938,7 @@ mod tests {
         let folder = package_with(shared.path(), &extra, "Other words entirely here.");
         let note = Entry::parse(
             "note.md",
-            &format!("---\nsplat_schema: 1\nsplat_id: {CAMPAIGN}\nsplat_kind: item\nsplat_name: Wand\nsplat_item:\n  category: gear\nsplat_rule:\n  mechanic: test:rules/mine\n  implementation: test:rules/mine\n---\n\n# Wand\n"),
+            &crate::content::formats::convert("Fixture.md", &format!("---\nsplat_schema: 1\nsplat_id: {CAMPAIGN}\nsplat_kind: item\nsplat_name: Wand\nsplat_item:\n  category: gear\nsplat_rule:\n  mechanic: test:rules/mine\n  implementation: test:rules/mine\n---\n\n# Wand\n")).expect("schema-2 fixture"),
         )
         .unwrap();
         assert!(
@@ -1972,12 +1958,12 @@ mod tests {
         let body = "\n# Goblin\n\n## Source text\n\n***Fury.*** You hit hard.\n";
         fs::write(
             &path,
-            format!("---\nsplat_schema: 1\nsplat_id: {WAND}\nsplat_kind: reference\nsplat_name: Goblin\nsplat_reference:\n  source: Test\n  category: species\n  executable: false\n---\n{body}"),
+            crate::content::formats::convert("Fixture.md", &format!("---\nsplat_schema: 1\nsplat_id: {WAND}\nsplat_kind: reference\nsplat_name: Goblin\nsplat_reference:\n  source: Test\n  category: species\n  executable: false\n---\n{body}")).expect("schema-2 fixture"),
         )
         .unwrap();
         let note = Entry::parse(
             "note.md",
-            &format!("---\nsplat_schema: 1\nsplat_id: {CAMPAIGN}\nsplat_kind: rule\nsplat_name: Fury\nsplat_rule:\n  mechanic: test:rules/fury\n  implementation: test:rules/fury\n---\n"),
+            &crate::content::formats::convert("Fixture.md", &format!("---\nsplat_schema: 1\nsplat_id: {CAMPAIGN}\nsplat_kind: rule\nsplat_name: Fury\nsplat_rule:\n  mechanic: test:rules/fury\n  implementation: test:rules/fury\n---\n")).expect("schema-2 fixture"),
         )
         .unwrap();
         let write = package_write(&path, Some(&note), &["feature:1".into()])
@@ -1985,7 +1971,12 @@ mod tests {
             .unwrap();
         assert!(write.text.contains("- feature:1"));
         assert!(!write.text.contains("splat_rule"));
-        assert!(write.text.ends_with(body));
+        assert_eq!(
+            Entry::parse("Goblin.md", &write.text).unwrap().body,
+            Entry::parse("Goblin.md", &fs::read_to_string(&path).unwrap())
+                .unwrap()
+                .body
+        );
     }
 
     #[test]
@@ -1995,10 +1986,10 @@ mod tests {
         for (name, n) in [("Goblin", 5u128), ("Tabaxi", 6)] {
             fs::write(
                 folder.join(format!("{name}.md")),
-                format!(
+                crate::content::formats::convert("Fixture.md", &format!(
                     "---\nsplat_schema: 1\nsplat_id: {}\nsplat_kind: reference\nsplat_name: {name}\nsplat_reference:\n  source: Test\n  category: species\n  executable: false\n---\n\n# {name}\n\n***Darkvision.*** You see in the dark for 60 feet.\n\n***Small.*** You are Small.\n",
                     Uuid::from_u128(n)
-                ),
+                )).expect("schema-2 fixture"),
             )
             .unwrap();
         }

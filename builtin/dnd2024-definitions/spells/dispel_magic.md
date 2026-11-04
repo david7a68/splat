@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 0091936d-2449-5293-bc84-d13f07ab9c8b
 splat_kind: spell
 splat_key: dnd2024:spells/dispel_magic
 splat_name: Dispel Magic
-splat_origin:
-  key: dnd2024:reference/spell/dispel_magic
+splat_origin: dnd2024:reference/spell/dispel_magic
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 124
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 124, https://www.dndbeyond.com/srd
 ---
 
 # Dispel Magic
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 3 |
+| School | Abjuration |
+| Classes | Bard, Cleric, Druid, Paladin, Ranger, Sorcerer, Warlock, Wizard |
+| Casting Time | Action |
+| Range | 120 feet |
+| Components | V, S |
+| Duration | Instantaneous |
+
 
 ## Source text
 
@@ -30,28 +41,9 @@ Using a Higher-Level Spell Slot. You automatically end a spell on the target if 
 
 Original layout: [[../../srd-5.2.1/pages/124|page 124]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 3 ` |
-| ` school ` | ` abjuration ` |
-| ` classes ` | ` ["bard", "cleric", "druid", "paladin", "ranger", "sorcerer", "warlock", "wizard"] ` |
-| ` components ` | ` ["verbal", "somatic"] ` |
-| ` concentration ` | ` false ` |
-| ` duration ` | ` Instantaneous ` |
-| ` casting_time ` | ` Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
-
-<!-- splat:values path=splat_spell/range -->
-
-| Field | Value |
-| --- | --- |
-| ` feet ` | ` 120 ` |
 
 ## Rule
 

@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 83fba512-5429-5d13-a438-117acd034f20
 splat_kind: rule
 splat_key: dnd2024:rules/poison_harvesting_poison
 splat_name: Harvesting Poison
-splat_origin:
-  key: dnd2024:reference/pages/197
+splat_origin: dnd2024:reference/pages/197
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 197
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 197, https://www.dndbeyond.com/srd
 ---
 
 # Harvesting Poison

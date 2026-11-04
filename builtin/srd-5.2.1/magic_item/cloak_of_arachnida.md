@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "56aae222-3aa7-53b1-962b-80d97a9e987a"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/magic_item/cloak_of_arachnida"
 splat_name: "Cloak of Arachnida"
-splat_reference: {"source": "SRD 5.2.1", "category": "magic_item", "pages": [215], "executable": false}
+splat_pages:
+- 215
 ---
 
 # Cloak of Arachnida
@@ -24,3 +25,13 @@ Spider Walk. You can’t be caught in webs of any sort and can move through webs
 Web. You can cast Web (save DC 13). The web created by the spell fills twice its normal area. Once used, this property can’t be used again until the next dawn.
 
 Original layout: [[../pages/215|page 215]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: magic_item
+> executable: false
+> ```
+

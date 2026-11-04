@@ -145,7 +145,7 @@ entries, then character sheet copies. File paths shorten before their file actio
 the full path stays on hover. All save rows call their discard action `Discard`. A clean
 Library editor shows `No changes` in the left status slot.
 
-Creature vitals come from `splat_stats` and appear once in the reader. The editor warns
+Creature vitals come from the Stat block table and appear once in the reader. The editor warns
 when a prose AC or HP line disagrees and offers `Use <value>` with Undo. Missing creature
 replacements use the shared search row, with CR, HP, AC and `Use`. Replace all matching
 rows is on by default; it keeps their names and starting values, with one Undo.
@@ -153,7 +153,7 @@ rows is on by default; it keeps their names and starting values, with one Undo.
 World uses labelled `Stat block`, `In` and `Status` rows with `Change` actions. Values share a fixed column and text baseline; empty values say `not set`. Missing links keep their names. New NPCs
 show their future path below the name. A missing place stays visible as `Not found`.
 
-Schema-2 creature readers use the same stat block as schema 1. The Markdown table
+The schema-2 creature reader uses the Markdown table, which
 supplies each value once. A bad cell shows a warning with its file line; valid
 values still lead in the reader and beside a run. Rejected vitals show their original
 text with a warning in the vitals area. Unknown rows stay readable.
@@ -167,15 +167,17 @@ Run copy notices compare the model and readable words, so conversion alone does
 not report a changed creature. A removed package is named without saying its file
 was deleted.
 
-A converting save keeps the action's own message and adds the layout change. Its one
-named Undo restores the whole action, including the previous bytes and layout. Library keeps
-the typed text as an unsaved draft after Undo save; Discard drops it with Undo discard.
-Its save-state word stays visible, and the layout notice uses the same plain small text as Discard. The notice
-stays beside that action. The next save, discard, conflict, outside edit, entry or scope
-change, or page exit clears it. Only Convert files has its own `Saved in the new layout.`
-message with `Undo convert`. Convert files
-groups files by owner, with only the campaign checked at first. Generated packages
-are disabled and say `Generated package; its converter writes the layout`.
+Splat reads schema 2 and Timeline version 2 only. An old file is not loaded. Its
+flag names the path and says `Old layout: Splat no longer reads this file. Use Convert files.`
+Library keeps the old-layout count in its header. Reading and polling write nothing.
+Ordinary saves have no layout notice.
+
+Convert files groups files by owner, with only the campaign checked at first.
+Generated packages start unticked and can be selected. They warn that their
+converter will overwrite these files on its next run. Convert files keeps its
+preview, baseline-checked writes, skipped files and `Undo convert`.
+The headless `splat convert` command uses those same checks; `splat check` reports
+schema-2 flags and unreadable files with their paths and lines.
 Counts include checked owners only. The file picker groups paths by owner too.
 Convert files
 opens a modal with each file's before and after text, the counts by kind in words,
@@ -183,8 +185,7 @@ and files skipped. Its wide source panes use about 60% of the window height. Sou
 the two panes scroll together. Changed lines are
 marked, both sides scroll together, and it opens at the first difference.
 Encounter and group conflict comparisons use the disk's layout. The draft includes
-outside properties and prose that Overwrite keeps. Conversion follows the choice.
-It is blocked while a run is open. Malformed flat properties stay in the
+outside properties and prose that Overwrite keeps. It is blocked while a run is open. Malformed flat properties stay in the
 file; the reader shows a warning with the line number and keeps the note available. Timeline version 2 uses event lists and day IDs in comments below the headings.
 
 Every write renumbers day headings to match the displayed clock. File items use Fight
@@ -271,10 +272,8 @@ Make NPC note into a quiet More menu. Lookup keeps the Back key hint. Both reade
 Alt+Left, with Lookup taking the key when focus is there. The owner line supplies the
 package name in Library. The kind line does not repeat it.
 
-New creatures store identity and CR in `splat_creature`, and speed and ability scores in
-`splat_stats`. The CR field takes precedence over a legacy body line on every surface.
-Each template stat uses one YAML line. Legacy CR and Speed lines appear only in their
-detail rows, without Markdown line breaks. An absent saving throw leaves its cell empty.
+New creatures store identity, CR, speed and ability scores in the Stat block tables.
+Each value has one source. Printed source text stays separate from those tables. An absent saving throw leaves its cell empty.
 Campaign spells use the book's fact order: Casting Time, Range, Components, Duration.
 Concentration and Ritual appear in those values only when true.
 The reader uses one L gap after the kind line and one M gap after a spell's fact table.
@@ -456,8 +455,8 @@ The app-close dialog uses Keep running for a run, Keep recording for audio, and 
 Storage recovery uses the existing warning, comparison and save controls. A copied session names
 both files and offers **New identity** with Undo. A moved draft offers its new path and **Let it go**.
 Missing session and run folders show **Choose folder**. Recording results remain visible with
-**Audio removed** after the WAV is deleted. An outside edit to a legacy Timeline body opens its existing
-disk-conflict comparison at the first difference. A new-layout Timeline keeps outside prose and separate event edits on save. Overwrite comes before Reload and lose my timeline,
+**Audio removed** after the WAV is deleted. Conflicting edits to a Timeline item open its disk-conflict comparison at the first difference.
+The Timeline keeps outside prose and separate event edits on save. Overwrite comes before Reload and lose my timeline,
 which uses the destructive action style. Unknown Timeline properties and event fields survive saves.
 
 Timeline measures the title line with `Copy link` and `Saving blocked`, so copy and
@@ -763,7 +762,7 @@ Open in Library opens its repair editor. Only a deleted file offers replacement.
 A deleted draft shows YOUR DRAFT, Save my draft again and red Let it go, with
 Undo let go. A moved file offers Save my draft to its new path. Saving checks
 the ID on disk so it cannot create a second file after a move.
-Creature copies write splat_creature and splat_stats in front matter and keep prose.
+Creature copies write schema-2 stat tables and keep prose.
 Source text and structured item fields stay in the end group after related notes.
 Fight and Packages use the same menu button, with the caret after the word.
 World relationship values use a 240 px column; Not found stays on one line.
@@ -899,6 +898,6 @@ A missing Campaign.md states whether Splat holds the last read copy and counts i
 An off package with required entries shows None chosen and the needed count, an indeterminate checkbox, and the encounters that use its creatures. Unread World values name the field, bad value, source line and repair; the list and header flag the note.
 
 Library puts nonzero file status links in the header, before Packages. Generated packages do
-not add to the old-layout count. Flagged stat cells appear in list rows and the file warning count.
+add to the old-layout count. Flagged stat cells appear in list rows and the file warning count.
 Stat warnings name the field, bad value, line and repair. Magic items use book case and put
 attunement in their identity line. End fences use a folded Splat data callout; empty defaults need no fence.

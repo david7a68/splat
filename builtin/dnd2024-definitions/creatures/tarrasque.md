@@ -1,36 +1,64 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: e6888c77-0bcb-516f-a305-13de712c5bd1
 splat_kind: creature
 splat_key: dnd2024:creatures/tarrasque
 splat_name: Tarrasque
-splat_origin:
-  key: dnd2024:reference/creature/tarrasque
+splat_origin: dnd2024:reference/creature/tarrasque
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 331, 332
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 331, 332, https://www.dndbeyond.com/srd
 ---
 
 # Tarrasque
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Gargantuan |
+| Type | Monstrosity (Titan) |
+| Alignment | Unaligned |
+| Armor Class | 25 |
+| Hit Points | 697 (34d20 + 340) |
+| Initiative | +18 (28) |
+| Speed | 60 ft., Burrow 40 ft., Climb 60 ft. |
+| Challenge | 30 (XP 155,000; PB +9) |
+| Skills | Perception +9 |
+| Senses | Blindsight 120 ft.; Passive Perception 19 |
+| Languages | None |
+| Resistances | Bludgeoning, Piercing, Slashing |
+| Immunities | Fire, Poison; Charmed, Deafened, Frightened, Paralyzed, Poisoned |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 30 | +10 | +10 |
+| Dex | 11 | +0 | +9 |
+| Con | 30 | +10 | +10 |
+| Int | 3 | -4 | +5 |
+| Wis | 11 | +0 | +9 |
+| Cha | 11 | +0 | +9 |
+
 
 ## Source text
 
 <!-- SRD page 331 -->
 
-Gargantuan Monstrosity (Titan), Unaligned\
-AC 25 Initiative +18 (28)\
-HP 697 (34d20 + 340)\
-Speed 60 ft., Burrow 40 ft., Climb 60 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 30 +10 +10 Dex 11 +0 +9 Con 30 +10 +10\
-Int 3 −4 +5 Wis 11 +0 +9 Cha 11 +0 +9\
-Skills Perception +9\
-Resistances Bludgeoning, Piercing, Slashing\
-Immunities Fire, Poison; Charmed, Deafened, Frightened, Paralyzed, Poisoned\
-Senses Blindsight 120 ft.; Passive Perception 19\
-Languages None\
-CR 30 (XP 155,000; PB +9)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Gargantuan Monstrosity (Titan), Unaligned\
+> AC 25 Initiative +18 (28)\
+> HP 697 (34d20 + 340)\
+> Speed 60 ft., Burrow 40 ft., Climb 60 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 30 +10 +10 Dex 11 +0 +9 Con 30 +10 +10\
+> Int 3 −4 +5 Wis 11 +0 +9 Cha 11 +0 +9\
+> Skills Perception +9\
+> Resistances Bludgeoning, Piercing, Slashing\
+> Immunities Fire, Poison; Charmed, Deafened, Frightened, Paralyzed, Poisoned\
+> Senses Blindsight 120 ft.; Passive Perception 19\
+> Languages None\
+> CR 30 (XP 155,000; PB +9)
+
 
 ### Traits
 
@@ -72,50 +100,11 @@ World-Shaking Movement. The tarrasque moves up to its Speed. At the end of this 
 
 Original layout: [[../../srd-5.2.1/pages/331|page 331]], [[../../srd-5.2.1/pages/332|page 332]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` gargantuan ` |
-| ` type ` | ` monstrosity ` |
-| ` alignment ` | ` Unaligned ` |
-| ` tags_text ` | ` (Titan) ` |
-| ` movement_text ` | ` 60 ft., Burrow 40 ft., Climb 60 ft. ` |
-| ` skills_text ` | ` Perception +9 ` |
-| ` resistances_text ` | ` Bludgeoning, Piercing, Slashing ` |
-| ` immunities_text ` | ` Fire, Poison; Charmed, Deafened, Frightened, Paralyzed, Poisoned ` |
-| ` senses_text ` | ` Blindsight 120 ft.; Passive Perception 19 ` |
-| ` languages_text ` | ` None ` |
-| ` cr_text ` | ` 30 (XP 155,000; PB +9) ` |
-| ` hit_points_text ` | ` 697 (34d20 + 340) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 30 ` | ` 10 ` |
-| ` Dexterity ` | ` 11 ` | ` 9 ` |
-| ` Constitution ` | ` 30 ` | ` 10 ` |
-| ` Intelligence ` | ` 3 ` | ` 5 ` |
-| ` Wisdom ` | ` 11 ` | ` 9 ` |
-| ` Charisma ` | ` 11 ` | ` 9 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 25 ` |  |
-| ` max_hp ` | ` 697 ` |  |
-| ` initiative ` | ` 18 ` |  |
-| ` speed ` | ` 60 ` | ` ft ` |
-| ` burrow_speed ` | ` 40 ` | ` ft ` |
-| ` climb_speed ` | ` 60 ` | ` ft ` |
 
 ## Health
 
@@ -621,3 +610,16 @@ geometry:
 unlisted_success_branch: no_effect
 unlisted_duration: until_removed_by_applicable_rule
 ```
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_stats_extras -->
+> 
+> ```yaml
+> climb_speed:
+>   unit: ft
+>   value: 60
+> burrow_speed:
+>   unit: ft
+>   value: 40
+> ```
+

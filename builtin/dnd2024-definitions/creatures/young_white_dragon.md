@@ -1,35 +1,62 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 4544c113-2676-582c-898a-9b6ad5031d8b
 splat_kind: creature
 splat_key: dnd2024:creatures/young_white_dragon
 splat_name: Young White Dragon
-splat_origin:
-  key: dnd2024:reference/creature/young_white_dragon
+splat_origin: dnd2024:reference/creature/young_white_dragon
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 340
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 340, https://www.dndbeyond.com/srd
 ---
 
 # Young White Dragon
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Large |
+| Type | Dragon (Chromatic) |
+| Alignment | Chaotic Evil |
+| Armor Class | 17 |
+| Hit Points | 123 (13d10 + 52) |
+| Initiative | +3 (13) |
+| Speed | 40 ft., Burrow 20 ft., Fly 80 ft., Swim 40 ft. |
+| Challenge | 6 (2,300 XP; PB +3) |
+| Skills | Perception +6, Stealth +3 |
+| Senses | Blindsight 30 ft., Darkvision 120 ft.; Passive Perception 16 |
+| Languages | Common, Draconic |
+| Immunities | Cold |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 18 | +4 | +4 |
+| Dex | 10 | +0 | +3 |
+| Con | 18 | +4 | +4 |
+| Int | 6 | -2 | -2 |
+| Wis | 11 | +0 | +3 |
+| Cha | 12 | +1 | +1 |
+
 
 ## Source text
 
 <!-- SRD page 340 -->
 
-Large Dragon (Chromatic), Chaotic Evil\
-AC 17 Initiative +3 (13)\
-HP 123 (13d10 + 52)\
-Speed 40 ft., Burrow 20 ft., Fly 80 ft., Swim 40 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 18 +4 +4 Dex 10 +0 +3 Con 18 +4 +4\
-Int 6 −2 −2 Wis 11 +0 +3 Cha 12 +1 +1\
-Skills Perception +6, Stealth +3\
-Immunities Cold\
-Senses Blindsight 30 ft., Darkvision 120 ft.; Passive Perception 16\
-Languages Common, Draconic\
-CR 6 (2,300 XP; PB +3)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Large Dragon (Chromatic), Chaotic Evil\
+> AC 17 Initiative +3 (13)\
+> HP 123 (13d10 + 52)\
+> Speed 40 ft., Burrow 20 ft., Fly 80 ft., Swim 40 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 18 +4 +4 Dex 10 +0 +3 Con 18 +4 +4\
+> Int 6 −2 −2 Wis 11 +0 +3 Cha 12 +1 +1\
+> Skills Perception +6, Stealth +3\
+> Immunities Cold\
+> Senses Blindsight 30 ft., Darkvision 120 ft.; Passive Perception 16\
+> Languages Common, Draconic\
+> CR 6 (2,300 XP; PB +3)
+
 
 ### Traits
 
@@ -45,50 +72,11 @@ Cold Breath (Recharge 5–6). Constitution Saving Throw: DC 15, each creature in
 
 Original layout: [[../../srd-5.2.1/pages/340|page 340]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` large ` |
-| ` type ` | ` dragon ` |
-| ` alignment ` | ` Chaotic Evil ` |
-| ` tags_text ` | ` (Chromatic) ` |
-| ` movement_text ` | ` 40 ft., Burrow 20 ft., Fly 80 ft., Swim 40 ft. ` |
-| ` skills_text ` | ` Perception +6, Stealth +3 ` |
-| ` immunities_text ` | ` Cold ` |
-| ` senses_text ` | ` Blindsight 30 ft., Darkvision 120 ft.; Passive Perception 16 ` |
-| ` languages_text ` | ` Common, Draconic ` |
-| ` cr_text ` | ` 6 (2,300 XP; PB +3) ` |
-| ` hit_points_text ` | ` 123 (13d10 + 52) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 18 ` | ` 4 ` |
-| ` Dexterity ` | ` 10 ` | ` 3 ` |
-| ` Constitution ` | ` 18 ` | ` 4 ` |
-| ` Intelligence ` | ` 6 ` | ` -2 ` |
-| ` Wisdom ` | ` 11 ` | ` 3 ` |
-| ` Charisma ` | ` 12 ` | ` 1 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 17 ` |  |
-| ` max_hp ` | ` 123 ` |  |
-| ` initiative ` | ` 3 ` |  |
-| ` speed ` | ` 40 ` | ` ft ` |
-| ` burrow_speed ` | ` 20 ` | ` ft ` |
-| ` fly_speed ` | ` 80 ` | ` ft ` |
-| ` swim_speed ` | ` 40 ` | ` ft ` |
 
 ## Health
 
@@ -317,3 +305,19 @@ geometry_assumptions:
   - plane
   - form_appearance
 ```
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_stats_extras -->
+> 
+> ```yaml
+> fly_speed:
+>   unit: ft
+>   value: 80
+> burrow_speed:
+>   unit: ft
+>   value: 20
+> swim_speed:
+>   unit: ft
+>   value: 40
+> ```
+

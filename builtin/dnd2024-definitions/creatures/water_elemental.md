@@ -1,35 +1,62 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: fed2df36-1e53-5e3f-8b77-aef7a2b16ae5
 splat_kind: creature
 splat_key: dnd2024:creatures/water_elemental
 splat_name: Water Elemental
-splat_origin:
-  key: dnd2024:reference/creature/water_elemental
+splat_origin: dnd2024:reference/creature/water_elemental
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 337
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 337, https://www.dndbeyond.com/srd
 ---
 
 # Water Elemental
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Large |
+| Type | Elemental |
+| Alignment | Neutral |
+| Armor Class | 14 |
+| Hit Points | 114 (12d10 + 48) |
+| Initiative | +2 (12) |
+| Speed | 30 ft., Swim 90 ft. |
+| Challenge | 5 (XP 1,800; PB +3) |
+| Senses | Darkvision 60 ft.; Passive Perception 10 |
+| Languages | Primordial (Aquan) |
+| Resistances | Acid, Fire |
+| Immunities | Poison; Exhaustion, Grappled, Paralyzed, Petrified, Poisoned, Prone, Restrained, Unconscious |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 18 | +4 | +4 |
+| Dex | 14 | +2 | +2 |
+| Con | 18 | +4 | +4 |
+| Int | 5 | -3 | -3 |
+| Wis | 10 | +0 | +0 |
+| Cha | 8 | -1 | -1 |
+
 
 ## Source text
 
 <!-- SRD page 337 -->
 
-Large Elemental, Neutral\
-AC 14 Initiative +2 (12)\
-HP 114 (12d10 + 48)\
-Speed 30 ft., Swim 90 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 18 +4 +4 Dex 14 +2 +2 Con 18 +4 +4\
-Int 5 −3 −3 Wis 10 +0 +0 Cha 8 −1 −1\
-Resistances Acid, Fire\
-Immunities Poison; Exhaustion, Grappled, Paralyzed, Petrified, Poisoned, Prone, Restrained, Unconscious\
-Senses Darkvision 60 ft.; Passive Perception 10\
-Languages Primordial (Aquan)\
-CR 5 (XP 1,800; PB +3)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Large Elemental, Neutral\
+> AC 14 Initiative +2 (12)\
+> HP 114 (12d10 + 48)\
+> Speed 30 ft., Swim 90 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 18 +4 +4 Dex 14 +2 +2 Con 18 +4 +4\
+> Int 5 −3 −3 Wis 10 +0 +0 Cha 8 −1 −1\
+> Resistances Acid, Fire\
+> Immunities Poison; Exhaustion, Grappled, Paralyzed, Petrified, Poisoned, Prone, Restrained, Unconscious\
+> Senses Darkvision 60 ft.; Passive Perception 10\
+> Languages Primordial (Aquan)\
+> CR 5 (XP 1,800; PB +3)
+
 
 ### Traits
 
@@ -47,47 +74,11 @@ Whelm (Recharge 4–6). Strength Saving Throw: DC 15, each creature in the eleme
 
 Original layout: [[../../srd-5.2.1/pages/337|page 337]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` large ` |
-| ` type ` | ` elemental ` |
-| ` alignment ` | ` Neutral ` |
-| ` movement_text ` | ` 30 ft., Swim 90 ft. ` |
-| ` resistances_text ` | ` Acid, Fire ` |
-| ` immunities_text ` | ` Poison; Exhaustion, Grappled, Paralyzed, Petrified, Poisoned, Prone, Restrained, Unconscious ` |
-| ` senses_text ` | ` Darkvision 60 ft.; Passive Perception 10 ` |
-| ` languages_text ` | ` Primordial (Aquan) ` |
-| ` cr_text ` | ` 5 (XP 1,800; PB +3) ` |
-| ` hit_points_text ` | ` 114 (12d10 + 48) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 18 ` | ` 4 ` |
-| ` Dexterity ` | ` 14 ` | ` 2 ` |
-| ` Constitution ` | ` 18 ` | ` 4 ` |
-| ` Intelligence ` | ` 5 ` | ` -3 ` |
-| ` Wisdom ` | ` 10 ` | ` 0 ` |
-| ` Charisma ` | ` 8 ` | ` -1 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 14 ` |  |
-| ` max_hp ` | ` 114 ` |  |
-| ` initiative ` | ` 2 ` |  |
-| ` speed ` | ` 30 ` | ` ft ` |
-| ` swim_speed ` | ` 90 ` | ` ft ` |
 
 ## Health
 
@@ -344,3 +335,13 @@ geometry:
 unlisted_success_branch: no_effect
 unlisted_duration: until_removed_by_applicable_rule
 ```
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_stats_extras -->
+> 
+> ```yaml
+> swim_speed:
+>   unit: ft
+>   value: 90
+> ```
+

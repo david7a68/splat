@@ -1,10 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "68ec5e0c-f8d3-591c-893c-17f905f8501a"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/blink"
 splat_name: "Blink"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [113, 114], "executable": false}
+splat_pages:
+- 113
+- 114
 ---
 
 # Blink
@@ -24,3 +26,13 @@ Roll 1d6 at the end of each of your turns for the duration. On a roll of 4–6, 
 You return to the other plane at the start of your next turn and when the spell ends if you are on the Ethereal Plane. You return to an unoccupied space of your choice that you can see within 10 feet of the space you left. If no unoccupied space is available within that range, you appear in the nearest unoccupied space.
 
 Original layout: [[../pages/113|page 113]], [[../pages/114|page 114]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 00f66409-316e-5ce6-805a-8f00df17b893
 splat_kind: rule
 splat_key: dnd2024:rules/creating_a_background_1_choose_abilities
 splat_name: '1: Choose Abilities'
-splat_origin:
-  key: dnd2024:reference/pages/192
+splat_origin: dnd2024:reference/pages/192
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 192, 193
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 192, 193, https://www.dndbeyond.com/srd
 ---
 
 # 1: Choose Abilities

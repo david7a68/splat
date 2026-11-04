@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "05b61d95-9193-5090-b5e1-fb501d767ff7"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/giant_wolf_spider"
 splat_name: "Giant Wolf Spider"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [355], "executable": false}
+splat_pages:
+- 355
 ---
 
 # Giant Wolf Spider
@@ -32,3 +33,13 @@ Spider Climb. The spider can climb difficult surfaces, including along ceilings,
 Bite. Melee Attack Roll: +5, reach 5 ft. Hit: 5 (1d4 + 3) Piercing damage plus 5 (2d4) Poison damage.
 
 Original layout: [[../pages/355|page 355]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: c13d9fe6-2fcf-51a6-a8a0-c3a3e669942b
 splat_kind: spell
 splat_key: dnd2024:spells/etherealness
 splat_name: Etherealness
-splat_origin:
-  key: dnd2024:reference/spell/etherealness
+splat_origin: dnd2024:reference/spell/etherealness
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 128
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 128, https://www.dndbeyond.com/srd
 ---
 
 # Etherealness
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 7 |
+| School | Conjuration |
+| Classes | Bard, Cleric, Sorcerer, Warlock, Wizard |
+| Casting Time | Action |
+| Range |  |
+| Components | V, S |
+| Duration | Up to 8 hours |
+
 
 ## Source text
 
@@ -36,28 +47,9 @@ Using a Higher-Level Spell Slot. You can target up to three willing creatures (i
 
 Original layout: [[../../srd-5.2.1/pages/128|page 128]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 7 ` |
-| ` school ` | ` conjuration ` |
-| ` classes ` | ` ["bard", "cleric", "sorcerer", "warlock", "wizard"] ` |
-| ` components ` | ` ["verbal", "somatic"] ` |
-| ` concentration ` | ` false ` |
-| ` duration ` | ` Up to 8 hours ` |
-| ` casting_time ` | ` Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
-
-<!-- splat:values path=splat_spell/range -->
-
-| Field | Value |
-| --- | --- |
-| ` mode ` | ` self ` |
 
 ## Rule
 
@@ -139,3 +131,12 @@ Original layout: [[../../srd-5.2.1/pages/128|page 128]].
 | ` includes_caster ` | ` true ` |
 | ` willing ` | ` true ` |
 | ` within_caster_feet ` | ` 10 ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_spell_extras -->
+> 
+> ```yaml
+> range:
+>   mode: self
+> ```
+

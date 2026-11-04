@@ -1,35 +1,62 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: e5311ec7-f6b3-509e-847d-cbae8bc3a2bd
 splat_kind: creature
 splat_key: dnd2024:creatures/xorn
 splat_name: Xorn
-splat_origin:
-  key: dnd2024:reference/creature/xorn
+splat_origin: dnd2024:reference/creature/xorn
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 343
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 343, https://www.dndbeyond.com/srd
 ---
 
 # Xorn
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Medium |
+| Type | Elemental |
+| Alignment | Neutral |
+| Armor Class | 19 |
+| Hit Points | 84 (8d8 + 48) |
+| Initiative | +0 (10) |
+| Speed | 20 ft., Burrow 20 ft. |
+| Challenge | 5 (XP 1,800; PB +3) |
+| Skills | Perception +6, Stealth +6 |
+| Senses | Darkvision 60 ft., Tremorsense 60 ft.; Passive Perception 16 |
+| Languages | Primordial (Terran) |
+| Immunities | Poison; Paralyzed, Petrified, Poisoned |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 17 | +3 | +3 |
+| Dex | 10 | +0 | +0 |
+| Con | 22 | +6 | +6 |
+| Int | 11 | +0 | +0 |
+| Wis | 10 | +0 | +0 |
+| Cha | 11 | +0 | +0 |
+
 
 ## Source text
 
 <!-- SRD page 343 -->
 
-Medium Elemental, Neutral\
-AC 19 Initiative +0 (10)\
-HP 84 (8d8 + 48)\
-Speed 20 ft., Burrow 20 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 17 +3 +3 Dex 10 +0 +0 Con 22 +6 +6\
-Int 11 +0 +0 Wis 10 +0 +0 Cha 11 +0 +0\
-Skills Perception +6, Stealth +6\
-Immunities Poison; Paralyzed, Petrified, Poisoned\
-Senses Darkvision 60 ft., Tremorsense 60 ft.; Passive Perception 16\
-Languages Primordial (Terran)\
-CR 5 (XP 1,800; PB +3)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Medium Elemental, Neutral\
+> AC 19 Initiative +0 (10)\
+> HP 84 (8d8 + 48)\
+> Speed 20 ft., Burrow 20 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 17 +3 +3 Dex 10 +0 +0 Con 22 +6 +6\
+> Int 11 +0 +0 Wis 10 +0 +0 Cha 11 +0 +0\
+> Skills Perception +6, Stealth +6\
+> Immunities Poison; Paralyzed, Petrified, Poisoned\
+> Senses Darkvision 60 ft., Tremorsense 60 ft.; Passive Perception 16\
+> Languages Primordial (Terran)\
+> CR 5 (XP 1,800; PB +3)
+
 
 ### Traits
 
@@ -51,47 +78,11 @@ Charge. The xorn moves up to its Speed or Burrow Speed straight toward an enemy 
 
 Original layout: [[../../srd-5.2.1/pages/343|page 343]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` medium ` |
-| ` type ` | ` elemental ` |
-| ` alignment ` | ` Neutral ` |
-| ` movement_text ` | ` 20 ft., Burrow 20 ft. ` |
-| ` skills_text ` | ` Perception +6, Stealth +6 ` |
-| ` immunities_text ` | ` Poison; Paralyzed, Petrified, Poisoned ` |
-| ` senses_text ` | ` Darkvision 60 ft., Tremorsense 60 ft.; Passive Perception 16 ` |
-| ` languages_text ` | ` Primordial (Terran) ` |
-| ` cr_text ` | ` 5 (XP 1,800; PB +3) ` |
-| ` hit_points_text ` | ` 84 (8d8 + 48) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 17 ` | ` 3 ` |
-| ` Dexterity ` | ` 10 ` | ` 0 ` |
-| ` Constitution ` | ` 22 ` | ` 6 ` |
-| ` Intelligence ` | ` 11 ` | ` 0 ` |
-| ` Wisdom ` | ` 10 ` | ` 0 ` |
-| ` Charisma ` | ` 11 ` | ` 0 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 19 ` |  |
-| ` max_hp ` | ` 84 ` |  |
-| ` initiative ` | ` 0 ` |  |
-| ` speed ` | ` 20 ` | ` ft ` |
-| ` burrow_speed ` | ` 20 ` | ` ft ` |
 
 ## Health
 
@@ -285,3 +276,13 @@ geometry:
 unlisted_success_branch: no_effect
 unlisted_duration: until_removed_by_applicable_rule
 ```
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_stats_extras -->
+> 
+> ```yaml
+> burrow_speed:
+>   unit: ft
+>   value: 20
+> ```
+

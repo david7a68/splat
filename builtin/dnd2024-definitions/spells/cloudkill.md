@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: d8636a54-0b4a-51bf-b387-2389a6f0741b
 splat_kind: spell
 splat_key: dnd2024:spells/cloudkill
 splat_name: Cloudkill
-splat_origin:
-  key: dnd2024:reference/spell/cloudkill
+splat_origin: dnd2024:reference/spell/cloudkill
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 116
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 116, https://www.dndbeyond.com/srd
 ---
 
 # Cloudkill
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 5 |
+| School | Conjuration |
+| Classes | Sorcerer, Wizard |
+| Casting Time | Action |
+| Range | 120 feet |
+| Components | V, S |
+| Duration | Concentration, up to 10 minutes |
+
 
 ## Source text
 
@@ -34,28 +45,9 @@ Using a Higher-Level Spell Slot. The damage increases by 1d8 for each spell slot
 
 Original layout: [[../../srd-5.2.1/pages/116|page 116]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 5 ` |
-| ` school ` | ` conjuration ` |
-| ` classes ` | ` ["sorcerer", "wizard"] ` |
-| ` components ` | ` ["verbal", "somatic"] ` |
-| ` concentration ` | ` true ` |
-| ` duration ` | ` Concentration, up to 10 minutes ` |
-| ` casting_time ` | ` Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
-
-<!-- splat:values path=splat_spell/range -->
-
-| Field | Value |
-| --- | --- |
-| ` feet ` | ` 120 ` |
 
 ## Rule
 

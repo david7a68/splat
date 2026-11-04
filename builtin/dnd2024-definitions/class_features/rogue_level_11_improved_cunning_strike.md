@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 4336c31c-9da8-5da5-81ca-ef13a7d6f75e
 splat_kind: rule
 splat_key: dnd2024:class_features/rogue_level_11_improved_cunning_strike
 splat_name: 'Level 11: Improved Cunning Strike'
-splat_origin:
-  key: dnd2024:reference/pages/063
+splat_origin: dnd2024:reference/pages/063
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 63
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 63, https://www.dndbeyond.com/srd
 ---
 
 # Level 11: Improved Cunning Strike

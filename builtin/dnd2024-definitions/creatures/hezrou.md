@@ -1,35 +1,62 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: a959432d-bbcc-5cab-810d-29dd255b407b
 splat_kind: creature
 splat_key: dnd2024:creatures/hezrou
 splat_name: Hezrou
-splat_origin:
-  key: dnd2024:reference/creature/hezrou
+splat_origin: dnd2024:reference/creature/hezrou
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 298
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 298, https://www.dndbeyond.com/srd
 ---
 
 # Hezrou
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Large |
+| Type | Fiend (Demon) |
+| Alignment | Chaotic Evil |
+| Armor Class | 18 |
+| Hit Points | 157 (15d10 + 75) |
+| Initiative | +6 (16) |
+| Speed | 30 ft. |
+| Challenge | 8 (XP 3,900; PB +3) |
+| Senses | Darkvision 120 ft.; Passive Perception 11 |
+| Languages | Abyssal; telepathy 120 ft. |
+| Resistances | Cold, Fire, Lightning |
+| Immunities | Poison; Poisoned |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 19 | +4 | +7 |
+| Dex | 17 | +3 | +3 |
+| Con | 20 | +5 | +8 |
+| Int | 5 | -3 | -3 |
+| Wis | 12 | +1 | +4 |
+| Cha | 13 | +1 | +1 |
+
 
 ## Source text
 
 <!-- SRD page 298 -->
 
-Large Fiend (Demon), Chaotic Evil\
-AC 18 Initiative +6 (16)\
-HP 157 (15d10 + 75)\
-Speed 30 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 19 +4 +7 Dex 17 +3 +3 Con 20 +5 +8\
-Int 5 −3 −3 Wis 12 +1 +4 Cha 13 +1 +1\
-Resistances Cold, Fire, Lightning\
-Immunities Poison; Poisoned\
-Senses Darkvision 120 ft.; Passive Perception 11\
-Languages Abyssal; telepathy 120 ft.\
-CR 8 (XP 3,900; PB +3)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Large Fiend (Demon), Chaotic Evil\
+> AC 18 Initiative +6 (16)\
+> HP 157 (15d10 + 75)\
+> Speed 30 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 19 +4 +7 Dex 17 +3 +3 Con 20 +5 +8\
+> Int 5 −3 −3 Wis 12 +1 +4 Cha 13 +1 +1\
+> Resistances Cold, Fire, Lightning\
+> Immunities Poison; Poisoned\
+> Senses Darkvision 120 ft.; Passive Perception 11\
+> Languages Abyssal; telepathy 120 ft.\
+> CR 8 (XP 3,900; PB +3)
+
 
 ### Traits
 
@@ -51,47 +78,11 @@ Leap. The hezrou jumps up to 30 feet by spending 10 feet of movement.
 
 Original layout: [[../../srd-5.2.1/pages/298|page 298]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` large ` |
-| ` type ` | ` fiend ` |
-| ` alignment ` | ` Chaotic Evil ` |
-| ` tags_text ` | ` (Demon) ` |
-| ` movement_text ` | ` 30 ft. ` |
-| ` resistances_text ` | ` Cold, Fire, Lightning ` |
-| ` immunities_text ` | ` Poison; Poisoned ` |
-| ` senses_text ` | ` Darkvision 120 ft.; Passive Perception 11 ` |
-| ` languages_text ` | ` Abyssal; telepathy 120 ft. ` |
-| ` cr_text ` | ` 8 (XP 3,900; PB +3) ` |
-| ` hit_points_text ` | ` 157 (15d10 + 75) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 19 ` | ` 7 ` |
-| ` Dexterity ` | ` 17 ` | ` 3 ` |
-| ` Constitution ` | ` 20 ` | ` 8 ` |
-| ` Intelligence ` | ` 5 ` | ` -3 ` |
-| ` Wisdom ` | ` 12 ` | ` 4 ` |
-| ` Charisma ` | ` 13 ` | ` 1 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 18 ` |  |
-| ` max_hp ` | ` 157 ` |  |
-| ` initiative ` | ` 6 ` |  |
-| ` speed ` | ` 30 ` | ` ft ` |
 
 ## Health
 

@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "524f784c-11d1-507f-b8d0-e3818c20b02b"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/magic_item/handy_haversack"
 splat_name: "Handy Haversack"
-splat_reference: {"source": "SRD 5.2.1", "category": "magic_item", "pages": [224], "executable": false}
+splat_pages:
+- 224
 ---
 
 # Handy Haversack
@@ -24,3 +25,13 @@ Each pouch of the haversack holds enough air for 10 minutes of breathing, divide
 Placing the haversack inside an extradimensional space created by a Bag of Holding, Portable Hole, or similar item instantly destroys both items and opens a gate to the Astral Plane. The gate originates where the one item was placed inside the other. Any creature within 10 feet of the gate and not behind Total Cover is sucked through it and deposited in a random location on the Astral Plane. The gate then closes. The gate is one-way only and can’t be reopened.
 
 Original layout: [[../pages/224|page 224]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: magic_item
+> executable: false
+> ```
+

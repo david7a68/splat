@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 49f5b590-7cb3-502f-87a2-1ea109302e29
 splat_kind: rule
 splat_key: dnd2024:class_features/cleric_level_14_improved_blessed_strikes
 splat_name: 'Level 14: Improved Blessed Strikes'
-splat_origin:
-  key: dnd2024:reference/pages/038
+splat_origin: dnd2024:reference/pages/038
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 38
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 38, https://www.dndbeyond.com/srd
 ---
 
 # Level 14: Improved Blessed Strikes

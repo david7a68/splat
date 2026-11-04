@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: d8025a32-bf23-5965-b773-6e93bdf2f343
 splat_kind: spell
 splat_key: dnd2024:spells/bestow_curse
 splat_name: Bestow Curse
-splat_origin:
-  key: dnd2024:reference/spell/bestow_curse
+splat_origin: dnd2024:reference/spell/bestow_curse
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 112, 113
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 112, 113, https://www.dndbeyond.com/srd
 ---
 
 # Bestow Curse
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 3 |
+| School | Necromancy |
+| Classes | Bard, Cleric, Wizard |
+| Casting Time | Action |
+| Range |  |
+| Components | V, S |
+| Duration | Concentration, up to 1 minute |
+
 
 ## Source text
 
@@ -40,28 +51,9 @@ Using a Higher-Level Spell Slot. If you cast this spell using a level 4 spell sl
 
 Original layout: [[../../srd-5.2.1/pages/112|page 112]], [[../../srd-5.2.1/pages/113|page 113]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 3 ` |
-| ` school ` | ` necromancy ` |
-| ` classes ` | ` ["bard", "cleric", "wizard"] ` |
-| ` components ` | ` ["verbal", "somatic"] ` |
-| ` concentration ` | ` true ` |
-| ` duration ` | ` Concentration, up to 1 minute ` |
-| ` casting_time ` | ` Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
-
-<!-- splat:values path=splat_spell/range -->
-
-| Field | Value |
-| --- | --- |
-| ` mode ` | ` touch ` |
 
 ## Rule
 
@@ -189,3 +181,12 @@ columns:
 | ` row_3 ` | ` [5, 6] ` | ` 28800 ` | false |  |
 | ` row_4 ` | ` [7, 8] ` | ` 86400 ` | false |  |
 | ` row_5 ` | ` [9] ` |  | false | ` Dispelled ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_spell_extras -->
+> 
+> ```yaml
+> range:
+>   mode: touch
+> ```
+

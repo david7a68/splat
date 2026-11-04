@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: c338b33d-31da-5fb5-ac44-6a7c66b3718e
 splat_kind: rule
 splat_key: dnd2024:rules/poison_assassin_s_blood_150_gp
 splat_name: Assassin’s Blood (150 GP)
-splat_origin:
-  key: dnd2024:reference/pages/197
+splat_origin: dnd2024:reference/pages/197
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 197
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 197, https://www.dndbeyond.com/srd
 ---
 
 # Assassin’s Blood (150 GP)

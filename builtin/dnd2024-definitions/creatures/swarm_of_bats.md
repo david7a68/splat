@@ -1,35 +1,62 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: a252daaf-d3b9-5f4a-97fc-dcd183b40d3f
 splat_kind: creature
 splat_key: dnd2024:creatures/swarm_of_bats
 splat_name: Swarm of Bats
-splat_origin:
-  key: dnd2024:reference/creature/swarm_of_bats
+splat_origin: dnd2024:reference/creature/swarm_of_bats
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 361
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 361, https://www.dndbeyond.com/srd
 ---
 
 # Swarm of Bats
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Large Swarm of Tiny |
+| Type | Beast |
+| Alignment | Unaligned |
+| Armor Class | 12 |
+| Hit Points | 11 (2d10) |
+| Initiative | +2 (12) |
+| Speed | 5 ft., Fly 30 ft. |
+| Challenge | 1/4 (XP 50; PB +2) |
+| Senses | Blindsight 60 ft.; Passive Perception 11 |
+| Languages | None |
+| Resistances | Bludgeoning, Piercing, Slashing |
+| Immunities | Charmed, Frightened, Grappled, Paralyzed, Petrified, Prone, Restrained, Stunned |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 5 | -3 | -3 |
+| Dex | 15 | +2 | +2 |
+| Con | 10 | +0 | +0 |
+| Int | 2 | -4 | -4 |
+| Wis | 12 | +1 | +1 |
+| Cha | 4 | -3 | -3 |
+
 
 ## Source text
 
 <!-- SRD page 361 -->
 
 Large Swarm of Tiny Beasts, Unaligned\
-AC 12 Initiative +2 (12)\
-HP 11 (2d10)\
-Speed 5 ft., Fly 30 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str  5 −3 −3 Dex 15 +2 +2 Con 10 +0 +0\
-Int 2 −4 −4 Wis 12 +1 +1 Cha  4 −3 −3\
-Resistances Bludgeoning, Piercing, Slashing\
-Immunities Charmed, Frightened, Grappled, Paralyzed, Petrified, Prone, Restrained, Stunned\
-Senses Blindsight 60 ft.; Passive Perception 11\
-Languages None\
-CR 1/4 (XP 50; PB +2)
+> [!quote]- Printed stat block (not read; edit the table above)
+> AC 12 Initiative +2 (12)\
+> HP 11 (2d10)\
+> Speed 5 ft., Fly 30 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str  5 −3 −3 Dex 15 +2 +2 Con 10 +0 +0\
+> Int 2 −4 −4 Wis 12 +1 +1 Cha  4 −3 −3\
+> Resistances Bludgeoning, Piercing, Slashing\
+> Immunities Charmed, Frightened, Grappled, Paralyzed, Petrified, Prone, Restrained, Stunned\
+> Senses Blindsight 60 ft.; Passive Perception 11\
+> Languages None\
+> CR 1/4 (XP 50; PB +2)
+
 
 ### Traits
 
@@ -41,48 +68,11 @@ Bites. Melee Attack Roll: +4, reach 5 ft. Hit: 5 (2d4) Piercing damage, or 2 (1d
 
 Original layout: [[../../srd-5.2.1/pages/361|page 361]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` large ` |
-| ` type ` | ` beast ` |
-| ` alignment ` | ` Unaligned ` |
-| ` size_options_text ` | ` Large Swarm of Tiny ` |
-| ` movement_text ` | ` 5 ft., Fly 30 ft. ` |
-| ` resistances_text ` | ` Bludgeoning, Piercing, Slashing ` |
-| ` immunities_text ` | ` Charmed, Frightened, Grappled, Paralyzed, Petrified, Prone, Restrained, Stunned ` |
-| ` senses_text ` | ` Blindsight 60 ft.; Passive Perception 11 ` |
-| ` languages_text ` | ` None ` |
-| ` cr_text ` | ` 1/4 (XP 50; PB +2) ` |
-| ` hit_points_text ` | ` 11 (2d10) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 5 ` | ` -3 ` |
-| ` Dexterity ` | ` 15 ` | ` 2 ` |
-| ` Constitution ` | ` 10 ` | ` 0 ` |
-| ` Intelligence ` | ` 2 ` | ` -4 ` |
-| ` Wisdom ` | ` 12 ` | ` 1 ` |
-| ` Charisma ` | ` 4 ` | ` -3 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 12 ` |  |
-| ` max_hp ` | ` 11 ` |  |
-| ` initiative ` | ` 2 ` |  |
-| ` speed ` | ` 5 ` | ` ft ` |
-| ` fly_speed ` | ` 30 ` | ` ft ` |
 
 ## Health
 
@@ -209,3 +199,13 @@ hit:
 | ` provider ` | ` caller ` |
 | ` required_facts ` | ` ["distance", "area_membership", "visibility", "occupancy", "movement_path"] ` |
 | ` validate_against_typed_constraints ` | ` true ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_stats_extras -->
+> 
+> ```yaml
+> fly_speed:
+>   unit: ft
+>   value: 30
+> ```
+

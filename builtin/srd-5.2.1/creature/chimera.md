@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "70b2c4be-643c-5563-9925-89a843ba18fa"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/chimera"
 splat_name: "Chimera"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [273], "executable": false}
+splat_pages:
+- 273
 ---
 
 # Chimera
@@ -36,3 +37,13 @@ Ram. Melee Attack Roll: +7, reach 5 ft. Hit: 10 (1d12 + 4) Bludgeoning damage. I
 Fire Breath (Recharge 5–6). Dexterity Saving Throw: DC 15, each creature in a 15-foot Cone. Failure: 31 (7d8) Fire damage. Success: Half damage.
 
 Original layout: [[../pages/273|page 273]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 4f35b9b4-6856-55e4-87f9-eb8552ff3fdc
 splat_kind: rule
 splat_key: dnd2024:class_features/sorcerer_level_4_ability_score_improvement
 splat_name: 'Level 4: Ability Score Improvement'
-splat_origin:
-  key: dnd2024:reference/pages/066
+splat_origin: dnd2024:reference/pages/066
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 66
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 66, https://www.dndbeyond.com/srd
 ---
 
 # Level 4: Ability Score Improvement

@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "f0711cf8-de43-5f02-8f86-df8cc79c68a5"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/sunbeam"
 splat_name: "Sunbeam"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [166], "executable": false}
+splat_pages:
+- 166
 ---
 
 # Sunbeam
@@ -24,3 +25,13 @@ Until the spell ends, you can take a Magic action to create a new Line of radian
 For the duration, a mote of brilliant radiance shines above you. It sheds Bright Light in a 30-foot radius and Dim Light for an additional 30 feet. This light is sunlight.
 
 Original layout: [[../pages/166|page 166]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

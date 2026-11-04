@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "b8332986-4c2a-532f-a883-14610de28305"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/grimlock"
 splat_name: "Grimlock"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [296], "executable": false}
+splat_pages:
+- 296
 ---
 
 # Grimlock
@@ -28,3 +29,13 @@ CR 1/4 (XP 50; PB +2)
 Bone Cudgel. Melee Attack Roll: +5, reach 5 ft. Hit: 6 (1d6 + 3) Bludgeoning damage plus 2 (1d4) Psychic damage.
 
 Original layout: [[../pages/296|page 296]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

@@ -1,35 +1,62 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: d74914a1-1960-56f1-b633-6cc3a498362d
 splat_kind: creature
 splat_key: dnd2024:creatures/mage
 splat_name: Mage
-splat_origin:
-  key: dnd2024:reference/creature/mage
+splat_origin: dnd2024:reference/creature/mage
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 305
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 305, https://www.dndbeyond.com/srd
 ---
 
 # Mage
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Medium or Small |
+| Type | Humanoid (Wizard) |
+| Alignment | Neutral |
+| Armor Class | 15 |
+| Hit Points | 81 (18d8) |
+| Initiative | +2 (12) |
+| Speed | 30 ft. |
+| Challenge | 6 (XP 2,300; PB +3) |
+| Skills | Arcana +6, History +6, Perception +4 |
+| Senses | Passive Perception 14 |
+| Languages | Common plus three other languages |
+| Gear | Wand |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 9 | -1 | -1 |
+| Dex | 14 | +2 | +2 |
+| Con | 11 | +0 | +0 |
+| Int | 17 | +3 | +6 |
+| Wis | 12 | +1 | +4 |
+| Cha | 11 | +0 | +0 |
+
 
 ## Source text
 
 <!-- SRD page 305 -->
 
 Medium or Small Humanoid (Wizard), Neutral\
-AC 15 Initiative +2 (12)\
-HP 81 (18d8)\
-Speed 30 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 9 −1 −1 Dex 14 +2 +2 Con 11 +0 +0\
-Int 17 +3 +6 Wis 12 +1 +4 Cha 11 +0 +0\
-Skills Arcana +6, History +6, Perception +4\
-Gear Wand\
-Senses Passive Perception 14\
-Languages Common plus three other languages\
-CR 6 (XP 2,300; PB +3)
+> [!quote]- Printed stat block (not read; edit the table above)
+> AC 15 Initiative +2 (12)\
+> HP 81 (18d8)\
+> Speed 30 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 9 −1 −1 Dex 14 +2 +2 Con 11 +0 +0\
+> Int 17 +3 +6 Wis 12 +1 +4 Cha 11 +0 +0\
+> Skills Arcana +6, History +6, Perception +4\
+> Gear Wand\
+> Senses Passive Perception 14\
+> Languages Common plus three other languages\
+> CR 6 (XP 2,300; PB +3)
+
 
 ### Actions
 
@@ -53,48 +80,11 @@ Protective Magic (3/Day). The mage casts Counterspell or Shield in response to t
 
 Original layout: [[../../srd-5.2.1/pages/305|page 305]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` medium ` |
-| ` type ` | ` humanoid ` |
-| ` alignment ` | ` Neutral ` |
-| ` size_options_text ` | ` Medium or Small ` |
-| ` tags_text ` | ` (Wizard) ` |
-| ` movement_text ` | ` 30 ft. ` |
-| ` skills_text ` | ` Arcana +6, History +6, Perception +4 ` |
-| ` gear_text ` | ` Wand ` |
-| ` senses_text ` | ` Passive Perception 14 ` |
-| ` languages_text ` | ` Common plus three other languages ` |
-| ` cr_text ` | ` 6 (XP 2,300; PB +3) ` |
-| ` hit_points_text ` | ` 81 (18d8) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 9 ` | ` -1 ` |
-| ` Dexterity ` | ` 14 ` | ` 2 ` |
-| ` Constitution ` | ` 11 ` | ` 0 ` |
-| ` Intelligence ` | ` 17 ` | ` 6 ` |
-| ` Wisdom ` | ` 12 ` | ` 4 ` |
-| ` Charisma ` | ` 11 ` | ` 0 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 15 ` |  |
-| ` max_hp ` | ` 81 ` |  |
-| ` initiative ` | ` 2 ` |  |
-| ` speed ` | ` 30 ` | ` ft ` |
 
 ## Health
 

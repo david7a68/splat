@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: ae6847a4-e9e0-513b-b60d-6ea97b144ca6
 splat_kind: spell
 splat_key: dnd2024:spells/protection_from_energy
 splat_name: Protection from Energy
-splat_origin:
-  key: dnd2024:reference/spell/protection_from_energy
+splat_origin: dnd2024:reference/spell/protection_from_energy
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 157
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 157, https://www.dndbeyond.com/srd
 ---
 
 # Protection from Energy
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 3 |
+| School | Abjuration |
+| Classes | Cleric, Druid, Ranger, Sorcerer, Wizard |
+| Casting Time | Action |
+| Range |  |
+| Components | V, S |
+| Duration | Concentration, up to 1 hour |
+
 
 ## Source text
 
@@ -28,28 +39,9 @@ For the duration, the willing creature you touch has Resistance to one damage ty
 
 Original layout: [[../../srd-5.2.1/pages/157|page 157]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 3 ` |
-| ` school ` | ` abjuration ` |
-| ` classes ` | ` ["cleric", "druid", "ranger", "sorcerer", "wizard"] ` |
-| ` components ` | ` ["verbal", "somatic"] ` |
-| ` concentration ` | ` true ` |
-| ` duration ` | ` Concentration, up to 1 hour ` |
-| ` casting_time ` | ` Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
-
-<!-- splat:values path=splat_spell/range -->
-
-| Field | Value |
-| --- | --- |
-| ` mode ` | ` touch ` |
 
 ## Rule
 
@@ -93,3 +85,12 @@ maximum:
   value: 1
   unit: hour
 ```
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_spell_extras -->
+> 
+> ```yaml
+> range:
+>   mode: touch
+> ```
+

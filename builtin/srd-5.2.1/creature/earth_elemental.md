@@ -1,10 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "7bc48b2e-320b-55c6-8c8a-27b15b43d5c1"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/earth_elemental"
 splat_name: "Earth Elemental"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [282, 283], "executable": false}
+splat_pages:
+- 282
+- 283
 ---
 
 # Earth Elemental
@@ -41,3 +43,13 @@ Slam. Melee Attack Roll: +8, reach 10 ft. Hit: 14 (2d8 + 5) Bludgeoning damage.
 Rock Launch. Ranged Attack Roll: +8, range 60 ft. Hit: 8 (1d6 + 5) Bludgeoning damage. If the target is a Large or smaller creature, it has the Prone condition.
 
 Original layout: [[../pages/282|page 282]], [[../pages/283|page 283]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

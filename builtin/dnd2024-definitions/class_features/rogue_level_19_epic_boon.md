@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: c3ab1d4b-e3a8-512e-b5f4-0c1ddc84c9dc
 splat_kind: rule
 splat_key: dnd2024:class_features/rogue_level_19_epic_boon
 splat_name: 'Level 19: Epic Boon'
-splat_origin:
-  key: dnd2024:reference/pages/063
+splat_origin: dnd2024:reference/pages/063
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 63
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 63, https://www.dndbeyond.com/srd
 ---
 
 # Level 19: Epic Boon

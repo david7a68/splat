@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "be343711-728b-529a-be53-a1df9dac5251"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/plant_growth"
 splat_name: "Plant Growth"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [153], "executable": false}
+splat_pages:
+- 153
 ---
 
 # Plant Growth
@@ -24,3 +25,13 @@ Overgrowth. Choose a point within range. All normal plants in a 100-foot-radius 
 Enrichment. All plants in a half-mile radius centered on a point within range become enriched for 365 days. The plants yield twice the normal amount of food when harvested. They can benefit from only one Plant Growth per year.
 
 Original layout: [[../pages/153|page 153]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

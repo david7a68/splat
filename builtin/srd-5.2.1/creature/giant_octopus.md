@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "6d336c48-9df1-5f37-8a19-43416979c5c9"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/giant_octopus"
 splat_name: "Giant Octopus"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [352], "executable": false}
+splat_pages:
+- 352
 ---
 
 # Giant Octopus
@@ -36,3 +37,13 @@ Tentacles. Melee Attack Roll: +5, reach 10 ft. Hit: 10 (2d6 + 3) Bludgeoning dam
 Ink Cloud (1/Day). Trigger: The octopus takes damage while underwater. Response: The octopus releases ink that fills a 10-foot Cube centered on itself, and the octopus moves up to its Swim Speed. The Cube is Heavily Obscured for 1 minute or until a strong current or similar effect disperses the ink.
 
 Original layout: [[../pages/352|page 352]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

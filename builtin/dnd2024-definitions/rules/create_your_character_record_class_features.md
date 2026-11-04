@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 83a794df-efa7-5a56-97c1-fd942816bf68
 splat_kind: rule
 splat_key: dnd2024:rules/create_your_character_record_class_features
 splat_name: Record Class Features
-splat_origin:
-  key: dnd2024:reference/pages/022
+splat_origin: dnd2024:reference/pages/022
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 22
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 22, https://www.dndbeyond.com/srd
 ---
 
 # Record Class Features

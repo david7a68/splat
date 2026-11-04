@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "038251dd-4233-5de2-b158-44f7d15316f8"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/clairvoyance"
 splat_name: "Clairvoyance"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [115], "executable": false}
+splat_pages:
+- 115
 ---
 
 # Clairvoyance
@@ -24,3 +25,13 @@ When you cast the spell, choose seeing or hearing. You can use the chosen sense 
 A creature that sees the sensor (such as a creature benefiting from See Invisibility or Truesight) sees a luminous orb about the size of your fist.
 
 Original layout: [[../pages/115|page 115]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

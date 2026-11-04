@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 1e646203-063c-5a1b-b49f-6eadf351e7e7
 splat_kind: item
 splat_key: dnd2024:items/crystal_ball
 splat_name: Crystal Ball
-splat_origin:
-  key: dnd2024:reference/magic_item/crystal_ball
+splat_origin: dnd2024:reference/magic_item/crystal_ball
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 216
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 216, https://www.dndbeyond.com/srd
 ---
 
 # Crystal Ball
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Wondrous Item |
+| Rarity | Very Rare |
+| Attunement | Yes |
+
 
 ## Source text
 
@@ -24,22 +31,9 @@ While touching this crystal orb, you can cast Scrying (save DC 17) with it.
 
 Original layout: [[../../srd-5.2.1/pages/216|page 216]].
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` wondrous_item ` |
-| ` rarity ` | ` very_rare ` |
 
-### Equipment
-
-<!-- splat:values path=splat_item/equipment -->
-
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` required ` |
 
 ## Rule
 

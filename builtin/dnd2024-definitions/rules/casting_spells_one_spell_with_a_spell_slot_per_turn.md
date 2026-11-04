@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: fd705c30-e0b4-553b-b0da-39bbfaed586c
 splat_kind: rule
 splat_key: dnd2024:rules/casting_spells_one_spell_with_a_spell_slot_per_turn
 splat_name: One Spell with a Spell Slot per Turn
-splat_origin:
-  key: dnd2024:reference/pages/105
+splat_origin: dnd2024:reference/pages/105
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 105
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 105, https://www.dndbeyond.com/srd
 ---
 
 # One Spell with a Spell Slot per Turn

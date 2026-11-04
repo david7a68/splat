@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "7459594b-4ad2-5151-952c-e715e92906ec"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/glossary/study_action"
 splat_name: "Study [Action]"
-splat_reference: {"source": "SRD 5.2.1", "category": "glossary", "pages": [189], "executable": false}
+splat_pages:
+- 189
 ---
 
 # Study [Action]
@@ -26,3 +27,13 @@ The Areas of Knowledge table suggests which skills are applicable to various are
 | Religion | Deities, religious hierarchies and rites, holy symbols, cults, and certain creatures (Celestials, Fiends, and Undead) |
 
 Original layout: [[../pages/189|page 189]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: glossary
+> executable: false
+> ```
+

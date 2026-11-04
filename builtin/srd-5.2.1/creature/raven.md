@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "57362c9e-1c35-5b9e-984b-8f4eb2426156"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/raven"
 splat_name: "Raven"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [359], "executable": false}
+splat_pages:
+- 359
 ---
 
 # Raven
@@ -32,3 +33,13 @@ Mimicry. The raven can mimic simple sounds it has heard, such as a whisper or ch
 Beak. Melee Attack Roll: +4, reach 5 ft. Hit: 1 Piercing damage.
 
 Original layout: [[../pages/359|page 359]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

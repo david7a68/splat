@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "80672ebc-9d96-520d-ba26-b8eb19d52070"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/passwall"
 splat_name: "Passwall"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [151], "executable": false}
+splat_pages:
+- 151
 ---
 
 # Passwall
@@ -22,3 +23,13 @@ A passage appears at a point that you can see on a wooden, plaster, or stone sur
 When the opening disappears, any creatures or objects still in the passage created by the spell are safely ejected to an unoccupied space nearest to the surface on which you cast the spell.
 
 Original layout: [[../pages/151|page 151]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

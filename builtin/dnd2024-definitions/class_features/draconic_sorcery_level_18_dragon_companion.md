@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 28a9289f-6427-5a51-81b0-e6bab514e6cd
 splat_kind: rule
 splat_key: dnd2024:class_features/draconic_sorcery_level_18_dragon_companion
 splat_name: 'Level 18: Dragon Companion'
-splat_origin:
-  key: dnd2024:reference/pages/070
+splat_origin: dnd2024:reference/pages/070
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 70
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 70, https://www.dndbeyond.com/srd
 ---
 
 # Level 18: Dragon Companion

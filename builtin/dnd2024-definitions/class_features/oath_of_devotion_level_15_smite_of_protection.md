@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: a8912eaa-95b4-5ee5-b49d-2f254ea1df9d
 splat_kind: rule
 splat_key: dnd2024:class_features/oath_of_devotion_level_15_smite_of_protection
 splat_name: 'Level 15: Smite of Protection'
-splat_origin:
-  key: dnd2024:reference/pages/057
+splat_origin: dnd2024:reference/pages/057
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 57
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 57, https://www.dndbeyond.com/srd
 ---
 
 # Level 15: Smite of Protection

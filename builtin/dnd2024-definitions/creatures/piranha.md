@@ -1,33 +1,58 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: a7e5a253-7e6a-582d-81f4-70d2a89a9d64
 splat_kind: creature
 splat_key: dnd2024:creatures/piranha
 splat_name: Piranha
-splat_origin:
-  key: dnd2024:reference/creature/piranha
+splat_origin: dnd2024:reference/creature/piranha
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 358
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 358, https://www.dndbeyond.com/srd
 ---
 
 # Piranha
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Tiny |
+| Type | Beast |
+| Alignment | Unaligned |
+| Armor Class | 13 |
+| Hit Points | 1 (1d4 - 1) |
+| Initiative | +3 (13) |
+| Speed | 5 ft., Swim 40 ft. |
+| Challenge | 0 (XP 10; PB +2) |
+| Senses | Darkvision 60 ft.; Passive Perception 8 |
+| Languages | None |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 2 | -4 | -4 |
+| Dex | 16 | +3 | +3 |
+| Con | 9 | -1 | -1 |
+| Int | 1 | -5 | -5 |
+| Wis | 7 | -2 | -2 |
+| Cha | 2 | -4 | -4 |
+
 
 ## Source text
 
 <!-- SRD page 358 -->
 
-Tiny Beast, Unaligned\
-AC 13  Initiative +3 (13)\
-HP 1 (1d4 − 1)\
-Speed 5 ft., Swim 40 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 2 −4 −4 Dex 16 +3 +3 Con 9 −1 −1\
-Int 1 −5 −5 Wis 7 −2 −2 Cha 2 −4 −4\
-Senses Darkvision 60 ft.; Passive Perception 8\
-Languages None\
-CR 0 (XP 10; PB +2)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Tiny Beast, Unaligned\
+> AC 13  Initiative +3 (13)\
+> HP 1 (1d4 − 1)\
+> Speed 5 ft., Swim 40 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 2 −4 −4 Dex 16 +3 +3 Con 9 −1 −1\
+> Int 1 −5 −5 Wis 7 −2 −2 Cha 2 −4 −4\
+> Senses Darkvision 60 ft.; Passive Perception 8\
+> Languages None\
+> CR 0 (XP 10; PB +2)
+
 
 ### Traits
 
@@ -39,45 +64,11 @@ Bite. Melee Attack Roll: +5 (with Advantage if the target doesn’t have all its
 
 Original layout: [[../../srd-5.2.1/pages/358|page 358]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` tiny ` |
-| ` type ` | ` beast ` |
-| ` alignment ` | ` Unaligned ` |
-| ` movement_text ` | ` 5 ft., Swim 40 ft. ` |
-| ` senses_text ` | ` Darkvision 60 ft.; Passive Perception 8 ` |
-| ` languages_text ` | ` None ` |
-| ` cr_text ` | ` 0 (XP 10; PB +2) ` |
-| ` hit_points_text ` | ` 1 (1d4 - 1) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 2 ` | ` -4 ` |
-| ` Dexterity ` | ` 16 ` | ` 3 ` |
-| ` Constitution ` | ` 9 ` | ` -1 ` |
-| ` Intelligence ` | ` 1 ` | ` -5 ` |
-| ` Wisdom ` | ` 7 ` | ` -2 ` |
-| ` Charisma ` | ` 2 ` | ` -4 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 13 ` |  |
-| ` max_hp ` | ` 1 ` |  |
-| ` initiative ` | ` 3 ` |  |
-| ` speed ` | ` 5 ` | ` ft ` |
-| ` swim_speed ` | ` 40 ` | ` ft ` |
 
 ## Health
 
@@ -178,3 +169,13 @@ advantage_when:
 | ` provider ` | ` caller ` |
 | ` required_facts ` | ` ["distance", "area_membership", "visibility", "occupancy", "movement_path"] ` |
 | ` validate_against_typed_constraints ` | ` true ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_stats_extras -->
+> 
+> ```yaml
+> swim_speed:
+>   unit: ft
+>   value: 40
+> ```
+

@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 0af128d9-a737-5412-b69f-21628b0ba7b2
 splat_kind: rule
 splat_key: dnd2024:class_features/barbarian_level_2_reckless_attack
 splat_name: 'Level 2: Reckless Attack'
-splat_origin:
-  key: dnd2024:reference/pages/029
+splat_origin: dnd2024:reference/pages/029
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 29
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 29, https://www.dndbeyond.com/srd
 ---
 
 # Level 2: Reckless Attack

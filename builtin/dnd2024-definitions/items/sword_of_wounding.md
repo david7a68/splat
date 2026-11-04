@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 07492c50-9b13-5c0e-914d-7987f83a9f17
 splat_kind: item
 splat_key: dnd2024:items/sword_of_wounding
 splat_name: Sword of Wounding
-splat_origin:
-  key: dnd2024:reference/magic_item/sword_of_wounding
+splat_origin: dnd2024:reference/magic_item/sword_of_wounding
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 248
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 248, https://www.dndbeyond.com/srd
 ---
 
 # Sword of Wounding
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Weapon |
+| Rarity | Rare |
+| Attunement | Yes |
+
 
 ## Source text
 
@@ -24,22 +31,9 @@ When you hit a creature with an attack using this magic weapon, the target takes
 
 Original layout: [[../../srd-5.2.1/pages/248|page 248]].
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` weapon ` |
-| ` rarity ` | ` rare ` |
 
-### Equipment
-
-<!-- splat:values path=splat_item/equipment -->
-
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` required ` |
 
 ## Rule
 

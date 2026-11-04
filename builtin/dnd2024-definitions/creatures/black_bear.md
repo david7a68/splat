@@ -1,34 +1,60 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: e76f4d97-c2ca-599e-a26e-7ded8834ee22
 splat_kind: creature
 splat_key: dnd2024:creatures/black_bear
 splat_name: Black Bear
-splat_origin:
-  key: dnd2024:reference/creature/black_bear
+splat_origin: dnd2024:reference/creature/black_bear
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 345
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 345, https://www.dndbeyond.com/srd
 ---
 
 # Black Bear
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Medium |
+| Type | Beast |
+| Alignment | Unaligned |
+| Armor Class | 11 |
+| Hit Points | 19 (3d8 + 6) |
+| Initiative | +1 (11) |
+| Speed | 30 ft., Climb 30 ft., Swim 30 ft. |
+| Challenge | 1/2 (XP 100; PB +2) |
+| Skills | Perception +5 |
+| Senses | Darkvision 60 ft.; Passive Perception 15 |
+| Languages | None |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 15 | +2 | +2 |
+| Dex | 12 | +1 | +1 |
+| Con | 14 | +2 | +2 |
+| Int | 2 | -4 | -4 |
+| Wis | 12 | +1 | +1 |
+| Cha | 7 | -2 | -2 |
+
 
 ## Source text
 
 <!-- SRD page 345 -->
 
-Medium Beast, Unaligned\
-AC 11 Initiative +1 (11)\
-HP 19 (3d8 + 6)\
-Speed 30 ft., Climb 30 ft., Swim 30 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 15 +2 +2 Dex 12 +1 +1 Con 14 +2 +2\
-Int 2 −4 −4 Wis 12 +1 +1 Cha 7 −2 −2\
-Skills Perception +5\
-Senses Darkvision 60 ft.; Passive Perception 15\
-Languages None\
-CR 1/2 (XP 100; PB +2)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Medium Beast, Unaligned\
+> AC 11 Initiative +1 (11)\
+> HP 19 (3d8 + 6)\
+> Speed 30 ft., Climb 30 ft., Swim 30 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 15 +2 +2 Dex 12 +1 +1 Con 14 +2 +2\
+> Int 2 −4 −4 Wis 12 +1 +1 Cha 7 −2 −2\
+> Skills Perception +5\
+> Senses Darkvision 60 ft.; Passive Perception 15\
+> Languages None\
+> CR 1/2 (XP 100; PB +2)
+
 
 ### Actions
 
@@ -38,47 +64,11 @@ Rend. Melee Attack Roll: +4, reach 5 ft. Hit: 5 (1d6 + 2) Slashing damage.
 
 Original layout: [[../../srd-5.2.1/pages/345|page 345]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` medium ` |
-| ` type ` | ` beast ` |
-| ` alignment ` | ` Unaligned ` |
-| ` movement_text ` | ` 30 ft., Climb 30 ft., Swim 30 ft. ` |
-| ` skills_text ` | ` Perception +5 ` |
-| ` senses_text ` | ` Darkvision 60 ft.; Passive Perception 15 ` |
-| ` languages_text ` | ` None ` |
-| ` cr_text ` | ` 1/2 (XP 100; PB +2) ` |
-| ` hit_points_text ` | ` 19 (3d8 + 6) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 15 ` | ` 2 ` |
-| ` Dexterity ` | ` 12 ` | ` 1 ` |
-| ` Constitution ` | ` 14 ` | ` 2 ` |
-| ` Intelligence ` | ` 2 ` | ` -4 ` |
-| ` Wisdom ` | ` 12 ` | ` 1 ` |
-| ` Charisma ` | ` 7 ` | ` -2 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 11 ` |  |
-| ` max_hp ` | ` 19 ` |  |
-| ` initiative ` | ` 1 ` |  |
-| ` speed ` | ` 30 ` | ` ft ` |
-| ` climb_speed ` | ` 30 ` | ` ft ` |
-| ` swim_speed ` | ` 30 ` | ` ft ` |
 
 ## Health
 
@@ -222,3 +212,16 @@ geometry_assumptions:
   - plane
   - form_appearance
 ```
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_stats_extras -->
+> 
+> ```yaml
+> swim_speed:
+>   unit: ft
+>   value: 30
+> climb_speed:
+>   unit: ft
+>   value: 30
+> ```
+

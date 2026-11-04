@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 834bcd37-0663-53ce-aac3-a2718dacb30f
 splat_kind: item
 splat_key: dnd2024:equipment/druidic_focus_varies
 splat_name: Druidic Focus (Varies)
-splat_origin:
-  key: dnd2024:reference/pages/097
+splat_origin: dnd2024:reference/pages/097
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 97
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 97, https://www.dndbeyond.com/srd
 ---
 
 # Druidic Focus (Varies)
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Adventuring Gear |
+| Rarity |  |
+| Attunement | No |
+
 
 ## Source text
 
@@ -28,21 +35,9 @@ A Druidic Focus takes one of the forms in the Druidic Focuses table and is carve
 | Wooden staff (also a Quarterstaff) | 4 lb. | 5 GP |
 | Yew wand | 1 lb. | 10 GP |
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` adventuring_gear ` |
 
-### Equipment
-
-<!-- splat:values path=splat_item/equipment -->
-
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` none ` |
 
 ## Rule
 

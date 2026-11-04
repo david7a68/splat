@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 74a0b5bb-55c1-5610-9fe2-6e65ae5109b4
 splat_kind: item
 splat_key: dnd2024:items/ring_of_the_ram
 splat_name: Ring of the Ram
-splat_origin:
-  key: dnd2024:reference/magic_item/ring_of_the_ram
+splat_origin: dnd2024:reference/magic_item/ring_of_the_ram
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 239
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 239, https://www.dndbeyond.com/srd
 ---
 
 # Ring of the Ram
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Ring |
+| Rarity | Rare |
+| Attunement | Yes |
+
 
 ## Source text
 
@@ -26,22 +33,9 @@ Alternatively, you can expend 1 to 3 of the ring’s charges as a Magic action t
 
 Original layout: [[../../srd-5.2.1/pages/239|page 239]].
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` ring ` |
-| ` rarity ` | ` rare ` |
 
-### Equipment
-
-<!-- splat:values path=splat_item/equipment -->
-
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` required ` |
 
 ## Rule
 

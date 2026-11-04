@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: a5e28636-7477-5376-a7d6-7a91d1928c65
 splat_kind: spell
 splat_key: dnd2024:spells/revivify
 splat_name: Revivify
-splat_origin:
-  key: dnd2024:reference/spell/revivify
+splat_origin: dnd2024:reference/spell/revivify
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 159
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 159, https://www.dndbeyond.com/srd
 ---
 
 # Revivify
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 3 |
+| School | Necromancy |
+| Classes | Cleric, Druid, Paladin, Ranger |
+| Casting Time | Action |
+| Range |  |
+| Components | V, S, M (a diamond worth 300+ GP, which the spell consumes) |
+| Duration | Instantaneous |
+
 
 ## Source text
 
@@ -28,37 +39,11 @@ You touch a creature that has died within the last minute. That creature revives
 
 Original layout: [[../../srd-5.2.1/pages/159|page 159]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 3 ` |
-| ` school ` | ` necromancy ` |
-| ` classes ` | ` ["cleric", "druid", "paladin", "ranger"] ` |
-| ` components ` | ` ["verbal", "somatic", "material"] ` |
-| ` concentration ` | ` false ` |
-| ` duration ` | ` Instantaneous ` |
-| ` casting_time ` | ` Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
 
-<!-- splat:values path=splat_spell/range -->
 
-| Field | Value |
-| --- | --- |
-| ` mode ` | ` touch ` |
-
-### Material
-
-<!-- splat:values path=splat_spell/material -->
-
-| Field | Value |
-| --- | --- |
-| ` description ` | ` a diamond worth 300+ GP, which the spell consumes ` |
-| ` consumed ` | ` true ` |
 
 ## Rule
 
@@ -92,3 +77,14 @@ Original layout: [[../../srd-5.2.1/pages/159|page 159]].
 | --- | --- |
 | ` hp ` | ` 1 ` |
 | ` restore_missing_parts ` | ` false ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_spell_extras -->
+> 
+> ```yaml
+> material:
+>   consumed: true
+> range:
+>   mode: touch
+> ```
+

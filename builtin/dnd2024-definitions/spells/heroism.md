@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: bbdf55ef-a5be-5853-b290-8f40317602d9
 splat_kind: spell
 splat_key: dnd2024:spells/heroism
 splat_name: Heroism
-splat_origin:
-  key: dnd2024:reference/spell/heroism
+splat_origin: dnd2024:reference/spell/heroism
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 140
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 140, https://www.dndbeyond.com/srd
 ---
 
 # Heroism
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 1 |
+| School | Enchantment |
+| Classes | Bard, Paladin |
+| Casting Time | Action |
+| Range |  |
+| Components | V, S |
+| Duration | Concentration, up to 1 minute |
+
 
 ## Source text
 
@@ -30,28 +41,9 @@ Using a Higher-Level Spell Slot. You can target one additional creature for each
 
 Original layout: [[../../srd-5.2.1/pages/140|page 140]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 1 ` |
-| ` school ` | ` enchantment ` |
-| ` classes ` | ` ["bard", "paladin"] ` |
-| ` components ` | ` ["verbal", "somatic"] ` |
-| ` concentration ` | ` true ` |
-| ` duration ` | ` Concentration, up to 1 minute ` |
-| ` casting_time ` | ` Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
-
-<!-- splat:values path=splat_spell/range -->
-
-| Field | Value |
-| --- | --- |
-| ` mode ` | ` touch ` |
 
 ## Rule
 
@@ -101,3 +93,12 @@ amount:
 | --- | --- |
 | ` per_slot_above ` | ` 1 ` |
 | ` additional_targets ` | ` 1 ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_spell_extras -->
+> 
+> ```yaml
+> range:
+>   mode: touch
+> ```
+

@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 828ea576-67f4-550b-801c-7f8cf78ed75a
 splat_kind: item
 splat_key: dnd2024:equipment/clothes_traveler_s_2_gp
 splat_name: Clothes, Traveler’s (2 GP)
-splat_origin:
-  key: dnd2024:reference/pages/097
+splat_origin: dnd2024:reference/pages/097
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 97
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 97, https://www.dndbeyond.com/srd
 ---
 
 # Clothes, Traveler’s (2 GP)
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Adventuring Gear |
+| Rarity |  |
+| Attunement | No |
+
 
 ## Source text
 
@@ -20,39 +27,13 @@ splat_sources:
 
 Traveler’s Clothes are resilient garments designed for travel in various environments.
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` adventuring_gear ` |
 
-### Equipment
 
-<!-- splat:values path=splat_item/equipment -->
 
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` none ` |
 
-### Price
 
-<!-- splat:values path=splat_item/price -->
-
-| Field | Value |
-| --- | --- |
-| ` value ` | ` 2 ` |
-| ` unit ` | ` gp ` |
-
-### Mass
-
-<!-- splat:values path=splat_item/mass -->
-
-| Field | Value |
-| --- | --- |
-| ` value ` | ` 4.0 ` |
-| ` unit ` | ` lb ` |
 
 ## Rule
 
@@ -82,3 +63,16 @@ Traveler’s Clothes are resilient garments designed for travel in various envir
 | --- | --- |
 | ` value ` | ` 4.0 ` |
 | ` unit ` | ` lb ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_item_extras -->
+> 
+> ```yaml
+> price:
+>   unit: gp
+>   value: 2
+> mass:
+>   unit: lb
+>   value: 4.0
+> ```
+

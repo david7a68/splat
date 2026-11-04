@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 3b72bb44-cf34-5ddb-af7b-c08f7b399fac
 splat_kind: spell
 splat_key: dnd2024:spells/contingency
 splat_name: Contingency
-splat_origin:
-  key: dnd2024:reference/spell/contingency
+splat_origin: dnd2024:reference/spell/contingency
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 119
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 119, https://www.dndbeyond.com/srd
 ---
 
 # Contingency
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 6 |
+| School | Abjuration |
+| Classes | Wizard |
+| Casting Time | 10 minutes |
+| Range |  |
+| Components | V, S, M (a gem-encrusted statuette of yourself worth 1,500+ GP) |
+| Duration | 10 days |
+
 
 ## Source text
 
@@ -32,37 +43,11 @@ The contingent spell takes effect only on you, even if it can normally target ot
 
 Original layout: [[../../srd-5.2.1/pages/119|page 119]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 6 ` |
-| ` school ` | ` abjuration ` |
-| ` classes ` | ` ["wizard"] ` |
-| ` components ` | ` ["verbal", "somatic", "material"] ` |
-| ` concentration ` | ` false ` |
-| ` duration ` | ` 10 days ` |
-| ` casting_time ` | ` 10 minutes ` |
-| ` ritual ` | ` false ` |
 
-### Range
 
-<!-- splat:values path=splat_spell/range -->
 
-| Field | Value |
-| --- | --- |
-| ` mode ` | ` self ` |
-
-### Material
-
-<!-- splat:values path=splat_spell/material -->
-
-| Field | Value |
-| --- | --- |
-| ` description ` | ` a gem-encrusted statuette of yourself worth 1,500+ GP ` |
-| ` consumed ` | ` false ` |
 
 ## Rule
 
@@ -128,3 +113,14 @@ Original layout: [[../../srd-5.2.1/pages/119|page 119]].
 | ` contingent_targets ` | ` caster_only ` |
 | ` ignore_normal_additional_targets ` | ` true ` |
 | ` end_contingency ` | ` true ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_spell_extras -->
+> 
+> ```yaml
+> material:
+>   consumed: false
+> range:
+>   mode: self
+> ```
+

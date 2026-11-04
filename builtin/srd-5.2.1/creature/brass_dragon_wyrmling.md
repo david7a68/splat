@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "059324c8-e6db-5256-8fee-35c841ed5d5c"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/brass_dragon_wyrmling"
 splat_name: "Brass Dragon Wyrmling"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [268], "executable": false}
+splat_pages:
+- 268
 ---
 
 # Brass Dragon Wyrmling
@@ -33,3 +34,13 @@ Fire Breath (Recharge 5–6). Dexterity Saving Throw: DC 11, each creature in a 
 Sleep Breath. Constitution Saving Throw: DC 11, each creature in a 15-foot Cone. Failure: The target has the Incapacitated condition until the end of its next turn, at which point it repeats the save. Second Failure: The target has the Unconscious condition for 1 minute. This effect ends for the target if it takes damage or a creature within 5 feet of it takes an action to wake it.
 
 Original layout: [[../pages/268|page 268]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

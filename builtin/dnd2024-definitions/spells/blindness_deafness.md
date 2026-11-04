@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 2d64dfd8-a1b9-569d-94fb-30e2b141dfd9
 splat_kind: spell
 splat_key: dnd2024:spells/blindness_deafness
 splat_name: Blindness/Deafness
-splat_origin:
-  key: dnd2024:reference/spell/blindness_deafness
+splat_origin: dnd2024:reference/spell/blindness_deafness
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 113
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 113, https://www.dndbeyond.com/srd
 ---
 
 # Blindness/Deafness
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 2 |
+| School | Transmutation |
+| Classes | Bard, Cleric, Sorcerer, Wizard |
+| Casting Time | Action |
+| Range | 120 feet |
+| Components | V |
+| Duration | 1 minute |
+
 
 ## Source text
 
@@ -30,28 +41,9 @@ Using a Higher-Level Spell Slot. You can target one additional creature for each
 
 Original layout: [[../../srd-5.2.1/pages/113|page 113]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 2 ` |
-| ` school ` | ` transmutation ` |
-| ` classes ` | ` ["bard", "cleric", "sorcerer", "wizard"] ` |
-| ` components ` | ` ["verbal"] ` |
-| ` concentration ` | ` false ` |
-| ` duration ` | ` 1 minute ` |
-| ` casting_time ` | ` Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
-
-<!-- splat:values path=splat_spell/range -->
-
-| Field | Value |
-| --- | --- |
-| ` feet ` | ` 120 ` |
 
 ## Rule
 

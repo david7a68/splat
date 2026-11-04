@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: acb90637-d08a-534b-a064-87f0cc446e80
 splat_kind: item
 splat_key: dnd2024:items/dwarven_thrower
 splat_name: Dwarven Thrower
-splat_origin:
-  key: dnd2024:reference/magic_item/dwarven_thrower
+splat_origin: dnd2024:reference/magic_item/dwarven_thrower
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 219
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 219, https://www.dndbeyond.com/srd
 ---
 
 # Dwarven Thrower
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Weapon |
+| Rarity | Very Rare |
+| Attunement | Yes |
+
 
 ## Source text
 
@@ -24,23 +31,9 @@ You gain a +3 bonus to attack rolls and damage rolls made with this magic weapon
 
 Original layout: [[../../srd-5.2.1/pages/219|page 219]].
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` weapon ` |
-| ` rarity ` | ` very_rare ` |
 
-### Equipment
-
-<!-- splat:values path=splat_item/equipment -->
-
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` required ` |
-| ` attunement_requirement_text ` | ` a Dwarf or a Creature Attuned to a Belt of Dwarvenkind ` |
 
 ## Rule
 
@@ -159,3 +152,12 @@ columns:
 | --- | --- | --- |
 | ` row_1 ` | ` Dwarf ` |  |
 | ` row_2 ` |  | [Belt of Dwarvenkind](<belt_of_dwarvenkind.md> "dnd2024:items/belt_of_dwarvenkind") |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_item_extras -->
+> 
+> ```yaml
+> equipment:
+>   attunement_requirement_text: a Dwarf or a Creature Attuned to a Belt of Dwarvenkind
+> ```
+

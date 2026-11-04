@@ -1,33 +1,58 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: d56719fd-ca46-59a2-afb6-162639274fc9
 splat_kind: creature
 splat_key: dnd2024:creatures/draft_horse
 splat_name: Draft Horse
-splat_origin:
-  key: dnd2024:reference/creature/draft_horse
+splat_origin: dnd2024:reference/creature/draft_horse
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 347, 348
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 347, 348, https://www.dndbeyond.com/srd
 ---
 
 # Draft Horse
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Large |
+| Type | Beast |
+| Alignment | Unaligned |
+| Armor Class | 10 |
+| Hit Points | 15 (2d10 + 4) |
+| Initiative | +0 (10) |
+| Speed | 40 ft. |
+| Challenge | 1/4 (XP 50; PB +2) |
+| Senses | Passive Perception 10 |
+| Languages | None |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 18 | +4 | +4 |
+| Dex | 10 | +0 | +0 |
+| Con | 15 | +2 | +2 |
+| Int | 2 | -4 | -4 |
+| Wis | 11 | +0 | +0 |
+| Cha | 7 | -2 | -2 |
+
 
 ## Source text
 
 <!-- SRD page 347 -->
 
-Large Beast, Unaligned\
-AC 10  Initiative +0 (10)\
-HP 15 (2d10 + 4)\
-Speed 40 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 18 +4 +4 Dex 10 +0 +0 Con 15 +2 +2\
-Int 2 −4 −4 Wis 11 +0 +0 Cha 7 −2 −2\
-Senses Passive Perception 10\
-Languages None\
-CR 1/4 (XP 50; PB +2)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Large Beast, Unaligned\
+> AC 10  Initiative +0 (10)\
+> HP 15 (2d10 + 4)\
+> Speed 40 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 18 +4 +4 Dex 10 +0 +0 Con 15 +2 +2\
+> Int 2 −4 −4 Wis 11 +0 +0 Cha 7 −2 −2\
+> Senses Passive Perception 10\
+> Languages None\
+> CR 1/4 (XP 50; PB +2)
+
 
 <!-- SRD page 348 -->
 
@@ -37,44 +62,11 @@ Hooves. Melee Attack Roll: +6, reach 5 ft. Hit: 6 (1d4 + 4) Bludgeoning damage.
 
 Original layout: [[../../srd-5.2.1/pages/347|page 347]], [[../../srd-5.2.1/pages/348|page 348]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` large ` |
-| ` type ` | ` beast ` |
-| ` alignment ` | ` Unaligned ` |
-| ` movement_text ` | ` 40 ft. ` |
-| ` senses_text ` | ` Passive Perception 10 ` |
-| ` languages_text ` | ` None ` |
-| ` cr_text ` | ` 1/4 (XP 50; PB +2) ` |
-| ` hit_points_text ` | ` 15 (2d10 + 4) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 18 ` | ` 4 ` |
-| ` Dexterity ` | ` 10 ` | ` 0 ` |
-| ` Constitution ` | ` 15 ` | ` 2 ` |
-| ` Intelligence ` | ` 2 ` | ` -4 ` |
-| ` Wisdom ` | ` 11 ` | ` 0 ` |
-| ` Charisma ` | ` 7 ` | ` -2 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 10 ` |  |
-| ` max_hp ` | ` 15 ` |  |
-| ` initiative ` | ` 0 ` |  |
-| ` speed ` | ` 40 ` | ` ft ` |
 
 ## Health
 

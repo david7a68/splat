@@ -1,10 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "5a727644-b896-5d50-8aa3-c5c839a2035d"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/stirge"
 splat_name: "Stirge"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [329, 330], "executable": false}
+splat_pages:
+- 329
+- 330
 ---
 
 # Stirge
@@ -31,3 +33,13 @@ Proboscis. Melee Attack Roll: +5, reach 5 ft. Hit: 6 (1d6 + 3) Piercing damage, 
 The stirge can detach itself by spending 5 feet of its movement. The target or a creature within 5 feet of it can detach the stirge as an action.
 
 Original layout: [[../pages/329|page 329]], [[../pages/330|page 330]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

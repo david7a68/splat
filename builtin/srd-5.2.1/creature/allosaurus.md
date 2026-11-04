@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "178a11d8-f351-55e0-ae1b-d027bbfded63"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/allosaurus"
 splat_name: "Allosaurus"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [344], "executable": false}
+splat_pages:
+- 344
 ---
 
 # Allosaurus
@@ -30,3 +31,13 @@ Bite. Melee Attack Roll: +6, reach 5 ft. Hit: 15 (2d10 + 4) Piercing damage.
 Claws. Melee Attack Roll: +6, reach 5 ft. Hit: 8 (1d8 +4) Slashing damage. If the target is a Large or smaller creature and the allosaurus moved 30+ feet straight toward it immediately before the hit, the target has the Prone condition, and the allosaurus can make one Bite attack against it.
 
 Original layout: [[../pages/344|page 344]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

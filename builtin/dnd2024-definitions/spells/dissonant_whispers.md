@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 92291c5c-5ac9-5558-b0d0-d4b9c99f383c
 splat_kind: spell
 splat_key: dnd2024:spells/dissonant_whispers
 splat_name: Dissonant Whispers
-splat_origin:
-  key: dnd2024:reference/spell/dissonant_whispers
+splat_origin: dnd2024:reference/spell/dissonant_whispers
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 124
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 124, https://www.dndbeyond.com/srd
 ---
 
 # Dissonant Whispers
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 1 |
+| School | Enchantment |
+| Classes | Bard |
+| Casting Time | Action |
+| Range | 60 feet |
+| Components | V |
+| Duration | Instantaneous |
+
 
 ## Source text
 
@@ -30,28 +41,9 @@ Using a Higher-Level Spell Slot. The damage increases by 1d6 for each spell slot
 
 Original layout: [[../../srd-5.2.1/pages/124|page 124]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 1 ` |
-| ` school ` | ` enchantment ` |
-| ` classes ` | ` ["bard"] ` |
-| ` components ` | ` ["verbal"] ` |
-| ` concentration ` | ` false ` |
-| ` duration ` | ` Instantaneous ` |
-| ` casting_time ` | ` Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
-
-<!-- splat:values path=splat_spell/range -->
-
-| Field | Value |
-| --- | --- |
-| ` feet ` | ` 60 ` |
 
 ## Rule
 

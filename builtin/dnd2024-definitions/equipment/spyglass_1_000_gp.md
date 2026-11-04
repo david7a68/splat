@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 6be059f3-a0fb-5182-8e46-0157bfd8b8e1
 splat_kind: item
 splat_key: dnd2024:equipment/spyglass_1_000_gp
 splat_name: Spyglass (1,000 GP)
-splat_origin:
-  key: dnd2024:reference/pages/100
+splat_origin: dnd2024:reference/pages/100
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 100
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 100, https://www.dndbeyond.com/srd
 ---
 
 # Spyglass (1,000 GP)
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Adventuring Gear |
+| Rarity |  |
+| Attunement | No |
+
 
 ## Source text
 
@@ -20,39 +27,13 @@ splat_sources:
 
 Objects viewed through a Spyglass are magnified to twice their size.
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` adventuring_gear ` |
 
-### Equipment
 
-<!-- splat:values path=splat_item/equipment -->
 
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` none ` |
 
-### Price
 
-<!-- splat:values path=splat_item/price -->
-
-| Field | Value |
-| --- | --- |
-| ` value ` | ` 1000 ` |
-| ` unit ` | ` gp ` |
-
-### Mass
-
-<!-- splat:values path=splat_item/mass -->
-
-| Field | Value |
-| --- | --- |
-| ` value ` | ` 1.0 ` |
-| ` unit ` | ` lb ` |
 
 ## Rule
 
@@ -81,3 +62,16 @@ Objects viewed through a Spyglass are magnified to twice their size.
 | --- | --- |
 | ` value ` | ` 1.0 ` |
 | ` unit ` | ` lb ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_item_extras -->
+> 
+> ```yaml
+> price:
+>   unit: gp
+>   value: 1000
+> mass:
+>   unit: lb
+>   value: 1.0
+> ```
+

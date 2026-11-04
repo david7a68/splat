@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "35e2ebf9-8e46-536d-b717-7cfd77f7ccc0"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/magic_item/boots_of_striding_and_springing"
 splat_name: "Boots of Striding and Springing"
-splat_reference: {"source": "SRD 5.2.1", "category": "magic_item", "pages": [214], "executable": false}
+splat_pages:
+- 214
 ---
 
 # Boots of Striding and Springing
@@ -18,3 +19,13 @@ While you wear these boots, your Speed becomes 30 feet unless your Speed is high
 Once on each of your turns, you can jump up to 30 feet by spending only 10 feet of movement.
 
 Original layout: [[../pages/214|page 214]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: magic_item
+> executable: false
+> ```
+

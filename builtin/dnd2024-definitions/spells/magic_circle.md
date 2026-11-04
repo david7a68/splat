@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 9162702f-cef3-5a07-bcea-28e0ad7971ad
 splat_kind: spell
 splat_key: dnd2024:spells/magic_circle
 splat_name: Magic Circle
-splat_origin:
-  key: dnd2024:reference/spell/magic_circle
+splat_origin: dnd2024:reference/spell/magic_circle
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 145, 146
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 145, 146, https://www.dndbeyond.com/srd
 ---
 
 # Magic Circle
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 3 |
+| School | Abjuration |
+| Classes | Cleric, Paladin, Warlock, Wizard |
+| Casting Time | 1 minute |
+| Range | 10 feet |
+| Components | V, S, M (salt and powdered silver worth 100+ GP, which the spell consumes) |
+| Duration | 1 hour |
+
 
 ## Source text
 
@@ -42,37 +53,11 @@ Using a Higher-Level Spell Slot. The duration increases by 1 hour for each spell
 
 Original layout: [[../../srd-5.2.1/pages/145|page 145]], [[../../srd-5.2.1/pages/146|page 146]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 3 ` |
-| ` school ` | ` abjuration ` |
-| ` classes ` | ` ["cleric", "paladin", "warlock", "wizard"] ` |
-| ` components ` | ` ["verbal", "somatic", "material"] ` |
-| ` concentration ` | ` false ` |
-| ` duration ` | ` 1 hour ` |
-| ` casting_time ` | ` 1 minute ` |
-| ` ritual ` | ` false ` |
 
-### Range
 
-<!-- splat:values path=splat_spell/range -->
 
-| Field | Value |
-| --- | --- |
-| ` feet ` | ` 10 ` |
-
-### Material
-
-<!-- splat:values path=splat_spell/material -->
-
-| Field | Value |
-| --- | --- |
-| ` description ` | ` salt and powdered silver worth 100+ GP, which the spell consumes ` |
-| ` consumed ` | ` true ` |
 
 ## Rule
 
@@ -145,3 +130,12 @@ protect_inside_against:
 | --- | --- |
 | ` per_slot_above ` | ` 3 ` |
 | ` duration_hours ` | ` 1 ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_spell_extras -->
+> 
+> ```yaml
+> material:
+>   consumed: true
+> ```
+

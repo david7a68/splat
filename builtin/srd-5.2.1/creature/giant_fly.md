@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "a18d3ef3-a588-58bd-a1c9-f4655b486afd"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/giant_fly"
 splat_name: "Giant Fly"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [222], "executable": false}
+splat_pages:
+- 222
 ---
 
 # Giant Fly
@@ -23,3 +24,13 @@ Languages None\
 CR 0 (XP 0; PB +2)
 
 Original layout: [[../pages/222|page 222]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

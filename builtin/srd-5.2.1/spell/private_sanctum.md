@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "ddf1f94c-d9cd-54e2-88a8-862d56e8b192"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/private_sanctum"
 splat_name: "Private Sanctum"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [156], "executable": false}
+splat_pages:
+- 156
 ---
 
 # Private Sanctum
@@ -38,3 +39,13 @@ Casting this spell on the same spot every day for 365 days makes the spell last 
 Using a Higher-Level Spell Slot. You can increase the size of the Cube by 100 feet for each spell slot level above 4.
 
 Original layout: [[../pages/156|page 156]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

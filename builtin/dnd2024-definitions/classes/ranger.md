@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: aed521b4-3fb7-58f7-a35e-bc8ab5848eef
 splat_kind: rule_group
 splat_key: dnd2024:classes/ranger
 splat_name: Ranger
-splat_origin:
-  key: dnd2024:reference/pages/057
+splat_origin: dnd2024:reference/pages/057
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 57
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 57, https://www.dndbeyond.com/srd
 ---
 
 # Ranger

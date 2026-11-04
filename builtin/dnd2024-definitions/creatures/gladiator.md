@@ -1,35 +1,62 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: af7b6e6c-088d-5f7c-be06-016ec7d3d773
 splat_kind: creature
 splat_key: dnd2024:creatures/gladiator
 splat_name: Gladiator
-splat_origin:
-  key: dnd2024:reference/creature/gladiator
+splat_origin: dnd2024:reference/creature/gladiator
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 289
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 289, https://www.dndbeyond.com/srd
 ---
 
 # Gladiator
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Medium or Small |
+| Type | Humanoid |
+| Alignment | Neutral |
+| Armor Class | 16 |
+| Hit Points | 112 (15d8 + 45) |
+| Initiative | +5 (15) |
+| Speed | 30 ft. |
+| Challenge | 5 (XP 1,800; PB +3) |
+| Skills | Athletics +10, Performance +5 |
+| Senses | Passive Perception 11 |
+| Languages | Common |
+| Gear | Shield, Spears (3), Studded Leather Armor |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 18 | +4 | +7 |
+| Dex | 15 | +2 | +5 |
+| Con | 16 | +3 | +6 |
+| Int | 10 | +0 | +0 |
+| Wis | 12 | +1 | +4 |
+| Cha | 15 | +2 | +2 |
+
 
 ## Source text
 
 <!-- SRD page 289 -->
 
 Medium or Small Humanoid, Neutral\
-AC 16 Initiative +5 (15)\
-HP 112 (15d8 + 45)\
-Speed 30 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 18 +4 +7 Dex 15 +2 +5 Con 16 +3 +6\
-Int 10 +0 +0 Wis 12 +1 +4 Cha 15 +2 +2\
-Skills Athletics +10, Performance +5\
-Gear Shield, Spears (3), Studded Leather Armor\
-Senses Passive Perception 11\
-Languages Common\
-CR 5 (XP 1,800; PB +3)
+> [!quote]- Printed stat block (not read; edit the table above)
+> AC 16 Initiative +5 (15)\
+> HP 112 (15d8 + 45)\
+> Speed 30 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 18 +4 +7 Dex 15 +2 +5 Con 16 +3 +6\
+> Int 10 +0 +0 Wis 12 +1 +4 Cha 15 +2 +2\
+> Skills Athletics +10, Performance +5\
+> Gear Shield, Spears (3), Studded Leather Armor\
+> Senses Passive Perception 11\
+> Languages Common\
+> CR 5 (XP 1,800; PB +3)
+
 
 ### Actions
 
@@ -45,47 +72,11 @@ Parry. Trigger: The gladiator is hit by a melee attack roll while holding a weap
 
 Original layout: [[../../srd-5.2.1/pages/289|page 289]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` medium ` |
-| ` type ` | ` humanoid ` |
-| ` alignment ` | ` Neutral ` |
-| ` size_options_text ` | ` Medium or Small ` |
-| ` movement_text ` | ` 30 ft. ` |
-| ` skills_text ` | ` Athletics +10, Performance +5 ` |
-| ` gear_text ` | ` Shield, Spears (3), Studded Leather Armor ` |
-| ` senses_text ` | ` Passive Perception 11 ` |
-| ` languages_text ` | ` Common ` |
-| ` cr_text ` | ` 5 (XP 1,800; PB +3) ` |
-| ` hit_points_text ` | ` 112 (15d8 + 45) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 18 ` | ` 7 ` |
-| ` Dexterity ` | ` 15 ` | ` 5 ` |
-| ` Constitution ` | ` 16 ` | ` 6 ` |
-| ` Intelligence ` | ` 10 ` | ` 0 ` |
-| ` Wisdom ` | ` 12 ` | ` 4 ` |
-| ` Charisma ` | ` 15 ` | ` 2 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 16 ` |  |
-| ` max_hp ` | ` 112 ` |  |
-| ` initiative ` | ` 5 ` |  |
-| ` speed ` | ` 30 ` | ` ft ` |
 
 ## Health
 

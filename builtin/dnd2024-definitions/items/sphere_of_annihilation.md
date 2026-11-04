@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 389d6bd9-cf4b-5557-82f9-27aa039b1fa7
 splat_kind: item
 splat_key: dnd2024:items/sphere_of_annihilation
 splat_name: Sphere of Annihilation
-splat_origin:
-  key: dnd2024:reference/magic_item/sphere_of_annihilation
+splat_origin: dnd2024:reference/magic_item/sphere_of_annihilation
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 244, 245
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 244, 245, https://www.dndbeyond.com/srd
 ---
 
 # Sphere of Annihilation
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Wondrous Item |
+| Rarity | Legendary |
+| Attunement | No |
+
 
 ## Source text
 
@@ -40,22 +47,9 @@ Sphere Interactions. If the sphere comes into contact with a planar portal (such
 
 Original layout: [[../../srd-5.2.1/pages/244|page 244]], [[../../srd-5.2.1/pages/245|page 245]].
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` wondrous_item ` |
-| ` rarity ` | ` legendary ` |
 
-### Equipment
-
-<!-- splat:values path=splat_item/equipment -->
-
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` none ` |
 
 ## Rule
 

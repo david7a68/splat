@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "91a0068f-04be-57df-a663-015d9dcae317"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/silver_dragon_wyrmling"
 splat_name: "Silver Dragon Wyrmling"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [324], "executable": false}
+splat_pages:
+- 324
 ---
 
 # Silver Dragon Wyrmling
@@ -35,3 +36,13 @@ Cold Breath (Recharge 5–6). Constitution Saving Throw: DC 13, each creature in
 Paralyzing Breath. Constitution Saving Throw: DC 13, each creature in a 15-foot Cone. First Failure: The target has the Incapacitated condition until the end of its next turn, when it repeats the save. Second Failure: The target has the Paralyzed condition, and it repeats the save at the end of each of its turns, ending the effect on itself on a success. After 1 minute, it succeeds automatically.
 
 Original layout: [[../pages/324|page 324]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

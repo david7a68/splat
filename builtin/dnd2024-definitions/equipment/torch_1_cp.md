@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 0a4aac78-c87d-5f56-8366-6ab785b04fc5
 splat_kind: item
 splat_key: dnd2024:equipment/torch_1_cp
 splat_name: Torch (1 CP)
-splat_origin:
-  key: dnd2024:reference/pages/100
+splat_origin: dnd2024:reference/pages/100
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 100
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 100, https://www.dndbeyond.com/srd
 ---
 
 # Torch (1 CP)
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Adventuring Gear |
+| Rarity |  |
+| Attunement | No |
+
 
 ## Source text
 
@@ -20,39 +27,13 @@ splat_sources:
 
 A Torch burns for 1 hour, casting Bright Light in a 20-foot radius and Dim Light for an additional 20 feet. When you take the Attack action, you can attack with the Torch, using it as a Simple Melee weapon. On a hit, the target takes 1 Fire damage.
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` adventuring_gear ` |
 
-### Equipment
 
-<!-- splat:values path=splat_item/equipment -->
 
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` none ` |
 
-### Price
 
-<!-- splat:values path=splat_item/price -->
-
-| Field | Value |
-| --- | --- |
-| ` value ` | ` 1 ` |
-| ` unit ` | ` cp ` |
-
-### Mass
-
-<!-- splat:values path=splat_item/mass -->
-
-| Field | Value |
-| --- | --- |
-| ` value ` | ` 1.0 ` |
-| ` unit ` | ` lb ` |
 
 ## Rule
 
@@ -105,3 +86,16 @@ damage:
 | --- | --- |
 | ` value ` | ` 1.0 ` |
 | ` unit ` | ` lb ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_item_extras -->
+> 
+> ```yaml
+> price:
+>   unit: cp
+>   value: 1
+> mass:
+>   unit: lb
+>   value: 1.0
+> ```
+

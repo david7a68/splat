@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 8780760b-3ed7-5057-8cc1-336f263c3fe4
 splat_kind: item
 splat_key: dnd2024:items/ring_of_free_action
 splat_name: Ring of Free Action
-splat_origin:
-  key: dnd2024:reference/magic_item/ring_of_free_action
+splat_origin: dnd2024:reference/magic_item/ring_of_free_action
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 238
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 238, https://www.dndbeyond.com/srd
 ---
 
 # Ring of Free Action
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Ring |
+| Rarity | Rare |
+| Attunement | Yes |
+
 
 ## Source text
 
@@ -24,22 +31,9 @@ While you wear this ring, Difficult Terrain doesn’t cost you extra movement. I
 
 Original layout: [[../../srd-5.2.1/pages/238|page 238]].
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` ring ` |
-| ` rarity ` | ` rare ` |
 
-### Equipment
-
-<!-- splat:values path=splat_item/equipment -->
-
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` required ` |
 
 ## Rule
 

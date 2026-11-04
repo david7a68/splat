@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 3cb6ef8d-c86d-5095-8559-a10f2dacd398
 splat_kind: rule
 splat_key: dnd2024:class_features/monk_level_1_unarmored_defense
 splat_name: 'Level 1: Unarmored Defense'
-splat_origin:
-  key: dnd2024:reference/pages/050
+splat_origin: dnd2024:reference/pages/050
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 50
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 50, https://www.dndbeyond.com/srd
 ---
 
 # Level 1: Unarmored Defense

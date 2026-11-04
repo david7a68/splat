@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 97069f88-f383-51ec-9e25-eb4943a439fe
 splat_kind: rule
 splat_key: dnd2024:rules/sorcerer_subtle_spell
 splat_name: Subtle Spell
-splat_origin:
-  key: dnd2024:reference/pages/067
+splat_origin: dnd2024:reference/pages/067
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 67
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 67, https://www.dndbeyond.com/srd
 ---
 
 # Subtle Spell

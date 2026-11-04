@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 8f28f780-21f0-5845-824e-5145c40d7fe5
 splat_kind: item
 splat_key: dnd2024:equipment/musket
 splat_name: Musket
-splat_origin:
-  key: dnd2024:reference/pages/091
+splat_origin: dnd2024:reference/pages/091
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 91
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 91, https://www.dndbeyond.com/srd
 ---
 
 # Musket
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Weapon |
+| Rarity |  |
+| Attunement |  |
+
 
 ## Source text
 
@@ -37,43 +44,13 @@ Source table, SRD 5.2.1 page 91.
   "category": "weapon"
 }
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` properties_text ` | ` Ammunition (Range 40/120; Bullet), Loading, Two-Handed ` |
-| ` mastery ` | ` slow ` |
-| ` weapon_category ` | ` martial ranged ` |
-| ` category ` | ` weapon ` |
 
-### Damage
 
-<!-- splat:values path=splat_item/damage -->
 
-| Field | Value |
-| --- | --- |
-| ` expression ` | ` 1d12 ` |
-| ` type ` | ` piercing ` |
 
-### Price
 
-<!-- splat:values path=splat_item/price -->
-
-| Field | Value |
-| --- | --- |
-| ` value ` | ` 500 ` |
-| ` unit ` | ` gp ` |
-
-### Mass
-
-<!-- splat:values path=splat_item/mass -->
-
-| Field | Value |
-| --- | --- |
-| ` value ` | ` 10.0 ` |
-| ` unit ` | ` lb ` |
 
 ## Rule
 
@@ -214,3 +191,22 @@ parameters:
 | ` actor ` | ` equipper ` |
 | ` item ` | ` equipped_instance ` |
 | ` inactive_if_not_equipped ` | ` true ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_item_extras -->
+> 
+> ```yaml
+> weapon_category: martial ranged
+> damage:
+>   expression: 1d12
+>   type: piercing
+> mass:
+>   unit: lb
+>   value: 10.0
+> mastery: slow
+> price:
+>   unit: gp
+>   value: 500
+> properties_text: Ammunition (Range 40/120; Bullet), Loading, Two-Handed
+> ```
+

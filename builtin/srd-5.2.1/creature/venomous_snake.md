@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "6d2304c0-56b6-59e7-becb-26f72442d610"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/venomous_snake"
 splat_name: "Venomous Snake"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [363], "executable": false}
+splat_pages:
+- 363
 ---
 
 # Venomous Snake
@@ -27,3 +28,13 @@ CR 1/8 (XP 25; PB +2)
 Bite. Melee Attack Roll: +4, reach 5 ft. Hit: 4 (1d4 + 2) Piercing damage plus 3 (1d6) Poison damage.
 
 Original layout: [[../pages/363|page 363]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

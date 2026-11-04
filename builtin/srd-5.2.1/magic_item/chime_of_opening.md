@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "5e5351ea-efc0-5c68-a622-519c35ec72df"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/magic_item/chime_of_opening"
 splat_name: "Chime of Opening"
-splat_reference: {"source": "SRD 5.2.1", "category": "magic_item", "pages": [215], "executable": false}
+splat_pages:
+- 215
 ---
 
 # Chime of Opening
@@ -18,3 +19,13 @@ This hollow metal tube measures about 1 foot long and weighs 1 pound. As a Magic
 The chime can be used 10 times. After the tenth time, it cracks and becomes useless.
 
 Original layout: [[../pages/215|page 215]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: magic_item
+> executable: false
+> ```
+

@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 1a06b21e-f742-52dd-88b4-0b8d6480bb1a
 splat_kind: rule
 splat_key: dnd2024:rules/actions_one_thing_at_a_time
 splat_name: One Thing at a Time
-splat_origin:
-  key: dnd2024:reference/pages/010
+splat_origin: dnd2024:reference/pages/010
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 10
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 10, https://www.dndbeyond.com/srd
 ---
 
 # One Thing at a Time

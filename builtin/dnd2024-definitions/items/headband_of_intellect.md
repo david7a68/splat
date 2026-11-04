@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 184d7087-e103-52ea-9a0a-026f7e09b6bb
 splat_kind: item
 splat_key: dnd2024:items/headband_of_intellect
 splat_name: Headband of Intellect
-splat_origin:
-  key: dnd2024:reference/magic_item/headband_of_intellect
+splat_origin: dnd2024:reference/magic_item/headband_of_intellect
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 225
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 225, https://www.dndbeyond.com/srd
 ---
 
 # Headband of Intellect
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Wondrous Item |
+| Rarity | Uncommon |
+| Attunement | Yes |
+
 
 ## Source text
 
@@ -24,22 +31,9 @@ Your Intelligence is 19 while you wear this headband. It has no effect on you if
 
 Original layout: [[../../srd-5.2.1/pages/225|page 225]].
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` wondrous_item ` |
-| ` rarity ` | ` uncommon ` |
 
-### Equipment
-
-<!-- splat:values path=splat_item/equipment -->
-
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` required ` |
 
 ## Rule
 

@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 6bb212a0-e1a9-5a31-a937-8be18be81053
 splat_kind: rule
 splat_key: dnd2024:rules/ranger_ranger_class_features
 splat_name: Ranger Class Features
-splat_origin:
-  key: dnd2024:reference/pages/057
+splat_origin: dnd2024:reference/pages/057
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 57
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 57, https://www.dndbeyond.com/srd
 ---
 
 # Ranger Class Features

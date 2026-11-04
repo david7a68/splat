@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "fc41e27a-20e2-550c-9e49-8bc194f2f798"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/glossary/tremorsense"
 splat_name: "Tremorsense"
-splat_reference: {"source": "SRD 5.2.1", "category": "glossary", "pages": [190], "executable": false}
+splat_pages:
+- 190
 ---
 
 # Tremorsense
@@ -16,3 +17,13 @@ A creature with Tremorsense can pinpoint the location of creatures and moving ob
 Tremorsense can’t detect creatures or objects in the air, and it doesn’t count as a form of sight.
 
 Original layout: [[../pages/190|page 190]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: glossary
+> executable: false
+> ```
+

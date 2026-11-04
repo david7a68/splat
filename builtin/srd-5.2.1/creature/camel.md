@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "abd632a9-10b4-5cdf-80c6-2833e37b4bc5"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/camel"
 splat_name: "Camel"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [346], "executable": false}
+splat_pages:
+- 346
 ---
 
 # Camel
@@ -27,3 +28,13 @@ CR 1/8 (XP 25; PB +2)
 Bite. Melee Attack Roll: +4, reach 5 ft. Hit: 4 (1d4 + 2) Bludgeoning damage.
 
 Original layout: [[../pages/346|page 346]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

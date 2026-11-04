@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "134a4d44-fe4a-5231-998e-26a9b22d502a"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/flesh_golem"
 splat_name: "Flesh Golem"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [285], "executable": false}
+splat_pages:
+- 285
 ---
 
 # Flesh Golem
@@ -44,3 +45,13 @@ Multiattack. The golem makes two Slam attacks.
 Slam. Melee Attack Roll: +7, reach 5 ft. Hit: 13 (2d8 + 4) Bludgeoning damage plus 4 (1d8) Lightning damage.
 
 Original layout: [[../pages/285|page 285]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

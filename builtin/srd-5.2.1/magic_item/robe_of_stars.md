@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "60d8b37d-e63c-5d25-8461-6d26096bee9d"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/magic_item/robe_of_stars"
 splat_name: "Robe of Stars"
-splat_reference: {"source": "SRD 5.2.1", "category": "magic_item", "pages": [240], "executable": false}
+splat_pages:
+- 240
 ---
 
 # Robe of Stars
@@ -20,3 +21,13 @@ Six stars, located on the robe’s upper-front portion, are particularly large. 
 While you wear the robe, you can take a Magic action to enter the Astral Plane along with everything you are wearing and carrying. You remain there until you take a Magic action to return to the plane you were on. You reappear in the last space you occupied or, if that space is occupied, the nearest unoccupied space.
 
 Original layout: [[../pages/240|page 240]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: magic_item
+> executable: false
+> ```
+

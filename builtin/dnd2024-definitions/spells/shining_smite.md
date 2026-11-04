@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 33a35a43-1180-5533-92d2-9a887f91fa1c
 splat_kind: spell
 splat_key: dnd2024:spells/shining_smite
 splat_name: Shining Smite
-splat_origin:
-  key: dnd2024:reference/spell/shining_smite
+splat_origin: dnd2024:reference/spell/shining_smite
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 162
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 162, https://www.dndbeyond.com/srd
 ---
 
 # Shining Smite
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 2 |
+| School | Transmutation |
+| Classes | Paladin |
+| Casting Time | Bonus Action, which you take immediately after hitting a creature with a Melee weapon or an Unarmed Strike |
+| Range |  |
+| Components | V |
+| Duration | Concentration, up to 1 minute |
+
 
 ## Source text
 
@@ -30,28 +41,9 @@ Using a Higher-Level Spell Slot. The damage increases by 1d6 for each spell slot
 
 Original layout: [[../../srd-5.2.1/pages/162|page 162]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 2 ` |
-| ` school ` | ` transmutation ` |
-| ` classes ` | ` ["paladin"] ` |
-| ` components ` | ` ["verbal"] ` |
-| ` concentration ` | ` true ` |
-| ` duration ` | ` Concentration, up to 1 minute ` |
-| ` casting_time ` | ` Bonus Action, which you take immediately after hitting a creature with a Melee weapon or an Unarmed Strike ` |
-| ` ritual ` | ` false ` |
 
-### Range
-
-<!-- splat:values path=splat_spell/range -->
-
-| Field | Value |
-| --- | --- |
-| ` mode ` | ` self ` |
 
 ## Rule
 
@@ -111,3 +103,12 @@ maximum:
   value: 1
   unit: minute
 ```
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_spell_extras -->
+> 
+> ```yaml
+> range:
+>   mode: self
+> ```
+

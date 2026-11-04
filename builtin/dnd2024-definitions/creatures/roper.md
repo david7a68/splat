@@ -1,34 +1,60 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: aad2d730-166b-50f4-acd0-c355c6b3b9e5
 splat_kind: creature
 splat_key: dnd2024:creatures/roper
 splat_name: Roper
-splat_origin:
-  key: dnd2024:reference/creature/roper
+splat_origin: dnd2024:reference/creature/roper
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 320
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 320, https://www.dndbeyond.com/srd
 ---
 
 # Roper
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Large |
+| Type | Aberration |
+| Alignment | Neutral Evil |
+| Armor Class | 20 |
+| Hit Points | 93 (11d10 + 33) |
+| Initiative | +5 (15) |
+| Speed | 10 ft., Climb 20 ft. |
+| Challenge | 5 (XP 1,800; PB +3) |
+| Skills | Perception +6, Stealth +5 |
+| Senses | Darkvision 60 ft.; Passive Perception 16 |
+| Languages | None |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 18 | +4 | +4 |
+| Dex | 8 | -1 | -1 |
+| Con | 17 | +3 | +3 |
+| Int | 7 | -2 | -2 |
+| Wis | 16 | +3 | +3 |
+| Cha | 6 | -2 | -2 |
+
 
 ## Source text
 
 <!-- SRD page 320 -->
 
-Large Aberration, Neutral Evil\
-AC 20  Initiative +5 (15)\
-HP 93 (11d10 + 33)\
-Speed 10 ft., Climb 20 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 18 +4 +4 Dex 8 −1 −1 Con 17 +3 +3\
-Int 7 −2 −2 Wis 16 +3 +3 Cha 6 −2 −2\
-Skills Perception +6, Stealth +5\
-Senses Darkvision 60 ft.; Passive Perception 16\
-Languages None\
-CR 5 (XP 1,800; PB +3)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Large Aberration, Neutral Evil\
+> AC 20  Initiative +5 (15)\
+> HP 93 (11d10 + 33)\
+> Speed 10 ft., Climb 20 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 18 +4 +4 Dex 8 −1 −1 Con 17 +3 +3\
+> Int 7 −2 −2 Wis 16 +3 +3 Cha 6 −2 −2\
+> Skills Perception +6, Stealth +5\
+> Senses Darkvision 60 ft.; Passive Perception 16\
+> Languages None\
+> CR 5 (XP 1,800; PB +3)
+
 
 ### Traits
 
@@ -48,46 +74,11 @@ Reel. The roper pulls each creature Grappled by it up to 30 feet straight toward
 
 Original layout: [[../../srd-5.2.1/pages/320|page 320]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` large ` |
-| ` type ` | ` aberration ` |
-| ` alignment ` | ` Neutral Evil ` |
-| ` movement_text ` | ` 10 ft., Climb 20 ft. ` |
-| ` skills_text ` | ` Perception +6, Stealth +5 ` |
-| ` senses_text ` | ` Darkvision 60 ft.; Passive Perception 16 ` |
-| ` languages_text ` | ` None ` |
-| ` cr_text ` | ` 5 (XP 1,800; PB +3) ` |
-| ` hit_points_text ` | ` 93 (11d10 + 33) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 18 ` | ` 4 ` |
-| ` Dexterity ` | ` 8 ` | ` -1 ` |
-| ` Constitution ` | ` 17 ` | ` 3 ` |
-| ` Intelligence ` | ` 7 ` | ` -2 ` |
-| ` Wisdom ` | ` 16 ` | ` 3 ` |
-| ` Charisma ` | ` 6 ` | ` -2 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 20 ` |  |
-| ` max_hp ` | ` 93 ` |  |
-| ` initiative ` | ` 5 ` |  |
-| ` speed ` | ` 10 ` | ` ft ` |
-| ` climb_speed ` | ` 20 ` | ` ft ` |
 
 ## Health
 
@@ -304,3 +295,13 @@ geometry_assumptions:
   - plane
   - form_appearance
 ```
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_stats_extras -->
+> 
+> ```yaml
+> climb_speed:
+>   unit: ft
+>   value: 20
+> ```
+

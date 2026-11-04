@@ -1,34 +1,60 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 30866ef2-a238-5b10-be76-9bf148aaf82f
 splat_kind: creature
 splat_key: dnd2024:creatures/ogre
 splat_name: Ogre
-splat_origin:
-  key: dnd2024:reference/creature/ogre
+splat_origin: dnd2024:reference/creature/ogre
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 312
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 312, https://www.dndbeyond.com/srd
 ---
 
 # Ogre
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Large |
+| Type | Giant |
+| Alignment | Chaotic Evil |
+| Armor Class | 11 |
+| Hit Points | 68 (8d10 + 24) |
+| Initiative | -1 (9) |
+| Speed | 40 ft. |
+| Challenge | 2 (XP 450; PB +2) |
+| Senses | Darkvision 60 ft.; Passive Perception 8 |
+| Languages | Common, Giant |
+| Gear | Greatclub, Javelins (3) |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 19 | +4 | +4 |
+| Dex | 8 | -1 | -1 |
+| Con | 16 | +3 | +3 |
+| Int | 5 | -3 | -3 |
+| Wis | 7 | -2 | -2 |
+| Cha | 7 | -2 | -2 |
+
 
 ## Source text
 
 <!-- SRD page 312 -->
 
-Large Giant, Chaotic Evil\
-AC 11 Initiative −1 (9)\
-HP 68 (8d10 + 24)\
-Speed 40 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 19 +4 +4 Dex 8 −1 −1 Con 16 +3 +3\
-Int 5 −3 −3 Wis 7 −2 −2 Cha 7 −2 −2\
-Gear Greatclub, Javelins (3)\
-Senses Darkvision 60 ft.; Passive Perception 8\
-Languages Common, Giant\
-CR 2 (XP 450; PB +2)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Large Giant, Chaotic Evil\
+> AC 11 Initiative −1 (9)\
+> HP 68 (8d10 + 24)\
+> Speed 40 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 19 +4 +4 Dex 8 −1 −1 Con 16 +3 +3\
+> Int 5 −3 −3 Wis 7 −2 −2 Cha 7 −2 −2\
+> Gear Greatclub, Javelins (3)\
+> Senses Darkvision 60 ft.; Passive Perception 8\
+> Languages Common, Giant\
+> CR 2 (XP 450; PB +2)
+
 
 ### Actions
 
@@ -38,45 +64,11 @@ Javelin. Melee or Ranged Attack Roll: +6, reach 5 ft. or range 30/120 ft. Hit: 1
 
 Original layout: [[../../srd-5.2.1/pages/312|page 312]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` large ` |
-| ` type ` | ` giant ` |
-| ` alignment ` | ` Chaotic Evil ` |
-| ` movement_text ` | ` 40 ft. ` |
-| ` gear_text ` | ` Greatclub, Javelins (3) ` |
-| ` senses_text ` | ` Darkvision 60 ft.; Passive Perception 8 ` |
-| ` languages_text ` | ` Common, Giant ` |
-| ` cr_text ` | ` 2 (XP 450; PB +2) ` |
-| ` hit_points_text ` | ` 68 (8d10 + 24) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 19 ` | ` 4 ` |
-| ` Dexterity ` | ` 8 ` | ` -1 ` |
-| ` Constitution ` | ` 16 ` | ` 3 ` |
-| ` Intelligence ` | ` 5 ` | ` -3 ` |
-| ` Wisdom ` | ` 7 ` | ` -2 ` |
-| ` Charisma ` | ` 7 ` | ` -2 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 11 ` |  |
-| ` max_hp ` | ` 68 ` |  |
-| ` initiative ` | ` -1 ` |  |
-| ` speed ` | ` 40 ` | ` ft ` |
 
 ## Health
 

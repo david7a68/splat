@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 8dadd17c-9a0c-5858-b18f-560406795e16
 splat_kind: spell
 splat_key: dnd2024:spells/astral_projection
 splat_name: Astral Projection
-splat_origin:
-  key: dnd2024:reference/spell/astral_projection
+splat_origin: dnd2024:reference/spell/astral_projection
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 111
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 111, https://www.dndbeyond.com/srd
 ---
 
 # Astral Projection
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 9 |
+| School | Necromancy |
+| Classes | Cleric, Warlock, Wizard |
+| Casting Time | 1 hour |
+| Range | 10 feet |
+| Components | V, S, M (for each of the spell’s targets, one jacinth worth 1,000+ GP and one silver bar worth 100+ GP, all of which the spell consumes) |
+| Duration | Until dispelled |
+
 
 ## Source text
 
@@ -36,37 +47,11 @@ When the spell ends for a target who isn’t dead, the target reappears in its b
 
 Original layout: [[../../srd-5.2.1/pages/111|page 111]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 9 ` |
-| ` school ` | ` necromancy ` |
-| ` classes ` | ` ["cleric", "warlock", "wizard"] ` |
-| ` components ` | ` ["verbal", "somatic", "material"] ` |
-| ` concentration ` | ` false ` |
-| ` duration ` | ` Until dispelled ` |
-| ` casting_time ` | ` 1 hour ` |
-| ` ritual ` | ` false ` |
 
-### Range
 
-<!-- splat:values path=splat_spell/range -->
 
-| Field | Value |
-| --- | --- |
-| ` feet ` | ` 10 ` |
-
-### Material
-
-<!-- splat:values path=splat_spell/material -->
-
-| Field | Value |
-| --- | --- |
-| ` description ` | ` for each of the spell’s targets, one jacinth worth 1,000+ GP and one silver bar worth 100+ GP, all of which the spell consumes ` |
-| ` consumed ` | ` true ` |
 
 ## Rule
 
@@ -140,3 +125,12 @@ living_target_cleanup:
 - return_to_body
 - end_suspended_animation
 ```
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_spell_extras -->
+> 
+> ```yaml
+> material:
+>   consumed: true
+> ```
+

@@ -1,34 +1,60 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 5e3caea4-c0c7-545a-aa9c-9f1c87c777e9
 splat_kind: creature
 splat_key: dnd2024:creatures/green_hag
 splat_name: Green Hag
-splat_origin:
-  key: dnd2024:reference/creature/green_hag
+splat_origin: dnd2024:reference/creature/green_hag
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 295
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 295, https://www.dndbeyond.com/srd
 ---
 
 # Green Hag
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Medium |
+| Type | Fey |
+| Alignment | Neutral Evil |
+| Armor Class | 17 |
+| Hit Points | 82 (11d8 + 33) |
+| Initiative | +1 (11) |
+| Speed | 30 ft., Swim 30 ft. |
+| Challenge | 3 (XP 700; PB +2) |
+| Skills | Arcana +5, Deception +4, Perception +4, Stealth +3 |
+| Senses | Darkvision 60 ft.; Passive Perception 14 |
+| Languages | Common, Elvish, Sylvan |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 18 | +4 | +4 |
+| Dex | 12 | +1 | +1 |
+| Con | 16 | +3 | +3 |
+| Int | 13 | +1 | +1 |
+| Wis | 14 | +2 | +2 |
+| Cha | 14 | +2 | +2 |
+
 
 ## Source text
 
 <!-- SRD page 295 -->
 
-Medium Fey, Neutral Evil\
-AC 17 Initiative +1 (11)\
-HP 82 (11d8 + 33)\
-Speed 30 ft., Swim 30 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 18 +4 +4 Dex 12 +1 +1 Con 16 +3 +3\
-Int 13 +1 +1 Wis 14 +2 +2 Cha 14 +2 +2\
-Skills Arcana +5, Deception +4, Perception +4, Stealth +3\
-Senses Darkvision 60 ft.; Passive Perception 14\
-Languages Common, Elvish, Sylvan\
-CR 3 (XP 700; PB +2)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Medium Fey, Neutral Evil\
+> AC 17 Initiative +1 (11)\
+> HP 82 (11d8 + 33)\
+> Speed 30 ft., Swim 30 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 18 +4 +4 Dex 12 +1 +1 Con 16 +3 +3\
+> Int 13 +1 +1 Wis 14 +2 +2 Cha 14 +2 +2\
+> Skills Arcana +5, Deception +4, Perception +4, Stealth +3\
+> Senses Darkvision 60 ft.; Passive Perception 14\
+> Languages Common, Elvish, Sylvan\
+> CR 3 (XP 700; PB +2)
+
 
 ### Traits
 
@@ -50,46 +76,11 @@ At Will: Dancing Lights, Disguise Self (24-hour duration), Invisibility (self on
 
 Original layout: [[../../srd-5.2.1/pages/295|page 295]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` medium ` |
-| ` type ` | ` fey ` |
-| ` alignment ` | ` Neutral Evil ` |
-| ` movement_text ` | ` 30 ft., Swim 30 ft. ` |
-| ` skills_text ` | ` Arcana +5, Deception +4, Perception +4, Stealth +3 ` |
-| ` senses_text ` | ` Darkvision 60 ft.; Passive Perception 14 ` |
-| ` languages_text ` | ` Common, Elvish, Sylvan ` |
-| ` cr_text ` | ` 3 (XP 700; PB +2) ` |
-| ` hit_points_text ` | ` 82 (11d8 + 33) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 18 ` | ` 4 ` |
-| ` Dexterity ` | ` 12 ` | ` 1 ` |
-| ` Constitution ` | ` 16 ` | ` 3 ` |
-| ` Intelligence ` | ` 13 ` | ` 1 ` |
-| ` Wisdom ` | ` 14 ` | ` 2 ` |
-| ` Charisma ` | ` 14 ` | ` 2 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 17 ` |  |
-| ` max_hp ` | ` 82 ` |  |
-| ` initiative ` | ` 1 ` |  |
-| ` speed ` | ` 30 ` | ` ft ` |
-| ` swim_speed ` | ` 30 ` | ` ft ` |
 
 ## Health
 
@@ -439,3 +430,13 @@ geometry_assumptions:
   - plane
   - form_appearance
 ```
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_stats_extras -->
+> 
+> ```yaml
+> swim_speed:
+>   unit: ft
+>   value: 30
+> ```
+

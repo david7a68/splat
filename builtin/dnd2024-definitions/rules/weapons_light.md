@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 20d2b5d7-9345-53e5-8d54-8a688f803bc6
 splat_kind: rule
 splat_key: dnd2024:rules/weapons_light
 splat_name: Light
-splat_origin:
-  key: dnd2024:reference/pages/089
+splat_origin: dnd2024:reference/pages/089
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 89
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 89, https://www.dndbeyond.com/srd
 ---
 
 # Light

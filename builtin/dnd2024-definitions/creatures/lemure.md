@@ -1,35 +1,62 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 50248aa3-89ce-55b8-8c50-74dfde4d4220
 splat_kind: creature
 splat_key: dnd2024:creatures/lemure
 splat_name: Lemure
-splat_origin:
-  key: dnd2024:reference/creature/lemure
+splat_origin: dnd2024:reference/creature/lemure
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 304
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 304, https://www.dndbeyond.com/srd
 ---
 
 # Lemure
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Medium |
+| Type | Fiend (Devil) |
+| Alignment | Lawful Evil |
+| Armor Class | 9 |
+| Hit Points | 9 (2d8) |
+| Initiative | -3 (7) |
+| Speed | 20 ft. |
+| Challenge | 0 (XP 10; PB +2) |
+| Senses | Darkvision 120 ft. (unimpeded by magical Darkness); Passive Perception 10 |
+| Languages | Understands Infernal but can’t speak |
+| Resistances | Cold |
+| Immunities | Fire, Poison; Charmed, Frightened, Poisoned |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 10 | +0 | +0 |
+| Dex | 5 | -3 | -3 |
+| Con | 11 | +0 | +0 |
+| Int | 1 | -5 | -5 |
+| Wis | 11 | +0 | +0 |
+| Cha | 3 | -4 | -4 |
+
 
 ## Source text
 
 <!-- SRD page 304 -->
 
-Medium Fiend (Devil), Lawful Evil\
-AC 9 Initiative −3 (7)\
-HP 9 (2d8)\
-Speed 20 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 10 +0 +0 Dex 5 −3 −3 Con 11 +0 +0\
-Int 1 −5 −5 Wis 11 +0 +0 Cha 3 −4 −4\
-Resistances Cold\
-Immunities Fire, Poison; Charmed, Frightened, Poisoned\
-Senses Darkvision 120 ft. (unimpeded by magical Darkness); Passive Perception 10\
-Languages Understands Infernal but can’t speak\
-CR 0 (XP 10; PB +2)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Medium Fiend (Devil), Lawful Evil\
+> AC 9 Initiative −3 (7)\
+> HP 9 (2d8)\
+> Speed 20 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 10 +0 +0 Dex 5 −3 −3 Con 11 +0 +0\
+> Int 1 −5 −5 Wis 11 +0 +0 Cha 3 −4 −4\
+> Resistances Cold\
+> Immunities Fire, Poison; Charmed, Frightened, Poisoned\
+> Senses Darkvision 120 ft. (unimpeded by magical Darkness); Passive Perception 10\
+> Languages Understands Infernal but can’t speak\
+> CR 0 (XP 10; PB +2)
+
 
 ### Traits
 
@@ -41,47 +68,11 @@ Vile Slime. Melee Attack Roll: +2, reach 5 ft. Hit: 2 (1d4) Poison damage.
 
 Original layout: [[../../srd-5.2.1/pages/304|page 304]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` medium ` |
-| ` type ` | ` fiend ` |
-| ` alignment ` | ` Lawful Evil ` |
-| ` tags_text ` | ` (Devil) ` |
-| ` movement_text ` | ` 20 ft. ` |
-| ` resistances_text ` | ` Cold ` |
-| ` immunities_text ` | ` Fire, Poison; Charmed, Frightened, Poisoned ` |
-| ` senses_text ` | ` Darkvision 120 ft. (unimpeded by magical Darkness); Passive Perception 10 ` |
-| ` languages_text ` | ` Understands Infernal but can’t speak ` |
-| ` cr_text ` | ` 0 (XP 10; PB +2) ` |
-| ` hit_points_text ` | ` 9 (2d8) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 10 ` | ` 0 ` |
-| ` Dexterity ` | ` 5 ` | ` -3 ` |
-| ` Constitution ` | ` 11 ` | ` 0 ` |
-| ` Intelligence ` | ` 1 ` | ` -5 ` |
-| ` Wisdom ` | ` 11 ` | ` 0 ` |
-| ` Charisma ` | ` 3 ` | ` -4 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 9 ` |  |
-| ` max_hp ` | ` 9 ` |  |
-| ` initiative ` | ` -3 ` |  |
-| ` speed ` | ` 20 ` | ` ft ` |
 
 ## Health
 

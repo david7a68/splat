@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "6fcbb769-6ac9-5d14-b6ec-2b8ebb077cd6"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/commune"
 splat_name: "Commune"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [116], "executable": false}
+splat_pages:
+- 116
 ---
 
 # Commune
@@ -24,3 +25,13 @@ Divine beings aren’t necessarily omniscient, so you might receive “unclear�
 If you cast the spell more than once before finishing a Long Rest, there is a cumulative 25 percent chance for each casting after the first that you get no answer.
 
 Original layout: [[../pages/116|page 116]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

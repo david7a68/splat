@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: ed013b84-6941-582f-bf69-b7ff453ec792
 splat_kind: rule
 splat_key: dnd2024:rules/monsters
 splat_name: Monsters
-splat_origin:
-  key: dnd2024:reference/pages/254
+splat_origin: dnd2024:reference/pages/254
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 254
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 254, https://www.dndbeyond.com/srd
 ---
 
 # Monsters

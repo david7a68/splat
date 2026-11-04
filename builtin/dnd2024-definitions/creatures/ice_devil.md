@@ -1,35 +1,62 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: a33a2ae8-8473-5e89-90b2-20d2665bb846
 splat_kind: creature
 splat_key: dnd2024:creatures/ice_devil
 splat_name: Ice Devil
-splat_origin:
-  key: dnd2024:reference/creature/ice_devil
+splat_origin: dnd2024:reference/creature/ice_devil
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 300
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 300, https://www.dndbeyond.com/srd
 ---
 
 # Ice Devil
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Large |
+| Type | Fiend (Devil) |
+| Alignment | Lawful Evil |
+| Armor Class | 18 |
+| Hit Points | 228 (24d10 + 96) |
+| Initiative | +7 (17) |
+| Speed | 40 ft. |
+| Challenge | 14 (XP 11,500; PB +5) |
+| Skills | Insight +7, Perception +7, Persuasion +9 |
+| Senses | Blindsight 120 ft.; Passive Perception 17 |
+| Languages | Infernal; telepathy 120 ft. |
+| Immunities | Cold, Fire, Poison; Poisoned |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 21 | +5 | +5 |
+| Dex | 14 | +2 | +7 |
+| Con | 18 | +4 | +9 |
+| Int | 18 | +4 | +4 |
+| Wis | 15 | +2 | +7 |
+| Cha | 18 | +4 | +9 |
+
 
 ## Source text
 
 <!-- SRD page 300 -->
 
-Large Fiend (Devil), Lawful Evil\
-AC 18 Initiative +7 (17)\
-HP 228 (24d10 + 96)\
-Speed 40 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 21 +5 +5 Dex 14 +2 +7 Con 18 +4 +9\
-Int 18 +4 +4 Wis 15 +2 +7 Cha 18 +4 +9\
-Skills Insight +7, Perception +7, Persuasion +9\
-Immunities Cold, Fire, Poison; Poisoned\
-Senses Blindsight 120 ft.; Passive Perception 17\
-Languages Infernal; telepathy 120 ft.\
-CR 14 (XP 11,500; PB +5)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Large Fiend (Devil), Lawful Evil\
+> AC 18 Initiative +7 (17)\
+> HP 228 (24d10 + 96)\
+> Speed 40 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 21 +5 +5 Dex 14 +2 +7 Con 18 +4 +9\
+> Int 18 +4 +4 Wis 15 +2 +7 Cha 18 +4 +9\
+> Skills Insight +7, Perception +7, Persuasion +9\
+> Immunities Cold, Fire, Poison; Poisoned\
+> Senses Blindsight 120 ft.; Passive Perception 17\
+> Languages Infernal; telepathy 120 ft.\
+> CR 14 (XP 11,500; PB +5)
+
 
 ### Traits
 
@@ -49,47 +76,11 @@ Ice Wall (Recharge 6). The devil casts Wall of Ice (level 8 version), requiring 
 
 Original layout: [[../../srd-5.2.1/pages/300|page 300]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` large ` |
-| ` type ` | ` fiend ` |
-| ` alignment ` | ` Lawful Evil ` |
-| ` tags_text ` | ` (Devil) ` |
-| ` movement_text ` | ` 40 ft. ` |
-| ` skills_text ` | ` Insight +7, Perception +7, Persuasion +9 ` |
-| ` immunities_text ` | ` Cold, Fire, Poison; Poisoned ` |
-| ` senses_text ` | ` Blindsight 120 ft.; Passive Perception 17 ` |
-| ` languages_text ` | ` Infernal; telepathy 120 ft. ` |
-| ` cr_text ` | ` 14 (XP 11,500; PB +5) ` |
-| ` hit_points_text ` | ` 228 (24d10 + 96) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 21 ` | ` 5 ` |
-| ` Dexterity ` | ` 14 ` | ` 7 ` |
-| ` Constitution ` | ` 18 ` | ` 9 ` |
-| ` Intelligence ` | ` 18 ` | ` 4 ` |
-| ` Wisdom ` | ` 15 ` | ` 7 ` |
-| ` Charisma ` | ` 18 ` | ` 9 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 18 ` |  |
-| ` max_hp ` | ` 228 ` |  |
-| ` initiative ` | ` 7 ` |  |
-| ` speed ` | ` 40 ` | ` ft ` |
 
 ## Health
 

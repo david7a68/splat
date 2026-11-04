@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: eb1d3055-55bf-59f6-838b-15c1b6a3fe18
 splat_kind: spell
 splat_key: dnd2024:spells/purify_food_and_drink
 splat_name: Purify Food and Drink
-splat_origin:
-  key: dnd2024:reference/spell/purify_food_and_drink
+splat_origin: dnd2024:reference/spell/purify_food_and_drink
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 157
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 157, https://www.dndbeyond.com/srd
 ---
 
 # Purify Food and Drink
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 1 |
+| School | Transmutation |
+| Classes | Cleric, Druid, Paladin |
+| Casting Time | Action or Ritual |
+| Range | 10 feet |
+| Components | V, S |
+| Duration | Instantaneous |
+
 
 ## Source text
 
@@ -28,28 +39,9 @@ You remove poison and rot from nonmagical food and drink in a 5-foot-radius Sphe
 
 Original layout: [[../../srd-5.2.1/pages/157|page 157]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 1 ` |
-| ` school ` | ` transmutation ` |
-| ` classes ` | ` ["cleric", "druid", "paladin"] ` |
-| ` components ` | ` ["verbal", "somatic"] ` |
-| ` concentration ` | ` false ` |
-| ` duration ` | ` Instantaneous ` |
-| ` casting_time ` | ` Action or Ritual ` |
-| ` ritual ` | ` true ` |
 
-### Range
-
-<!-- splat:values path=splat_spell/range -->
-
-| Field | Value |
-| --- | --- |
-| ` feet ` | ` 10 ` |
 
 ## Rule
 

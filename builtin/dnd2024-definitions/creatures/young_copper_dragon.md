@@ -1,35 +1,62 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 76207bbe-547f-5d70-94ce-cb0c8ab9bccc
 splat_kind: creature
 splat_key: dnd2024:creatures/young_copper_dragon
 splat_name: Young Copper Dragon
-splat_origin:
-  key: dnd2024:reference/creature/young_copper_dragon
+splat_origin: dnd2024:reference/creature/young_copper_dragon
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 276
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 276, https://www.dndbeyond.com/srd
 ---
 
 # Young Copper Dragon
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Large |
+| Type | Dragon (Metallic) |
+| Alignment | Chaotic Good |
+| Armor Class | 17 |
+| Hit Points | 119 (14d10 + 42) |
+| Initiative | +4 (14) |
+| Speed | 40 ft., Climb 40 ft., Fly 80 ft. |
+| Challenge | 7 (XP 2,900; PB +3) |
+| Skills | Deception +5, Perception +7, Stealth +4 |
+| Senses | Blindsight 30 ft., Darkvision 120 ft.; Passive Perception 17 |
+| Languages | Common, Draconic |
+| Immunities | Acid |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 19 | +4 | +4 |
+| Dex | 12 | +1 | +4 |
+| Con | 17 | +3 | +3 |
+| Int | 16 | +3 | +3 |
+| Wis | 13 | +1 | +4 |
+| Cha | 15 | +2 | +2 |
+
 
 ## Source text
 
 <!-- SRD page 276 -->
 
-Large Dragon (Metallic), Chaotic Good\
-AC 17  Initiative +4 (14)\
-HP 119 (14d10 + 42)\
-Speed 40 ft., Climb 40 ft., Fly 80 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 19 +4 +4 Dex 12 +1 +4 Con 17 +3 +3\
-Int 16 +3 +3 Wis 13 +1 +4 Cha 15 +2 +2\
-Skills Deception +5, Perception +7, Stealth +4\
-Immunities Acid\
-Senses Blindsight 30 ft., Darkvision 120 ft.; Passive Perception 17\
-Languages Common, Draconic\
-CR 7 (XP 2,900; PB +3)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Large Dragon (Metallic), Chaotic Good\
+> AC 17  Initiative +4 (14)\
+> HP 119 (14d10 + 42)\
+> Speed 40 ft., Climb 40 ft., Fly 80 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 19 +4 +4 Dex 12 +1 +4 Con 17 +3 +3\
+> Int 16 +3 +3 Wis 13 +1 +4 Cha 15 +2 +2\
+> Skills Deception +5, Perception +7, Stealth +4\
+> Immunities Acid\
+> Senses Blindsight 30 ft., Darkvision 120 ft.; Passive Perception 17\
+> Languages Common, Draconic\
+> CR 7 (XP 2,900; PB +3)
+
 
 ### Actions
 
@@ -43,49 +70,11 @@ Slowing Breath. Constitution Saving Throw: DC 14, each creature in a 30-foot Con
 
 Original layout: [[../../srd-5.2.1/pages/276|page 276]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` large ` |
-| ` type ` | ` dragon ` |
-| ` alignment ` | ` Chaotic Good ` |
-| ` tags_text ` | ` (Metallic) ` |
-| ` movement_text ` | ` 40 ft., Climb 40 ft., Fly 80 ft. ` |
-| ` skills_text ` | ` Deception +5, Perception +7, Stealth +4 ` |
-| ` immunities_text ` | ` Acid ` |
-| ` senses_text ` | ` Blindsight 30 ft., Darkvision 120 ft.; Passive Perception 17 ` |
-| ` languages_text ` | ` Common, Draconic ` |
-| ` cr_text ` | ` 7 (XP 2,900; PB +3) ` |
-| ` hit_points_text ` | ` 119 (14d10 + 42) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 19 ` | ` 4 ` |
-| ` Dexterity ` | ` 12 ` | ` 4 ` |
-| ` Constitution ` | ` 17 ` | ` 3 ` |
-| ` Intelligence ` | ` 16 ` | ` 3 ` |
-| ` Wisdom ` | ` 13 ` | ` 4 ` |
-| ` Charisma ` | ` 15 ` | ` 2 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 17 ` |  |
-| ` max_hp ` | ` 119 ` |  |
-| ` initiative ` | ` 4 ` |  |
-| ` speed ` | ` 40 ` | ` ft ` |
-| ` climb_speed ` | ` 40 ` | ` ft ` |
-| ` fly_speed ` | ` 80 ` | ` ft ` |
 
 ## Health
 
@@ -302,3 +291,16 @@ replace_attack:
 | ` provider ` | ` caller ` |
 | ` required_facts ` | ` ["distance", "area_membership", "visibility", "occupancy", "movement_path"] ` |
 | ` validate_against_typed_constraints ` | ` true ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_stats_extras -->
+> 
+> ```yaml
+> fly_speed:
+>   unit: ft
+>   value: 80
+> climb_speed:
+>   unit: ft
+>   value: 40
+> ```
+

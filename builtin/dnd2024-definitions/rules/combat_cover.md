@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 92d39316-b0ec-5655-a7c1-c5df64ea7786
 splat_kind: rule
 splat_key: dnd2024:rules/combat_cover
 splat_name: Cover
-splat_origin:
-  key: dnd2024:reference/pages/015
+splat_origin: dnd2024:reference/pages/015
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 15
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 15, https://www.dndbeyond.com/srd
 ---
 
 # Cover

@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 6baed617-b0e7-5653-835c-59bd1b1418b7
 splat_kind: item
 splat_key: dnd2024:items/medallion_of_thoughts
 splat_name: Medallion of Thoughts
-splat_origin:
-  key: dnd2024:reference/magic_item/medallion_of_thoughts
+splat_origin: dnd2024:reference/magic_item/medallion_of_thoughts
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 230
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 230, https://www.dndbeyond.com/srd
 ---
 
 # Medallion of Thoughts
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Wondrous Item |
+| Rarity | Uncommon |
+| Attunement | Yes |
+
 
 ## Source text
 
@@ -24,22 +31,9 @@ The medallion has 5 charges. While wearing it, you can expend 1 charge to cast D
 
 Original layout: [[../../srd-5.2.1/pages/230|page 230]].
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` wondrous_item ` |
-| ` rarity ` | ` uncommon ` |
 
-### Equipment
-
-<!-- splat:values path=splat_item/equipment -->
-
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` required ` |
 
 ## Rule
 

@@ -1,36 +1,64 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 71f360e6-f6cd-5406-a452-273caff9f01f
 splat_kind: creature
 splat_key: dnd2024:creatures/assassin
 splat_name: Assassin
-splat_origin:
-  key: dnd2024:reference/creature/assassin
+splat_origin: dnd2024:reference/creature/assassin
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 260
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 260, https://www.dndbeyond.com/srd
 ---
 
 # Assassin
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Medium or Small |
+| Type | Humanoid |
+| Alignment | Neutral |
+| Armor Class | 16 |
+| Hit Points | 97 (15d8 + 30) |
+| Initiative | +10 (20) |
+| Speed | 30 ft. |
+| Challenge | 8 (XP 3,900; PB +3) |
+| Skills | Acrobatics +7, Perception +6, Stealth +10 |
+| Senses | Passive Perception 16 |
+| Languages | Common, Thieves’ Cant |
+| Gear | Light Crossbow, Shortsword, Studded Leather Armor |
+| Resistances | Poison |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 11 | +0 | +0 |
+| Dex | 18 | +4 | +7 |
+| Con | 14 | +2 | +2 |
+| Int | 16 | +3 | +6 |
+| Wis | 11 | +0 | +0 |
+| Cha | 10 | +0 | +0 |
+
 
 ## Source text
 
 <!-- SRD page 260 -->
 
 Medium or Small Humanoid, Neutral\
-AC 16 Initiative +10 (20)\
-HP 97 (15d8 + 30)\
-Speed 30 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 11 +0 +0 Dex 18 +4 +7 Con 14 +2 +2\
-Int 16 +3 +6 Wis 11 +0 +0 Cha 10 +0 +0\
-Skills Acrobatics +7, Perception +6, Stealth +10\
-Resistances Poison\
-Gear Light Crossbow, Shortsword, Studded Leather Armor\
-Senses Passive Perception 16\
-Languages Common, Thieves’ Cant\
-CR 8 (XP 3,900; PB +3)
+> [!quote]- Printed stat block (not read; edit the table above)
+> AC 16 Initiative +10 (20)\
+> HP 97 (15d8 + 30)\
+> Speed 30 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 11 +0 +0 Dex 18 +4 +7 Con 14 +2 +2\
+> Int 16 +3 +6 Wis 11 +0 +0 Cha 10 +0 +0\
+> Skills Acrobatics +7, Perception +6, Stealth +10\
+> Resistances Poison\
+> Gear Light Crossbow, Shortsword, Studded Leather Armor\
+> Senses Passive Perception 16\
+> Languages Common, Thieves’ Cant\
+> CR 8 (XP 3,900; PB +3)
+
 
 ### Traits
 
@@ -50,48 +78,11 @@ Cunning Action. The assassin takes the Dash, Disengage, or Hide action.
 
 Original layout: [[../../srd-5.2.1/pages/260|page 260]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` medium ` |
-| ` type ` | ` humanoid ` |
-| ` alignment ` | ` Neutral ` |
-| ` size_options_text ` | ` Medium or Small ` |
-| ` movement_text ` | ` 30 ft. ` |
-| ` skills_text ` | ` Acrobatics +7, Perception +6, Stealth +10 ` |
-| ` resistances_text ` | ` Poison ` |
-| ` gear_text ` | ` Light Crossbow, Shortsword, Studded Leather Armor ` |
-| ` senses_text ` | ` Passive Perception 16 ` |
-| ` languages_text ` | ` Common, Thieves’ Cant ` |
-| ` cr_text ` | ` 8 (XP 3,900; PB +3) ` |
-| ` hit_points_text ` | ` 97 (15d8 + 30) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 11 ` | ` 0 ` |
-| ` Dexterity ` | ` 18 ` | ` 7 ` |
-| ` Constitution ` | ` 14 ` | ` 2 ` |
-| ` Intelligence ` | ` 16 ` | ` 6 ` |
-| ` Wisdom ` | ` 11 ` | ` 0 ` |
-| ` Charisma ` | ` 10 ` | ` 0 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 16 ` |  |
-| ` max_hp ` | ` 97 ` |  |
-| ` initiative ` | ` 10 ` |  |
-| ` speed ` | ` 30 ` | ` ft ` |
 
 ## Health
 

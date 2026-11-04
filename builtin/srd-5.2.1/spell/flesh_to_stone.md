@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "f95ea64b-07b4-5099-9e94-809944d71fce"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/flesh_to_stone"
 splat_name: "Flesh to Stone"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [133], "executable": false}
+splat_pages:
+- 133
 ---
 
 # Flesh to Stone
@@ -24,3 +25,13 @@ A Restrained target makes another Constitution saving throw at the end of each o
 If you maintain your Concentration on this spell for the entire possible duration, the target is Petrified until the condition is ended by Greater Restoration or similar magic.
 
 Original layout: [[../pages/133|page 133]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

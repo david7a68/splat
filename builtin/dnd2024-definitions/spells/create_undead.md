@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 7b239c1f-21aa-5184-9215-48564b907c73
 splat_kind: spell
 splat_key: dnd2024:spells/create_undead
 splat_name: Create Undead
-splat_origin:
-  key: dnd2024:reference/spell/create_undead
+splat_origin: dnd2024:reference/spell/create_undead
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 121
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 121, https://www.dndbeyond.com/srd
 ---
 
 # Create Undead
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 6 |
+| School | Necromancy |
+| Classes | Cleric, Warlock, Wizard |
+| Casting Time | 1 minute |
+| Range | 10 feet |
+| Components | V, S, M (one 150+ GP black onyx stone for each corpse) |
+| Duration | Instantaneous |
+
 
 ## Source text
 
@@ -34,37 +45,11 @@ Using a Higher-Level Spell Slot. If you use a level 7 spell slot, you can animat
 
 Original layout: [[../../srd-5.2.1/pages/121|page 121]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 6 ` |
-| ` school ` | ` necromancy ` |
-| ` classes ` | ` ["cleric", "warlock", "wizard"] ` |
-| ` components ` | ` ["verbal", "somatic", "material"] ` |
-| ` concentration ` | ` false ` |
-| ` duration ` | ` Instantaneous ` |
-| ` casting_time ` | ` 1 minute ` |
-| ` ritual ` | ` false ` |
 
-### Range
 
-<!-- splat:values path=splat_spell/range -->
 
-| Field | Value |
-| --- | --- |
-| ` feet ` | ` 10 ` |
-
-### Material
-
-<!-- splat:values path=splat_spell/material -->
-
-| Field | Value |
-| --- | --- |
-| ` description ` | ` one 150+ GP black onyx stone for each corpse ` |
-| ` consumed ` | ` false ` |
 
 ## Rule
 
@@ -175,3 +160,12 @@ wight:
 mummy:
   key: dnd2024:creatures/mummy
 ```
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_spell_extras -->
+> 
+> ```yaml
+> material:
+>   consumed: false
+> ```
+

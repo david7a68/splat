@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: e263103d-2edf-52c4-a9bd-818245b149c3
 splat_kind: spell
 splat_key: dnd2024:spells/simulacrum
 splat_name: Simulacrum
-splat_origin:
-  key: dnd2024:reference/spell/simulacrum
+splat_origin: dnd2024:reference/spell/simulacrum
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 162, 163
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 162, 163, https://www.dndbeyond.com/srd
 ---
 
 # Simulacrum
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 7 |
+| School | Illusion |
+| Classes | Wizard |
+| Casting Time | 12 hours |
+| Range |  |
+| Components | V, S, M (powdered ruby worth 1,500+ GP, which the spell consumes) |
+| Duration | Until dispelled |
+
 
 ## Source text
 
@@ -36,37 +47,11 @@ The simulacrum lasts until it drops to 0 Hit Points, at which point it reverts t
 
 Original layout: [[../../srd-5.2.1/pages/162|page 162]], [[../../srd-5.2.1/pages/163|page 163]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 7 ` |
-| ` school ` | ` illusion ` |
-| ` classes ` | ` ["wizard"] ` |
-| ` components ` | ` ["verbal", "somatic", "material"] ` |
-| ` concentration ` | ` false ` |
-| ` duration ` | ` Until dispelled ` |
-| ` casting_time ` | ` 12 hours ` |
-| ` ritual ` | ` false ` |
 
-### Range
 
-<!-- splat:values path=splat_spell/range -->
 
-| Field | Value |
-| --- | --- |
-| ` mode ` | ` touch ` |
-
-### Material
-
-<!-- splat:values path=splat_spell/material -->
-
-| Field | Value |
-| --- | --- |
-| ` description ` | ` powdered ruby worth 1,500+ GP, which the spell consumes ` |
-| ` consumed ` | ` true ` |
 
 ## Rule
 
@@ -157,3 +142,14 @@ concentration: false
 maximum:
   kind: until_dispelled
 ```
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_spell_extras -->
+> 
+> ```yaml
+> material:
+>   consumed: true
+> range:
+>   mode: touch
+> ```
+

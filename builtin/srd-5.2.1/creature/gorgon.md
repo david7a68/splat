@@ -1,10 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "65a22f2e-6e24-56f2-a08c-c9b719037c87"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/gorgon"
 splat_name: "Gorgon"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [292, 293], "executable": false}
+splat_pages:
+- 292
+- 293
 ---
 
 # Gorgon
@@ -37,3 +39,13 @@ Petrifying Breath (Recharge 5–6). Constitution Saving Throw: DC 15, each creat
 Trample. Dexterity Saving Throw: DC 16, one creature within 5 feet that has the Prone condition. Failure: 16 (2d10 + 5) Bludgeoning damage. Success: Half damage.
 
 Original layout: [[../pages/292|page 292]], [[../pages/293|page 293]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

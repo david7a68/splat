@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "2755c197-813a-5dde-9bdd-d889323f68f9"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/hippogriff"
 splat_name: "Hippogriff"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [298], "executable": false}
+splat_pages:
+- 298
 ---
 
 # Hippogriff
@@ -34,3 +35,13 @@ Multiattack. The hippogriff makes two Rend attacks.
 Rend. Melee Attack Roll: +5, reach 5 ft. Hit: 7 (1d8 + 3) Slashing damage.
 
 Original layout: [[../pages/298|page 298]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

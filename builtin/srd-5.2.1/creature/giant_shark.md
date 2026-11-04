@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "23535f37-3c65-575e-8248-1479669ea00c"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/giant_shark"
 splat_name: "Giant Shark"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [353], "executable": false}
+splat_pages:
+- 353
 ---
 
 # Giant Shark
@@ -34,3 +35,13 @@ Multiattack. The shark makes two Bite attacks.
 Bite. Melee Attack Roll: +9 (with Advantage if the target doesn’t have all its Hit Points), reach 5 ft. Hit: 22 (3d10 + 6) Piercing damage.
 
 Original layout: [[../pages/353|page 353]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

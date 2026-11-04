@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 5b60481a-9528-52d3-ab33-74a1060eca47
 splat_kind: spell
 splat_key: dnd2024:spells/ensnaring_strike
 splat_name: Ensnaring Strike
-splat_origin:
-  key: dnd2024:reference/spell/ensnaring_strike
+splat_origin: dnd2024:reference/spell/ensnaring_strike
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 128
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 128, https://www.dndbeyond.com/srd
 ---
 
 # Ensnaring Strike
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 1 |
+| School | Conjuration |
+| Classes | Ranger |
+| Casting Time | Bonus Action, which you take immediately after hitting a creature with a weapon |
+| Range |  |
+| Components | V |
+| Duration | Concentration, up to 1 minute |
+
 
 ## Source text
 
@@ -32,28 +43,9 @@ Using a Higher-Level Spell Slot. The damage increases by 1d6 for each spell slot
 
 Original layout: [[../../srd-5.2.1/pages/128|page 128]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 1 ` |
-| ` school ` | ` conjuration ` |
-| ` classes ` | ` ["ranger"] ` |
-| ` components ` | ` ["verbal"] ` |
-| ` concentration ` | ` true ` |
-| ` duration ` | ` Concentration, up to 1 minute ` |
-| ` casting_time ` | ` Bonus Action, which you take immediately after hitting a creature with a weapon ` |
-| ` ritual ` | ` false ` |
 
-### Range
-
-<!-- splat:values path=splat_spell/range -->
-
-| Field | Value |
-| --- | --- |
-| ` mode ` | ` self ` |
 
 ## Rule
 
@@ -132,3 +124,12 @@ maximum:
   value: 1
   unit: minute
 ```
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_spell_extras -->
+> 
+> ```yaml
+> range:
+>   mode: self
+> ```
+

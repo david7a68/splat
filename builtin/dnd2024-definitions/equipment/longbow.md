@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 130bc64f-94ba-5ac3-bc03-c7fe74e42bc3
 splat_kind: item
 splat_key: dnd2024:equipment/longbow
 splat_name: Longbow
-splat_origin:
-  key: dnd2024:reference/pages/091
+splat_origin: dnd2024:reference/pages/091
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 91
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 91, https://www.dndbeyond.com/srd
 ---
 
 # Longbow
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Weapon |
+| Rarity |  |
+| Attunement |  |
+
 
 ## Source text
 
@@ -37,43 +44,13 @@ Source table, SRD 5.2.1 page 91.
   "category": "weapon"
 }
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` properties_text ` | ` Ammunition (Range 150/600; Arrow), Heavy, Two-Handed ` |
-| ` mastery ` | ` slow ` |
-| ` weapon_category ` | ` martial ranged ` |
-| ` category ` | ` weapon ` |
 
-### Damage
 
-<!-- splat:values path=splat_item/damage -->
 
-| Field | Value |
-| --- | --- |
-| ` expression ` | ` 1d8 ` |
-| ` type ` | ` piercing ` |
 
-### Price
 
-<!-- splat:values path=splat_item/price -->
-
-| Field | Value |
-| --- | --- |
-| ` value ` | ` 50 ` |
-| ` unit ` | ` gp ` |
-
-### Mass
-
-<!-- splat:values path=splat_item/mass -->
-
-| Field | Value |
-| --- | --- |
-| ` value ` | ` 2.0 ` |
-| ` unit ` | ` lb ` |
 
 ## Rule
 
@@ -214,3 +191,22 @@ parameters:
 | ` actor ` | ` equipper ` |
 | ` item ` | ` equipped_instance ` |
 | ` inactive_if_not_equipped ` | ` true ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_item_extras -->
+> 
+> ```yaml
+> weapon_category: martial ranged
+> damage:
+>   expression: 1d8
+>   type: piercing
+> mass:
+>   unit: lb
+>   value: 2.0
+> mastery: slow
+> price:
+>   unit: gp
+>   value: 50
+> properties_text: Ammunition (Range 150/600; Arrow), Heavy, Two-Handed
+> ```
+

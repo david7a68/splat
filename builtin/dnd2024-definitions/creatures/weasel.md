@@ -1,34 +1,60 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 5c49d536-cb5a-59ea-821a-e5df052847eb
 splat_kind: creature
 splat_key: dnd2024:creatures/weasel
 splat_name: Weasel
-splat_origin:
-  key: dnd2024:reference/creature/weasel
+splat_origin: dnd2024:reference/creature/weasel
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 364
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 364, https://www.dndbeyond.com/srd
 ---
 
 # Weasel
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Tiny |
+| Type | Beast |
+| Alignment | Unaligned |
+| Armor Class | 13 |
+| Hit Points | 1 (1d4 - 1) |
+| Initiative | +3 (13) |
+| Speed | 30 ft., Climb 30 ft. |
+| Challenge | 0 (XP 10; PB +2) |
+| Skills | Acrobatics +5, Perception +3, Stealth +5 |
+| Senses | Darkvision 60 ft.; Passive Perception 13 |
+| Languages | None |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 3 | -4 | -4 |
+| Dex | 16 | +3 | +3 |
+| Con | 8 | -1 | -1 |
+| Int | 2 | -4 | -4 |
+| Wis | 12 | +1 | +1 |
+| Cha | 3 | -4 | -4 |
+
 
 ## Source text
 
 <!-- SRD page 364 -->
 
-Tiny Beast, Unaligned\
-AC 13  Initiative +3 (13)\
-HP 1 (1d4 − 1)\
-Speed 30 ft., Climb 30 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 3 −4 −4 Dex 16 +3 +3 Con 8 −1 −1\
-Int 2 −4 −4 Wis 12 +1 +1 Cha 3 −4 −4\
-Skills Acrobatics +5, Perception +3, Stealth +5\
-Senses Darkvision 60 ft.; Passive Perception 13\
-Languages None\
-CR 0 (XP 10; PB +2)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Tiny Beast, Unaligned\
+> AC 13  Initiative +3 (13)\
+> HP 1 (1d4 − 1)\
+> Speed 30 ft., Climb 30 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 3 −4 −4 Dex 16 +3 +3 Con 8 −1 −1\
+> Int 2 −4 −4 Wis 12 +1 +1 Cha 3 −4 −4\
+> Skills Acrobatics +5, Perception +3, Stealth +5\
+> Senses Darkvision 60 ft.; Passive Perception 13\
+> Languages None\
+> CR 0 (XP 10; PB +2)
+
 
 ### Actions
 
@@ -36,46 +62,11 @@ Bite. Melee Attack Roll: +5, reach 5 ft. Hit: 1 Piercing damage.
 
 Original layout: [[../../srd-5.2.1/pages/364|page 364]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` tiny ` |
-| ` type ` | ` beast ` |
-| ` alignment ` | ` Unaligned ` |
-| ` movement_text ` | ` 30 ft., Climb 30 ft. ` |
-| ` skills_text ` | ` Acrobatics +5, Perception +3, Stealth +5 ` |
-| ` senses_text ` | ` Darkvision 60 ft.; Passive Perception 13 ` |
-| ` languages_text ` | ` None ` |
-| ` cr_text ` | ` 0 (XP 10; PB +2) ` |
-| ` hit_points_text ` | ` 1 (1d4 - 1) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 3 ` | ` -4 ` |
-| ` Dexterity ` | ` 16 ` | ` 3 ` |
-| ` Constitution ` | ` 8 ` | ` -1 ` |
-| ` Intelligence ` | ` 2 ` | ` -4 ` |
-| ` Wisdom ` | ` 12 ` | ` 1 ` |
-| ` Charisma ` | ` 3 ` | ` -4 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 13 ` |  |
-| ` max_hp ` | ` 1 ` |  |
-| ` initiative ` | ` 3 ` |  |
-| ` speed ` | ` 30 ` | ` ft ` |
-| ` climb_speed ` | ` 30 ` | ` ft ` |
 
 ## Health
 
@@ -205,3 +196,13 @@ geometry_assumptions:
   - plane
   - form_appearance
 ```
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_stats_extras -->
+> 
+> ```yaml
+> climb_speed:
+>   unit: ft
+>   value: 30
+> ```
+

@@ -1,10 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "1e13062a-00e6-56c5-b8e6-a7cc7690924c"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/octopus"
 splat_name: "Octopus"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [357, 358], "executable": false}
+splat_pages:
+- 357
+- 358
 ---
 
 # Octopus
@@ -40,3 +42,13 @@ Tentacles. Melee Attack Roll: +4, reach 5 ft. Hit: 1 Bludgeoning damage.
 Ink Cloud (1/Day). Trigger: A creature ends its turn within 5 feet of the octopus while underwater. Response: The octopus releases ink that fills a 5-foot Cube centered on itself, and the octopus moves up to its Swim Speed. The Cube is Heavily Obscured for 1 minute or until a strong current or similar effect disperses the ink.
 
 Original layout: [[../pages/357|page 357]], [[../pages/358|page 358]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

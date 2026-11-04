@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: ffa71ba5-e207-5687-a93b-45176dc5ea94
 splat_kind: rule
 splat_key: dnd2024:rules/combat_encounters_powerful_creatures
 splat_name: Powerful Creatures
-splat_origin:
-  key: dnd2024:reference/pages/203
+splat_origin: dnd2024:reference/pages/203
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 203
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 203, https://www.dndbeyond.com/srd
 ---
 
 # Powerful Creatures

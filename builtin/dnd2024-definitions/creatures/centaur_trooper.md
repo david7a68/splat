@@ -1,35 +1,62 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: b3e09ba9-787f-5cd5-9e07-4bd1e256147c
 splat_kind: creature
 splat_key: dnd2024:creatures/centaur_trooper
 splat_name: Centaur Trooper
-splat_origin:
-  key: dnd2024:reference/creature/centaur_trooper
+splat_origin: dnd2024:reference/creature/centaur_trooper
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 272
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 272, https://www.dndbeyond.com/srd
 ---
 
 # Centaur Trooper
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Large |
+| Type | Fey |
+| Alignment | Neutral Good |
+| Armor Class | 16 |
+| Hit Points | 45 (6d10 + 12) |
+| Initiative | +2 (12) |
+| Speed | 50 ft. |
+| Challenge | 2 (XP 450; PB +2) |
+| Skills | Athletics +6, Perception +3 |
+| Senses | Passive Perception 13 |
+| Languages | Elvish, Sylvan |
+| Gear | Breastplate, Longbow, Pike |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 18 | +4 | +4 |
+| Dex | 14 | +2 | +2 |
+| Con | 14 | +2 | +2 |
+| Int | 9 | -1 | -1 |
+| Wis | 13 | +1 | +1 |
+| Cha | 11 | +0 | +0 |
+
 
 ## Source text
 
 <!-- SRD page 272 -->
 
-Large Fey, Neutral Good\
-AC 16 Initiative +2 (12)\
-HP 45 (6d10 + 12)\
-Speed 50 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 18 +4 +4 Dex 14 +2 +2 Con 14 +2 +2\
-Int 9 −1 −1 Wis 13 +1 +1 Cha 11 +0 +0\
-Skills Athletics +6, Perception +3\
-Gear Breastplate, Longbow, Pike\
-Senses Passive Perception 13\
-Languages Elvish, Sylvan\
-CR 2 (XP 450; PB +2)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Large Fey, Neutral Good\
+> AC 16 Initiative +2 (12)\
+> HP 45 (6d10 + 12)\
+> Speed 50 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 18 +4 +4 Dex 14 +2 +2 Con 14 +2 +2\
+> Int 9 −1 −1 Wis 13 +1 +1 Cha 11 +0 +0\
+> Skills Athletics +6, Perception +3\
+> Gear Breastplate, Longbow, Pike\
+> Senses Passive Perception 13\
+> Languages Elvish, Sylvan\
+> CR 2 (XP 450; PB +2)
+
 
 ### Actions
 
@@ -45,46 +72,11 @@ Trampling Charge (Recharge 5–6). The centaur moves up to its Speed without pro
 
 Original layout: [[../../srd-5.2.1/pages/272|page 272]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` large ` |
-| ` type ` | ` fey ` |
-| ` alignment ` | ` Neutral Good ` |
-| ` movement_text ` | ` 50 ft. ` |
-| ` skills_text ` | ` Athletics +6, Perception +3 ` |
-| ` gear_text ` | ` Breastplate, Longbow, Pike ` |
-| ` senses_text ` | ` Passive Perception 13 ` |
-| ` languages_text ` | ` Elvish, Sylvan ` |
-| ` cr_text ` | ` 2 (XP 450; PB +2) ` |
-| ` hit_points_text ` | ` 45 (6d10 + 12) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 18 ` | ` 4 ` |
-| ` Dexterity ` | ` 14 ` | ` 2 ` |
-| ` Constitution ` | ` 14 ` | ` 2 ` |
-| ` Intelligence ` | ` 9 ` | ` -1 ` |
-| ` Wisdom ` | ` 13 ` | ` 1 ` |
-| ` Charisma ` | ` 11 ` | ` 0 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 16 ` |  |
-| ` max_hp ` | ` 45 ` |  |
-| ` initiative ` | ` 2 ` |  |
-| ` speed ` | ` 50 ` | ` ft ` |
 
 ## Health
 

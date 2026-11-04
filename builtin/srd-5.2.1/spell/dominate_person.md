@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "0cca767c-19ae-5283-bc83-2df682d940f2"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/dominate_person"
 splat_name: "Dominate Person"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [126], "executable": false}
+splat_pages:
+- 126
 ---
 
 # Dominate Person
@@ -26,3 +27,13 @@ You can command the target to take a Reaction but must take your own Reaction to
 Using a Higher-Level Spell Slot. Your Concentration can last longer with a spell slot of level 6 (up to 10 minutes), 7 (up to 1 hour), or 8+ (up to 8 hours).
 
 Original layout: [[../pages/126|page 126]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

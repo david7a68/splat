@@ -1,10 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "b6f17e2e-c324-51ea-9c7e-d916f6a04532"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/project_image"
 splat_name: "Project Image"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [156, 157], "executable": false}
+splat_pages:
+- 156
+- 157
 ---
 
 # Project Image
@@ -24,3 +26,13 @@ You can see through the illusion’s eyes and hear through its ears as if you we
 Physical interaction with the image reveals it to be illusory, since things can pass through it. A creature that takes the Study action to examine the image can determine that it is an illusion with a successful Intelligence (Investigation) check against your spell save DC. If a creature discerns the illusion for what it is, the creature can see through the image, and any noise it makes sounds hollow to the creature.
 
 Original layout: [[../pages/156|page 156]], [[../pages/157|page 157]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

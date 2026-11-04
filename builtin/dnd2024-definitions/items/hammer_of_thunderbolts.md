@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: fe0188fc-b4cc-57ee-aab2-bbcd2f38a29d
 splat_kind: item
 splat_key: dnd2024:items/hammer_of_thunderbolts
 splat_name: Hammer of Thunderbolts
-splat_origin:
-  key: dnd2024:reference/magic_item/hammer_of_thunderbolts
+splat_origin: dnd2024:reference/magic_item/hammer_of_thunderbolts
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 224
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 224, https://www.dndbeyond.com/srd
 ---
 
 # Hammer of Thunderbolts
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Weapon |
+| Rarity | Legendary |
+| Attunement | Yes |
+
 
 ## Source text
 
@@ -32,22 +39,9 @@ Might of Giants. The Strength score bestowed by your Belt of Giant Strength or G
 
 Original layout: [[../../srd-5.2.1/pages/224|page 224]].
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` weapon ` |
-| ` rarity ` | ` legendary ` |
 
-### Equipment
-
-<!-- splat:values path=splat_item/equipment -->
-
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` required ` |
 
 ## Rule
 

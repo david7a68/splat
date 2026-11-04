@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 96a32ccd-4f87-5f0d-b127-5b172bb989cf
 splat_kind: rule
 splat_key: dnd2024:rules/combat_encounters_combat_encounter_difficulty
 splat_name: Combat Encounter Difficulty
-splat_origin:
-  key: dnd2024:reference/pages/202
+splat_origin: dnd2024:reference/pages/202
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 202
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 202, https://www.dndbeyond.com/srd
 ---
 
 # Combat Encounter Difficulty

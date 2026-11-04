@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "08d8b195-51c4-5472-baea-db88a94383cd"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/animal_messenger"
 splat_name: "Animal Messenger"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [108], "executable": false}
+splat_pages:
+- 108
 ---
 
 # Animal Messenger
@@ -24,3 +25,13 @@ When the Beast arrives, it delivers your message to the creature that you descri
 Using a Higher-Level Spell Slot. The spell’s duration increases by 48 hours for each spell slot level above 2.
 
 Original layout: [[../pages/108|page 108]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

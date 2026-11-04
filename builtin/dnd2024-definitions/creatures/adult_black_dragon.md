@@ -1,35 +1,62 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 88e6df83-4160-5611-b731-883f728ff052
 splat_kind: creature
 splat_key: dnd2024:creatures/adult_black_dragon
 splat_name: Adult Black Dragon
-splat_origin:
-  key: dnd2024:reference/creature/adult_black_dragon
+splat_origin: dnd2024:reference/creature/adult_black_dragon
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 264
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 264, https://www.dndbeyond.com/srd
 ---
 
 # Adult Black Dragon
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Huge |
+| Type | Dragon (Chromatic) |
+| Alignment | Chaotic Evil |
+| Armor Class | 19 |
+| Hit Points | 195 (17d12 + 85) |
+| Initiative | +12 (22) |
+| Speed | 40 ft., Fly 80 ft., Swim 40 ft. |
+| Challenge | 14 (XP 11,500, or 13,000 in lair; PB +5) |
+| Skills | Perception +11, Stealth +7 |
+| Senses | Blindsight 60 ft., Darkvision 120 ft.; Passive Perception 21 |
+| Languages | Common, Draconic |
+| Immunities | Acid |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 23 | +6 | +6 |
+| Dex | 14 | +2 | +7 |
+| Con | 21 | +5 | +5 |
+| Int | 14 | +2 | +2 |
+| Wis | 13 | +1 | +6 |
+| Cha | 19 | +4 | +4 |
+
 
 ## Source text
 
 <!-- SRD page 264 -->
 
-Huge Dragon (Chromatic), Chaotic Evil\
-AC 19 Initiative +12 (22)\
-HP 195 (17d12 + 85)\
-Speed 40 ft., Fly 80 ft., Swim 40 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 23 +6 +6 Dex 14 +2 +7 Con 21 +5 +5\
-Int 14 +2 +2 Wis 13 +1 +6 Cha 19 +4 +4\
-Skills Perception +11, Stealth +7\
-Immunities Acid\
-Senses Blindsight 60 ft., Darkvision 120 ft.; Passive Perception 21\
-Languages Common, Draconic\
-CR 14 (XP 11,500, or 13,000 in lair; PB +5)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Huge Dragon (Chromatic), Chaotic Evil\
+> AC 19 Initiative +12 (22)\
+> HP 195 (17d12 + 85)\
+> Speed 40 ft., Fly 80 ft., Swim 40 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 23 +6 +6 Dex 14 +2 +7 Con 21 +5 +5\
+> Int 14 +2 +2 Wis 13 +1 +6 Cha 19 +4 +4\
+> Skills Perception +11, Stealth +7\
+> Immunities Acid\
+> Senses Blindsight 60 ft., Darkvision 120 ft.; Passive Perception 21\
+> Languages Common, Draconic\
+> CR 14 (XP 11,500, or 13,000 in lair; PB +5)
+
 
 ### Traits
 
@@ -62,49 +89,11 @@ Pounce. The dragon moves up to half its Speed, and it makes one Rend attack.
 
 Original layout: [[../../srd-5.2.1/pages/264|page 264]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` huge ` |
-| ` type ` | ` dragon ` |
-| ` alignment ` | ` Chaotic Evil ` |
-| ` tags_text ` | ` (Chromatic) ` |
-| ` movement_text ` | ` 40 ft., Fly 80 ft., Swim 40 ft. ` |
-| ` skills_text ` | ` Perception +11, Stealth +7 ` |
-| ` immunities_text ` | ` Acid ` |
-| ` senses_text ` | ` Blindsight 60 ft., Darkvision 120 ft.; Passive Perception 21 ` |
-| ` languages_text ` | ` Common, Draconic ` |
-| ` cr_text ` | ` 14 (XP 11,500, or 13,000 in lair; PB +5) ` |
-| ` hit_points_text ` | ` 195 (17d12 + 85) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 23 ` | ` 6 ` |
-| ` Dexterity ` | ` 14 ` | ` 7 ` |
-| ` Constitution ` | ` 21 ` | ` 5 ` |
-| ` Intelligence ` | ` 14 ` | ` 2 ` |
-| ` Wisdom ` | ` 13 ` | ` 6 ` |
-| ` Charisma ` | ` 19 ` | ` 4 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 19 ` |  |
-| ` max_hp ` | ` 195 ` |  |
-| ` initiative ` | ` 12 ` |  |
-| ` speed ` | ` 40 ` | ` ft ` |
-| ` fly_speed ` | ` 80 ` | ` ft ` |
-| ` swim_speed ` | ` 40 ` | ` ft ` |
 
 ## Health
 
@@ -557,3 +546,16 @@ geometry_assumptions:
   - plane
   - form_appearance
 ```
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_stats_extras -->
+> 
+> ```yaml
+> fly_speed:
+>   unit: ft
+>   value: 80
+> swim_speed:
+>   unit: ft
+>   value: 40
+> ```
+

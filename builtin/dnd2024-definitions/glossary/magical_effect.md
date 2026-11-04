@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 56db16e5-094d-575f-a106-16569982da7c
 splat_kind: rule
 splat_key: dnd2024:glossary/magical_effect
 splat_name: Magical Effect
-splat_origin:
-  key: dnd2024:reference/glossary/magical_effect
+splat_origin: dnd2024:reference/glossary/magical_effect
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 185
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 185, https://www.dndbeyond.com/srd
 ---
 
 # Magical Effect

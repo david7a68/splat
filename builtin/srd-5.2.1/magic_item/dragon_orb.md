@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "6800fdb2-c30c-5c09-a509-897341abddec"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/magic_item/dragon_orb"
 splat_name: "Dragon Orb"
-splat_reference: {"source": "SRD 5.2.1", "category": "magic_item", "pages": [218], "executable": false}
+splat_pages:
+- 218
 ---
 
 # Dragon Orb
@@ -34,3 +35,13 @@ Call Dragons. While you control the orb, you can take a Magic action to cause th
 Destroying an Orb. A Dragon Orb has AC 20 and is destroyed if it takes damage from a +3 Weapon or a Disintegrate spell. Nothing else can harm it.
 
 Original layout: [[../pages/218|page 218]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: magic_item
+> executable: false
+> ```
+

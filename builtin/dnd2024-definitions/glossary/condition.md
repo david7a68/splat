@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 77348a61-de0f-5b72-ae1d-3dd0ebee7b6f
 splat_kind: rule
 splat_key: dnd2024:glossary/condition
 splat_name: Condition
-splat_origin:
-  key: dnd2024:reference/glossary/condition
+splat_origin: dnd2024:reference/glossary/condition
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 179
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 179, https://www.dndbeyond.com/srd
 ---
 
 # Condition

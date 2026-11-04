@@ -1,10 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "a42d1acd-7767-5e82-ab03-663ab89ccc0e"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/skeleton"
 splat_name: "Skeleton"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [325, 326], "executable": false}
+splat_pages:
+- 325
+- 326
 ---
 
 # Skeleton
@@ -34,3 +36,13 @@ Shortsword. Melee Attack Roll: +5, reach 5 ft. Hit: 6 (1d6 + 3) Piercing damage.
 Shortbow. Ranged Attack Roll: +5, range 80/320 ft. Hit: 6 (1d6 + 3) Piercing damage.
 
 Original layout: [[../pages/325|page 325]], [[../pages/326|page 326]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

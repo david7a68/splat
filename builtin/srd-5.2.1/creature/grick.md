@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "8c880710-5480-5333-88a2-bd62eacb3b84"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/grick"
 splat_name: "Grick"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [295], "executable": false}
+splat_pages:
+- 295
 ---
 
 # Grick
@@ -32,3 +33,13 @@ Beak. Melee Attack Roll: +4, reach 5 ft. Hit: 9 (2d6 + 2) Piercing damage.
 Tentacles. Melee Attack Roll: +4, reach 5 ft. Hit: 7 (1d10 + 2) Slashing damage. If the target is a Medium or smaller creature, it has the Grappled condition (escape DC 12) from all four tentacles.
 
 Original layout: [[../pages/295|page 295]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

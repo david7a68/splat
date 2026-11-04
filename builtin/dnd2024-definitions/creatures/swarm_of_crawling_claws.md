@@ -1,35 +1,62 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: f343b847-244a-535f-97ae-6aef632c3431
 splat_kind: creature
 splat_key: dnd2024:creatures/swarm_of_crawling_claws
 splat_name: Swarm of Crawling Claws
-splat_origin:
-  key: dnd2024:reference/creature/swarm_of_crawling_claws
+splat_origin: dnd2024:reference/creature/swarm_of_crawling_claws
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 278
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 278, https://www.dndbeyond.com/srd
 ---
 
 # Swarm of Crawling Claws
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Medium Swarm of Tiny |
+| Type | Undead |
+| Alignment | Neutral Evil |
+| Armor Class | 12 |
+| Hit Points | 49 (11d8) |
+| Initiative | +2 (12) |
+| Speed | 30 ft., Climb 30 ft. |
+| Challenge | 3 (XP 700; PB +2) |
+| Senses | Blindsight 30 ft.; Passive Perception 10 |
+| Languages | Understands Common but can’t speak |
+| Resistances | Bludgeoning, Piercing, Slashing |
+| Immunities | Necrotic, Poison; Charmed, Exhaustion, Frightened, Grappled, Incapacitated, Paralyzed, Petrified, Poisoned, Prone, Restrained, Stunned |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 14 | +2 | +2 |
+| Dex | 14 | +2 | +2 |
+| Con | 11 | +0 | +0 |
+| Int | 5 | -3 | -3 |
+| Wis | 10 | +0 | +0 |
+| Cha | 4 | -3 | -3 |
+
 
 ## Source text
 
 <!-- SRD page 278 -->
 
 Medium Swarm of Tiny Undead, Neutral Evil\
-AC 12 Initiative +2 (12)\
-HP 49 (11d8)\
-Speed 30 ft., Climb 30 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 14 +2 +2 Dex 14 +2 +2 Con 11 +0 +0\
-Int 5 −3 −3 Wis 10 +0 +0 Cha 4 −3 −3\
-Resistances Bludgeoning, Piercing, Slashing\
-Immunities Necrotic, Poison; Charmed, Exhaustion, Frightened, Grappled, Incapacitated, Paralyzed, Petrified, Poisoned, Prone, Restrained, Stunned\
-Senses Blindsight 30 ft.; Passive Perception 10\
-Languages Understands Common but can’t speak\
-CR 3 (XP 700; PB +2)
+> [!quote]- Printed stat block (not read; edit the table above)
+> AC 12 Initiative +2 (12)\
+> HP 49 (11d8)\
+> Speed 30 ft., Climb 30 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 14 +2 +2 Dex 14 +2 +2 Con 11 +0 +0\
+> Int 5 −3 −3 Wis 10 +0 +0 Cha 4 −3 −3\
+> Resistances Bludgeoning, Piercing, Slashing\
+> Immunities Necrotic, Poison; Charmed, Exhaustion, Frightened, Grappled, Incapacitated, Paralyzed, Petrified, Poisoned, Prone, Restrained, Stunned\
+> Senses Blindsight 30 ft.; Passive Perception 10\
+> Languages Understands Common but can’t speak\
+> CR 3 (XP 700; PB +2)
+
 
 ### Traits
 
@@ -41,48 +68,11 @@ Swarm of Grasping Hands. Melee Attack Roll: +4, reach 5 ft. Hit: 20 (4d8 + 2) Ne
 
 Original layout: [[../../srd-5.2.1/pages/278|page 278]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` medium ` |
-| ` type ` | ` undead ` |
-| ` alignment ` | ` Neutral Evil ` |
-| ` size_options_text ` | ` Medium Swarm of Tiny ` |
-| ` movement_text ` | ` 30 ft., Climb 30 ft. ` |
-| ` resistances_text ` | ` Bludgeoning, Piercing, Slashing ` |
-| ` immunities_text ` | ` Necrotic, Poison; Charmed, Exhaustion, Frightened, Grappled, Incapacitated, Paralyzed, Petrified, Poisoned, Prone, Restrained, Stunned ` |
-| ` senses_text ` | ` Blindsight 30 ft.; Passive Perception 10 ` |
-| ` languages_text ` | ` Understands Common but can’t speak ` |
-| ` cr_text ` | ` 3 (XP 700; PB +2) ` |
-| ` hit_points_text ` | ` 49 (11d8) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 14 ` | ` 2 ` |
-| ` Dexterity ` | ` 14 ` | ` 2 ` |
-| ` Constitution ` | ` 11 ` | ` 0 ` |
-| ` Intelligence ` | ` 5 ` | ` -3 ` |
-| ` Wisdom ` | ` 10 ` | ` 0 ` |
-| ` Charisma ` | ` 4 ` | ` -3 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 12 ` |  |
-| ` max_hp ` | ` 49 ` |  |
-| ` initiative ` | ` 2 ` |  |
-| ` speed ` | ` 30 ` | ` ft ` |
-| ` climb_speed ` | ` 30 ` | ` ft ` |
 
 ## Health
 
@@ -209,3 +199,13 @@ geometry:
 unlisted_success_branch: no_effect
 unlisted_duration: until_removed_by_applicable_rule
 ```
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_stats_extras -->
+> 
+> ```yaml
+> climb_speed:
+>   unit: ft
+>   value: 30
+> ```
+

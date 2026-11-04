@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: e9563af3-b932-5670-9fdf-d4b1221e188f
 splat_kind: rule
 splat_key: dnd2024:glossary/hover
 splat_name: Hover
-splat_origin:
-  key: dnd2024:reference/glossary/hover
+splat_origin: dnd2024:reference/glossary/hover
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 183
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 183, https://www.dndbeyond.com/srd
 ---
 
 # Hover

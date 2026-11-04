@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "d636ec59-d7cd-5c07-ab1a-2a4f711d69c1"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/revivify"
 splat_name: "Revivify"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [159], "executable": false}
+splat_pages:
+- 159
 ---
 
 # Revivify
@@ -20,3 +21,13 @@ Duration: Instantaneous
 You touch a creature that has died within the last minute. That creature revives with 1 Hit Point. This spell can’t revive a creature that has died of old age, nor does it restore any missing body parts.
 
 Original layout: [[../pages/159|page 159]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

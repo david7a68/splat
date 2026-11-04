@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: bd48fcf6-9d0b-52e1-8969-a7d7c0b411b0
 splat_kind: rule
 splat_key: dnd2024:class_features/thief_level_3_fast_hands
 splat_name: 'Level 3: Fast Hands'
-splat_origin:
-  key: dnd2024:reference/pages/064
+splat_origin: dnd2024:reference/pages/064
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 64
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 64, https://www.dndbeyond.com/srd
 ---
 
 # Level 3: Fast Hands

@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 0331a325-1bf8-55b5-8810-62b0fed75e95
 splat_kind: spell
 splat_key: dnd2024:spells/phantasmal_force
 splat_name: Phantasmal Force
-splat_origin:
-  key: dnd2024:reference/spell/phantasmal_force
+splat_origin: dnd2024:reference/spell/phantasmal_force
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 151, 152
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 151, 152, https://www.dndbeyond.com/srd
 ---
 
 # Phantasmal Force
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 2 |
+| School | Illusion |
+| Classes | Bard, Sorcerer, Wizard |
+| Casting Time | Action |
+| Range | 60 feet |
+| Components | V, S, M (a bit of fleece) |
+| Duration | Concentration, up to 1 minute |
+
 
 ## Source text
 
@@ -36,37 +47,11 @@ An affected target can even take damage from the illusion if the phantasm repres
 
 Original layout: [[../../srd-5.2.1/pages/151|page 151]], [[../../srd-5.2.1/pages/152|page 152]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 2 ` |
-| ` school ` | ` illusion ` |
-| ` classes ` | ` ["bard", "sorcerer", "wizard"] ` |
-| ` components ` | ` ["verbal", "somatic", "material"] ` |
-| ` concentration ` | ` true ` |
-| ` duration ` | ` Concentration, up to 1 minute ` |
-| ` casting_time ` | ` Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
 
-<!-- splat:values path=splat_spell/range -->
 
-| Field | Value |
-| --- | --- |
-| ` feet ` | ` 60 ` |
-
-### Material
-
-<!-- splat:values path=splat_spell/material -->
-
-| Field | Value |
-| --- | --- |
-| ` description ` | ` a bit of fleece ` |
-| ` consumed ` | ` false ` |
 
 ## Rule
 
@@ -154,3 +139,12 @@ maximum:
   value: 1
   unit: minute
 ```
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_spell_extras -->
+> 
+> ```yaml
+> material:
+>   consumed: false
+> ```
+

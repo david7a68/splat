@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 0b572249-2f3d-5e90-a2b7-1aa71dfef47d
 splat_kind: item
 splat_key: dnd2024:equipment/lance
 splat_name: Lance
-splat_origin:
-  key: dnd2024:reference/pages/091
+splat_origin: dnd2024:reference/pages/091
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 91
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 91, https://www.dndbeyond.com/srd
 ---
 
 # Lance
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Weapon |
+| Rarity |  |
+| Attunement |  |
+
 
 ## Source text
 
@@ -37,43 +44,13 @@ Source table, SRD 5.2.1 page 91.
   "category": "weapon"
 }
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` properties_text ` | ` Heavy, Reach, Two-Handed (unless mounted) ` |
-| ` mastery ` | ` topple ` |
-| ` weapon_category ` | ` martial melee ` |
-| ` category ` | ` weapon ` |
 
-### Damage
 
-<!-- splat:values path=splat_item/damage -->
 
-| Field | Value |
-| --- | --- |
-| ` expression ` | ` 1d10 ` |
-| ` type ` | ` piercing ` |
 
-### Price
 
-<!-- splat:values path=splat_item/price -->
-
-| Field | Value |
-| --- | --- |
-| ` value ` | ` 10 ` |
-| ` unit ` | ` gp ` |
-
-### Mass
-
-<!-- splat:values path=splat_item/mass -->
-
-| Field | Value |
-| --- | --- |
-| ` value ` | ` 6.0 ` |
-| ` unit ` | ` lb ` |
 
 ## Rule
 
@@ -207,3 +184,22 @@ parameters:
 | ` actor ` | ` equipper ` |
 | ` item ` | ` equipped_instance ` |
 | ` inactive_if_not_equipped ` | ` true ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_item_extras -->
+> 
+> ```yaml
+> weapon_category: martial melee
+> damage:
+>   expression: 1d10
+>   type: piercing
+> mass:
+>   unit: lb
+>   value: 6.0
+> mastery: topple
+> price:
+>   unit: gp
+>   value: 10
+> properties_text: Heavy, Reach, Two-Handed (unless mounted)
+> ```
+

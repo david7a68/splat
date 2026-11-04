@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: ef56cdab-838b-584b-99e9-ef935b1d8021
 splat_kind: rule
 splat_key: dnd2024:rules/poison_essence_of_ether_300_gp
 splat_name: Essence of Ether (300 GP)
-splat_origin:
-  key: dnd2024:reference/pages/197
+splat_origin: dnd2024:reference/pages/197
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 197
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 197, https://www.dndbeyond.com/srd
 ---
 
 # Essence of Ether (300 GP)

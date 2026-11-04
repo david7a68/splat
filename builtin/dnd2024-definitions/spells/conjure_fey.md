@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: d7a81f95-2075-5d5b-b785-3882892d079f
 splat_kind: spell
 splat_key: dnd2024:spells/conjure_fey
 splat_name: Conjure Fey
-splat_origin:
-  key: dnd2024:reference/spell/conjure_fey
+splat_origin: dnd2024:reference/spell/conjure_fey
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 118
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 118, https://www.dndbeyond.com/srd
 ---
 
 # Conjure Fey
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 6 |
+| School | Conjuration |
+| Classes | Druid |
+| Casting Time | Action |
+| Range | 60 feet |
+| Components | V, S |
+| Duration | Concentration, up to 10 minutes |
+
 
 ## Source text
 
@@ -32,28 +43,9 @@ Using a Higher-Level Spell Slot. The damage increases by 1d12 for each spell slo
 
 Original layout: [[../../srd-5.2.1/pages/118|page 118]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 6 ` |
-| ` school ` | ` conjuration ` |
-| ` classes ` | ` ["druid"] ` |
-| ` components ` | ` ["verbal", "somatic"] ` |
-| ` concentration ` | ` true ` |
-| ` duration ` | ` Concentration, up to 10 minutes ` |
-| ` casting_time ` | ` Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
-
-<!-- splat:values path=splat_spell/range -->
-
-| Field | Value |
-| --- | --- |
-| ` feet ` | ` 60 ` |
 
 ## Rule
 

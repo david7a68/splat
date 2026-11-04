@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "b5f6ae4b-b72c-52ce-a008-7e468f66e9fa"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/glossary/short_rest"
 splat_name: "Short Rest"
-splat_reference: {"source": "SRD 5.2.1", "category": "glossary", "pages": [187], "executable": false}
+splat_pages:
+- 187
 ---
 
 # Short Rest
@@ -30,3 +31,13 @@ Interrupting the Rest. A Short Rest is stopped by the following interruptions:
 An interrupted Short Rest confers no benefits.
 
 Original layout: [[../pages/187|page 187]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: glossary
+> executable: false
+> ```
+

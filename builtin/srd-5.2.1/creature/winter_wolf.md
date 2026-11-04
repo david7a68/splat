@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "48889153-770e-53da-89a2-9ff7b87a9c3e"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/winter_wolf"
 splat_name: "Winter Wolf"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [342], "executable": false}
+splat_pages:
+- 342
 ---
 
 # Winter Wolf
@@ -35,3 +36,13 @@ Bite. Melee Attack Roll: +6, reach 5 ft. Hit: 11 (2d6 + 4) Piercing damage. If t
 Cold Breath (Recharge 5–6). Constitution Saving Throw: DC 12, each creature in a 15-foot Cone. Failure: 18 (4d8) Cold damage. Success: Half damage.
 
 Original layout: [[../pages/342|page 342]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

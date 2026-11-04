@@ -1,36 +1,64 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: fdee7df5-944b-5b70-80bc-e693430ff2fd
 splat_kind: creature
 splat_key: dnd2024:creatures/rakshasa
 splat_name: Rakshasa
-splat_origin:
-  key: dnd2024:reference/creature/rakshasa
+splat_origin: dnd2024:reference/creature/rakshasa
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 317, 318
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 317, 318, https://www.dndbeyond.com/srd
 ---
 
 # Rakshasa
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Medium |
+| Type | Fiend |
+| Alignment | Lawful Evil |
+| Armor Class | 17 |
+| Hit Points | 221 (26d8 + 104) |
+| Initiative | +8 (18) |
+| Speed | 40 ft. |
+| Challenge | 13 (XP 10,000; PB +5) |
+| Skills | Deception +10, Insight +8, Perception +8 |
+| Senses | Truesight 60 ft.; Passive Perception 18 |
+| Languages | Common, Infernal |
+| Immunities | Charmed, Frightened |
+| Vulnerabilities | Piercing damage from weapons wielded by creatures under the effect of a Bless spell |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 14 | +2 | +2 |
+| Dex | 17 | +3 | +3 |
+| Con | 18 | +4 | +4 |
+| Int | 13 | +1 | +1 |
+| Wis | 16 | +3 | +3 |
+| Cha | 20 | +5 | +5 |
+
 
 ## Source text
 
 <!-- SRD page 317 -->
 
-Medium Fiend, Lawful Evil\
-AC 17 Initiative +8 (18)\
-HP 221 (26d8 + 104)\
-Speed 40 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 14 +2 +2 Dex 17 +3 +3 Con 18 +4 +4\
-Int 13 +1 +1 Wis 16 +3 +3 Cha 20 +5 +5\
-Skills Deception +10, Insight +8, Perception +8\
-Vulnerabilities Piercing damage from weapons wielded by creatures under the effect of a Bless spell\
-Immunities Charmed, Frightened\
-Senses Truesight 60 ft.; Passive Perception 18\
-Languages Common, Infernal\
-CR 13 (XP 10,000; PB +5)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Medium Fiend, Lawful Evil\
+> AC 17 Initiative +8 (18)\
+> HP 221 (26d8 + 104)\
+> Speed 40 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 14 +2 +2 Dex 17 +3 +3 Con 18 +4 +4\
+> Int 13 +1 +1 Wis 16 +3 +3 Cha 20 +5 +5\
+> Skills Deception +10, Insight +8, Perception +8\
+> Vulnerabilities Piercing damage from weapons wielded by creatures under the effect of a Bless spell\
+> Immunities Charmed, Frightened\
+> Senses Truesight 60 ft.; Passive Perception 18\
+> Languages Common, Infernal\
+> CR 13 (XP 10,000; PB +5)
+
 
 <!-- SRD page 318 -->
 
@@ -55,47 +83,11 @@ At Will: Detect Magic, Detect Thoughts, Disguise Self, Mage Hand, Minor Illusion
 
 Original layout: [[../../srd-5.2.1/pages/317|page 317]], [[../../srd-5.2.1/pages/318|page 318]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` medium ` |
-| ` type ` | ` fiend ` |
-| ` alignment ` | ` Lawful Evil ` |
-| ` movement_text ` | ` 40 ft. ` |
-| ` skills_text ` | ` Deception +10, Insight +8, Perception +8 ` |
-| ` vulnerabilities_text ` | ` Piercing damage from weapons wielded by creatures under the effect of a Bless spell ` |
-| ` immunities_text ` | ` Charmed, Frightened ` |
-| ` senses_text ` | ` Truesight 60 ft.; Passive Perception 18 ` |
-| ` languages_text ` | ` Common, Infernal ` |
-| ` cr_text ` | ` 13 (XP 10,000; PB +5) ` |
-| ` hit_points_text ` | ` 221 (26d8 + 104) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 14 ` | ` 2 ` |
-| ` Dexterity ` | ` 17 ` | ` 3 ` |
-| ` Constitution ` | ` 18 ` | ` 4 ` |
-| ` Intelligence ` | ` 13 ` | ` 1 ` |
-| ` Wisdom ` | ` 16 ` | ` 3 ` |
-| ` Charisma ` | ` 20 ` | ` 5 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 17 ` |  |
-| ` max_hp ` | ` 221 ` |  |
-| ` initiative ` | ` 8 ` |  |
-| ` speed ` | ` 40 ` | ` ft ` |
 
 ## Health
 

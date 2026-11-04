@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 95e3592c-7670-5a21-82ef-7e2a93485251
 splat_kind: spell
 splat_key: dnd2024:spells/magnificent_mansion
 splat_name: Magnificent Mansion
-splat_origin:
-  key: dnd2024:reference/spell/magnificent_mansion
+splat_origin: dnd2024:reference/spell/magnificent_mansion
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 147
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 147, https://www.dndbeyond.com/srd
 ---
 
 # Magnificent Mansion
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 7 |
+| School | Conjuration |
+| Classes | Bard, Wizard |
+| Casting Time | 1 minute |
+| Range | 300 feet |
+| Components | V, S, M (a miniature door worth 15+ GP) |
+| Duration | 24 hours |
+
 
 ## Source text
 
@@ -36,37 +47,11 @@ When the spell ends, any creatures or objects left inside the extradimensional s
 
 Original layout: [[../../srd-5.2.1/pages/147|page 147]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 7 ` |
-| ` school ` | ` conjuration ` |
-| ` classes ` | ` ["bard", "wizard"] ` |
-| ` components ` | ` ["verbal", "somatic", "material"] ` |
-| ` concentration ` | ` false ` |
-| ` duration ` | ` 24 hours ` |
-| ` casting_time ` | ` 1 minute ` |
-| ` ritual ` | ` false ` |
 
-### Range
 
-<!-- splat:values path=splat_spell/range -->
 
-| Field | Value |
-| --- | --- |
-| ` feet ` | ` 300 ` |
-
-### Material
-
-<!-- splat:values path=splat_spell/material -->
-
-| Field | Value |
-| --- | --- |
-| ` description ` | ` a miniature door worth 15+ GP ` |
-| ` consumed ` | ` false ` |
 
 ## Rule
 
@@ -158,3 +143,12 @@ maximum:
   value: 24
   unit: hour
 ```
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_spell_extras -->
+> 
+> ```yaml
+> material:
+>   consumed: false
+> ```
+

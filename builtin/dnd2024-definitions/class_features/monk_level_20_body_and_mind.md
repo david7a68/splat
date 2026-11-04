@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 7383c4de-2cb9-53e1-a6ed-aac188f9b9cd
 splat_kind: rule
 splat_key: dnd2024:class_features/monk_level_20_body_and_mind
 splat_name: 'Level 20: Body and Mind'
-splat_origin:
-  key: dnd2024:reference/pages/052
+splat_origin: dnd2024:reference/pages/052
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 52
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 52, https://www.dndbeyond.com/srd
 ---
 
 # Level 20: Body and Mind

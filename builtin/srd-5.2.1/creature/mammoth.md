@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "89294d03-a243-5320-b3ac-143ade4b1e93"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/mammoth"
 splat_name: "Mammoth"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [357], "executable": false}
+splat_pages:
+- 357
 ---
 
 # Mammoth
@@ -33,3 +34,13 @@ Gore. Melee Attack Roll: +10, reach 10 ft. Hit: 18 (2d10 + 7) Piercing damage. I
 Trample. Dexterity Saving Throw: DC 18, one creature within 5 feet that has the Prone condition. Failure: 29 (4d10 + 7) Bludgeoning damage. Success: Half damage.
 
 Original layout: [[../pages/357|page 357]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

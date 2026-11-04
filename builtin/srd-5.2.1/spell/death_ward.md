@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "1ac21531-9e4b-5916-987f-b9f071cbc002"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/death_ward"
 splat_name: "Death Ward"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [122], "executable": false}
+splat_pages:
+- 122
 ---
 
 # Death Ward
@@ -22,3 +23,13 @@ You touch a creature and grant it a measure of protection from death. The first 
 If the spell is still in effect when the target is subjected to an effect that would kill it instantly without dealing damage, that effect is negated against the target, and the spell ends.
 
 Original layout: [[../pages/122|page 122]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

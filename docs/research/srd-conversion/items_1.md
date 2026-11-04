@@ -3,7 +3,7 @@ format: 1
 source: SRD 5.2.1
 definitions:
   dnd2024:items/adamantine_armor:
-    source_sha256: b330832896b95830c905e782a2858ca7a1d4cbb03cf4f9ef90122a385ecef85e
+    source_sha256: 1c2786af3fc279cc0288aacfe12bc2ad87a27084bf927be2527be0465b12f42d
     disposition: specified
     fields:
       splat_rule:
@@ -32,7 +32,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 209; builtin/srd-5.2.1/magic_item/adamantine_armor.md
   dnd2024:items/amulet_of_health:
-    source_sha256: 29744e6455369640aef6fa5fe83af149204be80dcb9be3541e19bff23123876c
+    source_sha256: e5cb97c11c698fcb9d3db440efe741cac0b497b0892a51a425fa91e3aded79e8
     disposition: specified
     fields:
       splat_rule:
@@ -63,7 +63,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 209; builtin/srd-5.2.1/magic_item/amulet_of_health.md
   dnd2024:items/animated_shield:
-    source_sha256: 09924148527543d802db8af6635d75cd0d7a46ae824282e254b99b1544f65536
+    source_sha256: 51060675449ff0b672c8b05d49708e74e4954533240823a2d554bdbb27078a7a
     disposition: specified
     fields:
       splat_rule:
@@ -112,7 +112,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 209; builtin/srd-5.2.1/magic_item/animated_shield.md
   dnd2024:items/armor_of_invulnerability:
-    source_sha256: 108a42f04e72e4000a240085aa28cae306101e6c540f3779ae5d308943825f6d
+    source_sha256: 13a37ba6055b99c682dd20e34065874da24ee41ca68aa961e835666e02d42ce2
     disposition: specified
     fields:
       splat_rule:
@@ -163,7 +163,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 210; builtin/srd-5.2.1/magic_item/armor_of_invulnerability.md
   dnd2024:items/arrow_catching_shield:
-    source_sha256: c6c15ca9b5bed878ea37eec024193bb5419e45cb1baf7044f4b8cb53c1bf35e3
+    source_sha256: 9bb9cdad999ab4a4e926de10f077c2ab69e7cce3bd211077fafd1c3cf6aa28ab
     disposition: specified
     fields:
       splat_rule:
@@ -215,7 +215,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 211; builtin/srd-5.2.1/magic_item/arrow_catching_shield.md
   dnd2024:items/bag_of_holding:
-    source_sha256: 25ef09fc35897277d100419c0d05a7fb2732b35b211e2eed5c3a9be23ec65b35
+    source_sha256: 42225d08ad95b7bf7895609857a5076b64917f8c77907a8c8fbe30b652291e65
     disposition: specified
     fields:
       splat_rule:
@@ -299,7 +299,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 212; builtin/srd-5.2.1/magic_item/bag_of_holding.md
   dnd2024:items/bead_of_nourishment:
-    source_sha256: 3de0e8889c51c70e88a0657f7256fac1bc461cb31f0679ff9dfe99ebf78bd02c
+    source_sha256: a2d3ddacde700442e7d0bbf045df8e9d80ed56c896e69a321699b35f86eb1558
     disposition: specified
     fields:
       splat_rule:
@@ -330,7 +330,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 213; builtin/srd-5.2.1/magic_item/bead_of_nourishment.md
   dnd2024:items/berserker_axe:
-    source_sha256: b9d6e06c20b9a426e6b5d71bd4d1bd914fe0f8e5ffe6b63ad4a3124b54598214
+    source_sha256: 92b67e4d3ed7a791bef5e9a350f972ce3b89de3756e238b3369e52ac364b0ca9
     disposition: specified
     fields:
       splat_rule:
@@ -407,7 +407,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 213; builtin/srd-5.2.1/magic_item/berserker_axe.md
   dnd2024:items/boots_of_speed:
-    source_sha256: 5086a5ae52e90b9b434d77ae412a99bcdf8f660580164355dad41a3ffc246aa1
+    source_sha256: 7e100f01ab02eef276841632125ad0759ac33aae96fae0e0a328e3a777840c15
     disposition: specified
     fields:
       splat_rule:
@@ -453,7 +453,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 214; builtin/srd-5.2.1/magic_item/boots_of_speed.md
   dnd2024:items/bowl_of_commanding_water_elementals:
-    source_sha256: e53f17bcf719bac8d5304d07742aaf27eee5632f4874db7e004d6462211d1c00
+    source_sha256: d4e642bc1b40f118459fb77b7dd08fdbb5f03e436f1348a8775568434bc1c4b2
     disposition: specified
     fields:
       splat_rule:
@@ -515,7 +515,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 214; builtin/srd-5.2.1/magic_item/bowl_of_commanding_water_elementals.md
   dnd2024:items/brazier_of_commanding_fire_elementals:
-    source_sha256: 4588cc8e62d158feb968cfe67fcf45c0af44f5dd7ba94b95f0d78e732beb338b
+    source_sha256: 950c66aaf9d7cf7a4d52564d8eaa7dc4ec4046d8ba12e717ef7ced94b9ed0e4f
     disposition: specified
     fields:
       splat_rule:
@@ -572,7 +572,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 214; builtin/srd-5.2.1/magic_item/brazier_of_commanding_fire_elementals.md
   dnd2024:items/candle_of_invocation:
-    source_sha256: 799444d5669d2137e9576d91f670850a5dc320ea0f91c7e55b01a06e35ca6049
+    source_sha256: 235052c12fb27d59c8bbc337d62cc674862b4b7728d6d7117d6e949071e7c286
     disposition: specified
     fields:
       splat_rule:
@@ -691,7 +691,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 214, 215; builtin/srd-5.2.1/magic_item/candle_of_invocation.md
   dnd2024:items/censer_of_controlling_air_elementals:
-    source_sha256: dda18667eed5e96161abd1482263a3f0068d329fe6b54dc5a5934954f055a92d
+    source_sha256: af551839949a29b85905dc606797566df9854b2ef9f657e6737fe0b378fdaf62
     disposition: specified
     fields:
       splat_rule:
@@ -748,7 +748,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 215; builtin/srd-5.2.1/magic_item/censer_of_controlling_air_elementals.md
   dnd2024:items/cloak_of_arachnida:
-    source_sha256: 85f90f0be78d6406c1743d6a1ba57f43c43b74cf999789b72fd18b42c0dc05f4
+    source_sha256: c67609a9ad80fa59e617ca4365696c54971af009fc49d15355a99be19bf16597
     disposition: specified
     fields:
       splat_rule:
@@ -801,7 +801,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 215; builtin/srd-5.2.1/magic_item/cloak_of_arachnida.md
   dnd2024:items/cloak_of_invisibility:
-    source_sha256: 7db51db3da33c12885fdf522454664aef4017273f564a330ff193f7eee79283a
+    source_sha256: 45603662124b7d172e9aff51d879f4cf2f90ddfb7bc39e1156fc693bd57093c6
     disposition: specified
     fields:
       splat_rule:
@@ -854,7 +854,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 215, 216; builtin/srd-5.2.1/magic_item/cloak_of_invisibility.md
   dnd2024:items/cloak_of_the_manta_ray:
-    source_sha256: c58e9757177bb251508a5e4454d583327ee80f72e9b48a957c78905864aae755
+    source_sha256: 0d05f5ac5d4ae50ed148d0d1bda2950818e8e6c07241b41ba2a109d2ab43e99c
     disposition: specified
     fields:
       splat_rule:
@@ -884,7 +884,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 216; builtin/srd-5.2.1/magic_item/cloak_of_the_manta_ray.md
   dnd2024:items/crystal_ball_of_telepathy:
-    source_sha256: dd1e1936078bddeee4c946cd331dce1f0395ad35fa92aee9e79509f0df710831
+    source_sha256: cd9662f0fdb9c216255533015d381a49657151586f639b4737ff54e0cc48a4b0
     disposition: specified
     fields:
       splat_rule:
@@ -942,7 +942,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 216; builtin/srd-5.2.1/magic_item/crystal_ball_of_telepathy.md
   dnd2024:items/cubic_gate:
-    source_sha256: 80e593db86253cb966237e963d39366ae738c410463659b1f26c4260c1a583b6
+    source_sha256: d1e6e52e570bd1f0f48afa7c4e7d999194296f0323f05240f835548fe91dda1a
     disposition: specified
     fields:
       splat_rule:
@@ -1011,7 +1011,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 216; builtin/srd-5.2.1/magic_item/cubic_gate.md
   dnd2024:items/decanter_of_endless_water:
-    source_sha256: 3734f765d508dfb9e1bb3aa033ac7415991af9934af024fd942219fc7b61610e
+    source_sha256: 8898ddcf8d54d4a875e1cb2f3656c48cb957f5d0b1aa7576bbd3a5338b75fa3a
     disposition: specified
     fields:
       splat_rule:
@@ -1095,7 +1095,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 217; builtin/srd-5.2.1/magic_item/decanter_of_endless_water.md
   dnd2024:items/demon_armor:
-    source_sha256: afc9179851b25fb5869ef98f490857220eff8c2dc66261e237b783b46b26c221
+    source_sha256: 9cd335d8d37aa53d229e1191d24f993941f110167f74595a0ec31f4a5a6f3732
     disposition: specified
     fields:
       splat_rule:
@@ -1164,7 +1164,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 218; builtin/srd-5.2.1/magic_item/demon_armor.md
   dnd2024:items/dragon_scale_mail:
-    source_sha256: 0e5a5805078c85b318ef59e45d9f336e4154afb36269b0e2f57df21843e30ddd
+    source_sha256: 87669f448c7e355d2a89c0548fa30183fad25061eb25f30bbd7473b6942348f4
     disposition: specified
     fields:
       splat_rule:
@@ -1240,7 +1240,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 218, 219; builtin/srd-5.2.1/magic_item/dragon_scale_mail.md
   dnd2024:items/dust_of_dryness:
-    source_sha256: 04b7f08056bfd71d829b86bdeb3cc388c29696beb4d5976ebdf86760ca805826
+    source_sha256: 00654207d2f40ca73b66dee719a37b385d26f66bc7f372fa68fc548e2fb5575e
     disposition: specified
     fields:
       splat_rule:
@@ -1317,7 +1317,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 219; builtin/srd-5.2.1/magic_item/dust_of_dryness.md
   dnd2024:items/dwarven_thrower:
-    source_sha256: 2acb43caa61c5d310b99c931e440bec787c753995e90198081571370a0344da5
+    source_sha256: 39831461e274330d81dc3798f0d0dddd8d253f3c62d1b0e2bfc74cd7c9eb54a4
     disposition: specified
     fields:
       splat_rule:
@@ -1383,7 +1383,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 219; builtin/srd-5.2.1/magic_item/dwarven_thrower.md
   dnd2024:items/elemental_gem:
-    source_sha256: 9b5e89bf853d0e85419e95fd244bc9d8f48ef6a264445c4889ffda0882e74e6a
+    source_sha256: fdea11c51255d414c9560d1f90356a7b79dec834c055e8d8cc6beed8a8e1c7f1
     disposition: specified
     fields:
       splat_rule:
@@ -1451,7 +1451,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 220; builtin/srd-5.2.1/magic_item/elemental_gem.md
   dnd2024:items/energy_bow:
-    source_sha256: 82335e7feb50093e7dbf35ed8b4f7dbbde08c3957965adaf9683657086e9f9b8
+    source_sha256: 7617c15ee8134260bddde604d003e8d1d218f4dc4ee552bbe0f8559c85801e18
     disposition: specified
     fields:
       splat_rule:
@@ -1553,7 +1553,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 220; builtin/srd-5.2.1/magic_item/energy_bow.md
   dnd2024:items/eyes_of_minute_seeing:
-    source_sha256: 7872836b1b3d25c099d6a50e03b54f43cb7537f96c5f0368248daa773839564e
+    source_sha256: 687414d07982dbb5c6d69fbf90756a145d08d218597678e251515bcde7f7efd1
     disposition: specified
     fields:
       splat_rule:
@@ -1584,7 +1584,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 221; builtin/srd-5.2.1/magic_item/eyes_of_minute_seeing.md
   dnd2024:items/figurine_of_wondrous_power:
-    source_sha256: c1577372bcbbf0608167d6564296e81e09c19b27bdeeac158d179f275384e4c8
+    source_sha256: 7f7ca1e943753564dc70bb58c3bfa39f4b2d21fd1fbfd13b5cd3bcdc4f319a03
     disposition: specified
     fields:
       splat_rule:
@@ -1846,7 +1846,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 221, 222; builtin/srd-5.2.1/magic_item/figurine_of_wondrous_power.md
   dnd2024:items/frost_brand:
-    source_sha256: 2af8f5a8d0f38f6b8823367ea476d300f1b4cf82c7e48347567522d9bb600e7f
+    source_sha256: b3f8c203db20f8ae2a87113bae1e721cb5f5744f5c40256895d7ca7d43b893bd
     disposition: specified
     fields:
       splat_rule:
@@ -1911,7 +1911,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 223; builtin/srd-5.2.1/magic_item/frost_brand.md
   dnd2024:items/gem_of_seeing:
-    source_sha256: c38893313aa57132b4707ab59d470bb9334191df41c0d33ca961095fed4da25b
+    source_sha256: 8bd72db5357f3f8e8aecb85be34b1ef4556459b822b8dc99ae94b6166b0ee4f6
     disposition: specified
     fields:
       splat_rule:
@@ -1959,7 +1959,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 223; builtin/srd-5.2.1/magic_item/gem_of_seeing.md
   dnd2024:items/gloves_of_missile_snaring:
-    source_sha256: 28a29a57334447b0e374fa68a7ce5c4b2290f1236928dae4cf1c52f270268abd
+    source_sha256: abe4a998b5453793af99bf34a737787c0d68665ecc20e5a0799ed460e7ae7425
     disposition: specified
     fields:
       splat_rule:
@@ -2023,7 +2023,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 224; builtin/srd-5.2.1/magic_item/gloves_of_missile_snaring.md
   dnd2024:items/goggles_of_night:
-    source_sha256: 8c2e4c4532c6c7f667541dc18c95e283489e34eb8c6ec4b10d9170f40b44081a
+    source_sha256: 0f15bcb8b198926a5a302bba1c8a8a06e0ca291e3ada672b9762b463e3beef94
     disposition: specified
     fields:
       splat_rule:
@@ -2053,7 +2053,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 224; builtin/srd-5.2.1/magic_item/goggles_of_night.md
   dnd2024:items/hat_of_disguise:
-    source_sha256: e39f052772ff14235a15c475a09d9bb3b977d21c5b62dc8dee9afdb69ceb83e8
+    source_sha256: 222f45dd08fbaeeafc0d49174229a72229302c8989760e72ee911d2506237620
     disposition: specified
     fields:
       splat_rule:
@@ -2092,7 +2092,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 224; builtin/srd-5.2.1/magic_item/hat_of_disguise.md
   dnd2024:items/helm_of_brilliance:
-    source_sha256: 8beeed50c15db9bf764269a402b484884eb360dcca09017578abd2a2c011c440
+    source_sha256: ff42fbc16c2352fad6a61d5812dcf8d53d71a1f39c94c82ca9964be8b0e68ea1
     disposition: specified
     fields:
       splat_rule:
@@ -2240,7 +2240,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 225, 226; builtin/srd-5.2.1/magic_item/helm_of_brilliance.md
   dnd2024:items/helm_of_teleportation:
-    source_sha256: 4681e343694f62bcbd8b8c25cf8bac27248bb624f57334f2824cdedb21216ec8
+    source_sha256: a9a777c58f2397f0ed47da91c32d18ee1321d788a4f1dd5e837f53a2533a2511
     disposition: specified
     fields:
       splat_rule:
@@ -2290,7 +2290,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 226; builtin/srd-5.2.1/magic_item/helm_of_teleportation.md
   dnd2024:items/horn_of_valhalla:
-    source_sha256: c009f04a1bde5026add7874095f4e00fcf1923e73482e65b9c5f3ba60d833e69
+    source_sha256: 340b23c1509c159d6c6b72cbac35e0e23596bf889a7c6c3dfc1f1c25ce89ea9f
     disposition: specified
     fields:
       splat_rule:
@@ -2393,7 +2393,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 226; builtin/srd-5.2.1/magic_item/horn_of_valhalla.md
   dnd2024:items/immovable_rod:
-    source_sha256: 360beb55a8bd0489319eb4c8542634c01755fbea0cdf27574a60fdd488f866d5
+    source_sha256: a327270c710db63671c60bf465e27ebb1bb7d6ed06f5db1585437c0e6baab1b8
     disposition: specified
     fields:
       splat_rule:
@@ -2451,7 +2451,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 227; builtin/srd-5.2.1/magic_item/immovable_rod.md
   dnd2024:items/iron_bands:
-    source_sha256: c541ae75671f29e338cbcf3bb07f40bdc3e9c76a9b0107d03f3ba352cd795b30
+    source_sha256: abd5720c136514c4b7151b894e4a1c6b91ebb69099b1b5fca98841b022ee75b7
     disposition: specified
     fields:
       splat_rule:
@@ -2534,7 +2534,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 228; builtin/srd-5.2.1/magic_item/iron_bands.md
   dnd2024:items/lantern_of_revealing:
-    source_sha256: 3dab090a0c932d276822dbfca89ba9b7883abfda7debc2a51ad780ca510727bf
+    source_sha256: bbd02da8f9c48b745db5ff98acc7923c340e43aa50e6482143c85bb90c8d4e17
     disposition: specified
     fields:
       splat_rule:
@@ -2583,7 +2583,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 228, 229; builtin/srd-5.2.1/magic_item/lantern_of_revealing.md
   dnd2024:items/mace_of_smiting:
-    source_sha256: 05b9ab9c1c215f0d16042925860ab93449f40fc3a19697bd74c0e5f79c6ba49c
+    source_sha256: d07604d1c6d21b675cf6d1c2c4b4e711de40924b62bec10aee294d3d806d07c5
     disposition: specified
     fields:
       splat_rule:
@@ -2640,7 +2640,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 229; builtin/srd-5.2.1/magic_item/mace_of_smiting.md
   dnd2024:items/manual_of_bodily_health:
-    source_sha256: 499a32104724cbb0506facc0a29a6bef2dd58bec08a73295b7c53e51cec52930
+    source_sha256: d5a6993f1ee13f3d13b960de53bbd923e3d7e6ec385291d5d7833a6f65e06c4c
     disposition: specified
     fields:
       splat_rule:
@@ -2681,7 +2681,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 229; builtin/srd-5.2.1/magic_item/manual_of_bodily_health.md
   dnd2024:items/manual_of_quickness_of_action:
-    source_sha256: 7a233d246ff6ed9035afa08f1402761d69a9074462a67619386fca3b21d663cc
+    source_sha256: 094388016eeae1d95c5000a0a36a8712d34f86a8cb88e86b56d961c7848bd9cc
     disposition: specified
     fields:
       splat_rule:
@@ -2722,7 +2722,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 230; builtin/srd-5.2.1/magic_item/manual_of_quickness_of_action.md
   dnd2024:items/mirror_of_life_trapping:
-    source_sha256: 5a17e1a9a059a9026dd9eee112263280d39cee858a5c4012d21a0ba6eec4433f
+    source_sha256: 7242eb418b815cc3dad4268931e7b110059c7385669948781a74efc643e3905a
     disposition: specified
     fields:
       splat_rule:
@@ -2866,7 +2866,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 230; builtin/srd-5.2.1/magic_item/mirror_of_life_trapping.md
   dnd2024:items/necklace_of_adaptation:
-    source_sha256: c012f4c0a2f6915155ea522cf55700099967158a3891f9b1866ec5b25d3694f6
+    source_sha256: fcfb2c67842915fc813728a31364f182fafca9e301a9f4ad3ddf2b8a66a29280
     disposition: specified
     fields:
       splat_rule:
@@ -2899,7 +2899,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 232; builtin/srd-5.2.1/magic_item/necklace_of_adaptation.md
   dnd2024:items/nine_lives_stealer:
-    source_sha256: 6c3ac0d128f97e638523770d8a027ed54444aad5a3c8a88019ff3dc4e15fd998
+    source_sha256: 73a9af35ca9b39640b5d50dbd0ed1cfcca7daa3074a3d23891038a0fd26d5a00
     disposition: specified
     fields:
       splat_rule:
@@ -2969,7 +2969,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 233; builtin/srd-5.2.1/magic_item/nine_lives_stealer.md
   dnd2024:items/oil_of_sharpness:
-    source_sha256: 5760e32f03feee5974e1d2a3bdbc3440f8c7768b06f2660673206826f1309b77
+    source_sha256: 116d430138335899e548c108e2189a578a0619e4ace911e52133ebc2eedeaec7
     disposition: specified
     fields:
       splat_rule:
@@ -3027,7 +3027,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 233; builtin/srd-5.2.1/magic_item/oil_of_sharpness.md
   dnd2024:items/periapt_of_health:
-    source_sha256: 4b1a3dcac66f10cd11d98b50f0666b7380fe33ddf5ae9a6cca612c8c7137f092
+    source_sha256: 89bfdb930f9d05f8e57d8c69e5718075e78ec7495e0c057085ab6ab00c7cd114
     disposition: specified
     fields:
       splat_rule:
@@ -3073,7 +3073,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 234; builtin/srd-5.2.1/magic_item/periapt_of_health.md
   dnd2024:items/philter_of_love:
-    source_sha256: 171d46c5b4aa70dc680bc1781fccac66220987daae86778d1f5802eab3813bee
+    source_sha256: f17421ec7107e5f33d04ea504b0ad69e1b567b21746d548b1556c8deeed09e2a
     disposition: specified
     fields:
       splat_rule:
@@ -3119,7 +3119,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 234; builtin/srd-5.2.1/magic_item/philter_of_love.md
   dnd2024:items/plate_armor_of_etherealness:
-    source_sha256: 86b0eeb6fa06dafaa36e9de5050c7f31e98382cb052f089aff1e220e60188d4c
+    source_sha256: d5a5b393266ff7fd7d7e6fb112e19f9023c6fa0add234432e6c76b9d9737aae6
     disposition: specified
     fields:
       splat_rule:
@@ -3168,7 +3168,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 234; builtin/srd-5.2.1/magic_item/plate_armor_of_etherealness.md
   dnd2024:items/potion_of_clairvoyance:
-    source_sha256: b86f8ae09fe9e30cb2d156ca6902d01d2a789bac833a196a3a61765244fb74d8
+    source_sha256: 0bfdd81bfd257b1c6aa3a303bc9d7441b40b6812a593eddc79463334dffb8348
     disposition: specified
     fields:
       splat_rule:
@@ -3204,7 +3204,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 235; builtin/srd-5.2.1/magic_item/potion_of_clairvoyance.md
   dnd2024:items/potion_of_flying:
-    source_sha256: c3d47852cac55ca9205384607974ee8d3b0b9b80f8c621840bc9dc34f41ce14e
+    source_sha256: 35dcbfc39f1147f4ebf6aa6d47b1c49490011c2d6dc4f3f1e94b1855023c5a7e
     disposition: specified
     fields:
       splat_rule:
@@ -3244,7 +3244,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 235; builtin/srd-5.2.1/magic_item/potion_of_flying.md
   dnd2024:items/potion_of_growth:
-    source_sha256: 8cd6130cc036736cf00f93c0bd7bc2c473c525022fa5f762c4e841360f3c9b4c
+    source_sha256: a9dce3e577e90d8e4d5de8f0d2d3f3bad26a26423c45907185f4f617e856fd66
     disposition: specified
     fields:
       splat_rule:
@@ -3284,7 +3284,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 235; builtin/srd-5.2.1/magic_item/potion_of_growth.md
   dnd2024:items/potion_of_invulnerability:
-    source_sha256: e89b86da89f3244343eebadb045439c89b2d3440c253e66335e089054c7eec22
+    source_sha256: 9ddfb10952e2ff5e4caee5f501c69fb0ab8cbbf04b58ecdb9364f8054d2e29ab
     disposition: specified
     fields:
       splat_rule:
@@ -3319,7 +3319,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 236; builtin/srd-5.2.1/magic_item/potion_of_invulnerability.md
   dnd2024:items/potion_of_poison:
-    source_sha256: 77d9569518154c6abdec90126950e37b75b90a9758bf50b03eaaed736f8e51df
+    source_sha256: c064a9ecfeee9ff46d01fc42be222a70129770709e0efc352bac92b05a035351
     disposition: specified
     fields:
       splat_rule:
@@ -3376,7 +3376,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 236; builtin/srd-5.2.1/magic_item/potion_of_poison.md
   dnd2024:items/potion_of_vitality:
-    source_sha256: 52c3484f0ef8afa49243b2bc16809347c6704fa0bc56e9ae6f482b92dd3d4b5b
+    source_sha256: c18c2aeb7a5f441a4a9bf8915cf17a20adccd375a08c5528989d06256e595ad7
     disposition: specified
     fields:
       splat_rule:
@@ -3414,7 +3414,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 236; builtin/srd-5.2.1/magic_item/potion_of_vitality.md
   dnd2024:items/quarterstaff_of_the_acrobat:
-    source_sha256: 262dc18a9db8e245cb2583fd33daea2c772a22f70403d174d32408b06a0e7f9e
+    source_sha256: f9bc35f0214c50738e332ce1a6da47c291c437ae1143477f2d51434e11a3be68
     disposition: specified
     fields:
       splat_rule:
@@ -3494,7 +3494,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 237; builtin/srd-5.2.1/magic_item/quarterstaff_of_the_acrobat.md
   dnd2024:items/ring_of_elemental_command:
-    source_sha256: ec8f341404fb463bdbb3740b31c1c14921315a78402e32910fb79c85b1c80f31
+    source_sha256: 58e12880444160ea2c9d581361553d82d3ebd4a22b404d56f574299baaf5e63c
     disposition: specified
     fields:
       splat_rule:
@@ -3681,7 +3681,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 237, 238; builtin/srd-5.2.1/magic_item/ring_of_elemental_command.md
   dnd2024:items/ring_of_free_action:
-    source_sha256: 9d9c2adff7989b590568f6be289f66f99eb2eaa27c9852a0408162e0cf0fd6e5
+    source_sha256: cc6e873a3449b99d5797fb94a41f8e84c213cd60626655cd278d06a8a1651bd9
     disposition: specified
     fields:
       splat_rule:
@@ -3714,7 +3714,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 238; builtin/srd-5.2.1/magic_item/ring_of_free_action.md
   dnd2024:items/ring_of_mind_shielding:
-    source_sha256: 29b23fda058a009351f18c71f620d34939b5dc17a2e265556df7cdae329e3301
+    source_sha256: afb811e6f613c3ab4073f9abfbffeca1527f1e28389bb9493cd735e60ade919c
     disposition: specified
     fields:
       splat_rule:
@@ -3774,7 +3774,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 238; builtin/srd-5.2.1/magic_item/ring_of_mind_shielding.md
   dnd2024:items/ring_of_resistance:
-    source_sha256: 5106382ee61171745ae8ed21b425bb32e42a91c50d0311c26324f0318aa723bf
+    source_sha256: 10a33f4a6c39744c399d34bf91ff0333d3d5269732d71cca20fc4ceffdf636c1
     disposition: specified
     fields:
       splat_rule:
@@ -3841,7 +3841,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 238; builtin/srd-5.2.1/magic_item/ring_of_resistance.md
   dnd2024:items/ring_of_spell_turning:
-    source_sha256: 334f59559e7177349c690bf921ec1072a6679a68effec7f57b76b1f12dac2d38
+    source_sha256: ccb2cbfb299fe637a09005a487c0e6271a023f392f76806a1dd82f76e4f18451
     disposition: specified
     fields:
       splat_rule:
@@ -3896,7 +3896,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 239; builtin/srd-5.2.1/magic_item/ring_of_spell_turning.md
   dnd2024:items/ring_of_the_ram:
-    source_sha256: db60f8b3564b7f0fbcebb52ca5ca75e60020d846bf8b25b1df9bd7337bdf08ec
+    source_sha256: e020f746366fcbdd9b7e1c00cf711ba22b75750117b601f9ebecfc14db22d39a
     disposition: specified
     fields:
       splat_rule:
@@ -3980,7 +3980,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 239; builtin/srd-5.2.1/magic_item/ring_of_the_ram.md
   dnd2024:items/ring_of_water_walking:
-    source_sha256: 8bb55aa47592e7f8d93c6f0cd9f1ee4626df5d5d4b7d10a3fc0c76d6d8b9283d
+    source_sha256: e34513389da1148534a1386b92e968c0dd4d9b0e15498dd47ecd571460a3e758
     disposition: specified
     fields:
       splat_rule:
@@ -4018,7 +4018,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 239; builtin/srd-5.2.1/magic_item/ring_of_water_walking.md
   dnd2024:items/robe_of_scintillating_colors:
-    source_sha256: c64459a2a7a52affcddae263fcff19c6e4f999208f9618f01535a502ad27fdd7
+    source_sha256: 8ef75603d7c398edbeeb256338fb59dcb82a2d73146d9f4ad44536f9adfb9ed3
     disposition: specified
     fields:
       splat_rule:
@@ -4075,7 +4075,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 240; builtin/srd-5.2.1/magic_item/robe_of_scintillating_colors.md
   dnd2024:items/robe_of_useful_items:
-    source_sha256: fbe0a1313d4be5b81d53113033fb84045720bc4f53b62397851c38c0c4f9383f
+    source_sha256: 43c2e7bc782261ee4122fb78c213494a8fc610491a5cc05cb09f2c0c6c485944
     disposition: specified
     fields:
       splat_rule:
@@ -4249,7 +4249,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 240, 241; builtin/srd-5.2.1/magic_item/robe_of_useful_items.md
   dnd2024:items/rod_of_lordly_might:
-    source_sha256: b316b99f11668135e8aa1970d4378d734601ae0d390ba0ed236721400c8f8d60
+    source_sha256: 5c665450d6498cd24eeccd83ac016264b67e96edb6e7f34ac0eb9b387c9a6c82
     disposition: specified
     fields:
       splat_rule:
@@ -4415,7 +4415,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 241, 242; builtin/srd-5.2.1/magic_item/rod_of_lordly_might.md
   dnd2024:items/rod_of_security:
-    source_sha256: 444b59b2d813c203ced67900edbfbf10241a031635ce3dbc531db1040fd1daf9
+    source_sha256: 450c8396f08a1e9567794570ab4c477040fab7b26816769bbf219b549af17221
     disposition: specified
     fields:
       splat_rule:
@@ -4498,7 +4498,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 242; builtin/srd-5.2.1/magic_item/rod_of_security.md
   dnd2024:items/scarab_of_protection:
-    source_sha256: 969c3fec90af8eb751b9ce5192d821660c61573773e6d01954179fa4a9246450
+    source_sha256: cce424b3a746843b83c8fb4a4b5b5a0eaef16fb95c8843f48964cc65ed7cfdd6
     disposition: specified
     fields:
       splat_rule:
@@ -4559,7 +4559,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 243; builtin/srd-5.2.1/magic_item/scarab_of_protection.md
   dnd2024:items/sentinel_shield:
-    source_sha256: 84c7eda2c77a760b989922fce74f5dbb0c20a8f6cb7c9a5f88ea34433f9f8e5c
+    source_sha256: 578b83202aec97448098d7caffb8e37cbc8d3fca76a6073d6cd7bf2ef0c242df
     disposition: specified
     fields:
       splat_rule:
@@ -4589,7 +4589,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 243; builtin/srd-5.2.1/magic_item/sentinel_shield.md
   dnd2024:items/shield_of_the_cavalier:
-    source_sha256: a1b95819f3a59cfb1eb0833ea6de5c53d1e81803551fc78bb0c9f5b8f793a934
+    source_sha256: dbc69c286f8667ef70ac6f46cad152680dfda16031974d914e24bf5342efa2bc
     disposition: specified
     fields:
       splat_rule:
@@ -4697,7 +4697,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 243; builtin/srd-5.2.1/magic_item/shield_of_the_cavalier.md
   dnd2024:items/spell_scroll:
-    source_sha256: b2ce656f45c832f75f22e25f62cd04618fa35059413e3546b57deb33a9506cb8
+    source_sha256: 8f89506a73b9ac5cf73f610a819ef30c402dc2444a30eab0a7bb76a39eaea738
     disposition: specified
     fields:
       splat_rule:
@@ -4806,7 +4806,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 244; builtin/srd-5.2.1/magic_item/spell_scroll.md
   dnd2024:items/staff_of_charming:
-    source_sha256: 6177c693a6a2c6241e6055d700a1aad95e23b8b6e84ed02e5c1e98753d1b0bc8
+    source_sha256: 93a189e4630e34858cff38b76e2c8494be320b001e97cc57ac6cd93678fe2d3b
     disposition: specified
     fields:
       splat_rule:
@@ -4896,7 +4896,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 245; builtin/srd-5.2.1/magic_item/staff_of_charming.md
   dnd2024:items/staff_of_healing:
-    source_sha256: 62b89b99e1b0adfa9237a456ca0df0bddf11d0db1f1372c542099a856846aa1b
+    source_sha256: 4094bb1453d30dd0945fb89d6e78e0dbe2847bf53054ffedf327793e648569fc
     disposition: specified
     fields:
       splat_rule:
@@ -4969,7 +4969,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 245; builtin/srd-5.2.1/magic_item/staff_of_healing.md
   dnd2024:items/staff_of_swarming_insects:
-    source_sha256: 1f8a2d1f20b875e048e25a3748f72f2189091a69e33205890cff50a9f4edf993
+    source_sha256: 8297edc0a0628fc1a4fd88d7808fb6a38c8e056094299c3527aa1a505a619f32
     disposition: specified
     fields:
       splat_rule:
@@ -5054,7 +5054,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 246; builtin/srd-5.2.1/magic_item/staff_of_swarming_insects.md
   dnd2024:items/staff_of_the_woodlands:
-    source_sha256: b44ef1f214b6abc24872fc72654988da0a3109d15f28c81367caadc1b10b35f5
+    source_sha256: 25c308c6976eccbdc4ce248e3f308c39a3233b71c6da5368defa32b3d0f5a825
     disposition: specified
     fields:
       splat_rule:
@@ -5175,7 +5175,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 247; builtin/srd-5.2.1/magic_item/staff_of_the_woodlands.md
   dnd2024:items/stone_of_controlling_earth_elementals:
-    source_sha256: 4a4c38986d53257f61a90b308a7873482d098b400341fafb4fff9a5823bd88e3
+    source_sha256: 2584d86aeae45a4f4323a31638b457976358184381155e1eca960f5abe8380e3
     disposition: specified
     fields:
       splat_rule:
@@ -5233,7 +5233,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 248; builtin/srd-5.2.1/magic_item/stone_of_controlling_earth_elementals.md
   dnd2024:items/sword_of_life_stealing:
-    source_sha256: 61b3f9c2dee57d4b47ba4a2430f59d245efb31d7f9147ff226eab876e4ea776a
+    source_sha256: f5b75bbef9fd9de379c0ac10421e80287d09e4bf596d50ca28ee8c713585ce03
     disposition: specified
     fields:
       splat_rule:
@@ -5288,7 +5288,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 248; builtin/srd-5.2.1/magic_item/sword_of_life_stealing.md
   dnd2024:items/talisman_of_pure_good:
-    source_sha256: c6c811cf89e1c0bddc42b56200dfd1336f4f1ea9900cabfc8ef8cc7b5f7a556a
+    source_sha256: 16dcfcc0311023bdc0e68b80ec4b4f3c8b24151b3d0e4da4b48e55c1b9c5df0b
     disposition: specified
     fields:
       splat_rule:
@@ -5378,7 +5378,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 248, 249; builtin/srd-5.2.1/magic_item/talisman_of_pure_good.md
   dnd2024:items/thunderous_greatclub:
-    source_sha256: 92023a10d3552770b01d8275a134873418b9e2c724cda1dfe2d2f5b5304a512e
+    source_sha256: a0b54e37e9d76603d77e6ceb277bfdbd89ea08bebdc6add2df08dfa00a78e188
     disposition: specified
     fields:
       splat_rule:
@@ -5502,7 +5502,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 249; builtin/srd-5.2.1/magic_item/thunderous_greatclub.md
   dnd2024:items/tome_of_understanding:
-    source_sha256: 138dd0c63c21c96514a0c4a2e497f634c4b6a318b6d823ce52e3071224615932
+    source_sha256: 3105423595bcaffda49807ed7d9ef9a67001640e68ac67567a33a5cc71a5cac2
     disposition: specified
     fields:
       splat_rule:
@@ -5543,7 +5543,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 250; builtin/srd-5.2.1/magic_item/tome_of_understanding.md
   dnd2024:items/vicious_weapon:
-    source_sha256: 45affdb205154ab3131face2f4f075935be357b1f4bf47a66a323f045cdbb332
+    source_sha256: 1f7c21d918b61f963a9d4d12c9b06629354d158dd98b46a87e3da9e988e1cf81
     disposition: specified
     fields:
       splat_rule:
@@ -5593,7 +5593,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 250; builtin/srd-5.2.1/magic_item/vicious_weapon.md
   dnd2024:items/wand_of_enemy_detection:
-    source_sha256: 21a736c57ff07966ba0bd556c5ffe6c2dc22b34e59968d97e157fedfdb072883
+    source_sha256: c9ed12559b1d398a5f90db6fd67b84d983a33d155edd49e395201db54f7785dd
     disposition: specified
     fields:
       splat_rule:
@@ -5662,7 +5662,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 250; builtin/srd-5.2.1/magic_item/wand_of_enemy_detection.md
   dnd2024:items/wand_of_lightning_bolts:
-    source_sha256: 3e6fb587d156d6e70b8af766323e5e350cfd567afea6227a89f7aee55c11726c
+    source_sha256: e901bcd6902cf008620900d100868d28323c179bfdb470c2a84e7a111b0056db
     disposition: specified
     fields:
       splat_rule:
@@ -5728,7 +5728,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 251; builtin/srd-5.2.1/magic_item/wand_of_lightning_bolts.md
   dnd2024:items/wand_of_paralysis:
-    source_sha256: 3ee70540f052f533c3fa74ead9cf9e4c2285ce23fc232559fd4fbeff5e962f22
+    source_sha256: 6f1d7963b84e7021b32cf63899f6a5846089bc006e98cc50a9f93fc62c6892d3
     disposition: specified
     fields:
       splat_rule:
@@ -5798,7 +5798,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 251; builtin/srd-5.2.1/magic_item/wand_of_paralysis.md
   dnd2024:items/wand_of_the_war_mage_1_2_or_3:
-    source_sha256: 3eb0bf4a8786d7eb3d6b0f35daa0ae2b1c44b673230969da6c447d15e065c065
+    source_sha256: 4a01c0a3068e0d7383a4b1cb10e4835c3d350f27eb079ac3b16d5682231577cb
     disposition: specified
     fields:
       splat_rule:
@@ -5837,7 +5837,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 251; builtin/srd-5.2.1/magic_item/wand_of_the_war_mage_1_2_or_3.md
   dnd2024:items/weapon_1_2_or_3:
-    source_sha256: a01a85ec56e773bb506f7956eb30ccdd491d36c4ee665f7cf8cc86e85aa72427
+    source_sha256: da0c65f21d05a0b6b972d9f3cb06cb2c950a6f0cc2d896200ec5d6ba9093061b
     disposition: specified
     fields:
       splat_rule:
@@ -5874,7 +5874,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 253; builtin/srd-5.2.1/magic_item/weapon_1_2_or_3.md
   dnd2024:items/wind_fan:
-    source_sha256: 03cdbd6e09547d27e6f183816619f38cf06c324a336461012e40848ae5c7baeb
+    source_sha256: 9c406f9b6ab8e0d3c0ed30e61b6634873ae677be560d36bde98ae121d5ef6ef3
     disposition: specified
     fields:
       splat_rule:

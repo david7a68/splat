@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: c10b97e2-c908-52a4-96b5-95ad3403733b
 splat_kind: item
 splat_key: dnd2024:items/hat_of_disguise
 splat_name: Hat of Disguise
-splat_origin:
-  key: dnd2024:reference/magic_item/hat_of_disguise
+splat_origin: dnd2024:reference/magic_item/hat_of_disguise
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 224
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 224, https://www.dndbeyond.com/srd
 ---
 
 # Hat of Disguise
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Wondrous Item |
+| Rarity | Uncommon |
+| Attunement | Yes |
+
 
 ## Source text
 
@@ -24,22 +31,9 @@ While wearing this hat, you can cast the Disguise Self spell. The spell ends if 
 
 Original layout: [[../../srd-5.2.1/pages/224|page 224]].
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` wondrous_item ` |
-| ` rarity ` | ` uncommon ` |
 
-### Equipment
-
-<!-- splat:values path=splat_item/equipment -->
-
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` required ` |
 
 ## Rule
 

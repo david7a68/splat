@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "368ce3c6-213f-5d02-80e1-5c4f21244764"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/pirate"
 splat_name: "Pirate"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [314], "executable": false}
+splat_pages:
+- 314
 ---
 
 # Pirate
@@ -32,3 +33,13 @@ Dagger. Melee or Ranged Attack Roll: +5, reach 5 ft. or range 20/60 ft. Hit: 5 (
 Enthralling Panache. Wisdom Saving Throw: DC 12, one creature the pirate can see within 30 feet. Failure: The target has the Charmed condition until the start of the pirate’s next turn.
 
 Original layout: [[../pages/314|page 314]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

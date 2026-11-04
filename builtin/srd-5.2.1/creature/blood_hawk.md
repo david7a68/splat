@@ -1,10 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "2ffabdd3-a671-548d-b2c1-379287e3685b"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/blood_hawk"
 splat_name: "Blood Hawk"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [345, 346], "executable": false}
+splat_pages:
+- 345
+- 346
 ---
 
 # Blood Hawk
@@ -34,3 +36,13 @@ Pack Tactics. The hawk has Advantage on an attack roll against a creature if at 
 Beak. Melee Attack Roll: +4, reach 5 ft. Hit: 4 (1d4 + 2) Piercing damage, or 6 (1d8 + 2) Piercing damage if the target is Bloodied.
 
 Original layout: [[../pages/345|page 345]], [[../pages/346|page 346]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

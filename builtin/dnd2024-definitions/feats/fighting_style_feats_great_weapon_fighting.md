@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 5ed192df-06c6-57b6-872a-dae32109eb4c
 splat_kind: rule
 splat_key: dnd2024:feats/fighting_style_feats_great_weapon_fighting
 splat_name: Great Weapon Fighting
-splat_origin:
-  key: dnd2024:reference/pages/088
+splat_origin: dnd2024:reference/pages/088
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 88
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 88, https://www.dndbeyond.com/srd
 ---
 
 # Great Weapon Fighting

@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: b69fb1ef-c538-59b7-a5a5-64ba0ec3e3a2
 splat_kind: item
 splat_key: dnd2024:items/ring_of_animal_influence
 splat_name: Ring of Animal Influence
-splat_origin:
-  key: dnd2024:reference/magic_item/ring_of_animal_influence
+splat_origin: dnd2024:reference/magic_item/ring_of_animal_influence
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 237
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 237, https://www.dndbeyond.com/srd
 ---
 
 # Ring of Animal Influence
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Ring |
+| Rarity | Rare |
+| Attunement | No |
+
 
 ## Source text
 
@@ -30,22 +37,9 @@ This ring has 3 charges, and it regains 1d3 expended charges daily at dawn. Whil
 
 Original layout: [[../../srd-5.2.1/pages/237|page 237]].
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` ring ` |
-| ` rarity ` | ` rare ` |
 
-### Equipment
-
-<!-- splat:values path=splat_item/equipment -->
-
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` none ` |
 
 ## Rule
 

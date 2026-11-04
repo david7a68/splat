@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "63f13bba-5108-5bc7-949c-61309a548d64"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/night_hag"
 splat_name: "Night Hag"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [311], "executable": false}
+splat_pages:
+- 311
 ---
 
 # Night Hag
@@ -55,3 +56,13 @@ At Will: Detect Magic, Etherealness, Magic Missile (level 4 version)\
 Shape-Shift. The hag shape-shifts into a Small or Medium Humanoid, or it returns to its true form. Other than its size, its game statistics are the same in each form. Any equipment it is wearing or carrying isn’t transformed.
 
 Original layout: [[../pages/311|page 311]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

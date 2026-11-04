@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 30bf5254-82bb-570e-b6c6-79897d4fcbf0
 splat_kind: spell
 splat_key: dnd2024:spells/misty_step
 splat_name: Misty Step
-splat_origin:
-  key: dnd2024:reference/spell/misty_step
+splat_origin: dnd2024:reference/spell/misty_step
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 150
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 150, https://www.dndbeyond.com/srd
 ---
 
 # Misty Step
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 2 |
+| School | Conjuration |
+| Classes | Sorcerer, Warlock, Wizard |
+| Casting Time | Bonus Action |
+| Range |  |
+| Components | V |
+| Duration | Instantaneous |
+
 
 ## Source text
 
@@ -28,28 +39,9 @@ Briefly surrounded by silvery mist, you teleport up to 30 feet to an unoccupied 
 
 Original layout: [[../../srd-5.2.1/pages/150|page 150]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 2 ` |
-| ` school ` | ` conjuration ` |
-| ` classes ` | ` ["sorcerer", "warlock", "wizard"] ` |
-| ` components ` | ` ["verbal"] ` |
-| ` concentration ` | ` false ` |
-| ` duration ` | ` Instantaneous ` |
-| ` casting_time ` | ` Bonus Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
-
-<!-- splat:values path=splat_spell/range -->
-
-| Field | Value |
-| --- | --- |
-| ` mode ` | ` self ` |
 
 ## Rule
 
@@ -72,3 +64,12 @@ Original layout: [[../../srd-5.2.1/pages/150|page 150]].
 | ` maximum_feet ` | ` 30 ` |
 | ` destination_unoccupied ` | ` true ` |
 | ` destination_visible ` | ` true ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_spell_extras -->
+> 
+> ```yaml
+> range:
+>   mode: self
+> ```
+

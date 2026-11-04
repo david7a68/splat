@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 4d45fde6-670b-50b9-8649-5aecce62b64f
 splat_kind: rule
 splat_key: dnd2024:rules/rogue_rogue_class_features
 splat_name: Rogue Class Features
-splat_origin:
-  key: dnd2024:reference/pages/061
+splat_origin: dnd2024:reference/pages/061
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 61
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 61, https://www.dndbeyond.com/srd
 ---
 
 # Rogue Class Features

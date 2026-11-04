@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "fe70bf1d-02ed-5ee6-ae37-bbb57b2f7f10"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/magic_item/staff_of_charming"
 splat_name: "Staff of Charming"
-splat_reference: {"source": "SRD 5.2.1", "category": "magic_item", "pages": [245], "executable": false}
+splat_pages:
+- 245
 ---
 
 # Staff of Charming
@@ -24,3 +25,13 @@ Resist Enchantment. If you fail a saving throw against an Enchantment spell that
 Regaining Charges. The staff regains 1d8 + 2 expended charges daily at dawn. If you expend the last charge, roll 1d20. On a 1, the staff crumbles to dust and is destroyed.
 
 Original layout: [[../pages/245|page 245]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: magic_item
+> executable: false
+> ```
+

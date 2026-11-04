@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 01d0960f-fe28-5f4b-9d35-5797d59106a3
 splat_kind: item
 splat_key: dnd2024:items/rod_of_lordly_might
 splat_name: Rod of Lordly Might
-splat_origin:
-  key: dnd2024:reference/magic_item/rod_of_lordly_might
+splat_origin: dnd2024:reference/magic_item/rod_of_lordly_might
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 241, 242
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 241, 242, https://www.dndbeyond.com/srd
 ---
 
 # Rod of Lordly Might
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Rod |
+| Rarity | Legendary |
+| Attunement | Yes |
+
 
 ## Source text
 
@@ -46,22 +53,9 @@ Terrify. While holding the rod, you can take a Magic action to force each creatu
 
 Original layout: [[../../srd-5.2.1/pages/241|page 241]], [[../../srd-5.2.1/pages/242|page 242]].
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` rod ` |
-| ` rarity ` | ` legendary ` |
 
-### Equipment
-
-<!-- splat:values path=splat_item/equipment -->
-
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` required ` |
 
 ## Rule
 

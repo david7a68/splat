@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: b15ddebc-afe0-5607-bc5d-e8d4ce651a27
 splat_kind: rule
 splat_key: dnd2024:glossary/armor_class
 splat_name: Armor Class
-splat_origin:
-  key: dnd2024:reference/glossary/armor_class
+splat_origin: dnd2024:reference/glossary/armor_class
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 177
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 177, https://www.dndbeyond.com/srd
 ---
 
 # Armor Class

@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: a7b78458-d9b6-56c5-8c6b-a0d5278f759c
 splat_kind: spell
 splat_key: dnd2024:spells/vampiric_touch
 splat_name: Vampiric Touch
-splat_origin:
-  key: dnd2024:reference/spell/vampiric_touch
+splat_origin: dnd2024:reference/spell/vampiric_touch
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 171
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 171, https://www.dndbeyond.com/srd
 ---
 
 # Vampiric Touch
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 3 |
+| School | Necromancy |
+| Classes | Sorcerer, Warlock, Wizard |
+| Casting Time | Action |
+| Range |  |
+| Components | V, S |
+| Duration | Concentration, up to 1 minute |
+
 
 ## Source text
 
@@ -32,28 +43,9 @@ Using a Higher-Level Spell Slot. The damage increases by 1d6 for each spell slot
 
 Original layout: [[../../srd-5.2.1/pages/171|page 171]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 3 ` |
-| ` school ` | ` necromancy ` |
-| ` classes ` | ` ["sorcerer", "warlock", "wizard"] ` |
-| ` components ` | ` ["verbal", "somatic"] ` |
-| ` concentration ` | ` true ` |
-| ` duration ` | ` Concentration, up to 1 minute ` |
-| ` casting_time ` | ` Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
-
-<!-- splat:values path=splat_spell/range -->
-
-| Field | Value |
-| --- | --- |
-| ` mode ` | ` self ` |
 
 ## Rule
 
@@ -123,3 +115,12 @@ maximum:
   value: 1
   unit: minute
 ```
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_spell_extras -->
+> 
+> ```yaml
+> range:
+>   mode: self
+> ```
+

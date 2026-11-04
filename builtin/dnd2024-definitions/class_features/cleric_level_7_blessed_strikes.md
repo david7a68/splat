@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 7ff00766-dac4-5411-9bd6-882b50c54b8d
 splat_kind: rule
 splat_key: dnd2024:class_features/cleric_level_7_blessed_strikes
 splat_name: 'Level 7: Blessed Strikes'
-splat_origin:
-  key: dnd2024:reference/pages/038
+splat_origin: dnd2024:reference/pages/038
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 38
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 38, https://www.dndbeyond.com/srd
 ---
 
 # Level 7: Blessed Strikes

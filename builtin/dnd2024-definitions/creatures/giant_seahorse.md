@@ -1,33 +1,58 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 2c3d32aa-4010-5638-a265-553da3cc8030
 splat_kind: creature
 splat_key: dnd2024:creatures/giant_seahorse
 splat_name: Giant Seahorse
-splat_origin:
-  key: dnd2024:reference/creature/giant_seahorse
+splat_origin: dnd2024:reference/creature/giant_seahorse
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 353
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 353, https://www.dndbeyond.com/srd
 ---
 
 # Giant Seahorse
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Large |
+| Type | Beast |
+| Alignment | Unaligned |
+| Armor Class | 14 |
+| Hit Points | 16 (3d10) |
+| Initiative | +1 (11) |
+| Speed | 5 ft., Swim 40 ft. |
+| Challenge | 1/2 (XP 100; PB +2) |
+| Senses | Passive Perception 11 |
+| Languages | None |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 15 | +2 | +2 |
+| Dex | 12 | +1 | +1 |
+| Con | 11 | +0 | +0 |
+| Int | 2 | -4 | -4 |
+| Wis | 12 | +1 | +1 |
+| Cha | 5 | -3 | -3 |
+
 
 ## Source text
 
 <!-- SRD page 353 -->
 
-Large Beast, Unaligned\
-AC 14  Initiative +1 (11)\
-HP 16 (3d10)\
-Speed 5 ft., Swim 40 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 15 +2 +2 Dex 12 +1 +1 Con 11 +0 +0\
-Int 2 −4 −4 Wis 12 +1 +1 Cha 5 −3 −3\
-Senses Passive Perception 11\
-Languages None\
-CR 1/2 (XP 100; PB +2)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Large Beast, Unaligned\
+> AC 14  Initiative +1 (11)\
+> HP 16 (3d10)\
+> Speed 5 ft., Swim 40 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 15 +2 +2 Dex 12 +1 +1 Con 11 +0 +0\
+> Int 2 −4 −4 Wis 12 +1 +1 Cha 5 −3 −3\
+> Senses Passive Perception 11\
+> Languages None\
+> CR 1/2 (XP 100; PB +2)
+
 
 ### Traits
 
@@ -43,45 +68,11 @@ Bubble Dash. While underwater, the seahorse moves up to half its Swim Speed with
 
 Original layout: [[../../srd-5.2.1/pages/353|page 353]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` large ` |
-| ` type ` | ` beast ` |
-| ` alignment ` | ` Unaligned ` |
-| ` movement_text ` | ` 5 ft., Swim 40 ft. ` |
-| ` senses_text ` | ` Passive Perception 11 ` |
-| ` languages_text ` | ` None ` |
-| ` cr_text ` | ` 1/2 (XP 100; PB +2) ` |
-| ` hit_points_text ` | ` 16 (3d10) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 15 ` | ` 2 ` |
-| ` Dexterity ` | ` 12 ` | ` 1 ` |
-| ` Constitution ` | ` 11 ` | ` 0 ` |
-| ` Intelligence ` | ` 2 ` | ` -4 ` |
-| ` Wisdom ` | ` 12 ` | ` 1 ` |
-| ` Charisma ` | ` 5 ` | ` -3 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 14 ` |  |
-| ` max_hp ` | ` 16 ` |  |
-| ` initiative ` | ` 1 ` |  |
-| ` speed ` | ` 5 ` | ` ft ` |
-| ` swim_speed ` | ` 40 ` | ` ft ` |
 
 ## Health
 
@@ -278,3 +269,13 @@ geometry_assumptions:
   - plane
   - form_appearance
 ```
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_stats_extras -->
+> 
+> ```yaml
+> swim_speed:
+>   unit: ft
+>   value: 40
+> ```
+

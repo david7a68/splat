@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: be8a502a-255c-5496-9d4b-2175967d22b3
 splat_kind: item
 splat_key: dnd2024:items/manual_of_gainful_exercise
 splat_name: Manual of Gainful Exercise
-splat_origin:
-  key: dnd2024:reference/magic_item/manual_of_gainful_exercise
+splat_origin: dnd2024:reference/magic_item/manual_of_gainful_exercise
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 229
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 229, https://www.dndbeyond.com/srd
 ---
 
 # Manual of Gainful Exercise
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Wondrous Item |
+| Rarity | Very Rare |
+| Attunement | No |
+
 
 ## Source text
 
@@ -24,22 +31,9 @@ This book describes fitness exercises, and its words are charged with magic. If 
 
 Original layout: [[../../srd-5.2.1/pages/229|page 229]].
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` wondrous_item ` |
-| ` rarity ` | ` very_rare ` |
 
-### Equipment
-
-<!-- splat:values path=splat_item/equipment -->
-
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` none ` |
 
 ## Rule
 

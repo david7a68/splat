@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 62806d64-6e3b-5709-9112-2ec2ac050032
 splat_kind: spell
 splat_key: dnd2024:spells/gust_of_wind
 splat_name: Gust of Wind
-splat_origin:
-  key: dnd2024:reference/spell/gust_of_wind
+splat_origin: dnd2024:reference/spell/gust_of_wind
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 138
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 138, https://www.dndbeyond.com/srd
 ---
 
 # Gust of Wind
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 2 |
+| School | Evocation |
+| Classes | Druid, Ranger, Sorcerer, Wizard |
+| Casting Time | Action |
+| Range |  |
+| Components | V, S, M (a legume seed) |
+| Duration | Concentration, up to 1 minute |
+
 
 ## Source text
 
@@ -34,37 +45,11 @@ As a Bonus Action on your later turns, you can change the direction in which the
 
 Original layout: [[../../srd-5.2.1/pages/138|page 138]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 2 ` |
-| ` school ` | ` evocation ` |
-| ` classes ` | ` ["druid", "ranger", "sorcerer", "wizard"] ` |
-| ` components ` | ` ["verbal", "somatic", "material"] ` |
-| ` concentration ` | ` true ` |
-| ` duration ` | ` Concentration, up to 1 minute ` |
-| ` casting_time ` | ` Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
 
-<!-- splat:values path=splat_spell/range -->
 
-| Field | Value |
-| --- | --- |
-| ` mode ` | ` self ` |
-
-### Material
-
-<!-- splat:values path=splat_spell/material -->
-
-| Field | Value |
-| --- | --- |
-| ` description ` | ` a legume seed ` |
-| ` consumed ` | ` false ` |
 
 ## Rule
 
@@ -143,3 +128,14 @@ protected_flames:
 | --- | --- |
 | ` cost ` | ` bonus_action ` |
 | ` timing ` | ` caster_later_turns ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_spell_extras -->
+> 
+> ```yaml
+> material:
+>   consumed: false
+> range:
+>   mode: self
+> ```
+

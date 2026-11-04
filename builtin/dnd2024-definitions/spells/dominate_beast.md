@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 02dda062-ceba-5fb0-bdc9-b6c308f56dde
 splat_kind: spell
 splat_key: dnd2024:spells/dominate_beast
 splat_name: Dominate Beast
-splat_origin:
-  key: dnd2024:reference/spell/dominate_beast
+splat_origin: dnd2024:reference/spell/dominate_beast
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 125
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 125, https://www.dndbeyond.com/srd
 ---
 
 # Dominate Beast
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 4 |
+| School | Enchantment |
+| Classes | Druid, Ranger, Sorcerer |
+| Casting Time | Action |
+| Range | 60 feet |
+| Components | V, S |
+| Duration | Concentration, up to 1 minute |
+
 
 ## Source text
 
@@ -34,28 +45,9 @@ Using a Higher-Level Spell Slot. Your Concentration can last longer with a spell
 
 Original layout: [[../../srd-5.2.1/pages/125|page 125]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 4 ` |
-| ` school ` | ` enchantment ` |
-| ` classes ` | ` ["druid", "ranger", "sorcerer"] ` |
-| ` components ` | ` ["verbal", "somatic"] ` |
-| ` concentration ` | ` true ` |
-| ` duration ` | ` Concentration, up to 1 minute ` |
-| ` casting_time ` | ` Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
-
-<!-- splat:values path=splat_spell/range -->
-
-| Field | Value |
-| --- | --- |
-| ` feet ` | ` 60 ` |
 
 ## Rule
 

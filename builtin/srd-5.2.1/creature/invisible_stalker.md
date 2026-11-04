@@ -1,10 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "294244df-f5f1-50ab-a483-59a062bfffe9"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/invisible_stalker"
 splat_name: "Invisible Stalker"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [301, 302], "executable": false}
+splat_pages:
+- 301
+- 302
 ---
 
 # Invisible Stalker
@@ -40,3 +42,13 @@ Wind Swipe. Melee Attack Roll: +7, reach 5 ft. Hit: 11 (2d6 + 4) Force damage.
 Vortex. Constitution Saving Throw: DC 14, one Large or smaller creature in the stalker’s space. Failure: 7 (1d8 + 3) Thunder damage, and the target has the Grappled condition (escape DC 13). Until the grapple ends, the target can’t cast spells with a Verbal component and takes 7 (2d6) Thunder damage at the start of each of the stalker’s turns.
 
 Original layout: [[../pages/301|page 301]], [[../pages/302|page 302]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 6f5c8e82-bab2-52a5-8227-2d0780779f67
 splat_kind: spell
 splat_key: dnd2024:spells/control_weather
 splat_name: Control Weather
-splat_origin:
-  key: dnd2024:reference/spell/control_weather
+splat_origin: dnd2024:reference/spell/control_weather
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 120
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 120, https://www.dndbeyond.com/srd
 ---
 
 # Control Weather
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 8 |
+| School | Transmutation |
+| Classes | Cleric, Druid, Wizard |
+| Casting Time | 10 minutes |
+| Range |  |
+| Components | V, S, M (burning incense) |
+| Duration | Concentration, up to 8 hours |
+
 
 ## Source text
 
@@ -53,37 +64,11 @@ When you change the weather conditions, find a current condition on the followin
 
 Original layout: [[../../srd-5.2.1/pages/120|page 120]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 8 ` |
-| ` school ` | ` transmutation ` |
-| ` classes ` | ` ["cleric", "druid", "wizard"] ` |
-| ` components ` | ` ["verbal", "somatic", "material"] ` |
-| ` concentration ` | ` true ` |
-| ` duration ` | ` Concentration, up to 8 hours ` |
-| ` casting_time ` | ` 10 minutes ` |
-| ` ritual ` | ` false ` |
 
-### Range
 
-<!-- splat:values path=splat_spell/range -->
 
-| Field | Value |
-| --- | --- |
-| ` mode ` | ` self ` |
-
-### Material
-
-<!-- splat:values path=splat_spell/material -->
-
-| Field | Value |
-| --- | --- |
-| ` description ` | ` burning incense ` |
-| ` consumed ` | ` false ` |
 
 ## Rule
 
@@ -171,3 +156,14 @@ wind_stages:
 - gale
 - storm
 ```
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_spell_extras -->
+> 
+> ```yaml
+> material:
+>   consumed: false
+> range:
+>   mode: self
+> ```
+

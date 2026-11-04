@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: a8bb6f61-52b7-55df-bae5-c4943468298a
 splat_kind: rule
 splat_key: dnd2024:glossary/creature_type
 splat_name: Creature Type
-splat_origin:
-  key: dnd2024:reference/glossary/creature_type
+splat_origin: dnd2024:reference/glossary/creature_type
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 179
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 179, https://www.dndbeyond.com/srd
 ---
 
 # Creature Type

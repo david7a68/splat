@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: ff00ca23-2b98-5663-bd18-04b6c3208cd5
 splat_kind: rule
 splat_key: dnd2024:tables/warlock_progression
 splat_name: Warlock Progression
-splat_origin:
-  key: dnd2024:reference/pages/071
+splat_origin: dnd2024:reference/pages/071
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 71
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 71, https://www.dndbeyond.com/srd
 ---
 
 # Warlock Progression

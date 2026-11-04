@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "19c84181-ac6e-5e94-80d1-27848912654e"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/magic_item/horseshoes_of_speed"
 splat_name: "Horseshoes of Speed"
-splat_reference: {"source": "SRD 5.2.1", "category": "magic_item", "pages": [227], "executable": false}
+splat_pages:
+- 227
 ---
 
 # Horseshoes of Speed
@@ -18,3 +19,13 @@ These horseshoes come in a set of four. As a Magic action, you can touch one of 
 While all four horseshoes are attached to the same creature, its Speed is increased by 30 feet.
 
 Original layout: [[../pages/227|page 227]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: magic_item
+> executable: false
+> ```
+

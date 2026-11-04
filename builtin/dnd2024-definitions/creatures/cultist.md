@@ -1,35 +1,62 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 90ed0908-d71a-533a-b9e2-616435f0b171
 splat_kind: creature
 splat_key: dnd2024:creatures/cultist
 splat_name: Cultist
-splat_origin:
-  key: dnd2024:reference/creature/cultist
+splat_origin: dnd2024:reference/creature/cultist
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 278
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 278, https://www.dndbeyond.com/srd
 ---
 
 # Cultist
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Medium or Small |
+| Type | Humanoid |
+| Alignment | Neutral |
+| Armor Class | 12 |
+| Hit Points | 9 (2d8) |
+| Initiative | +1 (11) |
+| Speed | 30 ft. |
+| Challenge | 1/8 (XP 25; PB +2) |
+| Skills | Deception +2, Religion +2 |
+| Senses | Passive Perception 10 |
+| Languages | Common |
+| Gear | Leather Armor, Sickle |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 11 | +0 | +0 |
+| Dex | 12 | +1 | +1 |
+| Con | 10 | +0 | +0 |
+| Int | 10 | +0 | +0 |
+| Wis | 11 | +0 | +2 |
+| Cha | 10 | +0 | +0 |
+
 
 ## Source text
 
 <!-- SRD page 278 -->
 
 Medium or Small Humanoid, Neutral\
-AC 12 Initiative +1 (11)\
-HP 9 (2d8)\
-Speed 30 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 11 +0 +0 Dex 12 +1 +1 Con 10 +0 +0\
-Int 10 +0 +0 Wis 11 +0 +2 Cha 10 +0 +0\
-Skills Deception +2, Religion +2\
-Gear Leather Armor, Sickle\
-Senses Passive Perception 10\
-Languages Common\
-CR 1/8 (XP 25; PB +2)
+> [!quote]- Printed stat block (not read; edit the table above)
+> AC 12 Initiative +1 (11)\
+> HP 9 (2d8)\
+> Speed 30 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 11 +0 +0 Dex 12 +1 +1 Con 10 +0 +0\
+> Int 10 +0 +0 Wis 11 +0 +2 Cha 10 +0 +0\
+> Skills Deception +2, Religion +2\
+> Gear Leather Armor, Sickle\
+> Senses Passive Perception 10\
+> Languages Common\
+> CR 1/8 (XP 25; PB +2)
+
 
 ### Actions
 
@@ -37,47 +64,11 @@ Ritual Sickle. Melee Attack Roll: +3, reach 5 ft. Hit: 3 (1d4 + 1) Slashing dama
 
 Original layout: [[../../srd-5.2.1/pages/278|page 278]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` medium ` |
-| ` type ` | ` humanoid ` |
-| ` alignment ` | ` Neutral ` |
-| ` size_options_text ` | ` Medium or Small ` |
-| ` movement_text ` | ` 30 ft. ` |
-| ` skills_text ` | ` Deception +2, Religion +2 ` |
-| ` gear_text ` | ` Leather Armor, Sickle ` |
-| ` senses_text ` | ` Passive Perception 10 ` |
-| ` languages_text ` | ` Common ` |
-| ` cr_text ` | ` 1/8 (XP 25; PB +2) ` |
-| ` hit_points_text ` | ` 9 (2d8) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 11 ` | ` 0 ` |
-| ` Dexterity ` | ` 12 ` | ` 1 ` |
-| ` Constitution ` | ` 10 ` | ` 0 ` |
-| ` Intelligence ` | ` 10 ` | ` 0 ` |
-| ` Wisdom ` | ` 11 ` | ` 2 ` |
-| ` Charisma ` | ` 10 ` | ` 0 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 12 ` |  |
-| ` max_hp ` | ` 9 ` |  |
-| ` initiative ` | ` 1 ` |  |
-| ` speed ` | ` 30 ` | ` ft ` |
 
 ## Health
 

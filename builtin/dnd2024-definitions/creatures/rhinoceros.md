@@ -1,33 +1,58 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 385242bd-9fd7-5a19-8d90-6affd94ceecc
 splat_kind: creature
 splat_key: dnd2024:creatures/rhinoceros
 splat_name: Rhinoceros
-splat_origin:
-  key: dnd2024:reference/creature/rhinoceros
+splat_origin: dnd2024:reference/creature/rhinoceros
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 360
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 360, https://www.dndbeyond.com/srd
 ---
 
 # Rhinoceros
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Large |
+| Type | Beast |
+| Alignment | Unaligned |
+| Armor Class | 13 |
+| Hit Points | 45 (6d10 + 12) |
+| Initiative | -1 (9) |
+| Speed | 40 ft. |
+| Challenge | 2 (XP 450; PB +2) |
+| Senses | Passive Perception 11 |
+| Languages | None |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 21 | +5 | +5 |
+| Dex | 8 | -1 | -1 |
+| Con | 15 | +2 | +2 |
+| Int | 2 | -4 | -4 |
+| Wis | 12 | +1 | +1 |
+| Cha | 6 | -2 | -2 |
+
 
 ## Source text
 
 <!-- SRD page 360 -->
 
-Large Beast, Unaligned\
-AC 13  Initiative −1 (9)\
-HP 45 (6d10 + 12)\
-Speed 40 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 21 +5 +5 Dex 8 −1 −1 Con 15 +2 +2\
-Int 2 −4 −4 Wis 12 +1 +1 Cha 6 −2 −2\
-Senses Passive Perception 11\
-Languages None\
-CR 2 (XP 450; PB +2)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Large Beast, Unaligned\
+> AC 13  Initiative −1 (9)\
+> HP 45 (6d10 + 12)\
+> Speed 40 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 21 +5 +5 Dex 8 −1 −1 Con 15 +2 +2\
+> Int 2 −4 −4 Wis 12 +1 +1 Cha 6 −2 −2\
+> Senses Passive Perception 11\
+> Languages None\
+> CR 2 (XP 450; PB +2)
+
 
 ### Actions
 
@@ -35,44 +60,11 @@ Gore. Melee Attack Roll: +7, reach 5 ft. Hit: 14 (2d8 + 5) Piercing damage. If t
 
 Original layout: [[../../srd-5.2.1/pages/360|page 360]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` large ` |
-| ` type ` | ` beast ` |
-| ` alignment ` | ` Unaligned ` |
-| ` movement_text ` | ` 40 ft. ` |
-| ` senses_text ` | ` Passive Perception 11 ` |
-| ` languages_text ` | ` None ` |
-| ` cr_text ` | ` 2 (XP 450; PB +2) ` |
-| ` hit_points_text ` | ` 45 (6d10 + 12) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 21 ` | ` 5 ` |
-| ` Dexterity ` | ` 8 ` | ` -1 ` |
-| ` Constitution ` | ` 15 ` | ` 2 ` |
-| ` Intelligence ` | ` 2 ` | ` -4 ` |
-| ` Wisdom ` | ` 12 ` | ` 1 ` |
-| ` Charisma ` | ` 6 ` | ` -2 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 13 ` |  |
-| ` max_hp ` | ` 45 ` |  |
-| ` initiative ` | ` -1 ` |  |
-| ` speed ` | ` 40 ` | ` ft ` |
 
 ## Health
 

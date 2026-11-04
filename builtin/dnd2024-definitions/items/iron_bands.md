@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 754d424d-1ef9-597c-b4de-d820ef107624
 splat_kind: item
 splat_key: dnd2024:items/iron_bands
 splat_name: Iron Bands
-splat_origin:
-  key: dnd2024:reference/magic_item/iron_bands
+splat_origin: dnd2024:reference/magic_item/iron_bands
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 228
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 228, https://www.dndbeyond.com/srd
 ---
 
 # Iron Bands
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Wondrous Item |
+| Rarity | Rare |
+| Attunement | No |
+
 
 ## Source text
 
@@ -30,22 +37,9 @@ Once the bands are used, they can’t be used again until the next dawn.
 
 Original layout: [[../../srd-5.2.1/pages/228|page 228]].
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` wondrous_item ` |
-| ` rarity ` | ` rare ` |
 
-### Equipment
-
-<!-- splat:values path=splat_item/equipment -->
-
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` none ` |
 
 ## Rule
 

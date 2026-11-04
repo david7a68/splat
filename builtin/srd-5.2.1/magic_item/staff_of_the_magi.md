@@ -1,10 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "0b8e3bc0-208a-5cdf-8d60-82f71c7cc9c5"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/magic_item/staff_of_the_magi"
 splat_name: "Staff of the Magi"
-splat_reference: {"source": "SRD 5.2.1", "category": "magic_item", "pages": [246, 247], "executable": false}
+splat_pages:
+- 246
+- 247
 ---
 
 # Staff of the Magi
@@ -51,3 +53,13 @@ Regaining Charges. The staff regains 4d6 + 2 expended charges daily at dawn. If 
 Retributive Strike. You can take a Magic action to break the staff over your knee or against a solid surface. The staff is destroyed and releases its magic in an explosion that fills a 30-foot Emanation originating from itself. You have a 50 percent chance to instantly travel to a random plane of existence, avoiding the explosion. If you fail to avoid the effect, you take Force damage equal to 16 times the number of charges in the staff. Each other creature in the area makes a DC 17 Dexterity saving throw. On a failed save, a creature takes Force damage equal to 6 times the number of charges in the staff. On a successful save, a creature takes half as much damage.
 
 Original layout: [[../pages/246|page 246]], [[../pages/247|page 247]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: magic_item
+> executable: false
+> ```
+

@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: c40bfae4-5482-555c-949d-f937c57c1b35
 splat_kind: item
 splat_key: dnd2024:items/rod_of_resurrection
 splat_name: Rod of Resurrection
-splat_origin:
-  key: dnd2024:reference/magic_item/rod_of_resurrection
+splat_origin: dnd2024:reference/magic_item/rod_of_resurrection
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 242
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 242, https://www.dndbeyond.com/srd
 ---
 
 # Rod of Resurrection
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Rod |
+| Rarity | Legendary |
+| Attunement | Yes |
+
 
 ## Source text
 
@@ -26,22 +33,9 @@ The rod regains 1 expended charge daily at dawn. If you expend the last charge, 
 
 Original layout: [[../../srd-5.2.1/pages/242|page 242]].
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` rod ` |
-| ` rarity ` | ` legendary ` |
 
-### Equipment
-
-<!-- splat:values path=splat_item/equipment -->
-
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` required ` |
 
 ## Rule
 

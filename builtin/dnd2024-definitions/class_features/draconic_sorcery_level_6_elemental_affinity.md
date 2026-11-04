@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 6f444684-28e3-5892-aeae-b3686a61aa0f
 splat_kind: rule
 splat_key: dnd2024:class_features/draconic_sorcery_level_6_elemental_affinity
 splat_name: 'Level 6: Elemental Affinity'
-splat_origin:
-  key: dnd2024:reference/pages/070
+splat_origin: dnd2024:reference/pages/070
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 70
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 70, https://www.dndbeyond.com/srd
 ---
 
 # Level 6: Elemental Affinity

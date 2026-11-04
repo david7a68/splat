@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: b21da6c6-a53f-5ffc-82b9-b1bb6fa0acf3
 splat_kind: rule_group
 splat_key: dnd2024:backgrounds/acolyte
 splat_name: Acolyte
-splat_origin:
-  key: dnd2024:reference/pages/083
+splat_origin: dnd2024:reference/pages/083
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 83
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 83, https://www.dndbeyond.com/srd
 ---
 
 # Acolyte

@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 36c9d75d-8e19-5ba5-81e0-57c2ffc09e87
 splat_kind: spell
 splat_key: dnd2024:spells/goodberry
 splat_name: Goodberry
-splat_origin:
-  key: dnd2024:reference/spell/goodberry
+splat_origin: dnd2024:reference/spell/goodberry
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 137
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 137, https://www.dndbeyond.com/srd
 ---
 
 # Goodberry
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 1 |
+| School | Conjuration |
+| Classes | Druid, Ranger |
+| Casting Time | Action |
+| Range |  |
+| Components | V, S, M (a sprig of mistletoe) |
+| Duration | 24 hours |
+
 
 ## Source text
 
@@ -30,37 +41,11 @@ Uneaten berries disappear when the spell ends.
 
 Original layout: [[../../srd-5.2.1/pages/137|page 137]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 1 ` |
-| ` school ` | ` conjuration ` |
-| ` classes ` | ` ["druid", "ranger"] ` |
-| ` components ` | ` ["verbal", "somatic", "material"] ` |
-| ` concentration ` | ` false ` |
-| ` duration ` | ` 24 hours ` |
-| ` casting_time ` | ` Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
 
-<!-- splat:values path=splat_spell/range -->
 
-| Field | Value |
-| --- | --- |
-| ` mode ` | ` self ` |
-
-### Material
-
-<!-- splat:values path=splat_spell/material -->
-
-| Field | Value |
-| --- | --- |
-| ` description ` | ` a sprig of mistletoe ` |
-| ` consumed ` | ` false ` |
 
 ## Rule
 
@@ -95,3 +80,14 @@ Original layout: [[../../srd-5.2.1/pages/137|page 137]].
 | ` berries_consumed ` | ` 1 ` |
 | ` healing_hp ` | ` 1 ` |
 | ` nourishment_creature_days ` | ` 1 ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_spell_extras -->
+> 
+> ```yaml
+> material:
+>   consumed: false
+> range:
+>   mode: self
+> ```
+

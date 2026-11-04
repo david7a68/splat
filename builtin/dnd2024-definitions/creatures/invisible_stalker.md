@@ -1,36 +1,64 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: e2791c4d-9116-5342-8718-e3f3d9ffb2fc
 splat_kind: creature
 splat_key: dnd2024:creatures/invisible_stalker
 splat_name: Invisible Stalker
-splat_origin:
-  key: dnd2024:reference/creature/invisible_stalker
+splat_origin: dnd2024:reference/creature/invisible_stalker
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 301, 302
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 301, 302, https://www.dndbeyond.com/srd
 ---
 
 # Invisible Stalker
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Large |
+| Type | Elemental |
+| Alignment | Neutral |
+| Armor Class | 14 |
+| Hit Points | 97 (13d10 + 26) |
+| Initiative | +7 (17) |
+| Speed | 50 ft., Fly 50 ft. (hover) |
+| Challenge | 6 (XP 2,300; PB +3) |
+| Skills | Perception +8, Stealth +10 |
+| Senses | Darkvision 60 ft.; Passive Perception 18 |
+| Languages | Common, Primordial (Auran) |
+| Resistances | Bludgeoning, Piercing, Slashing |
+| Immunities | Poison; Exhaustion, Grappled, Paralyzed, Petrified, Poisoned, Prone, Restrained, Unconscious |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 16 | +3 | +3 |
+| Dex | 19 | +4 | +4 |
+| Con | 14 | +2 | +2 |
+| Int | 10 | +0 | +0 |
+| Wis | 15 | +2 | +2 |
+| Cha | 11 | +0 | +0 |
+
 
 ## Source text
 
 <!-- SRD page 301 -->
 
-Large Elemental, Neutral\
-AC 14 Initiative +7 (22)\
-HP 97 (13d10 + 26)\
-Speed 50 ft., Fly 50 ft. (hover)\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 16 +3 +3 Dex 19 +4 +4 Con 14 +2 +2\
-Int 10 +0 +0 Wis 15 +2 +2 Cha 11 +0 +0\
-Skills Perception +8, Stealth +10\
-Resistances Bludgeoning, Piercing, Slashing\
-Immunities Poison; Exhaustion, Grappled, Paralyzed, Petrified, Poisoned, Prone, Restrained, Unconscious\
-Senses Darkvision 60 ft.; Passive Perception 18\
-Languages Common, Primordial (Auran)\
-CR 6 (XP 2,300; PB +3)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Large Elemental, Neutral\
+> AC 14 Initiative +7 (22)\
+> HP 97 (13d10 + 26)\
+> Speed 50 ft., Fly 50 ft. (hover)\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 16 +3 +3 Dex 19 +4 +4 Con 14 +2 +2\
+> Int 10 +0 +0 Wis 15 +2 +2 Cha 11 +0 +0\
+> Skills Perception +8, Stealth +10\
+> Resistances Bludgeoning, Piercing, Slashing\
+> Immunities Poison; Exhaustion, Grappled, Paralyzed, Petrified, Poisoned, Prone, Restrained, Unconscious\
+> Senses Darkvision 60 ft.; Passive Perception 18\
+> Languages Common, Primordial (Auran)\
+> CR 6 (XP 2,300; PB +3)
+
 
 ### Traits
 
@@ -48,48 +76,11 @@ Vortex. Constitution Saving Throw: DC 14, one Large or smaller creature in the s
 
 Original layout: [[../../srd-5.2.1/pages/301|page 301]], [[../../srd-5.2.1/pages/302|page 302]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` large ` |
-| ` type ` | ` elemental ` |
-| ` alignment ` | ` Neutral ` |
-| ` movement_text ` | ` 50 ft., Fly 50 ft. (hover) ` |
-| ` skills_text ` | ` Perception +8, Stealth +10 ` |
-| ` resistances_text ` | ` Bludgeoning, Piercing, Slashing ` |
-| ` immunities_text ` | ` Poison; Exhaustion, Grappled, Paralyzed, Petrified, Poisoned, Prone, Restrained, Unconscious ` |
-| ` senses_text ` | ` Darkvision 60 ft.; Passive Perception 18 ` |
-| ` languages_text ` | ` Common, Primordial (Auran) ` |
-| ` cr_text ` | ` 6 (XP 2,300; PB +3) ` |
-| ` hit_points_text ` | ` 97 (13d10 + 26) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 16 ` | ` 3 ` |
-| ` Dexterity ` | ` 19 ` | ` 4 ` |
-| ` Constitution ` | ` 14 ` | ` 2 ` |
-| ` Intelligence ` | ` 10 ` | ` 0 ` |
-| ` Wisdom ` | ` 15 ` | ` 2 ` |
-| ` Charisma ` | ` 11 ` | ` 0 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 14 ` |  |
-| ` max_hp ` | ` 97 ` |  |
-| ` initiative ` | ` 7 ` |  |
-| ` speed ` | ` 50 ` | ` ft ` |
-| ` fly_speed ` | ` 50 ` | ` ft ` |
 
 ## Health
 
@@ -282,3 +273,13 @@ geometry:
 unlisted_success_branch: no_effect
 unlisted_duration: until_removed_by_applicable_rule
 ```
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_stats_extras -->
+> 
+> ```yaml
+> fly_speed:
+>   unit: ft
+>   value: 50
+> ```
+

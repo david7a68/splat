@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 8934f3f1-6941-500a-ac0d-1149bb97959b
 splat_kind: item
 splat_key: dnd2024:items/gem_of_seeing
 splat_name: Gem of Seeing
-splat_origin:
-  key: dnd2024:reference/magic_item/gem_of_seeing
+splat_origin: dnd2024:reference/magic_item/gem_of_seeing
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 223
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 223, https://www.dndbeyond.com/srd
 ---
 
 # Gem of Seeing
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Wondrous Item |
+| Rarity | Rare |
+| Attunement | Yes |
+
 
 ## Source text
 
@@ -26,22 +33,9 @@ The gem regains 1d3 expended charges daily at dawn.
 
 Original layout: [[../../srd-5.2.1/pages/223|page 223]].
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` wondrous_item ` |
-| ` rarity ` | ` rare ` |
 
-### Equipment
-
-<!-- splat:values path=splat_item/equipment -->
-
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` required ` |
 
 ## Rule
 

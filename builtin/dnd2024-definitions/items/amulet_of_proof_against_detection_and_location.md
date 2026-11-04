@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 95cf6ee6-059f-5661-8aeb-127435d11c94
 splat_kind: item
 splat_key: dnd2024:items/amulet_of_proof_against_detection_and_location
 splat_name: Amulet of Proof against Detection and Location
-splat_origin:
-  key: dnd2024:reference/magic_item/amulet_of_proof_against_detection_and_location
+splat_origin: dnd2024:reference/magic_item/amulet_of_proof_against_detection_and_location
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 209
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 209, https://www.dndbeyond.com/srd
 ---
 
 # Amulet of Proof against Detection and Location
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Wondrous Item |
+| Rarity | Uncommon |
+| Attunement | Yes |
+
 
 ## Source text
 
@@ -24,22 +31,9 @@ While wearing this amulet, you can’t be targeted by Divination spells or perce
 
 Original layout: [[../../srd-5.2.1/pages/209|page 209]].
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` wondrous_item ` |
-| ` rarity ` | ` uncommon ` |
 
-### Equipment
-
-<!-- splat:values path=splat_item/equipment -->
-
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` required ` |
 
 ## Rule
 

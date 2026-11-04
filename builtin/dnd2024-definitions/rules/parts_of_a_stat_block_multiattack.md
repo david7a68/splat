@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 0e1a1e99-fe60-5207-b8a1-cbbe840ac429
 splat_kind: rule
 splat_key: dnd2024:rules/parts_of_a_stat_block_multiattack
 splat_name: Multiattack
-splat_origin:
-  key: dnd2024:reference/pages/257
+splat_origin: dnd2024:reference/pages/257
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 257
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 257, https://www.dndbeyond.com/srd
 ---
 
 # Multiattack

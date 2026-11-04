@@ -1,35 +1,62 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: d587891f-84a1-59f8-aefb-70ae0130f5bc
 splat_kind: creature
 splat_key: dnd2024:creatures/ancient_bronze_dragon
 splat_name: Ancient Bronze Dragon
-splat_origin:
-  key: dnd2024:reference/creature/ancient_bronze_dragon
+splat_origin: dnd2024:reference/creature/ancient_bronze_dragon
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 271
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 271, https://www.dndbeyond.com/srd
 ---
 
 # Ancient Bronze Dragon
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Gargantuan |
+| Type | Dragon (Metallic) |
+| Alignment | Lawful Good |
+| Armor Class | 22 |
+| Hit Points | 444 (24d20 + 192) |
+| Initiative | +14 (24) |
+| Speed | 40 ft., Fly 80 ft., Swim 40 ft. |
+| Challenge | 22 (XP 41,000, or 50,000 in lair; PB +7) |
+| Skills | Insight +10, Perception +17, Stealth +7 |
+| Senses | Blindsight 60 ft., Darkvision 120 ft.; Passive Perception 27 |
+| Languages | Common, Draconic |
+| Immunities | Lightning |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 29 | +9 | +9 |
+| Dex | 10 | +0 | +7 |
+| Con | 27 | +8 | +8 |
+| Int | 18 | +4 | +4 |
+| Wis | 17 | +3 | +10 |
+| Cha | 25 | +7 | +7 |
+
 
 ## Source text
 
 <!-- SRD page 271 -->
 
-Gargantuan Dragon (Metallic), Lawful Good\
-AC 22 Initiative +14 (24)\
-HP 444 (24d20 + 192)\
-Speed 40 ft., Fly 80 ft., Swim 40 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 29 +9 +9 Dex 10 +0 +7 Con 27 +8 +8\
-Int 18 +4 +4 Wis 17 +3 +10 Cha 25 +7 +7\
-Skills Insight +10, Perception +17, Stealth +7\
-Immunities Lightning\
-Senses Blindsight 60 ft., Darkvision 120 ft.; Passive Perception 27\
-Languages Common, Draconic\
-CR 22 (XP 41,000, or 50,000 in lair; PB +7)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Gargantuan Dragon (Metallic), Lawful Good\
+> AC 22 Initiative +14 (24)\
+> HP 444 (24d20 + 192)\
+> Speed 40 ft., Fly 80 ft., Swim 40 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 29 +9 +9 Dex 10 +0 +7 Con 27 +8 +8\
+> Int 18 +4 +4 Wis 17 +3 +10 Cha 25 +7 +7\
+> Skills Insight +10, Perception +17, Stealth +7\
+> Immunities Lightning\
+> Senses Blindsight 60 ft., Darkvision 120 ft.; Passive Perception 27\
+> Languages Common, Draconic\
+> CR 22 (XP 41,000, or 50,000 in lair; PB +7)
+
 
 ### Traits
 
@@ -65,49 +92,11 @@ Thunderclap. Constitution Saving Throw: DC 22, each creature in a 20-foot-radius
 
 Original layout: [[../../srd-5.2.1/pages/271|page 271]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` gargantuan ` |
-| ` type ` | ` dragon ` |
-| ` alignment ` | ` Lawful Good ` |
-| ` tags_text ` | ` (Metallic) ` |
-| ` movement_text ` | ` 40 ft., Fly 80 ft., Swim 40 ft. ` |
-| ` skills_text ` | ` Insight +10, Perception +17, Stealth +7 ` |
-| ` immunities_text ` | ` Lightning ` |
-| ` senses_text ` | ` Blindsight 60 ft., Darkvision 120 ft.; Passive Perception 27 ` |
-| ` languages_text ` | ` Common, Draconic ` |
-| ` cr_text ` | ` 22 (XP 41,000, or 50,000 in lair; PB +7) ` |
-| ` hit_points_text ` | ` 444 (24d20 + 192) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 29 ` | ` 9 ` |
-| ` Dexterity ` | ` 10 ` | ` 7 ` |
-| ` Constitution ` | ` 27 ` | ` 8 ` |
-| ` Intelligence ` | ` 18 ` | ` 4 ` |
-| ` Wisdom ` | ` 17 ` | ` 10 ` |
-| ` Charisma ` | ` 25 ` | ` 7 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 22 ` |  |
-| ` max_hp ` | ` 444 ` |  |
-| ` initiative ` | ` 14 ` |  |
-| ` speed ` | ` 40 ` | ` ft ` |
-| ` fly_speed ` | ` 80 ` | ` ft ` |
-| ` swim_speed ` | ` 40 ` | ` ft ` |
 
 ## Health
 
@@ -688,3 +677,16 @@ geometry_assumptions:
   - plane
   - form_appearance
 ```
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_stats_extras -->
+> 
+> ```yaml
+> fly_speed:
+>   unit: ft
+>   value: 80
+> swim_speed:
+>   unit: ft
+>   value: 40
+> ```
+

@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: d3117ef7-c32c-50e2-a05e-f718d87a83ca
 splat_kind: item
 splat_key: dnd2024:items/eyes_of_charming
 splat_name: Eyes of Charming
-splat_origin:
-  key: dnd2024:reference/magic_item/eyes_of_charming
+splat_origin: dnd2024:reference/magic_item/eyes_of_charming
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 221
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 221, https://www.dndbeyond.com/srd
 ---
 
 # Eyes of Charming
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Wondrous Item |
+| Rarity | Uncommon |
+| Attunement | Yes |
+
 
 ## Source text
 
@@ -24,22 +31,9 @@ These crystal lenses fit over the eyes. They have 3 charges. While wearing them,
 
 Original layout: [[../../srd-5.2.1/pages/221|page 221]].
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` wondrous_item ` |
-| ` rarity ` | ` uncommon ` |
 
-### Equipment
-
-<!-- splat:values path=splat_item/equipment -->
-
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` required ` |
 
 ## Rule
 

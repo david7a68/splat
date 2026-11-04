@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 8938815b-ac6e-599b-a3f5-60cbc66a3bc6
 splat_kind: spell
 splat_key: dnd2024:spells/gentle_repose
 splat_name: Gentle Repose
-splat_origin:
-  key: dnd2024:reference/spell/gentle_repose
+splat_origin: dnd2024:reference/spell/gentle_repose
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 135
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 135, https://www.dndbeyond.com/srd
 ---
 
 # Gentle Repose
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 2 |
+| School | Necromancy |
+| Classes | Cleric, Paladin, Wizard |
+| Casting Time | Action or Ritual |
+| Range |  |
+| Components | V, S, M (2 Copper Pieces, which the spell consumes) |
+| Duration | 10 days |
+
 
 ## Source text
 
@@ -30,37 +41,11 @@ The spell also effectively extends the time limit on raising the target from the
 
 Original layout: [[../../srd-5.2.1/pages/135|page 135]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 2 ` |
-| ` school ` | ` necromancy ` |
-| ` classes ` | ` ["cleric", "paladin", "wizard"] ` |
-| ` components ` | ` ["verbal", "somatic", "material"] ` |
-| ` concentration ` | ` false ` |
-| ` duration ` | ` 10 days ` |
-| ` casting_time ` | ` Action or Ritual ` |
-| ` ritual ` | ` true ` |
 
-### Range
 
-<!-- splat:values path=splat_spell/range -->
 
-| Field | Value |
-| --- | --- |
-| ` mode ` | ` touch ` |
-
-### Material
-
-<!-- splat:values path=splat_spell/material -->
-
-| Field | Value |
-| --- | --- |
-| ` description ` | ` 2 Copper Pieces, which the spell consumes ` |
-| ` consumed ` | ` true ` |
 
 ## Rule
 
@@ -115,3 +100,14 @@ maximum:
   value: 10
   unit: day
 ```
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_spell_extras -->
+> 
+> ```yaml
+> material:
+>   consumed: true
+> range:
+>   mode: touch
+> ```
+

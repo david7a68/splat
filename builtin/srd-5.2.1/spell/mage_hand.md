@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "56ef1ec1-f386-5df1-9d6c-b1b1fd746261"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/mage_hand"
 splat_name: "Mage Hand"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [145], "executable": false}
+splat_pages:
+- 145
 ---
 
 # Mage Hand
@@ -26,3 +27,13 @@ As a Magic action on your later turns, you can control the hand thus again. As p
 The hand can’t attack, activate magic items, or carry more than 10 pounds.
 
 Original layout: [[../pages/145|page 145]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

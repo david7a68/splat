@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 1c5762b0-876d-57b7-bb92-c91e8614a4e7
 splat_kind: spell
 splat_key: dnd2024:spells/tongues
 splat_name: Tongues
-splat_origin:
-  key: dnd2024:reference/spell/tongues
+splat_origin: dnd2024:reference/spell/tongues
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 169, 170
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 169, 170, https://www.dndbeyond.com/srd
 ---
 
 # Tongues
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 3 |
+| School | Divination |
+| Classes | Bard, Cleric, Sorcerer, Warlock, Wizard |
+| Casting Time | Action |
+| Range |  |
+| Components | V, M (a miniature ziggurat) |
+| Duration | 1 hour |
+
 
 ## Source text
 
@@ -28,37 +39,11 @@ This spell grants the creature you touch the ability to understand any spoken or
 
 Original layout: [[../../srd-5.2.1/pages/169|page 169]], [[../../srd-5.2.1/pages/170|page 170]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 3 ` |
-| ` school ` | ` divination ` |
-| ` classes ` | ` ["bard", "cleric", "sorcerer", "warlock", "wizard"] ` |
-| ` components ` | ` ["verbal", "material"] ` |
-| ` concentration ` | ` false ` |
-| ` duration ` | ` 1 hour ` |
-| ` casting_time ` | ` Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
 
-<!-- splat:values path=splat_spell/range -->
 
-| Field | Value |
-| --- | --- |
-| ` mode ` | ` touch ` |
-
-### Material
-
-<!-- splat:values path=splat_spell/material -->
-
-| Field | Value |
-| --- | --- |
-| ` description ` | ` a miniature ziggurat ` |
-| ` consumed ` | ` false ` |
 
 ## Rule
 
@@ -101,3 +86,14 @@ Original layout: [[../../srd-5.2.1/pages/169|page 169]], [[../../srd-5.2.1/pages
 | ` listener_knows_minimum_languages ` | ` 1 ` |
 | ` speech_if ` | ` heard ` |
 | ` signing_if ` | ` seen ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_spell_extras -->
+> 
+> ```yaml
+> material:
+>   consumed: false
+> range:
+>   mode: touch
+> ```
+

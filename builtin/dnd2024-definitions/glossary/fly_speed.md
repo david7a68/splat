@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 06a93d1d-494d-59a7-9d12-c3156f10b120
 splat_kind: rule
 splat_key: dnd2024:glossary/fly_speed
 splat_name: Fly Speed
-splat_origin:
-  key: dnd2024:reference/glossary/fly_speed
+splat_origin: dnd2024:reference/glossary/fly_speed
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 182
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 182, https://www.dndbeyond.com/srd
 ---
 
 # Fly Speed

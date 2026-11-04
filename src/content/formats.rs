@@ -1,5 +1,4 @@
-//! Small schema 2 kinds. Readers return schema 1's model. Conversion is pure:
-//! only an explicit DM save or Convert files may publish its returned bytes.
+//! Schema-2 notes and pure, explicit conversion. Loading never writes files.
 use super::{Entry, Mapping, Value, layout::Flag, patch_fields};
 
 pub fn schema(fields: &Mapping) -> Result<u64, String> {
@@ -20,6 +19,20 @@ pub const WORLD_FIELDS: &[(&str, &str)] = &[
 ];
 
 pub fn flat_reference(value: &Value) -> Value {
+    if let Some(link) = value.get("link").and_then(Value::as_str) {
+        let terms = ["id", "key"]
+            .iter()
+            .filter_map(|key| {
+                value
+                    .get(*key)
+                    .and_then(Value::as_str)
+                    .map(|v| format!("{key}={v}"))
+            })
+            .collect::<Vec<_>>();
+        if !terms.is_empty() {
+            return format!("{link} %% splat {} %%", terms.join(" ")).into();
+        }
+    }
     value
         .get("key")
         .or_else(|| value.get("id"))
@@ -30,6 +43,18 @@ pub fn flat_reference(value: &Value) -> Value {
 
 pub fn model_reference(value: Value) -> Value {
     if let Some(raw) = value.as_str() {
+        if let Some((link, _)) = raw.split_once(" %% splat ") {
+            let mut fields = Mapping::new();
+            for key in ["id", "key"] {
+                if let Some(value) = super::list_formats::machine(raw, key) {
+                    fields.insert(key.into(), value.into());
+                }
+            }
+            if !fields.is_empty() {
+                fields.insert("link".into(), link.into());
+                return fields.into();
+            }
+        }
         if super::resource_key(raw) {
             return Value::Mapping([("key".into(), value)].into_iter().collect());
         }
@@ -40,11 +65,9 @@ pub fn model_reference(value: Value) -> Value {
     value
 }
 
-pub fn read(schema: u64, text: &str, fields: &mut Mapping) -> Vec<Flag> {
+pub fn read(text: &str, fields: &mut Mapping) -> Vec<Flag> {
     let mut flags = Vec::new();
-    if schema == 2
-        && let Some(Value::Mapping(payload)) = fields.remove("splat_payload")
-    {
+    if let Some(Value::Mapping(payload)) = fields.remove("splat_payload") {
         for (key, value) in payload {
             if fields.contains_key(&key) {
                 flags.push(Flag {
@@ -75,7 +98,7 @@ pub fn read(schema: u64, text: &str, fields: &mut Mapping) -> Vec<Flag> {
             message: message.into(),
         });
     };
-    if schema == 2 {
+    {
         super::list_formats::read(text, fields, &mut flags);
         let kind = fields
             .get("splat_kind")
@@ -201,33 +224,12 @@ pub fn read(schema: u64, text: &str, fields: &mut Mapping) -> Vec<Flag> {
             }
         }
     }
-    // Citations are display text in both models; no execution code consumes them.
-    if let Some(Value::Sequence(sources)) = fields.get_mut("splat_sources") {
-        for source in sources {
-            if let Some(map) = source.as_mapping() {
-                let words = ["title", "locator", "url"]
-                    .iter()
-                    .filter_map(|key| map.get(*key).and_then(Value::as_str))
-                    .collect::<Vec<_>>()
-                    .join(", ");
-                // Keep unknown citation metadata exactly, as a scalar YAML record.
-                *source = if map.keys().all(|key| {
-                    key.as_str()
-                        .is_some_and(|key| ["title", "locator", "url"].contains(&key))
-                }) {
-                    words.into()
-                } else {
-                    serde_json::to_string(&source).unwrap_or_default().into()
-                };
-            }
-        }
-    }
     let kind = fields
         .get("splat_kind")
         .and_then(Value::as_str)
         .unwrap_or("")
         .to_owned();
-    if schema == 2 && super::stat_blocks::owns(&kind, fields.contains_key("splat_character")) {
+    if super::stat_blocks::owns(&kind, fields.contains_key("splat_character")) {
         super::stat_blocks::read_tables(&kind, text, fields, &mut flags);
     }
     if kind == "creature" && !fields.contains_key("splat_character") {
@@ -261,6 +263,8 @@ fn expand_pages(value: &Value) -> Option<Value> {
 
 pub fn eligible(entry: &Entry) -> bool {
     [
+        "reference",
+        "container",
         "world",
         "creature",
         "spell",
@@ -284,9 +288,6 @@ pub fn eligible(entry: &Entry) -> bool {
 /// This is for model-based copy and repair code. It never renders the note body.
 pub fn patch_model(text: &str, changes: &[(&str, Option<Value>)]) -> Result<String, String> {
     let original = Entry::parse("note.md", text)?;
-    if schema(&original.fields)? == 1 {
-        return patch_fields(text, changes);
-    }
     if super::stat_blocks::owns(
         &original.kind,
         original.fields.contains_key("splat_character"),
@@ -389,6 +390,7 @@ pub fn patch_model(text: &str, changes: &[(&str, Option<Value>)]) -> Result<Stri
                 let newline = if after.contains("\r\n") { "\r\n" } else { "\n" };
                 let encoded =
                     serde_yaml_ng::to_string(flat.as_ref().unwrap()).map_err(|e| e.to_string())?;
+                after = patch_fields(&after, &[(*key, None)])?;
                 after.push_str(&format!("\n## Splat data\n\n<!-- splat:yaml path={key} -->\n\n```yaml\n{encoded}```\n").replace('\n', newline));
                 after = folded_data(&after);
                 continue;
@@ -407,6 +409,30 @@ pub fn patch_model(text: &str, changes: &[(&str, Option<Value>)]) -> Result<Stri
     let checked = Entry::parse("note.md", &after)?;
     if *checked.fields != expected || !checked.flags.is_empty() {
         return Err("Edit changed another value. The file was kept.".into());
+    }
+    Ok(after)
+}
+
+/// Replace non-printing data while retaining the surrounding note and fence.
+pub(super) fn patch_fence(text: &str, key: &str, value: &Value) -> Result<String, String> {
+    let marker = format!("<!-- splat:yaml path={key} -->");
+    let encoded = serde_yaml_ng::to_string(value).map_err(|e| e.to_string())?;
+    let mut after = text.to_owned();
+    if let Some(range) = fence_value(text, &marker)? {
+        let encoded = if text[range.clone()].starts_with('>') {
+            encoded
+                .lines()
+                .map(|line| format!("> {line}\n"))
+                .collect::<String>()
+        } else {
+            encoded
+        };
+        after.replace_range(range, &encoded);
+    } else {
+        after.push_str(&format!(
+            "\n## Splat data\n\n{marker}\n\n```yaml\n{encoded}```\n"
+        ));
+        after = folded_data(&after);
     }
     Ok(after)
 }
@@ -543,7 +569,7 @@ pub fn convert(path: &str, text: &str) -> Result<String, String> {
             Sha256::digest(after.as_bytes())
         ));
     }
-    let entry = Entry::parse(path, text)?;
+    let entry = super::legacy::parse(path, text)?;
     if schema(&entry.fields)? == 2 || !eligible(&entry) {
         return Ok(folded_data(text));
     }
@@ -735,7 +761,7 @@ pub fn convert_resolved<'a>(
     text: &str,
     entries: impl IntoIterator<Item = &'a Entry>,
 ) -> Result<String, String> {
-    let original = Entry::parse(path, text)?;
+    let original = super::legacy::parse(path, text)?;
     let entries: Vec<_> = entries.into_iter().collect();
     if original.kind == "campaign" && schema(&original.fields)? == 2 {
         let mut resolved = original.clone();

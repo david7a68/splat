@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 7472060e-1a44-5892-a340-780185d900b2
 splat_kind: rule
 splat_key: dnd2024:class_features/warlock_level_1_eldritch_invocations
 splat_name: 'Level 1: Eldritch Invocations'
-splat_origin:
-  key: dnd2024:reference/pages/070
+splat_origin: dnd2024:reference/pages/070
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 70, 71
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 70, 71, https://www.dndbeyond.com/srd
 ---
 
 # Level 1: Eldritch Invocations

@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "b6e060fa-ff3d-5634-8f98-2bafd0e3ccc5"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/thunderwave"
 splat_name: "Thunderwave"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [169], "executable": false}
+splat_pages:
+- 169
 ---
 
 # Thunderwave
@@ -24,3 +25,13 @@ In addition, unsecured objects that are entirely within the Cube are pushed 10 f
 Using a Higher-Level Spell Slot. The damage increases by 1d8 for each spell slot level above 1.
 
 Original layout: [[../pages/169|page 169]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

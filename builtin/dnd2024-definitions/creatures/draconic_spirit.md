@@ -1,35 +1,64 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 447f69de-fddc-5113-8938-50e6f1ebe886
 splat_kind: creature
 splat_key: dnd2024:creatures/draconic_spirit
 splat_name: Draconic Spirit
-splat_origin:
-  key: dnd2024:reference/creature/draconic_spirit
+splat_origin: dnd2024:reference/creature/draconic_spirit
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 166
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 166, https://www.dndbeyond.com/srd
 ---
 
 # Draconic Spirit
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Large |
+| Type | Dragon |
+| Alignment | Neutral |
+| Armor Class | 14 + the spell’s level |
+| Hit Points | 50 + 10 for each spell level above 5 |
+| Initiative |  |
+| Speed | 30 ft., Fly 60 ft., Swim 30 ft. |
+| Challenge | None (XP 0; PB equals your Proficiency Bonus) |
+| Senses | Blindsight 30 ft., Darkvision 60 ft.; Passive Perception 12 |
+| Languages | Draconic, understands the languages you know |
+| Resistances | Acid, Cold, Fire, Lightning, Poison |
+| Immunities | Charmed, Frightened, Poisoned |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 19 | +4 | +4 |
+| Dex | 14 | +2 | +2 |
+| Con | 17 | +3 | +3 |
+| Int | 10 | +0 | +0 |
+| Wis | 14 | +2 | +2 |
+| Cha | 14 | +2 | +2 |
+
+%% splat shape=hp_text,ac_text %%
+
 
 ## Source text
 
 <!-- SRD page 166 -->
 
-Large Dragon, Neutral\
-AC 14 + the spell’s level\
-HP 50 + 10 for each spell level above 5\
-Speed 30 ft., Fly 60 ft., Swim 30 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 19 +4 +4 Dex 14 +2 +2 Con 17 +3 +3\
-Int 10 +0 +0 Wis 14 +2 +2 Cha 14 +2 +2\
-Resistances Acid, Cold, Fire, Lightning, Poison\
-Immunities Charmed, Frightened, Poisoned\
-Senses Blindsight 30 ft., Darkvision 60 ft.; Passive Perception 12\
-Languages Draconic, understands the languages you know\
-CR None (XP 0; PB equals your Proficiency Bonus)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Large Dragon, Neutral\
+> AC 14 + the spell’s level\
+> HP 50 + 10 for each spell level above 5\
+> Speed 30 ft., Fly 60 ft., Swim 30 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 19 +4 +4 Dex 14 +2 +2 Con 17 +3 +3\
+> Int 10 +0 +0 Wis 14 +2 +2 Cha 14 +2 +2\
+> Resistances Acid, Cold, Fire, Lightning, Poison\
+> Immunities Charmed, Frightened, Poisoned\
+> Senses Blindsight 30 ft., Darkvision 60 ft.; Passive Perception 12\
+> Languages Draconic, understands the languages you know\
+> CR None (XP 0; PB equals your Proficiency Bonus)
+
 
 ### Traits
 
@@ -45,46 +74,11 @@ Breath Weapon. Dexterity Saving Throw: DC equals your spell save DC, each creatu
 
 Original layout: [[../../srd-5.2.1/pages/166|page 166]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` large ` |
-| ` type ` | ` dragon ` |
-| ` alignment ` | ` Neutral ` |
-| ` movement_text ` | ` 30 ft., Fly 60 ft., Swim 30 ft. ` |
-| ` resistances_text ` | ` Acid, Cold, Fire, Lightning, Poison ` |
-| ` immunities_text ` | ` Charmed, Frightened, Poisoned ` |
-| ` senses_text ` | ` Blindsight 30 ft., Darkvision 60 ft.; Passive Perception 12 ` |
-| ` languages_text ` | ` Draconic, understands the languages you know ` |
-| ` cr_text ` | ` None (XP 0; PB equals your Proficiency Bonus) ` |
-| ` hit_points_text ` | ` 50 + 10 for each spell level above 5 ` |
-| ` armor_class_text ` | ` 14 + the spell’s level ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 19 ` | ` 4 ` |
-| ` Dexterity ` | ` 14 ` | ` 2 ` |
-| ` Constitution ` | ` 17 ` | ` 3 ` |
-| ` Intelligence ` | ` 10 ` | ` 0 ` |
-| ` Wisdom ` | ` 14 ` | ` 2 ` |
-| ` Charisma ` | ` 14 ` | ` 2 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` speed ` | ` 30 ` | ` ft ` |
-| ` fly_speed ` | ` 60 ` | ` ft ` |
-| ` swim_speed ` | ` 30 ` | ` ft ` |
 
 ## Health
 
@@ -346,3 +340,16 @@ geometry_assumptions:
   - plane
   - form_appearance
 ```
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_stats_extras -->
+> 
+> ```yaml
+> fly_speed:
+>   unit: ft
+>   value: 60
+> swim_speed:
+>   unit: ft
+>   value: 30
+> ```
+

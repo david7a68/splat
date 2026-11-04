@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "2af27ed0-b1f1-5883-b578-7b877415ef43"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/enhance_ability"
 splat_name: "Enhance Ability"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [127], "executable": false}
+splat_pages:
+- 127
 ---
 
 # Enhance Ability
@@ -22,3 +23,13 @@ You touch a creature and choose Strength, Dexterity, Intelligence, Wisdom, or Ch
 Using a Higher-Level Spell Slot. You can target one additional creature for each spell slot level above 2. You can choose a different ability for each target.
 
 Original layout: [[../pages/127|page 127]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

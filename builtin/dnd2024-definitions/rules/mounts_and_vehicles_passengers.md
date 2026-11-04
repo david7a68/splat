@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 174efe28-e206-514c-b0c9-ead3d93990bc
 splat_kind: rule
 splat_key: dnd2024:rules/mounts_and_vehicles_passengers
 splat_name: Passengers
-splat_origin:
-  key: dnd2024:reference/pages/101
+splat_origin: dnd2024:reference/pages/101
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 101
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 101, https://www.dndbeyond.com/srd
 ---
 
 # Passengers

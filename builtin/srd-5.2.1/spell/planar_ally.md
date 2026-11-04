@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "0d5affe1-2bd7-5947-8a60-7592eeaa446d"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/planar_ally"
 splat_name: "Planar Ally"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [152], "executable": false}
+splat_pages:
+- 152
 ---
 
 # Planar Ally
@@ -28,3 +29,13 @@ A task that can be measured in minutes requires a payment worth 100 GP per minut
 After the creature completes the task, or when the agreed-upon duration of service expires, the creature returns to its home plane after reporting back to you if possible. If you are unable to agree on a price for the creature’s service, the creature immediately returns to its home plane.
 
 Original layout: [[../pages/152|page 152]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

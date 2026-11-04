@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 92510b1f-60d7-5070-bbfd-bb845774eda2
 splat_kind: item
 splat_key: dnd2024:items/lantern_of_revealing
 splat_name: Lantern of Revealing
-splat_origin:
-  key: dnd2024:reference/magic_item/lantern_of_revealing
+splat_origin: dnd2024:reference/magic_item/lantern_of_revealing
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 228, 229
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 228, 229, https://www.dndbeyond.com/srd
 ---
 
 # Lantern of Revealing
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Wondrous Item |
+| Rarity | Uncommon |
+| Attunement | No |
+
 
 ## Source text
 
@@ -24,22 +31,9 @@ While lit, this hooded lantern burns for 6 hours on 1 pint of oil, shedding Brig
 
 Original layout: [[../../srd-5.2.1/pages/228|page 228]], [[../../srd-5.2.1/pages/229|page 229]].
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` wondrous_item ` |
-| ` rarity ` | ` uncommon ` |
 
-### Equipment
-
-<!-- splat:values path=splat_item/equipment -->
-
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` none ` |
 
 ## Rule
 

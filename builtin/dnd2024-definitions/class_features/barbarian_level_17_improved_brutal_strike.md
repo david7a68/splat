@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 31ef89c0-c86f-5759-903b-47d89c3ff98f
 splat_kind: rule
 splat_key: dnd2024:class_features/barbarian_level_17_improved_brutal_strike
 splat_name: 'Level 17: Improved Brutal Strike'
-splat_origin:
-  key: dnd2024:reference/pages/030
+splat_origin: dnd2024:reference/pages/030
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 30
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 30, https://www.dndbeyond.com/srd
 ---
 
 # Level 17: Improved Brutal Strike

@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "530d1324-4c5e-54b5-ba93-414dbd7efd91"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/shrieker_fungus"
 splat_name: "Shrieker Fungus"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [286], "executable": false}
+splat_pages:
+- 286
 ---
 
 # Shrieker Fungus
@@ -28,3 +29,13 @@ CR 0 (XP 0; PB +2)
 Shriek. Trigger: A creature or a source of Bright Light moves within 30 feet of the shrieker. Response: The shrieker emits a shriek audible within 300 feet of itself for 1 minute or until the shrieker dies.
 
 Original layout: [[../pages/286|page 286]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "c00f27e2-032a-533a-8a0f-c34d146de0c2"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/finger_of_death"
 splat_name: "Finger of Death"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [131], "executable": false}
+splat_pages:
+- 131
 ---
 
 # Finger of Death
@@ -22,3 +23,13 @@ You unleash negative energy toward a creature you can see within range. The targ
 A Humanoid killed by this spell rises at the start of your next turn as a Zombie (see “Monsters”) that follows your verbal orders.
 
 Original layout: [[../pages/131|page 131]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

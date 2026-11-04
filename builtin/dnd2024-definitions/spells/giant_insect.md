@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 78708bf7-1722-50ee-b63e-52553566fb9a
 splat_kind: spell
 splat_key: dnd2024:spells/giant_insect
 splat_name: Giant Insect
-splat_origin:
-  key: dnd2024:reference/spell/giant_insect
+splat_origin: dnd2024:reference/spell/giant_insect
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 135, 136
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 135, 136, https://www.dndbeyond.com/srd
 ---
 
 # Giant Insect
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 4 |
+| School | Conjuration |
+| Classes | Druid |
+| Casting Time | Action |
+| Range | 60 feet |
+| Components | V, S |
+| Duration | Concentration, up to 10 minutes |
+
 
 ## Source text
 
@@ -63,28 +74,9 @@ Venomous Spew (Centipede Only). Constitution Saving Throw: Your spell save DC, o
 
 Original layout: [[../../srd-5.2.1/pages/135|page 135]], [[../../srd-5.2.1/pages/136|page 136]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 4 ` |
-| ` school ` | ` conjuration ` |
-| ` classes ` | ` ["druid"] ` |
-| ` components ` | ` ["verbal", "somatic"] ` |
-| ` concentration ` | ` true ` |
-| ` duration ` | ` Concentration, up to 10 minutes ` |
-| ` casting_time ` | ` Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
-
-<!-- splat:values path=splat_spell/range -->
-
-| Field | Value |
-| --- | --- |
-| ` feet ` | ` 60 ` |
 
 ## Rule
 

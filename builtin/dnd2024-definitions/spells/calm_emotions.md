@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 1b5855ba-91c4-578c-9f95-eb7745f961ee
 splat_kind: spell
 splat_key: dnd2024:spells/calm_emotions
 splat_name: Calm Emotions
-splat_origin:
-  key: dnd2024:reference/spell/calm_emotions
+splat_origin: dnd2024:reference/spell/calm_emotions
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 114
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 114, https://www.dndbeyond.com/srd
 ---
 
 # Calm Emotions
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 2 |
+| School | Enchantment |
+| Classes | Bard, Cleric |
+| Casting Time | Action |
+| Range | 60 feet |
+| Components | V, S |
+| Duration | Concentration, up to 1 minute |
+
 
 ## Source text
 
@@ -32,28 +43,9 @@ Each Humanoid in a 20-foot-radius Sphere centered on a point you choose within r
 
 Original layout: [[../../srd-5.2.1/pages/114|page 114]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 2 ` |
-| ` school ` | ` enchantment ` |
-| ` classes ` | ` ["bard", "cleric"] ` |
-| ` components ` | ` ["verbal", "somatic"] ` |
-| ` concentration ` | ` true ` |
-| ` duration ` | ` Concentration, up to 1 minute ` |
-| ` casting_time ` | ` Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
-
-<!-- splat:values path=splat_spell/range -->
-
-| Field | Value |
-| --- | --- |
-| ` feet ` | ` 60 ` |
 
 ## Rule
 

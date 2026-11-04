@@ -1,35 +1,62 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: b5a5c587-b6b9-5e9e-9dd9-ef58d6d3321d
 splat_kind: creature
 splat_key: dnd2024:creatures/hydra
 splat_name: Hydra
-splat_origin:
-  key: dnd2024:reference/creature/hydra
+splat_origin: dnd2024:reference/creature/hydra
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 300
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 300, https://www.dndbeyond.com/srd
 ---
 
 # Hydra
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Huge |
+| Type | Monstrosity |
+| Alignment | Unaligned |
+| Armor Class | 15 |
+| Hit Points | 184 (16d12 + 80) |
+| Initiative | +4 (14) |
+| Speed | 40 ft., Swim 40 ft. |
+| Challenge | 8 (XP 3,900; PB +3) |
+| Skills | Perception +6 |
+| Senses | Darkvision 60 ft.; Passive Perception 16 |
+| Languages | None |
+| Immunities | Blinded, Charmed, Deafened, Frightened, Stunned, Unconscious |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 20 | +5 | +5 |
+| Dex | 12 | +1 | +1 |
+| Con | 20 | +5 | +5 |
+| Int | 2 | -4 | -4 |
+| Wis | 10 | +0 | +0 |
+| Cha | 7 | -2 | -2 |
+
 
 ## Source text
 
 <!-- SRD page 300 -->
 
-Huge Monstrosity, Unaligned\
-AC 15 Initiative +4 (14)\
-HP 184 (16d12 + 80)\
-Speed 40 ft., Swim 40 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 20 +5 +5 Dex 12 +1 +1 Con 20 +5 +5\
-Int 2 −4 −4 Wis 10 +0 +0 Cha 7 −2 −2\
-Skills Perception +6\
-Immunities Blinded, Charmed, Deafened, Frightened, Stunned, Unconscious\
-Senses Darkvision 60 ft.; Passive Perception 16\
-Languages None\
-CR 8 (XP 3,900; PB +3)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Huge Monstrosity, Unaligned\
+> AC 15 Initiative +4 (14)\
+> HP 184 (16d12 + 80)\
+> Speed 40 ft., Swim 40 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 20 +5 +5 Dex 12 +1 +1 Con 20 +5 +5\
+> Int 2 −4 −4 Wis 10 +0 +0 Cha 7 −2 −2\
+> Skills Perception +6\
+> Immunities Blinded, Charmed, Deafened, Frightened, Stunned, Unconscious\
+> Senses Darkvision 60 ft.; Passive Perception 16\
+> Languages None\
+> CR 8 (XP 3,900; PB +3)
+
 
 ### Traits
 
@@ -47,47 +74,11 @@ Bite. Melee Attack Roll: +8, reach 10 ft. Hit: 10 (1d10 + 5) Piercing damage.
 
 Original layout: [[../../srd-5.2.1/pages/300|page 300]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` huge ` |
-| ` type ` | ` monstrosity ` |
-| ` alignment ` | ` Unaligned ` |
-| ` movement_text ` | ` 40 ft., Swim 40 ft. ` |
-| ` skills_text ` | ` Perception +6 ` |
-| ` immunities_text ` | ` Blinded, Charmed, Deafened, Frightened, Stunned, Unconscious ` |
-| ` senses_text ` | ` Darkvision 60 ft.; Passive Perception 16 ` |
-| ` languages_text ` | ` None ` |
-| ` cr_text ` | ` 8 (XP 3,900; PB +3) ` |
-| ` hit_points_text ` | ` 184 (16d12 + 80) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 20 ` | ` 5 ` |
-| ` Dexterity ` | ` 12 ` | ` 1 ` |
-| ` Constitution ` | ` 20 ` | ` 5 ` |
-| ` Intelligence ` | ` 2 ` | ` -4 ` |
-| ` Wisdom ` | ` 10 ` | ` 0 ` |
-| ` Charisma ` | ` 7 ` | ` -2 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 15 ` |  |
-| ` max_hp ` | ` 184 ` |  |
-| ` initiative ` | ` 4 ` |  |
-| ` speed ` | ` 40 ` | ` ft ` |
-| ` swim_speed ` | ` 40 ` | ` ft ` |
 
 ## Health
 
@@ -265,3 +256,13 @@ geometry:
 unlisted_success_branch: no_effect
 unlisted_duration: until_removed_by_applicable_rule
 ```
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_stats_extras -->
+> 
+> ```yaml
+> swim_speed:
+>   unit: ft
+>   value: 40
+> ```
+

@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "1adec51f-8931-5328-b2f0-be8398541438"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/plane_shift"
 splat_name: "Plane Shift"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [153], "executable": false}
+splat_pages:
+- 153
 ---
 
 # Plane Shift
@@ -22,3 +23,13 @@ You and up to eight willing creatures who link hands in a circle are transported
 Alternatively, if you know the sigil sequence of a teleportation circle on another plane of existence, this spell can take you to that circle. If the teleportation circle is too small to hold all the creatures you transported, they appear in the closest unoccupied spaces next to the circle.
 
 Original layout: [[../pages/153|page 153]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

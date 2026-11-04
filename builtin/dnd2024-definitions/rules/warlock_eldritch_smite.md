@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 000658d6-364c-5983-a6e0-70543064f0f9
 splat_kind: rule
 splat_key: dnd2024:rules/warlock_eldritch_smite
 splat_name: Eldritch Smite
-splat_origin:
-  key: dnd2024:reference/pages/072
+splat_origin: dnd2024:reference/pages/072
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 72, 73
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 72, 73, https://www.dndbeyond.com/srd
 ---
 
 # Eldritch Smite

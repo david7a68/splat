@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 2f5179e0-f2fa-5e40-ab0b-947f031eb8e2
 splat_kind: spell
 splat_key: dnd2024:spells/magic_weapon
 splat_name: Magic Weapon
-splat_origin:
-  key: dnd2024:reference/spell/magic_weapon
+splat_origin: dnd2024:reference/spell/magic_weapon
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 146, 147
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 146, 147, https://www.dndbeyond.com/srd
 ---
 
 # Magic Weapon
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 2 |
+| School | Transmutation |
+| Classes | Paladin, Ranger, Sorcerer, Wizard |
+| Casting Time | Bonus Action |
+| Range |  |
+| Components | V, S |
+| Duration | 1 hour |
+
 
 ## Source text
 
@@ -32,28 +43,9 @@ Using a Higher-Level Spell Slot. The bonus increases to +2 with a level 3–5 sp
 
 Original layout: [[../../srd-5.2.1/pages/146|page 146]], [[../../srd-5.2.1/pages/147|page 147]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 2 ` |
-| ` school ` | ` transmutation ` |
-| ` classes ` | ` ["paladin", "ranger", "sorcerer", "wizard"] ` |
-| ` components ` | ` ["verbal", "somatic"] ` |
-| ` concentration ` | ` false ` |
-| ` duration ` | ` 1 hour ` |
-| ` casting_time ` | ` Bonus Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
-
-<!-- splat:values path=splat_spell/range -->
-
-| Field | Value |
-| --- | --- |
-| ` mode ` | ` touch ` |
 
 ## Rule
 
@@ -106,3 +98,12 @@ Original layout: [[../../srd-5.2.1/pages/146|page 146]], [[../../srd-5.2.1/pages
 | Field | Value |
 | --- | --- |
 | ` event ` | ` caster.recasts_same_spell ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_spell_extras -->
+> 
+> ```yaml
+> range:
+>   mode: touch
+> ```
+

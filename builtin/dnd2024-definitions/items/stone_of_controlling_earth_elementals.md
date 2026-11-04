@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: d3eece81-23d6-5ce1-b296-e84b65be3d85
 splat_kind: item
 splat_key: dnd2024:items/stone_of_controlling_earth_elementals
 splat_name: Stone of Controlling Earth Elementals
-splat_origin:
-  key: dnd2024:reference/magic_item/stone_of_controlling_earth_elementals
+splat_origin: dnd2024:reference/magic_item/stone_of_controlling_earth_elementals
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 248
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 248, https://www.dndbeyond.com/srd
 ---
 
 # Stone of Controlling Earth Elementals
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Wondrous Item |
+| Rarity | Rare |
+| Attunement | No |
+
 
 ## Source text
 
@@ -24,22 +31,9 @@ While touching this 5-pound stone to the ground, you can take a Magic action to 
 
 Original layout: [[../../srd-5.2.1/pages/248|page 248]].
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` wondrous_item ` |
-| ` rarity ` | ` rare ` |
 
-### Equipment
-
-<!-- splat:values path=splat_item/equipment -->
-
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` none ` |
 
 ## Rule
 

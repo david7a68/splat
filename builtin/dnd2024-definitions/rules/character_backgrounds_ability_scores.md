@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: d4964a32-fc12-548d-94b6-bf58ce7dd303
 splat_kind: rule
 splat_key: dnd2024:rules/character_backgrounds_ability_scores
 splat_name: Ability Scores
-splat_origin:
-  key: dnd2024:reference/pages/083
+splat_origin: dnd2024:reference/pages/083
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 83
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 83, https://www.dndbeyond.com/srd
 ---
 
 # Ability Scores

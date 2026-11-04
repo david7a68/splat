@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 104ffb52-c4d5-50cf-8ef5-4bc801b8a714
 splat_kind: spell
 splat_key: dnd2024:spells/unseen_servant
 splat_name: Unseen Servant
-splat_origin:
-  key: dnd2024:reference/spell/unseen_servant
+splat_origin: dnd2024:reference/spell/unseen_servant
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 171
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 171, https://www.dndbeyond.com/srd
 ---
 
 # Unseen Servant
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 1 |
+| School | Conjuration |
+| Classes | Bard, Warlock, Wizard |
+| Casting Time | Action or Ritual |
+| Range | 60 feet |
+| Components | V, S, M (a bit of string and of wood) |
+| Duration | 1 hour |
+
 
 ## Source text
 
@@ -32,37 +43,11 @@ If you command the servant to perform a task that would move it more than 60 fee
 
 Original layout: [[../../srd-5.2.1/pages/171|page 171]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 1 ` |
-| ` school ` | ` conjuration ` |
-| ` classes ` | ` ["bard", "warlock", "wizard"] ` |
-| ` components ` | ` ["verbal", "somatic", "material"] ` |
-| ` concentration ` | ` false ` |
-| ` duration ` | ` 1 hour ` |
-| ` casting_time ` | ` Action or Ritual ` |
-| ` ritual ` | ` true ` |
 
-### Range
 
-<!-- splat:values path=splat_spell/range -->
 
-| Field | Value |
-| --- | --- |
-| ` feet ` | ` 60 ` |
-
-### Material
-
-<!-- splat:values path=splat_spell/material -->
-
-| Field | Value |
-| --- | --- |
-| ` description ` | ` a bit of string and of wood ` |
-| ` consumed ` | ` false ` |
 
 ## Rule
 
@@ -115,3 +100,12 @@ Original layout: [[../../srd-5.2.1/pages/171|page 171]].
 | ` examples ` | ` ["fetch", "clean", "mend", "fold_clothes", "light_fire", "serve_food", "pour_drink"] ` |
 | ` continue ` | ` best_ability_until_complete ` |
 | ` after_complete ` | ` wait_for_command ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_spell_extras -->
+> 
+> ```yaml
+> material:
+>   consumed: false
+> ```
+

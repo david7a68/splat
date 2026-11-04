@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "b7d663b8-3ff3-5c26-8bca-2821f696f2b1"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/guardian_naga"
 splat_name: "Guardian Naga"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [296], "executable": false}
+splat_pages:
+- 296
 ---
 
 # Guardian Naga
@@ -42,3 +43,13 @@ At Will: Thaumaturgy\
 1/Day Each: Clairvoyance, Cure Wounds (level 6 version), Flame Strike (level 6 version), Geas, True Seeing
 
 Original layout: [[../pages/296|page 296]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

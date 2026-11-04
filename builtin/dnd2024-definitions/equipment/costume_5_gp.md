@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 167d0da6-5679-5113-811a-486cf5968c01
 splat_kind: item
 splat_key: dnd2024:equipment/costume_5_gp
 splat_name: Costume (5 GP)
-splat_origin:
-  key: dnd2024:reference/pages/097
+splat_origin: dnd2024:reference/pages/097
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 97
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 97, https://www.dndbeyond.com/srd
 ---
 
 # Costume (5 GP)
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Adventuring Gear |
+| Rarity |  |
+| Attunement | No |
+
 
 ## Source text
 
@@ -20,39 +27,13 @@ splat_sources:
 
 While wearing a Costume, you have Advantage on any ability check you make to impersonate the person or type of person it represents.
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` adventuring_gear ` |
 
-### Equipment
 
-<!-- splat:values path=splat_item/equipment -->
 
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` none ` |
 
-### Price
 
-<!-- splat:values path=splat_item/price -->
-
-| Field | Value |
-| --- | --- |
-| ` value ` | ` 5 ` |
-| ` unit ` | ` gp ` |
-
-### Mass
-
-<!-- splat:values path=splat_item/mass -->
-
-| Field | Value |
-| --- | --- |
-| ` value ` | ` 4.0 ` |
-| ` unit ` | ` lb ` |
 
 ## Rule
 
@@ -83,3 +64,16 @@ While wearing a Costume, you have Advantage on any ability check you make to imp
 | --- | --- |
 | ` value ` | ` 4.0 ` |
 | ` unit ` | ` lb ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_item_extras -->
+> 
+> ```yaml
+> price:
+>   unit: gp
+>   value: 5
+> mass:
+>   unit: lb
+>   value: 4.0
+> ```
+

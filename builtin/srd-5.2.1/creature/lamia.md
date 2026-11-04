@@ -1,10 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "4988a59f-e379-54cb-b44d-80c7826a62ec"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/lamia"
 splat_name: "Lamia"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [303, 304], "executable": false}
+splat_pages:
+- 303
+- 304
 ---
 
 # Lamia
@@ -43,3 +45,13 @@ At Will: Disguise Self (can appear as a Large or Medium biped), Minor Illusion\
 Leap. The lamia jumps up to 30 feet by spending 10 feet of movement.
 
 Original layout: [[../pages/303|page 303]], [[../pages/304|page 304]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

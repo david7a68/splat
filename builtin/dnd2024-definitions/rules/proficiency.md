@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 3294f9d1-667e-5099-b2b2-6669bf3273e8
 splat_kind: rule
 splat_key: dnd2024:rules/proficiency
 splat_name: Proficiency
-splat_origin:
-  key: dnd2024:reference/pages/008
+splat_origin: dnd2024:reference/pages/008
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 8
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 8, https://www.dndbeyond.com/srd
 ---
 
 # Proficiency

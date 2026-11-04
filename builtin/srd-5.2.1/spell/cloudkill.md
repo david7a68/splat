@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "6a9e3659-1ef4-5f64-a764-2f148941680c"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/cloudkill"
 splat_name: "Cloudkill"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [116], "executable": false}
+splat_pages:
+- 116
 ---
 
 # Cloudkill
@@ -26,3 +27,13 @@ The Sphere moves 10 feet away from you at the start of each of your turns.
 Using a Higher-Level Spell Slot. The damage increases by 1d8 for each spell slot level above 5.
 
 Original layout: [[../pages/116|page 116]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

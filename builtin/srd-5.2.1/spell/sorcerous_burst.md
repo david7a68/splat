@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "bd974e33-4a8e-5f80-97fe-7a94fd3483d7"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/sorcerous_burst"
 splat_name: "Sorcerous Burst"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [163], "executable": false}
+splat_pages:
+- 163
 ---
 
 # Sorcerous Burst
@@ -24,3 +25,13 @@ If you roll an 8 on a d8 for this spell, you can roll another d8, and add it to 
 Cantrip Upgrade. The damage increases by 1d8 when you reach levels 5 (2d8), 11 (3d8), and 17 (4d8).
 
 Original layout: [[../pages/163|page 163]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

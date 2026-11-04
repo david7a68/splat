@@ -1,36 +1,64 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 92583734-40ca-5435-8b21-6b5d73e2cfd5
 splat_kind: creature
 splat_key: dnd2024:creatures/pit_fiend
 splat_name: Pit Fiend
-splat_origin:
-  key: dnd2024:reference/creature/pit_fiend
+splat_origin: dnd2024:reference/creature/pit_fiend
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 314, 315
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 314, 315, https://www.dndbeyond.com/srd
 ---
 
 # Pit Fiend
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Large |
+| Type | Fiend (Devil) |
+| Alignment | Lawful Evil |
+| Armor Class | 21 |
+| Hit Points | 337 (27d10 + 189) |
+| Initiative | +14 (24) |
+| Speed | 30 ft., Fly 60 ft. |
+| Challenge | 20 (XP 25,000; PB +6) |
+| Skills | Perception +10, Persuasion +19 |
+| Senses | Truesight 120 ft.; Passive Perception 20 |
+| Languages | Infernal; telepathy 120 ft. |
+| Resistances | Cold |
+| Immunities | Fire, Poison; Poisoned |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 26 | +8 | +8 |
+| Dex | 14 | +2 | +8 |
+| Con | 24 | +7 | +7 |
+| Int | 22 | +6 | +6 |
+| Wis | 18 | +4 | +10 |
+| Cha | 24 | +7 | +7 |
+
 
 ## Source text
 
 <!-- SRD page 314 -->
 
-Large Fiend (Devil), Lawful Evil\
-AC 21 Initiative +14 (24)\
-HP 337 (27d10 + 189)\
-Speed 30 ft., Fly 60 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 26 +8 +8 Dex 14 +2 +8 Con 24 +7 +7\
-Int 22 +6 +6 Wis 18 +4 +10 Cha 24 +7 +7\
-Skills Perception +10, Persuasion +19\
-Resistances Cold\
-Immunities Fire, Poison; Poisoned\
-Senses Truesight 120 ft.; Passive Perception 20\
-Languages Infernal; telepathy 120 ft.\
-CR 20 (XP 25,000; PB +6)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Large Fiend (Devil), Lawful Evil\
+> AC 21 Initiative +14 (24)\
+> HP 337 (27d10 + 189)\
+> Speed 30 ft., Fly 60 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 26 +8 +8 Dex 14 +2 +8 Con 24 +7 +7\
+> Int 22 +6 +6 Wis 18 +4 +10 Cha 24 +7 +7\
+> Skills Perception +10, Persuasion +19\
+> Resistances Cold\
+> Immunities Fire, Poison; Poisoned\
+> Senses Truesight 120 ft.; Passive Perception 20\
+> Languages Infernal; telepathy 120 ft.\
+> CR 20 (XP 25,000; PB +6)
+
 
 <!-- SRD page 315 -->
 
@@ -58,49 +86,11 @@ Hellfire Spellcasting (Recharge 4–6). The pit fiend casts Fireball (level 5 ve
 
 Original layout: [[../../srd-5.2.1/pages/314|page 314]], [[../../srd-5.2.1/pages/315|page 315]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` large ` |
-| ` type ` | ` fiend ` |
-| ` alignment ` | ` Lawful Evil ` |
-| ` tags_text ` | ` (Devil) ` |
-| ` movement_text ` | ` 30 ft., Fly 60 ft. ` |
-| ` skills_text ` | ` Perception +10, Persuasion +19 ` |
-| ` resistances_text ` | ` Cold ` |
-| ` immunities_text ` | ` Fire, Poison; Poisoned ` |
-| ` senses_text ` | ` Truesight 120 ft.; Passive Perception 20 ` |
-| ` languages_text ` | ` Infernal; telepathy 120 ft. ` |
-| ` cr_text ` | ` 20 (XP 25,000; PB +6) ` |
-| ` hit_points_text ` | ` 337 (27d10 + 189) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 26 ` | ` 8 ` |
-| ` Dexterity ` | ` 14 ` | ` 8 ` |
-| ` Constitution ` | ` 24 ` | ` 7 ` |
-| ` Intelligence ` | ` 22 ` | ` 6 ` |
-| ` Wisdom ` | ` 18 ` | ` 10 ` |
-| ` Charisma ` | ` 24 ` | ` 7 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 21 ` |  |
-| ` max_hp ` | ` 337 ` |  |
-| ` initiative ` | ` 14 ` |  |
-| ` speed ` | ` 30 ` | ` ft ` |
-| ` fly_speed ` | ` 60 ` | ` ft ` |
 
 ## Health
 
@@ -474,3 +464,13 @@ other_components: spell_definition_unless_waived
 | ` provider ` | ` caller ` |
 | ` required_facts ` | ` ["distance", "area_membership", "visibility", "occupancy", "movement_path"] ` |
 | ` validate_against_typed_constraints ` | ` true ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_stats_extras -->
+> 
+> ```yaml
+> fly_speed:
+>   unit: ft
+>   value: 60
+> ```
+

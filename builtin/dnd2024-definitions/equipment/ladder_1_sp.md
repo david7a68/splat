@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 04fbeb09-cf10-5fcc-9fcd-fa6d29cbfa10
 splat_kind: item
 splat_key: dnd2024:equipment/ladder_1_sp
 splat_name: Ladder (1 SP)
-splat_origin:
-  key: dnd2024:reference/pages/098
+splat_origin: dnd2024:reference/pages/098
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 98
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 98, https://www.dndbeyond.com/srd
 ---
 
 # Ladder (1 SP)
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Adventuring Gear |
+| Rarity |  |
+| Attunement | No |
+
 
 ## Source text
 
@@ -20,39 +27,13 @@ splat_sources:
 
 A Ladder is 10 feet tall. You must climb to move up or down it.
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` adventuring_gear ` |
 
-### Equipment
 
-<!-- splat:values path=splat_item/equipment -->
 
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` none ` |
 
-### Price
 
-<!-- splat:values path=splat_item/price -->
-
-| Field | Value |
-| --- | --- |
-| ` value ` | ` 1 ` |
-| ` unit ` | ` sp ` |
-
-### Mass
-
-<!-- splat:values path=splat_item/mass -->
-
-| Field | Value |
-| --- | --- |
-| ` value ` | ` 25.0 ` |
-| ` unit ` | ` lb ` |
 
 ## Rule
 
@@ -80,3 +61,16 @@ A Ladder is 10 feet tall. You must climb to move up or down it.
 | --- | --- |
 | ` value ` | ` 25.0 ` |
 | ` unit ` | ` lb ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_item_extras -->
+> 
+> ```yaml
+> price:
+>   unit: sp
+>   value: 1
+> mass:
+>   unit: lb
+>   value: 25.0
+> ```
+

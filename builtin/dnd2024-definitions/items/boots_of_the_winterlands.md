@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 1f3c4507-d7eb-5c94-8a92-f7d397a1b5a7
 splat_kind: item
 splat_key: dnd2024:items/boots_of_the_winterlands
 splat_name: Boots of the Winterlands
-splat_origin:
-  key: dnd2024:reference/magic_item/boots_of_the_winterlands
+splat_origin: dnd2024:reference/magic_item/boots_of_the_winterlands
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 214
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 214, https://www.dndbeyond.com/srd
 ---
 
 # Boots of the Winterlands
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Wondrous Item |
+| Rarity | Uncommon |
+| Attunement | Yes |
+
 
 ## Source text
 
@@ -28,22 +35,9 @@ Winter Strider. You ignore Difficult Terrain created by ice or snow.
 
 Original layout: [[../../srd-5.2.1/pages/214|page 214]].
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` wondrous_item ` |
-| ` rarity ` | ` uncommon ` |
 
-### Equipment
-
-<!-- splat:values path=splat_item/equipment -->
-
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` required ` |
 
 ## Rule
 

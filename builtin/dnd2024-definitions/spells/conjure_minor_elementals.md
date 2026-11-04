@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: b5d274e6-266a-512f-be8e-9db637d17892
 splat_kind: spell
 splat_key: dnd2024:spells/conjure_minor_elementals
 splat_name: Conjure Minor Elementals
-splat_origin:
-  key: dnd2024:reference/spell/conjure_minor_elementals
+splat_origin: dnd2024:reference/spell/conjure_minor_elementals
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 118
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 118, https://www.dndbeyond.com/srd
 ---
 
 # Conjure Minor Elementals
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 4 |
+| School | Conjuration |
+| Classes | Druid, Wizard |
+| Casting Time | Action |
+| Range |  |
+| Components | V, S |
+| Duration | Concentration, up to 10 minutes |
+
 
 ## Source text
 
@@ -32,28 +43,9 @@ Using a Higher-Level Spell Slot. The damage increases by 1d8 for each spell slot
 
 Original layout: [[../../srd-5.2.1/pages/118|page 118]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 4 ` |
-| ` school ` | ` conjuration ` |
-| ` classes ` | ` ["druid", "wizard"] ` |
-| ` components ` | ` ["verbal", "somatic"] ` |
-| ` concentration ` | ` true ` |
-| ` duration ` | ` Concentration, up to 10 minutes ` |
-| ` casting_time ` | ` Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
-
-<!-- splat:values path=splat_spell/range -->
-
-| Field | Value |
-| --- | --- |
-| ` mode ` | ` self ` |
 
 ## Rule
 
@@ -136,3 +128,12 @@ type:
 | ` source ` | ` supplied_world_geometry ` |
 | ` unknown_facts ` | ` require_resolution ` |
 | ` infer_unprovided_geometry ` | ` false ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_spell_extras -->
+> 
+> ```yaml
+> range:
+>   mode: self
+> ```
+

@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 2c8c118c-af0e-5f3a-b75f-aab0d29ea5df
 splat_kind: item
 splat_key: dnd2024:items/wand_of_enemy_detection
 splat_name: Wand of Enemy Detection
-splat_origin:
-  key: dnd2024:reference/magic_item/wand_of_enemy_detection
+splat_origin: dnd2024:reference/magic_item/wand_of_enemy_detection
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 250
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 250, https://www.dndbeyond.com/srd
 ---
 
 # Wand of Enemy Detection
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Wand |
+| Rarity | Rare |
+| Attunement | Yes |
+
 
 ## Source text
 
@@ -26,22 +33,9 @@ Regaining Charges. The wand regains 1d6 + 1 expended charges daily at dawn. If y
 
 Original layout: [[../../srd-5.2.1/pages/250|page 250]].
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` wand ` |
-| ` rarity ` | ` rare ` |
 
-### Equipment
-
-<!-- splat:values path=splat_item/equipment -->
-
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` required ` |
 
 ## Rule
 

@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: e5de36e0-984b-5e2f-a757-f53366ad3ebc
 splat_kind: item
 splat_key: dnd2024:items/cubic_gate
 splat_name: Cubic Gate
-splat_origin:
-  key: dnd2024:reference/magic_item/cubic_gate
+splat_origin: dnd2024:reference/magic_item/cubic_gate
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 216
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 216, https://www.dndbeyond.com/srd
 ---
 
 # Cubic Gate
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Wondrous Item |
+| Rarity | Legendary |
+| Attunement | No |
+
 
 ## Source text
 
@@ -30,22 +37,9 @@ Plane Shift. Pressing one side of the cube twice, you cast Plane Shift, transpor
 
 Original layout: [[../../srd-5.2.1/pages/216|page 216]].
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` wondrous_item ` |
-| ` rarity ` | ` legendary ` |
 
-### Equipment
-
-<!-- splat:values path=splat_item/equipment -->
-
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` none ` |
 
 ## Rule
 

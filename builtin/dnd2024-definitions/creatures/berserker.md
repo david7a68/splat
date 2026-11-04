@@ -1,34 +1,60 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 7cf98ec7-cf46-57a1-95ea-89be0fe74537
 splat_kind: creature
 splat_key: dnd2024:creatures/berserker
 splat_name: Berserker
-splat_origin:
-  key: dnd2024:reference/creature/berserker
+splat_origin: dnd2024:reference/creature/berserker
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 263
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 263, https://www.dndbeyond.com/srd
 ---
 
 # Berserker
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Medium or Small |
+| Type | Humanoid |
+| Alignment | Neutral |
+| Armor Class | 13 |
+| Hit Points | 67 (9d8 + 27) |
+| Initiative | +1 (11) |
+| Speed | 30 ft. |
+| Challenge | 2 (XP 450; PB +2) |
+| Senses | Passive Perception 10 |
+| Languages | Common |
+| Gear | Greataxe, Hide Armor |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 16 | +3 | +3 |
+| Dex | 12 | +1 | +1 |
+| Con | 17 | +3 | +3 |
+| Int | 9 | -1 | -1 |
+| Wis | 11 | +0 | +0 |
+| Cha | 9 | -1 | -1 |
+
 
 ## Source text
 
 <!-- SRD page 263 -->
 
 Medium or Small Humanoid, Neutral\
-AC 13 Initiative +1 (11)\
-HP 67 (9d8 + 27)\
-Speed 30 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 16 +3 +3 Dex 12 +1 +1 Con 17 +3 +3\
-Int 9 −1 −1 Wis 11 +0 +0 Cha 9 −1 −1\
-Gear Greataxe, Hide Armor\
-Senses Passive Perception 10\
-Languages Common\
-CR 2 (XP 450; PB +2)
+> [!quote]- Printed stat block (not read; edit the table above)
+> AC 13 Initiative +1 (11)\
+> HP 67 (9d8 + 27)\
+> Speed 30 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 16 +3 +3 Dex 12 +1 +1 Con 17 +3 +3\
+> Int 9 −1 −1 Wis 11 +0 +0 Cha 9 −1 −1\
+> Gear Greataxe, Hide Armor\
+> Senses Passive Perception 10\
+> Languages Common\
+> CR 2 (XP 450; PB +2)
+
 
 ### Traits
 
@@ -40,46 +66,11 @@ Greataxe. Melee Attack Roll: +5, reach 5 ft. Hit: 9 (1d12 + 3) Slashing damage.
 
 Original layout: [[../../srd-5.2.1/pages/263|page 263]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` medium ` |
-| ` type ` | ` humanoid ` |
-| ` alignment ` | ` Neutral ` |
-| ` size_options_text ` | ` Medium or Small ` |
-| ` movement_text ` | ` 30 ft. ` |
-| ` gear_text ` | ` Greataxe, Hide Armor ` |
-| ` senses_text ` | ` Passive Perception 10 ` |
-| ` languages_text ` | ` Common ` |
-| ` cr_text ` | ` 2 (XP 450; PB +2) ` |
-| ` hit_points_text ` | ` 67 (9d8 + 27) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 16 ` | ` 3 ` |
-| ` Dexterity ` | ` 12 ` | ` 1 ` |
-| ` Constitution ` | ` 17 ` | ` 3 ` |
-| ` Intelligence ` | ` 9 ` | ` -1 ` |
-| ` Wisdom ` | ` 11 ` | ` 0 ` |
-| ` Charisma ` | ` 9 ` | ` -1 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 13 ` |  |
-| ` max_hp ` | ` 67 ` |  |
-| ` initiative ` | ` 1 ` |  |
-| ` speed ` | ` 30 ` | ` ft ` |
 
 ## Health
 

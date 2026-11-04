@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "cd5a5071-6d47-5669-b689-998505762b06"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/warhorse_skeleton"
 splat_name: "Warhorse Skeleton"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [326], "executable": false}
+splat_pages:
+- 326
 ---
 
 # Warhorse Skeleton
@@ -29,3 +30,13 @@ CR 1/2 (XP 100; PB +2)
 Hooves. Melee Attack Roll: +6, reach 5 ft. Hit: 7 (1d6 + 4) Bludgeoning damage. If the target is a Large or smaller creature and the skeleton moved 20+ feet straight toward it immediately before the hit, the target has the Prone condition.
 
 Original layout: [[../pages/326|page 326]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

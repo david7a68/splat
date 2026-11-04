@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 83b18bd8-7cf2-5876-b671-37a806ea35b1
 splat_kind: rule
 splat_key: dnd2024:class_features/bard_level_5_font_of_inspiration
 splat_name: 'Level 5: Font of Inspiration'
-splat_origin:
-  key: dnd2024:reference/pages/032
+splat_origin: dnd2024:reference/pages/032
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 32
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 32, https://www.dndbeyond.com/srd
 ---
 
 # Level 5: Font of Inspiration

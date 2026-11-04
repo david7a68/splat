@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 64fc0893-46bb-5a96-a967-3e00f78b49c4
 splat_kind: spell
 splat_key: dnd2024:spells/maze
 splat_name: Maze
-splat_origin:
-  key: dnd2024:reference/spell/maze
+splat_origin: dnd2024:reference/spell/maze
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 148
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 148, https://www.dndbeyond.com/srd
 ---
 
 # Maze
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 8 |
+| School | Conjuration |
+| Classes | Wizard |
+| Casting Time | Action |
+| Range | 60 feet |
+| Components | V, S |
+| Duration | Concentration, up to 10 minutes |
+
 
 ## Source text
 
@@ -32,28 +43,9 @@ When the spell ends, the target reappears in the space it left or, if that space
 
 Original layout: [[../../srd-5.2.1/pages/148|page 148]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 8 ` |
-| ` school ` | ` conjuration ` |
-| ` classes ` | ` ["wizard"] ` |
-| ` components ` | ` ["verbal", "somatic"] ` |
-| ` concentration ` | ` true ` |
-| ` duration ` | ` Concentration, up to 10 minutes ` |
-| ` casting_time ` | ` Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
-
-<!-- splat:values path=splat_spell/range -->
-
-| Field | Value |
-| --- | --- |
-| ` feet ` | ` 60 ` |
 
 ## Rule
 

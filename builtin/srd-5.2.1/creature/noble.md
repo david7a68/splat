@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "856ac15d-ce6c-57a2-aec7-a82b90982847"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/noble"
 splat_name: "Noble"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [312], "executable": false}
+splat_pages:
+- 312
 ---
 
 # Noble
@@ -33,3 +34,13 @@ Rapier. Melee Attack Roll: +3, reach 5 ft. Hit: 5 (1d8 + 1) Piercing damage.
 Parry. Trigger: The noble is hit by a melee attack roll while holding a weapon. Response: The noble adds 2 to its AC against that attack, possibly causing it to miss.
 
 Original layout: [[../pages/312|page 312]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

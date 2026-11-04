@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 7ee21a0e-cede-5627-82e9-5c97418aff3d
 splat_kind: rule
 splat_key: dnd2024:rules/damage_and_healing_order_of_application
 splat_name: Order of Application
-splat_origin:
-  key: dnd2024:reference/pages/017
+splat_origin: dnd2024:reference/pages/017
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 17
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 17, https://www.dndbeyond.com/srd
 ---
 
 # Order of Application

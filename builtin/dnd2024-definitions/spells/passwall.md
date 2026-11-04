@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: fa9efad8-6342-54dc-b7ed-b9c16ff919a0
 splat_kind: spell
 splat_key: dnd2024:spells/passwall
 splat_name: Passwall
-splat_origin:
-  key: dnd2024:reference/spell/passwall
+splat_origin: dnd2024:reference/spell/passwall
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 151
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 151, https://www.dndbeyond.com/srd
 ---
 
 # Passwall
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 5 |
+| School | Transmutation |
+| Classes | Wizard |
+| Casting Time | Action |
+| Range | 30 feet |
+| Components | V, S, M (a pinch of sesame seeds) |
+| Duration | 1 hour |
+
 
 ## Source text
 
@@ -30,37 +41,11 @@ When the opening disappears, any creatures or objects still in the passage creat
 
 Original layout: [[../../srd-5.2.1/pages/151|page 151]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 5 ` |
-| ` school ` | ` transmutation ` |
-| ` classes ` | ` ["wizard"] ` |
-| ` components ` | ` ["verbal", "somatic", "material"] ` |
-| ` concentration ` | ` false ` |
-| ` duration ` | ` 1 hour ` |
-| ` casting_time ` | ` Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
 
-<!-- splat:values path=splat_spell/range -->
 
-| Field | Value |
-| --- | --- |
-| ` feet ` | ` 30 ` |
-
-### Material
-
-<!-- splat:values path=splat_spell/material -->
-
-| Field | Value |
-| --- | --- |
-| ` description ` | ` a pinch of sesame seeds ` |
-| ` consumed ` | ` false ` |
 
 ## Rule
 
@@ -103,3 +88,12 @@ Original layout: [[../../srd-5.2.1/pages/151|page 151]].
 | ` subjects ` | ` creatures_and_objects_in_passage ` |
 | ` eject_safely ` | ` true ` |
 | ` destination ` | ` unoccupied_nearest_cast_surface ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_spell_extras -->
+> 
+> ```yaml
+> material:
+>   consumed: false
+> ```
+

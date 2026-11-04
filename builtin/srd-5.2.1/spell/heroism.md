@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "c523b5a2-d7d2-5d34-bbb6-6a714f621743"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/heroism"
 splat_name: "Heroism"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [140], "executable": false}
+splat_pages:
+- 140
 ---
 
 # Heroism
@@ -22,3 +23,13 @@ A willing creature you touch is imbued with bravery. Until the spell ends, the c
 Using a Higher-Level Spell Slot. You can target one additional creature for each spell slot level above 1.
 
 Original layout: [[../pages/140|page 140]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

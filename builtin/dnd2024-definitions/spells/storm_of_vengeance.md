@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: bdbdaf92-8dfd-5bc6-8d11-10d4946d054d
 splat_kind: spell
 splat_key: dnd2024:spells/storm_of_vengeance
 splat_name: Storm of Vengeance
-splat_origin:
-  key: dnd2024:reference/spell/storm_of_vengeance
+splat_origin: dnd2024:reference/spell/storm_of_vengeance
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 165, 166
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 165, 166, https://www.dndbeyond.com/srd
 ---
 
 # Storm of Vengeance
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 9 |
+| School | Conjuration |
+| Classes | Druid |
+| Casting Time | Action |
+| Range |  |
+| Components | V, S |
+| Duration | Concentration, up to 1 minute |
+
 
 ## Source text
 
@@ -40,28 +51,9 @@ Turns 5–10. Gusts and freezing rain assail the area under the cloud. Each crea
 
 Original layout: [[../../srd-5.2.1/pages/165|page 165]], [[../../srd-5.2.1/pages/166|page 166]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 9 ` |
-| ` school ` | ` conjuration ` |
-| ` classes ` | ` ["druid"] ` |
-| ` components ` | ` ["verbal", "somatic"] ` |
-| ` concentration ` | ` true ` |
-| ` duration ` | ` Concentration, up to 1 minute ` |
-| ` casting_time ` | ` Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
-
-<!-- splat:values path=splat_spell/range -->
-
-| Field | Value |
-| --- | --- |
-| ` mode ` | ` 1 mile ` |
 
 ## Rule
 
@@ -180,3 +172,12 @@ turns:
     ranged_weapon_attacks: impossible
     wind: strong
 ```
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_spell_extras -->
+> 
+> ```yaml
+> range:
+>   mode: 1 mile
+> ```
+

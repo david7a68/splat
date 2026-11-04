@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 40c57379-6f88-5f05-9479-5208a5cd0e9b
 splat_kind: item
 splat_key: dnd2024:items/dancing_sword
 splat_name: Dancing Sword
-splat_origin:
-  key: dnd2024:reference/magic_item/dancing_sword
+splat_origin: dnd2024:reference/magic_item/dancing_sword
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 217
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 217, https://www.dndbeyond.com/srd
 ---
 
 # Dancing Sword
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Weapon |
+| Rarity | Very Rare |
+| Attunement | Yes |
+
 
 ## Source text
 
@@ -28,22 +35,9 @@ After the hovering weapon attacks for the fourth time, it flies back to you and 
 
 Original layout: [[../../srd-5.2.1/pages/217|page 217]].
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` weapon ` |
-| ` rarity ` | ` very_rare ` |
 
-### Equipment
-
-<!-- splat:values path=splat_item/equipment -->
-
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` required ` |
 
 ## Rule
 

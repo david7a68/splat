@@ -1,34 +1,60 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: d8c7cab5-1a7f-5f44-99f9-2e2de6e3a51d
 splat_kind: creature
 splat_key: dnd2024:creatures/dire_wolf
 splat_name: Dire Wolf
-splat_origin:
-  key: dnd2024:reference/creature/dire_wolf
+splat_origin: dnd2024:reference/creature/dire_wolf
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 347
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 347, https://www.dndbeyond.com/srd
 ---
 
 # Dire Wolf
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Large |
+| Type | Beast |
+| Alignment | Unaligned |
+| Armor Class | 14 |
+| Hit Points | 22 (3d10 + 6) |
+| Initiative | +2 (12) |
+| Speed | 50 ft. |
+| Challenge | 1 (XP 200; PB +2) |
+| Skills | Perception +5, Stealth +4 |
+| Senses | Darkvision 60 ft.; Passive Perception 15 |
+| Languages | None |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 17 | +3 | +3 |
+| Dex | 15 | +2 | +2 |
+| Con | 15 | +2 | +2 |
+| Int | 3 | -4 | -4 |
+| Wis | 12 | +1 | +1 |
+| Cha | 7 | -2 | -2 |
+
 
 ## Source text
 
 <!-- SRD page 347 -->
 
-Large Beast, Unaligned\
-AC 14  Initiative +2 (12)\
-HP 22 (3d10 + 6)\
-Speed 50 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 17 +3 +3 Dex 15 +2 +2 Con 15 +2 +2\
-Int 3 −4 −4 Wis 12 +1 +1 Cha 7 −2 −2\
-Skills Perception +5, Stealth +4\
-Senses Darkvision 60 ft.; Passive Perception 15\
-Languages None\
-CR 1 (XP 200; PB +2)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Large Beast, Unaligned\
+> AC 14  Initiative +2 (12)\
+> HP 22 (3d10 + 6)\
+> Speed 50 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 17 +3 +3 Dex 15 +2 +2 Con 15 +2 +2\
+> Int 3 −4 −4 Wis 12 +1 +1 Cha 7 −2 −2\
+> Skills Perception +5, Stealth +4\
+> Senses Darkvision 60 ft.; Passive Perception 15\
+> Languages None\
+> CR 1 (XP 200; PB +2)
+
 
 ### Traits
 
@@ -40,45 +66,11 @@ Bite. Melee Attack Roll: +5, reach 5 ft. Hit: 8 (1d10 + 3) Piercing damage. If t
 
 Original layout: [[../../srd-5.2.1/pages/347|page 347]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` large ` |
-| ` type ` | ` beast ` |
-| ` alignment ` | ` Unaligned ` |
-| ` movement_text ` | ` 50 ft. ` |
-| ` skills_text ` | ` Perception +5, Stealth +4 ` |
-| ` senses_text ` | ` Darkvision 60 ft.; Passive Perception 15 ` |
-| ` languages_text ` | ` None ` |
-| ` cr_text ` | ` 1 (XP 200; PB +2) ` |
-| ` hit_points_text ` | ` 22 (3d10 + 6) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 17 ` | ` 3 ` |
-| ` Dexterity ` | ` 15 ` | ` 2 ` |
-| ` Constitution ` | ` 15 ` | ` 2 ` |
-| ` Intelligence ` | ` 3 ` | ` -4 ` |
-| ` Wisdom ` | ` 12 ` | ` 1 ` |
-| ` Charisma ` | ` 7 ` | ` -2 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 14 ` |  |
-| ` max_hp ` | ` 22 ` |  |
-| ` initiative ` | ` 2 ` |  |
-| ` speed ` | ` 50 ` | ` ft ` |
 
 ## Health
 

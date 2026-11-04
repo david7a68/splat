@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 2617805c-1c9e-5706-b9e2-3c769e36b321
 splat_kind: item
 splat_key: dnd2024:equipment/heavy_crossbow
 splat_name: Heavy Crossbow
-splat_origin:
-  key: dnd2024:reference/pages/091
+splat_origin: dnd2024:reference/pages/091
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 91
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 91, https://www.dndbeyond.com/srd
 ---
 
 # Heavy Crossbow
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Weapon |
+| Rarity |  |
+| Attunement |  |
+
 
 ## Source text
 
@@ -37,43 +44,13 @@ Source table, SRD 5.2.1 page 91.
   "category": "weapon"
 }
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` properties_text ` | ` Ammunition (Range 100/400; Bolt), Heavy, Loading, Two-Handed ` |
-| ` mastery ` | ` push ` |
-| ` weapon_category ` | ` martial ranged ` |
-| ` category ` | ` weapon ` |
 
-### Damage
 
-<!-- splat:values path=splat_item/damage -->
 
-| Field | Value |
-| --- | --- |
-| ` expression ` | ` 1d10 ` |
-| ` type ` | ` piercing ` |
 
-### Price
 
-<!-- splat:values path=splat_item/price -->
-
-| Field | Value |
-| --- | --- |
-| ` value ` | ` 50 ` |
-| ` unit ` | ` gp ` |
-
-### Mass
-
-<!-- splat:values path=splat_item/mass -->
-
-| Field | Value |
-| --- | --- |
-| ` value ` | ` 18.0 ` |
-| ` unit ` | ` lb ` |
 
 ## Rule
 
@@ -223,3 +200,22 @@ parameters:
 | ` actor ` | ` equipper ` |
 | ` item ` | ` equipped_instance ` |
 | ` inactive_if_not_equipped ` | ` true ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_item_extras -->
+> 
+> ```yaml
+> weapon_category: martial ranged
+> damage:
+>   expression: 1d10
+>   type: piercing
+> mass:
+>   unit: lb
+>   value: 18.0
+> mastery: push
+> price:
+>   unit: gp
+>   value: 50
+> properties_text: Ammunition (Range 100/400; Bolt), Heavy, Loading, Two-Handed
+> ```
+

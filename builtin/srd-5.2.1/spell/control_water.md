@@ -1,10 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "26858ffc-6565-5736-8afd-f84d76eaa9c5"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/control_water"
 splat_name: "Control Water"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [119, 120], "executable": false}
+splat_pages:
+- 119
+- 120
 ---
 
 # Control Water
@@ -32,3 +34,13 @@ Redirect Flow. You cause flowing water in the area to move in a direction you ch
 Whirlpool. You cause a whirlpool to form in the center of the area, which must be at least 50 feet square and 25 feet deep. The whirlpool lasts until you choose a different effect or the spell ends. The whirlpool is 5 feet wide at the base, up to 50 feet wide at the top, and 25 feet tall. Any creature in the water and within 25 feet of the whirlpool is pulled 10 feet toward it. When a creature enters the whirlpool for the first time on a turn or ends its turn there, it makes a Strength saving throw. On a failed save, the creature takes 2d8 Bludgeoning damage. On a successful save, the creature takes half as much damage. A creature can swim away from the whirlpool only if it first takes an action to pull away and succeeds on a Strength (Athletics) check against your spell save DC.
 
 Original layout: [[../pages/119|page 119]], [[../pages/120|page 120]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

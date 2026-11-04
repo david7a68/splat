@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: fc71ebbf-7389-5ddc-9c61-c6ca3fce7978
 splat_kind: spell
 splat_key: dnd2024:spells/compulsion
 splat_name: Compulsion
-splat_origin:
-  key: dnd2024:reference/spell/compulsion
+splat_origin: dnd2024:reference/spell/compulsion
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 117
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 117, https://www.dndbeyond.com/srd
 ---
 
 # Compulsion
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 4 |
+| School | Enchantment |
+| Classes | Bard |
+| Casting Time | Action |
+| Range | 30 feet |
+| Components | V, S |
+| Duration | Concentration, up to 1 minute |
+
 
 ## Source text
 
@@ -30,28 +41,9 @@ For the duration, you can take a Bonus Action to designate a direction that is h
 
 Original layout: [[../../srd-5.2.1/pages/117|page 117]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 4 ` |
-| ` school ` | ` enchantment ` |
-| ` classes ` | ` ["bard"] ` |
-| ` components ` | ` ["verbal", "somatic"] ` |
-| ` concentration ` | ` true ` |
-| ` duration ` | ` Concentration, up to 1 minute ` |
-| ` casting_time ` | ` Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
-
-<!-- splat:values path=splat_spell/range -->
-
-| Field | Value |
-| --- | --- |
-| ` feet ` | ` 30 ` |
 
 ## Rule
 

@@ -1,33 +1,58 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: d7d62b80-e321-5292-b081-c21b13ca111a
 splat_kind: creature
 splat_key: dnd2024:creatures/giant_toad
 splat_name: Giant Toad
-splat_origin:
-  key: dnd2024:reference/creature/giant_toad
+splat_origin: dnd2024:reference/creature/giant_toad
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 354
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 354, https://www.dndbeyond.com/srd
 ---
 
 # Giant Toad
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Large |
+| Type | Beast |
+| Alignment | Unaligned |
+| Armor Class | 11 |
+| Hit Points | 39 (6d10 + 6) |
+| Initiative | +1 (11) |
+| Speed | 30 ft., Swim 30 ft. |
+| Challenge | 1 (XP 200; PB +2) |
+| Senses | Darkvision 60 ft.; Passive Perception 10 |
+| Languages | None |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 15 | +2 | +2 |
+| Dex | 13 | +1 | +1 |
+| Con | 13 | +1 | +1 |
+| Int | 2 | -4 | -4 |
+| Wis | 10 | +0 | +0 |
+| Cha | 3 | -4 | -4 |
+
 
 ## Source text
 
 <!-- SRD page 354 -->
 
-Large Beast, Unaligned\
-AC 11  Initiative +1 (11)\
-HP 39 (6d10 + 6)\
-Speed 30 ft., Swim 30 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 15 +2 +2 Dex 13 +1 +1 Con 13 +1 +1\
-Int 2 −4 −4 Wis 10 +0 +0 Cha 3 −4 −4\
-Senses Darkvision 60 ft.; Passive Perception 10\
-Languages None\
-CR 1 (XP 200; PB +2)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Large Beast, Unaligned\
+> AC 11  Initiative +1 (11)\
+> HP 39 (6d10 + 6)\
+> Speed 30 ft., Swim 30 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 15 +2 +2 Dex 13 +1 +1 Con 13 +1 +1\
+> Int 2 −4 −4 Wis 10 +0 +0 Cha 3 −4 −4\
+> Senses Darkvision 60 ft.; Passive Perception 10\
+> Languages None\
+> CR 1 (XP 200; PB +2)
+
 
 ### Traits
 
@@ -43,45 +68,11 @@ Swallow. The toad swallows a Medium or smaller target it is grappling. While swa
 
 Original layout: [[../../srd-5.2.1/pages/354|page 354]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` large ` |
-| ` type ` | ` beast ` |
-| ` alignment ` | ` Unaligned ` |
-| ` movement_text ` | ` 30 ft., Swim 30 ft. ` |
-| ` senses_text ` | ` Darkvision 60 ft.; Passive Perception 10 ` |
-| ` languages_text ` | ` None ` |
-| ` cr_text ` | ` 1 (XP 200; PB +2) ` |
-| ` hit_points_text ` | ` 39 (6d10 + 6) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 15 ` | ` 2 ` |
-| ` Dexterity ` | ` 13 ` | ` 1 ` |
-| ` Constitution ` | ` 13 ` | ` 1 ` |
-| ` Intelligence ` | ` 2 ` | ` -4 ` |
-| ` Wisdom ` | ` 10 ` | ` 0 ` |
-| ` Charisma ` | ` 3 ` | ` -4 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 11 ` |  |
-| ` max_hp ` | ` 39 ` |  |
-| ` initiative ` | ` 1 ` |  |
-| ` speed ` | ` 30 ` | ` ft ` |
-| ` swim_speed ` | ` 30 ` | ` ft ` |
 
 ## Health
 
@@ -284,3 +275,13 @@ geometry_assumptions:
   - plane
   - form_appearance
 ```
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_stats_extras -->
+> 
+> ```yaml
+> swim_speed:
+>   unit: ft
+>   value: 30
+> ```
+

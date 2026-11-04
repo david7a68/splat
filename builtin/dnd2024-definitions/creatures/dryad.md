@@ -1,34 +1,60 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 77df49d6-e151-5948-9bab-834533875dea
 splat_kind: creature
 splat_key: dnd2024:creatures/dryad
 splat_name: Dryad
-splat_origin:
-  key: dnd2024:reference/creature/dryad
+splat_origin: dnd2024:reference/creature/dryad
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 282
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 282, https://www.dndbeyond.com/srd
 ---
 
 # Dryad
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Medium |
+| Type | Fey |
+| Alignment | Neutral |
+| Armor Class | 16 |
+| Hit Points | 22 (5d8) |
+| Initiative | +1 (11) |
+| Speed | 30 ft. |
+| Challenge | 1 (XP 200; PB +2) |
+| Skills | Perception +4, Stealth +5 |
+| Senses | Darkvision 60 ft.; Passive Perception 14 |
+| Languages | Elvish, Sylvan |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 10 | +0 | +0 |
+| Dex | 12 | +1 | +1 |
+| Con | 11 | +0 | +0 |
+| Int | 14 | +2 | +2 |
+| Wis | 15 | +2 | +2 |
+| Cha | 18 | +4 | +4 |
+
 
 ## Source text
 
 <!-- SRD page 282 -->
 
-Medium Fey, Neutral\
-AC 16 Initiative +1 (11)\
-HP 22 (5d8)\
-Speed 30 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 10 +0 +0 Dex 12 +1 +1 Con 11 +0 +0\
-Int 14 +2 +2 Wis 15 +2 +2 Cha 18 +4 +4\
-Skills Perception +4, Stealth +5\
-Senses Darkvision 60 ft.; Passive Perception 14\
-Languages Elvish, Sylvan\
-CR 1 (XP 200; PB +2)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Medium Fey, Neutral\
+> AC 16 Initiative +1 (11)\
+> HP 22 (5d8)\
+> Speed 30 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 10 +0 +0 Dex 12 +1 +1 Con 11 +0 +0\
+> Int 14 +2 +2 Wis 15 +2 +2 Cha 18 +4 +4\
+> Skills Perception +4, Stealth +5\
+> Senses Darkvision 60 ft.; Passive Perception 14\
+> Languages Elvish, Sylvan\
+> CR 1 (XP 200; PB +2)
+
 
 ### Traits
 
@@ -56,45 +82,11 @@ Tree Stride. If within 5 feet of a Large or bigger tree, the dryad teleports to 
 
 Original layout: [[../../srd-5.2.1/pages/282|page 282]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` medium ` |
-| ` type ` | ` fey ` |
-| ` alignment ` | ` Neutral ` |
-| ` movement_text ` | ` 30 ft. ` |
-| ` skills_text ` | ` Perception +4, Stealth +5 ` |
-| ` senses_text ` | ` Darkvision 60 ft.; Passive Perception 14 ` |
-| ` languages_text ` | ` Elvish, Sylvan ` |
-| ` cr_text ` | ` 1 (XP 200; PB +2) ` |
-| ` hit_points_text ` | ` 22 (5d8) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 10 ` | ` 0 ` |
-| ` Dexterity ` | ` 12 ` | ` 1 ` |
-| ` Constitution ` | ` 11 ` | ` 0 ` |
-| ` Intelligence ` | ` 14 ` | ` 2 ` |
-| ` Wisdom ` | ` 15 ` | ` 2 ` |
-| ` Charisma ` | ` 18 ` | ` 4 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 16 ` |  |
-| ` max_hp ` | ` 22 ` |  |
-| ` initiative ` | ` 1 ` |  |
-| ` speed ` | ` 30 ` | ` ft ` |
 
 ## Health
 

@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "2485a3f3-4003-5152-9d1f-37207e43339e"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/bless"
 splat_name: "Bless"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [113], "executable": false}
+splat_pages:
+- 113
 ---
 
 # Bless
@@ -22,3 +23,13 @@ You bless up to three creatures within range. Whenever a target makes an attack 
 Using a Higher-Level Spell Slot. You can target one additional creature for each spell slot level above 1.
 
 Original layout: [[../pages/113|page 113]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

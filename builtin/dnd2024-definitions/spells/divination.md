@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 14c9bb02-561e-58c7-9632-ca9ced09ac95
 splat_kind: spell
 splat_key: dnd2024:spells/divination
 splat_name: Divination
-splat_origin:
-  key: dnd2024:reference/spell/divination
+splat_origin: dnd2024:reference/spell/divination
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 125
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 125, https://www.dndbeyond.com/srd
 ---
 
 # Divination
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 4 |
+| School | Divination |
+| Classes | Cleric, Druid, Wizard |
+| Casting Time | Action or Ritual |
+| Range |  |
+| Components | V, S, M (incense worth 25+ GP, which the spell consumes) |
+| Duration | Instantaneous |
+
 
 ## Source text
 
@@ -30,37 +41,11 @@ If you cast the spell more than once before finishing a Long Rest, there is a cu
 
 Original layout: [[../../srd-5.2.1/pages/125|page 125]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 4 ` |
-| ` school ` | ` divination ` |
-| ` classes ` | ` ["cleric", "druid", "wizard"] ` |
-| ` components ` | ` ["verbal", "somatic", "material"] ` |
-| ` concentration ` | ` false ` |
-| ` duration ` | ` Instantaneous ` |
-| ` casting_time ` | ` Action or Ritual ` |
-| ` ritual ` | ` true ` |
 
-### Range
 
-<!-- splat:values path=splat_spell/range -->
 
-| Field | Value |
-| --- | --- |
-| ` mode ` | ` self ` |
-
-### Material
-
-<!-- splat:values path=splat_spell/material -->
-
-| Field | Value |
-| --- | --- |
-| ` description ` | ` incense worth 25+ GP, which the spell consumes ` |
-| ` consumed ` | ` true ` |
 
 ## Rule
 
@@ -103,3 +88,14 @@ Original layout: [[../../srd-5.2.1/pages/125|page 125]].
 | ` reset ` | ` caster_long_rest_completed ` |
 | ` no_answer_chance_percent_per_cast_after_first ` | ` 25 ` |
 | ` cumulative ` | ` true ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_spell_extras -->
+> 
+> ```yaml
+> material:
+>   consumed: true
+> range:
+>   mode: self
+> ```
+

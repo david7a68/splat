@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 2ed70c33-8b5f-5a39-bf67-f1d52f4b6a76
 splat_kind: spell
 splat_key: dnd2024:spells/divine_smite
 splat_name: Divine Smite
-splat_origin:
-  key: dnd2024:reference/spell/divine_smite
+splat_origin: dnd2024:reference/spell/divine_smite
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 125
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 125, https://www.dndbeyond.com/srd
 ---
 
 # Divine Smite
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 1 |
+| School | Evocation |
+| Classes | Paladin |
+| Casting Time | Bonus Action, which you take immediately after hitting a target with a Melee weapon or an Unarmed Strike |
+| Range |  |
+| Components | V |
+| Duration | Instantaneous |
+
 
 ## Source text
 
@@ -30,28 +41,9 @@ Using a Higher-Level Spell Slot. The damage increases by 1d8 for each spell slot
 
 Original layout: [[../../srd-5.2.1/pages/125|page 125]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 1 ` |
-| ` school ` | ` evocation ` |
-| ` classes ` | ` ["paladin"] ` |
-| ` components ` | ` ["verbal"] ` |
-| ` concentration ` | ` false ` |
-| ` duration ` | ` Instantaneous ` |
-| ` casting_time ` | ` Bonus Action, which you take immediately after hitting a target with a Melee weapon or an Unarmed Strike ` |
-| ` ritual ` | ` false ` |
 
-### Range
-
-<!-- splat:values path=splat_spell/range -->
-
-| Field | Value |
-| --- | --- |
-| ` mode ` | ` self ` |
 
 ## Rule
 
@@ -113,3 +105,12 @@ type_bonus:
 | ` per_slot_above ` | ` 1 ` |
 | ` damage_dice ` | ` 1 ` |
 | ` sides ` | ` 8 ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_spell_extras -->
+> 
+> ```yaml
+> range:
+>   mode: self
+> ```
+

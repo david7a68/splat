@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: f05f68f5-9772-5bed-b198-67bbbb36b06d
 splat_kind: item
 splat_key: dnd2024:equipment/mirror_5_gp
 splat_name: Mirror (5 GP)
-splat_origin:
-  key: dnd2024:reference/pages/098
+splat_origin: dnd2024:reference/pages/098
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 98
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 98, https://www.dndbeyond.com/srd
 ---
 
 # Mirror (5 GP)
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Adventuring Gear |
+| Rarity |  |
+| Attunement | No |
+
 
 ## Source text
 
@@ -20,39 +27,13 @@ splat_sources:
 
 A handheld steel Mirror is useful for personal cosmetics but also for peeking around corners and reflecting light as a signal.
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` adventuring_gear ` |
 
-### Equipment
 
-<!-- splat:values path=splat_item/equipment -->
 
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` none ` |
 
-### Price
 
-<!-- splat:values path=splat_item/price -->
-
-| Field | Value |
-| --- | --- |
-| ` value ` | ` 5 ` |
-| ` unit ` | ` gp ` |
-
-### Mass
-
-<!-- splat:values path=splat_item/mass -->
-
-| Field | Value |
-| --- | --- |
-| ` value ` | ` 0.5 ` |
-| ` unit ` | ` lb ` |
 
 ## Rule
 
@@ -81,3 +62,16 @@ A handheld steel Mirror is useful for personal cosmetics but also for peeking ar
 | --- | --- |
 | ` value ` | ` 0.5 ` |
 | ` unit ` | ` lb ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_item_extras -->
+> 
+> ```yaml
+> price:
+>   unit: gp
+>   value: 5
+> mass:
+>   unit: lb
+>   value: 0.5
+> ```
+

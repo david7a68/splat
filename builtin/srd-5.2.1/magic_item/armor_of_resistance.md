@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "bd7cace3-7fea-58ce-ac36-f3479c15a49a"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/magic_item/armor_of_resistance"
 splat_name: "Armor of Resistance"
-splat_reference: {"source": "SRD 5.2.1", "category": "magic_item", "pages": [210], "executable": false}
+splat_pages:
+- 210
 ---
 
 # Armor of Resistance
@@ -24,3 +25,13 @@ You have Resistance to one type of damage while you wear this armor. The GM choo
 | 5 | Lightning | 10 | Thunder |
 
 Original layout: [[../pages/210|page 210]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: magic_item
+> executable: false
+> ```
+

@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: af613d48-01e3-585f-8f80-6838767ee644
 splat_kind: item
 splat_key: dnd2024:equipment/half_plate_armor
 splat_name: Half Plate Armor
-splat_origin:
-  key: dnd2024:reference/pages/092
+splat_origin: dnd2024:reference/pages/092
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 92
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 92, https://www.dndbeyond.com/srd
 ---
 
 # Half Plate Armor
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Armor |
+| Rarity |  |
+| Attunement |  |
+
 
 ## Source text
 
@@ -37,43 +44,13 @@ Source table, SRD 5.2.1 page 92.
   "category": "armor"
 }
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` armor ` |
 
-### Armor
 
-<!-- splat:values path=splat_item/armor -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` medium armor ` |
-| ` stealth_disadvantage ` | ` true ` |
-| ` base_ac ` | ` 15 ` |
-| ` add_dexterity_modifier ` | ` true ` |
-| ` dexterity_modifier_max ` | ` 2 ` |
 
-### Price
 
-<!-- splat:values path=splat_item/price -->
-
-| Field | Value |
-| --- | --- |
-| ` value ` | ` 750 ` |
-| ` unit ` | ` gp ` |
-
-### Mass
-
-<!-- splat:values path=splat_item/mass -->
-
-| Field | Value |
-| --- | --- |
-| ` value ` | ` 40.0 ` |
-| ` unit ` | ` lb ` |
 
 ## Rule
 
@@ -150,3 +127,22 @@ without_training:
 | ` actor ` | ` equipper ` |
 | ` item ` | ` equipped_instance ` |
 | ` inactive_if_not_equipped ` | ` true ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_item_extras -->
+> 
+> ```yaml
+> armor:
+>   add_dexterity_modifier: true
+>   base_ac: 15
+>   category: medium armor
+>   dexterity_modifier_max: 2
+>   stealth_disadvantage: true
+> price:
+>   unit: gp
+>   value: 750
+> mass:
+>   unit: lb
+>   value: 40.0
+> ```
+

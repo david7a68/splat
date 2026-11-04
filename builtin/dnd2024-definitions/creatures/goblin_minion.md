@@ -1,35 +1,62 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 299cbf5b-b33b-59e4-80a9-b38f344dc807
 splat_kind: creature
 splat_key: dnd2024:creatures/goblin_minion
 splat_name: Goblin Minion
-splat_origin:
-  key: dnd2024:reference/creature/goblin_minion
+splat_origin: dnd2024:reference/creature/goblin_minion
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 290
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 290, https://www.dndbeyond.com/srd
 ---
 
 # Goblin Minion
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Small |
+| Type | Fey (Goblinoid) |
+| Alignment | Chaotic Neutral |
+| Armor Class | 12 |
+| Hit Points | 7 (2d6) |
+| Initiative | +2 (12) |
+| Speed | 30 ft. |
+| Challenge | 1/8 (XP 25; PB +2) |
+| Skills | Stealth +6 |
+| Senses | Darkvision 60 ft.; Passive Perception 9 |
+| Languages | Common, Goblin |
+| Gear | Daggers (3) |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 8 | -1 | -1 |
+| Dex | 15 | +2 | +2 |
+| Con | 10 | +0 | +0 |
+| Int | 10 | +0 | +0 |
+| Wis | 8 | -1 | -1 |
+| Cha | 8 | -1 | -1 |
+
 
 ## Source text
 
 <!-- SRD page 290 -->
 
-Small Fey (Goblinoid), Chaotic Neutral\
-AC 12 Initiative +2 (12)\
-HP 7 (2d6)\
-Speed 30 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 8 −1 −1 Dex 15 +2 +2 Con 10 +0 +0\
-Int 10 +0 +0 Wis 8 −1 −1 Cha 8 −1 −1\
-Skills Stealth +6\
-Gear Daggers (3)\
-Senses Darkvision 60 ft.; Passive Perception 9\
-Languages Common, Goblin\
-CR 1/8 (XP 25; PB +2)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Small Fey (Goblinoid), Chaotic Neutral\
+> AC 12 Initiative +2 (12)\
+> HP 7 (2d6)\
+> Speed 30 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 8 −1 −1 Dex 15 +2 +2 Con 10 +0 +0\
+> Int 10 +0 +0 Wis 8 −1 −1 Cha 8 −1 −1\
+> Skills Stealth +6\
+> Gear Daggers (3)\
+> Senses Darkvision 60 ft.; Passive Perception 9\
+> Languages Common, Goblin\
+> CR 1/8 (XP 25; PB +2)
+
 
 ### Actions
 
@@ -41,47 +68,11 @@ Nimble Escape. The goblin takes the Disengage or Hide action.
 
 Original layout: [[../../srd-5.2.1/pages/290|page 290]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` small ` |
-| ` type ` | ` fey ` |
-| ` alignment ` | ` Chaotic Neutral ` |
-| ` tags_text ` | ` (Goblinoid) ` |
-| ` movement_text ` | ` 30 ft. ` |
-| ` skills_text ` | ` Stealth +6 ` |
-| ` gear_text ` | ` Daggers (3) ` |
-| ` senses_text ` | ` Darkvision 60 ft.; Passive Perception 9 ` |
-| ` languages_text ` | ` Common, Goblin ` |
-| ` cr_text ` | ` 1/8 (XP 25; PB +2) ` |
-| ` hit_points_text ` | ` 7 (2d6) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 8 ` | ` -1 ` |
-| ` Dexterity ` | ` 15 ` | ` 2 ` |
-| ` Constitution ` | ` 10 ` | ` 0 ` |
-| ` Intelligence ` | ` 10 ` | ` 0 ` |
-| ` Wisdom ` | ` 8 ` | ` -1 ` |
-| ` Charisma ` | ` 8 ` | ` -1 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 12 ` |  |
-| ` max_hp ` | ` 7 ` |  |
-| ` initiative ` | ` 2 ` |  |
-| ` speed ` | ` 30 ` | ` ft ` |
 
 ## Health
 

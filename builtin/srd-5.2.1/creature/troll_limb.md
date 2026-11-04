@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "cc47f163-2bc9-5a68-a171-cbfd80ddd978"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/troll_limb"
 splat_name: "Troll Limb"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [333], "executable": false}
+splat_pages:
+- 333
 ---
 
 # Troll Limb
@@ -33,3 +34,13 @@ Troll Spawn. The limb uncannily has the same senses as a whole troll. If the lim
 Rend. Melee Attack Roll: +6, reach 5 ft. Hit: 9 (2d4 + 4) Slashing damage.
 
 Original layout: [[../pages/333|page 333]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

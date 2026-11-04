@@ -1,34 +1,60 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 4bab219d-c9cc-5920-8bcc-1ba356ce8b64
 splat_kind: creature
 splat_key: dnd2024:creatures/giant_shark
 splat_name: Giant Shark
-splat_origin:
-  key: dnd2024:reference/creature/giant_shark
+splat_origin: dnd2024:reference/creature/giant_shark
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 353
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 353, https://www.dndbeyond.com/srd
 ---
 
 # Giant Shark
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Huge |
+| Type | Beast |
+| Alignment | Unaligned |
+| Armor Class | 13 |
+| Hit Points | 92 (8d12 + 40) |
+| Initiative | +3 (13) |
+| Speed | 5 ft., Swim 60 ft. |
+| Challenge | 5 (XP 1,800; PB +3) |
+| Skills | Perception +3 |
+| Senses | Blindsight 60 ft.; Passive Perception 13 |
+| Languages | None |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 23 | +6 | +6 |
+| Dex | 11 | +0 | +0 |
+| Con | 21 | +5 | +5 |
+| Int | 1 | -5 | -5 |
+| Wis | 10 | +0 | +0 |
+| Cha | 5 | -3 | -3 |
+
 
 ## Source text
 
 <!-- SRD page 353 -->
 
-Huge Beast, Unaligned\
-AC 13  Initiative +3 (13)\
-HP 92 (8d12 + 40)\
-Speed 5 ft., Swim 60 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 23 +6 +6 Dex 11 +0 +0 Con 21 +5 +5\
-Int 1 −5 −5 Wis 10 +0 +0 Cha 5 −3 −3\
-Skills Perception +3\
-Senses Blindsight 60 ft.; Passive Perception 13\
-Languages None\
-CR 5 (XP 1,800; PB +3)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Huge Beast, Unaligned\
+> AC 13  Initiative +3 (13)\
+> HP 92 (8d12 + 40)\
+> Speed 5 ft., Swim 60 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 23 +6 +6 Dex 11 +0 +0 Con 21 +5 +5\
+> Int 1 −5 −5 Wis 10 +0 +0 Cha 5 −3 −3\
+> Skills Perception +3\
+> Senses Blindsight 60 ft.; Passive Perception 13\
+> Languages None\
+> CR 5 (XP 1,800; PB +3)
+
 
 ### Traits
 
@@ -42,46 +68,11 @@ Bite. Melee Attack Roll: +9 (with Advantage if the target doesn’t have all its
 
 Original layout: [[../../srd-5.2.1/pages/353|page 353]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` huge ` |
-| ` type ` | ` beast ` |
-| ` alignment ` | ` Unaligned ` |
-| ` movement_text ` | ` 5 ft., Swim 60 ft. ` |
-| ` skills_text ` | ` Perception +3 ` |
-| ` senses_text ` | ` Blindsight 60 ft.; Passive Perception 13 ` |
-| ` languages_text ` | ` None ` |
-| ` cr_text ` | ` 5 (XP 1,800; PB +3) ` |
-| ` hit_points_text ` | ` 92 (8d12 + 40) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 23 ` | ` 6 ` |
-| ` Dexterity ` | ` 11 ` | ` 0 ` |
-| ` Constitution ` | ` 21 ` | ` 5 ` |
-| ` Intelligence ` | ` 1 ` | ` -5 ` |
-| ` Wisdom ` | ` 10 ` | ` 0 ` |
-| ` Charisma ` | ` 5 ` | ` -3 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 13 ` |  |
-| ` max_hp ` | ` 92 ` |  |
-| ` initiative ` | ` 3 ` |  |
-| ` speed ` | ` 5 ` | ` ft ` |
-| ` swim_speed ` | ` 60 ` | ` ft ` |
 
 ## Health
 
@@ -205,3 +196,13 @@ sequence:
 | ` provider ` | ` caller ` |
 | ` required_facts ` | ` ["distance", "area_membership", "visibility", "occupancy", "movement_path"] ` |
 | ` validate_against_typed_constraints ` | ` true ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_stats_extras -->
+> 
+> ```yaml
+> swim_speed:
+>   unit: ft
+>   value: 60
+> ```
+

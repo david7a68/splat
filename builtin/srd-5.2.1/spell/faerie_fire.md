@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "36e9624f-77ac-5359-8cd6-56f4928bd504"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/faerie_fire"
 splat_name: "Faerie Fire"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [129], "executable": false}
+splat_pages:
+- 129
 ---
 
 # Faerie Fire
@@ -22,3 +23,13 @@ Objects in a 20-foot Cube within range are outlined in blue, green, or violet li
 Attack rolls against an affected creature or object have Advantage if the attacker can see it.
 
 Original layout: [[../pages/129|page 129]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

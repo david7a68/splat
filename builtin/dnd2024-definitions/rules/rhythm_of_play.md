@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: cca9130c-2589-51f6-ac49-80e43703d267
 splat_kind: rule
 splat_key: dnd2024:rules/rhythm_of_play
 splat_name: Rhythm of Play
-splat_origin:
-  key: dnd2024:reference/pages/005
+splat_origin: dnd2024:reference/pages/005
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 5
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 5, https://www.dndbeyond.com/srd
 ---
 
 # Rhythm of Play

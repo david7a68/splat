@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 4d7518a5-bc6c-5ea8-9fde-7510551642fe
 splat_kind: spell
 splat_key: dnd2024:spells/project_image
 splat_name: Project Image
-splat_origin:
-  key: dnd2024:reference/spell/project_image
+splat_origin: dnd2024:reference/spell/project_image
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 156, 157
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 156, 157, https://www.dndbeyond.com/srd
 ---
 
 # Project Image
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 7 |
+| School | Illusion |
+| Classes | Bard, Wizard |
+| Casting Time | Action |
+| Range |  |
+| Components | V, S, M (a statuette of yourself worth 5+ GP) |
+| Duration | Concentration, up to 1 day |
+
 
 ## Source text
 
@@ -32,37 +43,11 @@ Physical interaction with the image reveals it to be illusory, since things can 
 
 Original layout: [[../../srd-5.2.1/pages/156|page 156]], [[../../srd-5.2.1/pages/157|page 157]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 7 ` |
-| ` school ` | ` illusion ` |
-| ` classes ` | ` ["bard", "wizard"] ` |
-| ` components ` | ` ["verbal", "somatic", "material"] ` |
-| ` concentration ` | ` true ` |
-| ` duration ` | ` Concentration, up to 1 day ` |
-| ` casting_time ` | ` Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
 
-<!-- splat:values path=splat_spell/range -->
 
-| Field | Value |
-| --- | --- |
-| ` mode ` | ` 500 miles ` |
-
-### Material
-
-<!-- splat:values path=splat_spell/material -->
-
-| Field | Value |
-| --- | --- |
-| ` description ` | ` a statuette of yourself worth 5+ GP ` |
-| ` consumed ` | ` false ` |
 
 ## Rule
 
@@ -122,3 +107,14 @@ after_discern:
   see_through: true
   sound: hollow
 ```
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_spell_extras -->
+> 
+> ```yaml
+> material:
+>   consumed: false
+> range:
+>   mode: 500 miles
+> ```
+

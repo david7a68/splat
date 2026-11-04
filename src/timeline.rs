@@ -1,7 +1,7 @@
 //! The campaign's timeline: every encounter, rest, travel interval, day and major event,
 //! in story order. It stands apart from session notes. A note refers to an event by its
 //! stable ID, and the same link works in Obsidian, because each event is a block in
-//! `Timeline.md`. Version 2 keeps the events in the body; version 1 stays readable.
+//! `Timeline.md`. Version 2 keeps the events in the body. Old layouts need conversion.
 pub(crate) mod formats;
 pub mod page;
 
@@ -60,7 +60,6 @@ pub fn played_fight_summary(event: &Event, open: bool) -> String {
 }
 
 pub const FILE: &str = "Timeline.md";
-const VERSION: u32 = 1;
 const SAVE_AFTER: Duration = Duration::from_secs(1);
 const CHECK_DISK_EVERY: Duration = Duration::from_secs(1);
 
@@ -291,13 +290,6 @@ pub enum RunState {
     Ended(String),
 }
 
-#[derive(Serialize, Deserialize)]
-struct Front {
-    timeline_version: u32,
-    #[serde(default)]
-    timeline: Vec<Event>,
-}
-
 const HOUR: u64 = 60;
 const DAY: u64 = 24 * HOUR;
 const MONTH: u64 = 30 * DAY;
@@ -507,72 +499,27 @@ pub fn markers_for_reading(text: &str) -> String {
 }
 
 fn render(events: &[Event], sessions: &BTreeMap<Uuid, String>) -> Result<String, String> {
-    let front = serde_yaml_ng::to_string(&Front {
-        timeline_version: VERSION,
-        timeline: events.to_vec(),
-    })
-    .map_err(|e| e.to_string())?;
-    let mut text = format!(
-        "---\n{front}---\n\n# Timeline\n\n\
-         Splat writes this page from the list above. Edit the list, or use Splat.\n"
-    );
-    let days = day_numbers(events);
-    let mut open_list = false;
-    for (event, day) in events.iter().zip(days) {
-        if event.kind == Kind::Day {
-            text.push_str(&format!(
-                "\n## {} ^{}\n\n",
-                event.label(day).replace(['\n', '^'], " "),
-                event.id
-            ));
-            open_list = true;
-            continue;
-        }
-        if !open_list {
-            text.push('\n');
-            open_list = true;
-        }
-        let session = event.session.and_then(|id| sessions.get(&id));
-        let summary = event.summary(None);
-        let mut line = format!("- **{}**", event.label(day));
-        if !summary.is_empty() {
-            line.push_str(&format!(": {summary}"));
-        }
-        if let Some(session) = session {
-            line.push_str(&format!(" ([[{session}]])"));
-        }
-        text.push_str(&line.replace('\n', " "));
-        text.push_str(&format!(" ^{}\n", event.id));
-    }
-    Ok(text)
+    Ok(formats::render(events, sessions))
 }
 
-fn parse(text: &str) -> Result<Vec<Event>, String> {
-    let text = text.trim_start_matches('\u{feff}').replace("\r\n", "\n");
-    let rest = text
-        .strip_prefix("---\n")
-        .ok_or("It has no frontmatter list.")?;
-    let end = rest
-        .find("\n---\n")
-        .or_else(|| rest.strip_suffix("\n---").map(str::len))
-        .ok_or("Its frontmatter has no end.")?;
-    let front: Front = serde_yaml_ng::from_str(&rest[..end]).map_err(|e| e.to_string())?;
-    if ![VERSION, 2].contains(&front.timeline_version) {
-        return Err(format!(
-            "Timeline version {} is not supported.",
-            front.timeline_version
-        ));
+pub(crate) fn parse(text: &str) -> Result<Vec<Event>, String> {
+    let (front, _) = crate::sessions::split_note(text).ok_or("Missing timeline properties.")?;
+    let fields: serde_yaml_ng::Value = serde_yaml_ng::from_str(
+        front
+            .trim()
+            .trim_start_matches("---")
+            .trim_end_matches("---"),
+    )
+    .map_err(|e| format!("Invalid YAML: {e}"))?;
+    match fields
+        .get("timeline_version")
+        .and_then(serde_yaml_ng::Value::as_u64)
+    {
+        Some(2) => {}
+        Some(1) => return Err(splat::content::OLD_LAYOUT.into()),
+        _ => return Err("Unsupported timeline version (expected 2).".into()),
     }
-    if front.timeline_version == 2 {
-        return Ok(formats::parse(&text).0);
-    }
-    let mut seen = std::collections::BTreeSet::new();
-    for event in &front.timeline {
-        if event.id.trim().is_empty() || !seen.insert(&event.id) {
-            return Err(format!("The event ID “{}” is not unique.", event.id));
-        }
-    }
-    Ok(front.timeline)
+    Ok(formats::parse(text).0)
 }
 
 fn new_id() -> String {
@@ -588,12 +535,8 @@ pub struct Book {
     pub flags: Vec<splat::content::layout::Flag>,
     run_write: bool,
     pub run_open: bool,
-    layouts: crate::formats_ui::State,
-    converted_add: Option<String>,
     baseline: Option<Vec<u8>>,
     /// The generated body last written, even while frontmatter is edited elsewhere.
-    written_body: Option<String>,
-    body_changed: bool,
     pending_run: Option<(RunFact, Option<Uuid>, bool)>,
     pub duplicate: Option<String>,
     saved_events: Vec<Event>,
@@ -657,8 +600,6 @@ impl Book {
 
     /// Read the file, and drop any edit not yet saved.
     pub fn reload(&mut self) {
-        self.layouts.clear();
-        self.written_body = None;
         self.rest_undo = None;
         self.dirty = false;
         self.reordered.clear();
@@ -678,23 +619,11 @@ impl Book {
                     .map_err(|e| e.to_string())
                     .and_then(parse)
                 {
-                    Ok(mut events) => {
+                    Ok(_) => {
                         let text = String::from_utf8_lossy(&bytes);
-                        let body = crate::sessions::body_of(&text).replace("\r\n", "\n");
-                        let generated = render(&events, &self.session_links).unwrap_or_default();
-                        let expected = self
-                            .written_body
-                            .as_deref()
-                            .unwrap_or_else(|| crate::sessions::body_of(&generated));
-                        self.body_changed = !formats::is_v2(&text) && body != expected;
-                        self.flags = if formats::is_v2(&text) {
-                            let (resolved, flags) =
-                                formats::parse_with_sessions(&text, &self.session_links);
-                            events = resolved;
-                            flags
-                        } else {
-                            Vec::new()
-                        };
+                        let (events, flags) =
+                            formats::parse_with_sessions(&text, &self.session_links);
+                        self.flags = flags;
                         let days = day_numbers(&events);
                         self.link_titles = events
                             .iter()
@@ -761,36 +690,17 @@ impl Book {
     }
 
     fn text_for(&self, events: &[Event], source: Option<&str>) -> Result<String, String> {
-        if let Some(source) = source
-            && formats::is_v2(source)
-        {
+        if let Some(source) = source {
+            parse(source)?;
             return formats::patch(source, events, &self.session_links, self.run_write);
         }
-        let generated = render(events, &self.session_links)?;
-        let body = crate::sessions::body_of(&generated);
-        if let Some(source) = source {
-            let patched = crate::content_workspace::patch_fields(
-                source,
-                &[(
-                    "timeline",
-                    Some(serde_yaml_ng::to_value(events).map_err(|e| e.to_string())?),
-                )],
-            )?;
-            let (front, _) =
-                crate::sessions::split_note(&patched).ok_or("Missing timeline properties.")?;
-            Ok(format!("{front}{body}"))
-        } else {
-            Ok(generated)
-        }
+        render(events, &self.session_links)
     }
 
     /// Keep outside-only edits; require a choice only for an item edited on both sides.
     fn merged_events(&self, disk: &str, overwrite: bool) -> Result<Vec<Event>, String> {
-        let disk = if formats::is_v2(disk) {
-            formats::parse_with_sessions(disk, &self.session_links).0
-        } else {
-            parse(disk)?
-        };
+        parse(disk)?;
+        let disk = formats::parse_with_sessions(disk, &self.session_links).0;
         let mut merged = disk.clone();
         for old in &self.saved_events {
             let ours = self.events.iter().find(|e| e.id == old.id);
@@ -874,24 +784,12 @@ impl Book {
     pub fn conflict_comparison(&self) -> Result<(String, String), String> {
         let path = self.path.as_ref().ok_or("No campaign is open.")?;
         let disk = fs::read_to_string(path).map_err(|e| format!("{}: {e}", path.display()))?;
-        let disk_events = parse(&disk)?;
-        let mut events = if formats::is_v2(&disk) {
-            self.merged_events(&disk, true)?
-        } else {
-            self.events.clone()
-        };
-        for event in events.iter_mut().filter(|_| !formats::is_v2(&disk)) {
-            if let Some(disk) = disk_events.iter().find(|disk| disk.id == event.id) {
-                event.extra.extend(disk.extra.clone());
-            }
-        }
-        // Compare like layouts. Overwrite performs conversion after the choice.
+        let events = self.merged_events(&disk, true)?;
         let draft = self.text_for(&events, Some(&disk))?;
         Ok((draft, disk))
     }
 
     fn write(&mut self) -> Result<(), String> {
-        self.layouts.clear();
         let path = self.path.as_ref().ok_or("No campaign is open.")?;
         let current = fs::read(path).ok();
         let outside = current != self.baseline;
@@ -914,16 +812,7 @@ impl Book {
             .map(std::str::from_utf8)
             .transpose()
             .map_err(|e| e.to_string())?;
-        let conversion = source
-            .filter(|text| !formats::is_v2(text) && !self.run_write && !self.run_open)
-            .map(str::to_owned);
         let text = self.text_for(&events, source)?;
-        let text = if !self.run_write && !self.run_open {
-            formats::convert(&text, &self.session_links)?
-        } else {
-            text
-        };
-        let body = crate::sessions::body_of(&text).to_owned();
         let parent = path.parent().ok_or("Invalid timeline location.")?;
         if !parent.is_dir() {
             return Err(format!(
@@ -946,23 +835,8 @@ impl Book {
         }
         .map_err(|e| e.to_string())?;
         crate::sessions::sync_folder(parent)?;
-        if let Some(before) = conversion {
-            self.converted_add = self
-                .events
-                .iter()
-                .rev()
-                .find(|event| !self.saved_events.iter().any(|old| old.id == event.id))
-                .map(|event| event.id.clone());
-            self.layouts.remember(parent, FILE, &before, &text);
-        }
-        self.flags = if formats::is_v2(&text) {
-            formats::parse_with_sessions(&text, &self.session_links).1
-        } else {
-            Vec::new()
-        };
+        self.flags = formats::parse_with_sessions(&text, &self.session_links).1;
         self.baseline = Some(text.into_bytes());
-        self.written_body = Some(body);
-        self.body_changed = false;
         self.events = events;
         self.saved_events.clone_from(&self.events);
         self.merged_outside = outside;
@@ -976,11 +850,6 @@ impl Book {
 
     pub fn save(&mut self) {
         if !self.dirty || self.conflict || self.unreadable.is_some() || self.path.is_none() {
-            return;
-        }
-        if self.body_changed {
-            self.layouts.clear();
-            self.conflict = true;
             return;
         }
         if let Err(error) = self.write() {
@@ -997,23 +866,12 @@ impl Book {
                 .map_err(|e| e.to_string())
                 .and_then(parse)
             {
-                Ok(events) => {
-                    if formats::is_v2(std::str::from_utf8(&bytes).unwrap()) {
-                        match self.merged_events(std::str::from_utf8(&bytes).unwrap(), true) {
-                            Ok(merged) => self.events = merged,
-                            Err(error) => {
-                                self.error = Some(error);
-                                return;
-                            }
-                        }
-                    }
-                    for event in self
-                        .events
-                        .iter_mut()
-                        .filter(|_| !formats::is_v2(std::str::from_utf8(&bytes).unwrap()))
-                    {
-                        if let Some(disk) = events.iter().find(|disk| disk.id == event.id) {
-                            event.extra.extend(disk.extra.clone());
+                Ok(_) => {
+                    match self.merged_events(std::str::from_utf8(&bytes).unwrap(), true) {
+                        Ok(merged) => self.events = merged,
+                        Err(error) => {
+                            self.error = Some(error);
+                            return;
                         }
                     }
                     self.baseline = Some(bytes);
@@ -1165,33 +1023,8 @@ impl Book {
         id
     }
 
-    pub fn clear_notice(&mut self) {
-        self.layouts.clear();
-    }
-
-    pub fn add_notice_current(&mut self, id: &str) -> bool {
-        self.converted_add.as_deref() != Some(id)
-            || (!self.dirty && !self.conflict && self.layouts.current(self.path.as_deref()))
-    }
-
-    pub fn added_words(&mut self, id: &str, words: &str) -> String {
-        if self.converted_add.as_deref() == Some(id) && self.layouts.current(self.path.as_deref()) {
-            format!("{words} Timeline.md now uses the new layout.")
-        } else {
-            words.to_owned()
-        }
-    }
-
-    /// The converting save is the whole add, including the old layout.
     pub fn undo_add(&mut self, id: &str) {
-        if self.converted_add.as_deref() == Some(id) && self.layouts.current(self.path.as_deref()) {
-            match self.layouts.undo() {
-                Ok(()) => self.reload(),
-                Err(error) => self.error = Some(error),
-            }
-        } else {
-            self.remove(id);
-        }
+        self.remove(id);
     }
 
     /// A rest added by the DM on either page includes the full-HP ruling.
@@ -1533,122 +1366,6 @@ mod tests {
     }
 
     #[test]
-    fn i19_s2_legacy_conflict_shows_the_changed_paragraph_at_both_sizes() {
-        use eframe::egui;
-        for (width, height) in [(960.0, 640.0), (1200.0, 800.0)] {
-            let dir = tempfile::tempdir().unwrap();
-            let mut book = book(dir.path());
-            book.run_open = true;
-            book.add(Kind::Travel, None);
-            book.events[0].notes = (1..=48)
-                .map(|day| format!("Day {day}: The party followed the river."))
-                .collect::<Vec<_>>()
-                .join("\n");
-            book.save();
-            book.run_open = false;
-            let path = dir.path().join(FILE);
-            fs::write(
-                &path,
-                format!("{}DM's paragraph.\n", fs::read_to_string(&path).unwrap()),
-            )
-            .unwrap();
-            book.reload();
-            book.touch();
-            book.save();
-            let ctx = egui::Context::default();
-            crate::design::theme::install(&ctx);
-            let output = ctx.run(
-                egui::RawInput {
-                    screen_rect: Some(egui::Rect::from_min_size(
-                        egui::Pos2::ZERO,
-                        egui::vec2(width, height),
-                    )),
-                    ..Default::default()
-                },
-                |ctx| {
-                    egui::CentralPanel::default().show(ctx, |ui| {
-                        page::problems(ui, &mut book);
-                    });
-                },
-            );
-            fn visible(shape: &egui::Shape, clip: egui::Rect) -> bool {
-                match shape {
-                    egui::Shape::Text(shape) => {
-                        shape.galley.text() == "DM's paragraph."
-                            && clip.contains_rect(shape.visual_bounding_rect())
-                    }
-                    egui::Shape::Vec(shapes) => shapes.iter().any(|shape| visible(shape, clip)),
-                    _ => false,
-                }
-            }
-            assert!(
-                output
-                    .shapes
-                    .iter()
-                    .any(|shape| visible(&shape.shape, shape.clip_rect)),
-                "changed paragraph is hidden at {width}×{height}"
-            );
-            for shape in &output.shapes {
-                if let egui::Shape::Text(text) = &shape.shape
-                    && text.galley.text().contains("The party followed the river.")
-                {
-                    let bounds = text.visual_bounding_rect();
-                    if bounds.intersects(shape.clip_rect) {
-                        assert!(
-                            bounds.top() >= shape.clip_rect.top()
-                                && bounds.bottom() <= shape.clip_rect.bottom(),
-                            "partial comparison row at {width}×{height}: {bounds:?}, clip {:?}",
-                            shape.clip_rect
-                        );
-                    }
-                }
-            }
-        }
-    }
-
-    #[test]
-    fn i19_h1_plan_and_recording_add_undo_restore_exact_legacy_bytes() {
-        for recording in [false, true] {
-            let dir = tempfile::tempdir().unwrap();
-            let path = dir.path().join(FILE);
-            let old = render(&[], &BTreeMap::new()).unwrap();
-            fs::write(&path, &old).unwrap();
-            let mut book = Book::default();
-            book.open(Some(dir.path()));
-            let id = if recording {
-                book.add_marker(
-                    &Marker {
-                        kind: Kind::Event,
-                        title: "Gate opens".into(),
-                        at: String::new(),
-                        place: String::new(),
-                        duration: String::new(),
-                    },
-                    "recording:0",
-                    None,
-                )
-            } else {
-                book.add(Kind::LongRest, None)
-            };
-            book.save();
-            assert!(!book.conflict);
-            assert!(book.add_notice_current(&id));
-            book.undo_add(&id);
-            assert_eq!(fs::read_to_string(&path).unwrap(), old);
-            assert!(book.events.is_empty());
-            book = Book::default();
-            book.open(Some(dir.path()));
-            book.add(Kind::Event, None);
-            book.save();
-            book.add(Kind::Travel, None);
-            book.save();
-            assert!(!book.conflict);
-            let labels = crate::formats_ui::test_notice_labels(&mut book.layouts, &path);
-            assert!(!labels.iter().any(|s| s.starts_with("Undo")), "{labels:?}");
-        }
-    }
-
-    #[test]
     fn fight_summary_uses_run_state_words_without_changing_stored_result() {
         let mut event = event(Kind::Encounter, "");
         for (stored, open, shown) in [
@@ -1711,14 +1428,11 @@ mod tests {
         book.run_write = true;
         book.save();
         let path = dir.path().join(FILE);
-        let text = fs::read_to_string(&path)
-            .unwrap()
-            .replacen(
-                "timeline_version:",
-                "# DM comment\ntags: [journey]\ntimeline_version:",
-                1,
-            )
-            .replacen("  kind:", "  weather: rain\n  kind:", 1);
+        let text = fs::read_to_string(&path).unwrap().replacen(
+            "timeline_version:",
+            "# DM comment\ntags: [journey]\ntimeline_version:",
+            1,
+        ) + "  - weather: rain\n";
         fs::write(&path, text).unwrap();
         book.reload();
         book.events[0].title = "Road".into();
@@ -1729,38 +1443,6 @@ mod tests {
         assert!(saved.contains("tags:"));
         assert!(saved.contains("weather: rain"));
         assert!(saved.contains("# DM comment"));
-    }
-
-    #[test]
-    fn integrity_d1_an_edited_body_opens_the_disk_conflict() {
-        let dir = tempfile::tempdir().unwrap();
-        let mut book = book(dir.path());
-        book.run_open = true;
-        book.add(Kind::Travel, None);
-        book.run_write = true;
-        book.save();
-        let path = dir.path().join(FILE);
-        let text = format!("{}\nDM's paragraph.\n", fs::read_to_string(&path).unwrap());
-        fs::write(&path, &text).unwrap();
-        book.reload();
-        book.touch();
-        book.save();
-        assert!(book.conflict);
-        assert_eq!(fs::read_to_string(&path).unwrap(), text);
-        let text = text
-            .replacen("timeline_version:", "tags: [DM]\ntimeline_version:", 1)
-            .replacen("  kind:", "  weather: rain\n  kind:", 1);
-        fs::write(&path, &text).unwrap();
-        let (draft, disk) = book.conflict_comparison().unwrap();
-        assert_eq!(disk, text);
-        let (_, changed) = crate::design::comparison_changes(&draft, &disk);
-        let body_change = *changed.last().unwrap();
-        assert_eq!(disk.lines().nth(body_change), Some(""));
-        assert_eq!(disk.lines().nth(body_change + 1), Some("DM's paragraph."));
-        assert!(!draft.contains("DM's paragraph."));
-        assert!(draft.contains("tags: [DM]") && draft.contains("weather: rain"));
-        book.overwrite();
-        assert_eq!(fs::read_to_string(path).unwrap(), draft);
     }
 
     #[test]
@@ -2131,11 +1813,14 @@ mod tests {
     fn a_change_on_disk_stops_saving_until_the_dm_chooses() {
         let dir = tempfile::tempdir().unwrap();
         let mut book = book(dir.path());
-        book.add(Kind::Day, None);
+        let day = book.add(Kind::Day, None);
         book.save();
         let path = dir.path().join(FILE);
-        let outside = "---\ntimeline_version: 1\ntimeline:\n- id: t-outside\n  kind: event\n---\n";
-        fs::write(&path, outside).unwrap();
+        let mut outside_events = book.events.clone();
+        outside_events[0].title = "Outside edit".into();
+        let outside = render(&outside_events, &BTreeMap::new()).unwrap();
+        fs::write(&path, &outside).unwrap();
+        book.event_mut(&day).unwrap().title = "Our edit".into();
         book.add(Kind::LongRest, None);
         book.save();
         assert!(book.conflict && book.not_saved());
@@ -2143,28 +1828,28 @@ mod tests {
         book.reload();
         assert!(!book.conflict);
         assert_eq!(book.events.len(), 1);
-        assert_eq!(book.events[0].id, "t-outside");
+        assert_eq!(book.events[0].title, "Outside edit");
+        book.event_mut(&day).unwrap().title = "Our next edit".into();
         book.add(Kind::Day, None);
-        fs::write(&path, outside.replace("t-outside", "t-again")).unwrap();
+        fs::write(&path, outside.replace("Outside edit", "Their next edit")).unwrap();
         book.save();
+        assert!(book.conflict);
         book.overwrite();
         assert!(!book.conflict);
-        assert_eq!(
-            self::parse(&fs::read_to_string(&path).unwrap())
-                .unwrap()
-                .len(),
-            2
-        );
+        let saved = self::parse(&fs::read_to_string(&path).unwrap()).unwrap();
+        assert_eq!(saved.len(), 2);
+        assert_eq!(saved[0].title, "Our next edit");
     }
 
     #[test]
     fn a_reload_in_a_conflict_has_one_step_of_undo() {
         let dir = tempfile::tempdir().unwrap();
         let mut book = book(dir.path());
-        book.add(Kind::Day, None);
+        let day = book.add(Kind::Day, None);
         book.save();
-        let outside = "---\ntimeline_version: 1\ntimeline: []\n---\n";
+        let outside = "---\ntimeline_version: 2\n---\n";
         fs::write(dir.path().join(FILE), outside).unwrap();
+        book.event_mut(&day).unwrap().title = "Our edit".into();
         let rest = book.add(Kind::LongRest, None);
         book.save();
         assert!(book.conflict);
@@ -2191,9 +1876,20 @@ mod tests {
     }
 
     #[test]
-    fn a_duplicate_id_is_refused_when_read() {
-        let text = "---\ntimeline_version: 1\ntimeline:\n- {id: a, kind: day}\n- {id: a, kind: day}\n---\n";
-        assert!(parse(text).unwrap_err().contains("not unique"));
+    fn old_timeline_is_flagged_and_not_loaded() {
+        let dir = tempfile::tempdir().unwrap();
+        let text = "---\ntimeline_version: 1\ntimeline: []\n---\n";
+        assert_eq!(parse(text).unwrap_err(), splat::content::OLD_LAYOUT);
+        fs::write(dir.path().join(FILE), text).unwrap();
+        let book = book(dir.path());
+        assert!(book.events.is_empty());
+        assert!(
+            book.unreadable
+                .as_ref()
+                .unwrap()
+                .contains(splat::content::OLD_LAYOUT)
+        );
+        assert_eq!(fs::read_to_string(dir.path().join(FILE)).unwrap(), text);
     }
 
     #[test]

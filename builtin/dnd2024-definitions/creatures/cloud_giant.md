@@ -1,34 +1,60 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: ae3f8349-3c70-579f-abc5-99126ce42f69
 splat_kind: creature
 splat_key: dnd2024:creatures/cloud_giant
 splat_name: Cloud Giant
-splat_origin:
-  key: dnd2024:reference/creature/cloud_giant
+splat_origin: dnd2024:reference/creature/cloud_giant
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 275
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 275, https://www.dndbeyond.com/srd
 ---
 
 # Cloud Giant
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Huge |
+| Type | Giant |
+| Alignment | Neutral |
+| Armor Class | 14 |
+| Hit Points | 200 (16d12 + 96) |
+| Initiative | +4 (14) |
+| Speed | 40 ft., Fly 20 ft. (hover) |
+| Challenge | 9 (XP 5,000; PB +4) |
+| Skills | Insight +7, Perception +11 |
+| Senses | Passive Perception 21 |
+| Languages | Common, Giant |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 27 | +8 | +8 |
+| Dex | 10 | +0 | +0 |
+| Con | 22 | +6 | +10 |
+| Int | 12 | +1 | +1 |
+| Wis | 16 | +3 | +7 |
+| Cha | 16 | +3 | +3 |
+
 
 ## Source text
 
 <!-- SRD page 275 -->
 
-Huge Giant, Neutral\
-AC 14 Initiative +4 (14)\
-HP 200 (16d12 + 96)\
-Speed 40 ft., Fly 20 ft. (hover)\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 27 +8 +8 Dex 10 +0 +0 Con 22 +6 +10\
-Int 12 +1 +1 Wis 16 +3 +7 Cha 16 +3 +3\
-Skills Insight +7, Perception +11\
-Senses Passive Perception 21\
-Languages Common, Giant\
-CR 9 (XP 5,000; PB +4)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Huge Giant, Neutral\
+> AC 14 Initiative +4 (14)\
+> HP 200 (16d12 + 96)\
+> Speed 40 ft., Fly 20 ft. (hover)\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 27 +8 +8 Dex 10 +0 +0 Con 22 +6 +10\
+> Int 12 +1 +1 Wis 16 +3 +7 Cha 16 +3 +3\
+> Skills Insight +7, Perception +11\
+> Senses Passive Perception 21\
+> Languages Common, Giant\
+> CR 9 (XP 5,000; PB +4)
+
 
 ### Actions
 
@@ -49,46 +75,11 @@ Misty Step. The giant casts the Misty Step spell, using the same spellcasting ab
 
 Original layout: [[../../srd-5.2.1/pages/275|page 275]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` huge ` |
-| ` type ` | ` giant ` |
-| ` alignment ` | ` Neutral ` |
-| ` movement_text ` | ` 40 ft., Fly 20 ft. (hover) ` |
-| ` skills_text ` | ` Insight +7, Perception +11 ` |
-| ` senses_text ` | ` Passive Perception 21 ` |
-| ` languages_text ` | ` Common, Giant ` |
-| ` cr_text ` | ` 9 (XP 5,000; PB +4) ` |
-| ` hit_points_text ` | ` 200 (16d12 + 96) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 27 ` | ` 8 ` |
-| ` Dexterity ` | ` 10 ` | ` 0 ` |
-| ` Constitution ` | ` 22 ` | ` 10 ` |
-| ` Intelligence ` | ` 12 ` | ` 1 ` |
-| ` Wisdom ` | ` 16 ` | ` 7 ` |
-| ` Charisma ` | ` 16 ` | ` 3 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 14 ` |  |
-| ` max_hp ` | ` 200 ` |  |
-| ` initiative ` | ` 4 ` |  |
-| ` speed ` | ` 40 ` | ` ft ` |
-| ` fly_speed ` | ` 20 ` | ` ft ` |
 
 ## Health
 
@@ -339,3 +330,13 @@ other_components: spell_definition_unless_waived
 | ` provider ` | ` caller ` |
 | ` required_facts ` | ` ["distance", "area_membership", "visibility", "occupancy", "movement_path"] ` |
 | ` validate_against_typed_constraints ` | ` true ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_stats_extras -->
+> 
+> ```yaml
+> fly_speed:
+>   unit: ft
+>   value: 20
+> ```
+

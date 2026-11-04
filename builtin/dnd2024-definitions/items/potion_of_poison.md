@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 450aaf9d-fa3a-5c68-b39f-96530f4dd743
 splat_kind: item
 splat_key: dnd2024:items/potion_of_poison
 splat_name: Potion of Poison
-splat_origin:
-  key: dnd2024:reference/magic_item/potion_of_poison
+splat_origin: dnd2024:reference/magic_item/potion_of_poison
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 236
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 236, https://www.dndbeyond.com/srd
 ---
 
 # Potion of Poison
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Potion |
+| Rarity | Uncommon |
+| Attunement | No |
+
 
 ## Source text
 
@@ -26,22 +33,9 @@ If you drink this potion, you take 4d6 Poison damage and must succeed on a DC 13
 
 Original layout: [[../../srd-5.2.1/pages/236|page 236]].
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` potion ` |
-| ` rarity ` | ` uncommon ` |
 
-### Equipment
-
-<!-- splat:values path=splat_item/equipment -->
-
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` none ` |
 
 ## Rule
 

@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: e1dd804f-df5d-58a0-ab02-c00e841c8ce3
 splat_kind: spell
 splat_key: dnd2024:spells/tsunami
 splat_name: Tsunami
-splat_origin:
-  key: dnd2024:reference/spell/tsunami
+splat_origin: dnd2024:reference/spell/tsunami
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 171
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 171, https://www.dndbeyond.com/srd
 ---
 
 # Tsunami
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 8 |
+| School | Conjuration |
+| Classes | Druid |
+| Casting Time | 1 minute |
+| Range |  |
+| Components | V, S |
+| Duration | Concentration, up to 6 rounds |
+
 
 ## Source text
 
@@ -34,28 +45,9 @@ A creature caught in the wall can move by swimming. Because of the wave’s forc
 
 Original layout: [[../../srd-5.2.1/pages/171|page 171]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 8 ` |
-| ` school ` | ` conjuration ` |
-| ` classes ` | ` ["druid"] ` |
-| ` components ` | ` ["verbal", "somatic"] ` |
-| ` concentration ` | ` true ` |
-| ` duration ` | ` Concentration, up to 6 rounds ` |
-| ` casting_time ` | ` 1 minute ` |
-| ` ritual ` | ` false ` |
 
-### Range
-
-<!-- splat:values path=splat_spell/range -->
-
-| Field | Value |
-| --- | --- |
-| ` mode ` | ` 1 mile ` |
 
 ## Rule
 
@@ -182,3 +174,12 @@ exit_wall: fall_to_ground
 | ` source ` | ` supplied_world_geometry ` |
 | ` unknown_facts ` | ` require_resolution ` |
 | ` infer_unprovided_geometry ` | ` false ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_spell_extras -->
+> 
+> ```yaml
+> range:
+>   mode: 1 mile
+> ```
+

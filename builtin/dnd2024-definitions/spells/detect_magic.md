@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: ac9606ad-e79a-552d-9f6e-f3a401571dfe
 splat_kind: spell
 splat_key: dnd2024:spells/detect_magic
 splat_name: Detect Magic
-splat_origin:
-  key: dnd2024:reference/spell/detect_magic
+splat_origin: dnd2024:reference/spell/detect_magic
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 123
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 123, https://www.dndbeyond.com/srd
 ---
 
 # Detect Magic
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 1 |
+| School | Divination |
+| Classes | Bard, Cleric, Druid, Paladin, Ranger, Sorcerer, Warlock, Wizard |
+| Casting Time | Action or Ritual |
+| Range |  |
+| Components | V, S |
+| Duration | Concentration, up to 10 minutes |
+
 
 ## Source text
 
@@ -30,28 +41,9 @@ The spell is blocked by 1 foot of stone, dirt, or wood; 1 inch of metal; or a th
 
 Original layout: [[../../srd-5.2.1/pages/123|page 123]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 1 ` |
-| ` school ` | ` divination ` |
-| ` classes ` | ` ["bard", "cleric", "druid", "paladin", "ranger", "sorcerer", "warlock", "wizard"] ` |
-| ` components ` | ` ["verbal", "somatic"] ` |
-| ` concentration ` | ` true ` |
-| ` duration ` | ` Concentration, up to 10 minutes ` |
-| ` casting_time ` | ` Action or Ritual ` |
-| ` ritual ` | ` true ` |
 
-### Range
-
-<!-- splat:values path=splat_spell/range -->
-
-| Field | Value |
-| --- | --- |
-| ` mode ` | ` self ` |
 
 ## Rule
 
@@ -138,3 +130,12 @@ maximum:
   value: 10
   unit: minute
 ```
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_spell_extras -->
+> 
+> ```yaml
+> range:
+>   mode: self
+> ```
+

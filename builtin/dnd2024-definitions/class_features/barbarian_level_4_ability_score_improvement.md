@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: e742b115-ac2a-5f2d-b2b4-77ebb417f155
 splat_kind: rule
 splat_key: dnd2024:class_features/barbarian_level_4_ability_score_improvement
 splat_name: 'Level 4: Ability Score Improvement'
-splat_origin:
-  key: dnd2024:reference/pages/029
+splat_origin: dnd2024:reference/pages/029
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 29
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 29, https://www.dndbeyond.com/srd
 ---
 
 # Level 4: Ability Score Improvement

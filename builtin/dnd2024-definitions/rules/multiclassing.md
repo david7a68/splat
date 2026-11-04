@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 823c2e47-2e1a-54e0-b527-5c297213e020
 splat_kind: rule
 splat_key: dnd2024:rules/multiclassing
 splat_name: Multiclassing
-splat_origin:
-  key: dnd2024:reference/pages/024
+splat_origin: dnd2024:reference/pages/024
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 24
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 24, https://www.dndbeyond.com/srd
 ---
 
 # Multiclassing

@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "d3f28ca2-0502-5afe-9b1e-b2147c4479e9"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/meteor_swarm"
 splat_name: "Meteor Swarm"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [149], "executable": false}
+splat_pages:
+- 149
 ---
 
 # Meteor Swarm
@@ -22,3 +23,13 @@ Blazing orbs of fire plummet to the ground at four different points you can see 
 A nonmagical object that isn’t being worn or carried also takes the damage if it’s in the spell’s area, and the object starts burning if it’s flammable.
 
 Original layout: [[../pages/149|page 149]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

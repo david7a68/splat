@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "e4df50b7-3a81-58b4-9c3a-b49e0a05cf29"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/glossary/influence_action"
 splat_name: "Influence [Action]"
-splat_reference: {"source": "SRD 5.2.1", "category": "glossary", "pages": [184], "executable": false}
+splat_pages:
+- 184
 ---
 
 # Influence [Action]
@@ -30,3 +31,13 @@ Hesitant. If you urge the monster to do something that it is hesitant to do, you
 | Wisdom (Animal Handling) | Gently coaxing a Beast or Monstrosity |
 
 Original layout: [[../pages/184|page 184]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: glossary
+> executable: false
+> ```
+

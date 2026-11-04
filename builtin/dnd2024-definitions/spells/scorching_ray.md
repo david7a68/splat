@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 0a96f42b-3b27-57e4-a112-4553a424129b
 splat_kind: spell
 splat_key: dnd2024:spells/scorching_ray
 splat_name: Scorching Ray
-splat_origin:
-  key: dnd2024:reference/spell/scorching_ray
+splat_origin: dnd2024:reference/spell/scorching_ray
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 159
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 159, https://www.dndbeyond.com/srd
 ---
 
 # Scorching Ray
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 2 |
+| School | Evocation |
+| Classes | Sorcerer, Wizard |
+| Casting Time | Action |
+| Range | 120 feet |
+| Components | V, S |
+| Duration | Instantaneous |
+
 
 ## Source text
 
@@ -30,28 +41,9 @@ Using a Higher-Level Spell Slot. You create one additional ray for each spell sl
 
 Original layout: [[../../srd-5.2.1/pages/159|page 159]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 2 ` |
-| ` school ` | ` evocation ` |
-| ` classes ` | ` ["sorcerer", "wizard"] ` |
-| ` components ` | ` ["verbal", "somatic"] ` |
-| ` concentration ` | ` false ` |
-| ` duration ` | ` Instantaneous ` |
-| ` casting_time ` | ` Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
-
-<!-- splat:values path=splat_spell/range -->
-
-| Field | Value |
-| --- | --- |
-| ` feet ` | ` 120 ` |
 
 ## Rule
 

@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: f591f989-571f-5ebb-af12-81da3f512204
 splat_kind: rule
 splat_key: dnd2024:feats/fighting_style_feats_defense
 splat_name: Defense
-splat_origin:
-  key: dnd2024:reference/pages/088
+splat_origin: dnd2024:reference/pages/088
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 88
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 88, https://www.dndbeyond.com/srd
 ---
 
 # Defense

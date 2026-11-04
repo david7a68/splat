@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 03f997cb-7c4e-58c3-997a-c948ba0ef9ab
 splat_kind: item
 splat_key: dnd2024:items/flame_tongue
 splat_name: Flame Tongue
-splat_origin:
-  key: dnd2024:reference/magic_item/flame_tongue
+splat_origin: dnd2024:reference/magic_item/flame_tongue
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 223
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 223, https://www.dndbeyond.com/srd
 ---
 
 # Flame Tongue
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Weapon |
+| Rarity | Rare |
+| Attunement | Yes |
+
 
 ## Source text
 
@@ -24,22 +31,9 @@ While holding this magic weapon, you can take a Bonus Action and use a command w
 
 Original layout: [[../../srd-5.2.1/pages/223|page 223]].
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` weapon ` |
-| ` rarity ` | ` rare ` |
 
-### Equipment
-
-<!-- splat:values path=splat_item/equipment -->
-
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` required ` |
 
 ## Rule
 

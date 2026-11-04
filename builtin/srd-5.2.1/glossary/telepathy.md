@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "a4de36f6-bcbf-599c-87f7-0bd92ea54c2a"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/glossary/telepathy"
 splat_name: "Telepathy"
-splat_reference: {"source": "SRD 5.2.1", "category": "glossary", "pages": [190], "executable": false}
+splat_pages:
+- 190
 ---
 
 # Telepathy
@@ -18,3 +19,13 @@ A telepath doesn’t need to see a contacted creature, and the telepath can star
 A creature without telepathy can receive telepathic messages but can’t initiate a telepathic conversation. Once a telepathic conversation starts, the non-telepath can communicate mentally to the telepath until the telepathic connection ends.
 
 Original layout: [[../pages/190|page 190]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: glossary
+> executable: false
+> ```
+

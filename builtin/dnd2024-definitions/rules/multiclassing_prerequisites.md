@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 752ca5af-c9f9-50d5-827f-6c64627e1d8f
 splat_kind: rule
 splat_key: dnd2024:rules/multiclassing_prerequisites
 splat_name: Prerequisites
-splat_origin:
-  key: dnd2024:reference/pages/024
+splat_origin: dnd2024:reference/pages/024
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 24, 25
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 24, 25, https://www.dndbeyond.com/srd
 ---
 
 # Prerequisites

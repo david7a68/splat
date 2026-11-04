@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 8393413c-5fce-50fc-88b6-6e8257329016
 splat_kind: rule
 splat_key: dnd2024:rules/level_advancement_tier_1_levels_1_4
 splat_name: Tier 1 (Levels 1–4)
-splat_origin:
-  key: dnd2024:reference/pages/024
+splat_origin: dnd2024:reference/pages/024
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 24
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 24, https://www.dndbeyond.com/srd
 ---
 
 # Tier 1 (Levels 1–4)

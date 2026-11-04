@@ -1,34 +1,60 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: a00af030-27f8-5d34-99f9-5b74dc3ce8e9
 splat_kind: creature
 splat_key: dnd2024:creatures/stone_giant
 splat_name: Stone Giant
-splat_origin:
-  key: dnd2024:reference/creature/stone_giant
+splat_origin: dnd2024:reference/creature/stone_giant
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 330
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 330, https://www.dndbeyond.com/srd
 ---
 
 # Stone Giant
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Huge |
+| Type | Giant |
+| Alignment | Neutral |
+| Armor Class | 17 |
+| Hit Points | 126 (11d12 + 55) |
+| Initiative | +5 (15) |
+| Speed | 40 ft. |
+| Challenge | 7 (XP 2,900; PB +3) |
+| Skills | Athletics +12, Perception +4, Stealth +5 |
+| Senses | Darkvision 60 ft.; Passive Perception 14 |
+| Languages | Giant |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 23 | +6 | +6 |
+| Dex | 15 | +2 | +5 |
+| Con | 20 | +5 | +8 |
+| Int | 10 | +0 | +0 |
+| Wis | 12 | +1 | +4 |
+| Cha | 9 | -1 | -1 |
+
 
 ## Source text
 
 <!-- SRD page 330 -->
 
-Huge Giant, Neutral\
-AC 17 Initiative +5 (15)\
-HP 126 (11d12 + 55)\
-Speed 40 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 23 +6 +6 Dex 15 +2 +5 Con 20 +5 +8\
-Int 10 +0 +0 Wis 12 +1 +4 Cha 9 −1 −1\
-Skills Athletics +12, Perception +4, Stealth +5\
-Senses Darkvision 60 ft.; Passive Perception 14\
-Languages Giant\
-CR 7 (XP 2,900; PB +3)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Huge Giant, Neutral\
+> AC 17 Initiative +5 (15)\
+> HP 126 (11d12 + 55)\
+> Speed 40 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 23 +6 +6 Dex 15 +2 +5 Con 20 +5 +8\
+> Int 10 +0 +0 Wis 12 +1 +4 Cha 9 −1 −1\
+> Skills Athletics +12, Perception +4, Stealth +5\
+> Senses Darkvision 60 ft.; Passive Perception 14\
+> Languages Giant\
+> CR 7 (XP 2,900; PB +3)
+
 
 ### Actions
 
@@ -44,45 +70,11 @@ Deflect Missile (Recharge 5–6). Trigger: The giant is hit by a ranged attack r
 
 Original layout: [[../../srd-5.2.1/pages/330|page 330]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` huge ` |
-| ` type ` | ` giant ` |
-| ` alignment ` | ` Neutral ` |
-| ` movement_text ` | ` 40 ft. ` |
-| ` skills_text ` | ` Athletics +12, Perception +4, Stealth +5 ` |
-| ` senses_text ` | ` Darkvision 60 ft.; Passive Perception 14 ` |
-| ` languages_text ` | ` Giant ` |
-| ` cr_text ` | ` 7 (XP 2,900; PB +3) ` |
-| ` hit_points_text ` | ` 126 (11d12 + 55) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 23 ` | ` 6 ` |
-| ` Dexterity ` | ` 15 ` | ` 5 ` |
-| ` Constitution ` | ` 20 ` | ` 8 ` |
-| ` Intelligence ` | ` 10 ` | ` 0 ` |
-| ` Wisdom ` | ` 12 ` | ` 4 ` |
-| ` Charisma ` | ` 9 ` | ` -1 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 17 ` |  |
-| ` max_hp ` | ` 126 ` |  |
-| ` initiative ` | ` 5 ` |  |
-| ` speed ` | ` 40 ` | ` ft ` |
 
 ## Health
 

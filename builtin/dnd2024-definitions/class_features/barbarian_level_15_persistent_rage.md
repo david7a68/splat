@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: b1c3a794-12a5-5ad1-9427-e3f29854c512
 splat_kind: rule
 splat_key: dnd2024:class_features/barbarian_level_15_persistent_rage
 splat_name: 'Level 15: Persistent Rage'
-splat_origin:
-  key: dnd2024:reference/pages/030
+splat_origin: dnd2024:reference/pages/030
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 30
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 30, https://www.dndbeyond.com/srd
 ---
 
 # Level 15: Persistent Rage

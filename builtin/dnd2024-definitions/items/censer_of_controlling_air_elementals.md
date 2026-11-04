@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 628203ef-4479-58ab-b84a-0d5d2be14f57
 splat_kind: item
 splat_key: dnd2024:items/censer_of_controlling_air_elementals
 splat_name: Censer of Controlling Air Elementals
-splat_origin:
-  key: dnd2024:reference/magic_item/censer_of_controlling_air_elementals
+splat_origin: dnd2024:reference/magic_item/censer_of_controlling_air_elementals
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 215
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 215, https://www.dndbeyond.com/srd
 ---
 
 # Censer of Controlling Air Elementals
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Wondrous Item |
+| Rarity | Rare |
+| Attunement | No |
+
 
 ## Source text
 
@@ -24,22 +31,9 @@ While gently swinging this censer, you can take a Magic action to summon an Air 
 
 Original layout: [[../../srd-5.2.1/pages/215|page 215]].
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` wondrous_item ` |
-| ` rarity ` | ` rare ` |
 
-### Equipment
-
-<!-- splat:values path=splat_item/equipment -->
-
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` none ` |
 
 ## Rule
 

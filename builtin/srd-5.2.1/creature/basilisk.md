@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "50ede794-8efa-5626-ab42-9ee2a55adf5b"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/basilisk"
 splat_name: "Basilisk"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [262], "executable": false}
+splat_pages:
+- 262
 ---
 
 # Basilisk
@@ -31,3 +32,13 @@ Bite. Melee Attack Roll: +5, reach 5 ft. Hit: 10 (2d6 + 3) Piercing damage plus 
 Petrifying Gaze (Recharge 4–6). Constitution Saving Throw: DC 12, each creature in a 30-foot Cone. If the basilisk sees its reflection in the Cone, the basilisk must make this save. First Failure: The target has the Restrained condition and repeats the save at the end of its next turn if it is still Restrained, ending the effect on itself on a success. Second Failure: The target has the Petrified condition instead of the Restrained condition.
 
 Original layout: [[../pages/262|page 262]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

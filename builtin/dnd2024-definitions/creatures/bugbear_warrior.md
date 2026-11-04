@@ -1,35 +1,62 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: a13cbe49-3f0c-5ea5-aef8-a35899999be3
 splat_kind: creature
 splat_key: dnd2024:creatures/bugbear_warrior
 splat_name: Bugbear Warrior
-splat_origin:
-  key: dnd2024:reference/creature/bugbear_warrior
+splat_origin: dnd2024:reference/creature/bugbear_warrior
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 272
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 272, https://www.dndbeyond.com/srd
 ---
 
 # Bugbear Warrior
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Medium |
+| Type | Fey (Goblinoid) |
+| Alignment | Chaotic Evil |
+| Armor Class | 14 |
+| Hit Points | 33 (6d8 + 6) |
+| Initiative | +2 (12) |
+| Speed | 30 ft. |
+| Challenge | 1 (XP 200; PB +2) |
+| Skills | Stealth +6, Survival +2 |
+| Senses | Darkvision 60 ft.; Passive Perception 10 |
+| Languages | Common, Goblin |
+| Gear | Hide Armor, Light Hammers (3) |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 15 | +2 | +2 |
+| Dex | 14 | +2 | +2 |
+| Con | 13 | +1 | +1 |
+| Int | 8 | -1 | -1 |
+| Wis | 11 | +0 | +0 |
+| Cha | 9 | -1 | -1 |
+
 
 ## Source text
 
 <!-- SRD page 272 -->
 
-Medium Fey (Goblinoid), Chaotic Evil\
-AC 14 Initiative +2 (12)\
-HP 33 (6d8 + 6)\
-Speed 30 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 15 +2 +2 Dex 14 +2 +2 Con 13 +1 +1\
-Int 8 −1 −1 Wis 11 +0 +0 Cha 9 −1 −1\
-Skills Stealth +6, Survival +2\
-Gear Hide Armor, Light Hammers (3)\
-Senses Darkvision 60 ft.; Passive Perception 10\
-Languages Common, Goblin\
-CR 1 (XP 200; PB +2)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Medium Fey (Goblinoid), Chaotic Evil\
+> AC 14 Initiative +2 (12)\
+> HP 33 (6d8 + 6)\
+> Speed 30 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 15 +2 +2 Dex 14 +2 +2 Con 13 +1 +1\
+> Int 8 −1 −1 Wis 11 +0 +0 Cha 9 −1 −1\
+> Skills Stealth +6, Survival +2\
+> Gear Hide Armor, Light Hammers (3)\
+> Senses Darkvision 60 ft.; Passive Perception 10\
+> Languages Common, Goblin\
+> CR 1 (XP 200; PB +2)
+
 
 ### Traits
 
@@ -43,47 +70,11 @@ Light Hammer. Melee or Ranged Attack Roll: +4 (with Advantage if the target is G
 
 Original layout: [[../../srd-5.2.1/pages/272|page 272]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` medium ` |
-| ` type ` | ` fey ` |
-| ` alignment ` | ` Chaotic Evil ` |
-| ` tags_text ` | ` (Goblinoid) ` |
-| ` movement_text ` | ` 30 ft. ` |
-| ` skills_text ` | ` Stealth +6, Survival +2 ` |
-| ` gear_text ` | ` Hide Armor, Light Hammers (3) ` |
-| ` senses_text ` | ` Darkvision 60 ft.; Passive Perception 10 ` |
-| ` languages_text ` | ` Common, Goblin ` |
-| ` cr_text ` | ` 1 (XP 200; PB +2) ` |
-| ` hit_points_text ` | ` 33 (6d8 + 6) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 15 ` | ` 2 ` |
-| ` Dexterity ` | ` 14 ` | ` 2 ` |
-| ` Constitution ` | ` 13 ` | ` 1 ` |
-| ` Intelligence ` | ` 8 ` | ` -1 ` |
-| ` Wisdom ` | ` 11 ` | ` 0 ` |
-| ` Charisma ` | ` 9 ` | ` -1 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 14 ` |  |
-| ` max_hp ` | ` 33 ` |  |
-| ` initiative ` | ` 2 ` |  |
-| ` speed ` | ` 30 ` | ` ft ` |
 
 ## Health
 

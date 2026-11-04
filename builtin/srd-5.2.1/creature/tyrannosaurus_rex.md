@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "472a50a8-e92b-59ca-9d24-606b7af0344a"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/tyrannosaurus_rex"
 splat_name: "Tyrannosaurus Rex"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [363], "executable": false}
+splat_pages:
+- 363
 ---
 
 # Tyrannosaurus Rex
@@ -32,3 +33,13 @@ Bite. Melee Attack Roll: +10, reach 10 ft. Hit: 33 (4d12 + 7) Piercing damage. I
 Tail. Melee Attack Roll: +10, reach 15 ft. Hit: 25 (4d8 + 7) Bludgeoning damage. If the target is a Huge or smaller creature, it has the Prone condition.
 
 Original layout: [[../pages/363|page 363]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

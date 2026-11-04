@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "6bc4d62a-5974-55dd-a2fc-7f60537062ca"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/ensnaring_strike"
 splat_name: "Ensnaring Strike"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [128], "executable": false}
+splat_pages:
+- 128
 ---
 
 # Ensnaring Strike
@@ -24,3 +25,13 @@ While Restrained, the target takes 1d6 Piercing damage at the start of each of i
 Using a Higher-Level Spell Slot. The damage increases by 1d6 for each spell slot level above 1.
 
 Original layout: [[../pages/128|page 128]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

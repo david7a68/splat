@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "41e053d0-86fb-5f53-af1d-0a74c6e93f9a"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/detect_magic"
 splat_name: "Detect Magic"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [123], "executable": false}
+splat_pages:
+- 123
 ---
 
 # Detect Magic
@@ -22,3 +23,13 @@ For the duration, you sense the presence of magical effects within 30 feet of yo
 The spell is blocked by 1 foot of stone, dirt, or wood; 1 inch of metal; or a thin sheet of lead.
 
 Original layout: [[../pages/123|page 123]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

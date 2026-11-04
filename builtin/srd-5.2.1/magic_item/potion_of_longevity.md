@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "78f524a1-fbbd-5333-81e9-0280c4b4a9e3"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/magic_item/potion_of_longevity"
 splat_name: "Potion of Longevity"
-splat_reference: {"source": "SRD 5.2.1", "category": "magic_item", "pages": [236], "executable": false}
+splat_pages:
+- 236
 ---
 
 # Potion of Longevity
@@ -18,3 +19,13 @@ When you drink this potion, your physical age is reduced by 1d6 + 6 years, to a 
 Suspended in this amber liquid is a tiny heart that, against all reason, is still beating. These ingredients vanish when the potion is opened.
 
 Original layout: [[../pages/236|page 236]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: magic_item
+> executable: false
+> ```
+

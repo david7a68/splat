@@ -1,35 +1,62 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 9c5354de-82e7-5e8a-8bb0-7514dd3a73c0
 splat_kind: creature
 splat_key: dnd2024:creatures/swarm_of_piranhas
 splat_name: Swarm of Piranhas
-splat_origin:
-  key: dnd2024:reference/creature/swarm_of_piranhas
+splat_origin: dnd2024:reference/creature/swarm_of_piranhas
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 362
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 362, https://www.dndbeyond.com/srd
 ---
 
 # Swarm of Piranhas
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Medium Swarm of Tiny |
+| Type | Beast |
+| Alignment | Unaligned |
+| Armor Class | 13 |
+| Hit Points | 28 (8d8 - 8) |
+| Initiative | +3 (13) |
+| Speed | 5 ft., Swim 40 ft. |
+| Challenge | 1 (XP 200; PB +2) |
+| Senses | Darkvision 60 ft.; Passive Perception 8 |
+| Languages | None |
+| Resistances | Bludgeoning, Piercing, Slashing |
+| Immunities | Charmed, Frightened, Grappled, Paralyzed, Petrified, Prone, Restrained, Stunned |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 13 | +1 | +1 |
+| Dex | 16 | +3 | +3 |
+| Con | 9 | -1 | -1 |
+| Int | 1 | -5 | -5 |
+| Wis | 7 | -2 | -2 |
+| Cha | 2 | -4 | -4 |
+
 
 ## Source text
 
 <!-- SRD page 362 -->
 
 Medium Swarm of Tiny Beasts, Unaligned\
-AC 13 Initiative +3 (13)\
-HP 28 (8d8 − 8)\
-Speed 5 ft., Swim 40 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 13 +1 +1 Dex 16 +3 +3 Con 9 −1 −1\
-Int 1 −5 −5 Wis 7 −2 −2 Cha 2 −4 −4\
-Resistances Bludgeoning, Piercing, Slashing\
-Immunities Charmed, Frightened, Grappled, Paralyzed, Petrified, Prone, Restrained, Stunned\
-Senses Darkvision 60 ft.; Passive Perception 8\
-Languages None\
-CR 1 (XP 200; PB +2)
+> [!quote]- Printed stat block (not read; edit the table above)
+> AC 13 Initiative +3 (13)\
+> HP 28 (8d8 − 8)\
+> Speed 5 ft., Swim 40 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 13 +1 +1 Dex 16 +3 +3 Con 9 −1 −1\
+> Int 1 −5 −5 Wis 7 −2 −2 Cha 2 −4 −4\
+> Resistances Bludgeoning, Piercing, Slashing\
+> Immunities Charmed, Frightened, Grappled, Paralyzed, Petrified, Prone, Restrained, Stunned\
+> Senses Darkvision 60 ft.; Passive Perception 8\
+> Languages None\
+> CR 1 (XP 200; PB +2)
+
 
 ### Traits
 
@@ -43,48 +70,11 @@ Bites. Melee Attack Roll: +5 (with Advantage if the target doesn’t have all it
 
 Original layout: [[../../srd-5.2.1/pages/362|page 362]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` medium ` |
-| ` type ` | ` beast ` |
-| ` alignment ` | ` Unaligned ` |
-| ` size_options_text ` | ` Medium Swarm of Tiny ` |
-| ` movement_text ` | ` 5 ft., Swim 40 ft. ` |
-| ` resistances_text ` | ` Bludgeoning, Piercing, Slashing ` |
-| ` immunities_text ` | ` Charmed, Frightened, Grappled, Paralyzed, Petrified, Prone, Restrained, Stunned ` |
-| ` senses_text ` | ` Darkvision 60 ft.; Passive Perception 8 ` |
-| ` languages_text ` | ` None ` |
-| ` cr_text ` | ` 1 (XP 200; PB +2) ` |
-| ` hit_points_text ` | ` 28 (8d8 - 8) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 13 ` | ` 1 ` |
-| ` Dexterity ` | ` 16 ` | ` 3 ` |
-| ` Constitution ` | ` 9 ` | ` -1 ` |
-| ` Intelligence ` | ` 1 ` | ` -5 ` |
-| ` Wisdom ` | ` 7 ` | ` -2 ` |
-| ` Charisma ` | ` 2 ` | ` -4 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 13 ` |  |
-| ` max_hp ` | ` 28 ` |  |
-| ` initiative ` | ` 3 ` |  |
-| ` speed ` | ` 5 ` | ` ft ` |
-| ` swim_speed ` | ` 40 ` | ` ft ` |
 
 ## Health
 
@@ -224,3 +214,13 @@ advantage_when:
 | ` provider ` | ` caller ` |
 | ` required_facts ` | ` ["distance", "area_membership", "visibility", "occupancy", "movement_path"] ` |
 | ` validate_against_typed_constraints ` | ` true ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_stats_extras -->
+> 
+> ```yaml
+> swim_speed:
+>   unit: ft
+>   value: 40
+> ```
+

@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 8344fcc7-ab23-5c62-a184-db3913394a69
 splat_kind: spell
 splat_key: dnd2024:spells/grease
 splat_name: Grease
-splat_origin:
-  key: dnd2024:reference/spell/grease
+splat_origin: dnd2024:reference/spell/grease
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 137
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 137, https://www.dndbeyond.com/srd
 ---
 
 # Grease
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 1 |
+| School | Conjuration |
+| Classes | Sorcerer, Wizard |
+| Casting Time | Action |
+| Range | 60 feet |
+| Components | V, S, M (a bit of pork rind or butter) |
+| Duration | 1 minute |
+
 
 ## Source text
 
@@ -30,37 +41,11 @@ When the grease appears, each creature standing in its area must succeed on a De
 
 Original layout: [[../../srd-5.2.1/pages/137|page 137]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 1 ` |
-| ` school ` | ` conjuration ` |
-| ` classes ` | ` ["sorcerer", "wizard"] ` |
-| ` components ` | ` ["verbal", "somatic", "material"] ` |
-| ` concentration ` | ` false ` |
-| ` duration ` | ` 1 minute ` |
-| ` casting_time ` | ` Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
 
-<!-- splat:values path=splat_spell/range -->
 
-| Field | Value |
-| --- | --- |
-| ` feet ` | ` 60 ` |
-
-### Material
-
-<!-- splat:values path=splat_spell/material -->
-
-| Field | Value |
-| --- | --- |
-| ` description ` | ` a bit of pork rind or butter ` |
-| ` consumed ` | ` false ` |
 
 ## Rule
 
@@ -150,3 +135,12 @@ columns:
 | ` source ` | ` supplied_world_geometry ` |
 | ` unknown_facts ` | ` require_resolution ` |
 | ` infer_unprovided_geometry ` | ` false ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_spell_extras -->
+> 
+> ```yaml
+> material:
+>   consumed: false
+> ```
+

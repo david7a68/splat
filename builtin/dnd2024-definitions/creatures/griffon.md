@@ -1,34 +1,60 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: f3b29089-44cc-5d81-b254-7e8304b98d9e
 splat_kind: creature
 splat_key: dnd2024:creatures/griffon
 splat_name: Griffon
-splat_origin:
-  key: dnd2024:reference/creature/griffon
+splat_origin: dnd2024:reference/creature/griffon
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 295
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 295, https://www.dndbeyond.com/srd
 ---
 
 # Griffon
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Large |
+| Type | Monstrosity |
+| Alignment | Unaligned |
+| Armor Class | 12 |
+| Hit Points | 59 (7d10 + 21) |
+| Initiative | +2 (12) |
+| Speed | 30 ft., Fly 80 ft. |
+| Challenge | 2 (XP 450; PB +2) |
+| Skills | Perception +5 |
+| Senses | Darkvision 60 ft.; Passive Perception 15 |
+| Languages | None |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 18 | +4 | +4 |
+| Dex | 15 | +2 | +2 |
+| Con | 16 | +3 | +3 |
+| Int | 2 | -4 | -4 |
+| Wis | 13 | +1 | +1 |
+| Cha | 8 | -1 | -1 |
+
 
 ## Source text
 
 <!-- SRD page 295 -->
 
-Large Monstrosity, Unaligned\
-AC 12 Initiative +2 (12)\
-HP 59 (7d10 + 21)\
-Speed 30 ft., Fly 80 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 18 +4 +4 Dex 15 +2 +2 Con 16 +3 +3\
-Int 2 −4 −4 Wis 13 +1 +1 Cha 8 −1 −1\
-Skills Perception +5\
-Senses Darkvision 60 ft.; Passive Perception 15\
-Languages None\
-CR 2 (XP 450; PB +2)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Large Monstrosity, Unaligned\
+> AC 12 Initiative +2 (12)\
+> HP 59 (7d10 + 21)\
+> Speed 30 ft., Fly 80 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 18 +4 +4 Dex 15 +2 +2 Con 16 +3 +3\
+> Int 2 −4 −4 Wis 13 +1 +1 Cha 8 −1 −1\
+> Skills Perception +5\
+> Senses Darkvision 60 ft.; Passive Perception 15\
+> Languages None\
+> CR 2 (XP 450; PB +2)
+
 
 ### Actions
 
@@ -38,46 +64,11 @@ Rend. Melee Attack Roll: +6, reach 5 ft. Hit: 8 (1d8 + 4) Piercing damage. If th
 
 Original layout: [[../../srd-5.2.1/pages/295|page 295]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` large ` |
-| ` type ` | ` monstrosity ` |
-| ` alignment ` | ` Unaligned ` |
-| ` movement_text ` | ` 30 ft., Fly 80 ft. ` |
-| ` skills_text ` | ` Perception +5 ` |
-| ` senses_text ` | ` Darkvision 60 ft.; Passive Perception 15 ` |
-| ` languages_text ` | ` None ` |
-| ` cr_text ` | ` 2 (XP 450; PB +2) ` |
-| ` hit_points_text ` | ` 59 (7d10 + 21) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 18 ` | ` 4 ` |
-| ` Dexterity ` | ` 15 ` | ` 2 ` |
-| ` Constitution ` | ` 16 ` | ` 3 ` |
-| ` Intelligence ` | ` 2 ` | ` -4 ` |
-| ` Wisdom ` | ` 13 ` | ` 1 ` |
-| ` Charisma ` | ` 8 ` | ` -1 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 12 ` |  |
-| ` max_hp ` | ` 59 ` |  |
-| ` initiative ` | ` 2 ` |  |
-| ` speed ` | ` 30 ` | ` ft ` |
-| ` fly_speed ` | ` 80 ` | ` ft ` |
 
 ## Health
 
@@ -199,3 +190,13 @@ geometry:
 unlisted_success_branch: no_effect
 unlisted_duration: until_removed_by_applicable_rule
 ```
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_stats_extras -->
+> 
+> ```yaml
+> fly_speed:
+>   unit: ft
+>   value: 80
+> ```
+

@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: e587bfe6-4f89-5d14-8c0c-6300ea328e86
 splat_kind: rule
 splat_key: dnd2024:rules/magic_item_categories_potions
 splat_name: Potions
-splat_origin:
-  key: dnd2024:reference/pages/204
+splat_origin: dnd2024:reference/pages/204
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 204
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 204, https://www.dndbeyond.com/srd
 ---
 
 # Potions

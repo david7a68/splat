@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "a5aa557c-8223-55ab-931a-63634262524e"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/chain_lightning"
 splat_name: "Chain Lightning"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [114], "executable": false}
+splat_pages:
+- 114
 ---
 
 # Chain Lightning
@@ -24,3 +25,13 @@ Each target makes a Dexterity saving throw, taking 10d8 Lightning damage on a fa
 Using a Higher-Level Spell Slot. One additional bolt leaps from the first target to another target for each spell slot level above 6.
 
 Original layout: [[../pages/114|page 114]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

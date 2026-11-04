@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: b236f1a7-8b7d-57c6-8fb5-d5df6bfb0218
 splat_kind: spell
 splat_key: dnd2024:spells/death_ward
 splat_name: Death Ward
-splat_origin:
-  key: dnd2024:reference/spell/death_ward
+splat_origin: dnd2024:reference/spell/death_ward
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 122
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 122, https://www.dndbeyond.com/srd
 ---
 
 # Death Ward
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 4 |
+| School | Abjuration |
+| Classes | Cleric, Paladin |
+| Casting Time | Action |
+| Range |  |
+| Components | V, S |
+| Duration | 8 hours |
+
 
 ## Source text
 
@@ -30,28 +41,9 @@ If the spell is still in effect when the target is subjected to an effect that w
 
 Original layout: [[../../srd-5.2.1/pages/122|page 122]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 4 ` |
-| ` school ` | ` abjuration ` |
-| ` classes ` | ` ["cleric", "paladin"] ` |
-| ` components ` | ` ["verbal", "somatic"] ` |
-| ` concentration ` | ` false ` |
-| ` duration ` | ` 8 hours ` |
-| ` casting_time ` | ` Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
-
-<!-- splat:values path=splat_spell/range -->
-
-| Field | Value |
-| --- | --- |
-| ` mode ` | ` touch ` |
 
 ## Rule
 
@@ -122,3 +114,12 @@ maximum:
   value: 8
   unit: hour
 ```
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_spell_extras -->
+> 
+> ```yaml
+> range:
+>   mode: touch
+> ```
+

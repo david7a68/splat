@@ -1,37 +1,66 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 58e39c3e-e714-5a0d-8b07-8f3519179edb
 splat_kind: creature
 splat_key: dnd2024:creatures/vampire_familiar
 splat_name: Vampire Familiar
-splat_origin:
-  key: dnd2024:reference/creature/vampire_familiar
+splat_origin: dnd2024:reference/creature/vampire_familiar
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 334
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 334, https://www.dndbeyond.com/srd
 ---
 
 # Vampire Familiar
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Medium or Small |
+| Type | Humanoid |
+| Alignment | Neutral Evil |
+| Armor Class | 15 |
+| Hit Points | 65 (10d8 + 20) |
+| Initiative | +5 (15) |
+| Speed | 30 ft., Climb 30 ft. |
+| Challenge | 3 (XP 700; PB +2) |
+| Skills | Perception +4, Persuasion +4, Stealth +7 |
+| Senses | Darkvision 60 ft.; Passive Perception 14 |
+| Languages | Common plus one other language |
+| Gear | Daggers (10) |
+| Resistances | Necrotic |
+| Immunities | Charmed (except from its vampire master) |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 17 | +3 | +3 |
+| Dex | 16 | +3 | +5 |
+| Con | 15 | +2 | +2 |
+| Int | 10 | +0 | +0 |
+| Wis | 10 | +0 | +2 |
+| Cha | 14 | +2 | +2 |
+
 
 ## Source text
 
 <!-- SRD page 334 -->
 
 Medium or Small Humanoid, Neutral Evil\
-AC 15  Initiative +5 (15)\
-HP 65 (10d8 + 20)\
-Speed 30 ft., Climb 30 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 17 +3 +3 Dex 16 +3 +5 Con 15 +2 +2\
-Int 10 +0 +0 Wis 10 +0 +2 Cha 14 +2 +2\
-Skills Perception +4, Persuasion +4, Stealth +7\
-Resistances Necrotic\
-Immunities Charmed (except from its vampire master)\
-Gear Daggers (10)\
-Senses Darkvision 60 ft.; Passive Perception 14\
-Languages Common plus one other language\
-CR 3 (XP 700; PB +2)
+> [!quote]- Printed stat block (not read; edit the table above)
+> AC 15  Initiative +5 (15)\
+> HP 65 (10d8 + 20)\
+> Speed 30 ft., Climb 30 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 17 +3 +3 Dex 16 +3 +5 Con 15 +2 +2\
+> Int 10 +0 +0 Wis 10 +0 +2 Cha 14 +2 +2\
+> Skills Perception +4, Persuasion +4, Stealth +7\
+> Resistances Necrotic\
+> Immunities Charmed (except from its vampire master)\
+> Gear Daggers (10)\
+> Senses Darkvision 60 ft.; Passive Perception 14\
+> Languages Common plus one other language\
+> CR 3 (XP 700; PB +2)
+
 
 ### Traits
 
@@ -49,50 +78,11 @@ Deathless Agility. The familiar takes the Dash or Disengage action.
 
 Original layout: [[../../srd-5.2.1/pages/334|page 334]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` medium ` |
-| ` type ` | ` humanoid ` |
-| ` alignment ` | ` Neutral Evil ` |
-| ` size_options_text ` | ` Medium or Small ` |
-| ` movement_text ` | ` 30 ft., Climb 30 ft. ` |
-| ` skills_text ` | ` Perception +4, Persuasion +4, Stealth +7 ` |
-| ` resistances_text ` | ` Necrotic ` |
-| ` immunities_text ` | ` Charmed (except from its vampire master) ` |
-| ` gear_text ` | ` Daggers (10) ` |
-| ` senses_text ` | ` Darkvision 60 ft.; Passive Perception 14 ` |
-| ` languages_text ` | ` Common plus one other language ` |
-| ` cr_text ` | ` 3 (XP 700; PB +2) ` |
-| ` hit_points_text ` | ` 65 (10d8 + 20) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 17 ` | ` 3 ` |
-| ` Dexterity ` | ` 16 ` | ` 5 ` |
-| ` Constitution ` | ` 15 ` | ` 2 ` |
-| ` Intelligence ` | ` 10 ` | ` 0 ` |
-| ` Wisdom ` | ` 10 ` | ` 2 ` |
-| ` Charisma ` | ` 14 ` | ` 2 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 15 ` |  |
-| ` max_hp ` | ` 65 ` |  |
-| ` initiative ` | ` 5 ` |  |
-| ` speed ` | ` 30 ` | ` ft ` |
-| ` climb_speed ` | ` 30 ` | ` ft ` |
 
 ## Health
 
@@ -277,3 +267,13 @@ sequence:
 | ` provider ` | ` caller ` |
 | ` required_facts ` | ` ["distance", "area_membership", "visibility", "occupancy", "movement_path"] ` |
 | ` validate_against_typed_constraints ` | ` true ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_stats_extras -->
+> 
+> ```yaml
+> climb_speed:
+>   unit: ft
+>   value: 30
+> ```
+

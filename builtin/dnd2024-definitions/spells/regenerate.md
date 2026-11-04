@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 4cac4ccd-a035-56ef-accb-deae22998694
 splat_kind: spell
 splat_key: dnd2024:spells/regenerate
 splat_name: Regenerate
-splat_origin:
-  key: dnd2024:reference/spell/regenerate
+splat_origin: dnd2024:reference/spell/regenerate
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 158
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 158, https://www.dndbeyond.com/srd
 ---
 
 # Regenerate
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 7 |
+| School | Transmutation |
+| Classes | Bard, Cleric, Druid |
+| Casting Time | 1 minute |
+| Range |  |
+| Components | V, S, M (a prayer wheel) |
+| Duration | 1 hour |
+
 
 ## Source text
 
@@ -28,37 +39,11 @@ A creature you touch regains 4d8 + 15 Hit Points. For the duration, the target r
 
 Original layout: [[../../srd-5.2.1/pages/158|page 158]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 7 ` |
-| ` school ` | ` transmutation ` |
-| ` classes ` | ` ["bard", "cleric", "druid"] ` |
-| ` components ` | ` ["verbal", "somatic", "material"] ` |
-| ` concentration ` | ` false ` |
-| ` duration ` | ` 1 hour ` |
-| ` casting_time ` | ` 1 minute ` |
-| ` ritual ` | ` false ` |
 
-### Range
 
-<!-- splat:values path=splat_spell/range -->
 
-| Field | Value |
-| --- | --- |
-| ` mode ` | ` touch ` |
-
-### Material
-
-<!-- splat:values path=splat_spell/material -->
-
-| Field | Value |
-| --- | --- |
-| ` description ` | ` a prayer wheel ` |
-| ` consumed ` | ` false ` |
 
 ## Rule
 
@@ -112,3 +97,14 @@ maximum:
   value: 1
   unit: hour
 ```
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_spell_extras -->
+> 
+> ```yaml
+> material:
+>   consumed: false
+> range:
+>   mode: touch
+> ```
+

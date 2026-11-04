@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "d71d3a55-f127-5a02-83cb-946f4e81742e"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/glossary/concentration"
 splat_name: "Concentration"
-splat_reference: {"source": "SRD 5.2.1", "category": "glossary", "pages": [179], "executable": false}
+splat_pages:
+- 179
 ---
 
 # Concentration
@@ -20,3 +21,13 @@ Damage. If you take damage, you must succeed on a Constitution saving throw to m
 Incapacitated or Dead. Your Concentration ends if you have the Incapacitated condition or you die.
 
 Original layout: [[../pages/179|page 179]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: glossary
+> executable: false
+> ```
+

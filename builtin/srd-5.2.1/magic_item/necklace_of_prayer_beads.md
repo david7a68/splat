@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "66bd9d0d-59af-5338-9a35-846ec27f101a"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/magic_item/necklace_of_prayer_beads"
 splat_name: "Necklace of Prayer Beads"
-splat_reference: {"source": "SRD 5.2.1", "category": "magic_item", "pages": [233], "executable": false}
+splat_pages:
+- 233
 ---
 
 # Necklace of Prayer Beads
@@ -27,3 +28,13 @@ Six types of magic beads exist. The GM decides the type of each bead on the neck
 | 20 | Bead of Wind Walking | Wind Walk |
 
 Original layout: [[../pages/233|page 233]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: magic_item
+> executable: false
+> ```
+

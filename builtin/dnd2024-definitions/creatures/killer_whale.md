@@ -1,34 +1,60 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 7bd71c86-f783-5366-b46c-79f87f366625
 splat_kind: creature
 splat_key: dnd2024:creatures/killer_whale
 splat_name: Killer Whale
-splat_origin:
-  key: dnd2024:reference/creature/killer_whale
+splat_origin: dnd2024:reference/creature/killer_whale
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 356
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 356, https://www.dndbeyond.com/srd
 ---
 
 # Killer Whale
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Huge |
+| Type | Beast |
+| Alignment | Unaligned |
+| Armor Class | 12 |
+| Hit Points | 90 (12d12 + 12) |
+| Initiative | +2 (12) |
+| Speed | 5 ft., Swim 60 ft. |
+| Challenge | 3 (XP 700; PB +2) |
+| Skills | Perception +3, Stealth +4 |
+| Senses | Blindsight 120 ft.; Passive Perception 13 |
+| Languages | None |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 19 | +4 | +4 |
+| Dex | 14 | +2 | +2 |
+| Con | 13 | +1 | +1 |
+| Int | 3 | -4 | -4 |
+| Wis | 12 | +1 | +1 |
+| Cha | 7 | -2 | -2 |
+
 
 ## Source text
 
 <!-- SRD page 356 -->
 
-Huge Beast, Unaligned\
-AC 12  Initiative +2 (12)\
-HP 90 (12d12 + 12)\
-Speed 5 ft., Swim 60 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 19 +4 +4 Dex 14 +2 +2 Con 13 +1 +1\
-Int 3 −4 −4 Wis 12 +1 +1 Cha 7 −2 −2\
-Skills Perception +3, Stealth +4\
-Senses Blindsight 120 ft.; Passive Perception 13\
-Languages None\
-CR 3 (XP 700; PB +2)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Huge Beast, Unaligned\
+> AC 12  Initiative +2 (12)\
+> HP 90 (12d12 + 12)\
+> Speed 5 ft., Swim 60 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 19 +4 +4 Dex 14 +2 +2 Con 13 +1 +1\
+> Int 3 −4 −4 Wis 12 +1 +1 Cha 7 −2 −2\
+> Skills Perception +3, Stealth +4\
+> Senses Blindsight 120 ft.; Passive Perception 13\
+> Languages None\
+> CR 3 (XP 700; PB +2)
+
 
 ### Traits
 
@@ -40,46 +66,11 @@ Bite. Melee Attack Roll: +6, reach 5 ft. Hit: 21 (5d6 + 4) Piercing damage.
 
 Original layout: [[../../srd-5.2.1/pages/356|page 356]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` huge ` |
-| ` type ` | ` beast ` |
-| ` alignment ` | ` Unaligned ` |
-| ` movement_text ` | ` 5 ft., Swim 60 ft. ` |
-| ` skills_text ` | ` Perception +3, Stealth +4 ` |
-| ` senses_text ` | ` Blindsight 120 ft.; Passive Perception 13 ` |
-| ` languages_text ` | ` None ` |
-| ` cr_text ` | ` 3 (XP 700; PB +2) ` |
-| ` hit_points_text ` | ` 90 (12d12 + 12) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 19 ` | ` 4 ` |
-| ` Dexterity ` | ` 14 ` | ` 2 ` |
-| ` Constitution ` | ` 13 ` | ` 1 ` |
-| ` Intelligence ` | ` 3 ` | ` -4 ` |
-| ` Wisdom ` | ` 12 ` | ` 1 ` |
-| ` Charisma ` | ` 7 ` | ` -2 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 12 ` |  |
-| ` max_hp ` | ` 90 ` |  |
-| ` initiative ` | ` 2 ` |  |
-| ` speed ` | ` 5 ` | ` ft ` |
-| ` swim_speed ` | ` 60 ` | ` ft ` |
 
 ## Health
 
@@ -190,3 +181,13 @@ geometry:
 unlisted_success_branch: no_effect
 unlisted_duration: until_removed_by_applicable_rule
 ```
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_stats_extras -->
+> 
+> ```yaml
+> swim_speed:
+>   unit: ft
+>   value: 60
+> ```
+

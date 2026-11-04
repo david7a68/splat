@@ -215,7 +215,6 @@ pub fn problems(ui: &mut egui::Ui, book: &mut Book) -> bool {
     {
         crate::world::entry_file_actions(ui, folder, super::FILE, true);
     }
-    book.layouts.current(book.path.as_deref());
     if let Some(warning) = &book.duplicate {
         design::message(ui, Tone::Warning, warning);
     }
@@ -616,13 +615,6 @@ impl TimelinePage {
             .just_added
             .take()
             .filter(|(id, at)| at.elapsed() < UNDO_ADD_FOR && self.selected.as_ref() == Some(id));
-        if self
-            .just_added
-            .as_ref()
-            .is_some_and(|(id, _)| !book.add_notice_current(id))
-        {
-            self.just_added = None;
-        }
         if let Some((id, _)) = self.just_added.clone() {
             ui.ctx().request_repaint_after(UNDO_ADD_FOR);
             let days = day_numbers(&book.events);
@@ -642,7 +634,6 @@ impl TimelinePage {
             } else {
                 format!("{label} added.")
             };
-            let words = book.added_words(&id, &words);
             if design::undo_message(ui, Tone::Success, &words, "Undo add") {
                 book.undo_add(&id);
                 self.just_added = None;

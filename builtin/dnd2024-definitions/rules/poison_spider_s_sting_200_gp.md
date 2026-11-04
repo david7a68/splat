@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 3ddfd7cf-91ff-5401-a196-606f53747af4
 splat_kind: rule
 splat_key: dnd2024:rules/poison_spider_s_sting_200_gp
 splat_name: Spider’s Sting (200 GP)
-splat_origin:
-  key: dnd2024:reference/pages/198
+splat_origin: dnd2024:reference/pages/198
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 198
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 198, https://www.dndbeyond.com/srd
 ---
 
 # Spider’s Sting (200 GP)

@@ -1,10 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "941e8cc1-06b9-5917-b0e4-a95e50e1823f"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/true_resurrection"
 splat_name: "True Resurrection"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [170, 171], "executable": false}
+splat_pages:
+- 170
+- 171
 ---
 
 # True Resurrection
@@ -24,3 +26,13 @@ This spell closes all wounds, neutralizes any poison, cures all magical contagio
 The spell can provide a new body if the original no longer exists, in which case you must speak the creature’s name. The creature then appears in an unoccupied space you choose within 10 feet of you.
 
 Original layout: [[../pages/170|page 170]], [[../pages/171|page 171]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

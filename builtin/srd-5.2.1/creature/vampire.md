@@ -1,10 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "d78adff0-526a-5cad-8fc0-c47e9397cd06"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/vampire"
 splat_name: "Vampire"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [335, 336], "executable": false}
+splat_pages:
+- 335
+- 336
 ---
 
 # Vampire
@@ -73,3 +75,13 @@ Beguile. The vampire casts Command, requiring no spell components and using Char
 Deathless Strike. The vampire moves up to half its Speed, and it makes one Grave Strike attack.
 
 Original layout: [[../pages/335|page 335]], [[../pages/336|page 336]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

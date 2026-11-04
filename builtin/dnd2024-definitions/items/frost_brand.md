@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 6b04a7de-44f9-5a60-a461-56889e2ac0d9
 splat_kind: item
 splat_key: dnd2024:items/frost_brand
 splat_name: Frost Brand
-splat_origin:
-  key: dnd2024:reference/magic_item/frost_brand
+splat_origin: dnd2024:reference/magic_item/frost_brand
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 223
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 223, https://www.dndbeyond.com/srd
 ---
 
 # Frost Brand
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Weapon |
+| Rarity | Very Rare |
+| Attunement | Yes |
+
 
 ## Source text
 
@@ -28,22 +35,9 @@ When you draw this weapon, you can extinguish all nonmagical flames within 30 fe
 
 Original layout: [[../../srd-5.2.1/pages/223|page 223]].
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` weapon ` |
-| ` rarity ` | ` very_rare ` |
 
-### Equipment
-
-<!-- splat:values path=splat_item/equipment -->
-
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` required ` |
 
 ## Rule
 

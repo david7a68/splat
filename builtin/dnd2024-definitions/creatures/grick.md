@@ -1,34 +1,60 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: a12c9816-5379-5649-92c8-960c7dbf2989
 splat_kind: creature
 splat_key: dnd2024:creatures/grick
 splat_name: Grick
-splat_origin:
-  key: dnd2024:reference/creature/grick
+splat_origin: dnd2024:reference/creature/grick
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 295
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 295, https://www.dndbeyond.com/srd
 ---
 
 # Grick
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Medium |
+| Type | Aberration |
+| Alignment | Unaligned |
+| Armor Class | 14 |
+| Hit Points | 54 (12d8) |
+| Initiative | +2 (12) |
+| Speed | 30 ft., Climb 30 ft. |
+| Challenge | 2 (XP 450; PB +2) |
+| Skills | Stealth +4 |
+| Senses | Darkvision 60 ft.; Passive Perception 12 |
+| Languages | None |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 14 | +2 | +2 |
+| Dex | 14 | +2 | +2 |
+| Con | 11 | +0 | +0 |
+| Int | 3 | -4 | -4 |
+| Wis | 14 | +2 | +2 |
+| Cha | 5 | -3 | -3 |
+
 
 ## Source text
 
 <!-- SRD page 295 -->
 
-Medium Aberration, Unaligned\
-AC 14 Initiative +2 (12)\
-HP 54 (12d8)\
-Speed 30 ft., Climb 30 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 14 +2 +2 Dex 14 +2 +2 Con 11 +0 +0\
-Int 3 −4 −4 Wis 14 +2 +2 Cha 5 −3 −3\
-Skills Stealth +4\
-Senses Darkvision 60 ft.; Passive Perception 12\
-Languages None\
-CR 2 (XP 450; PB +2)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Medium Aberration, Unaligned\
+> AC 14 Initiative +2 (12)\
+> HP 54 (12d8)\
+> Speed 30 ft., Climb 30 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 14 +2 +2 Dex 14 +2 +2 Con 11 +0 +0\
+> Int 3 −4 −4 Wis 14 +2 +2 Cha 5 −3 −3\
+> Skills Stealth +4\
+> Senses Darkvision 60 ft.; Passive Perception 12\
+> Languages None\
+> CR 2 (XP 450; PB +2)
+
 
 ### Actions
 
@@ -40,46 +66,11 @@ Tentacles. Melee Attack Roll: +4, reach 5 ft. Hit: 7 (1d10 + 2) Slashing damage.
 
 Original layout: [[../../srd-5.2.1/pages/295|page 295]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` medium ` |
-| ` type ` | ` aberration ` |
-| ` alignment ` | ` Unaligned ` |
-| ` movement_text ` | ` 30 ft., Climb 30 ft. ` |
-| ` skills_text ` | ` Stealth +4 ` |
-| ` senses_text ` | ` Darkvision 60 ft.; Passive Perception 12 ` |
-| ` languages_text ` | ` None ` |
-| ` cr_text ` | ` 2 (XP 450; PB +2) ` |
-| ` hit_points_text ` | ` 54 (12d8) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 14 ` | ` 2 ` |
-| ` Dexterity ` | ` 14 ` | ` 2 ` |
-| ` Constitution ` | ` 11 ` | ` 0 ` |
-| ` Intelligence ` | ` 3 ` | ` -4 ` |
-| ` Wisdom ` | ` 14 ` | ` 2 ` |
-| ` Charisma ` | ` 5 ` | ` -3 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 14 ` |  |
-| ` max_hp ` | ` 54 ` |  |
-| ` initiative ` | ` 2 ` |  |
-| ` speed ` | ` 30 ` | ` ft ` |
-| ` climb_speed ` | ` 30 ` | ` ft ` |
 
 ## Health
 
@@ -244,3 +235,13 @@ columns:
 | ` provider ` | ` caller ` |
 | ` required_facts ` | ` ["distance", "area_membership", "visibility", "occupancy", "movement_path"] ` |
 | ` validate_against_typed_constraints ` | ` true ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_stats_extras -->
+> 
+> ```yaml
+> climb_speed:
+>   unit: ft
+>   value: 30
+> ```
+

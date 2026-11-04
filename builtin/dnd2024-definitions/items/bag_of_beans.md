@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 9591a122-382b-5603-a720-a40c1093899e
 splat_kind: item
 splat_key: dnd2024:items/bag_of_beans
 splat_name: Bag of Beans
-splat_origin:
-  key: dnd2024:reference/magic_item/bag_of_beans
+splat_origin: dnd2024:reference/magic_item/bag_of_beans
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 211
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 211, https://www.dndbeyond.com/srd
 ---
 
 # Bag of Beans
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Wondrous Item |
+| Rarity | Rare |
+| Attunement | No |
+
 
 ## Source text
 
@@ -46,22 +53,9 @@ If you remove a bean from the bag, plant it in dirt or sand, and then water it, 
 
 Original layout: [[../../srd-5.2.1/pages/211|page 211]].
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` wondrous_item ` |
-| ` rarity ` | ` rare ` |
 
-### Equipment
-
-<!-- splat:values path=splat_item/equipment -->
-
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` none ` |
 
 ## Rule
 

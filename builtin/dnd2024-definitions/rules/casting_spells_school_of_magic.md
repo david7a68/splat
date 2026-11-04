@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 62f14d6b-ec6c-53bf-83be-deeb4deb3b49
 splat_kind: rule
 splat_key: dnd2024:rules/casting_spells_school_of_magic
 splat_name: School of Magic
-splat_origin:
-  key: dnd2024:reference/pages/105
+splat_origin: dnd2024:reference/pages/105
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 105
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 105, https://www.dndbeyond.com/srd
 ---
 
 # School of Magic

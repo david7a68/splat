@@ -1,33 +1,58 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: fd9787b0-eaf0-561d-84ab-0ad3568376fd
 splat_kind: creature
 splat_key: dnd2024:creatures/ankheg
 splat_name: Ankheg
-splat_origin:
-  key: dnd2024:reference/creature/ankheg
+splat_origin: dnd2024:reference/creature/ankheg
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 259
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 259, https://www.dndbeyond.com/srd
 ---
 
 # Ankheg
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Large |
+| Type | Monstrosity |
+| Alignment | Unaligned |
+| Armor Class | 14 |
+| Hit Points | 45 (6d10 + 12) |
+| Initiative | +0 (10) |
+| Speed | 30 ft., Burrow 10 ft. |
+| Challenge | 2 (XP 450; PB +2) |
+| Senses | Darkvision 60 ft., Tremorsense 60 ft.; Passive Perception 11 |
+| Languages | None |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 17 | +3 | +3 |
+| Dex | 11 | +0 | +0 |
+| Con | 14 | +2 | +2 |
+| Int | 1 | -5 | -5 |
+| Wis | 13 | +1 | +1 |
+| Cha | 6 | -2 | -2 |
+
 
 ## Source text
 
 <!-- SRD page 259 -->
 
-Large Monstrosity, Unaligned\
-AC 14 Initiative +0 (10)\
-HP 45 (6d10 + 12)\
-Speed 30 ft., Burrow 10 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 17 +3 +3 Dex 11 +0 +0 Con 14 +2 +2\
-Int 1 −5 −5 Wis 13 +1 +1 Cha 6 −2 −2\
-Senses Darkvision 60 ft., Tremorsense 60 ft.; Passive Perception 11\
-Languages None\
-CR 2 (XP 450; PB +2)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Large Monstrosity, Unaligned\
+> AC 14 Initiative +0 (10)\
+> HP 45 (6d10 + 12)\
+> Speed 30 ft., Burrow 10 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 17 +3 +3 Dex 11 +0 +0 Con 14 +2 +2\
+> Int 1 −5 −5 Wis 13 +1 +1 Cha 6 −2 −2\
+> Senses Darkvision 60 ft., Tremorsense 60 ft.; Passive Perception 11\
+> Languages None\
+> CR 2 (XP 450; PB +2)
+
 
 ### Traits
 
@@ -41,45 +66,11 @@ Acid Spray (Recharge 6). Dexterity Saving Throw: DC 12, each creature in a 30-fo
 
 Original layout: [[../../srd-5.2.1/pages/259|page 259]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` large ` |
-| ` type ` | ` monstrosity ` |
-| ` alignment ` | ` Unaligned ` |
-| ` movement_text ` | ` 30 ft., Burrow 10 ft. ` |
-| ` senses_text ` | ` Darkvision 60 ft., Tremorsense 60 ft.; Passive Perception 11 ` |
-| ` languages_text ` | ` None ` |
-| ` cr_text ` | ` 2 (XP 450; PB +2) ` |
-| ` hit_points_text ` | ` 45 (6d10 + 12) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 17 ` | ` 3 ` |
-| ` Dexterity ` | ` 11 ` | ` 0 ` |
-| ` Constitution ` | ` 14 ` | ` 2 ` |
-| ` Intelligence ` | ` 1 ` | ` -5 ` |
-| ` Wisdom ` | ` 13 ` | ` 1 ` |
-| ` Charisma ` | ` 6 ` | ` -2 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 14 ` |  |
-| ` max_hp ` | ` 45 ` |  |
-| ` initiative ` | ` 0 ` |  |
-| ` speed ` | ` 30 ` | ` ft ` |
-| ` burrow_speed ` | ` 10 ` | ` ft ` |
 
 ## Health
 
@@ -271,3 +262,13 @@ geometry:
 unlisted_success_branch: no_effect
 unlisted_duration: until_removed_by_applicable_rule
 ```
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_stats_extras -->
+> 
+> ```yaml
+> burrow_speed:
+>   unit: ft
+>   value: 10
+> ```
+

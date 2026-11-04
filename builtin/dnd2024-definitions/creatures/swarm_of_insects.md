@@ -1,35 +1,62 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: e2376c5f-c7b9-5a91-aab6-787c9980d3f7
 splat_kind: creature
 splat_key: dnd2024:creatures/swarm_of_insects
 splat_name: Swarm of Insects
-splat_origin:
-  key: dnd2024:reference/creature/swarm_of_insects
+splat_origin: dnd2024:reference/creature/swarm_of_insects
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 361
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 361, https://www.dndbeyond.com/srd
 ---
 
 # Swarm of Insects
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Medium Swarm of Tiny |
+| Type | Beast |
+| Alignment | Unaligned |
+| Armor Class | 11 |
+| Hit Points | 19 (3d8 + 6) |
+| Initiative | +1 (11) |
+| Speed | 20 ft., Climb or Fly 20 ft. (GM’s choice) |
+| Challenge | 1/2 (XP 100; PB +2) |
+| Senses | Blindsight 30 ft.; Passive Perception 8 |
+| Languages | None |
+| Resistances | Bludgeoning, Piercing, Slashing |
+| Immunities | Charmed, Frightened, Grappled, Paralyzed, Petrified, Prone, Restrained, Stunned |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 3 | -4 | -4 |
+| Dex | 13 | +1 | +1 |
+| Con | 14 | +2 | +2 |
+| Int | 1 | -5 | -5 |
+| Wis | 7 | -2 | -2 |
+| Cha | 1 | -5 | -5 |
+
 
 ## Source text
 
 <!-- SRD page 361 -->
 
 Medium Swarm of Tiny Beasts, Unaligned\
-AC 11 Initiative +1 (11)\
-HP 19 (3d8 + 6)\
-Speed 20 ft., Climb or Fly 20 ft. (GM’s choice)\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 3 −4 −4 Dex 13 +1 +1 Con 14 +2 +2\
-Int 1 −5 −5 Wis 7 −2 −2 Cha 1 −5 −5\
-Resistances Bludgeoning, Piercing, Slashing\
-Immunities Charmed, Frightened, Grappled, Paralyzed, Petrified, Prone, Restrained, Stunned\
-Senses Blindsight 30 ft.; Passive Perception 8\
-Languages None\
-CR 1/2 (XP 100; PB +2)
+> [!quote]- Printed stat block (not read; edit the table above)
+> AC 11 Initiative +1 (11)\
+> HP 19 (3d8 + 6)\
+> Speed 20 ft., Climb or Fly 20 ft. (GM’s choice)\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 3 −4 −4 Dex 13 +1 +1 Con 14 +2 +2\
+> Int 1 −5 −5 Wis 7 −2 −2 Cha 1 −5 −5\
+> Resistances Bludgeoning, Piercing, Slashing\
+> Immunities Charmed, Frightened, Grappled, Paralyzed, Petrified, Prone, Restrained, Stunned\
+> Senses Blindsight 30 ft.; Passive Perception 8\
+> Languages None\
+> CR 1/2 (XP 100; PB +2)
+
 
 ### Traits
 
@@ -43,48 +70,11 @@ Bites. Melee Attack Roll: +3, reach 5 ft. Hit: 6 (2d4 + 1) Poison damage, or 3 (
 
 Original layout: [[../../srd-5.2.1/pages/361|page 361]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` medium ` |
-| ` type ` | ` beast ` |
-| ` alignment ` | ` Unaligned ` |
-| ` size_options_text ` | ` Medium Swarm of Tiny ` |
-| ` movement_text ` | ` 20 ft., Climb or Fly 20 ft. (GM’s choice) ` |
-| ` resistances_text ` | ` Bludgeoning, Piercing, Slashing ` |
-| ` immunities_text ` | ` Charmed, Frightened, Grappled, Paralyzed, Petrified, Prone, Restrained, Stunned ` |
-| ` senses_text ` | ` Blindsight 30 ft.; Passive Perception 8 ` |
-| ` languages_text ` | ` None ` |
-| ` cr_text ` | ` 1/2 (XP 100; PB +2) ` |
-| ` hit_points_text ` | ` 19 (3d8 + 6) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 3 ` | ` -4 ` |
-| ` Dexterity ` | ` 13 ` | ` 1 ` |
-| ` Constitution ` | ` 14 ` | ` 2 ` |
-| ` Intelligence ` | ` 1 ` | ` -5 ` |
-| ` Wisdom ` | ` 7 ` | ` -2 ` |
-| ` Charisma ` | ` 1 ` | ` -5 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 11 ` |  |
-| ` max_hp ` | ` 19 ` |  |
-| ` initiative ` | ` 1 ` |  |
-| ` speed ` | ` 20 ` | ` ft ` |
-| ` fly_speed ` | ` 20 ` | ` ft ` |
 
 ## Health
 
@@ -290,3 +280,13 @@ geometry_assumptions:
   - plane
   - form_appearance
 ```
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_stats_extras -->
+> 
+> ```yaml
+> fly_speed:
+>   unit: ft
+>   value: 20
+> ```
+

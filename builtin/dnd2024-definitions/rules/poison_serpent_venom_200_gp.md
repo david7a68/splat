@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 8ed010ee-3518-578a-a264-830b49c0f933
 splat_kind: rule
 splat_key: dnd2024:rules/poison_serpent_venom_200_gp
 splat_name: Serpent Venom (200 GP)
-splat_origin:
-  key: dnd2024:reference/pages/198
+splat_origin: dnd2024:reference/pages/198
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 198
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 198, https://www.dndbeyond.com/srd
 ---
 
 # Serpent Venom (200 GP)

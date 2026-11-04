@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: bea1d8df-9a89-5e1c-a913-4262061ae9e9
 splat_kind: item
 splat_key: dnd2024:items/potion_of_giant_strength
 splat_name: Potion of Giant Strength
-splat_origin:
-  key: dnd2024:reference/magic_item/potion_of_giant_strength
+splat_origin: dnd2024:reference/magic_item/potion_of_giant_strength
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 235
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 235, https://www.dndbeyond.com/srd
 ---
 
 # Potion of Giant Strength
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Potion |
+| Rarity | Rarity Varies |
+| Attunement | No |
+
 
 ## Source text
 
@@ -34,22 +41,9 @@ This potion’s transparent liquid has floating in it a sliver of light resembli
 
 Original layout: [[../../srd-5.2.1/pages/235|page 235]].
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` potion ` |
-| ` rarity ` | ` rarity_varies ` |
 
-### Equipment
-
-<!-- splat:values path=splat_item/equipment -->
-
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` none ` |
 
 ## Rule
 

@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "523aafc9-ec3e-546d-8c1b-d4e3b1a2ed79"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/ray_of_enfeeblement"
 splat_name: "Ray of Enfeeblement"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [157], "executable": false}
+splat_pages:
+- 157
 ---
 
 # Ray of Enfeeblement
@@ -22,3 +23,13 @@ A beam of enervating energy shoots from you toward a creature within range. The 
 On a failed save, the target has Disadvantage on Strength-based D20 Tests for the duration. During that time, it also subtracts 1d8 from all its damage rolls. The target repeats the save at the end of each of its turns, ending the spell on a success.
 
 Original layout: [[../pages/157|page 157]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

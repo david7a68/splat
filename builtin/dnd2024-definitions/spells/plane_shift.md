@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 3e7549e0-4480-5966-9405-1d87d9f3e672
 splat_kind: spell
 splat_key: dnd2024:spells/plane_shift
 splat_name: Plane Shift
-splat_origin:
-  key: dnd2024:reference/spell/plane_shift
+splat_origin: dnd2024:reference/spell/plane_shift
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 153
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 153, https://www.dndbeyond.com/srd
 ---
 
 # Plane Shift
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 7 |
+| School | Conjuration |
+| Classes | Cleric, Druid, Sorcerer, Warlock, Wizard |
+| Casting Time | Action |
+| Range |  |
+| Components | V, S, M (a forked, metal rod worth 250+ GP and attuned to a plane of existence) |
+| Duration | Instantaneous |
+
 
 ## Source text
 
@@ -30,37 +41,11 @@ Alternatively, if you know the sigil sequence of a teleportation circle on anoth
 
 Original layout: [[../../srd-5.2.1/pages/153|page 153]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 7 ` |
-| ` school ` | ` conjuration ` |
-| ` classes ` | ` ["cleric", "druid", "sorcerer", "warlock", "wizard"] ` |
-| ` components ` | ` ["verbal", "somatic", "material"] ` |
-| ` concentration ` | ` false ` |
-| ` duration ` | ` Instantaneous ` |
-| ` casting_time ` | ` Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
 
-<!-- splat:values path=splat_spell/range -->
 
-| Field | Value |
-| --- | --- |
-| ` mode ` | ` touch ` |
-
-### Material
-
-<!-- splat:values path=splat_spell/material -->
-
-| Field | Value |
-| --- | --- |
-| ` description ` | ` a forked, metal rod worth 250+ GP and attuned to a plane of existence ` |
-| ` consumed ` | ` false ` |
 
 ## Rule
 
@@ -101,3 +86,14 @@ destination_modes:
     destination: circle_on_other_plane
     overflow: closest_unoccupied_spaces_next_to_circle
 ```
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_spell_extras -->
+> 
+> ```yaml
+> material:
+>   consumed: false
+> range:
+>   mode: touch
+> ```
+

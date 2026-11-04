@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 42b2915c-83c3-55c3-96d8-24755c610813
 splat_kind: spell
 splat_key: dnd2024:spells/shapechange
 splat_name: Shapechange
-splat_origin:
-  key: dnd2024:reference/spell/shapechange
+splat_origin: dnd2024:reference/spell/shapechange
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 161
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 161, https://www.dndbeyond.com/srd
 ---
 
 # Shapechange
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 9 |
+| School | Transmutation |
+| Classes | Druid, Wizard |
+| Casting Time | Action |
+| Range |  |
+| Components | V, S, M (a jade circlet worth 1,500+ GP) |
+| Duration | Concentration, up to 1 hour |
+
 
 ## Source text
 
@@ -34,37 +45,11 @@ Upon shape-shifting, you determine whether your equipment drops to the ground or
 
 Original layout: [[../../srd-5.2.1/pages/161|page 161]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 9 ` |
-| ` school ` | ` transmutation ` |
-| ` classes ` | ` ["druid", "wizard"] ` |
-| ` components ` | ` ["verbal", "somatic", "material"] ` |
-| ` concentration ` | ` true ` |
-| ` duration ` | ` Concentration, up to 1 hour ` |
-| ` casting_time ` | ` Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
 
-<!-- splat:values path=splat_spell/range -->
 
-| Field | Value |
-| --- | --- |
-| ` mode ` | ` self ` |
-
-### Material
-
-<!-- splat:values path=splat_spell/material -->
-
-| Field | Value |
-| --- | --- |
-| ` description ` | ` a jade circlet worth 1,500+ GP ` |
-| ` consumed ` | ` false ` |
 
 ## Rule
 
@@ -135,3 +120,14 @@ remaining_vanish_on_end: true
 | --- | --- |
 | ` choice_on_shape_shift ` | ` ["drop_to_ground", "resize_and_reshape_to_fit"] ` |
 | ` fit_duration ` | ` while_in_form ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_spell_extras -->
+> 
+> ```yaml
+> material:
+>   consumed: false
+> range:
+>   mode: self
+> ```
+

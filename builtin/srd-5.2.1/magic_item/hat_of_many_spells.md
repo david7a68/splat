@@ -1,10 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "ce9b20fb-a51f-5782-bb83-670d1af415cd"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/magic_item/hat_of_many_spells"
 splat_name: "Hat of Many Spells"
-splat_reference: {"source": "SRD 5.2.1", "category": "magic_item", "pages": [224, 225], "executable": false}
+splat_pages:
+- 224
+- 225
 ---
 
 # Hat of Many Spells
@@ -41,3 +43,13 @@ Any spell you cast from the hat uses your spell save DC and spell attack bonus.
 | 96–00 | You pull a magic item out of the hat. Roll 1d6 to determine the item’s rarity: on a 1–3, Common; on a 4–5, Uncommon; on a 6, Rare. The GM chooses the item, which disappears after 1 hour if it’s not consumed or destroyed before then. |
 
 Original layout: [[../pages/224|page 224]], [[../pages/225|page 225]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: magic_item
+> executable: false
+> ```
+

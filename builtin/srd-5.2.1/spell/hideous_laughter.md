@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "63a48475-10c7-5814-8d5b-aa8939ac345b"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/hideous_laughter"
 splat_name: "Hideous Laughter"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [140], "executable": false}
+splat_pages:
+- 140
 ---
 
 # Hideous Laughter
@@ -24,3 +25,13 @@ At the end of each of its turns and each time it takes damage, it makes another 
 Using a Higher-Level Spell Slot. You can target one additional creature for each spell slot level above 1.
 
 Original layout: [[../pages/140|page 140]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

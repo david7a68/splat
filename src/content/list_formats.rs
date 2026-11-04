@@ -163,11 +163,18 @@ fn reference(text: &str) -> Result<Value, String> {
     }
     if raw.starts_with("[[") && raw.ends_with("]]") {
         let target = raw[2..raw.len() - 2].split('|').next().unwrap_or("");
-        let id =
-            machine(text, "id").or_else(|| Uuid::parse_str(target).ok().map(|id| id.to_string()));
+        let id = machine(text, "id").or_else(|| {
+            machine(text, "key")
+                .is_none()
+                .then(|| Uuid::parse_str(target).ok().map(|id| id.to_string()))
+                .flatten()
+        });
         let mut result = Mapping::new();
         if let Some(id) = id {
             result.insert("id".into(), id.into());
+        }
+        if let Some(key) = machine(text, "key") {
+            result.insert("key".into(), key.into());
         }
         result.insert("link".into(), raw.into());
         return Ok(Value::Mapping(result));
@@ -188,7 +195,12 @@ fn show_reference(value: &Value) -> String {
             .and_then(Value::as_str)
             .map(|id| format!(" %% splat id={id} %%"))
             .unwrap_or_default();
-        return format!("{link}{backup}");
+        let key = value
+            .get("key")
+            .and_then(Value::as_str)
+            .map(|key| format!(" %% splat key={key} %%"))
+            .unwrap_or_default();
+        return format!("{link}{backup}{key}");
     }
     if let Some(key) = value.get("key").and_then(Value::as_str) {
         return format!(
@@ -1005,9 +1017,19 @@ fn render(fields: &Mapping) -> Result<Rendered, String> {
     Ok((front, body, data))
 }
 
-fn canonical(fields: &Mapping) -> Mapping {
+pub(super) fn canonical(fields: &Mapping) -> Mapping {
     let mut fields = fields.clone();
     fields.remove("splat_schema");
+    if let Some(model) = fields
+        .get_mut("splat_encounter")
+        .and_then(Value::as_mapping_mut)
+    {
+        let defaults: Mapping = serde_yaml_ng::from_str("roster: []\nsides: {party: {hostile_to: [enemies]}, enemies: {hostile_to: [party]}}\nlimits: {rounds: 20, resolution_events: 10000}\nassumptions: []\ncompletion: {mode: manual}\n").unwrap();
+        for (key, value) in defaults {
+            model.entry(key).or_insert(value);
+        }
+    }
+
     if let Some(members) = fields
         .get_mut("splat_encounter_group")
         .and_then(|v| v.get_mut("members"))

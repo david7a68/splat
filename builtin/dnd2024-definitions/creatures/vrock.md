@@ -1,35 +1,62 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: ba1b2ff5-3b5f-5f57-8ee9-517931cc2356
 splat_kind: creature
 splat_key: dnd2024:creatures/vrock
 splat_name: Vrock
-splat_origin:
-  key: dnd2024:reference/creature/vrock
+splat_origin: dnd2024:reference/creature/vrock
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 336
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 336, https://www.dndbeyond.com/srd
 ---
 
 # Vrock
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Large |
+| Type | Fiend (Demon) |
+| Alignment | Chaotic Evil |
+| Armor Class | 15 |
+| Hit Points | 152 (16d10 + 64) |
+| Initiative | +2 (12) |
+| Speed | 40 ft., Fly 60 ft. |
+| Challenge | 6 (XP 2,300; PB +3) |
+| Senses | Darkvision 120 ft.; Passive Perception 11 |
+| Languages | Abyssal; telepathy 120 ft. |
+| Resistances | Cold, Fire, Lightning |
+| Immunities | Poison; Poisoned |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 17 | +3 | +3 |
+| Dex | 15 | +2 | +5 |
+| Con | 18 | +4 | +4 |
+| Int | 8 | -1 | -1 |
+| Wis | 13 | +1 | +4 |
+| Cha | 8 | -1 | +2 |
+
 
 ## Source text
 
 <!-- SRD page 336 -->
 
-Large Fiend (Demon), Chaotic Evil\
-AC 15 Initiative +2 (12)\
-HP 152 (16d10 + 64)\
-Speed 40 ft., Fly 60 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 17 +3 +3 Dex 15 +2 +5 Con 18 +4 +4\
-Int 8 −1 −1 Wis 13 +1 +4 Cha 8 −1 +2\
-Resistances Cold, Fire, Lightning\
-Immunities Poison; Poisoned\
-Senses Darkvision 120 ft.; Passive Perception 11\
-Languages Abyssal; telepathy 120 ft.\
-CR 6 (XP 2,300; PB +3)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Large Fiend (Demon), Chaotic Evil\
+> AC 15 Initiative +2 (12)\
+> HP 152 (16d10 + 64)\
+> Speed 40 ft., Fly 60 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 17 +3 +3 Dex 15 +2 +5 Con 18 +4 +4\
+> Int 8 −1 −1 Wis 13 +1 +4 Cha 8 −1 +2\
+> Resistances Cold, Fire, Lightning\
+> Immunities Poison; Poisoned\
+> Senses Darkvision 120 ft.; Passive Perception 11\
+> Languages Abyssal; telepathy 120 ft.\
+> CR 6 (XP 2,300; PB +3)
+
 
 ### Traits
 
@@ -49,48 +76,11 @@ Stunning Screech (1/Day). Constitution Saving Throw: DC 15, each creature in a 2
 
 Original layout: [[../../srd-5.2.1/pages/336|page 336]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` large ` |
-| ` type ` | ` fiend ` |
-| ` alignment ` | ` Chaotic Evil ` |
-| ` tags_text ` | ` (Demon) ` |
-| ` movement_text ` | ` 40 ft., Fly 60 ft. ` |
-| ` resistances_text ` | ` Cold, Fire, Lightning ` |
-| ` immunities_text ` | ` Poison; Poisoned ` |
-| ` senses_text ` | ` Darkvision 120 ft.; Passive Perception 11 ` |
-| ` languages_text ` | ` Abyssal; telepathy 120 ft. ` |
-| ` cr_text ` | ` 6 (XP 2,300; PB +3) ` |
-| ` hit_points_text ` | ` 152 (16d10 + 64) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 17 ` | ` 3 ` |
-| ` Dexterity ` | ` 15 ` | ` 5 ` |
-| ` Constitution ` | ` 18 ` | ` 4 ` |
-| ` Intelligence ` | ` 8 ` | ` -1 ` |
-| ` Wisdom ` | ` 13 ` | ` 4 ` |
-| ` Charisma ` | ` 8 ` | ` 2 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 15 ` |  |
-| ` max_hp ` | ` 152 ` |  |
-| ` initiative ` | ` 2 ` |  |
-| ` speed ` | ` 40 ` | ` ft ` |
-| ` fly_speed ` | ` 60 ` | ` ft ` |
 
 ## Health
 
@@ -348,3 +338,13 @@ geometry:
 unlisted_success_branch: no_effect
 unlisted_duration: until_removed_by_applicable_rule
 ```
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_stats_extras -->
+> 
+> ```yaml
+> fly_speed:
+>   unit: ft
+>   value: 60
+> ```
+

@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 5ca55667-0040-5455-a5b2-3421baaf054a
 splat_kind: rule
 splat_key: dnd2024:class_features/fiend_patron_level_3_dark_one_s_blessing
 splat_name: 'Level 3: Dark One’s Blessing'
-splat_origin:
-  key: dnd2024:reference/pages/076
+splat_origin: dnd2024:reference/pages/076
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 76
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 76, https://www.dndbeyond.com/srd
 ---
 
 # Level 3: Dark One’s Blessing

@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 72a0fcde-868b-5416-9191-9d3f82755294
 splat_kind: spell
 splat_key: dnd2024:spells/find_steed
 splat_name: Find Steed
-splat_origin:
-  key: dnd2024:reference/spell/find_steed
+splat_origin: dnd2024:reference/spell/find_steed
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 130, 131
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 130, 131, https://www.dndbeyond.com/srd
 ---
 
 # Find Steed
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 2 |
+| School | Conjuration |
+| Classes | Paladin |
+| Casting Time | Action |
+| Range | 30 feet |
+| Components | V, S |
+| Duration | Instantaneous |
+
 
 ## Source text
 
@@ -67,28 +78,9 @@ Healing Touch (Celestial Only; Recharges after a Long Rest). One creature within
 
 Original layout: [[../../srd-5.2.1/pages/130|page 130]], [[../../srd-5.2.1/pages/131|page 131]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 2 ` |
-| ` school ` | ` conjuration ` |
-| ` classes ` | ` ["paladin"] ` |
-| ` components ` | ` ["verbal", "somatic"] ` |
-| ` concentration ` | ` false ` |
-| ` duration ` | ` Instantaneous ` |
-| ` casting_time ` | ` Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
-
-<!-- splat:values path=splat_spell/range -->
-
-| Field | Value |
-| --- | --- |
-| ` feet ` | ` 30 ` |
 
 ## Rule
 

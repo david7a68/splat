@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 92cad99f-65ae-5a25-a60a-03b36b768489
 splat_kind: rule
 splat_key: dnd2024:rules/create_your_character_fill_in_numbers
 splat_name: Fill In Numbers
-splat_origin:
-  key: dnd2024:reference/pages/022
+splat_origin: dnd2024:reference/pages/022
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 22, 23
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 22, 23, https://www.dndbeyond.com/srd
 ---
 
 # Fill In Numbers

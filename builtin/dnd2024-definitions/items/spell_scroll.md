@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 6c43d977-5f9f-588b-98c0-de2cfe98c2dc
 splat_kind: item
 splat_key: dnd2024:items/spell_scroll
 splat_name: Spell Scroll
-splat_origin:
-  key: dnd2024:reference/magic_item/spell_scroll
+splat_origin: dnd2024:reference/magic_item/spell_scroll
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 244
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 244, https://www.dndbeyond.com/srd
 ---
 
 # Spell Scroll
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Scroll |
+| Rarity | Rarity Varies |
+| Attunement | No |
+
 
 ## Source text
 
@@ -46,22 +53,9 @@ Copying a Scroll into a Spellbook. A Wizard spell on a Spell Scroll can be copie
 
 Original layout: [[../../srd-5.2.1/pages/244|page 244]].
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` scroll ` |
-| ` rarity ` | ` rarity_varies ` |
 
-### Equipment
-
-<!-- splat:values path=splat_item/equipment -->
-
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` none ` |
 
 ## Rule
 

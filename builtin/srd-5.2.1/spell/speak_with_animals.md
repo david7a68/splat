@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "757d8b56-8d30-5c9e-ad61-b46acd157352"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/speak_with_animals"
 splat_name: "Speak with Animals"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [164], "executable": false}
+splat_pages:
+- 164
 ---
 
 # Speak with Animals
@@ -22,3 +23,13 @@ For the duration, you can comprehend and verbally communicate with Beasts, and y
 Most Beasts have little to say about topics that don’t pertain to survival or companionship, but at minimum, a Beast can give you information about nearby locations and monsters, including whatever it has perceived within the past day.
 
 Original layout: [[../pages/164|page 164]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

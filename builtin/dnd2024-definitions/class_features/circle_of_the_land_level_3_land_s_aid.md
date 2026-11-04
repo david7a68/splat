@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 4ea24045-6ee6-51ce-9c40-3968055ba7fc
 splat_kind: rule
 splat_key: dnd2024:class_features/circle_of_the_land_level_3_land_s_aid
 splat_name: 'Level 3: Land’s Aid'
-splat_origin:
-  key: dnd2024:reference/pages/046
+splat_origin: dnd2024:reference/pages/046
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 46
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 46, https://www.dndbeyond.com/srd
 ---
 
 # Level 3: Land’s Aid

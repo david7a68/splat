@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: f8d05a63-ed18-577b-858e-18cd212df9df
 splat_kind: rule
 splat_key: dnd2024:glossary/cone_area_of_effect
 splat_name: Cone [Area of Effect]
-splat_origin:
-  key: dnd2024:reference/glossary/cone_area_of_effect
+splat_origin: dnd2024:reference/glossary/cone_area_of_effect
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 179
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 179, https://www.dndbeyond.com/srd
 ---
 
 # Cone [Area of Effect]

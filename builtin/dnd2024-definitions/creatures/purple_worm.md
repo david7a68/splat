@@ -1,33 +1,58 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: b0392038-ffb8-5c6d-9fe9-99bc4eda61ee
 splat_kind: creature
 splat_key: dnd2024:creatures/purple_worm
 splat_name: Purple Worm
-splat_origin:
-  key: dnd2024:reference/creature/purple_worm
+splat_origin: dnd2024:reference/creature/purple_worm
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 316, 317
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 316, 317, https://www.dndbeyond.com/srd
 ---
 
 # Purple Worm
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Gargantuan |
+| Type | Monstrosity |
+| Alignment | Unaligned |
+| Armor Class | 18 |
+| Hit Points | 247 (15d20 + 90) |
+| Initiative | +3 (13) |
+| Speed | 50 ft., Burrow 50 ft. |
+| Challenge | 15 (XP 13,000; PB +5) |
+| Senses | Blindsight 30 ft., Tremorsense 60 ft.; Passive Perception 9 |
+| Languages | None |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 28 | +9 | +9 |
+| Dex | 7 | -2 | -2 |
+| Con | 22 | +6 | +11 |
+| Int | 1 | -5 | -5 |
+| Wis | 8 | -1 | +4 |
+| Cha | 4 | -3 | -3 |
+
 
 ## Source text
 
 <!-- SRD page 316 -->
 
-Gargantuan Monstrosity, Unaligned\
-AC 18 Initiative +3 (13)\
-HP 247 (15d20 + 90)\
-Speed 50 ft., Burrow 50 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 28 +9 +9 Dex 7 −2 −2 Con 22 +6 +11\
-Int 1 −5 −5 Wis 8 −1 +4 Cha 4 −3 −3\
-Senses Blindsight 30 ft., Tremorsense 60 ft.; Passive Perception 9\
-Languages None\
-CR 15 (XP 13,000; PB +5)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Gargantuan Monstrosity, Unaligned\
+> AC 18 Initiative +3 (13)\
+> HP 247 (15d20 + 90)\
+> Speed 50 ft., Burrow 50 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 28 +9 +9 Dex 7 −2 −2 Con 22 +6 +11\
+> Int 1 −5 −5 Wis 8 −1 +4 Cha 4 −3 −3\
+> Senses Blindsight 30 ft., Tremorsense 60 ft.; Passive Perception 9\
+> Languages None\
+> CR 15 (XP 13,000; PB +5)
+
 
 <!-- SRD page 317 -->
 
@@ -51,45 +76,11 @@ If the worm takes 30 damage or more on a single turn from a creature inside it, 
 
 Original layout: [[../../srd-5.2.1/pages/316|page 316]], [[../../srd-5.2.1/pages/317|page 317]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` gargantuan ` |
-| ` type ` | ` monstrosity ` |
-| ` alignment ` | ` Unaligned ` |
-| ` movement_text ` | ` 50 ft., Burrow 50 ft. ` |
-| ` senses_text ` | ` Blindsight 30 ft., Tremorsense 60 ft.; Passive Perception 9 ` |
-| ` languages_text ` | ` None ` |
-| ` cr_text ` | ` 15 (XP 13,000; PB +5) ` |
-| ` hit_points_text ` | ` 247 (15d20 + 90) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 28 ` | ` 9 ` |
-| ` Dexterity ` | ` 7 ` | ` -2 ` |
-| ` Constitution ` | ` 22 ` | ` 11 ` |
-| ` Intelligence ` | ` 1 ` | ` -5 ` |
-| ` Wisdom ` | ` 8 ` | ` 4 ` |
-| ` Charisma ` | ` 4 ` | ` -3 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 18 ` |  |
-| ` max_hp ` | ` 247 ` |  |
-| ` initiative ` | ` 3 ` |  |
-| ` speed ` | ` 50 ` | ` ft ` |
-| ` burrow_speed ` | ` 50 ` | ` ft ` |
 
 ## Health
 
@@ -330,3 +321,13 @@ columns:
 | ` provider ` | ` caller ` |
 | ` required_facts ` | ` ["distance", "area_membership", "visibility", "occupancy", "movement_path"] ` |
 | ` validate_against_typed_constraints ` | ` true ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_stats_extras -->
+> 
+> ```yaml
+> burrow_speed:
+>   unit: ft
+>   value: 50
+> ```
+

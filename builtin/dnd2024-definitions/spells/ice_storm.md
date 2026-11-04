@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: fbc7531b-6863-52d4-a864-6056ce2201b1
 splat_kind: spell
 splat_key: dnd2024:spells/ice_storm
 splat_name: Ice Storm
-splat_origin:
-  key: dnd2024:reference/spell/ice_storm
+splat_origin: dnd2024:reference/spell/ice_storm
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 141, 142
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 141, 142, https://www.dndbeyond.com/srd
 ---
 
 # Ice Storm
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 4 |
+| School | Evocation |
+| Classes | Druid, Sorcerer, Wizard |
+| Casting Time | Action |
+| Range | 300 feet |
+| Components | V, S, M (a mitten) |
+| Duration | Instantaneous |
+
 
 ## Source text
 
@@ -34,37 +45,11 @@ Using a Higher-Level Spell Slot. The Bludgeoning damage increases by 1d10 for ea
 
 Original layout: [[../../srd-5.2.1/pages/141|page 141]], [[../../srd-5.2.1/pages/142|page 142]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 4 ` |
-| ` school ` | ` evocation ` |
-| ` classes ` | ` ["druid", "sorcerer", "wizard"] ` |
-| ` components ` | ` ["verbal", "somatic", "material"] ` |
-| ` concentration ` | ` false ` |
-| ` duration ` | ` Instantaneous ` |
-| ` casting_time ` | ` Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
 
-<!-- splat:values path=splat_spell/range -->
 
-| Field | Value |
-| --- | --- |
-| ` feet ` | ` 300 ` |
-
-### Material
-
-<!-- splat:values path=splat_spell/material -->
-
-| Field | Value |
-| --- | --- |
-| ` description ` | ` a mitten ` |
-| ` consumed ` | ` false ` |
 
 ## Rule
 
@@ -161,3 +146,12 @@ concentration: false
 maximum:
   kind: instantaneous
 ```
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_spell_extras -->
+> 
+> ```yaml
+> material:
+>   consumed: false
+> ```
+

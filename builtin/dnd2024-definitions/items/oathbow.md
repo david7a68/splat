@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: fcc1fd54-e8f6-57b6-be5f-c4128d587fe8
 splat_kind: item
 splat_key: dnd2024:items/oathbow
 splat_name: Oathbow
-splat_origin:
-  key: dnd2024:reference/magic_item/oathbow
+splat_origin: dnd2024:reference/magic_item/oathbow
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 233
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 233, https://www.dndbeyond.com/srd
 ---
 
 # Oathbow
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Weapon |
+| Rarity | Very Rare |
+| Attunement | Yes |
+
 
 ## Source text
 
@@ -28,22 +35,9 @@ While your sworn enemy lives, you have Disadvantage on attack rolls with all oth
 
 Original layout: [[../../srd-5.2.1/pages/233|page 233]].
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` weapon ` |
-| ` rarity ` | ` very_rare ` |
 
-### Equipment
-
-<!-- splat:values path=splat_item/equipment -->
-
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` required ` |
 
 ## Rule
 

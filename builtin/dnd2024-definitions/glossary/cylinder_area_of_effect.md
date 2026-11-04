@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: b48abbf4-267e-521b-9df5-36abfef6f063
 splat_kind: rule
 splat_key: dnd2024:glossary/cylinder_area_of_effect
 splat_name: Cylinder [Area of Effect]
-splat_origin:
-  key: dnd2024:reference/glossary/cylinder_area_of_effect
+splat_origin: dnd2024:reference/glossary/cylinder_area_of_effect
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 180
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 180, https://www.dndbeyond.com/srd
 ---
 
 # Cylinder [Area of Effect]

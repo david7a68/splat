@@ -1,34 +1,60 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: d7a5ef27-6d5b-5565-a145-b8e10c96067f
 splat_kind: creature
 splat_key: dnd2024:creatures/plesiosaurus
 splat_name: Plesiosaurus
-splat_origin:
-  key: dnd2024:reference/creature/plesiosaurus
+splat_origin: dnd2024:reference/creature/plesiosaurus
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 358, 359
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 358, 359, https://www.dndbeyond.com/srd
 ---
 
 # Plesiosaurus
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Large |
+| Type | Beast (Dinosaur) |
+| Alignment | Unaligned |
+| Armor Class | 13 |
+| Hit Points | 68 (8d10 + 24) |
+| Initiative | +2 (12) |
+| Speed | 20 ft., Swim 40 ft. |
+| Challenge | 2 (XP 450; PB +2) |
+| Skills | Perception +3, Stealth +4 |
+| Senses | Passive Perception 13 |
+| Languages | None |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 18 | +4 | +4 |
+| Dex | 15 | +2 | +2 |
+| Con | 16 | +3 | +3 |
+| Int | 2 | -4 | -4 |
+| Wis | 12 | +1 | +1 |
+| Cha | 5 | -3 | -3 |
+
 
 ## Source text
 
 <!-- SRD page 358 -->
 
-Large Beast (Dinosaur), Unaligned\
-AC 13  Initiative +2 (12)\
-HP 68 (8d10 + 24)\
-Speed 20 ft., Swim 40 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 18 +4 +4 Dex 15 +2 +2 Con 16 +3 +3\
-Int 2 −4 −4 Wis 12 +1 +1 Cha  5 −3 −3\
-Skills Perception +3, Stealth +4\
-Senses Passive Perception 13\
-Languages None\
-CR 2 (XP 450; PB +2)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Large Beast (Dinosaur), Unaligned\
+> AC 13  Initiative +2 (12)\
+> HP 68 (8d10 + 24)\
+> Speed 20 ft., Swim 40 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 18 +4 +4 Dex 15 +2 +2 Con 16 +3 +3\
+> Int 2 −4 −4 Wis 12 +1 +1 Cha  5 −3 −3\
+> Skills Perception +3, Stealth +4\
+> Senses Passive Perception 13\
+> Languages None\
+> CR 2 (XP 450; PB +2)
+
 
 ### Traits
 
@@ -42,47 +68,11 @@ Bite. Melee Attack Roll: +6, reach 10 ft. Hit: 11 (2d6 + 4) Piercing damage.
 
 Original layout: [[../../srd-5.2.1/pages/358|page 358]], [[../../srd-5.2.1/pages/359|page 359]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` large ` |
-| ` type ` | ` beast ` |
-| ` alignment ` | ` Unaligned ` |
-| ` tags_text ` | ` (Dinosaur) ` |
-| ` movement_text ` | ` 20 ft., Swim 40 ft. ` |
-| ` skills_text ` | ` Perception +3, Stealth +4 ` |
-| ` senses_text ` | ` Passive Perception 13 ` |
-| ` languages_text ` | ` None ` |
-| ` cr_text ` | ` 2 (XP 450; PB +2) ` |
-| ` hit_points_text ` | ` 68 (8d10 + 24) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 18 ` | ` 4 ` |
-| ` Dexterity ` | ` 15 ` | ` 2 ` |
-| ` Constitution ` | ` 16 ` | ` 3 ` |
-| ` Intelligence ` | ` 2 ` | ` -4 ` |
-| ` Wisdom ` | ` 12 ` | ` 1 ` |
-| ` Charisma ` | ` 5 ` | ` -3 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 13 ` |  |
-| ` max_hp ` | ` 68 ` |  |
-| ` initiative ` | ` 2 ` |  |
-| ` speed ` | ` 20 ` | ` ft ` |
-| ` swim_speed ` | ` 40 ` | ` ft ` |
 
 ## Health
 
@@ -224,3 +214,13 @@ geometry_assumptions:
   - plane
   - form_appearance
 ```
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_stats_extras -->
+> 
+> ```yaml
+> swim_speed:
+>   unit: ft
+>   value: 40
+> ```
+

@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "ab7e5300-8171-5ad2-bbde-e4552b5fb313"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/mastiff"
 splat_name: "Mastiff"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [357], "executable": false}
+splat_pages:
+- 357
 ---
 
 # Mastiff
@@ -28,3 +29,13 @@ CR 1/8 (XP 25; PB +2)
 Bite. Melee Attack Roll: +3, reach 5 ft. Hit: 4 (1d6 + 1) Piercing damage. If the target is a Medium or smaller creature, it has the Prone condition.
 
 Original layout: [[../pages/357|page 357]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

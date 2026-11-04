@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "54b5dde6-3598-5344-85e7-73c99fa5e962"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/ghoul"
 splat_name: "Ghoul"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [288], "executable": false}
+splat_pages:
+- 288
 ---
 
 # Ghoul
@@ -32,3 +33,13 @@ Bite. Melee Attack Roll: +4, reach 5 ft. Hit: 5 (1d6 + 2) Piercing damage plus 3
 Claw. Melee Attack Roll: +4, reach 5 ft. Hit: 4 (1d4 + 2) Slashing damage. If the target is a creature that isn’t an Undead or elf, it is subjected to the following effect. Constitution Saving Throw: DC 10. Failure: The target has the Paralyzed condition until the end of its next turn.
 
 Original layout: [[../pages/288|page 288]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

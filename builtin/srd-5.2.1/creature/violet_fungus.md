@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "0e366cdf-8afa-50da-b473-9d5705207b72"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/violet_fungus"
 splat_name: "Violet Fungus"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [286], "executable": false}
+splat_pages:
+- 286
 ---
 
 # Violet Fungus
@@ -30,3 +31,13 @@ Multiattack. The fungus makes two Rotting Touch attacks.
 Rotting Touch. Melee Attack Roll: +2, reach 10 ft. Hit: 4 (1d8) Necrotic damage.
 
 Original layout: [[../pages/286|page 286]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

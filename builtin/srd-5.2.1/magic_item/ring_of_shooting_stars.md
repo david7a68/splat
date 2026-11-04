@@ -1,10 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "b3b083f8-68dd-5125-9165-0910218073b5"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/magic_item/ring_of_shooting_stars"
 splat_name: "Ring of Shooting Stars"
-splat_reference: {"source": "SRD 5.2.1", "category": "magic_item", "pages": [238, 239], "executable": false}
+splat_pages:
+- 238
+- 239
 ---
 
 # Ring of Shooting Stars
@@ -35,3 +37,13 @@ As a Bonus Action, you can move each sphere up to 30 feet, but no farther than 1
 Shooting Stars. You can expend 1 to 3 charges as a Magic action. For every charge you expend, you launch a glowing mote of light from the ring at a point you can see within 60 feet of yourself. Each creature in a 15-foot Cube originating from that point is showered in sparks and makes a DC 15 Dexterity saving throw, taking 5d4 Radiant damage on a failed save or half as much damage on a successful one.
 
 Original layout: [[../pages/238|page 238]], [[../pages/239|page 239]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: magic_item
+> executable: false
+> ```
+

@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "6e78c7f3-1c70-5804-8628-a271901c3ba0"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/raise_dead"
 splat_name: "Raise Dead"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [157], "executable": false}
+splat_pages:
+- 157
 ---
 
 # Raise Dead
@@ -26,3 +27,13 @@ This spell closes all mortal wounds, but it doesn’t restore missing body parts
 Coming back from the dead is an ordeal. The target takes a −4 penalty to D20 Tests. Every time the target finishes a Long Rest, the penalty is reduced by 1 until it becomes 0.
 
 Original layout: [[../pages/157|page 157]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "c1b6a48a-f77f-5f37-9ff4-9b2ecbc898c4"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/modify_memory"
 splat_name: "Modify Memory"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [150], "executable": false}
+splat_pages:
+- 150
 ---
 
 # Modify Memory
@@ -28,3 +29,13 @@ A modified memory doesn’t necessarily affect how a creature behaves, particula
 Using a Higher-Level Spell Slot. You can alter the target’s memories of an event that took place up to 7 days ago (level 6 spell slot), 30 days ago (level 7 spell slot), 365 days ago (level 8 spell slot), or any time in the creature’s past (level 9 spell slot).
 
 Original layout: [[../pages/150|page 150]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

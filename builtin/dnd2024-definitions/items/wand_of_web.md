@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 4dcf10d2-e55b-560d-8d33-1a89b6f7fd52
 splat_kind: item
 splat_key: dnd2024:items/wand_of_web
 splat_name: Wand of Web
-splat_origin:
-  key: dnd2024:reference/magic_item/wand_of_web
+splat_origin: dnd2024:reference/magic_item/wand_of_web
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 251
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 251, https://www.dndbeyond.com/srd
 ---
 
 # Wand of Web
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Wand |
+| Rarity | Uncommon |
+| Attunement | Yes |
+
 
 ## Source text
 
@@ -26,23 +33,9 @@ Regaining Charges. The wand regains 1d6 + 1 expended charges daily at dawn. If y
 
 Original layout: [[../../srd-5.2.1/pages/251|page 251]].
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` wand ` |
-| ` rarity ` | ` uncommon ` |
 
-### Equipment
-
-<!-- splat:values path=splat_item/equipment -->
-
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` required ` |
-| ` attunement_requirement_text ` | ` a Spellcaster ` |
 
 ## Rule
 
@@ -129,3 +122,12 @@ effect: destroyed
 | --- | --- |
 | ` 0 ` | ` dnd2024:rules/magic_item_categories_wands ` |
 | ` 1 ` | ` dnd2024:rules/activating_a_magic_item_spells_cast_from_items ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_item_extras -->
+> 
+> ```yaml
+> equipment:
+>   attunement_requirement_text: a Spellcaster
+> ```
+

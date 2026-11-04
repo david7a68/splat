@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 25f83e04-8d94-5821-bd9f-8febd5436a55
 splat_kind: spell
 splat_key: dnd2024:spells/guidance
 splat_name: Guidance
-splat_origin:
-  key: dnd2024:reference/spell/guidance
+splat_origin: dnd2024:reference/spell/guidance
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 138
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 138, https://www.dndbeyond.com/srd
 ---
 
 # Guidance
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | Cantrip |
+| School | Divination |
+| Classes | Cleric, Druid |
+| Casting Time | Action |
+| Range |  |
+| Components | V, S |
+| Duration | Concentration, up to 1 minute |
+
 
 ## Source text
 
@@ -28,28 +39,9 @@ You touch a willing creature and choose a skill. Until the spell ends, the creat
 
 Original layout: [[../../srd-5.2.1/pages/138|page 138]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 0 ` |
-| ` school ` | ` divination ` |
-| ` classes ` | ` ["cleric", "druid"] ` |
-| ` components ` | ` ["verbal", "somatic"] ` |
-| ` concentration ` | ` true ` |
-| ` duration ` | ` Concentration, up to 1 minute ` |
-| ` casting_time ` | ` Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
-
-<!-- splat:values path=splat_spell/range -->
-
-| Field | Value |
-| --- | --- |
-| ` mode ` | ` touch ` |
 
 ## Rule
 
@@ -97,3 +89,12 @@ amount:
     add: 0
 all_matching_checks: true
 ```
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_spell_extras -->
+> 
+> ```yaml
+> range:
+>   mode: touch
+> ```
+

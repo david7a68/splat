@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "320ab4c8-3c5b-53cd-8419-aa2f795ec176"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/magic_item/feather_token"
 splat_name: "Feather Token"
-splat_reference: {"source": "SRD 5.2.1", "category": "magic_item", "pages": [221], "executable": false}
+splat_pages:
+- 221
 ---
 
 # Feather Token
@@ -41,3 +42,13 @@ As a Bonus Action, you can direct the whip to fly up to 20 feet and repeat the a
 | 91–00 | Whip | Rare |
 
 Original layout: [[../pages/221|page 221]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: magic_item
+> executable: false
+> ```
+

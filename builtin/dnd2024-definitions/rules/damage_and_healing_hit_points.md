@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 7b749381-128f-5563-8b8c-e68513aaa2f3
 splat_kind: rule
 splat_key: dnd2024:rules/damage_and_healing_hit_points
 splat_name: Hit Points
-splat_origin:
-  key: dnd2024:reference/pages/016
+splat_origin: dnd2024:reference/pages/016
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 16
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 16, https://www.dndbeyond.com/srd
 ---
 
 # Hit Points

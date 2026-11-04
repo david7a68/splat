@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "265401a2-79aa-5125-99d5-0e6dbac74d12"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/hyena"
 splat_name: "Hyena"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [356], "executable": false}
+splat_pages:
+- 356
 ---
 
 # Hyena
@@ -32,3 +33,13 @@ Pack Tactics. The hyena has Advantage on an attack roll against a creature if at
 Bite. Melee Attack Roll: +2, reach 5 ft. Hit: 3 (1d6) Piercing damage.
 
 Original layout: [[../pages/356|page 356]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

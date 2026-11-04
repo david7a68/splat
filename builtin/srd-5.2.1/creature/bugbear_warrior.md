@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "84555ebe-2af1-56ee-ab67-8da2c1affed1"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/bugbear_warrior"
 splat_name: "Bugbear Warrior"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [272], "executable": false}
+splat_pages:
+- 272
 ---
 
 # Bugbear Warrior
@@ -35,3 +36,13 @@ Grab. Melee Attack Roll: +4, reach 10 ft. Hit: 9 (2d6 + 2) Bludgeoning damage. I
 Light Hammer. Melee or Ranged Attack Roll: +4 (with Advantage if the target is Grappled by the bugbear), reach 10 ft. or range 20/60 ft. Hit: 9 (3d4 + 2) Bludgeoning damage.
 
 Original layout: [[../pages/272|page 272]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

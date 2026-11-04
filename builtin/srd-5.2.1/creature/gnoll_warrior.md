@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "5aa2e325-b973-53c4-9ae1-a9f1eb9401be"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/gnoll_warrior"
 splat_name: "Gnoll Warrior"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [289], "executable": false}
+splat_pages:
+- 289
 ---
 
 # Gnoll Warrior
@@ -33,3 +34,13 @@ Bone Bow. Ranged Attack Roll: +3, range 150/600 ft. Hit: 6 (1d10 + 1) Piercing d
 Rampage (1/Day). Immediately after dealing damage to a creature that is already Bloodied, the gnoll moves up to half its Speed, and it makes one Rend attack.
 
 Original layout: [[../pages/289|page 289]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

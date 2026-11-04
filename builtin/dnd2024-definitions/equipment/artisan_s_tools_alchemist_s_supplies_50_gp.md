@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 0c6ccdcd-ebfb-580d-b367-214af7def135
 splat_kind: item
 splat_key: dnd2024:equipment/artisan_s_tools_alchemist_s_supplies_50_gp
 splat_name: Alchemist’s Supplies (50 GP)
-splat_origin:
-  key: dnd2024:reference/pages/093
+splat_origin: dnd2024:reference/pages/093
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 93
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 93, https://www.dndbeyond.com/srd
 ---
 
 # Alchemist’s Supplies (50 GP)
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Adventuring Gear |
+| Rarity |  |
+| Attunement | No |
+
 
 ## Source text
 
@@ -22,39 +29,13 @@ Ability: Intelligence Weight: 8 lb.\
 Utilize: Identify a substance (DC 15), or start a fire (DC 15)\
 Craft: Acid, Alchemist’s Fire, Component Pouch, Oil, Paper, Perfume
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` adventuring_gear ` |
 
-### Equipment
 
-<!-- splat:values path=splat_item/equipment -->
 
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` none ` |
 
-### Price
 
-<!-- splat:values path=splat_item/price -->
-
-| Field | Value |
-| --- | --- |
-| ` value ` | ` 50 ` |
-| ` unit ` | ` gp ` |
-
-### Mass
-
-<!-- splat:values path=splat_item/mass -->
-
-| Field | Value |
-| --- | --- |
-| ` value ` | ` 8 ` |
-| ` unit ` | ` lb ` |
 
 ## Rule
 
@@ -108,3 +89,16 @@ crafting_rule:
 | --- | --- |
 | ` value ` | ` 8 ` |
 | ` unit ` | ` lb ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_item_extras -->
+> 
+> ```yaml
+> price:
+>   unit: gp
+>   value: 50
+> mass:
+>   unit: lb
+>   value: 8
+> ```
+

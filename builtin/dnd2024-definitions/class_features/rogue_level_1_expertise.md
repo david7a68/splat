@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 9cc03f70-bcf5-54c3-a203-39a4bde2c3ac
 splat_kind: rule
 splat_key: dnd2024:class_features/rogue_level_1_expertise
 splat_name: 'Level 1: Expertise'
-splat_origin:
-  key: dnd2024:reference/pages/061
+splat_origin: dnd2024:reference/pages/061
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 61
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 61, https://www.dndbeyond.com/srd
 ---
 
 # Level 1: Expertise

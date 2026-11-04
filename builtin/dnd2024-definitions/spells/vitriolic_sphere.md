@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 85c3e405-aefe-523e-acdf-0c2ac7c8ec52
 splat_kind: spell
 splat_key: dnd2024:spells/vitriolic_sphere
 splat_name: Vitriolic Sphere
-splat_origin:
-  key: dnd2024:reference/spell/vitriolic_sphere
+splat_origin: dnd2024:reference/spell/vitriolic_sphere
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 172
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 172, https://www.dndbeyond.com/srd
 ---
 
 # Vitriolic Sphere
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 4 |
+| School | Evocation |
+| Classes | Sorcerer, Wizard |
+| Casting Time | Action |
+| Range | 150 feet |
+| Components | V, S, M (a drop of bile) |
+| Duration | Instantaneous |
+
 
 ## Source text
 
@@ -30,37 +41,11 @@ Using a Higher-Level Spell Slot. The initial damage increases by 2d4 for each sp
 
 Original layout: [[../../srd-5.2.1/pages/172|page 172]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 4 ` |
-| ` school ` | ` evocation ` |
-| ` classes ` | ` ["sorcerer", "wizard"] ` |
-| ` components ` | ` ["verbal", "somatic", "material"] ` |
-| ` concentration ` | ` false ` |
-| ` duration ` | ` Instantaneous ` |
-| ` casting_time ` | ` Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
 
-<!-- splat:values path=splat_spell/range -->
 
-| Field | Value |
-| --- | --- |
-| ` feet ` | ` 150 ` |
-
-### Material
-
-<!-- splat:values path=splat_spell/material -->
-
-| Field | Value |
-| --- | --- |
-| ` description ` | ` a drop of bile ` |
-| ` consumed ` | ` false ` |
 
 ## Rule
 
@@ -152,3 +137,12 @@ delayed_damage: false
 | ` source ` | ` supplied_world_geometry ` |
 | ` unknown_facts ` | ` require_resolution ` |
 | ` infer_unprovided_geometry ` | ` false ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_spell_extras -->
+> 
+> ```yaml
+> material:
+>   consumed: false
+> ```
+

@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: a367499e-87dd-54dd-bdb3-c16d1fee56f7
 splat_kind: rule
 splat_key: dnd2024:rules/traps_rolling_stone
 splat_name: Rolling Stone
-splat_origin:
-  key: dnd2024:reference/pages/201
+splat_origin: dnd2024:reference/pages/201
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 201
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 201, https://www.dndbeyond.com/srd
 ---
 
 # Rolling Stone

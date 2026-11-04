@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 7f141cfc-6930-523f-bbbd-dd9f1b4c6bb0
 splat_kind: rule
 splat_key: dnd2024:rules/warlock_witch_sight
 splat_name: Witch Sight
-splat_origin:
-  key: dnd2024:reference/pages/074
+splat_origin: dnd2024:reference/pages/074
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 74
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 74, https://www.dndbeyond.com/srd
 ---
 
 # Witch Sight

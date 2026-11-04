@@ -1,35 +1,62 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 40badd7c-76b8-5532-850e-cab17fcded3d
 splat_kind: creature
 splat_key: dnd2024:creatures/adult_green_dragon
 splat_name: Adult Green Dragon
-splat_origin:
-  key: dnd2024:reference/creature/adult_green_dragon
+splat_origin: dnd2024:reference/creature/adult_green_dragon
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 294
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 294, https://www.dndbeyond.com/srd
 ---
 
 # Adult Green Dragon
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Huge |
+| Type | Dragon (Chromatic) |
+| Alignment | Lawful Evil |
+| Armor Class | 19 |
+| Hit Points | 207 (18d12 + 90) |
+| Initiative | +11 (21) |
+| Speed | 40 ft., Fly 80 ft., Swim 40 ft. |
+| Challenge | 15 (XP 13,000, or 15,000 in lair; PB +5) |
+| Skills | Deception +9, Perception +12, Persuasion +9, Stealth +6 |
+| Senses | Blindsight 60 ft., Darkvision 120 ft.; Passive Perception 22 |
+| Languages | Common, Draconic |
+| Immunities | Poison; Poisoned |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 23 | +6 | +6 |
+| Dex | 12 | +1 | +6 |
+| Con | 21 | +5 | +5 |
+| Int | 18 | +4 | +4 |
+| Wis | 15 | +2 | +7 |
+| Cha | 18 | +4 | +4 |
+
 
 ## Source text
 
 <!-- SRD page 294 -->
 
-Huge Dragon (Chromatic), Lawful Evil\
-AC 19 Initiative +11 (21)\
-HP 207 (18d12 + 90)\
-Speed 40 ft., Fly 80 ft., Swim 40 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 23 +6 +6 Dex 12 +1 +6 Con 21 +5 +5\
-Int 18 +4 +4 Wis 15 +2 +7 Cha 18 +4 +4\
-Skills Deception +9, Perception +12, Persuasion +9, Stealth +6\
-Immunities Poison; Poisoned\
-Senses Blindsight 60 ft., Darkvision 120 ft.; Passive Perception 22\
-Languages Common, Draconic\
-CR 15 (XP 13,000, or 15,000 in lair; PB +5)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Huge Dragon (Chromatic), Lawful Evil\
+> AC 19 Initiative +11 (21)\
+> HP 207 (18d12 + 90)\
+> Speed 40 ft., Fly 80 ft., Swim 40 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 23 +6 +6 Dex 12 +1 +6 Con 21 +5 +5\
+> Int 18 +4 +4 Wis 15 +2 +7 Cha 18 +4 +4\
+> Skills Deception +9, Perception +12, Persuasion +9, Stealth +6\
+> Immunities Poison; Poisoned\
+> Senses Blindsight 60 ft., Darkvision 120 ft.; Passive Perception 22\
+> Languages Common, Draconic\
+> CR 15 (XP 13,000, or 15,000 in lair; PB +5)
+
 
 ### Traits
 
@@ -62,49 +89,11 @@ Pounce. The dragon moves up to half its Speed, and it makes one Rend attack.
 
 Original layout: [[../../srd-5.2.1/pages/294|page 294]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` huge ` |
-| ` type ` | ` dragon ` |
-| ` alignment ` | ` Lawful Evil ` |
-| ` tags_text ` | ` (Chromatic) ` |
-| ` movement_text ` | ` 40 ft., Fly 80 ft., Swim 40 ft. ` |
-| ` skills_text ` | ` Deception +9, Perception +12, Persuasion +9, Stealth +6 ` |
-| ` immunities_text ` | ` Poison; Poisoned ` |
-| ` senses_text ` | ` Blindsight 60 ft., Darkvision 120 ft.; Passive Perception 22 ` |
-| ` languages_text ` | ` Common, Draconic ` |
-| ` cr_text ` | ` 15 (XP 13,000, or 15,000 in lair; PB +5) ` |
-| ` hit_points_text ` | ` 207 (18d12 + 90) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 23 ` | ` 6 ` |
-| ` Dexterity ` | ` 12 ` | ` 6 ` |
-| ` Constitution ` | ` 21 ` | ` 5 ` |
-| ` Intelligence ` | ` 18 ` | ` 4 ` |
-| ` Wisdom ` | ` 15 ` | ` 7 ` |
-| ` Charisma ` | ` 18 ` | ` 4 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 19 ` |  |
-| ` max_hp ` | ` 207 ` |  |
-| ` initiative ` | ` 11 ` |  |
-| ` speed ` | ` 40 ` | ` ft ` |
-| ` fly_speed ` | ` 80 ` | ` ft ` |
-| ` swim_speed ` | ` 40 ` | ` ft ` |
 
 ## Health
 
@@ -530,3 +519,16 @@ geometry_assumptions:
   - plane
   - form_appearance
 ```
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_stats_extras -->
+> 
+> ```yaml
+> fly_speed:
+>   unit: ft
+>   value: 80
+> swim_speed:
+>   unit: ft
+>   value: 40
+> ```
+

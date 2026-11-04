@@ -1,10 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "661a2a62-b1ed-5055-a69e-83ce18c1046c"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/purple_worm"
 splat_name: "Purple Worm"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [316, 317], "executable": false}
+splat_pages:
+- 316
+- 317
 ---
 
 # Purple Worm
@@ -43,3 +45,13 @@ Swallow. Strength Saving Throw: DC 19, one Large or smaller creature Grappled by
 If the worm takes 30 damage or more on a single turn from a creature inside it, the worm must succeed on a DC 21 Constitution saving throw at the end of that turn or regurgitate all swallowed creatures, each of which falls in a space within 5 feet of the worm and has the Prone condition. If the worm dies, any swallowed creature no longer has the Restrained condition and can escape from the corpse using 20 feet of movement, exiting Prone.
 
 Original layout: [[../pages/316|page 316]], [[../pages/317|page 317]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

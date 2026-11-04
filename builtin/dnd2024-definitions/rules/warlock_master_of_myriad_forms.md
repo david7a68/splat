@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 460b9e04-03ad-565c-8b97-c6c6454ed2af
 splat_kind: rule
 splat_key: dnd2024:rules/warlock_master_of_myriad_forms
 splat_name: Master of Myriad Forms
-splat_origin:
-  key: dnd2024:reference/pages/073
+splat_origin: dnd2024:reference/pages/073
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 73
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 73, https://www.dndbeyond.com/srd
 ---
 
 # Master of Myriad Forms

@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "607c10b6-5687-546c-be9d-0baa958efcc1"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/magic_jar"
 splat_name: "Magic Jar"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [146], "executable": false}
+splat_pages:
+- 146
 ---
 
 # Magic Jar
@@ -32,3 +33,13 @@ If the container is destroyed or the spell ends, your soul returns to your body.
 When the spell ends, the container is destroyed.
 
 Original layout: [[../pages/146|page 146]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

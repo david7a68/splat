@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "0463d86a-84f5-547b-a07c-b9728cea4431"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/find_familiar"
 splat_name: "Find Familiar"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [130], "executable": false}
+splat_pages:
+- 130
 ---
 
 # Find Familiar
@@ -30,3 +31,13 @@ Disappearance of the Familiar. When the familiar drops to 0 Hit Points, it disap
 One Familiar Only. You can’t have more than one familiar at a time. If you cast this spell while you have a familiar, you instead cause it to adopt a new eligible form.
 
 Original layout: [[../pages/130|page 130]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

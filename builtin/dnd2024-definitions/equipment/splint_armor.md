@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 121b2a25-1d9a-5f2b-bb67-8db7c489c366
 splat_kind: item
 splat_key: dnd2024:equipment/splint_armor
 splat_name: Splint Armor
-splat_origin:
-  key: dnd2024:reference/pages/092
+splat_origin: dnd2024:reference/pages/092
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 92
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 92, https://www.dndbeyond.com/srd
 ---
 
 # Splint Armor
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Armor |
+| Rarity |  |
+| Attunement |  |
+
 
 ## Source text
 
@@ -37,43 +44,13 @@ Source table, SRD 5.2.1 page 92.
   "category": "armor"
 }
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` armor ` |
 
-### Armor
 
-<!-- splat:values path=splat_item/armor -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` heavy armor ` |
-| ` stealth_disadvantage ` | ` true ` |
-| ` base_ac ` | ` 17 ` |
-| ` add_dexterity_modifier ` | ` false ` |
-| ` strength_minimum ` | ` 15 ` |
 
-### Price
 
-<!-- splat:values path=splat_item/price -->
-
-| Field | Value |
-| --- | --- |
-| ` value ` | ` 200 ` |
-| ` unit ` | ` gp ` |
-
-### Mass
-
-<!-- splat:values path=splat_item/mass -->
-
-| Field | Value |
-| --- | --- |
-| ` value ` | ` 60.0 ` |
-| ` unit ` | ` lb ` |
 
 ## Rule
 
@@ -159,3 +136,22 @@ without_training:
 | ` actor ` | ` equipper ` |
 | ` item ` | ` equipped_instance ` |
 | ` inactive_if_not_equipped ` | ` true ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_item_extras -->
+> 
+> ```yaml
+> armor:
+>   add_dexterity_modifier: false
+>   base_ac: 17
+>   category: heavy armor
+>   stealth_disadvantage: true
+>   strength_minimum: 15
+> price:
+>   unit: gp
+>   value: 200
+> mass:
+>   unit: lb
+>   value: 60.0
+> ```
+

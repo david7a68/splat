@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "edf47083-3f15-58a0-bed3-e5edc9e077da"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/young_blue_dragon"
 splat_name: "Young Blue Dragon"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [266], "executable": false}
+splat_pages:
+- 266
 ---
 
 # Young Blue Dragon
@@ -33,3 +34,13 @@ Rend. Melee Attack Roll: +9, reach 10 ft. Hit: 12 (2d6 + 5) Slashing damage plus
 Lightning Breath (Recharge 5–6). Dexterity Saving Throw: DC 16, each creature in a 60-foot-long, 5-foot-wide Line. Failure: 55 (10d10) Lightning damage. Success: Half damage.
 
 Original layout: [[../pages/266|page 266]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

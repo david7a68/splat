@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "8555b152-d31f-548e-bf04-458602edf5c6"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/fire_giant"
 splat_name: "Fire Giant"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [285], "executable": false}
+splat_pages:
+- 285
 ---
 
 # Fire Giant
@@ -33,3 +34,13 @@ Flame Sword. Melee Attack Roll: +11, reach 10 ft. Hit: 21 (4d6 + 7) Slashing dam
 Hammer Throw. Ranged Attack Roll: +11, range 60/240 ft. Hit: 23 (3d10 + 7) Bludgeoning damage plus 4 (1d8) Fire damage, and the target is pushed up to 15 feet straight away from the giant and has Disadvantage on the next attack roll it makes before the end of its next turn.
 
 Original layout: [[../pages/285|page 285]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

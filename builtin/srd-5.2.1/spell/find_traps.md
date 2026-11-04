@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "225ab2e2-3989-5168-82ed-72e90b83ba97"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/find_traps"
 splat_name: "Find Traps"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [131], "executable": false}
+splat_pages:
+- 131
 ---
 
 # Find Traps
@@ -22,3 +23,13 @@ You sense any trap within range that is within line of sight. A trap, for the pu
 This spell reveals that a trap is present but not its location. You do learn the general nature of the danger posed by a trap you sense.
 
 Original layout: [[../pages/131|page 131]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

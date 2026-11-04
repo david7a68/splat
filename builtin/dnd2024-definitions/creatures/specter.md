@@ -1,35 +1,62 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: e10dcd2a-10f4-535b-a264-adc2b5243358
 splat_kind: creature
 splat_key: dnd2024:creatures/specter
 splat_name: Specter
-splat_origin:
-  key: dnd2024:reference/creature/specter
+splat_origin: dnd2024:reference/creature/specter
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 327
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 327, https://www.dndbeyond.com/srd
 ---
 
 # Specter
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Medium |
+| Type | Undead |
+| Alignment | Chaotic Evil |
+| Armor Class | 12 |
+| Hit Points | 22 (5d8) |
+| Initiative | +2 (12) |
+| Speed | 30 ft., Fly 50 ft. (hover) |
+| Challenge | 1 (XP 200; PB +2) |
+| Senses | Darkvision 60 ft.; Passive Perception 10 |
+| Languages | Understands Common plus one other language but can’t speak |
+| Resistances | Acid, Bludgeoning, Cold, Fire, Lightning, Piercing, Slashing, Thunder |
+| Immunities | Necrotic, Poison; Charmed, Exhaustion, Grappled, Paralyzed, Petrified, Poisoned, Prone, Restrained, Unconscious |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 1 | -5 | -5 |
+| Dex | 14 | +2 | +2 |
+| Con | 11 | +0 | +0 |
+| Int | 10 | +0 | +0 |
+| Wis | 10 | +0 | +0 |
+| Cha | 11 | +0 | +0 |
+
 
 ## Source text
 
 <!-- SRD page 327 -->
 
-Medium Undead, Chaotic Evil\
-AC 12 Initiative +2 (12)\
-HP 22 (5d8)\
-Speed 30 ft., Fly 50 ft. (hover)\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 1 −5 −5 Dex 14 +2 +2 Con 11 +0 +0\
-Int 10 +0 +0 Wis 10 +0 +0 Cha 11 +0 +0\
-Resistances Acid, Bludgeoning, Cold, Fire, Lightning, Piercing, Slashing, Thunder\
-Immunities Necrotic, Poison; Charmed, Exhaustion, Grappled, Paralyzed, Petrified, Poisoned, Prone, Restrained, Unconscious\
-Senses Darkvision 60 ft.; Passive Perception 10\
-Languages Understands Common plus one other language but can’t speak\
-CR 1 (XP 200; PB +2)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Medium Undead, Chaotic Evil\
+> AC 12 Initiative +2 (12)\
+> HP 22 (5d8)\
+> Speed 30 ft., Fly 50 ft. (hover)\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 1 −5 −5 Dex 14 +2 +2 Con 11 +0 +0\
+> Int 10 +0 +0 Wis 10 +0 +0 Cha 11 +0 +0\
+> Resistances Acid, Bludgeoning, Cold, Fire, Lightning, Piercing, Slashing, Thunder\
+> Immunities Necrotic, Poison; Charmed, Exhaustion, Grappled, Paralyzed, Petrified, Poisoned, Prone, Restrained, Unconscious\
+> Senses Darkvision 60 ft.; Passive Perception 10\
+> Languages Understands Common plus one other language but can’t speak\
+> CR 1 (XP 200; PB +2)
+
 
 ### Traits
 
@@ -43,47 +70,11 @@ Life Drain. Melee Attack Roll: +4, reach 5 ft. Hit: 7 (2d6) Necrotic damage. If 
 
 Original layout: [[../../srd-5.2.1/pages/327|page 327]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` medium ` |
-| ` type ` | ` undead ` |
-| ` alignment ` | ` Chaotic Evil ` |
-| ` movement_text ` | ` 30 ft., Fly 50 ft. (hover) ` |
-| ` resistances_text ` | ` Acid, Bludgeoning, Cold, Fire, Lightning, Piercing, Slashing, Thunder ` |
-| ` immunities_text ` | ` Necrotic, Poison; Charmed, Exhaustion, Grappled, Paralyzed, Petrified, Poisoned, Prone, Restrained, Unconscious ` |
-| ` senses_text ` | ` Darkvision 60 ft.; Passive Perception 10 ` |
-| ` languages_text ` | ` Understands Common plus one other language but can’t speak ` |
-| ` cr_text ` | ` 1 (XP 200; PB +2) ` |
-| ` hit_points_text ` | ` 22 (5d8) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 1 ` | ` -5 ` |
-| ` Dexterity ` | ` 14 ` | ` 2 ` |
-| ` Constitution ` | ` 11 ` | ` 0 ` |
-| ` Intelligence ` | ` 10 ` | ` 0 ` |
-| ` Wisdom ` | ` 10 ` | ` 0 ` |
-| ` Charisma ` | ` 11 ` | ` 0 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 12 ` |  |
-| ` max_hp ` | ` 22 ` |  |
-| ` initiative ` | ` 2 ` |  |
-| ` speed ` | ` 30 ` | ` ft ` |
-| ` fly_speed ` | ` 50 ` | ` ft ` |
 
 ## Health
 
@@ -224,3 +215,13 @@ geometry:
 unlisted_success_branch: no_effect
 unlisted_duration: until_removed_by_applicable_rule
 ```
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_stats_extras -->
+> 
+> ```yaml
+> fly_speed:
+>   unit: ft
+>   value: 50
+> ```
+

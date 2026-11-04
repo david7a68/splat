@@ -1,10 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "d0fad491-52ac-5a26-9b34-dc098fce9bdb"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/will_o_wisp"
 splat_name: "Will-o’-Wisp"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [341, 342], "executable": false}
+splat_pages:
+- 341
+- 342
 ---
 
 # Will-o’-Wisp
@@ -45,3 +47,13 @@ Consume Life. Constitution Saving Throw: DC 10, one living creature the wisp can
 Vanish. The wisp and its light have the Invisible condition until the wisp’s Concentration ends on this effect, which ends early immediately after the wisp makes an attack roll or uses Consume Life.
 
 Original layout: [[../pages/341|page 341]], [[../pages/342|page 342]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

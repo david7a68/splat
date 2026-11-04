@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "776e978e-76c9-5003-b503-bf4859279aa4"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/guiding_bolt"
 splat_name: "Guiding Bolt"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [138], "executable": false}
+splat_pages:
+- 138
 ---
 
 # Guiding Bolt
@@ -22,3 +23,13 @@ You hurl a bolt of light toward a creature within range. Make a ranged spell att
 Using a Higher-Level Spell Slot. The damage increases by 1d6 for each spell slot level above 1.
 
 Original layout: [[../pages/138|page 138]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

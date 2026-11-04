@@ -1,35 +1,62 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 6dc83845-ae97-5f42-8cd6-657735b997a0
 splat_kind: creature
 splat_key: dnd2024:creatures/warhorse_skeleton
 splat_name: Warhorse Skeleton
-splat_origin:
-  key: dnd2024:reference/creature/warhorse_skeleton
+splat_origin: dnd2024:reference/creature/warhorse_skeleton
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 326
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 326, https://www.dndbeyond.com/srd
 ---
 
 # Warhorse Skeleton
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Large |
+| Type | Undead |
+| Alignment | Lawful Evil |
+| Armor Class | 13 |
+| Hit Points | 22 (3d10 + 6) |
+| Initiative | +1 (11) |
+| Speed | 60 ft. |
+| Challenge | 1/2 (XP 100; PB +2) |
+| Senses | Darkvision 60 ft.; Passive Perception 9 |
+| Languages | None |
+| Immunities | Poison; Exhaustion, Poisoned |
+| Vulnerabilities | Bludgeoning |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 18 | +4 | +4 |
+| Dex | 12 | +1 | +1 |
+| Con | 15 | +2 | +2 |
+| Int | 2 | -4 | -4 |
+| Wis | 8 | -1 | -1 |
+| Cha | 5 | -3 | -3 |
+
 
 ## Source text
 
 <!-- SRD page 326 -->
 
-Large Undead, Lawful Evil\
-AC 13 Initiative +1 (11)\
-HP 22 (3d10 + 6)\
-Speed 60 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 18 +4 +4 Dex 12 +1 +1 Con 15 +2 +2\
-Int 2 −4 −4 Wis 8 −1 −1 Cha 5 −3 −3\
-Vulnerabilities Bludgeoning\
-Immunities Poison; Exhaustion, Poisoned\
-Senses Darkvision 60 ft.; Passive Perception 9\
-Languages None\
-CR 1/2 (XP 100; PB +2)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Large Undead, Lawful Evil\
+> AC 13 Initiative +1 (11)\
+> HP 22 (3d10 + 6)\
+> Speed 60 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 18 +4 +4 Dex 12 +1 +1 Con 15 +2 +2\
+> Int 2 −4 −4 Wis 8 −1 −1 Cha 5 −3 −3\
+> Vulnerabilities Bludgeoning\
+> Immunities Poison; Exhaustion, Poisoned\
+> Senses Darkvision 60 ft.; Passive Perception 9\
+> Languages None\
+> CR 1/2 (XP 100; PB +2)
+
 
 ### Actions
 
@@ -37,46 +64,11 @@ Hooves. Melee Attack Roll: +6, reach 5 ft. Hit: 7 (1d6 + 4) Bludgeoning damage. 
 
 Original layout: [[../../srd-5.2.1/pages/326|page 326]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` large ` |
-| ` type ` | ` undead ` |
-| ` alignment ` | ` Lawful Evil ` |
-| ` movement_text ` | ` 60 ft. ` |
-| ` vulnerabilities_text ` | ` Bludgeoning ` |
-| ` immunities_text ` | ` Poison; Exhaustion, Poisoned ` |
-| ` senses_text ` | ` Darkvision 60 ft.; Passive Perception 9 ` |
-| ` languages_text ` | ` None ` |
-| ` cr_text ` | ` 1/2 (XP 100; PB +2) ` |
-| ` hit_points_text ` | ` 22 (3d10 + 6) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 18 ` | ` 4 ` |
-| ` Dexterity ` | ` 12 ` | ` 1 ` |
-| ` Constitution ` | ` 15 ` | ` 2 ` |
-| ` Intelligence ` | ` 2 ` | ` -4 ` |
-| ` Wisdom ` | ` 8 ` | ` -1 ` |
-| ` Charisma ` | ` 5 ` | ` -3 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 13 ` |  |
-| ` max_hp ` | ` 22 ` |  |
-| ` initiative ` | ` 1 ` |  |
-| ` speed ` | ` 60 ` | ` ft ` |
 
 ## Health
 

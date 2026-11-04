@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 5c5a485f-c32d-5032-b88d-2e293d44ebcf
 splat_kind: item
 splat_key: dnd2024:items/ring_of_x_ray_vision
 splat_name: Ring of X-ray Vision
-splat_origin:
-  key: dnd2024:reference/magic_item/ring_of_x_ray_vision
+splat_origin: dnd2024:reference/magic_item/ring_of_x_ray_vision
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 239, 240
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 239, 240, https://www.dndbeyond.com/srd
 ---
 
 # Ring of X-ray Vision
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Ring |
+| Rarity | Rare |
+| Attunement | Yes |
+
 
 ## Source text
 
@@ -28,22 +35,9 @@ Whenever you use the ring again before taking a Long Rest, you must succeed on a
 
 Original layout: [[../../srd-5.2.1/pages/239|page 239]], [[../../srd-5.2.1/pages/240|page 240]].
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` ring ` |
-| ` rarity ` | ` rare ` |
 
-### Equipment
-
-<!-- splat:values path=splat_item/equipment -->
-
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` required ` |
 
 ## Rule
 

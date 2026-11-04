@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: a179fbfa-9463-5466-9827-e2e0c45259e7
 splat_kind: spell
 splat_key: dnd2024:spells/light
 splat_name: Light
-splat_origin:
-  key: dnd2024:reference/spell/light
+splat_origin: dnd2024:reference/spell/light
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 144
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 144, https://www.dndbeyond.com/srd
 ---
 
 # Light
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | Cantrip |
+| School | Evocation |
+| Classes | Bard, Cleric, Sorcerer, Wizard |
+| Casting Time | Action |
+| Range |  |
+| Components | V, M (a firefly or phosphorescent moss) |
+| Duration | 1 hour |
+
 
 ## Source text
 
@@ -30,37 +41,11 @@ Covering the object with something opaque blocks the light. The spell ends if yo
 
 Original layout: [[../../srd-5.2.1/pages/144|page 144]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 0 ` |
-| ` school ` | ` evocation ` |
-| ` classes ` | ` ["bard", "cleric", "sorcerer", "wizard"] ` |
-| ` components ` | ` ["verbal", "material"] ` |
-| ` concentration ` | ` false ` |
-| ` duration ` | ` 1 hour ` |
-| ` casting_time ` | ` Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
 
-<!-- splat:values path=splat_spell/range -->
 
-| Field | Value |
-| --- | --- |
-| ` mode ` | ` touch ` |
-
-### Material
-
-<!-- splat:values path=splat_spell/material -->
-
-| Field | Value |
-| --- | --- |
-| ` description ` | ` a firefly or phosphorescent moss ` |
-| ` consumed ` | ` false ` |
 
 ## Rule
 
@@ -104,3 +89,14 @@ Original layout: [[../../srd-5.2.1/pages/144|page 144]].
 | Field | Value |
 | --- | --- |
 | ` event ` | ` caster.recasts_same_spell ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_spell_extras -->
+> 
+> ```yaml
+> material:
+>   consumed: false
+> range:
+>   mode: touch
+> ```
+

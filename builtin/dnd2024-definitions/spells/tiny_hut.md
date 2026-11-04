@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: cd9719c9-693a-55fd-9cc5-065882e41c16
 splat_kind: spell
 splat_key: dnd2024:spells/tiny_hut
 splat_name: Tiny Hut
-splat_origin:
-  key: dnd2024:reference/spell/tiny_hut
+splat_origin: dnd2024:reference/spell/tiny_hut
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 169
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 169, https://www.dndbeyond.com/srd
 ---
 
 # Tiny Hut
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 3 |
+| School | Evocation |
+| Classes | Bard, Wizard |
+| Casting Time | 1 minute or Ritual |
+| Range |  |
+| Components | V, S, M (a crystal bead) |
+| Duration | 8 hours |
+
 
 ## Source text
 
@@ -34,37 +45,11 @@ The spell ends early if you leave the Emanation or if you cast it again.
 
 Original layout: [[../../srd-5.2.1/pages/169|page 169]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 3 ` |
-| ` school ` | ` evocation ` |
-| ` classes ` | ` ["bard", "wizard"] ` |
-| ` components ` | ` ["verbal", "somatic", "material"] ` |
-| ` concentration ` | ` false ` |
-| ` duration ` | ` 8 hours ` |
-| ` casting_time ` | ` 1 minute or Ritual ` |
-| ` ritual ` | ` true ` |
 
-### Range
 
-<!-- splat:values path=splat_spell/range -->
 
-| Field | Value |
-| --- | --- |
-| ` mode ` | ` self ` |
-
-### Material
-
-<!-- splat:values path=splat_spell/material -->
-
-| Field | Value |
-| --- | --- |
-| ` description ` | ` a crystal bead ` |
-| ` consumed ` | ` false ` |
 
 ## Rule
 
@@ -164,3 +149,14 @@ light_choice:
 | ` source ` | ` supplied_world_geometry ` |
 | ` unknown_facts ` | ` require_resolution ` |
 | ` infer_unprovided_geometry ` | ` false ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_spell_extras -->
+> 
+> ```yaml
+> material:
+>   consumed: false
+> range:
+>   mode: self
+> ```
+

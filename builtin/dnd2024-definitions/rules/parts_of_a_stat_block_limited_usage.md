@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 110dcec7-06c8-5220-b28d-12b591119bd0
 splat_kind: rule
 splat_key: dnd2024:rules/parts_of_a_stat_block_limited_usage
 splat_name: Limited Usage
-splat_origin:
-  key: dnd2024:reference/pages/257
+splat_origin: dnd2024:reference/pages/257
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 257
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 257, https://www.dndbeyond.com/srd
 ---
 
 # Limited Usage

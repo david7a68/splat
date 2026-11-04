@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 49f81995-bc49-58d8-b972-06c8e6b43f24
 splat_kind: item
 splat_key: dnd2024:items/ring_of_regeneration
 splat_name: Ring of Regeneration
-splat_origin:
-  key: dnd2024:reference/magic_item/ring_of_regeneration
+splat_origin: dnd2024:reference/magic_item/ring_of_regeneration
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 238
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 238, https://www.dndbeyond.com/srd
 ---
 
 # Ring of Regeneration
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Ring |
+| Rarity | Very Rare |
+| Attunement | Yes |
+
 
 ## Source text
 
@@ -24,22 +31,9 @@ While wearing this ring, you regain 1d6 Hit Points every 10 minutes if you have 
 
 Original layout: [[../../srd-5.2.1/pages/238|page 238]].
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` ring ` |
-| ` rarity ` | ` very_rare ` |
 
-### Equipment
-
-<!-- splat:values path=splat_item/equipment -->
-
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` required ` |
 
 ## Rule
 

@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 04fc51cd-ffc5-5b16-81be-acdde63dd5eb
 splat_kind: item
 splat_key: dnd2024:items/ammunition_of_slaying
 splat_name: Ammunition of Slaying
-splat_origin:
-  key: dnd2024:reference/magic_item/ammunition_of_slaying
+splat_origin: dnd2024:reference/magic_item/ammunition_of_slaying
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 209
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 209, https://www.dndbeyond.com/srd
 ---
 
 # Ammunition of Slaying
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Weapon |
+| Rarity | Very Rare |
+| Attunement | No |
+
 
 ## Source text
 
@@ -36,22 +43,9 @@ After dealing its extra damage to a creature, the ammunition becomes nonmagical.
 
 Original layout: [[../../srd-5.2.1/pages/209|page 209]].
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` weapon ` |
-| ` rarity ` | ` very_rare ` |
 
-### Equipment
-
-<!-- splat:values path=splat_item/equipment -->
-
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` none ` |
 
 ## Rule
 

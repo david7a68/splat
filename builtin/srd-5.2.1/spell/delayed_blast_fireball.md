@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "d7b6040f-bab4-53f6-8e7e-33d019a46480"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/delayed_blast_fireball"
 splat_name: "Delayed Blast Fireball"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [122], "executable": false}
+splat_pages:
+- 122
 ---
 
 # Delayed Blast Fireball
@@ -28,3 +29,13 @@ When the bead explodes, flammable objects in the explosion that aren’t being w
 Using a Higher-Level Spell Slot. The base damage increases by 1d6 for each spell slot level above 7.
 
 Original layout: [[../pages/122|page 122]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

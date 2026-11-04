@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 49100522-211c-5116-959b-d6cbdc807828
 splat_kind: rule
 splat_key: dnd2024:rules/poison_truth_serum_150_gp
 splat_name: Truth Serum (150 GP)
-splat_origin:
-  key: dnd2024:reference/pages/198
+splat_origin: dnd2024:reference/pages/198
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 198
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 198, https://www.dndbeyond.com/srd
 ---
 
 # Truth Serum (150 GP)

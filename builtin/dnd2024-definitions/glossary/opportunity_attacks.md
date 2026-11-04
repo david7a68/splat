@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 80d03a57-0912-5ec7-b90b-e132a8876e05
 splat_kind: rule
 splat_key: dnd2024:glossary/opportunity_attacks
 splat_name: Opportunity Attacks
-splat_origin:
-  key: dnd2024:reference/glossary/opportunity_attacks
+splat_origin: dnd2024:reference/glossary/opportunity_attacks
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 185
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 185, https://www.dndbeyond.com/srd
 ---
 
 # Opportunity Attacks

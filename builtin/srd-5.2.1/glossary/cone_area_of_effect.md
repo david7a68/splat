@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "f254b763-3709-5d64-9d17-6d0b32eea68c"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/glossary/cone_area_of_effect"
 splat_name: "Cone [Area of Effect]"
-splat_reference: {"source": "SRD 5.2.1", "category": "glossary", "pages": [179], "executable": false}
+splat_pages:
+- 179
 ---
 
 # Cone [Area of Effect]
@@ -16,3 +17,13 @@ A Cone is an area of effect that extends in straight lines from a point of origi
 A Cone’s point of origin isn’t included in the area of effect unless its creator decides otherwise.
 
 Original layout: [[../pages/179|page 179]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: glossary
+> executable: false
+> ```
+

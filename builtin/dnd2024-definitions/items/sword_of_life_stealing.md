@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: d96beda7-1874-5f6c-861d-3e4f2d84ed2b
 splat_kind: item
 splat_key: dnd2024:items/sword_of_life_stealing
 splat_name: Sword of Life Stealing
-splat_origin:
-  key: dnd2024:reference/magic_item/sword_of_life_stealing
+splat_origin: dnd2024:reference/magic_item/sword_of_life_stealing
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 248
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 248, https://www.dndbeyond.com/srd
 ---
 
 # Sword of Life Stealing
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Weapon |
+| Rarity | Rare |
+| Attunement | Yes |
+
 
 ## Source text
 
@@ -24,22 +31,9 @@ When you attack a creature with this magic weapon and roll a 20 on the d20 for t
 
 Original layout: [[../../srd-5.2.1/pages/248|page 248]].
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` weapon ` |
-| ` rarity ` | ` rare ` |
 
-### Equipment
-
-<!-- splat:values path=splat_item/equipment -->
-
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` required ` |
 
 ## Rule
 

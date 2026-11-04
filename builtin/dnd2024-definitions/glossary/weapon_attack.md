@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 9e8c157d-4984-5099-beda-deccd883499f
 splat_kind: rule
 splat_key: dnd2024:glossary/weapon_attack
 splat_name: Weapon Attack
-splat_origin:
-  key: dnd2024:reference/glossary/weapon_attack
+splat_origin: dnd2024:reference/glossary/weapon_attack
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 191
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 191, https://www.dndbeyond.com/srd
 ---
 
 # Weapon Attack

@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 54d4c256-6dfc-5616-8d82-80502a91ce39
 splat_kind: spell
 splat_key: dnd2024:spells/beacon_of_hope
 splat_name: Beacon of Hope
-splat_origin:
-  key: dnd2024:reference/spell/beacon_of_hope
+splat_origin: dnd2024:reference/spell/beacon_of_hope
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 112
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 112, https://www.dndbeyond.com/srd
 ---
 
 # Beacon of Hope
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 3 |
+| School | Abjuration |
+| Classes | Cleric |
+| Casting Time | Action |
+| Range | 30 feet |
+| Components | V, S |
+| Duration | Concentration, up to 1 minute |
+
 
 ## Source text
 
@@ -28,28 +39,9 @@ Choose any number of creatures within range. For the duration, each target has A
 
 Original layout: [[../../srd-5.2.1/pages/112|page 112]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 3 ` |
-| ` school ` | ` abjuration ` |
-| ` classes ` | ` ["cleric"] ` |
-| ` components ` | ` ["verbal", "somatic"] ` |
-| ` concentration ` | ` true ` |
-| ` duration ` | ` Concentration, up to 1 minute ` |
-| ` casting_time ` | ` Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
-
-<!-- splat:values path=splat_spell/range -->
-
-| Field | Value |
-| --- | --- |
-| ` feet ` | ` 30 ` |
 
 ## Rule
 

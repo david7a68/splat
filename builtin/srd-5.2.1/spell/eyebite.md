@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "ba939402-94ec-5417-85c9-d8adf98fc22e"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/eyebite"
 splat_name: "Eyebite"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [129], "executable": false}
+splat_pages:
+- 129
 ---
 
 # Eyebite
@@ -28,3 +29,13 @@ Panicked. The target has the Frightened condition. On each of its turns, the Fri
 Sickened. The target has the Poisoned condition.
 
 Original layout: [[../pages/129|page 129]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

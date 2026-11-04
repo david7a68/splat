@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "40fa0628-196f-57ff-ba69-66032d97fefb"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/giant_fire_beetle"
 splat_name: "Giant Fire Beetle"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [351], "executable": false}
+splat_pages:
+- 351
 ---
 
 # Giant Fire Beetle
@@ -32,3 +33,13 @@ Illumination. The beetle sheds Bright Light in a 10-foot radius and Dim Light fo
 Bite. Melee Attack Roll: +1, reach 5 ft. Hit: 1 Fire damage.
 
 Original layout: [[../pages/351|page 351]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

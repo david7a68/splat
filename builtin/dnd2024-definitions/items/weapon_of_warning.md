@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 7d079e82-c907-5bf5-bfb9-5e774668e738
 splat_kind: item
 splat_key: dnd2024:items/weapon_of_warning
 splat_name: Weapon of Warning
-splat_origin:
-  key: dnd2024:reference/magic_item/weapon_of_warning
+splat_origin: dnd2024:reference/magic_item/weapon_of_warning
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 253
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 253, https://www.dndbeyond.com/srd
 ---
 
 # Weapon of Warning
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Weapon |
+| Rarity | Uncommon |
+| Attunement | Yes |
+
 
 ## Source text
 
@@ -28,22 +35,9 @@ Supernatural Readiness. Each subject has Advantage on its Initiative rolls.
 
 Original layout: [[../../srd-5.2.1/pages/253|page 253]].
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` weapon ` |
-| ` rarity ` | ` uncommon ` |
 
-### Equipment
-
-<!-- splat:values path=splat_item/equipment -->
-
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` required ` |
 
 ## Rule
 

@@ -1,36 +1,64 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: ce8d49a6-733a-5061-9adb-1c1c5c142862
 splat_kind: creature
 splat_key: dnd2024:creatures/magma_mephit
 splat_name: Magma Mephit
-splat_origin:
-  key: dnd2024:reference/creature/magma_mephit
+splat_origin: dnd2024:reference/creature/magma_mephit
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 307
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 307, https://www.dndbeyond.com/srd
 ---
 
 # Magma Mephit
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Small |
+| Type | Elemental |
+| Alignment | Neutral Evil |
+| Armor Class | 11 |
+| Hit Points | 18 (4d6 + 4) |
+| Initiative | +1 (11) |
+| Speed | 30 ft., Fly 30 ft. |
+| Challenge | 1/2 (XP 100; PB +2) |
+| Skills | Stealth +3 |
+| Senses | Darkvision 60 ft.; Passive Perception 10 |
+| Languages | Primordial (Ignan, Terran) |
+| Immunities | Fire, Poison; Exhaustion, Poisoned |
+| Vulnerabilities | Cold |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 8 | -1 | -1 |
+| Dex | 12 | +1 | +1 |
+| Con | 12 | +1 | +1 |
+| Int | 7 | -2 | -2 |
+| Wis | 10 | +0 | +0 |
+| Cha | 10 | +0 | +0 |
+
 
 ## Source text
 
 <!-- SRD page 307 -->
 
-Small Elemental, Neutral Evil\
-AC 11 Initiative +1 (11)\
-HP 18 (4d6 + 4)\
-Speed 30 ft., Fly 30 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 8 −1 −1 Dex 12 +1 +1 Con 12 +1 +1\
-Int 7 −2 −2 Wis 10 +0 +0 Cha 10 +0 +0\
-Skills Stealth +3\
-Vulnerabilities Cold\
-Immunities Fire, Poison; Exhaustion, Poisoned\
-Senses Darkvision 60 ft.; Passive Perception 10\
-Languages Primordial (Ignan, Terran)\
-CR 1/2 (XP 100; PB +2)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Small Elemental, Neutral Evil\
+> AC 11 Initiative +1 (11)\
+> HP 18 (4d6 + 4)\
+> Speed 30 ft., Fly 30 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 8 −1 −1 Dex 12 +1 +1 Con 12 +1 +1\
+> Int 7 −2 −2 Wis 10 +0 +0 Cha 10 +0 +0\
+> Skills Stealth +3\
+> Vulnerabilities Cold\
+> Immunities Fire, Poison; Exhaustion, Poisoned\
+> Senses Darkvision 60 ft.; Passive Perception 10\
+> Languages Primordial (Ignan, Terran)\
+> CR 1/2 (XP 100; PB +2)
+
 
 ### Traits
 
@@ -44,48 +72,11 @@ Fire Breath (Recharge 6). Dexterity Saving Throw: DC 11, each creature in a 15-f
 
 Original layout: [[../../srd-5.2.1/pages/307|page 307]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` small ` |
-| ` type ` | ` elemental ` |
-| ` alignment ` | ` Neutral Evil ` |
-| ` movement_text ` | ` 30 ft., Fly 30 ft. ` |
-| ` skills_text ` | ` Stealth +3 ` |
-| ` vulnerabilities_text ` | ` Cold ` |
-| ` immunities_text ` | ` Fire, Poison; Exhaustion, Poisoned ` |
-| ` senses_text ` | ` Darkvision 60 ft.; Passive Perception 10 ` |
-| ` languages_text ` | ` Primordial (Ignan, Terran) ` |
-| ` cr_text ` | ` 1/2 (XP 100; PB +2) ` |
-| ` hit_points_text ` | ` 18 (4d6 + 4) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 8 ` | ` -1 ` |
-| ` Dexterity ` | ` 12 ` | ` 1 ` |
-| ` Constitution ` | ` 12 ` | ` 1 ` |
-| ` Intelligence ` | ` 7 ` | ` -2 ` |
-| ` Wisdom ` | ` 10 ` | ` 0 ` |
-| ` Charisma ` | ` 10 ` | ` 0 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 11 ` |  |
-| ` max_hp ` | ` 18 ` |  |
-| ` initiative ` | ` 1 ` |  |
-| ` speed ` | ` 30 ` | ` ft ` |
-| ` fly_speed ` | ` 30 ` | ` ft ` |
 
 ## Health
 
@@ -309,3 +300,13 @@ geometry_assumptions:
   - plane
   - form_appearance
 ```
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_stats_extras -->
+> 
+> ```yaml
+> fly_speed:
+>   unit: ft
+>   value: 30
+> ```
+

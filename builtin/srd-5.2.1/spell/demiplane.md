@@ -1,10 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "8e46b575-bc8f-5574-a2bb-df8ccde5ade0"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/demiplane"
 splat_name: "Demiplane"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [122, 123], "executable": false}
+splat_pages:
+- 122
+- 123
 ---
 
 # Demiplane
@@ -26,3 +28,13 @@ When the spell ends, the door vanishes, and any objects inside the demiplane rem
 Each time you cast this spell, you can create a new demiplane or connect the shadowy door to a demiplane you created with a previous casting of this spell. Additionally, if you know the nature and contents of a demiplane created by a casting of this spell by another creature, you can connect the shadowy door to that demiplane instead.
 
 Original layout: [[../pages/122|page 122]], [[../pages/123|page 123]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

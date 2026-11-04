@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 92fc1503-04b1-5c5e-b686-6f411546cc55
 splat_kind: item
 splat_key: dnd2024:equipment/spell_scroll_cantrip_30_gp_level_1_50_gp
 splat_name: Spell Scroll (Cantrip, 30 GP; Level 1, 50 GP)
-splat_origin:
-  key: dnd2024:reference/pages/099
+splat_origin: dnd2024:reference/pages/099
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 99
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 99, https://www.dndbeyond.com/srd
 ---
 
 # Spell Scroll (Cantrip, 30 GP; Level 1, 50 GP)
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Adventuring Gear |
+| Rarity |  |
+| Attunement | No |
+
 
 ## Source text
 
@@ -22,30 +29,11 @@ A Spell Scroll (Cantrip) or Spell Scroll (Level 1) is a magic item that bears th
 
 If the spell requires a saving throw or an attack roll, the spell save DC is 13, and the attack bonus is +5. The scroll disintegrates when the casting is completed.
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` adventuring_gear ` |
 
-### Equipment
 
-<!-- splat:values path=splat_item/equipment -->
 
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` none ` |
-
-### Mass
-
-<!-- splat:values path=splat_item/mass -->
-
-| Field | Value |
-| --- | --- |
-| ` value ` | ` 0.0 ` |
-| ` unit ` | ` lb ` |
 
 ## Rule
 
@@ -121,3 +109,13 @@ columns:
 | ` value ` | ` 0.0 ` |
 | ` unit ` | ` lb ` |
 | ` negligible ` | ` true ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_item_extras -->
+> 
+> ```yaml
+> mass:
+>   unit: lb
+>   value: 0.0
+> ```
+

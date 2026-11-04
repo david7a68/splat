@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 95cc7ac0-5cbd-5c9f-b4c3-ef18cdb1b45b
 splat_kind: rule
 splat_key: dnd2024:rules/parts_of_a_stat_block_saving_throw_effect_notation
 splat_name: Saving Throw Effect Notation
-splat_origin:
-  key: dnd2024:reference/pages/256
+splat_origin: dnd2024:reference/pages/256
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 256
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 256, https://www.dndbeyond.com/srd
 ---
 
 # Saving Throw Effect Notation

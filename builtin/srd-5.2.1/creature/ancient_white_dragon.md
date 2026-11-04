@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "5f3580e8-07eb-5053-b003-bf372def9421"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/ancient_white_dragon"
 splat_name: "Ancient White Dragon"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [341], "executable": false}
+splat_pages:
+- 341
 ---
 
 # Ancient White Dragon
@@ -49,3 +50,13 @@ Frightful Presence. The dragon casts Fear, requiring no Material components and 
 Pounce. The dragon moves up to half its Speed, and it makes one Rend attack.
 
 Original layout: [[../pages/341|page 341]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

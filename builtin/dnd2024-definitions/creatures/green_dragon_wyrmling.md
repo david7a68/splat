@@ -1,35 +1,62 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: e7e31ec4-f899-574a-9ca7-62067bb43913
 splat_kind: creature
 splat_key: dnd2024:creatures/green_dragon_wyrmling
 splat_name: Green Dragon Wyrmling
-splat_origin:
-  key: dnd2024:reference/creature/green_dragon_wyrmling
+splat_origin: dnd2024:reference/creature/green_dragon_wyrmling
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 293
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 293, https://www.dndbeyond.com/srd
 ---
 
 # Green Dragon Wyrmling
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Medium |
+| Type | Dragon (Chromatic) |
+| Alignment | Lawful Evil |
+| Armor Class | 17 |
+| Hit Points | 38 (7d8 + 7) |
+| Initiative | +3 (13) |
+| Speed | 30 ft., Fly 60 ft., Swim 30 ft. |
+| Challenge | 2 (XP 450; PB +2) |
+| Skills | Perception +4, Stealth +3 |
+| Senses | Blindsight 10 ft., Darkvision 60 ft.; Passive Perception 14 |
+| Languages | Draconic |
+| Immunities | Poison; Poisoned |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 15 | +2 | +2 |
+| Dex | 12 | +1 | +3 |
+| Con | 13 | +1 | +1 |
+| Int | 14 | +2 | +2 |
+| Wis | 11 | +0 | +2 |
+| Cha | 13 | +1 | +1 |
+
 
 ## Source text
 
 <!-- SRD page 293 -->
 
-Medium Dragon (Chromatic), Lawful Evil\
-AC 17 Initiative +3 (13)\
-HP 38 (7d8 + 7)\
-Speed 30 ft., Fly 60 ft., Swim 30 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 15 +2 +2 Dex 12 +1 +3 Con 13 +1 +1\
-Int 14 +2 +2 Wis 11 +0 +2 Cha 13 +1 +1\
-Skills Perception +4, Stealth +3\
-Immunities Poison; Poisoned\
-Senses Blindsight 10 ft., Darkvision 60 ft.; Passive Perception 14\
-Languages Draconic\
-CR 2 (XP 450; PB +2)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Medium Dragon (Chromatic), Lawful Evil\
+> AC 17 Initiative +3 (13)\
+> HP 38 (7d8 + 7)\
+> Speed 30 ft., Fly 60 ft., Swim 30 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 15 +2 +2 Dex 12 +1 +3 Con 13 +1 +1\
+> Int 14 +2 +2 Wis 11 +0 +2 Cha 13 +1 +1\
+> Skills Perception +4, Stealth +3\
+> Immunities Poison; Poisoned\
+> Senses Blindsight 10 ft., Darkvision 60 ft.; Passive Perception 14\
+> Languages Draconic\
+> CR 2 (XP 450; PB +2)
+
 
 ### Traits
 
@@ -45,49 +72,11 @@ Poison Breath (Recharge 5–6). Constitution Saving Throw: DC 11, each creature 
 
 Original layout: [[../../srd-5.2.1/pages/293|page 293]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` medium ` |
-| ` type ` | ` dragon ` |
-| ` alignment ` | ` Lawful Evil ` |
-| ` tags_text ` | ` (Chromatic) ` |
-| ` movement_text ` | ` 30 ft., Fly 60 ft., Swim 30 ft. ` |
-| ` skills_text ` | ` Perception +4, Stealth +3 ` |
-| ` immunities_text ` | ` Poison; Poisoned ` |
-| ` senses_text ` | ` Blindsight 10 ft., Darkvision 60 ft.; Passive Perception 14 ` |
-| ` languages_text ` | ` Draconic ` |
-| ` cr_text ` | ` 2 (XP 450; PB +2) ` |
-| ` hit_points_text ` | ` 38 (7d8 + 7) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 15 ` | ` 2 ` |
-| ` Dexterity ` | ` 12 ` | ` 3 ` |
-| ` Constitution ` | ` 13 ` | ` 1 ` |
-| ` Intelligence ` | ` 14 ` | ` 2 ` |
-| ` Wisdom ` | ` 11 ` | ` 2 ` |
-| ` Charisma ` | ` 13 ` | ` 1 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 17 ` |  |
-| ` max_hp ` | ` 38 ` |  |
-| ` initiative ` | ` 3 ` |  |
-| ` speed ` | ` 30 ` | ` ft ` |
-| ` fly_speed ` | ` 60 ` | ` ft ` |
-| ` swim_speed ` | ` 30 ` | ` ft ` |
 
 ## Health
 
@@ -294,3 +283,16 @@ geometry:
 unlisted_success_branch: no_effect
 unlisted_duration: until_removed_by_applicable_rule
 ```
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_stats_extras -->
+> 
+> ```yaml
+> fly_speed:
+>   unit: ft
+>   value: 60
+> swim_speed:
+>   unit: ft
+>   value: 30
+> ```
+

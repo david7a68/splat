@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "325e0ffe-c480-5f99-b067-85c16e479a03"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/daylight"
 splat_name: "Daylight"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [122], "executable": false}
+splat_pages:
+- 122
 ---
 
 # Daylight
@@ -24,3 +25,13 @@ Alternatively, you cast the spell on an object that isn’t being worn or carrie
 If any of this spell’s area overlaps with an area of Darkness created by a spell of level 3 or lower, that other spell is dispelled.
 
 Original layout: [[../pages/122|page 122]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

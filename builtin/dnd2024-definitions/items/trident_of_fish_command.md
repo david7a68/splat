@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: ab80a986-fd3b-5196-a212-7af4d73565e0
 splat_kind: item
 splat_key: dnd2024:items/trident_of_fish_command
 splat_name: Trident of Fish Command
-splat_origin:
-  key: dnd2024:reference/magic_item/trident_of_fish_command
+splat_origin: dnd2024:reference/magic_item/trident_of_fish_command
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 250
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 250, https://www.dndbeyond.com/srd
 ---
 
 # Trident of Fish Command
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Weapon |
+| Rarity | Uncommon |
+| Attunement | Yes |
+
 
 ## Source text
 
@@ -24,22 +31,9 @@ This magic weapon has 3 charges, and it regains 1d3 expended charges daily at da
 
 Original layout: [[../../srd-5.2.1/pages/250|page 250]].
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` weapon ` |
-| ` rarity ` | ` uncommon ` |
 
-### Equipment
-
-<!-- splat:values path=splat_item/equipment -->
-
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` required ` |
 
 ## Rule
 

@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "eaee7bb7-b873-54d4-8a1c-82439f5a642c"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/sleep"
 splat_name: "Sleep"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [163], "executable": false}
+splat_pages:
+- 163
 ---
 
 # Sleep
@@ -22,3 +23,13 @@ Each creature of your choice in a 5-foot-radius Sphere centered on a point withi
 Creatures that don’t sleep, such as elves, or that have Immunity to the Exhaustion condition automatically succeed on saves against this spell.
 
 Original layout: [[../pages/163|page 163]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

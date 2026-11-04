@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "e0021cf7-fda4-5c09-aca6-6cec82cbf93e"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/wight"
 splat_name: "Wight"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [341], "executable": false}
+splat_pages:
+- 341
 ---
 
 # Wight
@@ -43,3 +44,13 @@ Life Drain. Constitution Saving Throw: DC 13, one creature within 5 feet. Failur
 A Humanoid slain by this attack rises 24 hours later as a Zombie under the wight’s control, unless the Humanoid is restored to life or its body is destroyed. The wight can have no more than twelve zombies under its control at a time.
 
 Original layout: [[../pages/341|page 341]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

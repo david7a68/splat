@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "4209af0c-d4c2-53d0-be44-5fde7e2ee823"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/mummy"
 splat_name: "Mummy"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [309], "executable": false}
+splat_pages:
+- 309
 ---
 
 # Mummy
@@ -33,3 +34,13 @@ Rotting Fist. Melee Attack Roll: +5, reach 5 ft. Hit: 8 (1d10 + 3) Bludgeoning d
 Dreadful Glare. Wisdom Saving Throw: DC 11, one creature the mummy can see within 60 feet. Failure: The target has the Frightened condition until the end of the mummy’s next turn. Success: The target is immune to this mummy’s Dreadful Glare for 24 hours.
 
 Original layout: [[../pages/309|page 309]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

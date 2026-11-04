@@ -1,10 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "36c5d07d-1006-511d-97d9-61b91eb06c0a"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/werebear"
 splat_name: "Werebear"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [337, 338], "executable": false}
+splat_pages:
+- 337
+- 338
 ---
 
 # Werebear
@@ -41,3 +43,13 @@ Rend (Bear or Hybrid Form Only). Melee Attack Roll: +7, reach 5 ft. Hit: 13 (2d8
 Shape-Shift. The werebear shape-shifts into a Large bear-humanoid hybrid form or a Large bear, or it returns to its true humanoid form. Its game statistics, other than its size, are the same in each form. Any equipment it is wearing or carrying isn’t transformed.
 
 Original layout: [[../pages/337|page 337]], [[../pages/338|page 338]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

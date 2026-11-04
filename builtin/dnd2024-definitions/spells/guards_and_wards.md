@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: b796317c-1598-54c7-b51e-9b844d81987f
 splat_kind: spell
 splat_key: dnd2024:spells/guards_and_wards
 splat_name: Guards and Wards
-splat_origin:
-  key: dnd2024:reference/spell/guards_and_wards
+splat_origin: dnd2024:reference/spell/guards_and_wards
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 137, 138
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 137, 138, https://www.dndbeyond.com/srd
 ---
 
 # Guards and Wards
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 6 |
+| School | Abjuration |
+| Classes | Bard, Wizard |
+| Casting Time | 1 hour |
+| Range |  |
+| Components | V, S, M (a silver rod worth 10+ GP) |
+| Duration | 24 hours |
+
 
 ## Source text
 
@@ -52,37 +63,11 @@ Other Spell Effect. Place one of the following magical effects within the warded
 
 Original layout: [[../../srd-5.2.1/pages/137|page 137]], [[../../srd-5.2.1/pages/138|page 138]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 6 ` |
-| ` school ` | ` abjuration ` |
-| ` classes ` | ` ["bard", "wizard"] ` |
-| ` components ` | ` ["verbal", "somatic", "material"] ` |
-| ` concentration ` | ` false ` |
-| ` duration ` | ` 24 hours ` |
-| ` casting_time ` | ` 1 hour ` |
-| ` ritual ` | ` false ` |
 
-### Range
 
-<!-- splat:values path=splat_spell/range -->
 
-| Field | Value |
-| --- | --- |
-| ` mode ` | ` touch ` |
-
-### Material
-
-<!-- splat:values path=splat_spell/material -->
-
-| Field | Value |
-| --- | --- |
-| ` description ` | ` a silver rod worth 10+ GP ` |
-| ` consumed ` | ` false ` |
 
 ## Rule
 
@@ -280,3 +265,14 @@ options:
 | ` source ` | ` supplied_world_geometry ` |
 | ` unknown_facts ` | ` require_resolution ` |
 | ` infer_unprovided_geometry ` | ` false ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_spell_extras -->
+> 
+> ```yaml
+> material:
+>   consumed: false
+> range:
+>   mode: touch
+> ```
+

@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 97691d2b-03ba-59cb-a949-ec1ff72defd0
 splat_kind: spell
 splat_key: dnd2024:spells/blade_barrier
 splat_name: Blade Barrier
-splat_origin:
-  key: dnd2024:reference/spell/blade_barrier
+splat_origin: dnd2024:reference/spell/blade_barrier
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 113
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 113, https://www.dndbeyond.com/srd
 ---
 
 # Blade Barrier
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 6 |
+| School | Evocation |
+| Classes | Cleric |
+| Casting Time | Action |
+| Range | 90 feet |
+| Components | V, S |
+| Duration | Concentration, up to 10 minutes |
+
 
 ## Source text
 
@@ -30,28 +41,9 @@ Any creature in the wall’s space makes a Dexterity saving throw, taking 6d10 F
 
 Original layout: [[../../srd-5.2.1/pages/113|page 113]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 6 ` |
-| ` school ` | ` evocation ` |
-| ` classes ` | ` ["cleric"] ` |
-| ` components ` | ` ["verbal", "somatic"] ` |
-| ` concentration ` | ` true ` |
-| ` duration ` | ` Concentration, up to 10 minutes ` |
-| ` casting_time ` | ` Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
-
-<!-- splat:values path=splat_spell/range -->
-
-| Field | Value |
-| --- | --- |
-| ` feet ` | ` 90 ` |
 
 ## Rule
 

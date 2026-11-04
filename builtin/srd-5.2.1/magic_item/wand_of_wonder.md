@@ -1,10 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "3db663e0-a692-5513-b408-10d4d8db07b6"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/magic_item/wand_of_wonder"
 splat_name: "Wand of Wonder"
-splat_reference: {"source": "SRD 5.2.1", "category": "magic_item", "pages": [251, 252], "executable": false}
+splat_pages:
+- 251
+- 252
 ---
 
 # Wand of Wonder
@@ -46,3 +48,13 @@ Regaining Charges. The wand regains 1d6 + 1 expended charges daily at dawn. If y
 | 98–00 | The creature closest to the chosen point of origin makes a DC 15 Constitution saving throw. On a failed save, the creature has the Restrained condition and begins to turn to stone. While Restrained in this way, the creature repeats the save at the end of its next turn. On a successful save, the effect ends. On a failed save, the creature has the Petrified condition instead of the Restrained condition. The petrification lasts until the creature is freed by the Greater Restoration spell or similar magic. |
 
 Original layout: [[../pages/251|page 251]], [[../pages/252|page 252]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: magic_item
+> executable: false
+> ```
+

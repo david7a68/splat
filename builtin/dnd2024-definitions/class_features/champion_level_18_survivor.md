@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: c8f45d11-5d90-568c-91e8-a9abcb3f39c7
 splat_kind: rule
 splat_key: dnd2024:class_features/champion_level_18_survivor
 splat_name: 'Level 18: Survivor'
-splat_origin:
-  key: dnd2024:reference/pages/049
+splat_origin: dnd2024:reference/pages/049
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 49
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 49, https://www.dndbeyond.com/srd
 ---
 
 # Level 18: Survivor

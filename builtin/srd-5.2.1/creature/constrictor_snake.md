@@ -1,10 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "6e22340e-5844-537b-9bf8-2874e059911f"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/constrictor_snake"
 splat_name: "Constrictor Snake"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [346, 347], "executable": false}
+splat_pages:
+- 346
+- 347
 ---
 
 # Constrictor Snake
@@ -32,3 +34,13 @@ Bite. Melee Attack Roll: +4, reach 5 ft. Hit: 6 (1d8 + 2) Piercing damage.
 Constrict. Strength Saving Throw: DC 12, one Medium or smaller creature the snake can see within 5 feet. Failure: 7 (3d4) Bludgeoning damage, and the target has the Grappled condition (escape DC 12).
 
 Original layout: [[../pages/346|page 346]], [[../pages/347|page 347]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

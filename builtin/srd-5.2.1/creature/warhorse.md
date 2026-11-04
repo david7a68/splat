@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "9d2a18aa-f882-5528-8818-9e0008a63e2a"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/warhorse"
 splat_name: "Warhorse"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [364], "executable": false}
+splat_pages:
+- 364
 ---
 
 # Warhorse
@@ -27,3 +28,13 @@ CR 1/2 (XP 100; PB +2)
 Hooves. Melee Attack Roll: +6, reach 5 ft. Hit: 9 (2d4 + 4) Bludgeoning damage. If the target is a Large or smaller creature and the horse moved 20+ feet straight toward it immediately before the hit, the target takes an extra 5 (2d4) Bludgeoning damage and has the Prone condition.
 
 Original layout: [[../pages/364|page 364]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

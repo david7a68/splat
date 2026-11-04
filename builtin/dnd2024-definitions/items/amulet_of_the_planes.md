@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: dcf124f1-da50-58b9-a70f-54dd63b8302d
 splat_kind: item
 splat_key: dnd2024:items/amulet_of_the_planes
 splat_name: Amulet of the Planes
-splat_origin:
-  key: dnd2024:reference/magic_item/amulet_of_the_planes
+splat_origin: dnd2024:reference/magic_item/amulet_of_the_planes
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 209
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 209, https://www.dndbeyond.com/srd
 ---
 
 # Amulet of the Planes
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Wondrous Item |
+| Rarity | Very Rare |
+| Attunement | Yes |
+
 
 ## Source text
 
@@ -32,22 +39,9 @@ While wearing this amulet, you can take a Magic action to name a location that y
 
 Original layout: [[../../srd-5.2.1/pages/209|page 209]].
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` wondrous_item ` |
-| ` rarity ` | ` very_rare ` |
 
-### Equipment
-
-<!-- splat:values path=splat_item/equipment -->
-
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` required ` |
 
 ## Rule
 

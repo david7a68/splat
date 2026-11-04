@@ -1,34 +1,60 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 0f221b09-8d98-5661-9896-385e53f3f1e6
 splat_kind: creature
 splat_key: dnd2024:creatures/worg
 splat_name: Worg
-splat_origin:
-  key: dnd2024:reference/creature/worg
+splat_origin: dnd2024:reference/creature/worg
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 342
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 342, https://www.dndbeyond.com/srd
 ---
 
 # Worg
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Large |
+| Type | Fey |
+| Alignment | Neutral Evil |
+| Armor Class | 13 |
+| Hit Points | 26 (4d10 + 4) |
+| Initiative | +1 (11) |
+| Speed | 50 ft. |
+| Challenge | 1/2 (XP 100; PB +2) |
+| Skills | Perception +4 |
+| Senses | Darkvision 60 ft.; Passive Perception 14 |
+| Languages | Goblin, Worg |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 16 | +3 | +3 |
+| Dex | 13 | +1 | +1 |
+| Con | 13 | +1 | +1 |
+| Int | 7 | -2 | -2 |
+| Wis | 11 | +0 | +0 |
+| Cha | 8 | -1 | -1 |
+
 
 ## Source text
 
 <!-- SRD page 342 -->
 
-Large Fey, Neutral Evil\
-AC 13 Initiative +1 (11)\
-HP 26 (4d10 + 4)\
-Speed 50 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 16 +3 +3 Dex 13 +1 +1 Con 13 +1 +1\
-Int 7 −2 −2 Wis 11 +0 +0 Cha 8 −1 −1\
-Skills Perception +4\
-Senses Darkvision 60 ft.; Passive Perception 14\
-Languages Goblin, Worg\
-CR 1/2 (XP 100; PB +2)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Large Fey, Neutral Evil\
+> AC 13 Initiative +1 (11)\
+> HP 26 (4d10 + 4)\
+> Speed 50 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 16 +3 +3 Dex 13 +1 +1 Con 13 +1 +1\
+> Int 7 −2 −2 Wis 11 +0 +0 Cha 8 −1 −1\
+> Skills Perception +4\
+> Senses Darkvision 60 ft.; Passive Perception 14\
+> Languages Goblin, Worg\
+> CR 1/2 (XP 100; PB +2)
+
 
 ### Actions
 
@@ -36,45 +62,11 @@ Bite. Melee Attack Roll: +5, reach 5 ft. Hit: 7 (1d8 + 3) Piercing damage, and t
 
 Original layout: [[../../srd-5.2.1/pages/342|page 342]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` large ` |
-| ` type ` | ` fey ` |
-| ` alignment ` | ` Neutral Evil ` |
-| ` movement_text ` | ` 50 ft. ` |
-| ` skills_text ` | ` Perception +4 ` |
-| ` senses_text ` | ` Darkvision 60 ft.; Passive Perception 14 ` |
-| ` languages_text ` | ` Goblin, Worg ` |
-| ` cr_text ` | ` 1/2 (XP 100; PB +2) ` |
-| ` hit_points_text ` | ` 26 (4d10 + 4) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 16 ` | ` 3 ` |
-| ` Dexterity ` | ` 13 ` | ` 1 ` |
-| ` Constitution ` | ` 13 ` | ` 1 ` |
-| ` Intelligence ` | ` 7 ` | ` -2 ` |
-| ` Wisdom ` | ` 11 ` | ` 0 ` |
-| ` Charisma ` | ` 8 ` | ` -1 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 13 ` |  |
-| ` max_hp ` | ` 26 ` |  |
-| ` initiative ` | ` 1 ` |  |
-| ` speed ` | ` 50 ` | ` ft ` |
 
 ## Health
 

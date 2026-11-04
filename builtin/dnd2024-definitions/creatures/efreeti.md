@@ -1,34 +1,60 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 735cd1e4-7c04-5899-8994-59dcb0679174
 splat_kind: creature
 splat_key: dnd2024:creatures/efreeti
 splat_name: Efreeti
-splat_origin:
-  key: dnd2024:reference/creature/efreeti
+splat_origin: dnd2024:reference/creature/efreeti
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 283
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 283, https://www.dndbeyond.com/srd
 ---
 
 # Efreeti
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Large |
+| Type | Elemental (Genie) |
+| Alignment | Neutral |
+| Armor Class | 17 |
+| Hit Points | 212 (17d10 + 119) |
+| Initiative | +1 (11) |
+| Speed | 40 ft., Fly 60 ft. (hover) |
+| Challenge | 11 (XP 7,200; PB +4) |
+| Senses | Darkvision 120 ft.; Passive Perception 12 |
+| Languages | Primordial (Ignan) |
+| Immunities | Fire |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 22 | +6 | +6 |
+| Dex | 12 | +1 | +1 |
+| Con | 24 | +7 | +7 |
+| Int | 16 | +3 | +3 |
+| Wis | 15 | +2 | +6 |
+| Cha | 19 | +4 | +8 |
+
 
 ## Source text
 
 <!-- SRD page 283 -->
 
-Large Elemental (Genie), Neutral\
-AC 17 Initiative +1 (11)\
-HP 212 (17d10 + 119)\
-Speed 40 ft., Fly 60 ft. (hover)\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 22 +6 +6 Dex 12 +1 +1 Con 24 +7 +7\
-Int 16 +3 +3 Wis 15 +2 +6 Cha 19 +4 +8\
-Immunities Fire\
-Senses Darkvision 120 ft.; Passive Perception 12\
-Languages Primordial (Ignan)\
-CR 11 (XP 7,200; PB +4)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Large Elemental (Genie), Neutral\
+> AC 17 Initiative +1 (11)\
+> HP 212 (17d10 + 119)\
+> Speed 40 ft., Fly 60 ft. (hover)\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 22 +6 +6 Dex 12 +1 +1 Con 24 +7 +7\
+> Int 16 +3 +3 Wis 15 +2 +6 Cha 19 +4 +8\
+> Immunities Fire\
+> Senses Darkvision 120 ft.; Passive Perception 12\
+> Languages Primordial (Ignan)\
+> CR 11 (XP 7,200; PB +4)
+
 
 ### Traits
 
@@ -53,47 +79,11 @@ At Will: Detect Magic, Elementalism\
 
 Original layout: [[../../srd-5.2.1/pages/283|page 283]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` large ` |
-| ` type ` | ` elemental ` |
-| ` alignment ` | ` Neutral ` |
-| ` tags_text ` | ` (Genie) ` |
-| ` movement_text ` | ` 40 ft., Fly 60 ft. (hover) ` |
-| ` immunities_text ` | ` Fire ` |
-| ` senses_text ` | ` Darkvision 120 ft.; Passive Perception 12 ` |
-| ` languages_text ` | ` Primordial (Ignan) ` |
-| ` cr_text ` | ` 11 (XP 7,200; PB +4) ` |
-| ` hit_points_text ` | ` 212 (17d10 + 119) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 22 ` | ` 6 ` |
-| ` Dexterity ` | ` 12 ` | ` 1 ` |
-| ` Constitution ` | ` 24 ` | ` 7 ` |
-| ` Intelligence ` | ` 16 ` | ` 3 ` |
-| ` Wisdom ` | ` 15 ` | ` 6 ` |
-| ` Charisma ` | ` 19 ` | ` 8 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 17 ` |  |
-| ` max_hp ` | ` 212 ` |  |
-| ` initiative ` | ` 1 ` |  |
-| ` speed ` | ` 40 ` | ` ft ` |
-| ` fly_speed ` | ` 60 ` | ` ft ` |
 
 ## Health
 
@@ -380,3 +370,13 @@ other_components: spell_definition_unless_waived
 | ` provider ` | ` caller ` |
 | ` required_facts ` | ` ["distance", "area_membership", "visibility", "occupancy", "movement_path"] ` |
 | ` validate_against_typed_constraints ` | ` true ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_stats_extras -->
+> 
+> ```yaml
+> fly_speed:
+>   unit: ft
+>   value: 60
+> ```
+

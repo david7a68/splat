@@ -1,10 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "f36af10a-4bc1-5db5-8f0e-b8eca080f58f"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/enlarge_reduce"
 splat_name: "Enlarge/Reduce"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [127, 128], "executable": false}
+splat_pages:
+- 127
+- 128
 ---
 
 # Enlarge/Reduce
@@ -28,3 +30,13 @@ Enlarge. The target’s size increases by one category—from Medium to Large, f
 Reduce. The target’s size decreases by one category—from Medium to Small, for example. The target also has Disadvantage on Strength checks and Strength saving throws. The target’s attacks with its reduced weapons or Unarmed Strikes deal 1d4 less damage on a hit (this can’t reduce the damage below 1).
 
 Original layout: [[../pages/127|page 127]], [[../pages/128|page 128]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

@@ -10,7 +10,7 @@ pub fn run(d: &mut Driver<'_>) {
     d.click(NAV_CAMPAIGN);
     d.click("Convert files…");
     d.click("File to convert");
-    d.click("Timeline.md");
+    d.click_containing("/Timeline.md");
     d.expect("BEFORE");
     d.expect("AFTER");
     d.state("timeline-conversion-preview", Sizes::All);

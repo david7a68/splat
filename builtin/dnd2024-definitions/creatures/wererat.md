@@ -1,35 +1,62 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 89e2602e-5fd7-5f0c-82c6-d5bb78e0fcf5
 splat_kind: creature
 splat_key: dnd2024:creatures/wererat
 splat_name: Wererat
-splat_origin:
-  key: dnd2024:reference/creature/wererat
+splat_origin: dnd2024:reference/creature/wererat
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 338
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 338, https://www.dndbeyond.com/srd
 ---
 
 # Wererat
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Medium or Small |
+| Type | Monstrosity (Lycanthrope) |
+| Alignment | Lawful Evil |
+| Armor Class | 13 |
+| Hit Points | 60 (11d8 + 11) |
+| Initiative | +3 (13) |
+| Speed | 30 ft., Climb 30 ft. |
+| Challenge | 2 (XP 450; PB +2) |
+| Skills | Perception +4, Stealth +5 |
+| Senses | Darkvision 60 ft.; Passive Perception 14 |
+| Languages | Common (can’t speak in rat form) |
+| Gear | Hand Crossbow |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 10 | +0 | +0 |
+| Dex | 16 | +3 | +3 |
+| Con | 12 | +1 | +1 |
+| Int | 11 | +0 | +0 |
+| Wis | 10 | +0 | +0 |
+| Cha | 8 | -1 | -1 |
+
 
 ## Source text
 
 <!-- SRD page 338 -->
 
 Medium or Small Monstrosity (Lycanthrope), Lawful Evil\
-AC 13 Initiative +3 (13)\
-HP 60 (11d8 + 11)\
-Speed 30 ft., Climb 30 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 10 +0 +0 Dex 16 +3 +3 Con 12 +1 +1\
-Int 11 +0 +0 Wis 10 +0 +0 Cha 8 −1 −1\
-Skills Perception +4, Stealth +5\
-Gear Hand Crossbow\
-Senses Darkvision 60 ft.; Passive Perception 14\
-Languages Common (can’t speak in rat form)\
-CR 2 (XP 450; PB +2)
+> [!quote]- Printed stat block (not read; edit the table above)
+> AC 13 Initiative +3 (13)\
+> HP 60 (11d8 + 11)\
+> Speed 30 ft., Climb 30 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 10 +0 +0 Dex 16 +3 +3 Con 12 +1 +1\
+> Int 11 +0 +0 Wis 10 +0 +0 Cha 8 −1 −1\
+> Skills Perception +4, Stealth +5\
+> Gear Hand Crossbow\
+> Senses Darkvision 60 ft.; Passive Perception 14\
+> Languages Common (can’t speak in rat form)\
+> CR 2 (XP 450; PB +2)
+
 
 ### Actions
 
@@ -47,49 +74,11 @@ Shape-Shift. The wererat shape-shifts into a Medium rat-humanoid hybrid or a Sma
 
 Original layout: [[../../srd-5.2.1/pages/338|page 338]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` medium ` |
-| ` type ` | ` monstrosity ` |
-| ` alignment ` | ` Lawful Evil ` |
-| ` size_options_text ` | ` Medium or Small ` |
-| ` tags_text ` | ` (Lycanthrope) ` |
-| ` movement_text ` | ` 30 ft., Climb 30 ft. ` |
-| ` skills_text ` | ` Perception +4, Stealth +5 ` |
-| ` gear_text ` | ` Hand Crossbow ` |
-| ` senses_text ` | ` Darkvision 60 ft.; Passive Perception 14 ` |
-| ` languages_text ` | ` Common (can’t speak in rat form) ` |
-| ` cr_text ` | ` 2 (XP 450; PB +2) ` |
-| ` hit_points_text ` | ` 60 (11d8 + 11) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 10 ` | ` 0 ` |
-| ` Dexterity ` | ` 16 ` | ` 3 ` |
-| ` Constitution ` | ` 12 ` | ` 1 ` |
-| ` Intelligence ` | ` 11 ` | ` 0 ` |
-| ` Wisdom ` | ` 10 ` | ` 0 ` |
-| ` Charisma ` | ` 8 ` | ` -1 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 13 ` |  |
-| ` max_hp ` | ` 60 ` |  |
-| ` initiative ` | ` 3 ` |  |
-| ` speed ` | ` 30 ` | ` ft ` |
-| ` climb_speed ` | ` 30 ` | ` ft ` |
 
 ## Health
 
@@ -381,3 +370,13 @@ geometry_assumptions:
   - plane
   - form_appearance
 ```
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_stats_extras -->
+> 
+> ```yaml
+> climb_speed:
+>   unit: ft
+>   value: 30
+> ```
+

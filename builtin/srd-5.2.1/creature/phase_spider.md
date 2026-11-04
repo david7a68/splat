@@ -1,10 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "6cb89bef-7a82-5074-9085-817f1e9eefc3"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/phase_spider"
 splat_name: "Phase Spider"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [313, 314], "executable": false}
+splat_pages:
+- 313
+- 314
 ---
 
 # Phase Spider
@@ -44,3 +46,13 @@ Bite. Melee Attack Roll: +5, reach 5 ft. Hit: 8 (1d10 + 3) Piercing damage plus 
 Ethereal Jaunt. The spider teleports from the Material Plane to the Ethereal Plane or vice versa.
 
 Original layout: [[../pages/313|page 313]], [[../pages/314|page 314]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

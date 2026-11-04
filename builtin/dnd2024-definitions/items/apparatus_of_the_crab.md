@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: d1fb3766-2184-5bd4-80a3-51f2f795af83
 splat_kind: item
 splat_key: dnd2024:items/apparatus_of_the_crab
 splat_name: Apparatus of the Crab
-splat_origin:
-  key: dnd2024:reference/magic_item/apparatus_of_the_crab
+splat_origin: dnd2024:reference/magic_item/apparatus_of_the_crab
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 210
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 210, https://www.dndbeyond.com/srd
 ---
 
 # Apparatus of the Crab
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Wondrous Item |
+| Rarity | Legendary |
+| Attunement | No |
+
 
 ## Source text
 
@@ -45,22 +52,9 @@ A creature in the compartment can take a Utilize action to move as many as two o
 
 Original layout: [[../../srd-5.2.1/pages/210|page 210]].
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` wondrous_item ` |
-| ` rarity ` | ` legendary ` |
 
-### Equipment
-
-<!-- splat:values path=splat_item/equipment -->
-
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` none ` |
 
 ## Rule
 

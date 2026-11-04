@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "2cfa5859-9ed5-59e9-b7f0-11520306f1d6"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/wall_of_thorns"
 splat_name: "Wall of Thorns"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [173], "executable": false}
+splat_pages:
+- 173
 ---
 
 # Wall of Thorns
@@ -26,3 +27,13 @@ A creature can move through the wall, albeit slowly and painfully. For every 1 f
 Using a Higher-Level Spell Slot. Both types of damage increase by 1d8 for each spell slot level above 6.
 
 Original layout: [[../pages/173|page 173]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

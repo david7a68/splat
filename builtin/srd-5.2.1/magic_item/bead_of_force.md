@@ -1,10 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "cfccf3c3-50f9-5d13-a762-46b4b03dbf81"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/magic_item/bead_of_force"
 splat_name: "Bead of Force"
-splat_reference: {"source": "SRD 5.2.1", "category": "magic_item", "pages": [212, 213], "executable": false}
+splat_pages:
+- 212
+- 213
 ---
 
 # Bead of Force
@@ -22,3 +24,13 @@ You can take a Magic action to throw the bead up to 60 feet. The bead explodes i
 An enclosed creature can take a Utilize action to push against the sphere’s wall, moving the sphere up to half the creature’s Speed. The sphere can be picked up, and its magic causes it to weigh only 1 pound, regardless of the weight of creatures inside.
 
 Original layout: [[../pages/212|page 212]], [[../pages/213|page 213]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: magic_item
+> executable: false
+> ```
+

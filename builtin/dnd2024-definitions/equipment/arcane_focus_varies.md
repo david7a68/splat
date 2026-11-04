@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 2d7b19f1-002c-505c-a275-8ca535664a40
 splat_kind: item
 splat_key: dnd2024:equipment/arcane_focus_varies
 splat_name: Arcane Focus (Varies)
-splat_origin:
-  key: dnd2024:reference/pages/096
+splat_origin: dnd2024:reference/pages/096
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 96
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 96, https://www.dndbeyond.com/srd
 ---
 
 # Arcane Focus (Varies)
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Adventuring Gear |
+| Rarity |  |
+| Attunement | No |
+
 
 ## Source text
 
@@ -30,21 +37,9 @@ An Arcane Focus takes one of the forms in the Arcane Focuses table and is bejewe
 | Staff (also a Quarterstaff) | 4 lb. | 5 GP |
 | Wand | 1 lb. | 10 GP |
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` adventuring_gear ` |
 
-### Equipment
-
-<!-- splat:values path=splat_item/equipment -->
-
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` none ` |
 
 ## Rule
 

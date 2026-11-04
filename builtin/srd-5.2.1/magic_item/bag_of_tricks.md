@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "e85c8a66-1d18-548d-9815-d247d15afcc0"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/magic_item/bag_of_tricks"
 splat_name: "Bag of Tricks"
-splat_reference: {"source": "SRD 5.2.1", "category": "magic_item", "pages": [212], "executable": false}
+splat_pages:
+- 212
 ---
 
 # Bag of Tricks
@@ -49,3 +50,13 @@ Once three fuzzy objects have been pulled from the bag, the bag can’t be used 
 | 4 | Axe Beak | 8 | Tiger |
 
 Original layout: [[../pages/212|page 212]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: magic_item
+> executable: false
+> ```
+

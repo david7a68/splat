@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "30a9c9c3-4c1f-5434-878f-29f53d4a786a"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/red_dragon_wyrmling"
 splat_name: "Red Dragon Wyrmling"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [318], "executable": false}
+splat_pages:
+- 318
 ---
 
 # Red Dragon Wyrmling
@@ -33,3 +34,13 @@ Rend. Melee Attack Roll: +6, reach 5 ft. Hit: 9 (1d10 + 4) Slashing damage plus 
 Fire Breath (Recharge 5–6). Dexterity Saving Throw: DC 13, each creature in a 15-foot Cone. Failure: 24 (7d6) Fire damage. Success: Half damage.
 
 Original layout: [[../pages/318|page 318]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

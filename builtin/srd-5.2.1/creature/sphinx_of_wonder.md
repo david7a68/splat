@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "d7d4d00d-3745-5e2a-ba50-def84b0fcc53"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/sphinx_of_wonder"
 splat_name: "Sphinx of Wonder"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [327], "executable": false}
+splat_pages:
+- 327
 ---
 
 # Sphinx of Wonder
@@ -37,3 +38,13 @@ Rend. Melee Attack Roll: +5, reach 5 ft. Hit: 5 (1d4 + 3) Slashing damage plus 7
 Burst of Ingenuity (2/Day). Trigger: The sphinx or another creature within 30 feet makes an ability check or a saving throw. Response: The sphinx adds 2 to the roll.
 
 Original layout: [[../pages/327|page 327]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

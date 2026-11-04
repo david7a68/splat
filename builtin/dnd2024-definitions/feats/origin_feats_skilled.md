@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 8d40a00d-c470-5f4d-8c8a-89b7ba31e9c5
 splat_kind: rule
 splat_key: dnd2024:feats/origin_feats_skilled
 splat_name: Skilled
-splat_origin:
-  key: dnd2024:reference/pages/087
+splat_origin: dnd2024:reference/pages/087
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 87
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 87, https://www.dndbeyond.com/srd
 ---
 
 # Skilled

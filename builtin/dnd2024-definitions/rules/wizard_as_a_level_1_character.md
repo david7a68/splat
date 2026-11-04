@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 8c1a7c72-b2d4-5cae-90b9-f383b5ecd878
 splat_kind: rule
 splat_key: dnd2024:rules/wizard_as_a_level_1_character
 splat_name: As a Level 1 Character
-splat_origin:
-  key: dnd2024:reference/pages/077
+splat_origin: dnd2024:reference/pages/077
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 77
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 77, https://www.dndbeyond.com/srd
 ---
 
 # As a Level 1 Character

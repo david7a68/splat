@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "8e31780a-b953-59ba-b408-571cd28379c1"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/mislead"
 splat_name: "Mislead"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [150], "executable": false}
+splat_pages:
+- 150
 ---
 
 # Mislead
@@ -24,3 +25,13 @@ As a Magic action, you can move the illusory double up to twice your Speed and m
 You can see through its eyes and hear through its ears as if you were located where it is.
 
 Original layout: [[../pages/150|page 150]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: e41a0eb6-bbbe-527a-a388-db5af40fa96d
 splat_kind: spell
 splat_key: dnd2024:spells/entangle
 splat_name: Entangle
-splat_origin:
-  key: dnd2024:reference/spell/entangle
+splat_origin: dnd2024:reference/spell/entangle
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 128
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 128, https://www.dndbeyond.com/srd
 ---
 
 # Entangle
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 1 |
+| School | Conjuration |
+| Classes | Druid, Ranger |
+| Casting Time | Action |
+| Range | 90 feet |
+| Components | V, S |
+| Duration | Concentration, up to 1 minute |
+
 
 ## Source text
 
@@ -30,28 +41,9 @@ Each creature (other than you) in the area when you cast the spell must succeed 
 
 Original layout: [[../../srd-5.2.1/pages/128|page 128]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 1 ` |
-| ` school ` | ` conjuration ` |
-| ` classes ` | ` ["druid", "ranger"] ` |
-| ` components ` | ` ["verbal", "somatic"] ` |
-| ` concentration ` | ` true ` |
-| ` duration ` | ` Concentration, up to 1 minute ` |
-| ` casting_time ` | ` Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
-
-<!-- splat:values path=splat_spell/range -->
-
-| Field | Value |
-| --- | --- |
-| ` feet ` | ` 90 ` |
 
 ## Rule
 

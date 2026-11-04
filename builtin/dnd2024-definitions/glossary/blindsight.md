@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 409feeac-c398-5165-908b-69d2c6eafe0a
 splat_kind: rule
 splat_key: dnd2024:glossary/blindsight
 splat_name: Blindsight
-splat_origin:
-  key: dnd2024:reference/glossary/blindsight
+splat_origin: dnd2024:reference/glossary/blindsight
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 177
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 177, https://www.dndbeyond.com/srd
 ---
 
 # Blindsight

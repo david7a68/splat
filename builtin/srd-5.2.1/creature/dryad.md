@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "3ee896a9-2436-5c84-ae3b-e7efcd88a664"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/dryad"
 splat_name: "Dryad"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [282], "executable": false}
+splat_pages:
+- 282
 ---
 
 # Dryad
@@ -48,3 +49,13 @@ At Will: Animal Friendship, Charm Monster (lasts 24 hours; ends early if the dry
 Tree Stride. If within 5 feet of a Large or bigger tree, the dryad teleports to an unoccupied space within 5 feet of a second Large or bigger tree that is within 60 feet of the previous tree.
 
 Original layout: [[../pages/282|page 282]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

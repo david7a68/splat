@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 244810ae-b90d-5e81-82bb-418a00484de1
 splat_kind: item
 splat_key: dnd2024:items/plate_armor_of_etherealness
 splat_name: Plate Armor of Etherealness
-splat_origin:
-  key: dnd2024:reference/magic_item/plate_armor_of_etherealness
+splat_origin: dnd2024:reference/magic_item/plate_armor_of_etherealness
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 234
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 234, https://www.dndbeyond.com/srd
 ---
 
 # Plate Armor of Etherealness
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Armor |
+| Rarity | Legendary |
+| Attunement | Yes |
+
 
 ## Source text
 
@@ -24,22 +31,9 @@ While you’re wearing this armor, you can take a Magic action and use a command
 
 Original layout: [[../../srd-5.2.1/pages/234|page 234]].
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` armor ` |
-| ` rarity ` | ` legendary ` |
 
-### Equipment
-
-<!-- splat:values path=splat_item/equipment -->
-
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` required ` |
 
 ## Rule
 

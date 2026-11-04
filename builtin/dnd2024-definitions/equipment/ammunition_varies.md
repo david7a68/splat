@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 195d81fd-98a0-57e1-b2b3-134a814d0214
 splat_kind: item
 splat_key: dnd2024:equipment/ammunition_varies
 splat_name: Ammunition (Varies)
-splat_origin:
-  key: dnd2024:reference/pages/094
+splat_origin: dnd2024:reference/pages/094
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 94, 96
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 94, 96, https://www.dndbeyond.com/srd
 ---
 
 # Ammunition (Varies)
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Adventuring Gear |
+| Rarity |  |
+| Attunement | No |
+
 
 ## Source text
 
@@ -30,21 +37,9 @@ Ammunition is required by a weapon that has the Ammunition property. A weapon’
 | Bullets, Sling | 20 | Pouch | 1½ lb. | 4 CP |
 | Needles | 50 | Pouch | 1 lb. | 1 GP |
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` adventuring_gear ` |
 
-### Equipment
-
-<!-- splat:values path=splat_item/equipment -->
-
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` none ` |
 
 ## Rule
 

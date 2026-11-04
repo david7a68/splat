@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: b32a75fd-5ca0-5dbc-b4a7-29e38ed82236
 splat_kind: rule
 splat_key: dnd2024:class_features/life_domain_level_3_preserve_life
 splat_name: 'Level 3: Preserve Life'
-splat_origin:
-  key: dnd2024:reference/pages/040
+splat_origin: dnd2024:reference/pages/040
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 40
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 40, https://www.dndbeyond.com/srd
 ---
 
 # Level 3: Preserve Life

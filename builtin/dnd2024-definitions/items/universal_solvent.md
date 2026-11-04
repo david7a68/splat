@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: ab984309-6e33-565e-a496-bdc20321584e
 splat_kind: item
 splat_key: dnd2024:items/universal_solvent
 splat_name: Universal Solvent
-splat_origin:
-  key: dnd2024:reference/magic_item/universal_solvent
+splat_origin: dnd2024:reference/magic_item/universal_solvent
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 250
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 250, https://www.dndbeyond.com/srd
 ---
 
 # Universal Solvent
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Wondrous Item |
+| Rarity | Legendary |
+| Attunement | No |
+
 
 ## Source text
 
@@ -26,22 +33,9 @@ You can take a Utilize action to pour 1 or more ounces of solvent from the tube 
 
 Original layout: [[../../srd-5.2.1/pages/250|page 250]].
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` wondrous_item ` |
-| ` rarity ` | ` legendary ` |
 
-### Equipment
-
-<!-- splat:values path=splat_item/equipment -->
-
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` none ` |
 
 ## Rule
 

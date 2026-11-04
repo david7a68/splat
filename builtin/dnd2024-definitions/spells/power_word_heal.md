@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: c6cccb53-4af6-55ef-af03-c177bb9950d2
 splat_kind: spell
 splat_key: dnd2024:spells/power_word_heal
 splat_name: Power Word Heal
-splat_origin:
-  key: dnd2024:reference/spell/power_word_heal
+splat_origin: dnd2024:reference/spell/power_word_heal
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 154
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 154, https://www.dndbeyond.com/srd
 ---
 
 # Power Word Heal
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 9 |
+| School | Enchantment |
+| Classes | Bard, Cleric |
+| Casting Time | Action |
+| Range | 60 feet |
+| Components | V |
+| Duration | Instantaneous |
+
 
 ## Source text
 
@@ -28,28 +39,9 @@ A wave of healing energy washes over one creature you can see within range. The 
 
 Original layout: [[../../srd-5.2.1/pages/154|page 154]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 9 ` |
-| ` school ` | ` enchantment ` |
-| ` classes ` | ` ["bard", "cleric"] ` |
-| ` components ` | ` ["verbal"] ` |
-| ` concentration ` | ` false ` |
-| ` duration ` | ` Instantaneous ` |
-| ` casting_time ` | ` Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
-
-<!-- splat:values path=splat_spell/range -->
-
-| Field | Value |
-| --- | --- |
-| ` feet ` | ` 60 ` |
 
 ## Rule
 

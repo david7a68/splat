@@ -1,10 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "bc2c3796-7211-5821-94f0-ed28b98205cd"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/giant_centipede"
 splat_name: "Giant Centipede"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [349, 350], "executable": false}
+splat_pages:
+- 349
+- 350
 ---
 
 # Giant Centipede
@@ -29,3 +31,13 @@ CR 1/4 (XP 50; PB +2)
 Bite. Melee Attack Roll: +4, reach 5 ft. Hit: 4 (1d4 + 2) Piercing damage, and the target has the Poisoned condition until the start of the centipede’s next turn.
 
 Original layout: [[../pages/349|page 349]], [[../pages/350|page 350]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

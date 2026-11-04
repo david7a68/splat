@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 2cf078a5-c631-5ea9-b405-61451c723b20
 splat_kind: spell
 splat_key: dnd2024:spells/floating_disk
 splat_name: Floating Disk
-splat_origin:
-  key: dnd2024:reference/spell/floating_disk
+splat_origin: dnd2024:reference/spell/floating_disk
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 133
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 133, https://www.dndbeyond.com/srd
 ---
 
 # Floating Disk
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 1 |
+| School | Conjuration |
+| Classes | Wizard |
+| Casting Time | Action or Ritual |
+| Range | 30 feet |
+| Components | V, S, M (a drop of mercury) |
+| Duration | 1 hour |
+
 
 ## Source text
 
@@ -32,37 +43,11 @@ If you move more than 100 feet from the disk (typically because it can’t move 
 
 Original layout: [[../../srd-5.2.1/pages/133|page 133]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 1 ` |
-| ` school ` | ` conjuration ` |
-| ` classes ` | ` ["wizard"] ` |
-| ` components ` | ` ["verbal", "somatic", "material"] ` |
-| ` concentration ` | ` false ` |
-| ` duration ` | ` 1 hour ` |
-| ` casting_time ` | ` Action or Ritual ` |
-| ` ritual ` | ` true ` |
 
-### Range
 
-<!-- splat:values path=splat_spell/range -->
 
-| Field | Value |
-| --- | --- |
-| ` feet ` | ` 30 ` |
-
-### Material
-
-<!-- splat:values path=splat_spell/material -->
-
-| Field | Value |
-| --- | --- |
-| ` description ` | ` a drop of mercury ` |
-| ` consumed ` | ` false ` |
 
 ## Rule
 
@@ -121,3 +106,12 @@ duration: spell_duration
 | Field | Value |
 | --- | --- |
 | ` contents ` | ` fall_to_ground ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_spell_extras -->
+> 
+> ```yaml
+> material:
+>   consumed: false
+> ```
+

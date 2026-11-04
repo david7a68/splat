@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "88a54901-e2bc-5bf3-aa76-224ea36b7a40"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/roc"
 splat_name: "Roc"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [320], "executable": false}
+splat_pages:
+- 320
 ---
 
 # Roc
@@ -36,3 +37,13 @@ Talons. Melee Attack Roll: +13, reach 5 ft. Hit: 23 (4d6 + 9) Slashing damage. I
 Swoop (Recharge 5–6). If the roc has a creature Grappled, the roc flies up to half its Fly Speed without provoking Opportunity Attacks and drops that creature.
 
 Original layout: [[../pages/320|page 320]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

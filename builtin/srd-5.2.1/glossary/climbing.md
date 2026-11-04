@@ -1,10 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "6bddbf8e-9625-5fad-bc8a-655f55c3f5f3"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/glossary/climbing"
 splat_name: "Climbing"
-splat_reference: {"source": "SRD 5.2.1", "category": "glossary", "pages": [178, 179], "executable": false}
+splat_pages:
+- 178
+- 179
 ---
 
 # Climbing
@@ -18,3 +20,13 @@ While you’re climbing, each foot of movement costs 1 extra foot (2 extra feet 
 At the GM’s option, climbing a slippery surface or one with few handholds might require a successful DC 15 Strength (Athletics) check.
 
 Original layout: [[../pages/178|page 178]], [[../pages/179|page 179]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: glossary
+> executable: false
+> ```
+

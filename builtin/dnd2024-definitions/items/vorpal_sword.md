@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 793209c7-3287-5bbd-a8e3-4e99c5897553
 splat_kind: item
 splat_key: dnd2024:items/vorpal_sword
 splat_name: Vorpal Sword
-splat_origin:
-  key: dnd2024:reference/magic_item/vorpal_sword
+splat_origin: dnd2024:reference/magic_item/vorpal_sword
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 250
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 250, https://www.dndbeyond.com/srd
 ---
 
 # Vorpal Sword
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Weapon |
+| Rarity | Legendary |
+| Attunement | Yes |
+
 
 ## Source text
 
@@ -26,22 +33,9 @@ When you use this weapon to attack a creature that has at least one head and rol
 
 Original layout: [[../../srd-5.2.1/pages/250|page 250]].
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` weapon ` |
-| ` rarity ` | ` legendary ` |
 
-### Equipment
-
-<!-- splat:values path=splat_item/equipment -->
-
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` required ` |
 
 ## Rule
 

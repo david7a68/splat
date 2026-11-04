@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "d4e42459-b1f5-542d-b509-0697767a8d96"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/power_word_heal"
 splat_name: "Power Word Heal"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [154], "executable": false}
+splat_pages:
+- 154
 ---
 
 # Power Word Heal
@@ -20,3 +21,13 @@ Duration: Instantaneous
 A wave of healing energy washes over one creature you can see within range. The target regains all its Hit Points. If the creature has the Charmed, Frightened, Paralyzed, Poisoned, or Stunned condition, the condition ends. If the creature has the Prone condition, it can use its Reaction to stand up.
 
 Original layout: [[../pages/154|page 154]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

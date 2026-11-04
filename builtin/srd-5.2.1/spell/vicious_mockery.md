@@ -1,10 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "9dd7f18b-3855-56f2-9360-c619bbf554fa"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/vicious_mockery"
 splat_name: "Vicious Mockery"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [171, 172], "executable": false}
+splat_pages:
+- 171
+- 172
 ---
 
 # Vicious Mockery
@@ -24,3 +26,13 @@ You unleash a string of insults laced with subtle enchantments at one creature y
 Cantrip Upgrade. The damage increases by 1d6 when you reach levels 5 (2d6), 11 (3d6), and 17 (4d6).
 
 Original layout: [[../pages/171|page 171]], [[../pages/172|page 172]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

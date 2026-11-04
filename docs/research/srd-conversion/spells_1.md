@@ -3,7 +3,7 @@ format: 1
 source: SRD 5.2.1
 definitions:
   dnd2024:spells/acid_arrow:
-    source_sha256: 40477620f116abdb8da4476f1f1788482e6a7061a0d47eeda774ec9fafe25461
+    source_sha256: 9c2c06352d6f5e55d6368039623f8d271d3a9a4f5aa9fdb2c62eddb27646b6a2
     disposition: specified
     fields:
       splat_rule:
@@ -96,7 +96,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 107; builtin/srd-5.2.1/spell/acid_arrow.md
   dnd2024:spells/alter_self:
-    source_sha256: 7a3cc50405f467a4716c3b05e6887995f2170c308704b7bdf62ac86594b7a2c1
+    source_sha256: 0798b38efd4f63c57dccc73cbe4b1862e8488a4685dde7ffd4667f3c0c3685b8
     disposition: specified
     fields:
       splat_rule:
@@ -195,7 +195,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 107; builtin/srd-5.2.1/spell/alter_self.md
   dnd2024:spells/animate_dead:
-    source_sha256: deca7f707ac8b52b9a849e74ac47530405eac5dec1b7bab9cd1aec054467752e
+    source_sha256: 6aab950576a3a179b6f37d32f808aca7e264aa301576d6ec23db9ea97cc4e479
     disposition: specified
     fields:
       splat_rule:
@@ -283,7 +283,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 108; builtin/srd-5.2.1/spell/animate_dead.md
   dnd2024:spells/antipathy_sympathy:
-    source_sha256: b5d9bbbb8d98f1cdf797b18889ad5c8c851ac3518ee466f2169052feb1ceecaa
+    source_sha256: 682b54e1349e07f1a122c5055ba8fe42438ac57d465311b2666ce153bedde1d5
     disposition: specified
     fields:
       splat_rule:
@@ -397,7 +397,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 109, 110; builtin/srd-5.2.1/spell/antipathy_sympathy.md
   dnd2024:spells/arcane_sword:
-    source_sha256: 438126a620dda588f0f722500e42c5cd91845906ae8690b86fa07ae3f3547278
+    source_sha256: 295a4d6bf5d55fd4a7dd93595eade972bd4a3afd5986ea2e1d132acba8e456db
     disposition: specified
     fields:
       splat_rule:
@@ -474,7 +474,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 110; builtin/srd-5.2.1/spell/arcane_sword.md
   dnd2024:spells/aura_of_life:
-    source_sha256: 835b5beee4dfbbcba84c477502fe52b6ba7d5be9e237da90425d34ac51f53c33
+    source_sha256: 2004b53b5e489f892de6a562329d977a752ba353b21cc9fab1086befcb0df087
     disposition: specified
     fields:
       splat_rule:
@@ -541,7 +541,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 111; builtin/srd-5.2.1/spell/aura_of_life.md
   dnd2024:spells/barkskin:
-    source_sha256: c9b7812358cfcf11283beb3349d0a33fd4c4c6733acfaf1f572378d38d865149
+    source_sha256: cdb72de6bb4639548c91e90375e611439c846af53bc87a80770d97ec729f5beb
     disposition: specified
     fields:
       splat_rule:
@@ -592,7 +592,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 112; builtin/srd-5.2.1/spell/barkskin.md
   dnd2024:spells/black_tentacles:
-    source_sha256: c02c2ec03f225902a019b06fb94244b5fe871257d617c0328817c3172d7c82f0
+    source_sha256: c718fd41ce290b3b3fcc273b911cf160d4fa424d5cd4982802aa5ea93bc30379
     disposition: specified
     fields:
       splat_rule:
@@ -682,7 +682,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 113; builtin/srd-5.2.1/spell/black_tentacles.md
   dnd2024:spells/blindness_deafness:
-    source_sha256: 2acf8a41ac4eda3e7d1736673dd198c9c8480e5ae0b62bd33754ccbc83fa0e57
+    source_sha256: fada3593436c755e5eeff969df3a18bc295f2280ad7edb4ed7b66a568cdae9c8
     disposition: specified
     fields:
       splat_rule:
@@ -754,7 +754,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 113; builtin/srd-5.2.1/spell/blindness_deafness.md
   dnd2024:spells/call_lightning:
-    source_sha256: d5d58a4720f4e2a7f55d2ce158ac0d61c7c3e84ff1cab967ee83dea01ba965b7
+    source_sha256: a08bee3d8b0b981cb4e01f2bc796e76e49dceee6fcc69dfcd17f34a803d80c68
     disposition: specified
     fields:
       splat_rule:
@@ -849,7 +849,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 114; builtin/srd-5.2.1/spell/call_lightning.md
   dnd2024:spells/charm_person:
-    source_sha256: 03d071f68abd71ef6a1706033f1810d8eec363bf076705dab74c47b885af75c6
+    source_sha256: ce291dc6e4276ee95b0c4a90ceee4f8c3c14a539bfe6f06233128b6ad8842ba7
     disposition: specified
     fields:
       splat_rule:
@@ -926,7 +926,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 115; builtin/srd-5.2.1/spell/charm_person.md
   dnd2024:spells/clairvoyance:
-    source_sha256: eca84e92d5d8c53d7e07e67daa06f29e03848a817f5446c1282c2a37740bb8a7
+    source_sha256: 745e9376ac88d5cbbd0b304695337e8aa9bf6b5b596485f44953ddf9fa136408
     disposition: specified
     fields:
       splat_rule:
@@ -991,7 +991,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 115; builtin/srd-5.2.1/spell/clairvoyance.md
   dnd2024:spells/command:
-    source_sha256: db3bb2de3ce1ecec049ecaa0e6cb5ffa5be0166da778dbfd3a6b5798967a1e18
+    source_sha256: faa631f9792953dcd34f35e29b10985856d534d5b895e1867b107292d9be57be
     disposition: specified
     fields:
       splat_rule:
@@ -1084,7 +1084,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 116; builtin/srd-5.2.1/spell/command.md
   dnd2024:spells/compulsion:
-    source_sha256: cc5a82370c66ea60b0b5fbb17039e7a5eba8cd15a90d00a3548ae3ba1857b1e3
+    source_sha256: e5fb226771b5c710732934cfec55970a6aacbf8181cb2ced47b40897b791b930
     disposition: specified
     fields:
       splat_rule:
@@ -1157,7 +1157,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 117; builtin/srd-5.2.1/spell/compulsion.md
   dnd2024:spells/conjure_celestial:
-    source_sha256: 5c69e6fe37e1f6ad01029eaa480ea222850afa61bc9077906277fc80dcc98ab9
+    source_sha256: 9642ad5d9f5c875d5d25217a69f45d7cc17bbf94f99bbdd11d4684f5f0accebb
     disposition: specified
     fields:
       splat_rule:
@@ -1271,7 +1271,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 118; builtin/srd-5.2.1/spell/conjure_celestial.md
   dnd2024:spells/conjure_woodland_beings:
-    source_sha256: 98aa4c0c2d6245da03a7dac409f3c1ac6d506f3ee4d00c3ed1a189848b2a77e8
+    source_sha256: c88c773e8c2711b9475f9e414e8cc59fb1b59bad8bae2913ea312442330ad60b
     disposition: specified
     fields:
       splat_rule:
@@ -1364,7 +1364,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 118, 119; builtin/srd-5.2.1/spell/conjure_woodland_beings.md
   dnd2024:spells/continual_flame:
-    source_sha256: 6bd7e5053c8c911b37a000ba6adbed10e4f50ebd7de6cadb952b10834f06ec10
+    source_sha256: 5eeb77a5d8bc7160ab8d23f589964a1f257c36106d79cc61ecacf0d029f21eee
     disposition: specified
     fields:
       splat_rule:
@@ -1423,7 +1423,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 119; builtin/srd-5.2.1/spell/continual_flame.md
   dnd2024:spells/create_food_and_water:
-    source_sha256: 6d1b061f3731b3da67561dbc3c84ba06c738e389a9391a1c6422af6e19cc7429
+    source_sha256: ea7dcc07288f4d539bdcec849127a72feac43a69728ffaa4464818510180261a
     disposition: specified
     fields:
       splat_rule:
@@ -1484,7 +1484,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 120; builtin/srd-5.2.1/spell/create_food_and_water.md
   dnd2024:spells/cure_wounds:
-    source_sha256: 8122e57c811326700332e3104a0070767aca6186ffbb8af30c79c6b7fc5ec271
+    source_sha256: 7adfa8dfb4f50ac96ea6f75961db4121dd3174e55624fbd73bc2b05cfaa3e74c
     disposition: specified
     fields:
       splat_rule:
@@ -1543,7 +1543,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 121; builtin/srd-5.2.1/spell/cure_wounds.md
   dnd2024:spells/daylight:
-    source_sha256: e849596555c43bd8d0fced7f9daee35fd350f5c3087a9693520e2da7ac2518b2
+    source_sha256: c16d379acf4c9fdc26ec32f4fb72518a97c115fbc9cb3c6b232da5321963d17b
     disposition: specified
     fields:
       splat_rule:
@@ -1606,7 +1606,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 122; builtin/srd-5.2.1/spell/daylight.md
   dnd2024:spells/detect_evil_and_good:
-    source_sha256: 7baf29d29105e358f217ebaeeb50c231871332bae20160fb30f55d7f40ae4ff4
+    source_sha256: fd668c1962c2955d37ae80e4de7712bd067cb0b0d1e02469942072f9611631cb
     disposition: specified
     fields:
       splat_rule:
@@ -1674,7 +1674,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 123; builtin/srd-5.2.1/spell/detect_evil_and_good.md
   dnd2024:spells/dimension_door:
-    source_sha256: 7650b892fd8ea7a49024f24bc90511bd1ed0fc9d37f1c3268c5a3c46de8761c5
+    source_sha256: 9e71bbaa5452552d93e5493bb56c5a9974b312c4f032b9bdd0b6666ac5dba705
     disposition: specified
     fields:
       splat_rule:
@@ -1746,7 +1746,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 123, 124; builtin/srd-5.2.1/spell/dimension_door.md
   dnd2024:spells/dispel_magic:
-    source_sha256: f9a5c3b5e2ef8106649cf061e386d1f5606fdb9c812d2824918f8363e29d159d
+    source_sha256: 1877c5e4211539275a728a64327f2b40bd97f7dc8dd379ed2d241fd875e1c637
     disposition: specified
     fields:
       splat_rule:
@@ -1809,7 +1809,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 124; builtin/srd-5.2.1/spell/dispel_magic.md
   dnd2024:spells/divine_smite:
-    source_sha256: 11051b625db0b7d2affdac0addc53d09d8e8054d6cc577f1e265934e7eac251a
+    source_sha256: c5f1f4d1bc501f2b3ca17fdaa96a96d225c5944012c6a1c55120d17d11ff2c42
     disposition: specified
     fields:
       splat_rule:
@@ -1886,7 +1886,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 125; builtin/srd-5.2.1/spell/divine_smite.md
   dnd2024:spells/dominate_person:
-    source_sha256: 843c9dbf14c9c1ebe15a43e607204b5fa31d90c68a6a0acbb90397c52b95e6fe
+    source_sha256: fa1106841e4fee5139fb2cec52bf3c74d81abf4ff529f13138cd6c574a42390a
     disposition: specified
     fields:
       splat_rule:
@@ -1976,7 +1976,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 126; builtin/srd-5.2.1/spell/dominate_person.md
   dnd2024:spells/earthquake:
-    source_sha256: b17d9bbb173599564efef6eecb78721aed6a1b7dd04c6817e9d13c462a4ab842
+    source_sha256: cc420d87d77dc2ba96c8cdfe2d5332abe8713d71569a5fc89376c183db1243b8
     disposition: specified
     fields:
       splat_rule:
@@ -2122,7 +2122,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 127; builtin/srd-5.2.1/spell/earthquake.md
   dnd2024:spells/enlarge_reduce:
-    source_sha256: 62fc307b7a544304ed27f8621c420d5a56da67abcbb48e1c713111f94357963a
+    source_sha256: 985b4396b20bac3945dd454edb6e46bb6f5a25c597b554e03969b0910c64d02a
     disposition: specified
     fields:
       splat_rule:
@@ -2210,7 +2210,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 127, 128; builtin/srd-5.2.1/spell/enlarge_reduce.md
   dnd2024:spells/etherealness:
-    source_sha256: 14fa741ed9ccd4d99c7a984525c128b89bfdd42d74975570690779d07ed95279
+    source_sha256: bb2408da35eb2a688db8d85bc10f2875e4d78842ed51378d684c3f96363949a9
     disposition: specified
     fields:
       splat_rule:
@@ -2289,7 +2289,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 128; builtin/srd-5.2.1/spell/etherealness.md
   dnd2024:spells/faerie_fire:
-    source_sha256: 003b47280bb8135456053346a303ec08258d6ffbf23a5fa276a86afe9e8b6015
+    source_sha256: f9e73aa7c5ba3d7b95c14ce811df172423d54f0cd35912e15a5cc75ed0e4b104
     disposition: specified
     fields:
       splat_rule:
@@ -2364,7 +2364,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 129; builtin/srd-5.2.1/spell/faerie_fire.md
   dnd2024:spells/feather_fall:
-    source_sha256: f5668ec58432d5ccf5b276afe40e95eeeb618de5765ea8d840e340af853527ff
+    source_sha256: 66bc59431b1aa4b09db00b8d47db2ae2ed2314f7deb86d85c37167878ceef28c
     disposition: specified
     fields:
       splat_rule:
@@ -2420,7 +2420,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 130; builtin/srd-5.2.1/spell/feather_fall.md
   dnd2024:spells/find_traps:
-    source_sha256: 06b19837d4a1edf2a19a692ce083a435847ca71d80837f21fdde9fc96b8a73be
+    source_sha256: e4f52581c09532dcb2144c78baf34b9c8337ac1639c43240b30edc220b2059ed
     disposition: specified
     fields:
       splat_rule:
@@ -2480,7 +2480,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 131; builtin/srd-5.2.1/spell/find_traps.md
   dnd2024:spells/fire_storm:
-    source_sha256: c6ae4b144ee336e6d6f553bf9b25b432ef77c1fe97dc3568dde1934360b4b6f7
+    source_sha256: ade8da6a4a9037d132252db8171415de34c31a8bddbc7ef6b3239b567ce87cd4
     disposition: specified
     fields:
       splat_rule:
@@ -2556,7 +2556,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 132; builtin/srd-5.2.1/spell/fire_storm.md
   dnd2024:spells/flaming_sphere:
-    source_sha256: 023e0be97733a3dffc18ab18c55a53363e0d2b5c177d2861b3c04434e585c0ca
+    source_sha256: 21c5e1730eb7045d3951a4e6d784afe40f806012be4e83bf44db7415b88ac9ae
     disposition: specified
     fields:
       splat_rule:
@@ -2649,7 +2649,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 132; builtin/srd-5.2.1/spell/flaming_sphere.md
   dnd2024:spells/fog_cloud:
-    source_sha256: 57bd320428d9eddee6c4ffff3bf68c51f7c265147ca040f05006fe650af52015
+    source_sha256: 534ff6fc60e6e5eb0abee77004c06a358e82f932a10fff76100cedf5dab03d34
     disposition: specified
     fields:
       splat_rule:
@@ -2701,7 +2701,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 133; builtin/srd-5.2.1/spell/fog_cloud.md
   dnd2024:spells/freedom_of_movement:
-    source_sha256: eee947c64ee093e4d051382c06199a3ca3c337772266b9863911ae486fc5ec00
+    source_sha256: d90e2fb0029e95951f6a39ce8488af9cc1b4109e6103005a0d09898dfe0a3754
     disposition: specified
     fields:
       splat_rule:
@@ -2773,7 +2773,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 134; builtin/srd-5.2.1/spell/freedom_of_movement.md
   dnd2024:spells/geas:
-    source_sha256: 944869bd405b7a3f3ff280aef38e262cbe8c4052d0b6d0f4f8936240ec5eb17f
+    source_sha256: afd02b96fcaac811141ee799d810ac9c05ddb63994d7686df6cea29b27b982f6
     disposition: specified
     fields:
       splat_rule:
@@ -2872,7 +2872,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 135; builtin/srd-5.2.1/spell/geas.md
   dnd2024:spells/globe_of_invulnerability:
-    source_sha256: 21a97d1bf0c4313853990b1886f8f85477575223a43d30012b77a212d56f69f9
+    source_sha256: 40ceedb1a7dc5e1352b717fe6db7db1b0ae79998205e894ea26c55bccd601ac9
     disposition: specified
     fields:
       splat_rule:
@@ -2930,7 +2930,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 136; builtin/srd-5.2.1/spell/globe_of_invulnerability.md
   dnd2024:spells/greater_invisibility:
-    source_sha256: 92c192abd55b9727be74569f43c12a4636de2307bd3e7ec3468875b101223aea
+    source_sha256: 3b7752e3a99658a16496f5a6b75f22b607ce931690367902bf1714f2b5fe979f
     disposition: specified
     fields:
       splat_rule:
@@ -2983,7 +2983,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 137; builtin/srd-5.2.1/spell/greater_invisibility.md
   dnd2024:spells/guidance:
-    source_sha256: 79d169bd9d6275fcb7ce09b7e996317911097a5c5422bf210abd89b6e9761f71
+    source_sha256: b8f9370cb109834304f51aecda556eaab3455955e6615c6bfce1ffb1151b5dc8
     disposition: specified
     fields:
       splat_rule:
@@ -3046,7 +3046,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 138; builtin/srd-5.2.1/spell/guidance.md
   dnd2024:spells/hallucinatory_terrain:
-    source_sha256: 33b2c871b0e0e642975ebce88af3f637e9f078fbf0186f8c16013aff9ebb1871
+    source_sha256: 117b01792a38e013e50ae15d0551693baa514f9bfe7adac0998522e6cb557c5b
     disposition: specified
     fields:
       splat_rule:
@@ -3121,7 +3121,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 139; builtin/srd-5.2.1/spell/hallucinatory_terrain.md
   dnd2024:spells/healing_word:
-    source_sha256: 5c9e9684b0e69b4327883dae64c3b31aed1aa23ae594f89bc411d65ade520263
+    source_sha256: 6e0815adad01e3682df03498d82dd5056d126b639f649c314cdb3316c79ab077
     disposition: specified
     fields:
       splat_rule:
@@ -3179,7 +3179,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 139; builtin/srd-5.2.1/spell/healing_word.md
   dnd2024:spells/heroism:
-    source_sha256: 0b05a28d552b1e7fb39095efeebccd1e6ccf2cea1c5d565dc643d26a30291749
+    source_sha256: 32fec7be874660c18c7d98554510527f4e5987c2ae9e854ec232d3ca683a7086
     disposition: specified
     fields:
       splat_rule:
@@ -3243,7 +3243,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 140; builtin/srd-5.2.1/spell/heroism.md
   dnd2024:spells/hold_person:
-    source_sha256: 3497f3158a6b7f41f8d7bddbdb07154345f0a62ba1e615041a7d8dc365068d54
+    source_sha256: 17b5a9e936ec13fbadc96453fc8083f02c04651ef079b6883e8eb364599c599d
     disposition: specified
     fields:
       splat_rule:
@@ -3311,7 +3311,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 141; builtin/srd-5.2.1/spell/hold_person.md
   dnd2024:spells/ice_knife:
-    source_sha256: fe57c1e9c31273a7184b988da5ce16cd971810b6e49667cd358650abe52a4d15
+    source_sha256: 18087d45e5bd26cd60c667d2333a9d4a5201d78c4122f7da349e9213ba78a3ff
     disposition: specified
     fields:
       splat_rule:
@@ -3399,7 +3399,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 141; builtin/srd-5.2.1/spell/ice_knife.md
   dnd2024:spells/imprisonment:
-    source_sha256: 45d3fa47ee5fd2106bb134e20680169b7f60346c7a9f6c00b79f3e596cb861a5
+    source_sha256: 6f1bc85d8c6aabc85278fa3080edbf8cf225ba3900469c2bca095e66c673728e
     disposition: specified
     fields:
       splat_rule:
@@ -3515,7 +3515,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 142; builtin/srd-5.2.1/spell/imprisonment.md
   dnd2024:spells/instant_summons:
-    source_sha256: a34155a70f294acd3c2488ffcc867dc301eada2ea393a7eb58d9653a77a4abf8
+    source_sha256: 448c2324bb0cf5dabbedc9bd6f2ca9b2b97f47e994af3d6a53eb26386ff38cc9
     disposition: specified
     fields:
       splat_rule:
@@ -3592,7 +3592,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 143; builtin/srd-5.2.1/spell/instant_summons.md
   dnd2024:spells/knock:
-    source_sha256: 59f6b2518bd2f0e5888e85d046cec42549b1fb81c05b65f0adda5e06b8445cc6
+    source_sha256: ba267dc5179e0e16f05e21215d976796c8df9dbf662de7f17f26f4238da1841f
     disposition: specified
     fields:
       splat_rule:
@@ -3652,7 +3652,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 143, 144; builtin/srd-5.2.1/spell/knock.md
   dnd2024:spells/light:
-    source_sha256: 7a47e6a49d014df4dfca1f40ede53f7cff0f2ccce871aa7c34c2d65cdcfa3221
+    source_sha256: 7f8371beaf43d6eca3d920e1c59f53bb670c41cdc2e60c004a81f8ce6af535a7
     disposition: specified
     fields:
       splat_rule:
@@ -3711,7 +3711,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 144; builtin/srd-5.2.1/spell/light.md
   dnd2024:spells/locate_object:
-    source_sha256: 7cc46b35688425d3b543b856d21e6a649d5afb561c0b15b58b298c5b1e9214fd
+    source_sha256: 051c039caa3f0df02fed33d7deeeb80a5bd661bfbbb83eb5750d4ae90c7bc2db
     disposition: specified
     fields:
       splat_rule:
@@ -3772,7 +3772,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 145; builtin/srd-5.2.1/spell/locate_object.md
   dnd2024:spells/magic_circle:
-    source_sha256: e88da3ccbd958250addd9afd897602b02831210bea0ce890020df9dfc9137379
+    source_sha256: 4f65517fdc2082b1034d1e0c79fc6204998e2c46d9b903e89040e052cf1704fc
     disposition: specified
     fields:
       splat_rule:
@@ -3862,7 +3862,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 145, 146; builtin/srd-5.2.1/spell/magic_circle.md
   dnd2024:spells/magic_weapon:
-    source_sha256: bfb823a8384f71ecce10ecc86275ac946526abf528c0945703187a537527f6c0
+    source_sha256: 0b8755ce053bc11f7b14e74f95dac12e38638ed9ee1128f807a035581b7ec992
     disposition: specified
     fields:
       splat_rule:
@@ -3928,7 +3928,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 146, 147; builtin/srd-5.2.1/spell/magic_weapon.md
   dnd2024:spells/mass_heal:
-    source_sha256: 6548dc91b8bc1437a183bab6d9b796d4188ab6c62e8e42be2f1c01aedf16b666
+    source_sha256: 49ff682ab5a00137b3bdc94101fc0b6cdf933ea4bc4ba4887e91557fe3391121
     disposition: specified
     fields:
       splat_rule:
@@ -3987,7 +3987,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 147; builtin/srd-5.2.1/spell/mass_heal.md
   dnd2024:spells/meld_into_stone:
-    source_sha256: 46d7aeb89a5a9ecc1fbca5da2e46359c32e5b41e24ff9aa0c76a70dc4a8ee52c
+    source_sha256: ec46e599e71e1fc2018987fd295c6a07c36aa9985c29c465caa2f3e1e2bc2378
     disposition: specified
     fields:
       splat_rule:
@@ -4075,7 +4075,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 148; builtin/srd-5.2.1/spell/meld_into_stone.md
   dnd2024:spells/mind_blank:
-    source_sha256: ef4564b74f3a20c7a17f7c5e6f65768d77bc1d72ebdfe3d238aa878b27ddff89
+    source_sha256: a743d688229b079bd5bc9246224dd3954b0351e22cd4509681f8e6109e481eea
     disposition: specified
     fields:
       splat_rule:
@@ -4145,7 +4145,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 149; builtin/srd-5.2.1/spell/mind_blank.md
   dnd2024:spells/mirror_image:
-    source_sha256: 6e5bbeb60d05000dc7d0ea295edd5b3d856588a4e688a7e67626bb8b020a1689
+    source_sha256: 0aa46dcf5910e66c3ed07746873654a1f9d8c7f9104b7f76533201382c769c33
     disposition: specified
     fields:
       splat_rule:
@@ -4217,7 +4217,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 150; builtin/srd-5.2.1/spell/mirror_image.md
   dnd2024:spells/moonbeam:
-    source_sha256: 9d736e75da28760fdec2dea5773cdebc507a4f1ac0b9e489d133cfc6e2f140da
+    source_sha256: 7dc3218643188088ac57dc84d3a8977b4f5249a24c1cd3aa9d50ac64d3acb533
     disposition: specified
     fields:
       splat_rule:
@@ -4314,7 +4314,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 150, 151; builtin/srd-5.2.1/spell/moonbeam.md
   dnd2024:spells/passwall:
-    source_sha256: 96f9fde21ffaef77fd9af51177d671239c8445d1641b295196955864037c0282
+    source_sha256: 90d027435a02f57e747e47c2b3c73d3da979e65a468409313006945570b080e4
     disposition: specified
     fields:
       splat_rule:
@@ -4375,7 +4375,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 151; builtin/srd-5.2.1/spell/passwall.md
   dnd2024:spells/planar_ally:
-    source_sha256: 2c095ba2dd4bdb4226e6141da075d0036d5e5421b53cdd24be7aa759c10b21d4
+    source_sha256: 35879b8878509746123b2b002aafabcfcc5c1102ac28bcd1c1e4a7bc54b0e92e
     disposition: specified
     fields:
       splat_rule:
@@ -4475,7 +4475,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 152; builtin/srd-5.2.1/spell/planar_ally.md
   dnd2024:spells/poison_spray:
-    source_sha256: bfbbe6d614cf5bee4eb68485d5408ad76c02f027b895d2126eb8b1d27dd9bfdf
+    source_sha256: c39fd3e58041def30035e8acade60d75b01b4e216d94fbd30f092242209b7022
     disposition: specified
     fields:
       splat_rule:
@@ -4541,7 +4541,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 153; builtin/srd-5.2.1/spell/poison_spray.md
   dnd2024:spells/power_word_stun:
-    source_sha256: a8f101c2692469742576cb5e571b07e6860b90079d7ce49a799a362284f43c96
+    source_sha256: 2869defff2810b5604028d5676eca62c96e21b412fd09270241f94bffad748d7
     disposition: specified
     fields:
       splat_rule:
@@ -4605,7 +4605,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 154; builtin/srd-5.2.1/spell/power_word_stun.md
   dnd2024:spells/prismatic_wall:
-    source_sha256: bcfba0fd958f4110678220061b87f71f4fb533b95edf4c52182a6ae0bd2bcb38
+    source_sha256: 9505efc5fb94c617ba37ac0ed2a1cfd43847db5448f74aaadc02c048f7b8addd
     disposition: specified
     fields:
       splat_rule:
@@ -4875,7 +4875,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 155; builtin/srd-5.2.1/spell/prismatic_wall.md
   dnd2024:spells/project_image:
-    source_sha256: 25c0ec22e80de025c0eec00efb5a819660a456b5e8951890b289e395ee3674a3
+    source_sha256: 8b6171a4e08278b2f766869ac15c10659052f8a09a5a2bc5139265c58669aef8
     disposition: specified
     fields:
       splat_rule:
@@ -4954,7 +4954,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 156, 157; builtin/srd-5.2.1/spell/project_image.md
   dnd2024:spells/purify_food_and_drink:
-    source_sha256: 1034ce5283c0ac92c4993f703b46c2713293d2dfe98ee8270bbd96e02baa5b59
+    source_sha256: 851025b8be76a7c21ab58cc35015f591be9c5e71bb0ee82c48e309310dfbc776
     disposition: specified
     fields:
       splat_rule:
@@ -5009,7 +5009,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 157; builtin/srd-5.2.1/spell/purify_food_and_drink.md
   dnd2024:spells/ray_of_sickness:
-    source_sha256: e1c1d76aa564117d0c72a3950588d32409cbd8c89b74df30e6cc780f80609d7a
+    source_sha256: f6415f544b0e3a0571f13938f18a0eab1428b7f37cd4cad894a86d90fed675f9
     disposition: specified
     fields:
       splat_rule:
@@ -5079,7 +5079,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 158; builtin/srd-5.2.1/spell/ray_of_sickness.md
   dnd2024:spells/resilient_sphere:
-    source_sha256: 6015a45f48ab931bebd36c6490b89ee2c8025b808f3dabe8acb22d213ccced4b
+    source_sha256: cc60e6787d3af2adde56900ba786fd4e29b1943073bba4178bcc027561267554
     disposition: specified
     fields:
       splat_rule:
@@ -5168,7 +5168,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 158; builtin/srd-5.2.1/spell/resilient_sphere.md
   dnd2024:spells/revivify:
-    source_sha256: 7cebd4afc9d94041d7a2279c4da3e78feac48b28307de33254f84acb315c468f
+    source_sha256: 0479116fc0865045a55ecd6ab922deb72f9761793981cbdbc5950f9d94dea873
     disposition: specified
     fields:
       splat_rule:
@@ -5222,7 +5222,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 159; builtin/srd-5.2.1/spell/revivify.md
   dnd2024:spells/scorching_ray:
-    source_sha256: 3f94119b8b98b9ae60d1d433bf6addf602728d3b1479f7be49f75b3250d65245
+    source_sha256: b8719b3e927d18b81ae2a48a42000f80363d6d8dec7772dfbbd87046bd887bdb
     disposition: specified
     fields:
       splat_rule:
@@ -5283,7 +5283,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 159; builtin/srd-5.2.1/spell/scorching_ray.md
   dnd2024:spells/see_invisibility:
-    source_sha256: f5e86a1eb9ed877c0c6055ed193c47c662e82dba78ba209eca3cbe48df06462e
+    source_sha256: 81e412f133e749693de15673b6962ed82e3e72ede38c04b785aff137f6f9aaf1
     disposition: specified
     fields:
       splat_rule:
@@ -5335,7 +5335,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 160; builtin/srd-5.2.1/spell/see_invisibility.md
   dnd2024:spells/shapechange:
-    source_sha256: 4f3eca3d40da883dfff7edec19f7bc329df531a5543d24b2577505a8ff8e70b6
+    source_sha256: 8e10ec26b65f35961a8111ae63a085b98d22bd75b963adaa710dc367f8f3bea1
     disposition: specified
     fields:
       splat_rule:
@@ -5426,7 +5426,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 161; builtin/srd-5.2.1/spell/shapechange.md
   dnd2024:spells/shillelagh:
-    source_sha256: fccce2e59bd08456d63ea77e6944f50ad7c12f0eee0229f88e9f54dace906237
+    source_sha256: 4144ab025390e182bd4484435f524fbf6b05a84f73b766eb9c69a1f4b8db44c7
     disposition: specified
     fields:
       splat_rule:
@@ -5514,7 +5514,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 162; builtin/srd-5.2.1/spell/shillelagh.md
   dnd2024:spells/silent_image:
-    source_sha256: a51399e2cfe2aa6781227af94991acc59fed0dd5c9154163d29ea72cb4241186
+    source_sha256: fef492337532c52b65110c9ae15f37ec67229e6c8baabc3453d9f39104008cdd
     disposition: specified
     fields:
       splat_rule:
@@ -5587,7 +5587,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 162; builtin/srd-5.2.1/spell/silent_image.md
   dnd2024:spells/slow:
-    source_sha256: 7bcb9b9cdcc34d92d33c33d70c8522dd7c84d37fe46aab9bf76ae086d1f70c97
+    source_sha256: 48edc2e0e8148ffca29fb0f8ec81b87c2c2f04cdcd76f9d8f3e2ca03a98b858a
     disposition: specified
     fields:
       splat_rule:
@@ -5674,7 +5674,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 163; builtin/srd-5.2.1/spell/slow.md
   dnd2024:spells/speak_with_dead:
-    source_sha256: e77a8f875292f29fc86136e2e1e5c67d615eec7da4dea89ffaab2ed598905ca6
+    source_sha256: a8274b2cd71a5b97a06654ffd9d384e4f7e870aebd541d9e6d369e90fac1a70e
     disposition: specified
     fields:
       splat_rule:
@@ -5744,7 +5744,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 164; builtin/srd-5.2.1/spell/speak_with_dead.md
   dnd2024:spells/spirit_guardians:
-    source_sha256: 42108bb9d7d84e063a5d0ed051803f6548207a2138baa6936262ffe62b737b94
+    source_sha256: b8d76d0e2e210d761eb1ffcea9fb15e4f0f20b60d8954721e219e04b2ac767b3
     disposition: specified
     fields:
       splat_rule:
@@ -5843,7 +5843,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 164, 165; builtin/srd-5.2.1/spell/spirit_guardians.md
   dnd2024:spells/stone_shape:
-    source_sha256: 6981a4fe1a0ed63f081b97b0f4a31bdf7adec3aa23b4cd8f529417ca7f53ebb3
+    source_sha256: f1e159c41a359fbad51ad044fca487e5ad15902ebce7713be9e623b2b63261a2
     disposition: specified
     fields:
       splat_rule:
@@ -5900,7 +5900,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 165; builtin/srd-5.2.1/spell/stone_shape.md
   dnd2024:spells/summon_dragon:
-    source_sha256: a8c8f4b7bc3f40c5a3c82d57d15ba985b0265b72e10e609dd3c1e8ea4e81fdb0
+    source_sha256: 096e7e4c5e60086dab929b7580f7fbc763e79129345a88b86340892f723e96e5
     disposition: specified
     fields:
       splat_rule:
@@ -6094,7 +6094,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 166; builtin/srd-5.2.1/spell/summon_dragon.md
   dnd2024:spells/telekinesis:
-    source_sha256: 722d91d22500446dc0695678b398e2b3ec9e154ae05478c1d28a864e987c6a77
+    source_sha256: cbe953373edc0d1eedb01c78cb31ed5c337ba9d28caf47efb4234478f86312ab
     disposition: specified
     fields:
       splat_rule:
@@ -6193,7 +6193,7 @@ definitions:
     - SRD 5.2.1 pp. 167, 168; builtin/srd-5.2.1/spell/telekinesis.md
     - SRD 5.2.1 p. 168; builtin/srd-5.2.1/source.pdf; builtin/srd-5.2.1/source.txt lines 10694–10703
   dnd2024:spells/thaumaturgy:
-    source_sha256: 2a8a8b0a9777fd3be26e9e63ff7c90ada3981bb0b3b87c914716ff5d1d1c7838
+    source_sha256: 9fc0637bf36ca1c9999634667f35b3668f4cb42ff6ada93d620fbb7ab8f7bc7a
     disposition: specified
     fields:
       splat_rule:
@@ -6277,7 +6277,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 169; builtin/srd-5.2.1/spell/thaumaturgy.md
   dnd2024:spells/tongues:
-    source_sha256: 16727e975fc6b22d119b7a062e08c576eed8e6a5956a5fb95fa43191a670d19f
+    source_sha256: 107b388ae3086aba7642504278156a81672f9baf912984076905c46cbb502243
     disposition: specified
     fields:
       splat_rule:
@@ -6333,7 +6333,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 169, 170; builtin/srd-5.2.1/spell/tongues.md
   dnd2024:spells/true_resurrection:
-    source_sha256: aa8abfe919d75e56f73e86c9ba18c70f82c7af570132fd11a13931e030a64cb1
+    source_sha256: a068ae2fec5cb2f6133385a07ef71c3969f5433bd7187717a520ab93479b4d29
     disposition: specified
     fields:
       splat_rule:
@@ -6400,7 +6400,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 170, 171; builtin/srd-5.2.1/spell/true_resurrection.md
   dnd2024:spells/unseen_servant:
-    source_sha256: 121379ae02b8427967554d1c50b048a71b516a83557e67bb9d3df2dd90398a09
+    source_sha256: 9c7c7077ccc51b33e5d910d8938d16b000fb0560c60420c04bff2a630a09cd6b
     disposition: specified
     fields:
       splat_rule:
@@ -6483,7 +6483,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 171; builtin/srd-5.2.1/spell/unseen_servant.md
   dnd2024:spells/wall_of_fire:
-    source_sha256: 937417e0974ae9bab59fbe1fb21cdfd79af1520a84082f823b4c48d3555201b5
+    source_sha256: b1f63211331d6c7e913d7a314b90d6b34f2c63822bd81d0a176669b66b86b5e9
     disposition: specified
     fields:
       splat_rule:
@@ -6598,7 +6598,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 172; builtin/srd-5.2.1/spell/wall_of_fire.md
   dnd2024:spells/wall_of_thorns:
-    source_sha256: 3aa6c281ae8364f72d8749d35ff34a57fab44774cb3f9a145b6452d9446ec062
+    source_sha256: b6496bfabe560ddc1f561b9d1ca42ab7c1f51b0231ffe0210fbdf6ff235980f8
     disposition: specified
     fields:
       splat_rule:
@@ -6710,7 +6710,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 173; builtin/srd-5.2.1/spell/wall_of_thorns.md
   dnd2024:spells/web:
-    source_sha256: 3b47a2b967a12256d9f572a538bd0801f070c7632ac7a147693d8a1c8d27a7e4
+    source_sha256: 9e499609879ba60265b8e2b4967a70705e89cabbfe8c333e8469988e3f4b1846
     disposition: specified
     fields:
       splat_rule:
@@ -6813,7 +6813,7 @@ definitions:
     citations:
     - SRD 5.2.1 pp. 174; builtin/srd-5.2.1/spell/web.md
   dnd2024:spells/wish:
-    source_sha256: 6d64e2720553ec02ae4c2b97cc37a53f31f2f32dc21206087d33b7c4889b5445
+    source_sha256: 85bd2031fbac7076dd17a4732d6afd36b41b0164c75bfc0f4266f73280f8dfef
     disposition: specified
     fields:
       splat_rule:

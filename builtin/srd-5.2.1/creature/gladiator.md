@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "22c3f426-9bca-5a6f-a16c-b404d9d68eed"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/gladiator"
 splat_name: "Gladiator"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [289], "executable": false}
+splat_pages:
+- 289
 ---
 
 # Gladiator
@@ -37,3 +38,13 @@ Shield Bash. Strength Saving Throw: DC 15, one creature within 5 feet that the g
 Parry. Trigger: The gladiator is hit by a melee attack roll while holding a weapon. Response: The gladiator adds 3 to its AC against that attack, possibly causing it to miss.
 
 Original layout: [[../pages/289|page 289]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

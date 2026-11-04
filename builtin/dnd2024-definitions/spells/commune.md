@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: e417ecb8-8600-5893-a71a-34610f59657a
 splat_kind: spell
 splat_key: dnd2024:spells/commune
 splat_name: Commune
-splat_origin:
-  key: dnd2024:reference/spell/commune
+splat_origin: dnd2024:reference/spell/commune
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 116
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 116, https://www.dndbeyond.com/srd
 ---
 
 # Commune
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 5 |
+| School | Divination |
+| Classes | Cleric |
+| Casting Time | 1 minute or Ritual |
+| Range |  |
+| Components | V, S, M (incense) |
+| Duration | 1 minute |
+
 
 ## Source text
 
@@ -32,37 +43,11 @@ If you cast the spell more than once before finishing a Long Rest, there is a cu
 
 Original layout: [[../../srd-5.2.1/pages/116|page 116]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 5 ` |
-| ` school ` | ` divination ` |
-| ` classes ` | ` ["cleric"] ` |
-| ` components ` | ` ["verbal", "somatic", "material"] ` |
-| ` concentration ` | ` false ` |
-| ` duration ` | ` 1 minute ` |
-| ` casting_time ` | ` 1 minute or Ritual ` |
-| ` ritual ` | ` true ` |
 
-### Range
 
-<!-- splat:values path=splat_spell/range -->
 
-| Field | Value |
-| --- | --- |
-| ` mode ` | ` self ` |
-
-### Material
-
-<!-- splat:values path=splat_spell/material -->
-
-| Field | Value |
-| --- | --- |
-| ` description ` | ` incense ` |
-| ` consumed ` | ` false ` |
 
 ## Rule
 
@@ -122,3 +107,14 @@ maximum:
   value: 1
   unit: minute
 ```
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_spell_extras -->
+> 
+> ```yaml
+> material:
+>   consumed: false
+> range:
+>   mode: self
+> ```
+

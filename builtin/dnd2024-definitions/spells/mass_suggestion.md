@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 584df967-6461-5764-a029-9a90b1989351
 splat_kind: spell
 splat_key: dnd2024:spells/mass_suggestion
 splat_name: Mass Suggestion
-splat_origin:
-  key: dnd2024:reference/spell/mass_suggestion
+splat_origin: dnd2024:reference/spell/mass_suggestion
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 148
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 148, https://www.dndbeyond.com/srd
 ---
 
 # Mass Suggestion
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 6 |
+| School | Enchantment |
+| Classes | Bard, Sorcerer, Wizard |
+| Casting Time | Action |
+| Range | 60 feet |
+| Components | V, M (a snake’s tongue) |
+| Duration | 24 hours |
+
 
 ## Source text
 
@@ -32,37 +43,11 @@ Using a Higher-Level Spell Slot. The duration is longer with a spell slot of lev
 
 Original layout: [[../../srd-5.2.1/pages/148|page 148]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 6 ` |
-| ` school ` | ` enchantment ` |
-| ` classes ` | ` ["bard", "sorcerer", "wizard"] ` |
-| ` components ` | ` ["verbal", "material"] ` |
-| ` concentration ` | ` false ` |
-| ` duration ` | ` 24 hours ` |
-| ` casting_time ` | ` Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
 
-<!-- splat:values path=splat_spell/range -->
 
-| Field | Value |
-| --- | --- |
-| ` feet ` | ` 60 ` |
-
-### Material
-
-<!-- splat:values path=splat_spell/material -->
-
-| Field | Value |
-| --- | --- |
-| ` description ` | ` a snake’s tongue ` |
-| ` consumed ` | ` false ` |
 
 ## Rule
 
@@ -139,3 +124,12 @@ success:
 '9':
   days: 366
 ```
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_spell_extras -->
+> 
+> ```yaml
+> material:
+>   consumed: false
+> ```
+

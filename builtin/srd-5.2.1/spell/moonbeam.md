@@ -1,10 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "4abcbf0c-8667-5fea-bf8c-ac7fe3daba5b"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/moonbeam"
 splat_name: "Moonbeam"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [150, 151], "executable": false}
+splat_pages:
+- 150
+- 151
 ---
 
 # Moonbeam
@@ -26,3 +28,13 @@ When the Cylinder appears, each creature in it makes a Constitution saving throw
 Using a Higher-Level Spell Slot. The damage increases by 1d10 for each spell slot level above 2.
 
 Original layout: [[../pages/150|page 150]], [[../pages/151|page 151]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

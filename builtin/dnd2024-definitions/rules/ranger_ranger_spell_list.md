@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 9ff830e7-389d-50c9-a6ba-f1f356e041da
 splat_kind: rule
 splat_key: dnd2024:rules/ranger_ranger_spell_list
 splat_name: Ranger Spell List
-splat_origin:
-  key: dnd2024:reference/pages/060
+splat_origin: dnd2024:reference/pages/060
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 60
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 60, https://www.dndbeyond.com/srd
 ---
 
 # Ranger Spell List

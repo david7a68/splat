@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: d0845196-22dd-5389-8fdd-9aefe4307c38
 splat_kind: rule
 splat_key: dnd2024:rules/warlock_warlock_spell_list
 splat_name: Warlock Spell List
-splat_origin:
-  key: dnd2024:reference/pages/074
+splat_origin: dnd2024:reference/pages/074
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 74, 75, 76
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 74, 75, 76, https://www.dndbeyond.com/srd
 ---
 
 # Warlock Spell List

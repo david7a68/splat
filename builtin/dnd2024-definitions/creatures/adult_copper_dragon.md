@@ -1,35 +1,62 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 6a5f535d-ceda-554a-b6af-4db9fc9e48e1
 splat_kind: creature
 splat_key: dnd2024:creatures/adult_copper_dragon
 splat_name: Adult Copper Dragon
-splat_origin:
-  key: dnd2024:reference/creature/adult_copper_dragon
+splat_origin: dnd2024:reference/creature/adult_copper_dragon
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 276, 277
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 276, 277, https://www.dndbeyond.com/srd
 ---
 
 # Adult Copper Dragon
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Huge |
+| Type | Dragon (Metallic) |
+| Alignment | Chaotic Good |
+| Armor Class | 18 |
+| Hit Points | 184 (16d12 + 80) |
+| Initiative | +11 (21) |
+| Speed | 40 ft., Climb 40 ft., Fly 80 ft. |
+| Challenge | 14 (XP 11,500, or 13,000 in lair; PB +5) |
+| Skills | Deception +9, Perception +12, Stealth +6 |
+| Senses | Blindsight 60 ft., Darkvision 120 ft.; Passive Perception 22 |
+| Languages | Common, Draconic |
+| Immunities | Acid |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 23 | +6 | +6 |
+| Dex | 12 | +1 | +6 |
+| Con | 21 | +5 | +5 |
+| Int | 18 | +4 | +4 |
+| Wis | 15 | +2 | +7 |
+| Cha | 18 | +4 | +4 |
+
 
 ## Source text
 
 <!-- SRD page 276 -->
 
-Huge Dragon (Metallic), Chaotic Good\
-AC 18 Initiative +11 (21)\
-HP 184 (16d12 + 80)\
-Speed 40 ft., Climb 40 ft., Fly 80 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 23 +6 +6 Dex 12 +1 +6 Con 21 +5 +5\
-Int 18 +4 +4 Wis 15 +2 +7 Cha 18 +4 +4\
-Skills Deception +9, Perception +12, Stealth +6\
-Immunities Acid\
-Senses Blindsight 60 ft., Darkvision 120 ft.; Passive Perception 22\
-Languages Common, Draconic\
-CR 14 (XP 11,500, or 13,000 in lair; PB +5)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Huge Dragon (Metallic), Chaotic Good\
+> AC 18 Initiative +11 (21)\
+> HP 184 (16d12 + 80)\
+> Speed 40 ft., Climb 40 ft., Fly 80 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 23 +6 +6 Dex 12 +1 +6 Con 21 +5 +5\
+> Int 18 +4 +4 Wis 15 +2 +7 Cha 18 +4 +4\
+> Skills Deception +9, Perception +12, Stealth +6\
+> Immunities Acid\
+> Senses Blindsight 60 ft., Darkvision 120 ft.; Passive Perception 22\
+> Languages Common, Draconic\
+> CR 14 (XP 11,500, or 13,000 in lair; PB +5)
+
 
 ### Traits
 
@@ -65,49 +92,11 @@ Pounce. The dragon moves up to half its Speed, and it makes one Rend attack.
 
 Original layout: [[../../srd-5.2.1/pages/276|page 276]], [[../../srd-5.2.1/pages/277|page 277]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` huge ` |
-| ` type ` | ` dragon ` |
-| ` alignment ` | ` Chaotic Good ` |
-| ` tags_text ` | ` (Metallic) ` |
-| ` movement_text ` | ` 40 ft., Climb 40 ft., Fly 80 ft. ` |
-| ` skills_text ` | ` Deception +9, Perception +12, Stealth +6 ` |
-| ` immunities_text ` | ` Acid ` |
-| ` senses_text ` | ` Blindsight 60 ft., Darkvision 120 ft.; Passive Perception 22 ` |
-| ` languages_text ` | ` Common, Draconic ` |
-| ` cr_text ` | ` 14 (XP 11,500, or 13,000 in lair; PB +5) ` |
-| ` hit_points_text ` | ` 184 (16d12 + 80) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 23 ` | ` 6 ` |
-| ` Dexterity ` | ` 12 ` | ` 6 ` |
-| ` Constitution ` | ` 21 ` | ` 5 ` |
-| ` Intelligence ` | ` 18 ` | ` 4 ` |
-| ` Wisdom ` | ` 15 ` | ` 7 ` |
-| ` Charisma ` | ` 18 ` | ` 4 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 18 ` |  |
-| ` max_hp ` | ` 184 ` |  |
-| ` initiative ` | ` 11 ` |  |
-| ` speed ` | ` 40 ` | ` ft ` |
-| ` climb_speed ` | ` 40 ` | ` ft ` |
-| ` fly_speed ` | ` 80 ` | ` ft ` |
 
 ## Health
 
@@ -537,3 +526,16 @@ other_components: spell_definition_unless_waived
 | ` provider ` | ` caller ` |
 | ` required_facts ` | ` ["distance", "area_membership", "visibility", "occupancy", "movement_path"] ` |
 | ` validate_against_typed_constraints ` | ` true ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_stats_extras -->
+> 
+> ```yaml
+> fly_speed:
+>   unit: ft
+>   value: 80
+> climb_speed:
+>   unit: ft
+>   value: 40
+> ```
+

@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 7cf2b7d8-d092-5ede-adbc-77b4ab2cacff
 splat_kind: rule
 splat_key: dnd2024:class_features/sorcerer_level_5_sorcerous_restoration
 splat_name: 'Level 5: Sorcerous Restoration'
-splat_origin:
-  key: dnd2024:reference/pages/066
+splat_origin: dnd2024:reference/pages/066
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 66
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 66, https://www.dndbeyond.com/srd
 ---
 
 # Level 5: Sorcerous Restoration

@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "9181deac-db4f-5883-b64b-91dfb47a2026"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/adult_black_dragon"
 splat_name: "Adult Black Dragon"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [264], "executable": false}
+splat_pages:
+- 264
 ---
 
 # Adult Black Dragon
@@ -54,3 +55,13 @@ Frightful Presence. The dragon uses Spellcasting to cast Fear. The dragon can’
 Pounce. The dragon moves up to half its Speed, and it makes one Rend attack.
 
 Original layout: [[../pages/264|page 264]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

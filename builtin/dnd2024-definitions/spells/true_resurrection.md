@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: c193e0c7-d054-5703-8445-d8aec30d9827
 splat_kind: spell
 splat_key: dnd2024:spells/true_resurrection
 splat_name: True Resurrection
-splat_origin:
-  key: dnd2024:reference/spell/true_resurrection
+splat_origin: dnd2024:reference/spell/true_resurrection
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 170, 171
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 170, 171, https://www.dndbeyond.com/srd
 ---
 
 # True Resurrection
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 9 |
+| School | Necromancy |
+| Classes | Cleric, Druid |
+| Casting Time | 1 hour |
+| Range |  |
+| Components | V, S, M (diamonds worth 25,000+ GP, which the spell consumes) |
+| Duration | Instantaneous |
+
 
 ## Source text
 
@@ -32,37 +43,11 @@ The spell can provide a new body if the original no longer exists, in which case
 
 Original layout: [[../../srd-5.2.1/pages/170|page 170]], [[../../srd-5.2.1/pages/171|page 171]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 9 ` |
-| ` school ` | ` necromancy ` |
-| ` classes ` | ` ["cleric", "druid"] ` |
-| ` components ` | ` ["verbal", "somatic", "material"] ` |
-| ` concentration ` | ` false ` |
-| ` duration ` | ` Instantaneous ` |
-| ` casting_time ` | ` 1 hour ` |
-| ` ritual ` | ` false ` |
 
-### Range
 
-<!-- splat:values path=splat_spell/range -->
 
-| Field | Value |
-| --- | --- |
-| ` mode ` | ` touch ` |
-
-### Material
-
-<!-- splat:values path=splat_spell/material -->
-
-| Field | Value |
-| --- | --- |
-| ` description ` | ` diamonds worth 25,000+ GP, which the spell consumes ` |
-| ` consumed ` | ` true ` |
 
 ## Rule
 
@@ -109,3 +94,14 @@ Original layout: [[../../srd-5.2.1/pages/170|page 170]], [[../../srd-5.2.1/pages
 | ` speak_name_required ` | ` true ` |
 | ` appearance_space ` | ` caster_chosen_unoccupied ` |
 | ` within_caster_feet ` | ` 10 ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_spell_extras -->
+> 
+> ```yaml
+> material:
+>   consumed: true
+> range:
+>   mode: touch
+> ```
+

@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: f9a9d4eb-f7e1-58a8-bc34-0dbfcd22c233
 splat_kind: spell
 splat_key: dnd2024:spells/spiritual_weapon
 splat_name: Spiritual Weapon
-splat_origin:
-  key: dnd2024:reference/spell/spiritual_weapon
+splat_origin: dnd2024:reference/spell/spiritual_weapon
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 165
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 165, https://www.dndbeyond.com/srd
 ---
 
 # Spiritual Weapon
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 2 |
+| School | Evocation |
+| Classes | Cleric |
+| Casting Time | Bonus Action |
+| Range | 60 feet |
+| Components | V, S |
+| Duration | Concentration, up to 1 minute |
+
 
 ## Source text
 
@@ -32,28 +43,9 @@ Using a Higher-Level Spell Slot. The damage increases by 1d8 for every slot leve
 
 Original layout: [[../../srd-5.2.1/pages/165|page 165]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 2 ` |
-| ` school ` | ` evocation ` |
-| ` classes ` | ` ["cleric"] ` |
-| ` components ` | ` ["verbal", "somatic"] ` |
-| ` concentration ` | ` true ` |
-| ` duration ` | ` Concentration, up to 1 minute ` |
-| ` casting_time ` | ` Bonus Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
-
-<!-- splat:values path=splat_spell/range -->
-
-| Field | Value |
-| --- | --- |
-| ` feet ` | ` 60 ` |
 
 ## Rule
 

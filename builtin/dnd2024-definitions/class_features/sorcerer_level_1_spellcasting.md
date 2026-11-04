@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 8f1b19b2-4af8-5f3c-88ea-c7f2fec52817
 splat_kind: rule
 splat_key: dnd2024:class_features/sorcerer_level_1_spellcasting
 splat_name: 'Level 1: Spellcasting'
-splat_origin:
-  key: dnd2024:reference/pages/064
+splat_origin: dnd2024:reference/pages/064
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 64, 65
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 64, 65, https://www.dndbeyond.com/srd
 ---
 
 # Level 1: Spellcasting

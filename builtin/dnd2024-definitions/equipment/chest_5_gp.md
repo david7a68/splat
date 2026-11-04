@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 8896c1c7-da50-51bf-968b-824a1f2c935e
 splat_kind: item
 splat_key: dnd2024:equipment/chest_5_gp
 splat_name: Chest (5 GP)
-splat_origin:
-  key: dnd2024:reference/pages/097
+splat_origin: dnd2024:reference/pages/097
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 97
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 97, https://www.dndbeyond.com/srd
 ---
 
 # Chest (5 GP)
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Adventuring Gear |
+| Rarity |  |
+| Attunement | No |
+
 
 ## Source text
 
@@ -20,39 +27,13 @@ splat_sources:
 
 A Chest holds up to 12 cubic feet of contents.
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` adventuring_gear ` |
 
-### Equipment
 
-<!-- splat:values path=splat_item/equipment -->
 
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` none ` |
 
-### Price
 
-<!-- splat:values path=splat_item/price -->
-
-| Field | Value |
-| --- | --- |
-| ` value ` | ` 5 ` |
-| ` unit ` | ` gp ` |
-
-### Mass
-
-<!-- splat:values path=splat_item/mass -->
-
-| Field | Value |
-| --- | --- |
-| ` value ` | ` 25.0 ` |
-| ` unit ` | ` lb ` |
 
 ## Rule
 
@@ -81,3 +62,16 @@ A Chest holds up to 12 cubic feet of contents.
 | --- | --- |
 | ` value ` | ` 25.0 ` |
 | ` unit ` | ` lb ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_item_extras -->
+> 
+> ```yaml
+> price:
+>   unit: gp
+>   value: 5
+> mass:
+>   unit: lb
+>   value: 25.0
+> ```
+

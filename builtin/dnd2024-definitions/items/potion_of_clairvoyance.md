@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: c56f82f6-583d-559f-a482-c9b586cd3638
 splat_kind: item
 splat_key: dnd2024:items/potion_of_clairvoyance
 splat_name: Potion of Clairvoyance
-splat_origin:
-  key: dnd2024:reference/magic_item/potion_of_clairvoyance
+splat_origin: dnd2024:reference/magic_item/potion_of_clairvoyance
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 235
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 235, https://www.dndbeyond.com/srd
 ---
 
 # Potion of Clairvoyance
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Potion |
+| Rarity | Rare |
+| Attunement | No |
+
 
 ## Source text
 
@@ -26,22 +33,9 @@ An eyeball bobs in this potion’s yellowish liquid but vanishes when the potion
 
 Original layout: [[../../srd-5.2.1/pages/235|page 235]].
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` potion ` |
-| ` rarity ` | ` rare ` |
 
-### Equipment
-
-<!-- splat:values path=splat_item/equipment -->
-
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` none ` |
 
 ## Rule
 

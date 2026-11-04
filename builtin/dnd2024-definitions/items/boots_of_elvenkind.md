@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: fa387b75-f756-59fe-81e1-37fa1384c3b6
 splat_kind: item
 splat_key: dnd2024:items/boots_of_elvenkind
 splat_name: Boots of Elvenkind
-splat_origin:
-  key: dnd2024:reference/magic_item/boots_of_elvenkind
+splat_origin: dnd2024:reference/magic_item/boots_of_elvenkind
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 213
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 213, https://www.dndbeyond.com/srd
 ---
 
 # Boots of Elvenkind
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Wondrous Item |
+| Rarity | Uncommon |
+| Attunement | No |
+
 
 ## Source text
 
@@ -24,22 +31,9 @@ While you wear these boots, your steps make no sound, regardless of the surface 
 
 Original layout: [[../../srd-5.2.1/pages/213|page 213]].
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` wondrous_item ` |
-| ` rarity ` | ` uncommon ` |
 
-### Equipment
-
-<!-- splat:values path=splat_item/equipment -->
-
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` none ` |
 
 ## Rule
 

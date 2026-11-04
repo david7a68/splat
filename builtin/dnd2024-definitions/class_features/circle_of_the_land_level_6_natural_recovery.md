@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 40d2509b-e855-5fb9-a1a6-26dd032d01a1
 splat_kind: rule
 splat_key: dnd2024:class_features/circle_of_the_land_level_6_natural_recovery
 splat_name: 'Level 6: Natural Recovery'
-splat_origin:
-  key: dnd2024:reference/pages/046
+splat_origin: dnd2024:reference/pages/046
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 46
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 46, https://www.dndbeyond.com/srd
 ---
 
 # Level 6: Natural Recovery

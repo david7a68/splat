@@ -1,35 +1,62 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: be1743d1-eb35-553a-8b6c-392e94eb3535
 splat_kind: creature
 splat_key: dnd2024:creatures/will_o_wisp
 splat_name: Will-o’-Wisp
-splat_origin:
-  key: dnd2024:reference/creature/will_o_wisp
+splat_origin: dnd2024:reference/creature/will_o_wisp
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 341, 342
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 341, 342, https://www.dndbeyond.com/srd
 ---
 
 # Will-o’-Wisp
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Tiny |
+| Type | Undead |
+| Alignment | Chaotic Evil |
+| Armor Class | 19 |
+| Hit Points | 27 (11d4) |
+| Initiative | +9 (19) |
+| Speed | 5 ft., Fly 50 ft. (hover) |
+| Challenge | 2 (XP 450; PB +2) |
+| Senses | Darkvision 120 ft.; Passive Perception 12 |
+| Languages | Common plus one other language |
+| Resistances | Acid, Bludgeoning, Cold, Fire, Necrotic, Piercing, Slashing |
+| Immunities | Lightning, Poison; Exhaustion, Grappled, Paralyzed, Petrified, Poisoned, Prone, Restrained, Unconscious |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 1 | -5 | -5 |
+| Dex | 28 | +9 | +9 |
+| Con | 10 | +0 | +0 |
+| Int | 13 | +1 | +1 |
+| Wis | 14 | +2 | +2 |
+| Cha | 11 | +0 | +0 |
+
 
 ## Source text
 
 <!-- SRD page 341 -->
 
-Tiny Undead, Chaotic Evil\
-AC 19 Initiative +9 (19)\
-HP 27 (11d4)\
-Speed 5 ft., Fly 50 ft. (hover)\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 1 −5 −5 Dex 28 +9 +9 Con 10 +0 +0\
-Int 13 +1 +1 Wis 14 +2 +2 Cha 11 +0 +0\
-Resistances Acid, Bludgeoning, Cold, Fire, Necrotic, Piercing, Slashing\
-Immunities Lightning, Poison; Exhaustion, Grappled, Paralyzed, Petrified, Poisoned, Prone, Restrained, Unconscious\
-Senses Darkvision 120 ft.; Passive Perception 12\
-Languages Common plus one other language\
-CR 2 (XP 450; PB +2)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Tiny Undead, Chaotic Evil\
+> AC 19 Initiative +9 (19)\
+> HP 27 (11d4)\
+> Speed 5 ft., Fly 50 ft. (hover)\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 1 −5 −5 Dex 28 +9 +9 Con 10 +0 +0\
+> Int 13 +1 +1 Wis 14 +2 +2 Cha 11 +0 +0\
+> Resistances Acid, Bludgeoning, Cold, Fire, Necrotic, Piercing, Slashing\
+> Immunities Lightning, Poison; Exhaustion, Grappled, Paralyzed, Petrified, Poisoned, Prone, Restrained, Unconscious\
+> Senses Darkvision 120 ft.; Passive Perception 12\
+> Languages Common plus one other language\
+> CR 2 (XP 450; PB +2)
+
 
 <!-- SRD page 342 -->
 
@@ -53,47 +80,11 @@ Vanish. The wisp and its light have the Invisible condition until the wisp’s C
 
 Original layout: [[../../srd-5.2.1/pages/341|page 341]], [[../../srd-5.2.1/pages/342|page 342]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` tiny ` |
-| ` type ` | ` undead ` |
-| ` alignment ` | ` Chaotic Evil ` |
-| ` movement_text ` | ` 5 ft., Fly 50 ft. (hover) ` |
-| ` resistances_text ` | ` Acid, Bludgeoning, Cold, Fire, Necrotic, Piercing, Slashing ` |
-| ` immunities_text ` | ` Lightning, Poison; Exhaustion, Grappled, Paralyzed, Petrified, Poisoned, Prone, Restrained, Unconscious ` |
-| ` senses_text ` | ` Darkvision 120 ft.; Passive Perception 12 ` |
-| ` languages_text ` | ` Common plus one other language ` |
-| ` cr_text ` | ` 2 (XP 450; PB +2) ` |
-| ` hit_points_text ` | ` 27 (11d4) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 1 ` | ` -5 ` |
-| ` Dexterity ` | ` 28 ` | ` 9 ` |
-| ` Constitution ` | ` 10 ` | ` 0 ` |
-| ` Intelligence ` | ` 13 ` | ` 1 ` |
-| ` Wisdom ` | ` 14 ` | ` 2 ` |
-| ` Charisma ` | ` 11 ` | ` 0 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 19 ` |  |
-| ` max_hp ` | ` 27 ` |  |
-| ` initiative ` | ` 9 ` |  |
-| ` speed ` | ` 5 ` | ` ft ` |
-| ` fly_speed ` | ` 50 ` | ` ft ` |
 
 ## Health
 
@@ -280,3 +271,13 @@ geometry:
 unlisted_success_branch: no_effect
 unlisted_duration: until_removed_by_applicable_rule
 ```
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_stats_extras -->
+> 
+> ```yaml
+> fly_speed:
+>   unit: ft
+>   value: 50
+> ```
+

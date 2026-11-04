@@ -1,10 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "30b3557e-1d95-5ad1-af39-593cc5bb9d6c"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/magic_item/ring_of_x_ray_vision"
 splat_name: "Ring of X-ray Vision"
-splat_reference: {"source": "SRD 5.2.1", "category": "magic_item", "pages": [239, 240], "executable": false}
+splat_pages:
+- 239
+- 240
 ---
 
 # Ring of X-ray Vision
@@ -20,3 +22,13 @@ While wearing this ring, you can take a Magic action to gain X-ray vision with a
 Whenever you use the ring again before taking a Long Rest, you must succeed on a DC 15 Constitution saving throw or gain 1 Exhaustion level.
 
 Original layout: [[../pages/239|page 239]], [[../pages/240|page 240]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: magic_item
+> executable: false
+> ```
+

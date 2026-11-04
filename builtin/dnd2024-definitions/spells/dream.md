@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 929037b2-6db0-5d5f-ba5f-685ca8d83dd9
 splat_kind: spell
 splat_key: dnd2024:spells/dream
 splat_name: Dream
-splat_origin:
-  key: dnd2024:reference/spell/dream
+splat_origin: dnd2024:reference/spell/dream
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 126
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 126, https://www.dndbeyond.com/srd
 ---
 
 # Dream
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 5 |
+| School | Illusion |
+| Classes | Bard, Warlock, Wizard |
+| Casting Time | 1 minute |
+| Range |  |
+| Components | V, S, M (a handful of sand) |
+| Duration | 8 hours |
+
 
 ## Source text
 
@@ -34,37 +45,11 @@ You can make the messenger terrifying to the target. If you do so, the messenger
 
 Original layout: [[../../srd-5.2.1/pages/126|page 126]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 5 ` |
-| ` school ` | ` illusion ` |
-| ` classes ` | ` ["bard", "warlock", "wizard"] ` |
-| ` components ` | ` ["verbal", "somatic", "material"] ` |
-| ` concentration ` | ` false ` |
-| ` duration ` | ` 8 hours ` |
-| ` casting_time ` | ` 1 minute ` |
-| ` ritual ` | ` false ` |
 
-### Range
 
-<!-- splat:values path=splat_spell/range -->
 
-| Field | Value |
-| --- | --- |
-| ` mode ` | ` special ` |
-
-### Material
-
-<!-- splat:values path=splat_spell/material -->
-
-| Field | Value |
-| --- | --- |
-| ` description ` | ` a handful of sand ` |
-| ` consumed ` | ` false ` |
 
 ## Rule
 
@@ -145,3 +130,14 @@ save_after_message:
   success:
     effect: none
 ```
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_spell_extras -->
+> 
+> ```yaml
+> material:
+>   consumed: false
+> range:
+>   mode: special
+> ```
+

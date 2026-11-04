@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: d1142589-53f6-57af-acbc-8959df188421
 splat_kind: item
 splat_key: dnd2024:items/staff_of_thunder_and_lightning
 splat_name: Staff of Thunder and Lightning
-splat_origin:
-  key: dnd2024:reference/magic_item/staff_of_thunder_and_lightning
+splat_origin: dnd2024:reference/magic_item/staff_of_thunder_and_lightning
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 247, 248
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 247, 248, https://www.dndbeyond.com/srd
 ---
 
 # Staff of Thunder and Lightning
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Staff |
+| Rarity | Very Rare |
+| Attunement | Yes |
+
 
 ## Source text
 
@@ -36,22 +43,9 @@ Thunderclap. You can take a Magic action to cause the staff to produce a thunder
 
 Original layout: [[../../srd-5.2.1/pages/247|page 247]], [[../../srd-5.2.1/pages/248|page 248]].
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` staff ` |
-| ` rarity ` | ` very_rare ` |
 
-### Equipment
-
-<!-- splat:values path=splat_item/equipment -->
-
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` required ` |
 
 ## Rule
 

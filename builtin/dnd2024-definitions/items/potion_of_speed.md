@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: dccf5ec1-52af-5ec6-8992-8da6062e975b
 splat_kind: item
 splat_key: dnd2024:items/potion_of_speed
 splat_name: Potion of Speed
-splat_origin:
-  key: dnd2024:reference/magic_item/potion_of_speed
+splat_origin: dnd2024:reference/magic_item/potion_of_speed
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 236
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 236, https://www.dndbeyond.com/srd
 ---
 
 # Potion of Speed
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Potion |
+| Rarity | Very Rare |
+| Attunement | No |
+
 
 ## Source text
 
@@ -26,22 +33,9 @@ This potion’s yellow fluid is streaked with black and swirls on its own.
 
 Original layout: [[../../srd-5.2.1/pages/236|page 236]].
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` potion ` |
-| ` rarity ` | ` very_rare ` |
 
-### Equipment
-
-<!-- splat:values path=splat_item/equipment -->
-
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` none ` |
 
 ## Rule
 

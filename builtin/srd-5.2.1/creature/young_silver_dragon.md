@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "6db4f78c-a2ee-5abf-94bd-045636725293"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/young_silver_dragon"
 splat_name: "Young Silver Dragon"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [324], "executable": false}
+splat_pages:
+- 324
 ---
 
 # Young Silver Dragon
@@ -35,3 +36,13 @@ Cold Breath (Recharge 5–6). Constitution Saving Throw: DC 17, each creature in
 Paralyzing Breath. Constitution Saving Throw: DC 17, each creature in a 30-foot Cone. First Failure: The target has the Incapacitated condition until the end of its next turn, when it repeats the save. Second Failure: The target has the Paralyzed condition, and it repeats the save at the end of each of its turns, ending the effect on itself on a success. After 1 minute, it succeeds automatically.
 
 Original layout: [[../pages/324|page 324]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

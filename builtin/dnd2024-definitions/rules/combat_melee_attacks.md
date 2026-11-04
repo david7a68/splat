@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 312d9860-b8b9-5e10-bb12-46abc16bcdc7
 splat_kind: rule
 splat_key: dnd2024:rules/combat_melee_attacks
 splat_name: Melee Attacks
-splat_origin:
-  key: dnd2024:reference/pages/015
+splat_origin: dnd2024:reference/pages/015
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 15
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 15, https://www.dndbeyond.com/srd
 ---
 
 # Melee Attacks

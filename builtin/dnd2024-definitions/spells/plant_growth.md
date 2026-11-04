@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 6f0a27ec-46de-51ee-952c-eac79c4f4d4b
 splat_kind: spell
 splat_key: dnd2024:spells/plant_growth
 splat_name: Plant Growth
-splat_origin:
-  key: dnd2024:reference/spell/plant_growth
+splat_origin: dnd2024:reference/spell/plant_growth
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 153
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 153, https://www.dndbeyond.com/srd
 ---
 
 # Plant Growth
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 3 |
+| School | Transmutation |
+| Classes | Bard, Druid, Ranger |
+| Casting Time | Action (Overgrowth) or 8 hours (Enrichment) |
+| Range | 150 feet |
+| Components | V, S |
+| Duration | Instantaneous |
+
 
 ## Source text
 
@@ -32,28 +43,9 @@ Enrichment. All plants in a half-mile radius centered on a point within range be
 
 Original layout: [[../../srd-5.2.1/pages/153|page 153]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 3 ` |
-| ` school ` | ` transmutation ` |
-| ` classes ` | ` ["bard", "druid", "ranger"] ` |
-| ` components ` | ` ["verbal", "somatic"] ` |
-| ` concentration ` | ` false ` |
-| ` duration ` | ` Instantaneous ` |
-| ` casting_time ` | ` Action (Overgrowth) or 8 hours (Enrichment) ` |
-| ` ritual ` | ` false ` |
 
-### Range
-
-<!-- splat:values path=splat_spell/range -->
-
-| Field | Value |
-| --- | --- |
-| ` feet ` | ` 150 ` |
 
 ## Rule
 

@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 47dc5eea-7370-5391-a655-11e86303c94d
 splat_kind: spell
 splat_key: dnd2024:spells/black_tentacles
 splat_name: Black Tentacles
-splat_origin:
-  key: dnd2024:reference/spell/black_tentacles
+splat_origin: dnd2024:reference/spell/black_tentacles
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 113
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 113, https://www.dndbeyond.com/srd
 ---
 
 # Black Tentacles
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 4 |
+| School | Conjuration |
+| Classes | Wizard |
+| Casting Time | Action |
+| Range | 90 feet |
+| Components | V, S, M (a tentacle) |
+| Duration | Concentration, up to 1 minute |
+
 
 ## Source text
 
@@ -32,37 +43,11 @@ A Restrained creature can take an action to make a Strength (Athletics) check ag
 
 Original layout: [[../../srd-5.2.1/pages/113|page 113]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 4 ` |
-| ` school ` | ` conjuration ` |
-| ` classes ` | ` ["wizard"] ` |
-| ` components ` | ` ["verbal", "somatic", "material"] ` |
-| ` concentration ` | ` true ` |
-| ` duration ` | ` Concentration, up to 1 minute ` |
-| ` casting_time ` | ` Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
 
-<!-- splat:values path=splat_spell/range -->
 
-| Field | Value |
-| --- | --- |
-| ` feet ` | ` 90 ` |
-
-### Material
-
-<!-- splat:values path=splat_spell/material -->
-
-| Field | Value |
-| --- | --- |
-| ` description ` | ` a tentacle ` |
-| ` consumed ` | ` false ` |
 
 ## Rule
 
@@ -135,3 +120,12 @@ dc:
   binding: save_dc
 success: end_restrained_on_self
 ```
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_spell_extras -->
+> 
+> ```yaml
+> material:
+>   consumed: false
+> ```
+

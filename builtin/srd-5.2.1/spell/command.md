@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "f271a406-4fda-5f6d-be03-acc41072edcd"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/command"
 splat_name: "Command"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [116], "executable": false}
+splat_pages:
+- 116
 ---
 
 # Command
@@ -32,3 +33,13 @@ Halt. On its turn, the target doesn’t move and takes no action or Bonus Action
 Using a Higher-Level Spell Slot. You can affect one additional creature for each spell slot level above 1.
 
 Original layout: [[../pages/116|page 116]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

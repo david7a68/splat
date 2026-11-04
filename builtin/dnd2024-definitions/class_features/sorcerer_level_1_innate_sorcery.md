@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 82874b69-d75c-52b7-8ba9-ee18236be272
 splat_kind: rule
 splat_key: dnd2024:class_features/sorcerer_level_1_innate_sorcery
 splat_name: 'Level 1: Innate Sorcery'
-splat_origin:
-  key: dnd2024:reference/pages/065
+splat_origin: dnd2024:reference/pages/065
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 65, 66
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 65, 66, https://www.dndbeyond.com/srd
 ---
 
 # Level 1: Innate Sorcery

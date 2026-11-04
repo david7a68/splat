@@ -1,34 +1,60 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 5a3c78f9-2858-53fa-970d-95bf9c8d5bcb
 splat_kind: creature
 splat_key: dnd2024:creatures/pirate
 splat_name: Pirate
-splat_origin:
-  key: dnd2024:reference/creature/pirate
+splat_origin: dnd2024:reference/creature/pirate
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 314
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 314, https://www.dndbeyond.com/srd
 ---
 
 # Pirate
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Medium or Small |
+| Type | Humanoid |
+| Alignment | Neutral |
+| Armor Class | 14 |
+| Hit Points | 33 (6d8 + 6) |
+| Initiative | +5 (15) |
+| Speed | 30 ft. |
+| Challenge | 1 (XP 200; PB +2) |
+| Senses | Passive Perception 11 |
+| Languages | Common plus one other language |
+| Gear | Daggers (6), Leather Armor |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 10 | +0 | +0 |
+| Dex | 16 | +3 | +5 |
+| Con | 12 | +1 | +1 |
+| Int | 8 | -1 | -1 |
+| Wis | 12 | +1 | +1 |
+| Cha | 14 | +2 | +4 |
+
 
 ## Source text
 
 <!-- SRD page 314 -->
 
 Medium or Small Humanoid, Neutral\
-AC 14  Initiative +5 (15)\
-HP 33 (6d8 + 6)\
-Speed 30 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 10 +0 +0 Dex 16 +3 +5 Con 12 +1 +1\
-Int 8 −1 −1 Wis 12 +1 +1 Cha 14 +2 +4\
-Gear Daggers (6), Leather Armor\
-Senses Passive Perception 11\
-Languages Common plus one other language\
-CR 1 (XP 200; PB +2)
+> [!quote]- Printed stat block (not read; edit the table above)
+> AC 14  Initiative +5 (15)\
+> HP 33 (6d8 + 6)\
+> Speed 30 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 10 +0 +0 Dex 16 +3 +5 Con 12 +1 +1\
+> Int 8 −1 −1 Wis 12 +1 +1 Cha 14 +2 +4\
+> Gear Daggers (6), Leather Armor\
+> Senses Passive Perception 11\
+> Languages Common plus one other language\
+> CR 1 (XP 200; PB +2)
+
 
 ### Actions
 
@@ -40,46 +66,11 @@ Enthralling Panache. Wisdom Saving Throw: DC 12, one creature the pirate can see
 
 Original layout: [[../../srd-5.2.1/pages/314|page 314]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` medium ` |
-| ` type ` | ` humanoid ` |
-| ` alignment ` | ` Neutral ` |
-| ` size_options_text ` | ` Medium or Small ` |
-| ` movement_text ` | ` 30 ft. ` |
-| ` gear_text ` | ` Daggers (6), Leather Armor ` |
-| ` senses_text ` | ` Passive Perception 11 ` |
-| ` languages_text ` | ` Common plus one other language ` |
-| ` cr_text ` | ` 1 (XP 200; PB +2) ` |
-| ` hit_points_text ` | ` 33 (6d8 + 6) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 10 ` | ` 0 ` |
-| ` Dexterity ` | ` 16 ` | ` 5 ` |
-| ` Constitution ` | ` 12 ` | ` 1 ` |
-| ` Intelligence ` | ` 8 ` | ` -1 ` |
-| ` Wisdom ` | ` 12 ` | ` 1 ` |
-| ` Charisma ` | ` 14 ` | ` 4 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 14 ` |  |
-| ` max_hp ` | ` 33 ` |  |
-| ` initiative ` | ` 5 ` |  |
-| ` speed ` | ` 30 ` | ` ft ` |
 
 ## Health
 

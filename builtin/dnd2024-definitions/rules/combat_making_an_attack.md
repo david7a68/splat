@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 29300129-0d51-5aee-9a7c-9600279e98cb
 splat_kind: rule
 splat_key: dnd2024:rules/combat_making_an_attack
 splat_name: Making an Attack
-splat_origin:
-  key: dnd2024:reference/pages/014
+splat_origin: dnd2024:reference/pages/014
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 14, 15
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 14, 15, https://www.dndbeyond.com/srd
 ---
 
 # Making an Attack

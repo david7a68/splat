@@ -33,8 +33,7 @@ or execute embedded text.
 
 To change the importer, run `devenv shell -- bash scripts/regenerate_srd.sh`. It
 regenerates the SRD and the definitions in place, then moves the `source_sha256`
-pins in the reviewed specs from the committed notes to the new ones. It reports
-each note whose words changed, and those need a review against the PDF. Commit
+pins in the reviewed specs from the committed notes to the new ones. It stops if the ordered source text changes; review such changes against the PDF. Commit
 the specs and the notes together.
 
 ## Source-reference schema extension
@@ -105,6 +104,7 @@ uses Poppler **26.08.0**. Different versions can produce different whitespace or
 font metadata; `--check` reports those differences instead of accepting them.
 
 ```sh
+cargo build --locked --bin format-notes
 python3 scripts/import_srd.py
 python3 scripts/import_srd.py --pdf builtin/srd-5.2.1/source.pdf --check
 ```
@@ -129,3 +129,7 @@ This work includes material from the System Reference Document 5.2.1 (“SRD 5.2
 
 Splat extracts and reformats the material as Markdown. The source PDF is unchanged.
 The attribution is also included in the package manifest and `LICENSE.txt`.
+
+The Archmage retains the pinned SRD award of 8,000 XP at CR 12. Its stat table marks
+that award as printed with `%% splat reward=printed %%`. This keeps the supplied
+model and avoids an unresolved edit flag. Other CR/XP mismatches remain flagged.

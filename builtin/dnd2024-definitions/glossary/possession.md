@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 5d029d8a-e7b6-5585-9abe-2c13e96f0527
 splat_kind: rule
 splat_key: dnd2024:glossary/possession
 splat_name: Possession
-splat_origin:
-  key: dnd2024:reference/glossary/possession
+splat_origin: dnd2024:reference/glossary/possession
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 186
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 186, https://www.dndbeyond.com/srd
 ---
 
 # Possession

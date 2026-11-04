@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "2b13a99f-59af-5f9f-ab05-8af6118aefcb"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/magic_item/robe_of_the_archmagi"
 splat_name: "Robe of the Archmagi"
-splat_reference: {"source": "SRD 5.2.1", "category": "magic_item", "pages": [240], "executable": false}
+splat_pages:
+- 240
 ---
 
 # Robe of the Archmagi
@@ -24,3 +25,13 @@ Magic Resistance. You have Advantage on saving throws against spells and other m
 War Mage. Your spell save DC and spell attack bonus each increase by 2.
 
 Original layout: [[../pages/240|page 240]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: magic_item
+> executable: false
+> ```
+

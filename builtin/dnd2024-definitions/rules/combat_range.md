@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 13adc30e-253e-5245-b9b9-33c8e2f929a4
 splat_kind: rule
 splat_key: dnd2024:rules/combat_range
 splat_name: Range
-splat_origin:
-  key: dnd2024:reference/pages/015
+splat_origin: dnd2024:reference/pages/015
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 15
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 15, https://www.dndbeyond.com/srd
 ---
 
 # Range

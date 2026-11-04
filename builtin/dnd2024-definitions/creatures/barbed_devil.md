@@ -1,36 +1,64 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: fac6b339-4dd8-5a57-9047-a586aea5960b
 splat_kind: creature
 splat_key: dnd2024:creatures/barbed_devil
 splat_name: Barbed Devil
-splat_origin:
-  key: dnd2024:reference/creature/barbed_devil
+splat_origin: dnd2024:reference/creature/barbed_devil
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 262
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 262, https://www.dndbeyond.com/srd
 ---
 
 # Barbed Devil
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Medium |
+| Type | Fiend (Devil) |
+| Alignment | Lawful Evil |
+| Armor Class | 15 |
+| Hit Points | 110 (13d8 + 52) |
+| Initiative | +3 (13) |
+| Speed | 30 ft., Climb 30 ft. |
+| Challenge | 5 (XP 1,800; PB +3) |
+| Skills | Deception +5, Insight +5, Perception +8 |
+| Senses | Darkvision 120 ft. (unimpeded by magical Darkness); Passive Perception 18 |
+| Languages | Infernal; telepathy 120 ft. |
+| Resistances | Cold |
+| Immunities | Fire, Poison; Poisoned |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 16 | +3 | +6 |
+| Dex | 17 | +3 | +3 |
+| Con | 18 | +4 | +7 |
+| Int | 12 | +1 | +1 |
+| Wis | 14 | +2 | +5 |
+| Cha | 14 | +2 | +5 |
+
 
 ## Source text
 
 <!-- SRD page 262 -->
 
-Medium Fiend (Devil), Lawful Evil\
-AC 15 Initiative +3 (13)\
-HP 110 (13d8 + 52)\
-Speed 30 ft., Climb 30 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 16 +3 +6 Dex 17 +3 +3 Con 18 +4 +7\
-Int 12 +1 +1 Wis 14 +2 +5 Cha 14 +2 +5\
-Skills Deception +5, Insight +5, Perception +8\
-Resistances Cold\
-Immunities Fire, Poison; Poisoned\
-Senses Darkvision 120 ft. (unimpeded by magical Darkness); Passive Perception 18\
-Languages Infernal; telepathy 120 ft.\
-CR 5 (XP 1,800; PB +3)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Medium Fiend (Devil), Lawful Evil\
+> AC 15 Initiative +3 (13)\
+> HP 110 (13d8 + 52)\
+> Speed 30 ft., Climb 30 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 16 +3 +6 Dex 17 +3 +3 Con 18 +4 +7\
+> Int 12 +1 +1 Wis 14 +2 +5 Cha 14 +2 +5\
+> Skills Deception +5, Insight +5, Perception +8\
+> Resistances Cold\
+> Immunities Fire, Poison; Poisoned\
+> Senses Darkvision 120 ft. (unimpeded by magical Darkness); Passive Perception 18\
+> Languages Infernal; telepathy 120 ft.\
+> CR 5 (XP 1,800; PB +3)
+
 
 ### Traits
 
@@ -52,49 +80,11 @@ Hurl Flame. Ranged Attack Roll: +5, range 150 ft. Hit: 17 (5d6) Fire damage. If 
 
 Original layout: [[../../srd-5.2.1/pages/262|page 262]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` medium ` |
-| ` type ` | ` fiend ` |
-| ` alignment ` | ` Lawful Evil ` |
-| ` tags_text ` | ` (Devil) ` |
-| ` movement_text ` | ` 30 ft., Climb 30 ft. ` |
-| ` skills_text ` | ` Deception +5, Insight +5, Perception +8 ` |
-| ` resistances_text ` | ` Cold ` |
-| ` immunities_text ` | ` Fire, Poison; Poisoned ` |
-| ` senses_text ` | ` Darkvision 120 ft. (unimpeded by magical Darkness); Passive Perception 18 ` |
-| ` languages_text ` | ` Infernal; telepathy 120 ft. ` |
-| ` cr_text ` | ` 5 (XP 1,800; PB +3) ` |
-| ` hit_points_text ` | ` 110 (13d8 + 52) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 16 ` | ` 6 ` |
-| ` Dexterity ` | ` 17 ` | ` 3 ` |
-| ` Constitution ` | ` 18 ` | ` 7 ` |
-| ` Intelligence ` | ` 12 ` | ` 1 ` |
-| ` Wisdom ` | ` 14 ` | ` 5 ` |
-| ` Charisma ` | ` 14 ` | ` 5 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 15 ` |  |
-| ` max_hp ` | ` 110 ` |  |
-| ` initiative ` | ` 3 ` |  |
-| ` speed ` | ` 30 ` | ` ft ` |
-| ` climb_speed ` | ` 30 ` | ` ft ` |
 
 ## Health
 
@@ -387,3 +377,13 @@ geometry_assumptions:
   - plane
   - form_appearance
 ```
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_stats_extras -->
+> 
+> ```yaml
+> climb_speed:
+>   unit: ft
+>   value: 30
+> ```
+

@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: cc701950-d55b-5b07-bea0-f54931e8b41e
 splat_kind: spell
 splat_key: dnd2024:spells/dragon_s_breath
 splat_name: Dragon’s Breath
-splat_origin:
-  key: dnd2024:reference/spell/dragon_s_breath
+splat_origin: dnd2024:reference/spell/dragon_s_breath
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 126
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 126, https://www.dndbeyond.com/srd
 ---
 
 # Dragon’s Breath
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 2 |
+| School | Transmutation |
+| Classes | Sorcerer, Wizard |
+| Casting Time | Bonus Action |
+| Range |  |
+| Components | V, S, M (a hot pepper) |
+| Duration | Concentration, up to 1 minute |
+
 
 ## Source text
 
@@ -30,37 +41,11 @@ Using a Higher-Level Spell Slot. The damage increases by 1d6 for each spell slot
 
 Original layout: [[../../srd-5.2.1/pages/126|page 126]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 2 ` |
-| ` school ` | ` transmutation ` |
-| ` classes ` | ` ["sorcerer", "wizard"] ` |
-| ` components ` | ` ["verbal", "somatic", "material"] ` |
-| ` concentration ` | ` true ` |
-| ` duration ` | ` Concentration, up to 1 minute ` |
-| ` casting_time ` | ` Bonus Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
 
-<!-- splat:values path=splat_spell/range -->
 
-| Field | Value |
-| --- | --- |
-| ` mode ` | ` touch ` |
-
-### Material
-
-<!-- splat:values path=splat_spell/material -->
-
-| Field | Value |
-| --- | --- |
-| ` description ` | ` a hot pepper ` |
-| ` consumed ` | ` false ` |
 
 ## Rule
 
@@ -134,3 +119,14 @@ maximum:
   value: 1
   unit: minute
 ```
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_spell_extras -->
+> 
+> ```yaml
+> material:
+>   consumed: false
+> range:
+>   mode: touch
+> ```
+

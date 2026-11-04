@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "4700178e-fc01-5e4b-848c-f9ba80e83513"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/contact_other_plane"
 splat_name: "Contact Other Plane"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [119], "executable": false}
+splat_pages:
+- 119
 ---
 
 # Contact Other Plane
@@ -22,3 +23,13 @@ You mentally contact a demigod, the spirit of a long-dead sage, or some other kn
 On a failed save, you take 6d6 Psychic damage and have the Incapacitated condition until you finish a Long Rest. A Greater Restoration spell cast on you ends this effect.
 
 Original layout: [[../pages/119|page 119]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

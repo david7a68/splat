@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 850bcc82-f5d2-5fd2-bb97-a39bc776c3c4
 splat_kind: rule_group
 splat_key: dnd2024:subclasses/sorcerer_sorcerer_subclass_draconic_sorcery
 splat_name: 'Sorcerer Subclass: Draconic Sorcery'
-splat_origin:
-  key: dnd2024:reference/pages/069
+splat_origin: dnd2024:reference/pages/069
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 69
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 69, https://www.dndbeyond.com/srd
 ---
 
 # Sorcerer Subclass: Draconic Sorcery

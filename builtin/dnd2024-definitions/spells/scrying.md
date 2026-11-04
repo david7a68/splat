@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 8174ca4b-590c-5811-a154-1f6821ae809c
 splat_kind: spell
 splat_key: dnd2024:spells/scrying
 splat_name: Scrying
-splat_origin:
-  key: dnd2024:reference/spell/scrying
+splat_origin: dnd2024:reference/spell/scrying
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 160
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 160, https://www.dndbeyond.com/srd
 ---
 
 # Scrying
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 5 |
+| School | Divination |
+| Classes | Bard, Cleric, Druid, Warlock, Wizard |
+| Casting Time | 10 minutes |
+| Range |  |
+| Components | V, S, M (a focus worth 1,000+ GP, such as a crystal ball, mirror, or water-filled font) |
+| Duration | Concentration, up to 10 minutes |
+
 
 ## Source text
 
@@ -44,37 +55,11 @@ Instead of targeting a creature, you can target a location you have seen. When y
 
 Original layout: [[../../srd-5.2.1/pages/160|page 160]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 5 ` |
-| ` school ` | ` divination ` |
-| ` classes ` | ` ["bard", "cleric", "druid", "warlock", "wizard"] ` |
-| ` components ` | ` ["verbal", "somatic", "material"] ` |
-| ` concentration ` | ` true ` |
-| ` duration ` | ` Concentration, up to 10 minutes ` |
-| ` casting_time ` | ` 10 minutes ` |
-| ` ritual ` | ` false ` |
 
-### Range
 
-<!-- splat:values path=splat_spell/range -->
 
-| Field | Value |
-| --- | --- |
-| ` mode ` | ` self ` |
-
-### Material
-
-<!-- splat:values path=splat_spell/material -->
-
-| Field | Value |
-| --- | --- |
-| ` description ` | ` a focus worth 1,000+ GP, such as a crystal ball, mirror, or water-filled font ` |
-| ` consumed ` | ` false ` |
 
 ## Rule
 
@@ -178,3 +163,14 @@ maximum:
   value: 10
   unit: minute
 ```
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_spell_extras -->
+> 
+> ```yaml
+> material:
+>   consumed: false
+> range:
+>   mode: self
+> ```
+

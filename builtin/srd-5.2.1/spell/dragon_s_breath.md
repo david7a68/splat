@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "8e5f0ff4-e75a-54cc-856c-82c3e3c9f7af"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/dragon_s_breath"
 splat_name: "Dragon’s Breath"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [126], "executable": false}
+splat_pages:
+- 126
 ---
 
 # Dragon’s Breath
@@ -22,3 +23,13 @@ You touch one willing creature, and choose Acid, Cold, Fire, Lightning, or Poiso
 Using a Higher-Level Spell Slot. The damage increases by 1d6 for each spell slot level above 2.
 
 Original layout: [[../pages/126|page 126]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

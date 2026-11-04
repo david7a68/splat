@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: ab4d6e06-0f81-5659-80d3-47c3b45a54ef
 splat_kind: spell
 splat_key: dnd2024:spells/contact_other_plane
 splat_name: Contact Other Plane
-splat_origin:
-  key: dnd2024:reference/spell/contact_other_plane
+splat_origin: dnd2024:reference/spell/contact_other_plane
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 119
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 119, https://www.dndbeyond.com/srd
 ---
 
 # Contact Other Plane
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 5 |
+| School | Divination |
+| Classes | Warlock, Wizard |
+| Casting Time | 1 minute or Ritual |
+| Range |  |
+| Components | V |
+| Duration | 1 minute |
+
 
 ## Source text
 
@@ -30,28 +41,9 @@ On a failed save, you take 6d6 Psychic damage and have the Incapacitated conditi
 
 Original layout: [[../../srd-5.2.1/pages/119|page 119]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 5 ` |
-| ` school ` | ` divination ` |
-| ` classes ` | ` ["warlock", "wizard"] ` |
-| ` components ` | ` ["verbal"] ` |
-| ` concentration ` | ` false ` |
-| ` duration ` | ` 1 minute ` |
-| ` casting_time ` | ` 1 minute or Ritual ` |
-| ` ritual ` | ` true ` |
 
-### Range
-
-<!-- splat:values path=splat_spell/range -->
-
-| Field | Value |
-| --- | --- |
-| ` mode ` | ` self ` |
 
 ## Rule
 
@@ -107,3 +99,12 @@ maximum:
   value: 1
   unit: minute
 ```
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_spell_extras -->
+> 
+> ```yaml
+> range:
+>   mode: self
+> ```
+

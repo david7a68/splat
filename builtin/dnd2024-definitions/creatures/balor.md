@@ -1,36 +1,64 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 8743edd3-aa74-5b44-99f7-b3b30b153480
 splat_kind: creature
 splat_key: dnd2024:creatures/balor
 splat_name: Balor
-splat_origin:
-  key: dnd2024:reference/creature/balor
+splat_origin: dnd2024:reference/creature/balor
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 261
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 261, https://www.dndbeyond.com/srd
 ---
 
 # Balor
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Huge |
+| Type | Fiend (Demon) |
+| Alignment | Chaotic Evil |
+| Armor Class | 19 |
+| Hit Points | 287 (23d12 + 138) |
+| Initiative | +14 (24) |
+| Speed | 40 ft., Fly 80 ft. |
+| Challenge | 19 (XP 22,000; PB +6) |
+| Skills | Perception +9 |
+| Senses | Truesight 120 ft.; Passive Perception 19 |
+| Languages | Abyssal; telepathy 120 ft. |
+| Resistances | Cold, Lightning |
+| Immunities | Fire, Poison; Charmed, Frightened, Poisoned |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 26 | +8 | +8 |
+| Dex | 15 | +2 | +2 |
+| Con | 22 | +6 | +12 |
+| Int | 20 | +5 | +5 |
+| Wis | 16 | +3 | +9 |
+| Cha | 22 | +6 | +6 |
+
 
 ## Source text
 
 <!-- SRD page 261 -->
 
-Huge Fiend (Demon), Chaotic Evil\
-AC 19 Initiative +14 (24)\
-HP 287 (23d12 + 138)\
-Speed 40 ft., Fly 80 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 26 +8 +8 Dex 15 +2 +2 Con 22 +6 +12\
-Int 20 +5 +5 Wis 16 +3 +9 Cha 22 +6 +6\
-Skills Perception +9\
-Resistances Cold, Lightning\
-Immunities Fire, Poison; Charmed, Frightened, Poisoned\
-Senses Truesight 120 ft.; Passive Perception 19\
-Languages Abyssal; telepathy 120 ft.\
-CR 19 (XP 22,000; PB +6)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Huge Fiend (Demon), Chaotic Evil\
+> AC 19 Initiative +14 (24)\
+> HP 287 (23d12 + 138)\
+> Speed 40 ft., Fly 80 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 26 +8 +8 Dex 15 +2 +2 Con 22 +6 +12\
+> Int 20 +5 +5 Wis 16 +3 +9 Cha 22 +6 +6\
+> Skills Perception +9\
+> Resistances Cold, Lightning\
+> Immunities Fire, Poison; Charmed, Frightened, Poisoned\
+> Senses Truesight 120 ft.; Passive Perception 19\
+> Languages Abyssal; telepathy 120 ft.\
+> CR 19 (XP 22,000; PB +6)
+
 
 ### Traits
 
@@ -56,49 +84,11 @@ Teleport. The balor teleports itself or a willing demon within 10 feet of itself
 
 Original layout: [[../../srd-5.2.1/pages/261|page 261]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` huge ` |
-| ` type ` | ` fiend ` |
-| ` alignment ` | ` Chaotic Evil ` |
-| ` tags_text ` | ` (Demon) ` |
-| ` movement_text ` | ` 40 ft., Fly 80 ft. ` |
-| ` skills_text ` | ` Perception +9 ` |
-| ` resistances_text ` | ` Cold, Lightning ` |
-| ` immunities_text ` | ` Fire, Poison; Charmed, Frightened, Poisoned ` |
-| ` senses_text ` | ` Truesight 120 ft.; Passive Perception 19 ` |
-| ` languages_text ` | ` Abyssal; telepathy 120 ft. ` |
-| ` cr_text ` | ` 19 (XP 22,000; PB +6) ` |
-| ` hit_points_text ` | ` 287 (23d12 + 138) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 26 ` | ` 8 ` |
-| ` Dexterity ` | ` 15 ` | ` 2 ` |
-| ` Constitution ` | ` 22 ` | ` 12 ` |
-| ` Intelligence ` | ` 20 ` | ` 5 ` |
-| ` Wisdom ` | ` 16 ` | ` 9 ` |
-| ` Charisma ` | ` 22 ` | ` 6 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 19 ` |  |
-| ` max_hp ` | ` 287 ` |  |
-| ` initiative ` | ` 14 ` |  |
-| ` speed ` | ` 40 ` | ` ft ` |
-| ` fly_speed ` | ` 80 ` | ` ft ` |
 
 ## Health
 
@@ -439,3 +429,13 @@ geometry_assumptions:
   - plane
   - form_appearance
 ```
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_stats_extras -->
+> 
+> ```yaml
+> fly_speed:
+>   unit: ft
+>   value: 80
+> ```
+

@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 2b24f1ab-a317-5e70-8e90-e8de54d7e1d6
 splat_kind: rule_group
 splat_key: dnd2024:backgrounds/soldier
 splat_name: Soldier
-splat_origin:
-  key: dnd2024:reference/pages/083
+splat_origin: dnd2024:reference/pages/083
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 83
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 83, https://www.dndbeyond.com/srd
 ---
 
 # Soldier

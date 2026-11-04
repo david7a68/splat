@@ -1,34 +1,60 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 15fa8c5b-a51d-5241-88c1-ffdd197e9675
 splat_kind: creature
 splat_key: dnd2024:creatures/gibbering_mouther
 splat_name: Gibbering Mouther
-splat_origin:
-  key: dnd2024:reference/creature/gibbering_mouther
+splat_origin: dnd2024:reference/creature/gibbering_mouther
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 288
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 288, https://www.dndbeyond.com/srd
 ---
 
 # Gibbering Mouther
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Medium |
+| Type | Aberration |
+| Alignment | Chaotic Neutral |
+| Armor Class | 9 |
+| Hit Points | 52 (7d8 + 21) |
+| Initiative | -1 (9) |
+| Speed | 20 ft., Swim 20 ft. |
+| Challenge | 2 (XP 450; PB +2) |
+| Senses | Darkvision 60 ft.; Passive Perception 10 |
+| Languages | None |
+| Immunities | Prone |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 10 | +0 | +0 |
+| Dex | 8 | -1 | -1 |
+| Con | 16 | +3 | +3 |
+| Int | 3 | -4 | -4 |
+| Wis | 10 | +0 | +0 |
+| Cha | 6 | -2 | -2 |
+
 
 ## Source text
 
 <!-- SRD page 288 -->
 
-Medium Aberration, Chaotic Neutral\
-AC 9 Initiative −1 (9)\
-HP 52 (7d8 + 21)\
-Speed 20 ft., Swim 20 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 10 +0 +0 Dex 8 −1 −1 Con 16 +3 +3\
-Int 3 −4 −4 Wis 10 +0 +0 Cha 6 −2 −2\
-Immunities Prone\
-Senses Darkvision 60 ft.; Passive Perception 10\
-Languages None\
-CR 2 (XP 450; PB +2)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Medium Aberration, Chaotic Neutral\
+> AC 9 Initiative −1 (9)\
+> HP 52 (7d8 + 21)\
+> Speed 20 ft., Swim 20 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 10 +0 +0 Dex 8 −1 −1 Con 16 +3 +3\
+> Int 3 −4 −4 Wis 10 +0 +0 Cha 6 −2 −2\
+> Immunities Prone\
+> Senses Darkvision 60 ft.; Passive Perception 10\
+> Languages None\
+> CR 2 (XP 450; PB +2)
+
 
 ### Traits
 
@@ -50,46 +76,11 @@ Blinding Spittle (Recharge 5–6). Dexterity Saving Throw: DC 10, each creature 
 
 Original layout: [[../../srd-5.2.1/pages/288|page 288]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` medium ` |
-| ` type ` | ` aberration ` |
-| ` alignment ` | ` Chaotic Neutral ` |
-| ` movement_text ` | ` 20 ft., Swim 20 ft. ` |
-| ` immunities_text ` | ` Prone ` |
-| ` senses_text ` | ` Darkvision 60 ft.; Passive Perception 10 ` |
-| ` languages_text ` | ` None ` |
-| ` cr_text ` | ` 2 (XP 450; PB +2) ` |
-| ` hit_points_text ` | ` 52 (7d8 + 21) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 10 ` | ` 0 ` |
-| ` Dexterity ` | ` 8 ` | ` -1 ` |
-| ` Constitution ` | ` 16 ` | ` 3 ` |
-| ` Intelligence ` | ` 3 ` | ` -4 ` |
-| ` Wisdom ` | ` 10 ` | ` 0 ` |
-| ` Charisma ` | ` 6 ` | ` -2 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 9 ` |  |
-| ` max_hp ` | ` 52 ` |  |
-| ` initiative ` | ` -1 ` |  |
-| ` speed ` | ` 20 ` | ` ft ` |
-| ` swim_speed ` | ` 20 ` | ` ft ` |
 
 ## Health
 
@@ -341,3 +332,13 @@ geometry_assumptions:
   - plane
   - form_appearance
 ```
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_stats_extras -->
+> 
+> ```yaml
+> swim_speed:
+>   unit: ft
+>   value: 20
+> ```
+

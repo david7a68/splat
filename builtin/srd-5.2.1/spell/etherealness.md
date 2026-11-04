@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "207abbe7-dd10-55ab-8d70-ac7de68d8647"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/etherealness"
 splat_name: "Etherealness"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [128], "executable": false}
+splat_pages:
+- 128
 ---
 
 # Etherealness
@@ -28,3 +29,13 @@ This spell ends instantly if you cast it while you are on the Ethereal Plane or 
 Using a Higher-Level Spell Slot. You can target up to three willing creatures (including yourself) for each spell slot level above 7. The creatures must be within 10 feet of you when you cast the spell.
 
 Original layout: [[../pages/128|page 128]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

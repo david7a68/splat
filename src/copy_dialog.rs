@@ -286,9 +286,6 @@ impl CopyDialog {
             }
             if let Some(plan) = &self.plan {
                 design::rule(ui);
-                if let Some(warning) = &plan.layout_warning {
-                    design::message(ui, Tone::Warning, warning);
-                }
 
                 let destination = destinations
                     .iter()

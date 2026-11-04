@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "71583ba2-08b0-51bf-9679-9c877a0fd466"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/swarm_of_insects"
 splat_name: "Swarm of Insects"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [361], "executable": false}
+splat_pages:
+- 361
 ---
 
 # Swarm of Insects
@@ -35,3 +36,13 @@ Swarm. The swarm can occupy another creature’s space and vice versa, and the s
 Bites. Melee Attack Roll: +3, reach 5 ft. Hit: 6 (2d4 + 1) Poison damage, or 3 (1d4 + 1) Poison damage if the swarm is Bloodied.
 
 Original layout: [[../pages/361|page 361]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

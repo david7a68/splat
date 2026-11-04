@@ -1,34 +1,60 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 42bc1db8-12d7-57b5-893a-04f13cdf074e
 splat_kind: creature
 splat_key: dnd2024:creatures/saber_toothed_tiger
 splat_name: Saber-Toothed Tiger
-splat_origin:
-  key: dnd2024:reference/creature/saber_toothed_tiger
+splat_origin: dnd2024:reference/creature/saber_toothed_tiger
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 360
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 360, https://www.dndbeyond.com/srd
 ---
 
 # Saber-Toothed Tiger
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Large |
+| Type | Beast |
+| Alignment | Unaligned |
+| Armor Class | 13 |
+| Hit Points | 52 (7d10 + 14) |
+| Initiative | +3 (13) |
+| Speed | 40 ft. |
+| Challenge | 2 (XP 450; PB +2) |
+| Skills | Perception +5, Stealth +7 |
+| Senses | Darkvision 60 ft.; Passive Perception 15 |
+| Languages | None |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 18 | +4 | +6 |
+| Dex | 17 | +3 | +5 |
+| Con | 15 | +2 | +2 |
+| Int | 3 | -4 | -4 |
+| Wis | 12 | +1 | +1 |
+| Cha | 8 | -1 | -1 |
+
 
 ## Source text
 
 <!-- SRD page 360 -->
 
-Large Beast, Unaligned\
-AC 13  Initiative +3 (13)\
-HP 52 (7d10 + 14)\
-Speed 40 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 18 +4 +6 Dex 17 +3 +5 Con 15 +2 +2\
-Int 3 −4 −4 Wis 12 +1 +1 Cha 8 −1 −1\
-Skills Perception +5, Stealth +7\
-Senses Darkvision 60 ft.; Passive Perception 15\
-Languages None\
-CR 2 (XP 450; PB +2)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Large Beast, Unaligned\
+> AC 13  Initiative +3 (13)\
+> HP 52 (7d10 + 14)\
+> Speed 40 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 18 +4 +6 Dex 17 +3 +5 Con 15 +2 +2\
+> Int 3 −4 −4 Wis 12 +1 +1 Cha 8 −1 −1\
+> Skills Perception +5, Stealth +7\
+> Senses Darkvision 60 ft.; Passive Perception 15\
+> Languages None\
+> CR 2 (XP 450; PB +2)
+
 
 ### Traits
 
@@ -46,45 +72,11 @@ Nimble Escape. The tiger takes the Disengage or Hide action.
 
 Original layout: [[../../srd-5.2.1/pages/360|page 360]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` large ` |
-| ` type ` | ` beast ` |
-| ` alignment ` | ` Unaligned ` |
-| ` movement_text ` | ` 40 ft. ` |
-| ` skills_text ` | ` Perception +5, Stealth +7 ` |
-| ` senses_text ` | ` Darkvision 60 ft.; Passive Perception 15 ` |
-| ` languages_text ` | ` None ` |
-| ` cr_text ` | ` 2 (XP 450; PB +2) ` |
-| ` hit_points_text ` | ` 52 (7d10 + 14) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 18 ` | ` 6 ` |
-| ` Dexterity ` | ` 17 ` | ` 5 ` |
-| ` Constitution ` | ` 15 ` | ` 2 ` |
-| ` Intelligence ` | ` 3 ` | ` -4 ` |
-| ` Wisdom ` | ` 12 ` | ` 1 ` |
-| ` Charisma ` | ` 8 ` | ` -1 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 13 ` |  |
-| ` max_hp ` | ` 52 ` |  |
-| ` initiative ` | ` 3 ` |  |
-| ` speed ` | ` 40 ` | ` ft ` |
 
 ## Health
 

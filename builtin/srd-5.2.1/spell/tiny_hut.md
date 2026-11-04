@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "ee2c8569-9f4b-5538-8150-8709fd6934cf"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/tiny_hut"
 splat_name: "Tiny Hut"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [169], "executable": false}
+splat_pages:
+- 169
 ---
 
 # Tiny Hut
@@ -26,3 +27,13 @@ The atmosphere inside the Emanation is comfortable and dry, regardless of the we
 The spell ends early if you leave the Emanation or if you cast it again.
 
 Original layout: [[../pages/169|page 169]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

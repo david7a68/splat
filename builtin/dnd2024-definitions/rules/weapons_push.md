@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 6815bcf2-fb7e-51d4-9c32-5fb0bf8105ef
 splat_kind: rule
 splat_key: dnd2024:rules/weapons_push
 splat_name: Push
-splat_origin:
-  key: dnd2024:reference/pages/090
+splat_origin: dnd2024:reference/pages/090
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 90
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 90, https://www.dndbeyond.com/srd
 ---
 
 # Push

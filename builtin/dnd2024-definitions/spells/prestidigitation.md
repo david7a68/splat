@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: dd7b2596-90d9-52e3-bd16-cf735492dfe2
 splat_kind: spell
 splat_key: dnd2024:spells/prestidigitation
 splat_name: Prestidigitation
-splat_origin:
-  key: dnd2024:reference/spell/prestidigitation
+splat_origin: dnd2024:reference/spell/prestidigitation
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 154
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 154, https://www.dndbeyond.com/srd
 ---
 
 # Prestidigitation
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | Cantrip |
+| School | Transmutation |
+| Classes | Bard, Sorcerer, Warlock, Wizard |
+| Casting Time | Action |
+| Range | 10 feet |
+| Components | V, S |
+| Duration | Up to 1 hour |
+
 
 ## Source text
 
@@ -40,28 +51,9 @@ Minor Creation. You create a nonmagical trinket or an illusory image that can fi
 
 Original layout: [[../../srd-5.2.1/pages/154|page 154]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 0 ` |
-| ` school ` | ` transmutation ` |
-| ` classes ` | ` ["bard", "sorcerer", "warlock", "wizard"] ` |
-| ` components ` | ` ["verbal", "somatic"] ` |
-| ` concentration ` | ` false ` |
-| ` duration ` | ` Up to 1 hour ` |
-| ` casting_time ` | ` Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
-
-<!-- splat:values path=splat_spell/range -->
-
-| Field | Value |
-| --- | --- |
-| ` feet ` | ` 10 ` |
 
 ## Rule
 

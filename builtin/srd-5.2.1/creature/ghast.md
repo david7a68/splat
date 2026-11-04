@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "87b5b17d-11c9-5e62-99dd-c80438e7e866"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/ghast"
 splat_name: "Ghast"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [287], "executable": false}
+splat_pages:
+- 287
 ---
 
 # Ghast
@@ -35,3 +36,13 @@ Bite. Melee Attack Roll: +5, reach 5 ft. Hit: 7 (1d8 + 3) Piercing damage plus 9
 Claw. Melee Attack Roll: +5, reach 5 ft. Hit: 10 (2d6 + 3) Slashing damage. If the target is a non-Undead creature, it is subjected to the following effect. Constitution Saving Throw: DC 10. Failure: The target has the Paralyzed condition until the end of its next turn.
 
 Original layout: [[../pages/287|page 287]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

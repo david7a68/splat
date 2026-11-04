@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 9c5c8008-8320-5d7f-8938-30a3f5e7036e
 splat_kind: rule
 splat_key: dnd2024:rules/proficiency_saving_throw_proficiencies
 splat_name: Saving Throw Proficiencies
-splat_origin:
-  key: dnd2024:reference/pages/009
+splat_origin: dnd2024:reference/pages/009
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 9
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 9, https://www.dndbeyond.com/srd
 ---
 
 # Saving Throw Proficiencies

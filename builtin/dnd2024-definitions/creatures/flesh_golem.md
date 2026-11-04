@@ -1,34 +1,60 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 8b52c7cd-6dc1-5f02-949a-6df4b15a852c
 splat_kind: creature
 splat_key: dnd2024:creatures/flesh_golem
 splat_name: Flesh Golem
-splat_origin:
-  key: dnd2024:reference/creature/flesh_golem
+splat_origin: dnd2024:reference/creature/flesh_golem
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 285
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 285, https://www.dndbeyond.com/srd
 ---
 
 # Flesh Golem
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Medium |
+| Type | Construct |
+| Alignment | Neutral |
+| Armor Class | 9 |
+| Hit Points | 127 (15d8 + 60) |
+| Initiative | -1 (9) |
+| Speed | 30 ft. |
+| Challenge | 5 (XP 1,800; PB +3) |
+| Senses | Darkvision 60 ft.; Passive Perception 10 |
+| Languages | Understands Common plus one other language but can’t speak |
+| Immunities | Lightning, Poison; Charmed, Exhaustion, Frightened, Paralyzed, Petrified, Poisoned |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 19 | +4 | +4 |
+| Dex | 9 | -1 | -1 |
+| Con | 18 | +4 | +4 |
+| Int | 6 | -2 | -2 |
+| Wis | 10 | +0 | +0 |
+| Cha | 5 | -3 | -3 |
+
 
 ## Source text
 
 <!-- SRD page 285 -->
 
-Medium Construct, Neutral\
-AC 9 Initiative −1 (9)\
-HP 127 (15d8 + 60)\
-Speed 30 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 19 +4 +4 Dex 9 −1 −1 Con 18 +4 +4\
-Int 6 −2 −2 Wis 10 +0 +0 Cha 5 −3 −3\
-Immunities Lightning, Poison; Charmed, Exhaustion, Frightened, Paralyzed, Petrified, Poisoned\
-Senses Darkvision 60 ft.; Passive Perception 10\
-Languages Understands Common plus one other language but can’t speak\
-CR 5 (XP 1,800; PB +3)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Medium Construct, Neutral\
+> AC 9 Initiative −1 (9)\
+> HP 127 (15d8 + 60)\
+> Speed 30 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 19 +4 +4 Dex 9 −1 −1 Con 18 +4 +4\
+> Int 6 −2 −2 Wis 10 +0 +0 Cha 5 −3 −3\
+> Immunities Lightning, Poison; Charmed, Exhaustion, Frightened, Paralyzed, Petrified, Poisoned\
+> Senses Darkvision 60 ft.; Passive Perception 10\
+> Languages Understands Common plus one other language but can’t speak\
+> CR 5 (XP 1,800; PB +3)
+
 
 ### Traits
 
@@ -52,45 +78,11 @@ Slam. Melee Attack Roll: +7, reach 5 ft. Hit: 13 (2d8 + 4) Bludgeoning damage pl
 
 Original layout: [[../../srd-5.2.1/pages/285|page 285]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` medium ` |
-| ` type ` | ` construct ` |
-| ` alignment ` | ` Neutral ` |
-| ` movement_text ` | ` 30 ft. ` |
-| ` immunities_text ` | ` Lightning, Poison; Charmed, Exhaustion, Frightened, Paralyzed, Petrified, Poisoned ` |
-| ` senses_text ` | ` Darkvision 60 ft.; Passive Perception 10 ` |
-| ` languages_text ` | ` Understands Common plus one other language but can’t speak ` |
-| ` cr_text ` | ` 5 (XP 1,800; PB +3) ` |
-| ` hit_points_text ` | ` 127 (15d8 + 60) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 19 ` | ` 4 ` |
-| ` Dexterity ` | ` 9 ` | ` -1 ` |
-| ` Constitution ` | ` 18 ` | ` 4 ` |
-| ` Intelligence ` | ` 6 ` | ` -2 ` |
-| ` Wisdom ` | ` 10 ` | ` 0 ` |
-| ` Charisma ` | ` 5 ` | ` -3 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 9 ` |  |
-| ` max_hp ` | ` 127 ` |  |
-| ` initiative ` | ` -1 ` |  |
-| ` speed ` | ` 30 ` | ` ft ` |
 
 ## Health
 

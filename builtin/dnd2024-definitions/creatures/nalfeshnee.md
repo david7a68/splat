@@ -1,35 +1,62 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 356c36da-db91-55f8-851e-b672168583ef
 splat_kind: creature
 splat_key: dnd2024:creatures/nalfeshnee
 splat_name: Nalfeshnee
-splat_origin:
-  key: dnd2024:reference/creature/nalfeshnee
+splat_origin: dnd2024:reference/creature/nalfeshnee
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 310, 311
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 310, 311, https://www.dndbeyond.com/srd
 ---
 
 # Nalfeshnee
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Large |
+| Type | Fiend (Demon) |
+| Alignment | Chaotic Evil |
+| Armor Class | 18 |
+| Hit Points | 184 (16d10 + 96) |
+| Initiative | +5 (15) |
+| Speed | 20 ft., Fly 30 ft. |
+| Challenge | 13 (XP 10,000; PB +5) |
+| Senses | Truesight 120 ft.; Passive Perception 11 |
+| Languages | Abyssal; telepathy 120 ft. |
+| Resistances | Cold, Fire, Lightning |
+| Immunities | Poison; Frightened, Poisoned |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 21 | +5 | +5 |
+| Dex | 10 | +0 | +0 |
+| Con | 22 | +6 | +11 |
+| Int | 19 | +4 | +9 |
+| Wis | 12 | +1 | +6 |
+| Cha | 15 | +2 | +7 |
+
 
 ## Source text
 
 <!-- SRD page 310 -->
 
-Large Fiend (Demon), Chaotic Evil\
-AC 18 Initiative +5 (15)\
-HP 184 (16d10 + 96)\
-Speed 20 ft., Fly 30 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 21 +5 +5 Dex 10 +0 +0 Con 22 +6 +11\
-Int 19 +4 +9 Wis 12 +1 +6 Cha 15 +2 +7\
-Resistances Cold, Fire, Lightning\
-Immunities Poison; Frightened, Poisoned\
-Senses Truesight 120 ft.; Passive Perception 11\
-Languages Abyssal; telepathy 120 ft.\
-CR 13 (XP 10,000; PB +5)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Large Fiend (Demon), Chaotic Evil\
+> AC 18 Initiative +5 (15)\
+> HP 184 (16d10 + 96)\
+> Speed 20 ft., Fly 30 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 21 +5 +5 Dex 10 +0 +0 Con 22 +6 +11\
+> Int 19 +4 +9 Wis 12 +1 +6 Cha 15 +2 +7\
+> Resistances Cold, Fire, Lightning\
+> Immunities Poison; Frightened, Poisoned\
+> Senses Truesight 120 ft.; Passive Perception 11\
+> Languages Abyssal; telepathy 120 ft.\
+> CR 13 (XP 10,000; PB +5)
+
 
 ### Traits
 
@@ -57,48 +84,11 @@ Pursuit. Trigger: Another creature the nalfeshnee can see ends its move within 1
 
 Original layout: [[../../srd-5.2.1/pages/310|page 310]], [[../../srd-5.2.1/pages/311|page 311]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` large ` |
-| ` type ` | ` fiend ` |
-| ` alignment ` | ` Chaotic Evil ` |
-| ` tags_text ` | ` (Demon) ` |
-| ` movement_text ` | ` 20 ft., Fly 30 ft. ` |
-| ` resistances_text ` | ` Cold, Fire, Lightning ` |
-| ` immunities_text ` | ` Poison; Frightened, Poisoned ` |
-| ` senses_text ` | ` Truesight 120 ft.; Passive Perception 11 ` |
-| ` languages_text ` | ` Abyssal; telepathy 120 ft. ` |
-| ` cr_text ` | ` 13 (XP 10,000; PB +5) ` |
-| ` hit_points_text ` | ` 184 (16d10 + 96) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 21 ` | ` 5 ` |
-| ` Dexterity ` | ` 10 ` | ` 0 ` |
-| ` Constitution ` | ` 22 ` | ` 11 ` |
-| ` Intelligence ` | ` 19 ` | ` 9 ` |
-| ` Wisdom ` | ` 12 ` | ` 6 ` |
-| ` Charisma ` | ` 15 ` | ` 7 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 18 ` |  |
-| ` max_hp ` | ` 184 ` |  |
-| ` initiative ` | ` 5 ` |  |
-| ` speed ` | ` 20 ` | ` ft ` |
-| ` fly_speed ` | ` 30 ` | ` ft ` |
 
 ## Health
 
@@ -379,3 +369,13 @@ geometry_assumptions:
   - plane
   - form_appearance
 ```
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_stats_extras -->
+> 
+> ```yaml
+> fly_speed:
+>   unit: ft
+>   value: 30
+> ```
+

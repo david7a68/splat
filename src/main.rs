@@ -3,7 +3,9 @@ pub mod auth;
 mod campaign_content;
 mod campaigns;
 mod combat_sync;
+mod commands;
 mod content_workspace;
+mod conversion;
 mod copy_dialog;
 mod credentials;
 mod design;
@@ -38,6 +40,10 @@ use design::{Action, Density, Status, Tone, Type, colors, icons};
 use eframe::egui;
 
 fn main() -> eframe::Result {
+    let args: Vec<_> = std::env::args().skip(1).collect();
+    if !args.is_empty() {
+        std::process::exit(commands::run(&args, &mut std::io::stdout().lock()));
+    }
     let _instance = if let Some(dirs) = directories::ProjectDirs::from("", "", "splat") {
         match ui_state::InstanceLock::acquire(&dirs.config_dir().join("instance.lock")) {
             Ok(lock) => Some(lock),
@@ -2189,7 +2195,6 @@ impl eframe::App for Splat {
             self.library.clear_notice();
             self.campaign_content.clear_notice();
             self.encounters.clear_notice();
-            self.timeline.clear_notice();
             self.sessions.clear_notice();
             self.world_page.reader.clear_notice();
             let from_sessions = self.shown_page == Page::Sessions;

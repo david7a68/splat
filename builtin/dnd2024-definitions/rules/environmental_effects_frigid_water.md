@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 382c25fc-03ac-52bc-98dd-9248b89393ed
 splat_kind: rule
 splat_key: dnd2024:rules/environmental_effects_frigid_water
 splat_name: Frigid Water
-splat_origin:
-  key: dnd2024:reference/pages/195
+splat_origin: dnd2024:reference/pages/195
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 195
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 195, https://www.dndbeyond.com/srd
 ---
 
 # Frigid Water

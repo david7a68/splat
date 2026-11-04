@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 9851c2a4-c7cb-5db3-b080-a0ac719edce1
 splat_kind: spell
 splat_key: dnd2024:spells/legend_lore
 splat_name: Legend Lore
-splat_origin:
-  key: dnd2024:reference/spell/legend_lore
+splat_origin: dnd2024:reference/spell/legend_lore
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 144
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 144, https://www.dndbeyond.com/srd
 ---
 
 # Legend Lore
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 5 |
+| School | Divination |
+| Classes | Bard, Cleric, Wizard |
+| Casting Time | 10 minutes |
+| Range |  |
+| Components | V, S, M (incense worth 250+ GP, which the spell consumes, and four ivory strips worth 50+ GP each) |
+| Duration | Instantaneous |
+
 
 ## Source text
 
@@ -32,37 +43,11 @@ If the famous thing you chose isn’t actually famous, you hear sad musical note
 
 Original layout: [[../../srd-5.2.1/pages/144|page 144]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 5 ` |
-| ` school ` | ` divination ` |
-| ` classes ` | ` ["bard", "cleric", "wizard"] ` |
-| ` components ` | ` ["verbal", "somatic", "material"] ` |
-| ` concentration ` | ` false ` |
-| ` duration ` | ` Instantaneous ` |
-| ` casting_time ` | ` 10 minutes ` |
-| ` ritual ` | ` false ` |
 
-### Range
 
-<!-- splat:values path=splat_spell/range -->
 
-| Field | Value |
-| --- | --- |
-| ` mode ` | ` self ` |
-
-### Material
-
-<!-- splat:values path=splat_spell/material -->
-
-| Field | Value |
-| --- | --- |
-| ` description ` | ` incense worth 250+ GP, which the spell consumes, and four ivory strips worth 50+ GP each ` |
-| ` consumed ` | ` true ` |
 
 ## Rule
 
@@ -117,3 +102,14 @@ concentration: false
 maximum:
   kind: instantaneous
 ```
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_spell_extras -->
+> 
+> ```yaml
+> material:
+>   consumed: true
+> range:
+>   mode: self
+> ```
+

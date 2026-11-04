@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "b7796f98-81f8-5b69-a27c-3c3f523eda46"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/wereboar"
 splat_name: "Wereboar"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [338], "executable": false}
+splat_pages:
+- 338
 ---
 
 # Wereboar
@@ -39,3 +40,13 @@ Tusk (Boar or Hybrid Form Only). Melee Attack Roll: +5, reach 5 ft. Hit: 10 (2d6
 Shape-Shift. The wereboar shape-shifts into a Medium boar-humanoid hybrid or a Small boar, or it returns to its true humanoid form. Its game statistics, other than its size, are the same in each form. Any equipment it is wearing or carrying isn’t transformed.
 
 Original layout: [[../pages/338|page 338]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

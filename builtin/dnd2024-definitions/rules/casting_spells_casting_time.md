@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: f358b1f0-0e7c-5853-9dd4-4b52a8da47f5
 splat_kind: rule
 splat_key: dnd2024:rules/casting_spells_casting_time
 splat_name: Casting Time
-splat_origin:
-  key: dnd2024:reference/pages/105
+splat_origin: dnd2024:reference/pages/105
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 105
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 105, https://www.dndbeyond.com/srd
 ---
 
 # Casting Time

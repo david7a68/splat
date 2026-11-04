@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 94b66205-d1c9-5a86-8d01-2c6c7c49c9e9
 splat_kind: spell
 splat_key: dnd2024:spells/holy_aura
 splat_name: Holy Aura
-splat_origin:
-  key: dnd2024:reference/spell/holy_aura
+splat_origin: dnd2024:reference/spell/holy_aura
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 141
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 141, https://www.dndbeyond.com/srd
 ---
 
 # Holy Aura
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 8 |
+| School | Abjuration |
+| Classes | Cleric |
+| Casting Time | Action |
+| Range |  |
+| Components | V, S, M (a reliquary worth 1,000+ GP) |
+| Duration | Concentration, up to 1 minute |
+
 
 ## Source text
 
@@ -28,37 +39,11 @@ For the duration, you emit an aura in a 30-foot Emanation. While in the aura, cr
 
 Original layout: [[../../srd-5.2.1/pages/141|page 141]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 8 ` |
-| ` school ` | ` abjuration ` |
-| ` classes ` | ` ["cleric"] ` |
-| ` components ` | ` ["verbal", "somatic", "material"] ` |
-| ` concentration ` | ` true ` |
-| ` duration ` | ` Concentration, up to 1 minute ` |
-| ` casting_time ` | ` Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
 
-<!-- splat:values path=splat_spell/range -->
 
-| Field | Value |
-| --- | --- |
-| ` mode ` | ` self ` |
-
-### Material
-
-<!-- splat:values path=splat_spell/material -->
-
-| Field | Value |
-| --- | --- |
-| ` description ` | ` a reliquary worth 1,000+ GP ` |
-| ` consumed ` | ` false ` |
 
 ## Rule
 
@@ -123,3 +108,14 @@ maximum:
   value: 1
   unit: minute
 ```
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_spell_extras -->
+> 
+> ```yaml
+> material:
+>   consumed: false
+> range:
+>   mode: self
+> ```
+

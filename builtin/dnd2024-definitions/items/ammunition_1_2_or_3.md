@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: a96e093e-8791-5622-8bea-c073ba0b175c
 splat_kind: item
 splat_key: dnd2024:items/ammunition_1_2_or_3
 splat_name: Ammunition, +1, +2, or +3
-splat_origin:
-  key: dnd2024:reference/magic_item/ammunition_1_2_or_3
+splat_origin: dnd2024:reference/magic_item/ammunition_1_2_or_3
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 209
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 209, https://www.dndbeyond.com/srd
 ---
 
 # Ammunition, +1, +2, or +3
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Weapon |
+| Rarity | Varies |
+| Attunement | No |
+
 
 ## Source text
 
@@ -26,22 +33,9 @@ This ammunition is typically found or sold in quantities of ten or twenty pieces
 
 Original layout: [[../../srd-5.2.1/pages/209|page 209]].
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` weapon ` |
-| ` rarity ` | ` varies ` |
 
-### Equipment
-
-<!-- splat:values path=splat_item/equipment -->
-
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` none ` |
 
 ## Rule
 

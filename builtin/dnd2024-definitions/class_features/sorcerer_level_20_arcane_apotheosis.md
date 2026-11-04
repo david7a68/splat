@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: e5333c93-9a9d-59e5-978c-651643bcd39c
 splat_kind: rule
 splat_key: dnd2024:class_features/sorcerer_level_20_arcane_apotheosis
 splat_name: 'Level 20: Arcane Apotheosis'
-splat_origin:
-  key: dnd2024:reference/pages/066
+splat_origin: dnd2024:reference/pages/066
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 66
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 66, https://www.dndbeyond.com/srd
 ---
 
 # Level 20: Arcane Apotheosis

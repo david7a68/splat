@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: ab7e6e89-a62a-5318-aa98-fe6a0ece3d0b
 splat_kind: spell
 splat_key: dnd2024:spells/thaumaturgy
 splat_name: Thaumaturgy
-splat_origin:
-  key: dnd2024:reference/spell/thaumaturgy
+splat_origin: dnd2024:reference/spell/thaumaturgy
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 169
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 169, https://www.dndbeyond.com/srd
 ---
 
 # Thaumaturgy
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | Cantrip |
+| School | Transmutation |
+| Classes | Cleric |
+| Casting Time | Action |
+| Range | 30 feet |
+| Components | V |
+| Duration | Up to 1 minute |
+
 
 ## Source text
 
@@ -40,28 +51,9 @@ Tremors. You cause harmless tremors in the ground for 1 minute.
 
 Original layout: [[../../srd-5.2.1/pages/169|page 169]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 0 ` |
-| ` school ` | ` transmutation ` |
-| ` classes ` | ` ["cleric"] ` |
-| ` components ` | ` ["verbal"] ` |
-| ` concentration ` | ` false ` |
-| ` duration ` | ` Up to 1 minute ` |
-| ` casting_time ` | ` Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
-
-<!-- splat:values path=splat_spell/range -->
-
-| Field | Value |
-| --- | --- |
-| ` feet ` | ` 30 ` |
 
 ## Rule
 

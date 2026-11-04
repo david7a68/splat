@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "75c9f449-2f93-5b3e-bd63-74ba151f371c"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/efreeti"
 splat_name: "Efreeti"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [283], "executable": false}
+splat_pages:
+- 283
 ---
 
 # Efreeti
@@ -45,3 +46,13 @@ At Will: Detect Magic, Elementalism\
 1/Day Each: Gaseous Form, Invisibility, Major Image, Plane Shift, Tongues, Wall of Fire (level 7 version)
 
 Original layout: [[../pages/283|page 283]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

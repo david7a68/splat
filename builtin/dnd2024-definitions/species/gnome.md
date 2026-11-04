@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 18db71b0-4ee1-5f36-a04b-c06c1090ba46
 splat_kind: rule_group
 splat_key: dnd2024:species/gnome
 splat_name: Gnome
-splat_origin:
-  key: dnd2024:reference/pages/085
+splat_origin: dnd2024:reference/pages/085
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 85
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 85, https://www.dndbeyond.com/srd
 ---
 
 # Gnome

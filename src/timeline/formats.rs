@@ -450,7 +450,7 @@ pub fn convert(text: &str, sessions: &BTreeMap<Uuid, String>) -> Result<String, 
     if is_v2(text) {
         return Ok(text.into());
     }
-    let events = super::parse(text)?;
+    let events: Vec<Event> = splat::content::legacy::timeline(text)?;
     let mut after = crate::content_workspace::patch_fields(
         text,
         &[("timeline_version", Some(2.into())), ("timeline", None)],
@@ -876,37 +876,17 @@ mod tests {
         assert_eq!(book.events[0].result, "Round 3");
         assert!(std::fs::read_to_string(path).unwrap().contains("DM prose."));
     }
-    #[test]
-    fn i19_s2_legacy_conflict_compares_in_disk_schema_and_converts_on_overwrite() {
-        let dir = tempfile::tempdir().unwrap();
-        let path = dir.path().join(FILE);
-        let old = "---\ntags: [DM]\ntimeline_version: 1\ntimeline:\n- id: t-road\n  kind: travel\n  weather: rain\n---\n\nDM prose.\n";
-        std::fs::write(&path, old).unwrap();
-        let mut book = Book::default();
-        book.open(Some(dir.path()));
-        book.touch();
-        book.save();
-        assert!(book.conflict);
-        let (draft, disk) = book.conflict_comparison().unwrap();
-        assert_eq!(disk, old);
-        assert!(!is_v2(&draft));
-        assert!(draft.contains("tags: [DM]"));
-        assert_eq!(
-            super::super::parse(&draft).unwrap()[0].extra["weather"],
-            serde_yaml_ng::Value::from("rain")
-        );
-        book.overwrite();
-        let saved = std::fs::read_to_string(path).unwrap();
-        assert!(is_v2(&saved));
-        assert_eq!(saved, convert(&draft, &BTreeMap::new()).unwrap());
-    }
+
     #[test]
     fn i19_x14_custom_fields_are_visible_and_deleting_one_keeps_it_deleted() {
         let old = "---\ntimeline_version: 1\ntimeline:\n- id: t-road\n  kind: travel\n  weather: rain\n  loot: {gold: 20}\n---\n";
         let converted = convert(old, &BTreeMap::new()).unwrap();
         assert!(converted.contains("  - weather: rain\n"));
         assert!(!converted.contains("data="));
-        assert_eq!(super::super::parse(old).unwrap(), parse(&converted).0);
+        assert_eq!(
+            splat::content::legacy::timeline::<Event>(old).unwrap(),
+            parse(&converted).0
+        );
         let edited = converted
             .lines()
             .filter(|line| !line.starts_with("  - loot:"))
@@ -922,22 +902,6 @@ mod tests {
         assert_eq!(events.len(), 2);
         assert!(flags.iter().any(|flag| flag.line == 8
             && flag.message == "\"Day 5\" is day 2 in order. Splat renumbers it when it saves."));
-    }
-
-    #[test]
-    fn i19_s2_one_outside_paragraph_is_one_line_difference() {
-        let dir = tempfile::tempdir().unwrap();
-        let old = super::super::render(
-            &[event(Kind::Travel, "t-road".into(), "Road".into())],
-            &BTreeMap::new(),
-        )
-        .unwrap();
-        let disk = format!("{old}DM's paragraph.\n");
-        std::fs::write(dir.path().join(FILE), &disk).unwrap();
-        let mut book = Book::default();
-        book.open(Some(dir.path()));
-        let (draft, disk) = book.conflict_comparison().unwrap();
-        assert_eq!(crate::design::comparison_changes(&draft, &disk).0, 1);
     }
 
     #[test]
@@ -980,15 +944,26 @@ mod tests {
         }
     }
     #[test]
-    fn fmt_f3_timeline_golden_noise_and_result_only_run_write() {
+    fn timeline_conversion_keeps_model_prose_and_exact_new_text() {
         let old = "---\n# Keep this comment\ntags: [road]\ntimeline_version: 1\ntimeline:\n- id: t-day\n  kind: day\n  title: Begins\n- id: t-fight\n  kind: encounter\n  title: Bridge\n  result: Round 1\n  weather: rain\n---\n\n# Timeline\n\nA paragraph from the DM.\n";
         let new = "---\n# Keep this comment\ntags: [road]\ntimeline_version: 2\n---\n\n# Timeline\n\n## Day 1: Begins\n%% splat id=t-day %%\n\n- Encounter: **Bridge** ^t-fight\n  - Result: Round 1\n  - weather: rain\n\nA paragraph from the DM.\n";
-        assert_eq!(super::super::parse(old).unwrap(), parse(new).0);
         let converted = convert(old, &BTreeMap::new()).unwrap();
+        assert_eq!(
+            converted,
+            new.replace("- Encounter:", "- Fight:")
+                .replace(
+                    "# Timeline\n\n",
+                    "# Timeline\n\nEdit this list in Obsidian or in Splat.\n\n"
+                )
+                .replace("\n\nA paragraph", "\n\n\nA paragraph")
+        );
         assert!(converted.contains("# Keep this comment"));
         assert!(converted.contains("tags: [road]"));
         assert!(converted.contains("A paragraph from the DM."));
-        assert_eq!(super::super::parse(old).unwrap(), parse(&converted).0);
+        assert_eq!(
+            splat::content::legacy::timeline::<Event>(old).unwrap(),
+            parse(&converted).0
+        );
         assert_eq!(converted, convert(&converted, &BTreeMap::new()).unwrap());
         let mut events = parse(new).0;
         events[1].result = "Party won".into();
@@ -1011,29 +986,5 @@ mod tests {
         assert!(edited.contains("Keep this prose."));
         assert!(edited.contains("- Loot: 30 gp"));
         assert!(edited.contains(&format!("- Major event: **New** ^{}", events[1].id)));
-    }
-    #[test]
-    fn fmt_f3_run_does_not_convert_legacy_timeline() {
-        let dir = tempfile::tempdir().unwrap();
-        let text = super::super::render(&[], &BTreeMap::new()).unwrap();
-        std::fs::write(dir.path().join(FILE), text).unwrap();
-        let mut book = Book::default();
-        book.open(Some(dir.path()));
-        book.record_run(
-            &RunFact {
-                id: Uuid::new_v4(),
-                copied_from: None,
-                name: "Bridge".into(),
-                round: 1,
-                state: RunState::Running,
-                steps: 1,
-            },
-            None,
-            true,
-        );
-        book.save();
-        let saved = std::fs::read_to_string(dir.path().join(FILE)).unwrap();
-        assert!(saved.contains("timeline_version: 1"));
-        assert_eq!(super::super::parse(&saved).unwrap().len(), 1);
     }
 }

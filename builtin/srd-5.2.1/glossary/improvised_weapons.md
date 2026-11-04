@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "f40cc57e-1dfb-571c-b98b-38aa19a916d2"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/glossary/improvised_weapons"
 splat_name: "Improvised Weapons"
-splat_reference: {"source": "SRD 5.2.1", "category": "glossary", "pages": [183], "executable": false}
+splat_pages:
+- 183
 ---
 
 # Improvised Weapons
@@ -22,3 +23,13 @@ Range. If you throw the weapon, it has a normal range of 20 feet and a long rang
 Weapon Equivalents. If an improvised weapon resembles a Simple or Martial weapon, the GM may say it functions as that weapon and uses that weapon’s rules. For example, the GM could treat a table leg as a Club.
 
 Original layout: [[../pages/183|page 183]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: glossary
+> executable: false
+> ```
+

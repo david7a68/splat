@@ -1,10 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "5aac4ef8-1648-5d01-b104-77dfb6ef8d4a"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/adult_bronze_dragon"
 splat_name: "Adult Bronze Dragon"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [270, 271], "executable": false}
+splat_pages:
+- 270
+- 271
 ---
 
 # Adult Bronze Dragon
@@ -57,3 +59,13 @@ Pounce. The dragon moves up to half its Speed, and it makes one Rend attack.
 Thunderclap. Constitution Saving Throw: DC 17, each creature in a 20-foot-radius Sphere centered on a point the dragon can see within 90 feet. Failure: 10 (3d6) Thunder damage, and the target has the Deafened condition until the end of its next turn.
 
 Original layout: [[../pages/270|page 270]], [[../pages/271|page 271]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

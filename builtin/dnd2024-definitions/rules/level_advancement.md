@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 6b13a834-95d3-54ba-8233-b94b19856c22
 splat_kind: rule
 splat_key: dnd2024:rules/level_advancement
 splat_name: Level Advancement
-splat_origin:
-  key: dnd2024:reference/pages/023
+splat_origin: dnd2024:reference/pages/023
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 23
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 23, https://www.dndbeyond.com/srd
 ---
 
 # Level Advancement

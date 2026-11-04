@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 09e38628-990e-50a7-87be-311aa6df7f73
 splat_kind: item
 splat_key: dnd2024:items/bowl_of_commanding_water_elementals
 splat_name: Bowl of Commanding Water Elementals
-splat_origin:
-  key: dnd2024:reference/magic_item/bowl_of_commanding_water_elementals
+splat_origin: dnd2024:reference/magic_item/bowl_of_commanding_water_elementals
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 214
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 214, https://www.dndbeyond.com/srd
 ---
 
 # Bowl of Commanding Water Elementals
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Wondrous Item |
+| Rarity | Rare |
+| Attunement | No |
+
 
 ## Source text
 
@@ -26,22 +33,9 @@ The bowl is about 1 foot in diameter and half as deep. It holds about 3 gallons.
 
 Original layout: [[../../srd-5.2.1/pages/214|page 214]].
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` wondrous_item ` |
-| ` rarity ` | ` rare ` |
 
-### Equipment
-
-<!-- splat:values path=splat_item/equipment -->
-
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` none ` |
 
 ## Rule
 

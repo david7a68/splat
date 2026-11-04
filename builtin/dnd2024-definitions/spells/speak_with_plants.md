@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: f3e9921a-757f-5580-a3cd-2d5c4bfe400a
 splat_kind: spell
 splat_key: dnd2024:spells/speak_with_plants
 splat_name: Speak with Plants
-splat_origin:
-  key: dnd2024:reference/spell/speak_with_plants
+splat_origin: dnd2024:reference/spell/speak_with_plants
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 164
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 164, https://www.dndbeyond.com/srd
 ---
 
 # Speak with Plants
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 3 |
+| School | Transmutation |
+| Classes | Bard, Druid, Ranger |
+| Casting Time | Action |
+| Range |  |
+| Components | V, S |
+| Duration | 10 minutes |
+
 
 ## Source text
 
@@ -34,28 +45,9 @@ If a Plant creature is in the area, you can communicate with it as if you shared
 
 Original layout: [[../../srd-5.2.1/pages/164|page 164]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 3 ` |
-| ` school ` | ` transmutation ` |
-| ` classes ` | ` ["bard", "druid", "ranger"] ` |
-| ` components ` | ` ["verbal", "somatic"] ` |
-| ` concentration ` | ` false ` |
-| ` duration ` | ` 10 minutes ` |
-| ` casting_time ` | ` Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
-
-<!-- splat:values path=splat_spell/range -->
-
-| Field | Value |
-| --- | --- |
-| ` mode ` | ` self ` |
 
 ## Rule
 
@@ -151,3 +143,12 @@ maximum:
   value: 10
   unit: minute
 ```
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_spell_extras -->
+> 
+> ```yaml
+> range:
+>   mode: self
+> ```
+

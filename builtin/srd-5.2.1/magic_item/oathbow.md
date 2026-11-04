@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "5fa1b07c-63db-5fef-b11d-042b7ec6d21b"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/magic_item/oathbow"
 splat_name: "Oathbow"
-splat_reference: {"source": "SRD 5.2.1", "category": "magic_item", "pages": [233], "executable": false}
+splat_pages:
+- 233
 ---
 
 # Oathbow
@@ -20,3 +21,13 @@ When you make a ranged attack roll with this weapon against your sworn enemy, yo
 While your sworn enemy lives, you have Disadvantage on attack rolls with all other weapons.
 
 Original layout: [[../pages/233|page 233]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: magic_item
+> executable: false
+> ```
+

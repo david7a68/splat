@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 869878e5-1543-5757-8ae4-ab880e5ae328
 splat_kind: rule
 splat_key: dnd2024:rules/gameplay_toolbox
 splat_name: Gameplay Toolbox
-splat_origin:
-  key: dnd2024:reference/pages/192
+splat_origin: dnd2024:reference/pages/192
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 192
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 192, https://www.dndbeyond.com/srd
 ---
 
 # Gameplay Toolbox

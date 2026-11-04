@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 0ceb2480-62d9-5c92-819c-c28f6ff8a286
 splat_kind: rule
 splat_key: dnd2024:rules/social_interaction
 splat_name: Social Interaction
-splat_origin:
-  key: dnd2024:reference/pages/010
+splat_origin: dnd2024:reference/pages/010
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 10
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 10, https://www.dndbeyond.com/srd
 ---
 
 # Social Interaction

@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: bcfa9253-12b1-553a-bc7c-eaf05c6eb8ec
 splat_kind: spell
 splat_key: dnd2024:spells/conjure_elemental
 splat_name: Conjure Elemental
-splat_origin:
-  key: dnd2024:reference/spell/conjure_elemental
+splat_origin: dnd2024:reference/spell/conjure_elemental
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 118
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 118, https://www.dndbeyond.com/srd
 ---
 
 # Conjure Elemental
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 5 |
+| School | Conjuration |
+| Classes | Druid, Wizard |
+| Casting Time | Action |
+| Range | 60 feet |
+| Components | V, S |
+| Duration | Concentration, up to 10 minutes |
+
 
 ## Source text
 
@@ -32,28 +43,9 @@ Using a Higher-Level Spell Slot. The damage increases by 1d8 for each spell slot
 
 Original layout: [[../../srd-5.2.1/pages/118|page 118]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 5 ` |
-| ` school ` | ` conjuration ` |
-| ` classes ` | ` ["druid", "wizard"] ` |
-| ` components ` | ` ["verbal", "somatic"] ` |
-| ` concentration ` | ` true ` |
-| ` duration ` | ` Concentration, up to 10 minutes ` |
-| ` casting_time ` | ` Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
-
-<!-- splat:values path=splat_spell/range -->
-
-| Field | Value |
-| --- | --- |
-| ` feet ` | ` 60 ` |
 
 ## Rule
 

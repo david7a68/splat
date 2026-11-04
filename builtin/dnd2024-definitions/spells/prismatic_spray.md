@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 815fe32c-d12a-540a-acde-9d65b2337972
 splat_kind: spell
 splat_key: dnd2024:spells/prismatic_spray
 splat_name: Prismatic Spray
-splat_origin:
-  key: dnd2024:reference/spell/prismatic_spray
+splat_origin: dnd2024:reference/spell/prismatic_spray
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 154, 155
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 154, 155, https://www.dndbeyond.com/srd
 ---
 
 # Prismatic Spray
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 7 |
+| School | Evocation |
+| Classes | Bard, Sorcerer, Wizard |
+| Casting Time | Action |
+| Range |  |
+| Components | V, S |
+| Duration | Instantaneous |
+
 
 ## Source text
 
@@ -46,28 +57,9 @@ Eight rays of light flash from you in a 60-foot Cone. Each creature in the Cone 
 
 Original layout: [[../../srd-5.2.1/pages/154|page 154]], [[../../srd-5.2.1/pages/155|page 155]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 7 ` |
-| ` school ` | ` evocation ` |
-| ` classes ` | ` ["bard", "sorcerer", "wizard"] ` |
-| ` components ` | ` ["verbal", "somatic"] ` |
-| ` concentration ` | ` false ` |
-| ` duration ` | ` Instantaneous ` |
-| ` casting_time ` | ` Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
-
-<!-- splat:values path=splat_spell/range -->
-
-| Field | Value |
-| --- | --- |
-| ` mode ` | ` self ` |
 
 ## Rule
 
@@ -310,3 +302,12 @@ failure:
 | ` source ` | ` supplied_world_geometry ` |
 | ` unknown_facts ` | ` require_resolution ` |
 | ` infer_unprovided_geometry ` | ` false ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_spell_extras -->
+> 
+> ```yaml
+> range:
+>   mode: self
+> ```
+

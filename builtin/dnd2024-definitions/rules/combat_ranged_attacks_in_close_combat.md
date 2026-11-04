@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 9c568993-cdec-5914-91ff-fc45f1dca1e9
 splat_kind: rule
 splat_key: dnd2024:rules/combat_ranged_attacks_in_close_combat
 splat_name: Ranged Attacks in Close Combat
-splat_origin:
-  key: dnd2024:reference/pages/015
+splat_origin: dnd2024:reference/pages/015
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 15
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 15, https://www.dndbeyond.com/srd
 ---
 
 # Ranged Attacks in Close Combat

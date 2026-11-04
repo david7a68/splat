@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "320bff06-a3cf-5d0b-9431-4072b321f87b"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/black_tentacles"
 splat_name: "Black Tentacles"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [113], "executable": false}
+splat_pages:
+- 113
 ---
 
 # Black Tentacles
@@ -24,3 +25,13 @@ Each creature in that area makes a Strength saving throw. On a failed save, it t
 A Restrained creature can take an action to make a Strength (Athletics) check against your spell save DC, ending the condition on itself on a success.
 
 Original layout: [[../pages/113|page 113]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

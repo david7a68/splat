@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 459b4c2e-7c8a-5fef-9332-ee83c0b32ffd
 splat_kind: rule
 splat_key: dnd2024:class_features/paladin_level_3_channel_divinity
 splat_name: 'Level 3: Channel Divinity'
-splat_origin:
-  key: dnd2024:reference/pages/054
+splat_origin: dnd2024:reference/pages/054
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 54, 55
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 54, 55, https://www.dndbeyond.com/srd
 ---
 
 # Level 3: Channel Divinity

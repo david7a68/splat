@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "2d98eec4-27d0-5ff4-be18-aadde097c703"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/green_dragon_wyrmling"
 splat_name: "Green Dragon Wyrmling"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [293], "executable": false}
+splat_pages:
+- 293
 ---
 
 # Green Dragon Wyrmling
@@ -37,3 +38,13 @@ Rend. Melee Attack Roll: +4, reach 5 ft. Hit: 7 (1d10 + 2) Slashing damage plus 
 Poison Breath (Recharge 5–6). Constitution Saving Throw: DC 11, each creature in a 15-foot Cone. Failure: 21 (6d6) Poison damage. Success: Half damage.
 
 Original layout: [[../pages/293|page 293]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 68325514-4658-50b9-8cec-6c38bf89de8b
 splat_kind: rule
 splat_key: dnd2024:class_features/rogue_level_1_thieves_cant
 splat_name: 'Level 1: Thieves’ Cant'
-splat_origin:
-  key: dnd2024:reference/pages/062
+splat_origin: dnd2024:reference/pages/062
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 62
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 62, https://www.dndbeyond.com/srd
 ---
 
 # Level 1: Thieves’ Cant

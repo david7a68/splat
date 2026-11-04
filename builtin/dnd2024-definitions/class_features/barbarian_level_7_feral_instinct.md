@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 1ec276d2-f908-58a1-9831-340fff07ff4d
 splat_kind: rule
 splat_key: dnd2024:class_features/barbarian_level_7_feral_instinct
 splat_name: 'Level 7: Feral Instinct'
-splat_origin:
-  key: dnd2024:reference/pages/029
+splat_origin: dnd2024:reference/pages/029
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 29
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 29, https://www.dndbeyond.com/srd
 ---
 
 # Level 7: Feral Instinct

@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: b7643b11-2a43-559e-971f-aae50cc8f01f
 splat_kind: spell
 splat_key: dnd2024:spells/thunderwave
 splat_name: Thunderwave
-splat_origin:
-  key: dnd2024:reference/spell/thunderwave
+splat_origin: dnd2024:reference/spell/thunderwave
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 169
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 169, https://www.dndbeyond.com/srd
 ---
 
 # Thunderwave
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 1 |
+| School | Evocation |
+| Classes | Bard, Druid, Sorcerer, Wizard |
+| Casting Time | Action |
+| Range |  |
+| Components | V, S |
+| Duration | Instantaneous |
+
 
 ## Source text
 
@@ -32,28 +43,9 @@ Using a Higher-Level Spell Slot. The damage increases by 1d8 for each spell slot
 
 Original layout: [[../../srd-5.2.1/pages/169|page 169]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 1 ` |
-| ` school ` | ` evocation ` |
-| ` classes ` | ` ["bard", "druid", "sorcerer", "wizard"] ` |
-| ` components ` | ` ["verbal", "somatic"] ` |
-| ` concentration ` | ` false ` |
-| ` duration ` | ` Instantaneous ` |
-| ` casting_time ` | ` Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
-
-<!-- splat:values path=splat_spell/range -->
-
-| Field | Value |
-| --- | --- |
-| ` mode ` | ` self ` |
 
 ## Rule
 
@@ -134,3 +126,12 @@ concentration: false
 maximum:
   kind: instantaneous
 ```
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_spell_extras -->
+> 
+> ```yaml
+> range:
+>   mode: self
+> ```
+

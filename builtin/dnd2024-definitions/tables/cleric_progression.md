@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 4c6a3cd1-4c23-5774-9f46-77be07f5e3b3
 splat_kind: rule
 splat_key: dnd2024:tables/cleric_progression
 splat_name: Cleric Progression
-splat_origin:
-  key: dnd2024:reference/pages/036
+splat_origin: dnd2024:reference/pages/036
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 36
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 36, https://www.dndbeyond.com/srd
 ---
 
 # Cleric Progression

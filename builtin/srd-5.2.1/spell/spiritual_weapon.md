@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "62e2c56e-d88e-5961-b486-9157f2d3f06f"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/spiritual_weapon"
 splat_name: "Spiritual Weapon"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [165], "executable": false}
+splat_pages:
+- 165
 ---
 
 # Spiritual Weapon
@@ -24,3 +25,13 @@ As a Bonus Action on your later turns, you can move the force up to 20 feet and 
 Using a Higher-Level Spell Slot. The damage increases by 1d8 for every slot level above 2.
 
 Original layout: [[../pages/165|page 165]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

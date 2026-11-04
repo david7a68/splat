@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: e2e011ec-40d9-5e52-99eb-e06a89ee9bda
 splat_kind: rule
 splat_key: dnd2024:rules/lifestyle_expenses_poor_2_sp_per_day
 splat_name: Poor (2 SP per Day)
-splat_origin:
-  key: dnd2024:reference/pages/101
+splat_origin: dnd2024:reference/pages/101
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 101
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 101, https://www.dndbeyond.com/srd
 ---
 
 # Poor (2 SP per Day)

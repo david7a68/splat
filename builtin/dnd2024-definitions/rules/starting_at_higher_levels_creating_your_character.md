@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 1366dc42-9425-52c3-a79c-6c0a7fe46c73
 splat_kind: rule
 splat_key: dnd2024:rules/starting_at_higher_levels_creating_your_character
 splat_name: Creating Your Character
-splat_origin:
-  key: dnd2024:reference/pages/024
+splat_origin: dnd2024:reference/pages/024
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 24
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 24, https://www.dndbeyond.com/srd
 ---
 
 # Creating Your Character

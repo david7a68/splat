@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: e744366a-c0e1-5396-a29d-2b5d69f08560
 splat_kind: spell
 splat_key: dnd2024:spells/tree_stride
 splat_name: Tree Stride
-splat_origin:
-  key: dnd2024:reference/spell/tree_stride
+splat_origin: dnd2024:reference/spell/tree_stride
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 170
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 170, https://www.dndbeyond.com/srd
 ---
 
 # Tree Stride
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 5 |
+| School | Conjuration |
+| Classes | Druid, Ranger |
+| Casting Time | Action |
+| Range |  |
+| Components | V, S |
+| Duration | Concentration, up to 1 minute |
+
 
 ## Source text
 
@@ -30,28 +41,9 @@ You can use this transportation ability only once on each of your turns. You mus
 
 Original layout: [[../../srd-5.2.1/pages/170|page 170]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 5 ` |
-| ` school ` | ` conjuration ` |
-| ` classes ` | ` ["druid", "ranger"] ` |
-| ` components ` | ` ["verbal", "somatic"] ` |
-| ` concentration ` | ` true ` |
-| ` duration ` | ` Concentration, up to 1 minute ` |
-| ` casting_time ` | ` Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
-
-<!-- splat:values path=splat_spell/range -->
-
-| Field | Value |
-| --- | --- |
-| ` mode ` | ` self ` |
 
 ## Rule
 
@@ -91,3 +83,12 @@ no_movement_remaining:
 uses_per_caster_turn: 1
 must_end_turn_outside_tree: true
 ```
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_spell_extras -->
+> 
+> ```yaml
+> range:
+>   mode: self
+> ```
+

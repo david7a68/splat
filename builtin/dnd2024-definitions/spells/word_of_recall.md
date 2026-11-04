@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: f01125ab-d5e2-5211-9b98-faa790036b8c
 splat_kind: spell
 splat_key: dnd2024:spells/word_of_recall
 splat_name: Word of Recall
-splat_origin:
-  key: dnd2024:reference/spell/word_of_recall
+splat_origin: dnd2024:reference/spell/word_of_recall
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 175
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 175, https://www.dndbeyond.com/srd
 ---
 
 # Word of Recall
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 6 |
+| School | Conjuration |
+| Classes | Cleric |
+| Casting Time | Action |
+| Range | 5 feet |
+| Components | V |
+| Duration | Instantaneous |
+
 
 ## Source text
 
@@ -30,28 +41,9 @@ You must designate a location, such as a temple, as a sanctuary by casting this 
 
 Original layout: [[../../srd-5.2.1/pages/175|page 175]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 6 ` |
-| ` school ` | ` conjuration ` |
-| ` classes ` | ` ["cleric"] ` |
-| ` components ` | ` ["verbal"] ` |
-| ` concentration ` | ` false ` |
-| ` duration ` | ` Instantaneous ` |
-| ` casting_time ` | ` Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
-
-<!-- splat:values path=splat_spell/range -->
-
-| Field | Value |
-| --- | --- |
-| ` feet ` | ` 5 ` |
 
 ## Rule
 

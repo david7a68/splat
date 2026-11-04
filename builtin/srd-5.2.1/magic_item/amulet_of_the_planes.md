@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "5732163a-d768-5639-a78f-86adf25dc235"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/magic_item/amulet_of_the_planes"
 splat_name: "Amulet of the Planes"
-splat_reference: {"source": "SRD 5.2.1", "category": "magic_item", "pages": [209], "executable": false}
+splat_pages:
+- 209
 ---
 
 # Amulet of the Planes
@@ -24,3 +25,13 @@ While wearing this amulet, you can take a Magic action to name a location that y
 | 91–00 | Random location on the Astral Plane |
 
 Original layout: [[../pages/209|page 209]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: magic_item
+> executable: false
+> ```
+

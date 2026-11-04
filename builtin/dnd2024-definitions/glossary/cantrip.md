@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: bc2d14b8-7529-54c5-98b1-d6f2017fea75
 splat_kind: rule
 splat_key: dnd2024:glossary/cantrip
 splat_name: Cantrip
-splat_origin:
-  key: dnd2024:reference/glossary/cantrip
+splat_origin: dnd2024:reference/glossary/cantrip
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 178
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 178, https://www.dndbeyond.com/srd
 ---
 
 # Cantrip

@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 99965f86-2526-5f91-9b40-1114afbf6486
 splat_kind: item
 splat_key: dnd2024:items/belt_of_dwarvenkind
 splat_name: Belt of Dwarvenkind
-splat_origin:
-  key: dnd2024:reference/magic_item/belt_of_dwarvenkind
+splat_origin: dnd2024:reference/magic_item/belt_of_dwarvenkind
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 213
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 213, https://www.dndbeyond.com/srd
 ---
 
 # Belt of Dwarvenkind
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Wondrous Item |
+| Rarity | Rare |
+| Attunement | Yes |
+
 
 ## Source text
 
@@ -38,22 +45,9 @@ Resilience. You have Resistance to Poison damage. You also have Advantage on sav
 
 Original layout: [[../../srd-5.2.1/pages/213|page 213]].
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` wondrous_item ` |
-| ` rarity ` | ` rare ` |
 
-### Equipment
-
-<!-- splat:values path=splat_item/equipment -->
-
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` required ` |
 
 ## Rule
 

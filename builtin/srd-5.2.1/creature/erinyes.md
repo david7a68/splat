@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "c82f8f0d-4d7a-5277-9eba-fe3b28790980"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/erinyes"
 splat_name: "Erinyes"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [283], "executable": false}
+splat_pages:
+- 283
 ---
 
 # Erinyes
@@ -46,3 +47,13 @@ Entangling Rope (Requires Magic Rope). Strength Saving Throw: DC 16, one creatur
 Parry. Trigger: The erinyes is hit by a melee attack roll while holding a weapon. Response: The erinyes adds 4 to its AC against that attack, possibly causing it to miss.
 
 Original layout: [[../pages/283|page 283]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

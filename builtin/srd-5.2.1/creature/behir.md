@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "770f2382-d587-5607-a52c-90582559d306"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/behir"
 splat_name: "Behir"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [263], "executable": false}
+splat_pages:
+- 263
 ---
 
 # Behir
@@ -41,3 +42,13 @@ Swallow. Dexterity Saving Throw: DC 18, one Large or smaller creature Grappled b
 If the behir takes 30 damage or more on a single turn from the swallowed creature, the behir must succeed on a DC 14 Constitution saving throw at the end of that turn or regurgitate the creature, which falls in a space within 10 feet of the behir and has the Prone condition. If the behir dies, a swallowed creature is no longer Restrained and can escape from the corpse by using 15 feet of movement, exiting Prone.
 
 Original layout: [[../pages/263|page 263]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

@@ -1,7 +1,7 @@
 # Reviewed against the bundled SRD 5.2.1. These contracts require future adapters.
 # Parameter names are a closed contract, not scripts or expressions to evaluate.
 dnd2024:spells/counterspell:
-  source_sha256: 3dcf6fba5eba512f4e3352846610f6615314c4d5b8d1da50c2174128aa7712bc
+  source_sha256: eaf19e56ac1a6158c76ef69bfac23f80edc4c8663cd182618e3c45276c6a0a30
   requires: [dnd2024:counterspell_2024]
   fields:
     splat_actions:
@@ -37,7 +37,7 @@ dnd2024:spells/counterspell:
       save_dc: {type: integer, minimum: 1, maximum: 40, required: true}
 
 dnd2024:spells/polymorph:
-  source_sha256: d0c3d384bcc1e844742cd8ffd30775fd372883e229ec795897fd7147971e8c80
+  source_sha256: 01003aa0efaeaaf2cbe709b338ac559d3a21e8a6d781b59efbf6bd0eb2b7932d
   requires: [dnd2024:polymorph_2024]
   fields:
     splat_actions:
@@ -75,7 +75,7 @@ dnd2024:spells/polymorph:
       save_dc: {type: integer, minimum: 1, maximum: 40, required: true}
 
 dnd2024:creatures/hydra:
-  source_sha256: 429a5a604b7cc4f1f75e4669efbb7d30052e3ec08d28a83e10c8154b92c1e5c1
+  source_sha256: 543e8be3bf2b73fa89c57e03b5774a8463b24f7a1157d609fd76d677ffb0f45e
   requires: [dnd2024:hydra_heads_2024, dnd2024:hold_breath]
   fields:
     splat_traits:
@@ -132,7 +132,7 @@ dnd2024:creatures/hydra:
               pay_attack_economy_again: false
 
 dnd2024:items/bag_of_holding:
-  source_sha256: 25ef09fc35897277d100419c0d05a7fb2732b35b211e2eed5c3a9be23ec65b35
+  source_sha256: 42225d08ad95b7bf7895609857a5076b64917f8c77907a8c8fbe30b652291e65
   requires: [dnd2024:bag_of_holding_2024]
   fields:
     splat_item:
@@ -169,7 +169,7 @@ dnd2024:items/bag_of_holding:
             gate: one_way_closes_cannot_reopen
 
 dnd2024:items/wand_of_fireballs:
-  source_sha256: ba840373a3f3bee48d32b7dd6bebd68e575707d70ca26981706b3120f63c522a
+  source_sha256: 5bc41e2daea844f07a71ac8b08ea7171579e7872354a96a30b6f83c705bc5a16
   requires: [dnd2024:wand_of_fireballs_2024]
   fields:
     splat_item:

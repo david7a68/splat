@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 191c5e14-4406-50f6-bd02-5344a2611871
 splat_kind: rule
 splat_key: dnd2024:glossary/per_day
 splat_name: Per Day
-splat_origin:
-  key: dnd2024:reference/glossary/per_day
+splat_origin: dnd2024:reference/glossary/per_day
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 186
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 186, https://www.dndbeyond.com/srd
 ---
 
 # Per Day

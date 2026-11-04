@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "dc8bbb5f-6642-55d1-90f1-7ae5576f4278"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/tsunami"
 splat_name: "Tsunami"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [171], "executable": false}
+splat_pages:
+- 171
 ---
 
 # Tsunami
@@ -26,3 +27,13 @@ At the start of each of your turns after the wall appears, the wall, along with 
 A creature caught in the wall can move by swimming. Because of the wave’s force, though, the creature must succeed on a Strength (Athletics) check against your spell save DC to move at all. If it fails the check, it can’t move. A creature that moves out of the wall falls to the ground.
 
 Original layout: [[../pages/171|page 171]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

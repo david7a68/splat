@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 85bb3099-8f3a-5296-b590-eb7ed9e2d595
 splat_kind: rule
 splat_key: dnd2024:glossary/expertise
 splat_name: Expertise
-splat_origin:
-  key: dnd2024:reference/glossary/expertise
+splat_origin: dnd2024:reference/glossary/expertise
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 182
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 182, https://www.dndbeyond.com/srd
 ---
 
 # Expertise

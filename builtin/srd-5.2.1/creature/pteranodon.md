@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "b0cdb5d3-9e4b-5994-bc15-7912c89962c3"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/pteranodon"
 splat_name: "Pteranodon"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [359], "executable": false}
+splat_pages:
+- 359
 ---
 
 # Pteranodon
@@ -32,3 +33,13 @@ Flyby. The pteranodon doesn’t provoke an Opportunity Attack when it flies out 
 Bite. Melee Attack Roll: +4, reach 5 ft. Hit: 6 (1d8 + 2) Piercing damage.
 
 Original layout: [[../pages/359|page 359]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "35b603d6-d17f-5531-a09d-4631fa948098"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/magic_item/oil_of_etherealness"
 splat_name: "Oil of Etherealness"
-splat_reference: {"source": "SRD 5.2.1", "category": "magic_item", "pages": [233], "executable": false}
+splat_pages:
+- 233
 ---
 
 # Oil of Etherealness
@@ -18,3 +19,13 @@ One vial of this oil can cover one Medium or smaller creature, along with the eq
 Beads of this cloudy, gray oil form on the outside of its container and quickly evaporate.
 
 Original layout: [[../pages/233|page 233]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: magic_item
+> executable: false
+> ```
+

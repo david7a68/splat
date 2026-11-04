@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: c13c443b-6460-53bf-bc48-acdb876af0d9
 splat_kind: rule
 splat_key: dnd2024:class_features/cleric_level_1_divine_order
 splat_name: 'Level 1: Divine Order'
-splat_origin:
-  key: dnd2024:reference/pages/037
+splat_origin: dnd2024:reference/pages/037
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 37
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 37, https://www.dndbeyond.com/srd
 ---
 
 # Level 1: Divine Order

@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "ad0b3256-3bd6-5c7a-b3df-49646f763e80"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/kraken"
 splat_name: "Kraken"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [303], "executable": false}
+splat_pages:
+- 303
 ---
 
 # Kraken
@@ -55,3 +56,13 @@ Storm Bolt. The kraken uses Lightning Strike.
 Toxic Ink. Constitution Saving Throw: DC 23, each creature in a 15-foot Emanation originating from the kraken while it is underwater. Failure: The target has the Blinded and Poisoned conditions until the end of the kraken’s next turn. The kraken then moves up to its Speed. Failure or Success: The kraken can’t take this action again until the start of its next turn.
 
 Original layout: [[../pages/303|page 303]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

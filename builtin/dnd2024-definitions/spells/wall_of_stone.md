@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 2c639407-c344-5139-94ff-f9af21495524
 splat_kind: spell
 splat_key: dnd2024:spells/wall_of_stone
 splat_name: Wall of Stone
-splat_origin:
-  key: dnd2024:reference/spell/wall_of_stone
+splat_origin: dnd2024:reference/spell/wall_of_stone
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 173
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 173, https://www.dndbeyond.com/srd
 ---
 
 # Wall of Stone
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 5 |
+| School | Evocation |
+| Classes | Druid, Sorcerer, Wizard |
+| Casting Time | Action |
+| Range | 120 feet |
+| Components | V, S, M (a cube of granite) |
+| Duration | Concentration, up to 10 minutes |
+
 
 ## Source text
 
@@ -38,37 +49,11 @@ If you maintain your Concentration on this spell for its full duration, the wall
 
 Original layout: [[../../srd-5.2.1/pages/173|page 173]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 5 ` |
-| ` school ` | ` evocation ` |
-| ` classes ` | ` ["druid", "sorcerer", "wizard"] ` |
-| ` components ` | ` ["verbal", "somatic", "material"] ` |
-| ` concentration ` | ` true ` |
-| ` duration ` | ` Concentration, up to 10 minutes ` |
-| ` casting_time ` | ` Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
 
-<!-- splat:values path=splat_spell/range -->
 
-| Field | Value |
-| --- | --- |
-| ` feet ` | ` 120 ` |
-
-### Material
-
-<!-- splat:values path=splat_spell/material -->
-
-| Field | Value |
-| --- | --- |
-| ` description ` | ` a cube of granite ` |
-| ` consumed ` | ` false ` |
 
 ## Rule
 
@@ -205,3 +190,12 @@ earlier_spell_end: wall_disappears
 | ` source ` | ` supplied_world_geometry ` |
 | ` unknown_facts ` | ` require_resolution ` |
 | ` infer_unprovided_geometry ` | ` false ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_spell_extras -->
+> 
+> ```yaml
+> material:
+>   consumed: false
+> ```
+

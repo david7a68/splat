@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "2002c125-cd18-547a-b884-fb5494241548"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/goblin_boss"
 splat_name: "Goblin Boss"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [290], "executable": false}
+splat_pages:
+- 290
 ---
 
 # Goblin Boss
@@ -41,3 +42,13 @@ Nimble Escape. The goblin takes the Disengage or Hide action.
 Redirect Attack. Trigger: A creature the goblin can see makes an attack roll against it. Response: The goblin chooses a Small or Medium ally within 5 feet of itself. The goblin and that ally swap places, and the ally becomes the target of the attack instead.
 
 Original layout: [[../pages/290|page 290]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

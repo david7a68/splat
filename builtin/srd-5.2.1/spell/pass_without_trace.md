@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "063b50ce-40ad-5dd1-b944-15380bd65504"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/pass_without_trace"
 splat_name: "Pass without Trace"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [151], "executable": false}
+splat_pages:
+- 151
 ---
 
 # Pass without Trace
@@ -20,3 +21,13 @@ Duration: Concentration, up to 1 hour
 You radiate a concealing aura in a 30-foot Emanation for the duration. While in the aura, you and each creature you choose have a +10 bonus to Dexterity (Stealth) checks and leave no tracks.
 
 Original layout: [[../pages/151|page 151]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

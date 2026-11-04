@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "21edecfa-298c-58a6-92ba-0901d143dd87"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/glossary/unarmed_strike"
 splat_name: "Unarmed Strike"
-splat_reference: {"source": "SRD 5.2.1", "category": "glossary", "pages": [190], "executable": false}
+splat_pages:
+- 190
 ---
 
 # Unarmed Strike
@@ -22,3 +23,13 @@ Grapple. The target must succeed on a Strength or Dexterity saving throw (it cho
 Shove. The target must succeed on a Strength or Dexterity saving throw (it chooses which), or you either push it 5 feet away or cause it to have the Prone condition. The DC for the saving throw equals 8 plus your Strength modifier and Proficiency Bonus. This shove is possible only if the target is no more than one size larger than you.
 
 Original layout: [[../pages/190|page 190]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: glossary
+> executable: false
+> ```
+

@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 171111ce-3d96-5c9f-99f9-7d39e7f2bb37
 splat_kind: spell
 splat_key: dnd2024:spells/knock
 splat_name: Knock
-splat_origin:
-  key: dnd2024:reference/spell/knock
+splat_origin: dnd2024:reference/spell/knock
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 143, 144
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 143, 144, https://www.dndbeyond.com/srd
 ---
 
 # Knock
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 2 |
+| School | Transmutation |
+| Classes | Bard, Sorcerer, Wizard |
+| Casting Time | Action |
+| Range | 60 feet |
+| Components | V |
+| Duration | Instantaneous |
+
 
 ## Source text
 
@@ -36,28 +47,9 @@ When you cast the spell, a loud knock, audible up to 300 feet away, emanates fro
 
 Original layout: [[../../srd-5.2.1/pages/143|page 143]], [[../../srd-5.2.1/pages/144|page 144]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 2 ` |
-| ` school ` | ` transmutation ` |
-| ` classes ` | ` ["bard", "sorcerer", "wizard"] ` |
-| ` components ` | ` ["verbal"] ` |
-| ` concentration ` | ` false ` |
-| ` duration ` | ` Instantaneous ` |
-| ` casting_time ` | ` Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
-
-<!-- splat:values path=splat_spell/range -->
-
-| Field | Value |
-| --- | --- |
-| ` feet ` | ` 60 ` |
 
 ## Rule
 

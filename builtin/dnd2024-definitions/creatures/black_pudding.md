@@ -1,34 +1,60 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 2268e2e6-8129-53ff-8c67-b9ce03805d92
 splat_kind: creature
 splat_key: dnd2024:creatures/black_pudding
 splat_name: Black Pudding
-splat_origin:
-  key: dnd2024:reference/creature/black_pudding
+splat_origin: dnd2024:reference/creature/black_pudding
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 265, 266
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 265, 266, https://www.dndbeyond.com/srd
 ---
 
 # Black Pudding
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Large |
+| Type | Ooze |
+| Alignment | Unaligned |
+| Armor Class | 7 |
+| Hit Points | 68 (8d10 + 24) |
+| Initiative | -3 (7) |
+| Speed | 20 ft., Climb 20 ft. |
+| Challenge | 4 (XP 1,100; PB +2) |
+| Senses | Blindsight 60 ft.; Passive Perception 8 |
+| Languages | None |
+| Immunities | Acid, Cold, Lightning, Slashing; Charmed, Deafened, Exhaustion, Frightened, Grappled, Prone, Restrained |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 16 | +3 | +3 |
+| Dex | 5 | -3 | -3 |
+| Con | 16 | +3 | +3 |
+| Int | 1 | -5 | -5 |
+| Wis | 6 | -2 | -2 |
+| Cha | 1 | -5 | -5 |
+
 
 ## Source text
 
 <!-- SRD page 265 -->
 
-Large Ooze, Unaligned\
-AC 7 Initiative −3 (7)\
-HP 68 (8d10 + 24)\
-Speed 20 ft., Climb 20 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 16 +3 +3 Dex 5 −3 −3 Con 16 +3 +3\
-Int 1 −5 −5 Wis 6 −2 −2 Cha 1 −5 −5\
-Immunities Acid, Cold, Lightning, Slashing; Charmed, Deafened, Exhaustion, Frightened, Grappled, Prone, Restrained\
-Senses Blindsight 60 ft.; Passive Perception 8\
-Languages None\
-CR 4 (XP 1,100; PB +2)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Large Ooze, Unaligned\
+> AC 7 Initiative −3 (7)\
+> HP 68 (8d10 + 24)\
+> Speed 20 ft., Climb 20 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 16 +3 +3 Dex 5 −3 −3 Con 16 +3 +3\
+> Int 1 −5 −5 Wis 6 −2 −2 Cha 1 −5 −5\
+> Immunities Acid, Cold, Lightning, Slashing; Charmed, Deafened, Exhaustion, Frightened, Grappled, Prone, Restrained\
+> Senses Blindsight 60 ft.; Passive Perception 8\
+> Languages None\
+> CR 4 (XP 1,100; PB +2)
+
 
 ### Traits
 
@@ -50,46 +76,11 @@ Split. Trigger: While the pudding is Large or Medium and has 10+ Hit Points, it 
 
 Original layout: [[../../srd-5.2.1/pages/265|page 265]], [[../../srd-5.2.1/pages/266|page 266]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` large ` |
-| ` type ` | ` ooze ` |
-| ` alignment ` | ` Unaligned ` |
-| ` movement_text ` | ` 20 ft., Climb 20 ft. ` |
-| ` immunities_text ` | ` Acid, Cold, Lightning, Slashing; Charmed, Deafened, Exhaustion, Frightened, Grappled, Prone, Restrained ` |
-| ` senses_text ` | ` Blindsight 60 ft.; Passive Perception 8 ` |
-| ` languages_text ` | ` None ` |
-| ` cr_text ` | ` 4 (XP 1,100; PB +2) ` |
-| ` hit_points_text ` | ` 68 (8d10 + 24) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 16 ` | ` 3 ` |
-| ` Dexterity ` | ` 5 ` | ` -3 ` |
-| ` Constitution ` | ` 16 ` | ` 3 ` |
-| ` Intelligence ` | ` 1 ` | ` -5 ` |
-| ` Wisdom ` | ` 6 ` | ` -2 ` |
-| ` Charisma ` | ` 1 ` | ` -5 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 7 ` |  |
-| ` max_hp ` | ` 68 ` |  |
-| ` initiative ` | ` -3 ` |  |
-| ` speed ` | ` 20 ` | ` ft ` |
-| ` climb_speed ` | ` 20 ` | ` ft ` |
 
 ## Health
 
@@ -280,3 +271,13 @@ geometry:
 unlisted_success_branch: no_effect
 unlisted_duration: until_removed_by_applicable_rule
 ```
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_stats_extras -->
+> 
+> ```yaml
+> climb_speed:
+>   unit: ft
+>   value: 20
+> ```
+

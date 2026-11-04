@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 7eb7ac23-9716-5f16-9f5c-54f75ddef069
 splat_kind: item
 splat_key: dnd2024:items/sword_of_sharpness
 splat_name: Sword of Sharpness
-splat_origin:
-  key: dnd2024:reference/magic_item/sword_of_sharpness
+splat_origin: dnd2024:reference/magic_item/sword_of_sharpness
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 248
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 248, https://www.dndbeyond.com/srd
 ---
 
 # Sword of Sharpness
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Weapon |
+| Rarity | Very Rare |
+| Attunement | Yes |
+
 
 ## Source text
 
@@ -26,22 +33,9 @@ When you attack a creature with this weapon and roll a 20 on the d20 for the att
 
 Original layout: [[../../srd-5.2.1/pages/248|page 248]].
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` weapon ` |
-| ` rarity ` | ` very_rare ` |
 
-### Equipment
-
-<!-- splat:values path=splat_item/equipment -->
-
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` required ` |
 
 ## Rule
 

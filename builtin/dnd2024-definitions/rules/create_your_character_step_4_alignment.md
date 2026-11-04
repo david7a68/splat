@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: cf637505-115a-5d75-885e-759441477936
 splat_kind: rule
 splat_key: dnd2024:rules/create_your_character_step_4_alignment
 splat_name: 'Step 4: Alignment'
-splat_origin:
-  key: dnd2024:reference/pages/021
+splat_origin: dnd2024:reference/pages/021
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 21
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 21, https://www.dndbeyond.com/srd
 ---
 
 # Step 4: Alignment

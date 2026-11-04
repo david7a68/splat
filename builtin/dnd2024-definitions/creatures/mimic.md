@@ -1,35 +1,62 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: ce1a24e3-0409-5378-afef-531280f43679
 splat_kind: creature
 splat_key: dnd2024:creatures/mimic
 splat_name: Mimic
-splat_origin:
-  key: dnd2024:reference/creature/mimic
+splat_origin: dnd2024:reference/creature/mimic
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 308, 309
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 308, 309, https://www.dndbeyond.com/srd
 ---
 
 # Mimic
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Medium |
+| Type | Monstrosity |
+| Alignment | Neutral |
+| Armor Class | 12 |
+| Hit Points | 58 (9d8 + 18) |
+| Initiative | +3 (13) |
+| Speed | 20 ft. |
+| Challenge | 2 (XP 450; PB +2) |
+| Skills | Stealth +5 |
+| Senses | Darkvision 60 ft.; Passive Perception 11 |
+| Languages | None |
+| Immunities | Acid; Prone |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 17 | +3 | +3 |
+| Dex | 12 | +1 | +1 |
+| Con | 15 | +2 | +2 |
+| Int | 5 | -3 | -3 |
+| Wis | 13 | +1 | +1 |
+| Cha | 8 | -1 | -1 |
+
 
 ## Source text
 
 <!-- SRD page 308 -->
 
-Medium Monstrosity, Neutral\
-AC 12 Initiative +3 (13)\
-HP 58 (9d8 + 18)\
-Speed 20 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 17 +3 +3 Dex 12 +1 +1 Con 15 +2 +2\
-Int 5 −3 −3 Wis 13 +1 +1 Cha 8 −1 −1\
-Skills Stealth +5\
-Immunities Acid; Prone\
-Senses Darkvision 60 ft.; Passive Perception 11\
-Languages None\
-CR 2 (XP 450; PB +2)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Medium Monstrosity, Neutral\
+> AC 12 Initiative +3 (13)\
+> HP 58 (9d8 + 18)\
+> Speed 20 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 17 +3 +3 Dex 12 +1 +1 Con 15 +2 +2\
+> Int 5 −3 −3 Wis 13 +1 +1 Cha 8 −1 −1\
+> Skills Stealth +5\
+> Immunities Acid; Prone\
+> Senses Darkvision 60 ft.; Passive Perception 11\
+> Languages None\
+> CR 2 (XP 450; PB +2)
+
 
 <!-- SRD page 309 -->
 
@@ -49,46 +76,11 @@ Shape-Shift. The mimic shape-shifts to resemble a Medium or Small object while r
 
 Original layout: [[../../srd-5.2.1/pages/308|page 308]], [[../../srd-5.2.1/pages/309|page 309]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` medium ` |
-| ` type ` | ` monstrosity ` |
-| ` alignment ` | ` Neutral ` |
-| ` movement_text ` | ` 20 ft. ` |
-| ` skills_text ` | ` Stealth +5 ` |
-| ` immunities_text ` | ` Acid; Prone ` |
-| ` senses_text ` | ` Darkvision 60 ft.; Passive Perception 11 ` |
-| ` languages_text ` | ` None ` |
-| ` cr_text ` | ` 2 (XP 450; PB +2) ` |
-| ` hit_points_text ` | ` 58 (9d8 + 18) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 17 ` | ` 3 ` |
-| ` Dexterity ` | ` 12 ` | ` 1 ` |
-| ` Constitution ` | ` 15 ` | ` 2 ` |
-| ` Intelligence ` | ` 5 ` | ` -3 ` |
-| ` Wisdom ` | ` 13 ` | ` 1 ` |
-| ` Charisma ` | ` 8 ` | ` -1 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 12 ` |  |
-| ` max_hp ` | ` 58 ` |  |
-| ` initiative ` | ` 3 ` |  |
-| ` speed ` | ` 20 ` | ` ft ` |
 
 ## Health
 

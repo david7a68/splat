@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 25cd7903-6852-5d19-a127-ed37e95b775a
 splat_kind: item
 splat_key: dnd2024:equipment/blowgun
 splat_name: Blowgun
-splat_origin:
-  key: dnd2024:reference/pages/091
+splat_origin: dnd2024:reference/pages/091
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 91
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 91, https://www.dndbeyond.com/srd
 ---
 
 # Blowgun
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Weapon |
+| Rarity |  |
+| Attunement |  |
+
 
 ## Source text
 
@@ -37,43 +44,13 @@ Source table, SRD 5.2.1 page 91.
   "category": "weapon"
 }
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` properties_text ` | ` Ammunition (Range 25/100; Needle), Loading ` |
-| ` mastery ` | ` vex ` |
-| ` weapon_category ` | ` martial ranged ` |
-| ` category ` | ` weapon ` |
 
-### Damage
 
-<!-- splat:values path=splat_item/damage -->
 
-| Field | Value |
-| --- | --- |
-| ` expression ` | ` "1" ` |
-| ` type ` | ` piercing ` |
 
-### Price
 
-<!-- splat:values path=splat_item/price -->
-
-| Field | Value |
-| --- | --- |
-| ` value ` | ` 10 ` |
-| ` unit ` | ` gp ` |
-
-### Mass
-
-<!-- splat:values path=splat_item/mass -->
-
-| Field | Value |
-| --- | --- |
-| ` value ` | ` 1.0 ` |
-| ` unit ` | ` lb ` |
 
 ## Rule
 
@@ -202,3 +179,22 @@ parameters:
 | ` actor ` | ` equipper ` |
 | ` item ` | ` equipped_instance ` |
 | ` inactive_if_not_equipped ` | ` true ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_item_extras -->
+> 
+> ```yaml
+> weapon_category: martial ranged
+> damage:
+>   expression: '1'
+>   type: piercing
+> mass:
+>   unit: lb
+>   value: 1.0
+> mastery: vex
+> price:
+>   unit: gp
+>   value: 10
+> properties_text: Ammunition (Range 25/100; Needle), Loading
+> ```
+

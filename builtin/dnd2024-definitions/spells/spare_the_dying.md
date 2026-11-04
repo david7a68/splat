@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 711a82f5-bc93-52b3-8e2a-79c734bc7eb4
 splat_kind: spell
 splat_key: dnd2024:spells/spare_the_dying
 splat_name: Spare the Dying
-splat_origin:
-  key: dnd2024:reference/spell/spare_the_dying
+splat_origin: dnd2024:reference/spell/spare_the_dying
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 163
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 163, https://www.dndbeyond.com/srd
 ---
 
 # Spare the Dying
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | Cantrip |
+| School | Necromancy |
+| Classes | Cleric, Druid |
+| Casting Time | Action |
+| Range | 15 feet |
+| Components | V, S |
+| Duration | Instantaneous |
+
 
 ## Source text
 
@@ -30,28 +41,9 @@ Cantrip Upgrade. The range doubles when you reach levels 5 (30 feet), 11 (60 fee
 
 Original layout: [[../../srd-5.2.1/pages/163|page 163]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 0 ` |
-| ` school ` | ` necromancy ` |
-| ` classes ` | ` ["cleric", "druid"] ` |
-| ` components ` | ` ["verbal", "somatic"] ` |
-| ` concentration ` | ` false ` |
-| ` duration ` | ` Instantaneous ` |
-| ` casting_time ` | ` Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
-
-<!-- splat:values path=splat_spell/range -->
-
-| Field | Value |
-| --- | --- |
-| ` feet ` | ` 15 ` |
 
 ## Rule
 

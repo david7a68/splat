@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: beb8ffa3-89c5-542b-a44f-41c58aed6bc6
 splat_kind: rule
 splat_key: dnd2024:class_features/warlock_level_4_ability_score_improvement
 splat_name: 'Level 4: Ability Score Improvement'
-splat_origin:
-  key: dnd2024:reference/pages/072
+splat_origin: dnd2024:reference/pages/072
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 72
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 72, https://www.dndbeyond.com/srd
 ---
 
 # Level 4: Ability Score Improvement

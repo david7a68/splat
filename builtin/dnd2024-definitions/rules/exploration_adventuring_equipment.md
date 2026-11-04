@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 07ca7008-8d0b-5e4f-b70a-68ca44712151
 splat_kind: rule
 splat_key: dnd2024:rules/exploration_adventuring_equipment
 splat_name: Adventuring Equipment
-splat_origin:
-  key: dnd2024:reference/pages/011
+splat_origin: dnd2024:reference/pages/011
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 11
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 11, https://www.dndbeyond.com/srd
 ---
 
 # Adventuring Equipment

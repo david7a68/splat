@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 55b31e22-129b-58eb-815a-62c84014c39c
 splat_kind: rule
 splat_key: dnd2024:rules/multiclassing_proficiency_bonus
 splat_name: Proficiency Bonus
-splat_origin:
-  key: dnd2024:reference/pages/025
+splat_origin: dnd2024:reference/pages/025
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 25
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 25, https://www.dndbeyond.com/srd
 ---
 
 # Proficiency Bonus

@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "222538a0-90d6-571d-a504-85c02a152494"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/piranha"
 splat_name: "Piranha"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [358], "executable": false}
+splat_pages:
+- 358
 ---
 
 # Piranha
@@ -31,3 +32,13 @@ Water Breathing. The piranha can breathe only underwater.
 Bite. Melee Attack Roll: +5 (with Advantage if the target doesn’t have all its Hit Points), reach 5 ft. Hit: 1 Piercing damage.
 
 Original layout: [[../pages/358|page 358]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 28b158ce-9809-5b95-80a9-304ff6e54c37
 splat_kind: spell
 splat_key: dnd2024:spells/mage_hand
 splat_name: Mage Hand
-splat_origin:
-  key: dnd2024:reference/spell/mage_hand
+splat_origin: dnd2024:reference/spell/mage_hand
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 145
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 145, https://www.dndbeyond.com/srd
 ---
 
 # Mage Hand
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | Cantrip |
+| School | Conjuration |
+| Classes | Bard, Sorcerer, Warlock, Wizard |
+| Casting Time | Action |
+| Range | 30 feet |
+| Components | V, S |
+| Duration | 1 minute |
+
 
 ## Source text
 
@@ -34,28 +45,9 @@ The hand can’t attack, activate magic items, or carry more than 10 pounds.
 
 Original layout: [[../../srd-5.2.1/pages/145|page 145]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 0 ` |
-| ` school ` | ` conjuration ` |
-| ` classes ` | ` ["bard", "sorcerer", "warlock", "wizard"] ` |
-| ` components ` | ` ["verbal", "somatic"] ` |
-| ` concentration ` | ` false ` |
-| ` duration ` | ` 1 minute ` |
-| ` casting_time ` | ` Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
-
-<!-- splat:values path=splat_spell/range -->
-
-| Field | Value |
-| --- | --- |
-| ` feet ` | ` 30 ` |
 
 ## Rule
 

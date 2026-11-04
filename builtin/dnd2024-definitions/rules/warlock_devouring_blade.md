@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: f7dc75fc-f4ea-50ec-9325-11612921416a
 splat_kind: rule
 splat_key: dnd2024:rules/warlock_devouring_blade
 splat_name: Devouring Blade
-splat_origin:
-  key: dnd2024:reference/pages/072
+splat_origin: dnd2024:reference/pages/072
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 72
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 72, https://www.dndbeyond.com/srd
 ---
 
 # Devouring Blade

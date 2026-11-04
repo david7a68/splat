@@ -1,10 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "d3da95b1-7c96-59b4-8cd4-aee01c3fff7a"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/magic_item/dragon_scale_mail"
 splat_name: "Dragon Scale Mail"
-splat_reference: {"source": "SRD 5.2.1", "category": "magic_item", "pages": [218, 219], "executable": false}
+splat_pages:
+- 218
+- 219
 ---
 
 # Dragon Scale Mail
@@ -30,3 +32,13 @@ Additionally, you can focus your senses as a Magic action to discern the distanc
 | Copper | Acid | White | Cold |
 
 Original layout: [[../pages/218|page 218]], [[../pages/219|page 219]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: magic_item
+> executable: false
+> ```
+

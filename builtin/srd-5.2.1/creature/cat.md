@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "c2acc409-204b-5a69-8804-47de5b53a83e"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/cat"
 splat_name: "Cat"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [346], "executable": false}
+splat_pages:
+- 346
 ---
 
 # Cat
@@ -32,3 +33,13 @@ Jumper. The cat’s jump distance is determined using its Dexterity rather than 
 Scratch. Melee Attack Roll: +4, reach 5 ft. Hit: 1 Slashing damage.
 
 Original layout: [[../pages/346|page 346]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

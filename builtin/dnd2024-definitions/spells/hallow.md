@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 8c8df744-4409-56d5-8c63-b2b4ac3eed11
 splat_kind: spell
 splat_key: dnd2024:spells/hallow
 splat_name: Hallow
-splat_origin:
-  key: dnd2024:reference/spell/hallow
+splat_origin: dnd2024:reference/spell/hallow
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 138, 139
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 138, 139, https://www.dndbeyond.com/srd
 ---
 
 # Hallow
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 5 |
+| School | Abjuration |
+| Classes | Cleric |
+| Casting Time | 24 hours |
+| Range |  |
+| Components | V, S, M (incense worth 1,000+ GP, which the spell consumes) |
+| Duration | Until dispelled |
+
 
 ## Source text
 
@@ -54,37 +65,11 @@ Vulnerability. Creatures of any types you choose have Vulnerability to one damag
 
 Original layout: [[../../srd-5.2.1/pages/138|page 138]], [[../../srd-5.2.1/pages/139|page 139]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 5 ` |
-| ` school ` | ` abjuration ` |
-| ` classes ` | ` ["cleric"] ` |
-| ` components ` | ` ["verbal", "somatic", "material"] ` |
-| ` concentration ` | ` false ` |
-| ` duration ` | ` Until dispelled ` |
-| ` casting_time ` | ` 24 hours ` |
-| ` ritual ` | ` false ` |
 
-### Range
 
-<!-- splat:values path=splat_spell/range -->
 
-| Field | Value |
-| --- | --- |
-| ` mode ` | ` touch ` |
-
-### Material
-
-<!-- splat:values path=splat_spell/material -->
-
-| Field | Value |
-| --- | --- |
-| ` description ` | ` incense worth 1,000+ GP, which the spell consumes ` |
-| ` consumed ` | ` true ` |
 
 ## Rule
 
@@ -213,3 +198,14 @@ vulnerability:
 | ` source ` | ` supplied_world_geometry ` |
 | ` unknown_facts ` | ` require_resolution ` |
 | ` infer_unprovided_geometry ` | ` false ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_spell_extras -->
+> 
+> ```yaml
+> material:
+>   consumed: true
+> range:
+>   mode: touch
+> ```
+

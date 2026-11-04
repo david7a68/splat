@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "382c7762-1f6f-5410-9c11-6e4dfdb605fb"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/druidcraft"
 splat_name: "Druidcraft"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [126], "executable": false}
+splat_pages:
+- 126
 ---
 
 # Druidcraft
@@ -28,3 +29,13 @@ Sensory Effect. You create a harmless sensory effect, such as falling leaves, sp
 Fire Play. You light or snuff out a candle, a torch, or a campfire.
 
 Original layout: [[../pages/126|page 126]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

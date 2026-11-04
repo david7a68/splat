@@ -1,10 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "221c46f2-542c-5061-869c-ee4b0d8f6947"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/copper_dragon_wyrmling"
 splat_name: "Copper Dragon Wyrmling"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [275, 276], "executable": false}
+splat_pages:
+- 275
+- 276
 ---
 
 # Copper Dragon Wyrmling
@@ -35,3 +37,13 @@ Acid Breath (Recharge 5–6). Dexterity Saving Throw: DC 11, each creature in a 
 Slowing Breath. Constitution Saving Throw: DC 11, each creature in a 15-foot Cone. Failure: The target can’t take Reactions; its Speed is halved; and it can take either an action or a Bonus Action on its turn, not both. This effect lasts until the end of its next turn.
 
 Original layout: [[../pages/275|page 275]], [[../pages/276|page 276]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

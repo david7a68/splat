@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "36979fdf-569b-5b27-9c54-462f1727b018"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/ancient_gold_dragon"
 splat_name: "Ancient Gold Dragon"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [292], "executable": false}
+splat_pages:
+- 292
 ---
 
 # Ancient Gold Dragon
@@ -57,3 +58,13 @@ Guiding Light. The dragon uses Spellcasting to cast Guiding Bolt (level 4 versio
 Pounce. The dragon moves up to half its Speed, and it makes one Rend attack.
 
 Original layout: [[../pages/292|page 292]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

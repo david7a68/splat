@@ -244,38 +244,12 @@ impl EntitySnapshot {
                 return Err(conflict(&path));
             }
             let notes = copy.map_or(PERSONAL_NOTES, |copy| copy.notes);
-            // Refresh keeps an existing schema 1 sheet in its layout. Only the
-            // explicit conversion action migrates a copy already on disk.
-            let markdown = if previous
+            if previous
                 .as_deref()
-                .and_then(|text| Entry::parse("sheet.md", text).ok())
-                .is_some_and(|entry| {
-                    entry
-                        .fields
-                        .get("splat_schema")
-                        .and_then(serde_yaml_ng::Value::as_u64)
-                        == Some(1)
-                })
-                && let Ok(entry) = Entry::parse("sheet.md", &markdown)
-                && crate::content::formats::eligible(&entry)
+                .is_some_and(|text| text.contains("splat_schema: 1"))
             {
-                let mut fields = (*entry.fields).clone();
-                fields.insert("splat_schema".into(), 1.into());
-                let body = entry
-                    .body
-                    .split("\n> [!note]- Splat data")
-                    .next()
-                    .unwrap()
-                    .split("\n## Splat data")
-                    .next()
-                    .unwrap_or(&entry.body);
-                format!(
-                    "---\n{}---\n{body}",
-                    serde_yaml_ng::to_string(&fields).map_err(|e| e.to_string())?
-                )
-            } else {
-                markdown
-            };
+                return Err(crate::content::OLD_LAYOUT.into());
+            }
             let text = stamped(&markdown, notes);
             staged.push(Note {
                 path,
@@ -618,9 +592,9 @@ mod tests {
             record.definition.splat_id
         ));
         fs::create_dir_all(path.parent().unwrap()).unwrap();
-        let generated = format!(
+        let generated = crate::content::formats::convert("Fixture.md", &format!(
             "---\nsplat_schema: 1\nsplat_id: {id}\nsplat_name: Old copied rule\nsplat_kind: rule\nsplat_rule: {{}}\nsplat_origin:\n  key: {key}\n---\n\nOld generated content.\n"
-        );
+        )).expect("schema-2 fixture");
         let hash = format!("{:x}", Sha256::digest(generated.as_bytes()));
         let text = format!("{generated}{MARKER}{hash} -->\n{PERSONAL_NOTES}{extra}");
         fs::write(&path, &text).unwrap();
@@ -636,7 +610,7 @@ mod tests {
         routed_notes(record, campaign).remove(0).0
     }
     fn custom_entry_requiring(campaign: &Path, id: uuid::Uuid) {
-        fs::write(campaign.join("Custom.md"), format!("---\nsplat_schema: 1\nsplat_id: {}\nsplat_name: Custom rule\nsplat_kind: rule\nsplat_rule: {{}}\nsplat_requires:\n- id: {id}\n---\n", uuid::Uuid::new_v4())).unwrap();
+        fs::write(campaign.join("Custom.md"), crate::content::formats::convert("Fixture.md", &format!("---\nsplat_schema: 1\nsplat_id: {}\nsplat_name: Custom rule\nsplat_kind: rule\nsplat_rule: {{}}\nsplat_requires:\n- id: {id}\n---\n", uuid::Uuid::new_v4())).expect("schema-2 fixture")).unwrap();
     }
     #[test]
     fn retires_only_unreferenced_unannotated_copies_and_preserves_all_bytes() {
@@ -734,72 +708,14 @@ mod tests {
     }
 
     #[test]
-    fn fmt_f1_character_payload_and_legacy_refresh_keep_identity_and_notes() {
-        let root = tempfile::tempdir().unwrap();
-        let mut record = super::super::tests::sample();
-        let new = record.entry_markdown().unwrap();
-        assert!(new.contains("> [!note]- Splat data (from D&D Beyond; do not edit)"));
-        assert_eq!(
-            new.matches("<!-- splat:yaml path=splat_payload -->")
-                .count(),
-            1
-        );
-        let entry = Entry::parse("sheet.md", &new).unwrap();
-        let mut fields = (*entry.fields).clone();
-        fields.insert("splat_schema".into(), 1.into());
-        let body = entry
-            .body
-            .split("\n> [!note]- Splat data")
-            .next()
-            .unwrap()
-            .split("\n## Splat data")
-            .next()
-            .unwrap();
-        let legacy = format!(
-            "---\n{}---\n{body}",
-            serde_yaml_ng::to_string(&fields).unwrap()
-        );
-        let legacy = stamped(&legacy, "\n## Personal notes\n\nKeep my words.\n");
-        let path = root
-            .path()
-            .join("Characters/D&D Beyond")
-            .join(format!("{}.md", record.definition.splat_id));
-        fs::create_dir_all(path.parent().unwrap()).unwrap();
-        fs::write(&path, &legacy).unwrap();
-        record.initial.temporary_hp += 1;
-        assert_eq!(record.save_campaign_copy(root.path()).unwrap(), path);
-        let refreshed = fs::read_to_string(&path).unwrap();
-        assert_eq!(
-            Entry::parse("sheet.md", &refreshed).unwrap().fields["splat_schema"].as_u64(),
-            Some(1)
-        );
-        let converted = crate::content::formats::convert("sheet.md", &refreshed).unwrap();
-        assert!(parts(&converted).intact);
-        assert!(converted.ends_with("Keep my words.\n"));
-        assert_eq!(
-            converted,
-            crate::content::formats::convert("sheet.md", &converted).unwrap()
-        );
-        fs::write(&path, converted).unwrap();
-        record.save_campaign_copy(root.path()).unwrap();
-        assert_eq!(
-            Entry::parse("sheet.md", &fs::read_to_string(path).unwrap())
-                .unwrap()
-                .fields["splat_schema"]
-                .as_u64(),
-            Some(2)
-        );
-    }
-
-    #[test]
     fn fmt_f1_character_names_do_not_replace_another_character() {
         let root = tempfile::tempdir().unwrap();
         let record = super::super::tests::sample();
         let path = record.campaign_path(root.path());
         assert_eq!(path.file_name().unwrap(), "Example.md");
         fs::create_dir_all(path.parent().unwrap()).unwrap();
-        let other = "---\nsplat_schema: 1\nsplat_id: 00000000-0000-0000-0000-000000000099\nsplat_kind: creature\nsplat_name: Example\nsplat_creature: {}\n---\n\nA different character's note.\n";
-        fs::write(&path, other).unwrap();
+        let other = crate::content::formats::convert("Other.md", "---\nsplat_schema: 1\nsplat_id: 00000000-0000-0000-0000-000000000099\nsplat_kind: creature\nsplat_name: Example\nsplat_creature: {}\n---\n\nA different character's note.\n").unwrap();
+        fs::write(&path, &other).unwrap();
         let saved = record.save_campaign_copy(root.path()).unwrap();
         assert_ne!(saved, path);
         assert_eq!(fs::read_to_string(path).unwrap(), other);
@@ -870,7 +786,7 @@ mod tests {
         let record = super::super::tests::sample();
         let creature = record.save_campaign_copy(root.path()).unwrap();
         // Frontmatter that the reader tries to parse, and cannot.
-        fs::write(&creature, "---\nsplat_schema: 1\nsplat_id: nope\n---\n").unwrap();
+        fs::write(&creature, "---\nsplat_schema: 2\nsplat_id: nope\n---\n").unwrap();
         // A retired copy makes the save read the whole campaign.
         let (retired, _, _) = old_copy(&record, root.path(), "dnd2024:spells/fire_bolt", "");
         record.overwrite_campaign_copy(root.path()).unwrap();

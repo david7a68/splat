@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 7dcd9ca9-ad7d-50da-87aa-c639841dd906
 splat_kind: item
 splat_key: dnd2024:items/luck_blade
 splat_name: Luck Blade
-splat_origin:
-  key: dnd2024:reference/magic_item/luck_blade
+splat_origin: dnd2024:reference/magic_item/luck_blade
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 229
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 229, https://www.dndbeyond.com/srd
 ---
 
 # Luck Blade
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Weapon |
+| Rarity | Legendary |
+| Attunement | Yes |
+
 
 ## Source text
 
@@ -28,22 +35,9 @@ Wish. The weapon has 1d3 charges. While holding it, you can expend 1 charge and 
 
 Original layout: [[../../srd-5.2.1/pages/229|page 229]].
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` weapon ` |
-| ` rarity ` | ` legendary ` |
 
-### Equipment
-
-<!-- splat:values path=splat_item/equipment -->
-
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` required ` |
 
 ## Rule
 

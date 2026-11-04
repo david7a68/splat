@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 7582bdb4-11fc-5bbb-b962-a27a64a4cea2
 splat_kind: rule
 splat_key: dnd2024:rules/multiclassing_hit_points_and_hit_point_dice
 splat_name: Hit Points and Hit Point Dice
-splat_origin:
-  key: dnd2024:reference/pages/025
+splat_origin: dnd2024:reference/pages/025
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 25
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 25, https://www.dndbeyond.com/srd
 ---
 
 # Hit Points and Hit Point Dice

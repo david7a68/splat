@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: ca23af47-f359-56e7-99e4-6be91a14275f
 splat_kind: rule
 splat_key: dnd2024:class_features/monk_level_7_evasion
 splat_name: 'Level 7: Evasion'
-splat_origin:
-  key: dnd2024:reference/pages/051
+splat_origin: dnd2024:reference/pages/051
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 51
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 51, https://www.dndbeyond.com/srd
 ---
 
 # Level 7: Evasion

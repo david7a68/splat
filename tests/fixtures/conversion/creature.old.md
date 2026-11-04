@@ -1,0 +1,12 @@
+---
+splat_schema: 1
+splat_id: 00000000-0000-0000-0000-000000000001
+splat_kind: creature
+splat_name: Fixture
+splat_creature: {size: medium, type: beast}
+splat_stats: {max_hp: {value: 12}}
+---
+
+# Fixture
+
+Keep this prose.

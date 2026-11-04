@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "511929f4-aeab-51cf-9252-8eaf85414cd0"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/greater_restoration"
 splat_name: "Greater Restoration"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [137], "executable": false}
+splat_pages:
+- 137
 ---
 
 # Greater Restoration
@@ -30,3 +31,13 @@ You touch a creature and magically remove one of the following effects from it:
 •  Any reduction to the target’s Hit Point maximum
 
 Original layout: [[../pages/137|page 137]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 9e7714b0-18eb-5ea7-a688-8839f21ef7ac
 splat_kind: rule
 splat_key: dnd2024:glossary/target
 splat_name: Target
-splat_origin:
-  key: dnd2024:reference/glossary/target
+splat_origin: dnd2024:reference/glossary/target
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 190
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 190, https://www.dndbeyond.com/srd
 ---
 
 # Target

@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "238dbe00-8ab9-513e-a307-f4945e7328c8"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/wind_walk"
 splat_name: "Wind Walk"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [174], "executable": false}
+splat_pages:
+- 174
 ---
 
 # Wind Walk
@@ -22,3 +23,13 @@ You and up to ten willing creatures of your choice within range assume gaseous f
 If a target is in cloud form and flying when the effect ends, the target descends 60 feet per round for 1 minute until it lands, which it does safely. If it can’t land after 1 minute, it falls the remaining distance.
 
 Original layout: [[../pages/174|page 174]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 146adcd4-4b17-5d9c-99cd-e91d38094b0b
 splat_kind: rule
 splat_key: dnd2024:glossary/hit_point_dice
 splat_name: Hit Point Dice
-splat_origin:
-  key: dnd2024:reference/glossary/hit_point_dice
+splat_origin: dnd2024:reference/glossary/hit_point_dice
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 183
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 183, https://www.dndbeyond.com/srd
 ---
 
 # Hit Point Dice

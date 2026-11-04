@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: c3617baa-f4ba-5cd0-949f-5afb9c1525d8
 splat_kind: rule
 splat_key: dnd2024:class_features/rogue_level_3_rogue_subclass
 splat_name: 'Level 3: Rogue Subclass'
-splat_origin:
-  key: dnd2024:reference/pages/062
+splat_origin: dnd2024:reference/pages/062
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 62
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 62, https://www.dndbeyond.com/srd
 ---
 
 # Level 3: Rogue Subclass

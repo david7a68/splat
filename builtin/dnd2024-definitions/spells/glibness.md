@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: b67983cc-4eb9-5253-8c2a-8480d86cc59d
 splat_kind: spell
 splat_key: dnd2024:spells/glibness
 splat_name: Glibness
-splat_origin:
-  key: dnd2024:reference/spell/glibness
+splat_origin: dnd2024:reference/spell/glibness
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 136
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 136, https://www.dndbeyond.com/srd
 ---
 
 # Glibness
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 8 |
+| School | Enchantment |
+| Classes | Bard, Warlock |
+| Casting Time | Action |
+| Range |  |
+| Components | V |
+| Duration | 1 hour |
+
 
 ## Source text
 
@@ -28,28 +39,9 @@ Until the spell ends, when you make a Charisma check, you can replace the number
 
 Original layout: [[../../srd-5.2.1/pages/136|page 136]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 8 ` |
-| ` school ` | ` enchantment ` |
-| ` classes ` | ` ["bard", "warlock"] ` |
-| ` components ` | ` ["verbal"] ` |
-| ` concentration ` | ` false ` |
-| ` duration ` | ` 1 hour ` |
-| ` casting_time ` | ` Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
-
-<!-- splat:values path=splat_spell/range -->
-
-| Field | Value |
-| --- | --- |
-| ` mode ` | ` self ` |
 
 ## Rule
 
@@ -99,3 +91,12 @@ Original layout: [[../../srd-5.2.1/pages/136|page 136]].
 | ` source_kind ` | ` magic ` |
 | ` actual_statement_truth ` | ` any ` |
 | ` reported_truth ` | ` truthful ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_spell_extras -->
+> 
+> ```yaml
+> range:
+>   mode: self
+> ```
+

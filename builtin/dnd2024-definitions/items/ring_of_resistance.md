@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: e61dfba9-0409-5feb-b290-94310960df25
 splat_kind: item
 splat_key: dnd2024:items/ring_of_resistance
 splat_name: Ring of Resistance
-splat_origin:
-  key: dnd2024:reference/magic_item/ring_of_resistance
+splat_origin: dnd2024:reference/magic_item/ring_of_resistance
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 238
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 238, https://www.dndbeyond.com/srd
 ---
 
 # Ring of Resistance
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Ring |
+| Rarity | Rare |
+| Attunement | No |
+
 
 ## Source text
 
@@ -37,22 +44,9 @@ You have Resistance to one damage type while wearing this ring. The gemstone in 
 
 Original layout: [[../../srd-5.2.1/pages/238|page 238]].
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` ring ` |
-| ` rarity ` | ` rare ` |
 
-### Equipment
-
-<!-- splat:values path=splat_item/equipment -->
-
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` none ` |
 
 ## Rule
 

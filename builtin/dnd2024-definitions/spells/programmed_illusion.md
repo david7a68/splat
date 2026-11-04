@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 4798c2d4-9515-5463-91a6-1adeff908ce8
 splat_kind: spell
 splat_key: dnd2024:spells/programmed_illusion
 splat_name: Programmed Illusion
-splat_origin:
-  key: dnd2024:reference/spell/programmed_illusion
+splat_origin: dnd2024:reference/spell/programmed_illusion
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 156
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 156, https://www.dndbeyond.com/srd
 ---
 
 # Programmed Illusion
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 6 |
+| School | Illusion |
+| Classes | Bard, Wizard |
+| Casting Time | Action |
+| Range | 120 feet |
+| Components | V, S, M (jade dust worth 25+ GP) |
+| Duration | Until dispelled |
+
 
 ## Source text
 
@@ -34,37 +45,11 @@ Physical interaction with the image reveals it to be illusory, since things can 
 
 Original layout: [[../../srd-5.2.1/pages/156|page 156]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 6 ` |
-| ` school ` | ` illusion ` |
-| ` classes ` | ` ["bard", "wizard"] ` |
-| ` components ` | ` ["verbal", "somatic", "material"] ` |
-| ` concentration ` | ` false ` |
-| ` duration ` | ` Until dispelled ` |
-| ` casting_time ` | ` Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
 
-<!-- splat:values path=splat_spell/range -->
 
-| Field | Value |
-| --- | --- |
-| ` feet ` | ` 120 ` |
-
-### Material
-
-<!-- splat:values path=splat_spell/material -->
-
-| Field | Value |
-| --- | --- |
-| ` description ` | ` jade dust worth 25+ GP ` |
-| ` consumed ` | ` false ` |
 
 ## Rule
 
@@ -164,3 +149,12 @@ success: discern_illusion
 | ` source ` | ` supplied_world_geometry ` |
 | ` unknown_facts ` | ` require_resolution ` |
 | ` infer_unprovided_geometry ` | ` false ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_spell_extras -->
+> 
+> ```yaml
+> material:
+>   consumed: false
+> ```
+

@@ -1,10 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "c3c1b22f-da8a-5500-b859-7a654a0ab8d2"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/oni"
 splat_name: "Oni"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [312, 313], "executable": false}
+splat_pages:
+- 312
+- 313
 ---
 
 # Oni
@@ -49,3 +51,13 @@ Spellcasting. The oni casts one of the following spells, requiring no Material c
 Invisibility. The oni casts Invisibility on itself, requiring no spell components and using the same spellcasting ability as Spellcasting.
 
 Original layout: [[../pages/312|page 312]], [[../pages/313|page 313]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

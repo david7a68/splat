@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: b6abf51d-2706-5b2d-a211-7ce1d3b86d16
 splat_kind: rule
 splat_key: dnd2024:rules/environmental_effects_extreme_heat
 splat_name: Extreme Heat
-splat_origin:
-  key: dnd2024:reference/pages/195
+splat_origin: dnd2024:reference/pages/195
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 195
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 195, https://www.dndbeyond.com/srd
 ---
 
 # Extreme Heat

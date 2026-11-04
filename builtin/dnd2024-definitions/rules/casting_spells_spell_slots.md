@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: fd9a24ad-a71d-5d25-9333-8fadfd706869
 splat_kind: rule
 splat_key: dnd2024:rules/casting_spells_spell_slots
 splat_name: Spell Slots
-splat_origin:
-  key: dnd2024:reference/pages/104
+splat_origin: dnd2024:reference/pages/104
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 104
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 104, https://www.dndbeyond.com/srd
 ---
 
 # Spell Slots

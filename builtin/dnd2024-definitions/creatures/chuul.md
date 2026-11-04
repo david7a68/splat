@@ -1,35 +1,62 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: a1021e18-4468-569c-9a73-fb1833b1c112
 splat_kind: creature
 splat_key: dnd2024:creatures/chuul
 splat_name: Chuul
-splat_origin:
-  key: dnd2024:reference/creature/chuul
+splat_origin: dnd2024:reference/creature/chuul
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 273, 274
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 273, 274, https://www.dndbeyond.com/srd
 ---
 
 # Chuul
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Large |
+| Type | Aberration |
+| Alignment | Chaotic Evil |
+| Armor Class | 16 |
+| Hit Points | 76 (9d10 + 27) |
+| Initiative | +0 (10) |
+| Speed | 30 ft., Swim 30 ft. |
+| Challenge | 4 (XP 1,100; PB +2) |
+| Skills | Perception +4 |
+| Senses | Darkvision 60 ft.; Passive Perception 14 |
+| Languages | Understands Deep Speech but can’t speak |
+| Immunities | Poison; Poisoned |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 19 | +4 | +4 |
+| Dex | 10 | +0 | +0 |
+| Con | 16 | +3 | +3 |
+| Int | 5 | -3 | -3 |
+| Wis | 11 | +0 | +0 |
+| Cha | 5 | -3 | -3 |
+
 
 ## Source text
 
 <!-- SRD page 273 -->
 
-Large Aberration, Chaotic Evil\
-AC 16 Initiative +0 (10)\
-HP 76 (9d10 + 27)\
-Speed 30 ft., Swim 30 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 19 +4 +4 Dex 10 +0 +0 Con 16 +3 +3\
-Int 5 −3 −3 Wis 11 +0 +0 Cha 5 −3 −3\
-Skills Perception +4\
-Immunities Poison; Poisoned\
-Senses Darkvision 60 ft.; Passive Perception 14\
-Languages Understands Deep Speech but can’t speak\
-CR 4 (XP 1,100; PB +2)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Large Aberration, Chaotic Evil\
+> AC 16 Initiative +0 (10)\
+> HP 76 (9d10 + 27)\
+> Speed 30 ft., Swim 30 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 19 +4 +4 Dex 10 +0 +0 Con 16 +3 +3\
+> Int 5 −3 −3 Wis 11 +0 +0 Cha 5 −3 −3\
+> Skills Perception +4\
+> Immunities Poison; Poisoned\
+> Senses Darkvision 60 ft.; Passive Perception 14\
+> Languages Understands Deep Speech but can’t speak\
+> CR 4 (XP 1,100; PB +2)
+
 
 ### Traits
 
@@ -49,47 +76,11 @@ Paralyzing Tentacles. Constitution Saving Throw: DC 13, one creature Grappled by
 
 Original layout: [[../../srd-5.2.1/pages/273|page 273]], [[../../srd-5.2.1/pages/274|page 274]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` large ` |
-| ` type ` | ` aberration ` |
-| ` alignment ` | ` Chaotic Evil ` |
-| ` movement_text ` | ` 30 ft., Swim 30 ft. ` |
-| ` skills_text ` | ` Perception +4 ` |
-| ` immunities_text ` | ` Poison; Poisoned ` |
-| ` senses_text ` | ` Darkvision 60 ft.; Passive Perception 14 ` |
-| ` languages_text ` | ` Understands Deep Speech but can’t speak ` |
-| ` cr_text ` | ` 4 (XP 1,100; PB +2) ` |
-| ` hit_points_text ` | ` 76 (9d10 + 27) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 19 ` | ` 4 ` |
-| ` Dexterity ` | ` 10 ` | ` 0 ` |
-| ` Constitution ` | ` 16 ` | ` 3 ` |
-| ` Intelligence ` | ` 5 ` | ` -3 ` |
-| ` Wisdom ` | ` 11 ` | ` 0 ` |
-| ` Charisma ` | ` 5 ` | ` -3 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 16 ` |  |
-| ` max_hp ` | ` 76 ` |  |
-| ` initiative ` | ` 0 ` |  |
-| ` speed ` | ` 30 ` | ` ft ` |
-| ` swim_speed ` | ` 30 ` | ` ft ` |
 
 ## Health
 
@@ -302,3 +293,13 @@ other_components: spell_definition_unless_waived
 | ` provider ` | ` caller ` |
 | ` required_facts ` | ` ["distance", "area_membership", "visibility", "occupancy", "movement_path"] ` |
 | ` validate_against_typed_constraints ` | ` true ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_stats_extras -->
+> 
+> ```yaml
+> swim_speed:
+>   unit: ft
+>   value: 30
+> ```
+

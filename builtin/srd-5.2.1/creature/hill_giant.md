@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "c38a25c9-33fc-554a-a95b-1c4ac00f8420"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/hill_giant"
 splat_name: "Hill Giant"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [298], "executable": false}
+splat_pages:
+- 298
 ---
 
 # Hill Giant
@@ -32,3 +33,13 @@ Tree Club. Melee Attack Roll: +8, reach 10 ft. Hit: 18 (3d8 + 5) Bludgeoning dam
 Trash Lob. Ranged Attack Roll: +8, range 60/240 ft. Hit: 16 (2d10 + 5) Bludgeoning damage, and the target has the Poisoned condition until the end of its next turn.
 
 Original layout: [[../pages/298|page 298]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

@@ -1,34 +1,60 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 9e0eea97-c939-58d8-b586-c85d883f58eb
 splat_kind: creature
 splat_key: dnd2024:creatures/blood_hawk
 splat_name: Blood Hawk
-splat_origin:
-  key: dnd2024:reference/creature/blood_hawk
+splat_origin: dnd2024:reference/creature/blood_hawk
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 345, 346
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 345, 346, https://www.dndbeyond.com/srd
 ---
 
 # Blood Hawk
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Small |
+| Type | Beast |
+| Alignment | Unaligned |
+| Armor Class | 12 |
+| Hit Points | 7 (2d6) |
+| Initiative | +2 (12) |
+| Speed | 10 ft., Fly 60 ft. |
+| Challenge | 1/8 (XP 25; PB +2) |
+| Skills | Perception +6 |
+| Senses | Passive Perception 16 |
+| Languages | None |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 6 | -2 | -2 |
+| Dex | 14 | +2 | +2 |
+| Con | 10 | +0 | +0 |
+| Int | 3 | -4 | -4 |
+| Wis | 14 | +2 | +2 |
+| Cha | 5 | -3 | -3 |
+
 
 ## Source text
 
 <!-- SRD page 345 -->
 
-Small Beast, Unaligned\
-AC 12  Initiative +2 (12)\
-HP 7 (2d6)\
-Speed 10 ft., Fly 60 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 6 −2 −2 Dex 14 +2 +2 Con 10 +0 +0\
-Int 3 −4 −4 Wis 14 +2 +2 Cha 5 −3 −3\
-Skills Perception +6\
-Senses Passive Perception 16\
-Languages None\
-CR 1/8 (XP 25; PB +2)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Small Beast, Unaligned\
+> AC 12  Initiative +2 (12)\
+> HP 7 (2d6)\
+> Speed 10 ft., Fly 60 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 6 −2 −2 Dex 14 +2 +2 Con 10 +0 +0\
+> Int 3 −4 −4 Wis 14 +2 +2 Cha 5 −3 −3\
+> Skills Perception +6\
+> Senses Passive Perception 16\
+> Languages None\
+> CR 1/8 (XP 25; PB +2)
+
 
 <!-- SRD page 346 -->
 
@@ -42,46 +68,11 @@ Beak. Melee Attack Roll: +4, reach 5 ft. Hit: 4 (1d4 + 2) Piercing damage, or 6 
 
 Original layout: [[../../srd-5.2.1/pages/345|page 345]], [[../../srd-5.2.1/pages/346|page 346]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` small ` |
-| ` type ` | ` beast ` |
-| ` alignment ` | ` Unaligned ` |
-| ` movement_text ` | ` 10 ft., Fly 60 ft. ` |
-| ` skills_text ` | ` Perception +6 ` |
-| ` senses_text ` | ` Passive Perception 16 ` |
-| ` languages_text ` | ` None ` |
-| ` cr_text ` | ` 1/8 (XP 25; PB +2) ` |
-| ` hit_points_text ` | ` 7 (2d6) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 6 ` | ` -2 ` |
-| ` Dexterity ` | ` 14 ` | ` 2 ` |
-| ` Constitution ` | ` 10 ` | ` 0 ` |
-| ` Intelligence ` | ` 3 ` | ` -4 ` |
-| ` Wisdom ` | ` 14 ` | ` 2 ` |
-| ` Charisma ` | ` 5 ` | ` -3 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 12 ` |  |
-| ` max_hp ` | ` 7 ` |  |
-| ` initiative ` | ` 2 ` |  |
-| ` speed ` | ` 10 ` | ` ft ` |
-| ` fly_speed ` | ` 60 ` | ` ft ` |
 
 ## Health
 
@@ -207,3 +198,13 @@ hit:
 | ` provider ` | ` caller ` |
 | ` required_facts ` | ` ["distance", "area_membership", "visibility", "occupancy", "movement_path"] ` |
 | ` validate_against_typed_constraints ` | ` true ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_stats_extras -->
+> 
+> ```yaml
+> fly_speed:
+>   unit: ft
+>   value: 60
+> ```
+

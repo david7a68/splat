@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "ceebb3c7-9df6-52fa-a44f-655971f6d6a5"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/doppelganger"
 splat_name: "Doppelganger"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [280], "executable": false}
+splat_pages:
+- 280
 ---
 
 # Doppelganger
@@ -39,3 +40,13 @@ Unsettling Visage (Recharge 6). Wisdom Saving Throw: DC 12, each creature in a 1
 Shape-Shift. The doppelganger shape-shifts into a Medium or Small Humanoid, or it returns to its true form. Its game statistics, other than its size, are the same in each form. Any equipment it is wearing or carrying isn’t transformed.
 
 Original layout: [[../pages/280|page 280]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

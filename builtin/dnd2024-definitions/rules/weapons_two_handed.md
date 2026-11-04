@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 9076f231-1622-5842-9ad8-05f714983f08
 splat_kind: rule
 splat_key: dnd2024:rules/weapons_two_handed
 splat_name: Two-Handed
-splat_origin:
-  key: dnd2024:reference/pages/090
+splat_origin: dnd2024:reference/pages/090
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 90
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 90, https://www.dndbeyond.com/srd
 ---
 
 # Two-Handed

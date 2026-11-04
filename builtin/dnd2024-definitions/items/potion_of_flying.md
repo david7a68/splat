@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 5ac9961d-7125-5059-baa5-0d8bd2321e82
 splat_kind: item
 splat_key: dnd2024:items/potion_of_flying
 splat_name: Potion of Flying
-splat_origin:
-  key: dnd2024:reference/magic_item/potion_of_flying
+splat_origin: dnd2024:reference/magic_item/potion_of_flying
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 235
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 235, https://www.dndbeyond.com/srd
 ---
 
 # Potion of Flying
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Potion |
+| Rarity | Very Rare |
+| Attunement | No |
+
 
 ## Source text
 
@@ -26,22 +33,9 @@ This potion’s clear liquid floats at the top of its container and has cloudy w
 
 Original layout: [[../../srd-5.2.1/pages/235|page 235]].
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` potion ` |
-| ` rarity ` | ` very_rare ` |
 
-### Equipment
-
-<!-- splat:values path=splat_item/equipment -->
-
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` none ` |
 
 ## Rule
 

@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: a480fce7-ca46-5781-acf9-63d7ba8234a2
 splat_kind: rule
 splat_key: dnd2024:rules/sentient_magic_items_conflict
 splat_name: Conflict
-splat_origin:
-  key: dnd2024:reference/pages/208
+splat_origin: dnd2024:reference/pages/208
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 208
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 208, https://www.dndbeyond.com/srd
 ---
 
 # Conflict

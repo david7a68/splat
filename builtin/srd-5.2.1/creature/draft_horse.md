@@ -1,10 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "c969c3a7-dd99-5f8a-a58f-6c2ac50bd80d"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/draft_horse"
 splat_name: "Draft Horse"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [347, 348], "executable": false}
+splat_pages:
+- 347
+- 348
 ---
 
 # Draft Horse
@@ -29,3 +31,13 @@ CR 1/4 (XP 50; PB +2)
 Hooves. Melee Attack Roll: +6, reach 5 ft. Hit: 6 (1d4 + 4) Bludgeoning damage.
 
 Original layout: [[../pages/347|page 347]], [[../pages/348|page 348]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

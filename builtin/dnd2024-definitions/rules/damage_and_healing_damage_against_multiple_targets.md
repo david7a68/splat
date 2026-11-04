@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 26ef7018-a0f9-5fcb-b61c-9e615779d05f
 splat_kind: rule
 splat_key: dnd2024:rules/damage_and_healing_damage_against_multiple_targets
 splat_name: Damage against Multiple Targets
-splat_origin:
-  key: dnd2024:reference/pages/016
+splat_origin: dnd2024:reference/pages/016
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 16
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 16, https://www.dndbeyond.com/srd
 ---
 
 # Damage against Multiple Targets

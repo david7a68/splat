@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: b912ddd6-07ec-5099-86e2-9187bed9f6eb
 splat_kind: rule
 splat_key: dnd2024:glossary/speed
 splat_name: Speed
-splat_origin:
-  key: dnd2024:reference/glossary/speed
+splat_origin: dnd2024:reference/glossary/speed
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 188
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 188, https://www.dndbeyond.com/srd
 ---
 
 # Speed

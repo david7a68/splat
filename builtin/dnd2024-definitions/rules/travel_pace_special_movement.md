@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 20810ca1-9835-5698-ae23-9f0cccaaae71
 splat_kind: rule
 splat_key: dnd2024:rules/travel_pace_special_movement
 splat_name: Special Movement
-splat_origin:
-  key: dnd2024:reference/pages/192
+splat_origin: dnd2024:reference/pages/192
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 192
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 192, https://www.dndbeyond.com/srd
 ---
 
 # Special Movement

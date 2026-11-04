@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: fca817d4-2b03-5651-a738-ef18537f23b7
 splat_kind: rule
 splat_key: dnd2024:rules/damage_and_healing_no_stacking
 splat_name: No Stacking
-splat_origin:
-  key: dnd2024:reference/pages/017
+splat_origin: dnd2024:reference/pages/017
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 17
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 17, https://www.dndbeyond.com/srd
 ---
 
 # No Stacking

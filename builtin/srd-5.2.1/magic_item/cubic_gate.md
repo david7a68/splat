@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "bbfb401c-04f2-535d-b202-b01105cc0ada"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/magic_item/cubic_gate"
 splat_name: "Cubic Gate"
-splat_reference: {"source": "SRD 5.2.1", "category": "magic_item", "pages": [216], "executable": false}
+splat_pages:
+- 216
 ---
 
 # Cubic Gate
@@ -22,3 +23,13 @@ Gate. Pressing one side of the cube, you cast Gate, opening a portal to the plan
 Plane Shift. Pressing one side of the cube twice, you cast Plane Shift, transporting the targets to the plane of existence keyed to that side.
 
 Original layout: [[../pages/216|page 216]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: magic_item
+> executable: false
+> ```
+

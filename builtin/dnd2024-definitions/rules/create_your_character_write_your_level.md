@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 46425f3e-833b-536a-baad-1cf4d1d929a9
 splat_kind: rule
 splat_key: dnd2024:rules/create_your_character_write_your_level
 splat_name: Write Your Level
-splat_origin:
-  key: dnd2024:reference/pages/019
+splat_origin: dnd2024:reference/pages/019
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 19
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 19, https://www.dndbeyond.com/srd
 ---
 
 # Write Your Level

@@ -1,34 +1,60 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 70753f51-9152-503e-972c-dff51c4d5701
 splat_kind: creature
 splat_key: dnd2024:creatures/magmin
 splat_name: Magmin
-splat_origin:
-  key: dnd2024:reference/creature/magmin
+splat_origin: dnd2024:reference/creature/magmin
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 305, 306
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 305, 306, https://www.dndbeyond.com/srd
 ---
 
 # Magmin
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Small |
+| Type | Elemental |
+| Alignment | Chaotic Neutral |
+| Armor Class | 14 |
+| Hit Points | 13 (3d6 + 3) |
+| Initiative | +2 (12) |
+| Speed | 30 ft. |
+| Challenge | 1/2 (XP 100; PB +2) |
+| Senses | Darkvision 60 ft.; Passive Perception 10 |
+| Languages | Primordial (Ignan) |
+| Immunities | Fire |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 7 | -2 | -2 |
+| Dex | 15 | +2 | +2 |
+| Con | 12 | +1 | +1 |
+| Int | 8 | -1 | -1 |
+| Wis | 11 | +0 | +0 |
+| Cha | 10 | +0 | +0 |
+
 
 ## Source text
 
 <!-- SRD page 305 -->
 
-Small Elemental, Chaotic Neutral\
-AC 14 Initiative +2 (12)\
-HP 13 (3d6 + 3)\
-Speed 30 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 7 −2 −2 Dex 15 +2 +2 Con 12 +1 +1\
-Int 8 −1 −1 Wis 11 +0 +0 Cha 10 +0 +0\
-Immunities Fire\
-Senses Darkvision 60 ft.; Passive Perception 10\
-Languages Primordial (Ignan)\
-CR 1/2 (XP 100; PB +2)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Small Elemental, Chaotic Neutral\
+> AC 14 Initiative +2 (12)\
+> HP 13 (3d6 + 3)\
+> Speed 30 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 7 −2 −2 Dex 15 +2 +2 Con 12 +1 +1\
+> Int 8 −1 −1 Wis 11 +0 +0 Cha 10 +0 +0\
+> Immunities Fire\
+> Senses Darkvision 60 ft.; Passive Perception 10\
+> Languages Primordial (Ignan)\
+> CR 1/2 (XP 100; PB +2)
+
 
 ### Traits
 
@@ -46,45 +72,11 @@ Ignited Illumination. The magmin sets itself ablaze or extinguishes its flames. 
 
 Original layout: [[../../srd-5.2.1/pages/305|page 305]], [[../../srd-5.2.1/pages/306|page 306]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` small ` |
-| ` type ` | ` elemental ` |
-| ` alignment ` | ` Chaotic Neutral ` |
-| ` movement_text ` | ` 30 ft. ` |
-| ` immunities_text ` | ` Fire ` |
-| ` senses_text ` | ` Darkvision 60 ft.; Passive Perception 10 ` |
-| ` languages_text ` | ` Primordial (Ignan) ` |
-| ` cr_text ` | ` 1/2 (XP 100; PB +2) ` |
-| ` hit_points_text ` | ` 13 (3d6 + 3) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 7 ` | ` -2 ` |
-| ` Dexterity ` | ` 15 ` | ` 2 ` |
-| ` Constitution ` | ` 12 ` | ` 1 ` |
-| ` Intelligence ` | ` 8 ` | ` -1 ` |
-| ` Wisdom ` | ` 11 ` | ` 0 ` |
-| ` Charisma ` | ` 10 ` | ` 0 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 14 ` |  |
-| ` max_hp ` | ` 13 ` |  |
-| ` initiative ` | ` 2 ` |  |
-| ` speed ` | ` 30 ` | ` ft ` |
 
 ## Health
 

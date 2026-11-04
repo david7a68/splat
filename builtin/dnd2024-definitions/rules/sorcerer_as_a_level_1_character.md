@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: ac56109a-cc47-5b67-a56c-99fc5d3a86fc
 splat_kind: rule
 splat_key: dnd2024:rules/sorcerer_as_a_level_1_character
 splat_name: As a Level 1 Character
-splat_origin:
-  key: dnd2024:reference/pages/064
+splat_origin: dnd2024:reference/pages/064
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 64
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 64, https://www.dndbeyond.com/srd
 ---
 
 # As a Level 1 Character

@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: c58ffaf5-abf4-5105-bae0-03f347059b4c
 splat_kind: spell
 splat_key: dnd2024:spells/find_the_path
 splat_name: Find the Path
-splat_origin:
-  key: dnd2024:reference/spell/find_the_path
+splat_origin: dnd2024:reference/spell/find_the_path
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 131
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 131, https://www.dndbeyond.com/srd
 ---
 
 # Find the Path
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 6 |
+| School | Divination |
+| Classes | Bard, Cleric, Druid |
+| Casting Time | 1 minute |
+| Range |  |
+| Components | V, S, M (a set of divination tools—such as cards or runes—worth 100+ GP) |
+| Duration | Concentration, up to 1 day |
+
 
 ## Source text
 
@@ -30,37 +41,11 @@ For the duration, as long as you are on the same plane of existence as the desti
 
 Original layout: [[../../srd-5.2.1/pages/131|page 131]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 6 ` |
-| ` school ` | ` divination ` |
-| ` classes ` | ` ["bard", "cleric", "druid"] ` |
-| ` components ` | ` ["verbal", "somatic", "material"] ` |
-| ` concentration ` | ` true ` |
-| ` duration ` | ` Concentration, up to 1 day ` |
-| ` casting_time ` | ` 1 minute ` |
-| ` ritual ` | ` false ` |
 
-### Range
 
-<!-- splat:values path=splat_spell/range -->
 
-| Field | Value |
-| --- | --- |
-| ` mode ` | ` self ` |
-
-### Material
-
-<!-- splat:values path=splat_spell/material -->
-
-| Field | Value |
-| --- | --- |
-| ` description ` | ` a set of divination tools—such as cards or runes—worth 100+ GP ` |
-| ` consumed ` | ` false ` |
 
 ## Rule
 
@@ -112,3 +97,14 @@ Original layout: [[../../srd-5.2.1/pages/131|page 131]].
 | ` requires ` | ` same_plane_as_destination ` |
 | ` outputs ` | ` ["distance", "direction"] ` |
 | ` at_path_choice ` | ` most_direct_path ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_spell_extras -->
+> 
+> ```yaml
+> material:
+>   consumed: false
+> range:
+>   mode: self
+> ```
+

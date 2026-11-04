@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "e2c4abae-2408-56dc-8a3a-1838f7019b82"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/deer"
 splat_name: "Deer"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [347], "executable": false}
+splat_pages:
+- 347
 ---
 
 # Deer
@@ -32,3 +33,13 @@ Agile. The deer doesn’t provoke an Opportunity Attack when it moves out of an 
 Ram. Melee Attack Roll: +2, reach 5 ft. Hit: 2 (1d4) Bludgeoning damage.
 
 Original layout: [[../pages/347|page 347]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

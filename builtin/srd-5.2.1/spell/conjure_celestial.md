@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "614371fa-c172-5d40-bd38-dffef6200783"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/conjure_celestial"
 splat_name: "Conjure Celestial"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [118], "executable": false}
+splat_pages:
+- 118
 ---
 
 # Conjure Celestial
@@ -30,3 +31,13 @@ Whenever the Cylinder moves into the space of a creature you can see and wheneve
 Using a Higher-Level Spell Slot. The healing and damage increase by 1d12 for each spell slot level above 7.
 
 Original layout: [[../pages/118|page 118]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 39e252c6-959e-5b5c-9c1a-93a11f4a0e89
 splat_kind: rule
 splat_key: dnd2024:rules/wizard_wizard_spell_list
 splat_name: Wizard Spell List
-splat_origin:
-  key: dnd2024:reference/pages/079
+splat_origin: dnd2024:reference/pages/079
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 79, 80, 81, 82
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 79, 80, 81, 82, https://www.dndbeyond.com/srd
 ---
 
 # Wizard Spell List

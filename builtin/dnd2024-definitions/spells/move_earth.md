@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 06a61f39-b3d7-50c2-bf50-fc19094ec9b9
 splat_kind: spell
 splat_key: dnd2024:spells/move_earth
 splat_name: Move Earth
-splat_origin:
-  key: dnd2024:reference/spell/move_earth
+splat_origin: dnd2024:reference/spell/move_earth
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 151
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 151, https://www.dndbeyond.com/srd
 ---
 
 # Move Earth
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 6 |
+| School | Transmutation |
+| Classes | Druid, Sorcerer, Wizard |
+| Casting Time | Action |
+| Range | 120 feet |
+| Components | V, S, M (a miniature shovel) |
+| Duration | Concentration, up to 2 hours |
+
 
 ## Source text
 
@@ -34,37 +45,11 @@ Similarly, this spell doesn’t directly affect plant growth. The moved earth ca
 
 Original layout: [[../../srd-5.2.1/pages/151|page 151]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 6 ` |
-| ` school ` | ` transmutation ` |
-| ` classes ` | ` ["druid", "sorcerer", "wizard"] ` |
-| ` components ` | ` ["verbal", "somatic", "material"] ` |
-| ` concentration ` | ` true ` |
-| ` duration ` | ` Concentration, up to 2 hours ` |
-| ` casting_time ` | ` Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
 
-<!-- splat:values path=splat_spell/range -->
 
-| Field | Value |
-| --- | --- |
-| ` feet ` | ` 120 ` |
-
-### Material
-
-<!-- splat:values path=splat_spell/material -->
-
-| Field | Value |
-| --- | --- |
-| ` description ` | ` a miniature shovel ` |
-| ` consumed ` | ` false ` |
 
 ## Rule
 
@@ -154,3 +139,12 @@ maximum:
   value: 2
   unit: hour
 ```
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_spell_extras -->
+> 
+> ```yaml
+> material:
+>   consumed: false
+> ```
+

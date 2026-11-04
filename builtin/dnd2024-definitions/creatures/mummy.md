@@ -1,35 +1,62 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 006a2999-e089-576e-94db-c2a47aca2c61
 splat_kind: creature
 splat_key: dnd2024:creatures/mummy
 splat_name: Mummy
-splat_origin:
-  key: dnd2024:reference/creature/mummy
+splat_origin: dnd2024:reference/creature/mummy
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 309
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 309, https://www.dndbeyond.com/srd
 ---
 
 # Mummy
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Medium or Small |
+| Type | Undead |
+| Alignment | Lawful Evil |
+| Armor Class | 11 |
+| Hit Points | 58 (9d8 + 18) |
+| Initiative | -1 (9) |
+| Speed | 20 ft. |
+| Challenge | 3 (XP 700; PB +2) |
+| Senses | Darkvision 60 ft.; Passive Perception 11 |
+| Languages | Common plus two other languages |
+| Immunities | Necrotic, Poison; Charmed, Exhaustion, Frightened, Paralyzed, Poisoned |
+| Vulnerabilities | Fire |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 16 | +3 | +3 |
+| Dex | 8 | -1 | -1 |
+| Con | 15 | +2 | +2 |
+| Int | 6 | -2 | -2 |
+| Wis | 12 | +1 | +3 |
+| Cha | 12 | +1 | +1 |
+
 
 ## Source text
 
 <!-- SRD page 309 -->
 
 Medium or Small Undead, Lawful Evil\
-AC 11 Initiative −1 (9)\
-HP 58 (9d8 + 18)\
-Speed 20 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 16 +3 +3 Dex 8 −1 −1 Con 15 +2 +2\
-Int 6 −2 −2 Wis 12 +1 +3 Cha 12 +1 +1\
-Vulnerabilities Fire\
-Immunities Necrotic, Poison; Charmed, Exhaustion, Frightened, Paralyzed, Poisoned\
-Senses Darkvision 60 ft.; Passive Perception 11\
-Languages Common plus two other languages\
-CR 3 (XP 700; PB +2)
+> [!quote]- Printed stat block (not read; edit the table above)
+> AC 11 Initiative −1 (9)\
+> HP 58 (9d8 + 18)\
+> Speed 20 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 16 +3 +3 Dex 8 −1 −1 Con 15 +2 +2\
+> Int 6 −2 −2 Wis 12 +1 +3 Cha 12 +1 +1\
+> Vulnerabilities Fire\
+> Immunities Necrotic, Poison; Charmed, Exhaustion, Frightened, Paralyzed, Poisoned\
+> Senses Darkvision 60 ft.; Passive Perception 11\
+> Languages Common plus two other languages\
+> CR 3 (XP 700; PB +2)
+
 
 ### Actions
 
@@ -41,47 +68,11 @@ Dreadful Glare. Wisdom Saving Throw: DC 11, one creature the mummy can see withi
 
 Original layout: [[../../srd-5.2.1/pages/309|page 309]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` medium ` |
-| ` type ` | ` undead ` |
-| ` alignment ` | ` Lawful Evil ` |
-| ` size_options_text ` | ` Medium or Small ` |
-| ` movement_text ` | ` 20 ft. ` |
-| ` vulnerabilities_text ` | ` Fire ` |
-| ` immunities_text ` | ` Necrotic, Poison; Charmed, Exhaustion, Frightened, Paralyzed, Poisoned ` |
-| ` senses_text ` | ` Darkvision 60 ft.; Passive Perception 11 ` |
-| ` languages_text ` | ` Common plus two other languages ` |
-| ` cr_text ` | ` 3 (XP 700; PB +2) ` |
-| ` hit_points_text ` | ` 58 (9d8 + 18) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 16 ` | ` 3 ` |
-| ` Dexterity ` | ` 8 ` | ` -1 ` |
-| ` Constitution ` | ` 15 ` | ` 2 ` |
-| ` Intelligence ` | ` 6 ` | ` -2 ` |
-| ` Wisdom ` | ` 12 ` | ` 3 ` |
-| ` Charisma ` | ` 12 ` | ` 1 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 11 ` |  |
-| ` max_hp ` | ` 58 ` |  |
-| ` initiative ` | ` -1 ` |  |
-| ` speed ` | ` 20 ` | ` ft ` |
 
 ## Health
 

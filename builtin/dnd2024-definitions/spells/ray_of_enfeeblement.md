@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: cec90d8e-7a1e-533b-ac52-1cb607f5e548
 splat_kind: spell
 splat_key: dnd2024:spells/ray_of_enfeeblement
 splat_name: Ray of Enfeeblement
-splat_origin:
-  key: dnd2024:reference/spell/ray_of_enfeeblement
+splat_origin: dnd2024:reference/spell/ray_of_enfeeblement
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 157
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 157, https://www.dndbeyond.com/srd
 ---
 
 # Ray of Enfeeblement
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 2 |
+| School | Necromancy |
+| Classes | Warlock, Wizard |
+| Casting Time | Action |
+| Range | 60 feet |
+| Components | V, S |
+| Duration | Concentration, up to 1 minute |
+
 
 ## Source text
 
@@ -30,28 +41,9 @@ On a failed save, the target has Disadvantage on Strength-based D20 Tests for th
 
 Original layout: [[../../srd-5.2.1/pages/157|page 157]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 2 ` |
-| ` school ` | ` necromancy ` |
-| ` classes ` | ` ["warlock", "wizard"] ` |
-| ` components ` | ` ["verbal", "somatic"] ` |
-| ` concentration ` | ` true ` |
-| ` duration ` | ` Concentration, up to 1 minute ` |
-| ` casting_time ` | ` Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
-
-<!-- splat:values path=splat_spell/range -->
-
-| Field | Value |
-| --- | --- |
-| ` feet ` | ` 60 ` |
 
 ## Rule
 

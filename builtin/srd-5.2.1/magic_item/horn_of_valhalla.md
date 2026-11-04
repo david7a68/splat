@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "93ec7c59-aab4-5c66-a848-5f0bbe8da31c"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/magic_item/horn_of_valhalla"
 splat_name: "Horn of Valhalla"
-splat_reference: {"source": "SRD 5.2.1", "category": "magic_item", "pages": [226], "executable": false}
+splat_pages:
+- 226
 ---
 
 # Horn of Valhalla
@@ -27,3 +28,13 @@ If you blow the horn without meeting its requirement, the summoned spirits attac
 | 91–00 | Iron | 5 | Proficiency with all Martial weapons |
 
 Original layout: [[../pages/226|page 226]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: magic_item
+> executable: false
+> ```
+

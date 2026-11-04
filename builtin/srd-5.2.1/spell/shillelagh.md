@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "b50092d0-ff20-5b5b-b87c-129e4e68256a"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/shillelagh"
 splat_name: "Shillelagh"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [162], "executable": false}
+splat_pages:
+- 162
 ---
 
 # Shillelagh
@@ -24,3 +25,13 @@ The spell ends early if you cast it again or if you let go of the weapon.
 Cantrip Upgrade. The damage die changes when you reach levels 5 (d10), 11 (d12), and 17 (2d6).
 
 Original layout: [[../pages/162|page 162]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

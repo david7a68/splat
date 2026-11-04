@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 6ead4dce-099b-5206-83f0-e8fe0deb917e
 splat_kind: rule
 splat_key: dnd2024:class_features/rogue_level_2_cunning_action
 splat_name: 'Level 2: Cunning Action'
-splat_origin:
-  key: dnd2024:reference/pages/062
+splat_origin: dnd2024:reference/pages/062
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 62
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 62, https://www.dndbeyond.com/srd
 ---
 
 # Level 2: Cunning Action

@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "d177653e-6d66-5a69-be2a-34febf1a5106"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/fire_bolt"
 splat_name: "Fire Bolt"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [132], "executable": false}
+splat_pages:
+- 132
 ---
 
 # Fire Bolt
@@ -22,3 +23,13 @@ You hurl a mote of fire at a creature or an object within range. Make a ranged s
 Cantrip Upgrade. The damage increases by 1d10 when you reach levels 5 (2d10), 11 (3d10), and 17 (4d10).
 
 Original layout: [[../pages/132|page 132]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

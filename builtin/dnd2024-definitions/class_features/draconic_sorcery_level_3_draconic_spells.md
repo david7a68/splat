@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 8c5bc5c2-5e14-5ec3-be06-811ab3553115
 splat_kind: rule
 splat_key: dnd2024:class_features/draconic_sorcery_level_3_draconic_spells
 splat_name: 'Level 3: Draconic Spells'
-splat_origin:
-  key: dnd2024:reference/pages/070
+splat_origin: dnd2024:reference/pages/070
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 70
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 70, https://www.dndbeyond.com/srd
 ---
 
 # Level 3: Draconic Spells

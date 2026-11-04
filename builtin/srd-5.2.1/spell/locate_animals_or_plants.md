@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "d41a5feb-9ffa-5f2d-ac44-87e86417ce9b"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/locate_animals_or_plants"
 splat_name: "Locate Animals or Plants"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [144], "executable": false}
+splat_pages:
+- 144
 ---
 
 # Locate Animals or Plants
@@ -20,3 +21,13 @@ Duration: Instantaneous
 Describe or name a specific kind of Beast, Plant creature, or nonmagical plant. You learn the direction and distance to the closest creature or plant of that kind within 5 miles, if any are present.
 
 Original layout: [[../pages/144|page 144]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "0e6e5257-0ee3-5716-bbf4-e98727738d6f"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/zone_of_truth"
 splat_name: "Zone of Truth"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [175], "executable": false}
+splat_pages:
+- 175
 ---
 
 # Zone of Truth
@@ -22,3 +23,13 @@ You create a magical zone that guards against deception in a 15-foot-radius Sphe
 An affected creature is aware of the spell and can avoid answering questions to which it would normally respond with a lie. Such a creature can be evasive yet must be truthful.
 
 Original layout: [[../pages/175|page 175]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

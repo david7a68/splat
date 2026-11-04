@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 160877bd-5c87-5b3a-b2f2-867c566a400e
 splat_kind: spell
 splat_key: dnd2024:spells/fabricate
 splat_name: Fabricate
-splat_origin:
-  key: dnd2024:reference/spell/fabricate
+splat_origin: dnd2024:reference/spell/fabricate
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 129
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 129, https://www.dndbeyond.com/srd
 ---
 
 # Fabricate
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 4 |
+| School | Transmutation |
+| Classes | Wizard |
+| Casting Time | 10 minutes |
+| Range | 120 feet |
+| Components | V, S |
+| Duration | Instantaneous |
+
 
 ## Source text
 
@@ -32,28 +43,9 @@ Creatures and magic items can’t be created by this spell. You also can’t use
 
 Original layout: [[../../srd-5.2.1/pages/129|page 129]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 4 ` |
-| ` school ` | ` transmutation ` |
-| ` classes ` | ` ["wizard"] ` |
-| ` components ` | ` ["verbal", "somatic"] ` |
-| ` concentration ` | ` false ` |
-| ` duration ` | ` Instantaneous ` |
-| ` casting_time ` | ` 10 minutes ` |
-| ` ritual ` | ` false ` |
 
-### Range
-
-<!-- splat:values path=splat_spell/range -->
-
-| Field | Value |
-| --- | --- |
-| ` feet ` | ` 120 ` |
 
 ## Rule
 

@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "cbc7228c-2884-5283-b16c-1b8b5c0034e7"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/ice_knife"
 splat_name: "Ice Knife"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [141], "executable": false}
+splat_pages:
+- 141
 ---
 
 # Ice Knife
@@ -22,3 +23,13 @@ You create a shard of ice and fling it at one creature within range. Make a rang
 Using a Higher-Level Spell Slot. The Cold damage increases by 1d6 for each spell slot level above 1.
 
 Original layout: [[../pages/141|page 141]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

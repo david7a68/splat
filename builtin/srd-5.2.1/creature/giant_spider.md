@@ -1,10 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "6b7c5ebd-5be7-539e-b4a6-72cd2680903e"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/giant_spider"
 splat_name: "Giant Spider"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [353, 354], "executable": false}
+splat_pages:
+- 353
+- 354
 ---
 
 # Giant Spider
@@ -38,3 +40,13 @@ Bite. Melee Attack Roll: +5, reach 5 ft. Hit: 7 (1d8 + 3) Piercing damage plus 7
 Web (Recharge 5–6). Dexterity Saving Throw: DC 13, one creature the spider can see within 60 feet. Failure: The target has the Restrained condition until the web is destroyed (AC 10; HP 5; Vulnerability to Fire damage; Immunity to Poison and Psychic damage).
 
 Original layout: [[../pages/353|page 353]], [[../pages/354|page 354]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

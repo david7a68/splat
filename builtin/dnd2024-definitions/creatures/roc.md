@@ -1,34 +1,60 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 9eac7390-434c-519f-b483-0c6612df0bc3
 splat_kind: creature
 splat_key: dnd2024:creatures/roc
 splat_name: Roc
-splat_origin:
-  key: dnd2024:reference/creature/roc
+splat_origin: dnd2024:reference/creature/roc
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 320
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 320, https://www.dndbeyond.com/srd
 ---
 
 # Roc
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Gargantuan |
+| Type | Monstrosity |
+| Alignment | Unaligned |
+| Armor Class | 15 |
+| Hit Points | 248 (16d20 + 80) |
+| Initiative | +8 (18) |
+| Speed | 20 ft., Fly 120 ft. |
+| Challenge | 11 (XP 7,200; PB +4) |
+| Skills | Perception +8 |
+| Senses | Passive Perception 18 |
+| Languages | None |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 28 | +9 | +9 |
+| Dex | 10 | +0 | +4 |
+| Con | 20 | +5 | +5 |
+| Int | 3 | -4 | -4 |
+| Wis | 10 | +0 | +4 |
+| Cha | 9 | -1 | -1 |
+
 
 ## Source text
 
 <!-- SRD page 320 -->
 
-Gargantuan Monstrosity, Unaligned\
-AC 15 Initiative +8 (18)\
-HP 248 (16d20 + 80)\
-Speed 20 ft., Fly 120 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 28 +9 +9 Dex 10 +0 +4 Con 20 +5 +5\
-Int 3 −4 −4 Wis 10 +0 +4 Cha 9 −1 −1\
-Skills Perception +8\
-Senses Passive Perception 18\
-Languages None\
-CR 11 (XP 7,200; PB +4)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Gargantuan Monstrosity, Unaligned\
+> AC 15 Initiative +8 (18)\
+> HP 248 (16d20 + 80)\
+> Speed 20 ft., Fly 120 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 28 +9 +9 Dex 10 +0 +4 Con 20 +5 +5\
+> Int 3 −4 −4 Wis 10 +0 +4 Cha 9 −1 −1\
+> Skills Perception +8\
+> Senses Passive Perception 18\
+> Languages None\
+> CR 11 (XP 7,200; PB +4)
+
 
 ### Actions
 
@@ -44,46 +70,11 @@ Swoop (Recharge 5–6). If the roc has a creature Grappled, the roc flies up to 
 
 Original layout: [[../../srd-5.2.1/pages/320|page 320]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` gargantuan ` |
-| ` type ` | ` monstrosity ` |
-| ` alignment ` | ` Unaligned ` |
-| ` movement_text ` | ` 20 ft., Fly 120 ft. ` |
-| ` skills_text ` | ` Perception +8 ` |
-| ` senses_text ` | ` Passive Perception 18 ` |
-| ` languages_text ` | ` None ` |
-| ` cr_text ` | ` 11 (XP 7,200; PB +4) ` |
-| ` hit_points_text ` | ` 248 (16d20 + 80) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 28 ` | ` 9 ` |
-| ` Dexterity ` | ` 10 ` | ` 4 ` |
-| ` Constitution ` | ` 20 ` | ` 5 ` |
-| ` Intelligence ` | ` 3 ` | ` -4 ` |
-| ` Wisdom ` | ` 10 ` | ` 4 ` |
-| ` Charisma ` | ` 9 ` | ` -1 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 15 ` |  |
-| ` max_hp ` | ` 248 ` |  |
-| ` initiative ` | ` 8 ` |  |
-| ` speed ` | ` 20 ` | ` ft ` |
-| ` fly_speed ` | ` 120 ` | ` ft ` |
 
 ## Health
 
@@ -268,3 +259,13 @@ geometry:
 unlisted_success_branch: no_effect
 unlisted_duration: until_removed_by_applicable_rule
 ```
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_stats_extras -->
+> 
+> ```yaml
+> fly_speed:
+>   unit: ft
+>   value: 120
+> ```
+

@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: d926ea81-ff38-59bb-ae90-7c055f174fb9
 splat_kind: rule
 splat_key: dnd2024:rules/warlock_pact_of_the_chain
 splat_name: Pact of the Chain
-splat_origin:
-  key: dnd2024:reference/pages/074
+splat_origin: dnd2024:reference/pages/074
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 74
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 74, https://www.dndbeyond.com/srd
 ---
 
 # Pact of the Chain

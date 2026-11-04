@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 43b29943-2868-5c23-8e20-df98ac3fb8dc
 splat_kind: item
 splat_key: dnd2024:items/quarterstaff_of_the_acrobat
 splat_name: Quarterstaff of the Acrobat
-splat_origin:
-  key: dnd2024:reference/magic_item/quarterstaff_of_the_acrobat
+splat_origin: dnd2024:reference/magic_item/quarterstaff_of_the_acrobat
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 237
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 237, https://www.dndbeyond.com/srd
 ---
 
 # Quarterstaff of the Acrobat
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Weapon |
+| Rarity | Very Rare |
+| Attunement | Yes |
+
 
 ## Source text
 
@@ -36,22 +43,9 @@ Ranged Weapon (Quarterstaff Form Only). This weapon has the Thrown property with
 
 Original layout: [[../../srd-5.2.1/pages/237|page 237]].
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` weapon ` |
-| ` rarity ` | ` very_rare ` |
 
-### Equipment
-
-<!-- splat:values path=splat_item/equipment -->
-
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` required ` |
 
 ## Rule
 

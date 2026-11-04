@@ -1,35 +1,62 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 0aa80369-235f-55b4-97f6-a1479ebe1f5b
 splat_kind: creature
 splat_key: dnd2024:creatures/treant
 splat_name: Treant
-splat_origin:
-  key: dnd2024:reference/creature/treant
+splat_origin: dnd2024:reference/creature/treant
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 333
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 333, https://www.dndbeyond.com/srd
 ---
 
 # Treant
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Huge |
+| Type | Plant |
+| Alignment | Chaotic Good |
+| Armor Class | 16 |
+| Hit Points | 138 (12d12 + 60) |
+| Initiative | +3 (13) |
+| Speed | 30 ft. |
+| Challenge | 9 (XP 5,000; PB +4) |
+| Senses | Passive Perception 13 |
+| Languages | Common, Druidic, Elvish, Sylvan |
+| Resistances | Bludgeoning, Piercing |
+| Vulnerabilities | Fire |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 23 | +6 | +6 |
+| Dex | 8 | -1 | -1 |
+| Con | 21 | +5 | +5 |
+| Int | 12 | +1 | +1 |
+| Wis | 16 | +3 | +3 |
+| Cha | 12 | +1 | +1 |
+
 
 ## Source text
 
 <!-- SRD page 333 -->
 
-Huge Plant, Chaotic Good\
-AC 16 Initiative +3 (13)\
-HP 138 (12d12 + 60)\
-Speed 30 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 23 +6 +6 Dex 8 −1 −1 Con 21 +5 +5\
-Int 12 +1 +1 Wis 16 +3 +3 Cha 12 +1 +1\
-Vulnerabilities Fire\
-Resistances Bludgeoning, Piercing\
-Senses Passive Perception 13\
-Languages Common, Druidic, Elvish, Sylvan\
-CR 9 (XP 5,000; PB +4)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Huge Plant, Chaotic Good\
+> AC 16 Initiative +3 (13)\
+> HP 138 (12d12 + 60)\
+> Speed 30 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 23 +6 +6 Dex 8 −1 −1 Con 21 +5 +5\
+> Int 12 +1 +1 Wis 16 +3 +3 Cha 12 +1 +1\
+> Vulnerabilities Fire\
+> Resistances Bludgeoning, Piercing\
+> Senses Passive Perception 13\
+> Languages Common, Druidic, Elvish, Sylvan\
+> CR 9 (XP 5,000; PB +4)
+
 
 ### Traits
 
@@ -47,46 +74,11 @@ Animate Trees (1/Day). The treant magically animates up to two trees it can see 
 
 Original layout: [[../../srd-5.2.1/pages/333|page 333]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` huge ` |
-| ` type ` | ` plant ` |
-| ` alignment ` | ` Chaotic Good ` |
-| ` movement_text ` | ` 30 ft. ` |
-| ` resistances_text ` | ` Bludgeoning, Piercing ` |
-| ` vulnerabilities_text ` | ` Fire ` |
-| ` senses_text ` | ` Passive Perception 13 ` |
-| ` languages_text ` | ` Common, Druidic, Elvish, Sylvan ` |
-| ` cr_text ` | ` 9 (XP 5,000; PB +4) ` |
-| ` hit_points_text ` | ` 138 (12d12 + 60) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 23 ` | ` 6 ` |
-| ` Dexterity ` | ` 8 ` | ` -1 ` |
-| ` Constitution ` | ` 21 ` | ` 5 ` |
-| ` Intelligence ` | ` 12 ` | ` 1 ` |
-| ` Wisdom ` | ` 16 ` | ` 3 ` |
-| ` Charisma ` | ` 12 ` | ` 1 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 16 ` |  |
-| ` max_hp ` | ` 138 ` |  |
-| ` initiative ` | ` 3 ` |  |
-| ` speed ` | ` 30 ` | ` ft ` |
 
 ## Health
 

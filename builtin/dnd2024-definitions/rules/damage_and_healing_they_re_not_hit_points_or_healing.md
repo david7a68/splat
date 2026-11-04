@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: bf9388da-b669-57ab-badc-bd78eb90219c
 splat_kind: rule
 splat_key: dnd2024:rules/damage_and_healing_they_re_not_hit_points_or_healing
 splat_name: They’re Not Hit Points or Healing
-splat_origin:
-  key: dnd2024:reference/pages/018
+splat_origin: dnd2024:reference/pages/018
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 18
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 18, https://www.dndbeyond.com/srd
 ---
 
 # They’re Not Hit Points or Healing

@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 578f7a44-f954-5ae1-8faa-a95da7eb24c9
 splat_kind: rule
 splat_key: dnd2024:class_features/monk_level_3_deflect_attacks
 splat_name: 'Level 3: Deflect Attacks'
-splat_origin:
-  key: dnd2024:reference/pages/051
+splat_origin: dnd2024:reference/pages/051
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 51
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 51, https://www.dndbeyond.com/srd
 ---
 
 # Level 3: Deflect Attacks

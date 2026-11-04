@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: cf3565a4-1d71-5569-b07d-9bc6b80a4329
 splat_kind: rule
 splat_key: dnd2024:rules/creating_a_background_3_choose_skill_proficiencies
 splat_name: '3: Choose Skill Proficiencies'
-splat_origin:
-  key: dnd2024:reference/pages/193
+splat_origin: dnd2024:reference/pages/193
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 193
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 193, https://www.dndbeyond.com/srd
 ---
 
 # 3: Choose Skill Proficiencies

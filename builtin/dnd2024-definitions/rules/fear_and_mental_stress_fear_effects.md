@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 3f86bacd-c824-5fbd-8b2e-da184b352930
 splat_kind: rule
 splat_key: dnd2024:rules/fear_and_mental_stress_fear_effects
 splat_name: Fear Effects
-splat_origin:
-  key: dnd2024:reference/pages/196
+splat_origin: dnd2024:reference/pages/196
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 196
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 196, https://www.dndbeyond.com/srd
 ---
 
 # Fear Effects

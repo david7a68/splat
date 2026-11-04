@@ -1,10 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "90d087a9-fe9d-5316-a1b1-b806109567cb"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/storm_of_vengeance"
 splat_name: "Storm of Vengeance"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [165, 166], "executable": false}
+splat_pages:
+- 165
+- 166
 ---
 
 # Storm of Vengeance
@@ -32,3 +34,13 @@ Turn 4. Hailstones rain down. Each creature under the cloud takes 2d6 Bludgeonin
 Turns 5–10. Gusts and freezing rain assail the area under the cloud. Each creature there takes 1d6 Cold damage. Until the spell ends, the area is Difficult Terrain and Heavily Obscured, ranged attacks with weapons are impossible there, and strong wind blows through the area.
 
 Original layout: [[../pages/165|page 165]], [[../pages/166|page 166]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

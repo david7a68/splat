@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "c0cf560e-cf20-5666-91ef-336f11bca09c"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/divine_smite"
 splat_name: "Divine Smite"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [125], "executable": false}
+splat_pages:
+- 125
 ---
 
 # Divine Smite
@@ -22,3 +23,13 @@ The target takes an extra 2d8 Radiant damage from the attack. The damage increas
 Using a Higher-Level Spell Slot. The damage increases by 1d8 for each spell slot level above 1.
 
 Original layout: [[../pages/125|page 125]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

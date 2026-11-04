@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 397d1e99-e0d9-5cd4-bb11-7a29716e088d
 splat_kind: spell
 splat_key: dnd2024:spells/mage_armor
 splat_name: Mage Armor
-splat_origin:
-  key: dnd2024:reference/spell/mage_armor
+splat_origin: dnd2024:reference/spell/mage_armor
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 145
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 145, https://www.dndbeyond.com/srd
 ---
 
 # Mage Armor
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 1 |
+| School | Abjuration |
+| Classes | Sorcerer, Wizard |
+| Casting Time | Action |
+| Range |  |
+| Components | V, S, M (a piece of cured leather) |
+| Duration | 8 hours |
+
 
 ## Source text
 
@@ -28,37 +39,11 @@ You touch a willing creature who isn’t wearing armor. Until the spell ends, th
 
 Original layout: [[../../srd-5.2.1/pages/145|page 145]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 1 ` |
-| ` school ` | ` abjuration ` |
-| ` classes ` | ` ["sorcerer", "wizard"] ` |
-| ` components ` | ` ["verbal", "somatic", "material"] ` |
-| ` concentration ` | ` false ` |
-| ` duration ` | ` 8 hours ` |
-| ` casting_time ` | ` Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
 
-<!-- splat:values path=splat_spell/range -->
 
-| Field | Value |
-| --- | --- |
-| ` mode ` | ` touch ` |
-
-### Material
-
-<!-- splat:values path=splat_spell/material -->
-
-| Field | Value |
-| --- | --- |
-| ` description ` | ` a piece of cured leather ` |
-| ` consumed ` | ` false ` |
 
 ## Rule
 
@@ -101,3 +86,14 @@ Original layout: [[../../srd-5.2.1/pages/145|page 145]].
 | Field | Value |
 | --- | --- |
 | ` target_dons_armor ` | ` true ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_spell_extras -->
+> 
+> ```yaml
+> material:
+>   consumed: false
+> range:
+>   mode: touch
+> ```
+

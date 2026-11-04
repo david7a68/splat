@@ -1,35 +1,62 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 90504663-a874-50e5-9d69-049c43447321
 splat_kind: creature
 splat_key: dnd2024:creatures/brass_dragon_wyrmling
 splat_name: Brass Dragon Wyrmling
-splat_origin:
-  key: dnd2024:reference/creature/brass_dragon_wyrmling
+splat_origin: dnd2024:reference/creature/brass_dragon_wyrmling
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 268
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 268, https://www.dndbeyond.com/srd
 ---
 
 # Brass Dragon Wyrmling
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Medium |
+| Type | Dragon (Metallic) |
+| Alignment | Chaotic Good |
+| Armor Class | 15 |
+| Hit Points | 22 (4d8 + 4) |
+| Initiative | +2 (12) |
+| Speed | 30 ft., Burrow 15 ft., Fly 60 ft. |
+| Challenge | 1 (XP 200; PB +2) |
+| Skills | Perception +4, Stealth +2 |
+| Senses | Blindsight 10 ft., Darkvision 60 ft.; Passive Perception 14 |
+| Languages | Draconic |
+| Immunities | Fire |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 15 | +2 | +2 |
+| Dex | 10 | +0 | +2 |
+| Con | 13 | +1 | +1 |
+| Int | 10 | +0 | +0 |
+| Wis | 11 | +0 | +2 |
+| Cha | 13 | +1 | +1 |
+
 
 ## Source text
 
 <!-- SRD page 268 -->
 
-Medium Dragon (Metallic), Chaotic Good\
-AC 15 Initiative +2 (12)\
-HP 22 (4d8 + 4)\
-Speed 30 ft., Burrow 15 ft., Fly 60 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 15 +2 +2 Dex 10 +0 +2 Con 13 +1 +1\
-Int 10 +0 +0 Wis 11 +0 +2 Cha 13 +1 +1\
-Skills Perception +4, Stealth +2\
-Immunities Fire\
-Senses Blindsight 10 ft., Darkvision 60 ft.; Passive Perception 14\
-Languages Draconic\
-CR 1 (XP 200; PB +2)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Medium Dragon (Metallic), Chaotic Good\
+> AC 15 Initiative +2 (12)\
+> HP 22 (4d8 + 4)\
+> Speed 30 ft., Burrow 15 ft., Fly 60 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 15 +2 +2 Dex 10 +0 +2 Con 13 +1 +1\
+> Int 10 +0 +0 Wis 11 +0 +2 Cha 13 +1 +1\
+> Skills Perception +4, Stealth +2\
+> Immunities Fire\
+> Senses Blindsight 10 ft., Darkvision 60 ft.; Passive Perception 14\
+> Languages Draconic\
+> CR 1 (XP 200; PB +2)
+
 
 ### Actions
 
@@ -41,49 +68,11 @@ Sleep Breath. Constitution Saving Throw: DC 11, each creature in a 15-foot Cone.
 
 Original layout: [[../../srd-5.2.1/pages/268|page 268]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` medium ` |
-| ` type ` | ` dragon ` |
-| ` alignment ` | ` Chaotic Good ` |
-| ` tags_text ` | ` (Metallic) ` |
-| ` movement_text ` | ` 30 ft., Burrow 15 ft., Fly 60 ft. ` |
-| ` skills_text ` | ` Perception +4, Stealth +2 ` |
-| ` immunities_text ` | ` Fire ` |
-| ` senses_text ` | ` Blindsight 10 ft., Darkvision 60 ft.; Passive Perception 14 ` |
-| ` languages_text ` | ` Draconic ` |
-| ` cr_text ` | ` 1 (XP 200; PB +2) ` |
-| ` hit_points_text ` | ` 22 (4d8 + 4) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 15 ` | ` 2 ` |
-| ` Dexterity ` | ` 10 ` | ` 2 ` |
-| ` Constitution ` | ` 13 ` | ` 1 ` |
-| ` Intelligence ` | ` 10 ` | ` 0 ` |
-| ` Wisdom ` | ` 11 ` | ` 2 ` |
-| ` Charisma ` | ` 13 ` | ` 1 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 15 ` |  |
-| ` max_hp ` | ` 22 ` |  |
-| ` initiative ` | ` 2 ` |  |
-| ` speed ` | ` 30 ` | ` ft ` |
-| ` burrow_speed ` | ` 15 ` | ` ft ` |
-| ` fly_speed ` | ` 60 ` | ` ft ` |
 
 ## Health
 
@@ -278,3 +267,16 @@ geometry:
 unlisted_success_branch: no_effect
 unlisted_duration: until_removed_by_applicable_rule
 ```
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_stats_extras -->
+> 
+> ```yaml
+> fly_speed:
+>   unit: ft
+>   value: 60
+> burrow_speed:
+>   unit: ft
+>   value: 15
+> ```
+

@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 0beda0ed-f8cd-515d-9e57-9416c350b41b
 splat_kind: spell
 splat_key: dnd2024:spells/inflict_wounds
 splat_name: Inflict Wounds
-splat_origin:
-  key: dnd2024:reference/spell/inflict_wounds
+splat_origin: dnd2024:reference/spell/inflict_wounds
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 143
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 143, https://www.dndbeyond.com/srd
 ---
 
 # Inflict Wounds
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 1 |
+| School | Necromancy |
+| Classes | Cleric |
+| Casting Time | Action |
+| Range |  |
+| Components | V, S |
+| Duration | Instantaneous |
+
 
 ## Source text
 
@@ -30,28 +41,9 @@ Using a Higher-Level Spell Slot. The damage increases by 1d10 for each spell slo
 
 Original layout: [[../../srd-5.2.1/pages/143|page 143]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 1 ` |
-| ` school ` | ` necromancy ` |
-| ` classes ` | ` ["cleric"] ` |
-| ` components ` | ` ["verbal", "somatic"] ` |
-| ` concentration ` | ` false ` |
-| ` duration ` | ` Instantaneous ` |
-| ` casting_time ` | ` Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
-
-<!-- splat:values path=splat_spell/range -->
-
-| Field | Value |
-| --- | --- |
-| ` mode ` | ` touch ` |
 
 ## Rule
 
@@ -121,3 +113,12 @@ success:
     numerator: 1
     denominator: 2
 ```
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_spell_extras -->
+> 
+> ```yaml
+> range:
+>   mode: touch
+> ```
+

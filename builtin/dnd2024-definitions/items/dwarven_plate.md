@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 352fc4da-6796-5ed3-8326-600acc8d4387
 splat_kind: item
 splat_key: dnd2024:items/dwarven_plate
 splat_name: Dwarven Plate
-splat_origin:
-  key: dnd2024:reference/magic_item/dwarven_plate
+splat_origin: dnd2024:reference/magic_item/dwarven_plate
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 219
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 219, https://www.dndbeyond.com/srd
 ---
 
 # Dwarven Plate
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Armor |
+| Rarity | Very Rare |
+| Attunement | No |
+
 
 ## Source text
 
@@ -24,22 +31,9 @@ While wearing this armor, you gain a +2 bonus to Armor Class. In addition, if an
 
 Original layout: [[../../srd-5.2.1/pages/219|page 219]].
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` armor ` |
-| ` rarity ` | ` very_rare ` |
 
-### Equipment
-
-<!-- splat:values path=splat_item/equipment -->
-
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` none ` |
 
 ## Rule
 

@@ -17,32 +17,16 @@ pub fn run(d: &mut Driver<'_>) {
         "Reading never converts a file"
     );
 
-    d.click_containing("Rook · ");
-    d.click("Change In");
-    d.type_text("Undercroft");
-    d.click("Undercroft");
-    d.expect("Saved in the new layout.");
-    d.observe_both(
-        "H1 World",
-        "One named Undo restores the place change and the old layout",
-        |d| {
-            d.nodes()
-                .iter()
-                .filter(|node| node.in_view() && node.name.starts_with("Undo"))
-                .count()
-                == 1
-                && d.visible_text("In: not set → Undercroft. Saved in the new layout.")
-        },
-    );
-    d.state("saved-in-new-layout", Sizes::All);
-    let after = fs::read_to_string(&path).unwrap();
-    assert!(after.contains("splat_schema: 2"));
-    assert!(after.contains("splat_in:"));
-    d.click("Undo place change");
-    d.settle();
+    go_library(d);
+    search_library(d, "NPCs/Rook.md");
+    d.click_containing("NPCs/Rook.md");
+    d.expect(splat::content::OLD_LAYOUT);
+    d.state("old-layout-flagged-in-library", Sizes::All);
     assert_eq!(fs::read_to_string(&path).unwrap(), before);
-
     d.click(NAV_CAMPAIGN);
+    d.expect(splat::content::OLD_LAYOUT);
+    d.expect("NPCs/Rook.md");
+    d.state("old-layout-flagged-in-campaign", Sizes::All);
     d.click("Convert files…");
     d.click("File to convert");
     d.click("NPCs/Rook.md");
@@ -82,7 +66,7 @@ pub fn run(d: &mut Driver<'_>) {
     d.click_containing("files use the old layout");
     fs::write(&path, format!("{before}Outside edit after preview.\n")).unwrap();
     d.click("Convert files");
-    d.expect("2 files now use the new layout. 1 file was skipped.");
+    d.expect("1 file now uses the new layout. 1 file was skipped.");
     d.expect("Undo convert");
     d.expect(
         "NPCs/Rook.md changed on disk after the preview. Open Convert files again to convert it.",

@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 43c6436f-6610-5460-925c-0479374081d0
 splat_kind: spell
 splat_key: dnd2024:spells/acid_arrow
 splat_name: Acid Arrow
-splat_origin:
-  key: dnd2024:reference/spell/acid_arrow
+splat_origin: dnd2024:reference/spell/acid_arrow
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 107
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 107, https://www.dndbeyond.com/srd
 ---
 
 # Acid Arrow
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 2 |
+| School | Evocation |
+| Classes | Wizard |
+| Casting Time | Action |
+| Range | 90 feet |
+| Components | V, S, M (powdered rhubarb leaf) |
+| Duration | Instantaneous |
+
 
 ## Source text
 
@@ -30,37 +41,11 @@ Using a Higher-Level Spell Slot. The damage (both initial and later) increases b
 
 Original layout: [[../../srd-5.2.1/pages/107|page 107]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 2 ` |
-| ` school ` | ` evocation ` |
-| ` classes ` | ` ["wizard"] ` |
-| ` components ` | ` ["verbal", "somatic", "material"] ` |
-| ` concentration ` | ` false ` |
-| ` duration ` | ` Instantaneous ` |
-| ` casting_time ` | ` Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
 
-<!-- splat:values path=splat_spell/range -->
 
-| Field | Value |
-| --- | --- |
-| ` feet ` | ` 90 ` |
-
-### Material
-
-<!-- splat:values path=splat_spell/material -->
-
-| Field | Value |
-| --- | --- |
-| ` description ` | ` powdered rhubarb leaf ` |
-| ` consumed ` | ` false ` |
 
 ## Rule
 
@@ -133,3 +118,12 @@ miss:
 | ` initial_dice ` | ` 1 ` |
 | ` later_dice ` | ` 1 ` |
 | ` sides ` | ` 4 ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_spell_extras -->
+> 
+> ```yaml
+> material:
+>   consumed: false
+> ```
+

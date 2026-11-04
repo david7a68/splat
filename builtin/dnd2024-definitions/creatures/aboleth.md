@@ -1,34 +1,60 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 8dc91c9b-4e6d-51e8-97a0-6f23bafeb1ef
 splat_kind: creature
 splat_key: dnd2024:creatures/aboleth
 splat_name: Aboleth
-splat_origin:
-  key: dnd2024:reference/creature/aboleth
+splat_origin: dnd2024:reference/creature/aboleth
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 258
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 258, https://www.dndbeyond.com/srd
 ---
 
 # Aboleth
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Large |
+| Type | Aberration |
+| Alignment | Lawful Evil |
+| Armor Class | 17 |
+| Hit Points | 150 (20d10 + 40) |
+| Initiative | +7 (17) |
+| Speed | 10 ft., Swim 40 ft. |
+| Challenge | 10 (XP 5,900, or 7,200 in lair; PB +4) |
+| Skills | History +12, Perception +10 |
+| Senses | Darkvision 120 ft.; Passive Perception 20 |
+| Languages | Deep Speech; telepathy 120 ft. |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 21 | +5 | +5 |
+| Dex | 9 | -1 | +3 |
+| Con | 15 | +2 | +6 |
+| Int | 18 | +4 | +8 |
+| Wis | 15 | +2 | +6 |
+| Cha | 18 | +4 | +4 |
+
 
 ## Source text
 
 <!-- SRD page 258 -->
 
-Large Aberration, Lawful Evil\
-AC 17  Initiative +7 (17)\
-HP 150 (20d10 + 40)\
-Speed 10 ft., Swim 40 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 21 +5 +5 Dex 9 −1 +3 Con 15 +2 +6\
-Int 18 +4 +8 Wis 15 +2 +6 Cha 18 +4 +4\
-Skills History +12, Perception +10\
-Senses Darkvision 120 ft.; Passive Perception 20\
-Languages Deep Speech; telepathy 120 ft.\
-CR 10 (XP 5,900, or 7,200 in lair; PB +4)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Large Aberration, Lawful Evil\
+> AC 17  Initiative +7 (17)\
+> HP 150 (20d10 + 40)\
+> Speed 10 ft., Swim 40 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 21 +5 +5 Dex 9 −1 +3 Con 15 +2 +6\
+> Int 18 +4 +8 Wis 15 +2 +6 Cha 18 +4 +4\
+> Skills History +12, Perception +10\
+> Senses Darkvision 120 ft.; Passive Perception 20\
+> Languages Deep Speech; telepathy 120 ft.\
+> CR 10 (XP 5,900, or 7,200 in lair; PB +4)
+
 
 ### Traits
 
@@ -66,46 +92,11 @@ Psychic Drain. If the aboleth has at least one creature Charmed or Grappled, it 
 
 Original layout: [[../../srd-5.2.1/pages/258|page 258]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` large ` |
-| ` type ` | ` aberration ` |
-| ` alignment ` | ` Lawful Evil ` |
-| ` movement_text ` | ` 10 ft., Swim 40 ft. ` |
-| ` skills_text ` | ` History +12, Perception +10 ` |
-| ` senses_text ` | ` Darkvision 120 ft.; Passive Perception 20 ` |
-| ` languages_text ` | ` Deep Speech; telepathy 120 ft. ` |
-| ` cr_text ` | ` 10 (XP 5,900, or 7,200 in lair; PB +4) ` |
-| ` hit_points_text ` | ` 150 (20d10 + 40) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 21 ` | ` 5 ` |
-| ` Dexterity ` | ` 9 ` | ` 3 ` |
-| ` Constitution ` | ` 15 ` | ` 6 ` |
-| ` Intelligence ` | ` 18 ` | ` 8 ` |
-| ` Wisdom ` | ` 15 ` | ` 6 ` |
-| ` Charisma ` | ` 18 ` | ` 4 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 17 ` |  |
-| ` max_hp ` | ` 150 ` |  |
-| ` initiative ` | ` 7 ` |  |
-| ` speed ` | ` 10 ` | ` ft ` |
-| ` swim_speed ` | ` 40 ` | ` ft ` |
 
 ## Health
 
@@ -553,3 +544,13 @@ geometry:
 unlisted_success_branch: no_effect
 unlisted_duration: until_removed_by_applicable_rule
 ```
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_stats_extras -->
+> 
+> ```yaml
+> swim_speed:
+>   unit: ft
+>   value: 40
+> ```
+

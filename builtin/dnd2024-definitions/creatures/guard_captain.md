@@ -1,35 +1,62 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 9eb70a3b-655f-5d61-9db6-9da7198c1f94
 splat_kind: creature
 splat_key: dnd2024:creatures/guard_captain
 splat_name: Guard Captain
-splat_origin:
-  key: dnd2024:reference/creature/guard_captain
+splat_origin: dnd2024:reference/creature/guard_captain
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 296
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 296, https://www.dndbeyond.com/srd
 ---
 
 # Guard Captain
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Medium or Small |
+| Type | Humanoid |
+| Alignment | Neutral |
+| Armor Class | 18 |
+| Hit Points | 75 (10d8 + 30) |
+| Initiative | +4 (14) |
+| Speed | 30 ft. |
+| Challenge | 4 (XP 1,100; PB +2) |
+| Skills | Athletics +6, Perception +4 |
+| Senses | Passive Perception 14 |
+| Languages | Common |
+| Gear | Breastplate, Javelins (6), Longsword, Shield |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 18 | +4 | +4 |
+| Dex | 14 | +2 | +2 |
+| Con | 16 | +3 | +3 |
+| Int | 12 | +1 | +1 |
+| Wis | 14 | +2 | +2 |
+| Cha | 13 | +1 | +1 |
+
 
 ## Source text
 
 <!-- SRD page 296 -->
 
 Medium or Small Humanoid, Neutral\
-AC 18  Initiative +4 (14)\
-HP 75 (10d8 + 30)\
-Speed 30 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 18 +4 +4 Dex 14 +2 +2 Con 16 +3 +3\
-Int 12 +1 +1 Wis 14 +2 +2 Cha 13 +1 +1\
-Skills Athletics +6, Perception +4\
-Gear Breastplate, Javelins (6), Longsword, Shield\
-Senses Passive Perception 14\
-Languages Common\
-CR 4 (XP 1,100; PB +2)
+> [!quote]- Printed stat block (not read; edit the table above)
+> AC 18  Initiative +4 (14)\
+> HP 75 (10d8 + 30)\
+> Speed 30 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 18 +4 +4 Dex 14 +2 +2 Con 16 +3 +3\
+> Int 12 +1 +1 Wis 14 +2 +2 Cha 13 +1 +1\
+> Skills Athletics +6, Perception +4\
+> Gear Breastplate, Javelins (6), Longsword, Shield\
+> Senses Passive Perception 14\
+> Languages Common\
+> CR 4 (XP 1,100; PB +2)
+
 
 ### Actions
 
@@ -41,47 +68,11 @@ Longsword. Melee Attack Roll: +6, reach 5 ft. Hit: 15 (2d10 + 4) Slashing damage
 
 Original layout: [[../../srd-5.2.1/pages/296|page 296]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` medium ` |
-| ` type ` | ` humanoid ` |
-| ` alignment ` | ` Neutral ` |
-| ` size_options_text ` | ` Medium or Small ` |
-| ` movement_text ` | ` 30 ft. ` |
-| ` skills_text ` | ` Athletics +6, Perception +4 ` |
-| ` gear_text ` | ` Breastplate, Javelins (6), Longsword, Shield ` |
-| ` senses_text ` | ` Passive Perception 14 ` |
-| ` languages_text ` | ` Common ` |
-| ` cr_text ` | ` 4 (XP 1,100; PB +2) ` |
-| ` hit_points_text ` | ` 75 (10d8 + 30) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 18 ` | ` 4 ` |
-| ` Dexterity ` | ` 14 ` | ` 2 ` |
-| ` Constitution ` | ` 16 ` | ` 3 ` |
-| ` Intelligence ` | ` 12 ` | ` 1 ` |
-| ` Wisdom ` | ` 14 ` | ` 2 ` |
-| ` Charisma ` | ` 13 ` | ` 1 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 18 ` |  |
-| ` max_hp ` | ` 75 ` |  |
-| ` initiative ` | ` 4 ` |  |
-| ` speed ` | ` 30 ` | ` ft ` |
 
 ## Health
 

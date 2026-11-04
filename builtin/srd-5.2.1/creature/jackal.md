@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "7812ab18-fbd9-5301-8d6c-173b3c58e9b7"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/jackal"
 splat_name: "Jackal"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [356], "executable": false}
+splat_pages:
+- 356
 ---
 
 # Jackal
@@ -28,3 +29,13 @@ CR 0 (XP 10; PB +2)
 Bite. Melee Attack Roll: +1, reach 5 ft. Hit: 1 (1d4 – 1) Piercing damage.
 
 Original layout: [[../pages/356|page 356]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "0afae4ac-6086-50af-b137-faf5160ce0f0"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/spike_growth"
 splat_name: "Spike Growth"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [164], "executable": false}
+splat_pages:
+- 164
 ---
 
 # Spike Growth
@@ -22,3 +23,13 @@ The ground in a 20-foot-radius Sphere centered on a point within range sprouts h
 The transformation of the ground is camouflaged to look natural. Any creature that can’t see the area when the spell is cast must take a Search action and succeed on a Wisdom (Perception or Survival) check against your spell save DC to recognize the terrain as hazardous before entering it.
 
 Original layout: [[../pages/164|page 164]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

@@ -1,10 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "0808ce82-942c-5415-ba64-22c195930946"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/teleportation_circle"
 splat_name: "Teleportation Circle"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [168, 169], "executable": false}
+splat_pages:
+- 168
+- 169
 ---
 
 # Teleportation Circle
@@ -28,3 +30,13 @@ When you first gain the ability to cast this spell, you learn the sigil sequence
 You can create a permanent teleportation circle by casting this spell in the same location every day for 365 days.
 
 Original layout: [[../pages/168|page 168]], [[../pages/169|page 169]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 8eba4d5b-02d3-5f10-bfd3-b5201f5d3732
 splat_kind: rule
 splat_key: dnd2024:class_features/monk_level_9_acrobatic_movement
 splat_name: 'Level 9: Acrobatic Movement'
-splat_origin:
-  key: dnd2024:reference/pages/051
+splat_origin: dnd2024:reference/pages/051
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 51
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 51, https://www.dndbeyond.com/srd
 ---
 
 # Level 9: Acrobatic Movement

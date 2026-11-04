@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "355fc5d3-e360-597b-a274-b484bea6af22"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/glossary/action"
 splat_name: "Action"
-splat_reference: {"source": "SRD 5.2.1", "category": "glossary", "pages": [176], "executable": false}
+splat_pages:
+- 176
 ---
 
 # Action
@@ -20,3 +21,13 @@ On your turn, you can take one action. Choose which action to take from those be
 | Disengage | Hide | Ready | Utilize |
 
 Original layout: [[../pages/176|page 176]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: glossary
+> executable: false
+> ```
+

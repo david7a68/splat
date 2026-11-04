@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 36badd6b-3407-5b39-9565-dd4d74569f8c
 splat_kind: rule
 splat_key: dnd2024:class_features/path_of_the_berserker_level_14_intimidating_presence
 splat_name: 'Level 14: Intimidating Presence'
-splat_origin:
-  key: dnd2024:reference/pages/030
+splat_origin: dnd2024:reference/pages/030
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 30
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 30, https://www.dndbeyond.com/srd
 ---
 
 # Level 14: Intimidating Presence

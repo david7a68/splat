@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 9819640f-61b7-5f9b-8573-b391e88f1193
 splat_kind: spell
 splat_key: dnd2024:spells/teleport
 splat_name: Teleport
-splat_origin:
-  key: dnd2024:reference/spell/teleport
+splat_origin: dnd2024:reference/spell/teleport
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 168
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 168, https://www.dndbeyond.com/srd
 ---
 
 # Teleport
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 7 |
+| School | Conjuration |
+| Classes | Bard, Sorcerer, Wizard |
+| Casting Time | Action |
+| Range | 10 feet |
+| Components | V |
+| Duration | Instantaneous |
+
 
 ## Source text
 
@@ -63,28 +74,9 @@ On Target. You and your group (or the target object) appear where you intended.
 
 Original layout: [[../../srd-5.2.1/pages/168|page 168]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 7 ` |
-| ` school ` | ` conjuration ` |
-| ` classes ` | ` ["bard", "sorcerer", "wizard"] ` |
-| ` components ` | ` ["verbal"] ` |
-| ` concentration ` | ` false ` |
-| ` duration ` | ` Instantaneous ` |
-| ` casting_time ` | ` Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
-
-<!-- splat:values path=splat_spell/range -->
-
-| Field | Value |
-| --- | --- |
-| ` feet ` | ` 10 ` |
 
 ## Rule
 

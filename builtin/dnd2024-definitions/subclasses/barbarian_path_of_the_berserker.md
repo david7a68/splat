@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: d3008830-4514-5e18-a003-b735f2ac7932
 splat_kind: rule_group
 splat_key: dnd2024:subclasses/barbarian_path_of_the_berserker
 splat_name: Path of the Berserker
-splat_origin:
-  key: dnd2024:reference/pages/030
+splat_origin: dnd2024:reference/pages/030
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 30
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 30, https://www.dndbeyond.com/srd
 ---
 
 # Path of the Berserker

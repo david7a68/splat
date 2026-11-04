@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 4b1a2e62-71ea-57a5-8c4f-a9ba24482c67
 splat_kind: item
 splat_key: dnd2024:equipment/basket_4_sp
 splat_name: Basket (4 SP)
-splat_origin:
-  key: dnd2024:reference/pages/096
+splat_origin: dnd2024:reference/pages/096
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 96
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 96, https://www.dndbeyond.com/srd
 ---
 
 # Basket (4 SP)
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Adventuring Gear |
+| Rarity |  |
+| Attunement | No |
+
 
 ## Source text
 
@@ -20,39 +27,13 @@ splat_sources:
 
 A Basket holds up to 40 pounds within 2 cubic feet.
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` adventuring_gear ` |
 
-### Equipment
 
-<!-- splat:values path=splat_item/equipment -->
 
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` none ` |
 
-### Price
 
-<!-- splat:values path=splat_item/price -->
-
-| Field | Value |
-| --- | --- |
-| ` value ` | ` 4 ` |
-| ` unit ` | ` sp ` |
-
-### Mass
-
-<!-- splat:values path=splat_item/mass -->
-
-| Field | Value |
-| --- | --- |
-| ` value ` | ` 2.0 ` |
-| ` unit ` | ` lb ` |
 
 ## Rule
 
@@ -82,3 +63,16 @@ A Basket holds up to 40 pounds within 2 cubic feet.
 | --- | --- |
 | ` value ` | ` 2.0 ` |
 | ` unit ` | ` lb ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_item_extras -->
+> 
+> ```yaml
+> price:
+>   unit: sp
+>   value: 4
+> mass:
+>   unit: lb
+>   value: 2.0
+> ```
+

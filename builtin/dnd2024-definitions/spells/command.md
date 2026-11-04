@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 662dd9da-c049-5604-8398-9c2809fde868
 splat_kind: spell
 splat_key: dnd2024:spells/command
 splat_name: Command
-splat_origin:
-  key: dnd2024:reference/spell/command
+splat_origin: dnd2024:reference/spell/command
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 116
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 116, https://www.dndbeyond.com/srd
 ---
 
 # Command
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 1 |
+| School | Enchantment |
+| Classes | Bard, Cleric, Paladin |
+| Casting Time | Action |
+| Range | 60 feet |
+| Components | V |
+| Duration | Instantaneous |
+
 
 ## Source text
 
@@ -40,28 +51,9 @@ Using a Higher-Level Spell Slot. You can affect one additional creature for each
 
 Original layout: [[../../srd-5.2.1/pages/116|page 116]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 1 ` |
-| ` school ` | ` enchantment ` |
-| ` classes ` | ` ["bard", "cleric", "paladin"] ` |
-| ` components ` | ` ["verbal"] ` |
-| ` concentration ` | ` false ` |
-| ` duration ` | ` Instantaneous ` |
-| ` casting_time ` | ` Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
-
-<!-- splat:values path=splat_spell/range -->
-
-| Field | Value |
-| --- | --- |
-| ` feet ` | ` 60 ` |
 
 ## Rule
 

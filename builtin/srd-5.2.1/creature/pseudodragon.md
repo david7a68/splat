@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "5268557f-132b-5bc0-a12c-ddc64c7102c8"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/pseudodragon"
 splat_name: "Pseudodragon"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [316], "executable": false}
+splat_pages:
+- 316
 ---
 
 # Pseudodragon
@@ -36,3 +37,13 @@ Bite. Melee Attack Roll: +4, reach 5 ft. Hit: 4 (1d4 + 2) Piercing damage.
 Sting. Constitution Saving Throw: DC 12, one creature the pseudodragon can see within 5 feet. Failure: 5 (2d4) Poison damage, and the target has the Poisoned condition for 1 hour. Failure by 5 or More: While Poisoned, the target also has the Unconscious condition, which ends early if the target takes damage or a creature within 5 feet of it takes an action to wake it.
 
 Original layout: [[../pages/316|page 316]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

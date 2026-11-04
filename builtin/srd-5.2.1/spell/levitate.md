@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "ac52134d-bbe1-5f59-a173-91d9de226bc6"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/levitate"
 splat_name: "Levitate"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [144], "executable": false}
+splat_pages:
+- 144
 ---
 
 # Levitate
@@ -24,3 +25,13 @@ The target can move only by pushing or pulling against a fixed object or surface
 When the spell ends, the target floats gently to the ground if it is still aloft.
 
 Original layout: [[../pages/144|page 144]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

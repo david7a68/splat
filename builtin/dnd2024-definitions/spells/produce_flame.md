@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 4a838293-61fd-5c3a-a04a-156e714967c3
 splat_kind: spell
 splat_key: dnd2024:spells/produce_flame
 splat_name: Produce Flame
-splat_origin:
-  key: dnd2024:reference/spell/produce_flame
+splat_origin: dnd2024:reference/spell/produce_flame
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 156
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 156, https://www.dndbeyond.com/srd
 ---
 
 # Produce Flame
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | Cantrip |
+| School | Conjuration |
+| Classes | Druid |
+| Casting Time | Bonus Action |
+| Range |  |
+| Components | V, S |
+| Duration | 10 minutes |
+
 
 ## Source text
 
@@ -32,28 +43,9 @@ Cantrip Upgrade. The damage increases by 1d8 when you reach levels 5 (2d8), 11 (
 
 Original layout: [[../../srd-5.2.1/pages/156|page 156]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 0 ` |
-| ` school ` | ` conjuration ` |
-| ` classes ` | ` ["druid"] ` |
-| ` components ` | ` ["verbal", "somatic"] ` |
-| ` concentration ` | ` false ` |
-| ` duration ` | ` 10 minutes ` |
-| ` casting_time ` | ` Bonus Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
-
-<!-- splat:values path=splat_spell/range -->
-
-| Field | Value |
-| --- | --- |
-| ` mode ` | ` self ` |
 
 ## Rule
 
@@ -146,3 +138,12 @@ columns:
 | ` row_2 ` | ` 5 ` | ` 2 ` |
 | ` row_3 ` | ` 11 ` | ` 3 ` |
 | ` row_4 ` | ` 17 ` | ` 4 ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_spell_extras -->
+> 
+> ```yaml
+> range:
+>   mode: self
+> ```
+

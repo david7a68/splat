@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "01682664-0a41-553f-9d37-96ef42ccc545"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/giant_weasel"
 splat_name: "Giant Weasel"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [355], "executable": false}
+splat_pages:
+- 355
 ---
 
 # Giant Weasel
@@ -28,3 +29,13 @@ CR 1/8 (XP 25; PB +2)
 Bite. Melee Attack Roll: +5, reach 5 ft. Hit: 5 (1d4 + 3) Piercing damage.
 
 Original layout: [[../pages/355|page 355]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

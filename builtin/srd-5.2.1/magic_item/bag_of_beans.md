@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "783f73fb-a0df-5508-ac56-84408c524ad6"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/magic_item/bag_of_beans"
 splat_name: "Bag of Beans"
-splat_reference: {"source": "SRD 5.2.1", "category": "magic_item", "pages": [211], "executable": false}
+splat_pages:
+- 211
 ---
 
 # Bag of Beans
@@ -38,3 +39,13 @@ If you remove a bean from the bag, plant it in dirt or sand, and then water it, 
 | 96–00 | A giant beanstalk sprouts, growing to a height of the GM’s choice. The top leads where the GM chooses, such as to a great view, a cloud giant’s castle, or another plane of existence. |
 
 Original layout: [[../pages/211|page 211]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: magic_item
+> executable: false
+> ```
+

@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 4bb066b4-2070-57bd-abe5-b452534cad3b
 splat_kind: rule
 splat_key: dnd2024:rules/spellcasting
 splat_name: Spellcasting
-splat_origin:
-  key: dnd2024:reference/pages/102
+splat_origin: dnd2024:reference/pages/102
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 102
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 102, https://www.dndbeyond.com/srd
 ---
 
 # Spellcasting

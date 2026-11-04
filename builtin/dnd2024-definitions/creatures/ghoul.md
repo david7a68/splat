@@ -1,34 +1,60 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 288eb685-d6ab-5bec-8aa0-b56547a5433a
 splat_kind: creature
 splat_key: dnd2024:creatures/ghoul
 splat_name: Ghoul
-splat_origin:
-  key: dnd2024:reference/creature/ghoul
+splat_origin: dnd2024:reference/creature/ghoul
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 288
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 288, https://www.dndbeyond.com/srd
 ---
 
 # Ghoul
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Medium |
+| Type | Undead |
+| Alignment | Chaotic Evil |
+| Armor Class | 12 |
+| Hit Points | 22 (5d8) |
+| Initiative | +2 (12) |
+| Speed | 30 ft. |
+| Challenge | 1 (XP 200; PB +2) |
+| Senses | Darkvision 60 ft.; Passive Perception 10 |
+| Languages | Common |
+| Immunities | Poison; Charmed, Exhaustion, Poisoned |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 13 | +1 | +1 |
+| Dex | 15 | +2 | +2 |
+| Con | 10 | +0 | +0 |
+| Int | 7 | -2 | -2 |
+| Wis | 10 | +0 | +0 |
+| Cha | 6 | -2 | -2 |
+
 
 ## Source text
 
 <!-- SRD page 288 -->
 
-Medium Undead, Chaotic Evil\
-AC 12 Initiative +2 (12)\
-HP 22 (5d8)\
-Speed 30 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 13 +1 +1 Dex 15 +2 +2 Con 10 +0 +0\
-Int 7 −2 −2 Wis 10 +0 +0 Cha 6 −2 −2\
-Immunities Poison; Charmed, Exhaustion, Poisoned\
-Senses Darkvision 60 ft.; Passive Perception 10\
-Languages Common\
-CR 1 (XP 200; PB +2)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Medium Undead, Chaotic Evil\
+> AC 12 Initiative +2 (12)\
+> HP 22 (5d8)\
+> Speed 30 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 13 +1 +1 Dex 15 +2 +2 Con 10 +0 +0\
+> Int 7 −2 −2 Wis 10 +0 +0 Cha 6 −2 −2\
+> Immunities Poison; Charmed, Exhaustion, Poisoned\
+> Senses Darkvision 60 ft.; Passive Perception 10\
+> Languages Common\
+> CR 1 (XP 200; PB +2)
+
 
 ### Actions
 
@@ -40,45 +66,11 @@ Claw. Melee Attack Roll: +4, reach 5 ft. Hit: 4 (1d4 + 2) Slashing damage. If th
 
 Original layout: [[../../srd-5.2.1/pages/288|page 288]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` medium ` |
-| ` type ` | ` undead ` |
-| ` alignment ` | ` Chaotic Evil ` |
-| ` movement_text ` | ` 30 ft. ` |
-| ` immunities_text ` | ` Poison; Charmed, Exhaustion, Poisoned ` |
-| ` senses_text ` | ` Darkvision 60 ft.; Passive Perception 10 ` |
-| ` languages_text ` | ` Common ` |
-| ` cr_text ` | ` 1 (XP 200; PB +2) ` |
-| ` hit_points_text ` | ` 22 (5d8) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 13 ` | ` 1 ` |
-| ` Dexterity ` | ` 15 ` | ` 2 ` |
-| ` Constitution ` | ` 10 ` | ` 0 ` |
-| ` Intelligence ` | ` 7 ` | ` -2 ` |
-| ` Wisdom ` | ` 10 ` | ` 0 ` |
-| ` Charisma ` | ` 6 ` | ` -2 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 12 ` |  |
-| ` max_hp ` | ` 22 ` |  |
-| ` initiative ` | ` 2 ` |  |
-| ` speed ` | ` 30 ` | ` ft ` |
 
 ## Health
 

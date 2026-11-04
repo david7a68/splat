@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: b6d9dcff-db11-5e04-95c4-42127237d86e
 splat_kind: rule
 splat_key: dnd2024:class_features/bard_level_4_ability_score_improvement
 splat_name: 'Level 4: Ability Score Improvement'
-splat_origin:
-  key: dnd2024:reference/pages/032
+splat_origin: dnd2024:reference/pages/032
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 32
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 32, https://www.dndbeyond.com/srd
 ---
 
 # Level 4: Ability Score Improvement

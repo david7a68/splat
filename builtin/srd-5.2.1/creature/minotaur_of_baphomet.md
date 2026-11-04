@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "1dda8904-87ee-5a3e-8cc4-48dc68c40519"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/minotaur_of_baphomet"
 splat_name: "Minotaur of Baphomet"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [309], "executable": false}
+splat_pages:
+- 309
 ---
 
 # Minotaur of Baphomet
@@ -30,3 +31,13 @@ Abyssal Glaive. Melee Attack Roll: +6, reach 10 ft. Hit: 10 (1d12 + 4) Slashing 
 Gore (Recharge 5–6). Melee Attack Roll: +6, reach 5 ft. Hit: 18 (4d6 + 4) Piercing damage. If the target is a Large or smaller creature and the minotaur moved 10+ feet straight toward it immediately before the hit, the target takes an extra 10 (3d6) Piercing damage and has the Prone condition.
 
 Original layout: [[../pages/309|page 309]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

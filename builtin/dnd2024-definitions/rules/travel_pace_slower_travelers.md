@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 423fdb62-5c87-56e0-82c1-77de312beed8
 splat_kind: rule
 splat_key: dnd2024:rules/travel_pace_slower_travelers
 splat_name: Slower Travelers
-splat_origin:
-  key: dnd2024:reference/pages/192
+splat_origin: dnd2024:reference/pages/192
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 192
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 192, https://www.dndbeyond.com/srd
 ---
 
 # Slower Travelers

@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "47d87bf5-207c-5b59-b036-25bd430bcdec"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/rope_trick"
 splat_name: "Rope Trick"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [159], "executable": false}
+splat_pages:
+- 159
 ---
 
 # Rope Trick
@@ -22,3 +23,13 @@ You touch a rope. One end of it hovers upward until the rope hangs perpendicular
 The space can hold up to eight Medium or smaller creatures. Attacks, spells, and other effects can’t pass into or out of the space, but creatures inside it can see through the portal. Anything inside the space drops out when the spell ends.
 
 Original layout: [[../pages/159|page 159]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

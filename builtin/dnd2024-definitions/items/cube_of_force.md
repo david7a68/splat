@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 3d74ea97-d180-5a06-881c-f9d30d23f1ad
 splat_kind: item
 splat_key: dnd2024:items/cube_of_force
 splat_name: Cube of Force
-splat_origin:
-  key: dnd2024:reference/magic_item/cube_of_force
+splat_origin: dnd2024:reference/magic_item/cube_of_force
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 216
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 216, https://www.dndbeyond.com/srd
 ---
 
 # Cube of Force
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Wondrous Item |
+| Rarity | Rare |
+| Attunement | Yes |
+
 
 ## Source text
 
@@ -37,22 +44,9 @@ The cube starts with 10 charges, and it regains 1d6 expended charges daily at da
 
 Original layout: [[../../srd-5.2.1/pages/216|page 216]].
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` wondrous_item ` |
-| ` rarity ` | ` rare ` |
 
-### Equipment
-
-<!-- splat:values path=splat_item/equipment -->
-
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` required ` |
 
 ## Rule
 

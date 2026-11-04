@@ -1,34 +1,60 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: d9dba9af-35dc-5cab-b2a5-997303b74c58
 splat_kind: creature
 splat_key: dnd2024:creatures/frog
 splat_name: Frog
-splat_origin:
-  key: dnd2024:reference/creature/frog
+splat_origin: dnd2024:reference/creature/frog
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 348, 349
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 348, 349, https://www.dndbeyond.com/srd
 ---
 
 # Frog
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Tiny |
+| Type | Beast |
+| Alignment | Unaligned |
+| Armor Class | 11 |
+| Hit Points | 1 (1d4 - 1) |
+| Initiative | +1 (11) |
+| Speed | 20 ft., Swim 20 ft. |
+| Challenge | 0 (XP 10; PB +2) |
+| Skills | Perception +1, Stealth +3 |
+| Senses | Darkvision 30 ft.; Passive Perception 11 |
+| Languages | None |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 1 | -5 | -5 |
+| Dex | 13 | +1 | +1 |
+| Con | 8 | -1 | -1 |
+| Int | 1 | -5 | -5 |
+| Wis | 8 | -1 | -1 |
+| Cha | 3 | -4 | -4 |
+
 
 ## Source text
 
 <!-- SRD page 348 -->
 
-Tiny Beast, Unaligned\
-AC 11  Initiative +1 (11)\
-HP 1 (1d4 − 1)\
-Speed 20 ft., Swim 20 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 1 −5 −5 Dex 13 +1 +1 Con 8 −1 −1\
-Int 1 −5 −5 Wis 8 −1 −1 Cha 3 −4 −4\
-Skills Perception +1, Stealth +3\
-Senses Darkvision 30 ft.; Passive Perception 11\
-Languages None\
-CR 0 (XP 10; PB +2)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Tiny Beast, Unaligned\
+> AC 11  Initiative +1 (11)\
+> HP 1 (1d4 − 1)\
+> Speed 20 ft., Swim 20 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 1 −5 −5 Dex 13 +1 +1 Con 8 −1 −1\
+> Int 1 −5 −5 Wis 8 −1 −1 Cha 3 −4 −4\
+> Skills Perception +1, Stealth +3\
+> Senses Darkvision 30 ft.; Passive Perception 11\
+> Languages None\
+> CR 0 (XP 10; PB +2)
+
 
 <!-- SRD page 349 -->
 
@@ -44,46 +70,11 @@ Bite. Melee Attack Roll: +3, reach 5 ft. Hit: 1 Piercing damage.
 
 Original layout: [[../../srd-5.2.1/pages/348|page 348]], [[../../srd-5.2.1/pages/349|page 349]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` tiny ` |
-| ` type ` | ` beast ` |
-| ` alignment ` | ` Unaligned ` |
-| ` movement_text ` | ` 20 ft., Swim 20 ft. ` |
-| ` skills_text ` | ` Perception +1, Stealth +3 ` |
-| ` senses_text ` | ` Darkvision 30 ft.; Passive Perception 11 ` |
-| ` languages_text ` | ` None ` |
-| ` cr_text ` | ` 0 (XP 10; PB +2) ` |
-| ` hit_points_text ` | ` 1 (1d4 - 1) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 1 ` | ` -5 ` |
-| ` Dexterity ` | ` 13 ` | ` 1 ` |
-| ` Constitution ` | ` 8 ` | ` -1 ` |
-| ` Intelligence ` | ` 1 ` | ` -5 ` |
-| ` Wisdom ` | ` 8 ` | ` -1 ` |
-| ` Charisma ` | ` 3 ` | ` -4 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 11 ` |  |
-| ` max_hp ` | ` 1 ` |  |
-| ` initiative ` | ` 1 ` |  |
-| ` speed ` | ` 20 ` | ` ft ` |
-| ` swim_speed ` | ` 20 ` | ` ft ` |
 
 ## Health
 
@@ -204,3 +195,13 @@ geometry:
 unlisted_success_branch: no_effect
 unlisted_duration: until_removed_by_applicable_rule
 ```
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_stats_extras -->
+> 
+> ```yaml
+> swim_speed:
+>   unit: ft
+>   value: 20
+> ```
+

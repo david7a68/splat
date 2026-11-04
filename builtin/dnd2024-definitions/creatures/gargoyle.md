@@ -1,35 +1,62 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 9607ffda-788a-5ade-8b84-7afa39d5dfa5
 splat_kind: creature
 splat_key: dnd2024:creatures/gargoyle
 splat_name: Gargoyle
-splat_origin:
-  key: dnd2024:reference/creature/gargoyle
+splat_origin: dnd2024:reference/creature/gargoyle
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 286
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 286, https://www.dndbeyond.com/srd
 ---
 
 # Gargoyle
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Medium |
+| Type | Elemental |
+| Alignment | Chaotic Evil |
+| Armor Class | 15 |
+| Hit Points | 67 (9d8 + 27) |
+| Initiative | +2 (12) |
+| Speed | 30 ft., Fly 60 ft. |
+| Challenge | 2 (XP 450; PB +2) |
+| Skills | Stealth +4 |
+| Senses | Darkvision 60 ft.; Passive Perception 10 |
+| Languages | Primordial (Terran) |
+| Immunities | Poison; Exhaustion, Petrified, Poisoned |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 15 | +2 | +2 |
+| Dex | 11 | +0 | +0 |
+| Con | 16 | +3 | +3 |
+| Int | 6 | -2 | -2 |
+| Wis | 11 | +0 | +0 |
+| Cha | 7 | -2 | -2 |
+
 
 ## Source text
 
 <!-- SRD page 286 -->
 
-Medium Elemental, Chaotic Evil\
-AC 15 Initiative +2 (12)\
-HP 67 (9d8 + 27)\
-Speed 30 ft., Fly 60 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 15 +2 +2 Dex 11 +0 +0 Con 16 +3 +3\
-Int 6 −2 −2 Wis 11 +0 +0 Cha 7 −2 −2\
-Skills Stealth +4\
-Immunities Poison; Exhaustion, Petrified, Poisoned\
-Senses Darkvision 60 ft.; Passive Perception 10\
-Languages Primordial (Terran)\
-CR 2 (XP 450; PB +2)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Medium Elemental, Chaotic Evil\
+> AC 15 Initiative +2 (12)\
+> HP 67 (9d8 + 27)\
+> Speed 30 ft., Fly 60 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 15 +2 +2 Dex 11 +0 +0 Con 16 +3 +3\
+> Int 6 −2 −2 Wis 11 +0 +0 Cha 7 −2 −2\
+> Skills Stealth +4\
+> Immunities Poison; Exhaustion, Petrified, Poisoned\
+> Senses Darkvision 60 ft.; Passive Perception 10\
+> Languages Primordial (Terran)\
+> CR 2 (XP 450; PB +2)
+
 
 ### Traits
 
@@ -43,47 +70,11 @@ Claw. Melee Attack Roll: +4, reach 5 ft. Hit: 7 (2d4 + 2) Slashing damage.
 
 Original layout: [[../../srd-5.2.1/pages/286|page 286]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` medium ` |
-| ` type ` | ` elemental ` |
-| ` alignment ` | ` Chaotic Evil ` |
-| ` movement_text ` | ` 30 ft., Fly 60 ft. ` |
-| ` skills_text ` | ` Stealth +4 ` |
-| ` immunities_text ` | ` Poison; Exhaustion, Petrified, Poisoned ` |
-| ` senses_text ` | ` Darkvision 60 ft.; Passive Perception 10 ` |
-| ` languages_text ` | ` Primordial (Terran) ` |
-| ` cr_text ` | ` 2 (XP 450; PB +2) ` |
-| ` hit_points_text ` | ` 67 (9d8 + 27) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 15 ` | ` 2 ` |
-| ` Dexterity ` | ` 11 ` | ` 0 ` |
-| ` Constitution ` | ` 16 ` | ` 3 ` |
-| ` Intelligence ` | ` 6 ` | ` -2 ` |
-| ` Wisdom ` | ` 11 ` | ` 0 ` |
-| ` Charisma ` | ` 7 ` | ` -2 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 15 ` |  |
-| ` max_hp ` | ` 67 ` |  |
-| ` initiative ` | ` 2 ` |  |
-| ` speed ` | ` 30 ` | ` ft ` |
-| ` fly_speed ` | ` 60 ` | ` ft ` |
 
 ## Health
 
@@ -208,3 +199,13 @@ sequence:
 | ` provider ` | ` caller ` |
 | ` required_facts ` | ` ["distance", "area_membership", "visibility", "occupancy", "movement_path"] ` |
 | ` validate_against_typed_constraints ` | ` true ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_stats_extras -->
+> 
+> ```yaml
+> fly_speed:
+>   unit: ft
+>   value: 60
+> ```
+

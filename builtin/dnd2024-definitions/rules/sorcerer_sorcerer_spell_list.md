@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 3bb10d45-9738-52b2-94ee-93f66fca6203
 splat_kind: rule
 splat_key: dnd2024:rules/sorcerer_sorcerer_spell_list
 splat_name: Sorcerer Spell List
-splat_origin:
-  key: dnd2024:reference/pages/067
+splat_origin: dnd2024:reference/pages/067
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 67, 68, 69
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 67, 68, 69, https://www.dndbeyond.com/srd
 ---
 
 # Sorcerer Spell List

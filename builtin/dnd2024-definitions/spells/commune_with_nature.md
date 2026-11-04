@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 91923fd8-5c7e-565e-8d34-ce84dec1e42b
 splat_kind: spell
 splat_key: dnd2024:spells/commune_with_nature
 splat_name: Commune with Nature
-splat_origin:
-  key: dnd2024:reference/spell/commune_with_nature
+splat_origin: dnd2024:reference/spell/commune_with_nature
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 116, 117
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 116, 117, https://www.dndbeyond.com/srd
 ---
 
 # Commune with Nature
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 5 |
+| School | Divination |
+| Classes | Druid, Ranger |
+| Casting Time | 1 minute or Ritual |
+| Range |  |
+| Components | V, S |
+| Duration | Instantaneous |
+
 
 ## Source text
 
@@ -44,28 +55,9 @@ For example, you could determine the location of a powerful monster in the area,
 
 Original layout: [[../../srd-5.2.1/pages/116|page 116]], [[../../srd-5.2.1/pages/117|page 117]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 5 ` |
-| ` school ` | ` divination ` |
-| ` classes ` | ` ["druid", "ranger"] ` |
-| ` components ` | ` ["verbal", "somatic"] ` |
-| ` concentration ` | ` false ` |
-| ` duration ` | ` Instantaneous ` |
-| ` casting_time ` | ` 1 minute or Ritual ` |
-| ` ritual ` | ` true ` |
 
-### Range
-
-<!-- splat:values path=splat_spell/range -->
-
-| Field | Value |
-| --- | --- |
-| ` mode ` | ` self ` |
 
 ## Rule
 
@@ -119,3 +111,12 @@ choices:
   bodies_of_water:
     output: locations
 ```
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_spell_extras -->
+> 
+> ```yaml
+> range:
+>   mode: self
+> ```
+

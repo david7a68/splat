@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 2b2754cf-08c3-58ac-bb4c-ab067f7cd300
 splat_kind: item
 splat_key: dnd2024:items/elven_chain
 splat_name: Elven Chain
-splat_origin:
-  key: dnd2024:reference/magic_item/elven_chain
+splat_origin: dnd2024:reference/magic_item/elven_chain
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 220
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 220, https://www.dndbeyond.com/srd
 ---
 
 # Elven Chain
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Armor |
+| Rarity | Rare |
+| Attunement | No |
+
 
 ## Source text
 
@@ -24,22 +31,9 @@ You gain a +1 bonus to Armor Class while you wear this armor. You are considered
 
 Original layout: [[../../srd-5.2.1/pages/220|page 220]].
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` armor ` |
-| ` rarity ` | ` rare ` |
 
-### Equipment
-
-<!-- splat:values path=splat_item/equipment -->
-
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` none ` |
 
 ## Rule
 

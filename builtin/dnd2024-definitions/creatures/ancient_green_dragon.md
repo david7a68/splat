@@ -1,35 +1,62 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: d72a9024-caed-5593-870f-acc73edd73e4
 splat_kind: creature
 splat_key: dnd2024:creatures/ancient_green_dragon
 splat_name: Ancient Green Dragon
-splat_origin:
-  key: dnd2024:reference/creature/ancient_green_dragon
+splat_origin: dnd2024:reference/creature/ancient_green_dragon
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 294, 295
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 294, 295, https://www.dndbeyond.com/srd
 ---
 
 # Ancient Green Dragon
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Gargantuan |
+| Type | Dragon (Chromatic) |
+| Alignment | Lawful Evil |
+| Armor Class | 21 |
+| Hit Points | 402 (23d20 + 161) |
+| Initiative | +15 (25) |
+| Speed | 40 ft., Fly 80 ft., Swim 40 ft. |
+| Challenge | 22 (XP 41,000, or 50,000 in lair; PB +7) |
+| Skills | Deception +13, Perception +17, Persuasion +13, Stealth +8 |
+| Senses | Blindsight 60 ft., Darkvision 120 ft.; Passive Perception 27 |
+| Languages | Common, Draconic |
+| Immunities | Poison; Poisoned |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 27 | +8 | +8 |
+| Dex | 12 | +1 | +8 |
+| Con | 25 | +7 | +7 |
+| Int | 20 | +5 | +5 |
+| Wis | 17 | +3 | +10 |
+| Cha | 22 | +6 | +6 |
+
 
 ## Source text
 
 <!-- SRD page 294 -->
 
-Gargantuan Dragon (Chromatic), Lawful Evil\
-AC 21 Initiative +15 (25)\
-HP 402 (23d20 + 161)\
-Speed 40 ft., Fly 80 ft., Swim 40 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 27 +8 +8 Dex 12 +1 +8 Con 25 +7 +7\
-Int 20 +5 +5 Wis 17 +3 +10 Cha 22 +6 +6\
-Skills Deception +13, Perception +17, Persuasion +13, Stealth +8\
-Immunities Poison; Poisoned\
-Senses Blindsight 60 ft., Darkvision 120 ft.; Passive Perception 27\
-Languages Common, Draconic\
-CR 22 (XP 41,000, or 50,000 in lair; PB +7)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Gargantuan Dragon (Chromatic), Lawful Evil\
+> AC 21 Initiative +15 (25)\
+> HP 402 (23d20 + 161)\
+> Speed 40 ft., Fly 80 ft., Swim 40 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 27 +8 +8 Dex 12 +1 +8 Con 25 +7 +7\
+> Int 20 +5 +5 Wis 17 +3 +10 Cha 22 +6 +6\
+> Skills Deception +13, Perception +17, Persuasion +13, Stealth +8\
+> Immunities Poison; Poisoned\
+> Senses Blindsight 60 ft., Darkvision 120 ft.; Passive Perception 27\
+> Languages Common, Draconic\
+> CR 22 (XP 41,000, or 50,000 in lair; PB +7)
+
 
 ### Traits
 
@@ -64,49 +91,11 @@ Pounce. The dragon moves up to half its Speed, and it makes one Rend attack.
 
 Original layout: [[../../srd-5.2.1/pages/294|page 294]], [[../../srd-5.2.1/pages/295|page 295]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` gargantuan ` |
-| ` type ` | ` dragon ` |
-| ` alignment ` | ` Lawful Evil ` |
-| ` tags_text ` | ` (Chromatic) ` |
-| ` movement_text ` | ` 40 ft., Fly 80 ft., Swim 40 ft. ` |
-| ` skills_text ` | ` Deception +13, Perception +17, Persuasion +13, Stealth +8 ` |
-| ` immunities_text ` | ` Poison; Poisoned ` |
-| ` senses_text ` | ` Blindsight 60 ft., Darkvision 120 ft.; Passive Perception 27 ` |
-| ` languages_text ` | ` Common, Draconic ` |
-| ` cr_text ` | ` 22 (XP 41,000, or 50,000 in lair; PB +7) ` |
-| ` hit_points_text ` | ` 402 (23d20 + 161) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 27 ` | ` 8 ` |
-| ` Dexterity ` | ` 12 ` | ` 8 ` |
-| ` Constitution ` | ` 25 ` | ` 7 ` |
-| ` Intelligence ` | ` 20 ` | ` 5 ` |
-| ` Wisdom ` | ` 17 ` | ` 10 ` |
-| ` Charisma ` | ` 22 ` | ` 6 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 21 ` |  |
-| ` max_hp ` | ` 402 ` |  |
-| ` initiative ` | ` 15 ` |  |
-| ` speed ` | ` 40 ` | ` ft ` |
-| ` fly_speed ` | ` 80 ` | ` ft ` |
-| ` swim_speed ` | ` 40 ` | ` ft ` |
 
 ## Health
 
@@ -546,3 +535,16 @@ geometry_assumptions:
   - plane
   - form_appearance
 ```
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_stats_extras -->
+> 
+> ```yaml
+> fly_speed:
+>   unit: ft
+>   value: 80
+> swim_speed:
+>   unit: ft
+>   value: 40
+> ```
+

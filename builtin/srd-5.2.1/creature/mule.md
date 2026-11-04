@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "36577ec2-dfce-5424-88f6-259b96857ffa"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/mule"
 splat_name: "Mule"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [357], "executable": false}
+splat_pages:
+- 357
 ---
 
 # Mule
@@ -31,3 +32,13 @@ Beast of Burden. The mule counts as one size larger for the purpose of determini
 Hooves. Melee Attack Roll: +4, reach 5 ft. Hit: 4 (1d4 + 2) Bludgeoning damage.
 
 Original layout: [[../pages/357|page 357]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

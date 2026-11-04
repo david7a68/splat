@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "23b99eac-da61-520f-8f98-6030cd4863f0"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/triceratops"
 splat_name: "Triceratops"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [363], "executable": false}
+splat_pages:
+- 363
 ---
 
 # Triceratops
@@ -29,3 +30,13 @@ Multiattack. The triceratops makes two Gore attacks.
 Gore. Melee Attack Roll: +9, reach 5 ft. Hit: 19 (2d12 + 6) Piercing damage. If the target is Huge or smaller and the triceratops moved 20+ feet straight toward it immediately before the hit, the target takes an extra 9 (2d8) Piercing damage and has the Prone condition.
 
 Original layout: [[../pages/363|page 363]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

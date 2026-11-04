@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 4a37cfcf-025d-51f5-9a98-be41338641fe
 splat_kind: spell
 splat_key: dnd2024:spells/warding_bond
 splat_name: Warding Bond
-splat_origin:
-  key: dnd2024:reference/spell/warding_bond
+splat_origin: dnd2024:reference/spell/warding_bond
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 173
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 173, https://www.dndbeyond.com/srd
 ---
 
 # Warding Bond
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 2 |
+| School | Abjuration |
+| Classes | Cleric, Paladin |
+| Casting Time | Action |
+| Range |  |
+| Components | V, S, M (a pair of platinum rings worth 50+ GP each, which you and the target must wear for the duration) |
+| Duration | 1 hour |
+
 
 ## Source text
 
@@ -30,37 +41,11 @@ The spell ends if you drop to 0 Hit Points or if you and the target become separ
 
 Original layout: [[../../srd-5.2.1/pages/173|page 173]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 2 ` |
-| ` school ` | ` abjuration ` |
-| ` classes ` | ` ["cleric", "paladin"] ` |
-| ` components ` | ` ["verbal", "somatic", "material"] ` |
-| ` concentration ` | ` false ` |
-| ` duration ` | ` 1 hour ` |
-| ` casting_time ` | ` Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
 
-<!-- splat:values path=splat_spell/range -->
 
-| Field | Value |
-| --- | --- |
-| ` mode ` | ` touch ` |
-
-### Material
-
-<!-- splat:values path=splat_spell/material -->
-
-| Field | Value |
-| --- | --- |
-| ` description ` | ` a pair of platinum rings worth 50+ GP each, which you and the target must wear for the duration ` |
-| ` consumed ` | ` false ` |
 
 ## Rule
 
@@ -131,3 +116,14 @@ maximum:
   value: 1
   unit: hour
 ```
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_spell_extras -->
+> 
+> ```yaml
+> material:
+>   consumed: false
+> range:
+>   mode: touch
+> ```
+

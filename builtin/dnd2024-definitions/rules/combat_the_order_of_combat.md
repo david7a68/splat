@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: b54910bb-1adf-5923-8e2e-949f0a5e6630
 splat_kind: rule
 splat_key: dnd2024:rules/combat_the_order_of_combat
 splat_name: The Order of Combat
-splat_origin:
-  key: dnd2024:reference/pages/013
+splat_origin: dnd2024:reference/pages/013
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 13
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 13, https://www.dndbeyond.com/srd
 ---
 
 # The Order of Combat

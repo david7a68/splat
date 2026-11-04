@@ -1,35 +1,62 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: b7c31d5e-b3b4-507c-8d2e-690f7d334b7d
 splat_kind: creature
 splat_key: dnd2024:creatures/ancient_brass_dragon
 splat_name: Ancient Brass Dragon
-splat_origin:
-  key: dnd2024:reference/creature/ancient_brass_dragon
+splat_origin: dnd2024:reference/creature/ancient_brass_dragon
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 269
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 269, https://www.dndbeyond.com/srd
 ---
 
 # Ancient Brass Dragon
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Gargantuan |
+| Type | Dragon (Metallic) |
+| Alignment | Chaotic Good |
+| Armor Class | 20 |
+| Hit Points | 332 (19d20 + 133) |
+| Initiative | +12 (22) |
+| Speed | 40 ft., Burrow 40 ft., Fly 80 ft. |
+| Challenge | 20 (XP 25,000, or 33,000 in lair; PB +6) |
+| Skills | History +9, Perception +14, Persuasion +12, Stealth +6 |
+| Senses | Blindsight 60 ft., Darkvision 120 ft.; Passive Perception 24 |
+| Languages | Common, Draconic |
+| Immunities | Fire |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 27 | +8 | +8 |
+| Dex | 10 | +0 | +6 |
+| Con | 25 | +7 | +7 |
+| Int | 16 | +3 | +3 |
+| Wis | 15 | +2 | +8 |
+| Cha | 22 | +6 | +6 |
+
 
 ## Source text
 
 <!-- SRD page 269 -->
 
-Gargantuan Dragon (Metallic), Chaotic Good\
-AC 20  Initiative +12 (22)\
-HP 332 (19d20 + 133)\
-Speed 40 ft., Burrow 40 ft., Fly 80 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 27 +8 +8 Dex 10 +0 +6 Con 25 +7 +7\
-Int 16 +3 +3 Wis 15 +2 +8 Cha 22 +6 +6\
-Skills History +9, Perception +14, Persuasion +12, Stealth +6\
-Immunities Fire\
-Senses Blindsight 60 ft., Darkvision 120 ft.; Passive Perception 24\
-Languages Common, Draconic\
-CR 20 (XP 25,000, or 33,000 in lair; PB +6)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Gargantuan Dragon (Metallic), Chaotic Good\
+> AC 20  Initiative +12 (22)\
+> HP 332 (19d20 + 133)\
+> Speed 40 ft., Burrow 40 ft., Fly 80 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 27 +8 +8 Dex 10 +0 +6 Con 25 +7 +7\
+> Int 16 +3 +3 Wis 15 +2 +8 Cha 22 +6 +6\
+> Skills History +9, Perception +14, Persuasion +12, Stealth +6\
+> Immunities Fire\
+> Senses Blindsight 60 ft., Darkvision 120 ft.; Passive Perception 24\
+> Languages Common, Draconic\
+> CR 20 (XP 25,000, or 33,000 in lair; PB +6)
+
 
 ### Traits
 
@@ -63,49 +90,11 @@ Scorching Sands. Dexterity Saving Throw: DC 20, one creature the dragon can see 
 
 Original layout: [[../../srd-5.2.1/pages/269|page 269]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` gargantuan ` |
-| ` type ` | ` dragon ` |
-| ` alignment ` | ` Chaotic Good ` |
-| ` tags_text ` | ` (Metallic) ` |
-| ` movement_text ` | ` 40 ft., Burrow 40 ft., Fly 80 ft. ` |
-| ` skills_text ` | ` History +9, Perception +14, Persuasion +12, Stealth +6 ` |
-| ` immunities_text ` | ` Fire ` |
-| ` senses_text ` | ` Blindsight 60 ft., Darkvision 120 ft.; Passive Perception 24 ` |
-| ` languages_text ` | ` Common, Draconic ` |
-| ` cr_text ` | ` 20 (XP 25,000, or 33,000 in lair; PB +6) ` |
-| ` hit_points_text ` | ` 332 (19d20 + 133) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 27 ` | ` 8 ` |
-| ` Dexterity ` | ` 10 ` | ` 6 ` |
-| ` Constitution ` | ` 25 ` | ` 7 ` |
-| ` Intelligence ` | ` 16 ` | ` 3 ` |
-| ` Wisdom ` | ` 15 ` | ` 8 ` |
-| ` Charisma ` | ` 22 ` | ` 6 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 20 ` |  |
-| ` max_hp ` | ` 332 ` |  |
-| ` initiative ` | ` 12 ` |  |
-| ` speed ` | ` 40 ` | ` ft ` |
-| ` burrow_speed ` | ` 40 ` | ` ft ` |
-| ` fly_speed ` | ` 80 ` | ` ft ` |
 
 ## Health
 
@@ -534,3 +523,16 @@ geometry:
 unlisted_success_branch: no_effect
 unlisted_duration: until_removed_by_applicable_rule
 ```
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_stats_extras -->
+> 
+> ```yaml
+> fly_speed:
+>   unit: ft
+>   value: 80
+> burrow_speed:
+>   unit: ft
+>   value: 40
+> ```
+

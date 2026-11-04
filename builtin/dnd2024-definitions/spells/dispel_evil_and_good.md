@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 98c98622-a138-5960-a9f2-d491794a5a79
 splat_kind: spell
 splat_key: dnd2024:spells/dispel_evil_and_good
 splat_name: Dispel Evil and Good
-splat_origin:
-  key: dnd2024:reference/spell/dispel_evil_and_good
+splat_origin: dnd2024:reference/spell/dispel_evil_and_good
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 124
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 124, https://www.dndbeyond.com/srd
 ---
 
 # Dispel Evil and Good
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 5 |
+| School | Abjuration |
+| Classes | Cleric, Paladin |
+| Casting Time | Action |
+| Range |  |
+| Components | V, S, M (powdered silver and iron) |
+| Duration | Concentration, up to 1 minute |
+
 
 ## Source text
 
@@ -32,37 +43,11 @@ Dismissal. As a Magic action, you target one creature you can see within 5 feet 
 
 Original layout: [[../../srd-5.2.1/pages/124|page 124]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 5 ` |
-| ` school ` | ` abjuration ` |
-| ` classes ` | ` ["cleric", "paladin"] ` |
-| ` components ` | ` ["verbal", "somatic", "material"] ` |
-| ` concentration ` | ` true ` |
-| ` duration ` | ` Concentration, up to 1 minute ` |
-| ` casting_time ` | ` Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
 
-<!-- splat:values path=splat_spell/range -->
 
-| Field | Value |
-| --- | --- |
-| ` mode ` | ` self ` |
-
-### Material
-
-<!-- splat:values path=splat_spell/material -->
-
-| Field | Value |
-| --- | --- |
-| ` description ` | ` powdered silver and iron ` |
-| ` consumed ` | ` false ` |
 
 ## Rule
 
@@ -145,3 +130,14 @@ failure:
       fey: feywild
   if_on_home_plane: unaffected
 ```
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_spell_extras -->
+> 
+> ```yaml
+> material:
+>   consumed: false
+> range:
+>   mode: self
+> ```
+

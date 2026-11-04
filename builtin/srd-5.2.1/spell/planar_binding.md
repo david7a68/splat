@@ -1,10 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "f586e11d-2508-5769-836a-387b8e4409c2"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/planar_binding"
 splat_name: "Planar Binding"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [152, 153], "executable": false}
+splat_pages:
+- 152
+- 153
 ---
 
 # Planar Binding
@@ -26,3 +28,13 @@ A bound creature must follow your commands to the best of its ability. You might
 Using a Higher-Level Spell Slot. The duration increases with a spell slot of level 6 (10 days), 7 (30 days), 8 (180 days), and 9 (366 days).
 
 Original layout: [[../pages/152|page 152]], [[../pages/153|page 153]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

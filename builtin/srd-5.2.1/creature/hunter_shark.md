@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "5e9ebb28-16de-5edb-a577-59f0ad1a2127"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/hunter_shark"
 splat_name: "Hunter Shark"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [356], "executable": false}
+splat_pages:
+- 356
 ---
 
 # Hunter Shark
@@ -32,3 +33,13 @@ Water Breathing. The shark can breathe only underwater.
 Bite. Melee Attack Roll: +6 (with Advantage if the target doesn’t have all its Hit Points), reach 5 ft. Hit: 14 (3d6 + 4) Piercing damage.
 
 Original layout: [[../pages/356|page 356]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

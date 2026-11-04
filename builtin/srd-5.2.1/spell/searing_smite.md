@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "3eddd049-b24b-521c-9395-17d9d9104def"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/searing_smite"
 splat_name: "Searing Smite"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [160], "executable": false}
+splat_pages:
+- 160
 ---
 
 # Searing Smite
@@ -22,3 +23,13 @@ As you hit the target, it takes an extra 1d6 Fire damage from the attack. At the
 Using a Higher-Level Spell Slot. All the damage increases by 1d6 for each spell slot level above 1.
 
 Original layout: [[../pages/160|page 160]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: a7e4f139-6804-548c-bcd7-a863aa5b3776
 splat_kind: item
 splat_key: dnd2024:items/dimensional_shackles
 splat_name: Dimensional Shackles
-splat_origin:
-  key: dnd2024:reference/magic_item/dimensional_shackles
+splat_origin: dnd2024:reference/magic_item/dimensional_shackles
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 218
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 218, https://www.dndbeyond.com/srd
 ---
 
 # Dimensional Shackles
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Wondrous Item |
+| Rarity | Rare |
+| Attunement | No |
+
 
 ## Source text
 
@@ -26,22 +33,9 @@ You and any creature you designate when you use the shackles can take a Utilize 
 
 Original layout: [[../../srd-5.2.1/pages/218|page 218]].
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` wondrous_item ` |
-| ` rarity ` | ` rare ` |
 
-### Equipment
-
-<!-- splat:values path=splat_item/equipment -->
-
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` none ` |
 
 ## Rule
 

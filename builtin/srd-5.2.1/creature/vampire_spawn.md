@@ -1,10 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "00b09037-ab35-5d0f-98d9-1fe41131b51d"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/vampire_spawn"
 splat_name: "Vampire Spawn"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [334, 335], "executable": false}
+splat_pages:
+- 334
+- 335
 ---
 
 # Vampire Spawn
@@ -53,3 +55,13 @@ Bite. Constitution Saving Throw: DC 14, one creature within 5 feet that is willi
 Deathless Agility. The vampire takes the Dash or Disengage action.
 
 Original layout: [[../pages/334|page 334]], [[../pages/335|page 335]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

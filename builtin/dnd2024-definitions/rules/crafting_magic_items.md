@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 9d5ca422-452e-5972-b406-18b8d78a911d
 splat_kind: rule
 splat_key: dnd2024:rules/crafting_magic_items
 splat_name: Crafting Magic Items
-splat_origin:
-  key: dnd2024:reference/pages/206
+splat_origin: dnd2024:reference/pages/206
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 206
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 206, https://www.dndbeyond.com/srd
 ---
 
 # Crafting Magic Items

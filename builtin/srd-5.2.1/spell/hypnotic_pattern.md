@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "2ced9e6a-861a-5573-9ad0-89ce8fd688b0"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/hypnotic_pattern"
 splat_name: "Hypnotic Pattern"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [141], "executable": false}
+splat_pages:
+- 141
 ---
 
 # Hypnotic Pattern
@@ -22,3 +23,13 @@ You create a twisting pattern of colors in a 30-foot Cube within range. The patt
 The spell ends for an affected creature if it takes any damage or if someone else uses an action to shake the creature out of its stupor.
 
 Original layout: [[../pages/141|page 141]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

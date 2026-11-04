@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 26045ee2-4818-5c3f-b16d-4f24f274491f
 splat_kind: rule
 splat_key: dnd2024:glossary/petrified_condition
 splat_name: Petrified [Condition]
-splat_origin:
-  key: dnd2024:reference/glossary/petrified_condition
+splat_origin: dnd2024:reference/glossary/petrified_condition
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 186
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 186, https://www.dndbeyond.com/srd
 ---
 
 # Petrified [Condition]

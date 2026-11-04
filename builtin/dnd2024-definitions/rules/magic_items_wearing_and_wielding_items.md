@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 8de03d4f-772d-597c-a05a-098df13a53a9
 splat_kind: rule
 splat_key: dnd2024:rules/magic_items_wearing_and_wielding_items
 splat_name: Wearing and Wielding Items
-splat_origin:
-  key: dnd2024:reference/pages/103
+splat_origin: dnd2024:reference/pages/103
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 103
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 103, https://www.dndbeyond.com/srd
 ---
 
 # Wearing and Wielding Items

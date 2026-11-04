@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: f9acbe43-d563-53b5-a159-5e8a7268b7fc
 splat_kind: rule
 splat_key: dnd2024:rules/d20_tests_saving_throws
 splat_name: Saving Throws
-splat_origin:
-  key: dnd2024:reference/pages/007
+splat_origin: dnd2024:reference/pages/007
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 7
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 7, https://www.dndbeyond.com/srd
 ---
 
 # Saving Throws

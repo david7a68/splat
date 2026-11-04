@@ -1,10 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "88a4b284-e518-596d-89ad-1adc09e2f9aa"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/awaken"
 splat_name: "Awaken"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [111, 112], "executable": false}
+splat_pages:
+- 111
+- 112
 ---
 
 # Awaken
@@ -24,3 +26,13 @@ You spend the casting time tracing magical pathways within a precious gemstone, 
 The awakened target has the Charmed condition for 30 days or until you or your allies deal damage to it. When that condition ends, the awakened creature chooses its attitude toward you.
 
 Original layout: [[../pages/111|page 111]], [[../pages/112|page 112]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "b07f66d3-1c06-5e2e-86dc-3039cac9bf5b"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/telepathic_bond"
 splat_name: "Telepathic Bond"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [168], "executable": false}
+splat_pages:
+- 168
 ---
 
 # Telepathic Bond
@@ -22,3 +23,13 @@ You forge a telepathic link among up to eight willing creatures of your choice w
 Until the spell ends, the targets can communicate telepathically through the bond whether or not they share a language. The communication is possible over any distance, though it can’t extend to other planes of existence.
 
 Original layout: [[../pages/168|page 168]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

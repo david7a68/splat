@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: d32266ca-739a-54c6-98ef-e56edb3f1fb8
 splat_kind: rule
 splat_key: dnd2024:glossary/critical_hit
 splat_name: Critical Hit
-splat_origin:
-  key: dnd2024:reference/glossary/critical_hit
+splat_origin: dnd2024:reference/glossary/critical_hit
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 179
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 179, https://www.dndbeyond.com/srd
 ---
 
 # Critical Hit

@@ -1,35 +1,62 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 49c2f231-18d1-5fb3-bc11-02824f17e924
 splat_kind: creature
 splat_key: dnd2024:creatures/cultist_fanatic
 splat_name: Cultist Fanatic
-splat_origin:
-  key: dnd2024:reference/creature/cultist_fanatic
+splat_origin: dnd2024:reference/creature/cultist_fanatic
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 278
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 278, https://www.dndbeyond.com/srd
 ---
 
 # Cultist Fanatic
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Medium or Small |
+| Type | Humanoid |
+| Alignment | Neutral |
+| Armor Class | 13 |
+| Hit Points | 44 (8d8 + 8) |
+| Initiative | +2 (12) |
+| Speed | 30 ft. |
+| Challenge | 2 (XP 450; PB +2) |
+| Skills | Deception +3, Persuasion +3, Religion +2 |
+| Senses | Passive Perception 12 |
+| Languages | Common |
+| Gear | Holy Symbol, Leather Armor |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 11 | +0 | +0 |
+| Dex | 14 | +2 | +2 |
+| Con | 12 | +1 | +1 |
+| Int | 10 | +0 | +0 |
+| Wis | 14 | +2 | +4 |
+| Cha | 13 | +1 | +1 |
+
 
 ## Source text
 
 <!-- SRD page 278 -->
 
 Medium or Small Humanoid, Neutral\
-AC 13 Initiative +2 (12)\
-HP 44 (8d8 + 8)\
-Speed 30 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 11 +0 +0 Dex 14 +2 +2 Con 12 +1 +1\
-Int 10 +0 +0 Wis 14 +2 +4 Cha 13 +1 +1\
-Skills Deception +3, Persuasion +3, Religion +2\
-Gear Holy Symbol, Leather Armor\
-Senses Passive Perception 12\
-Languages Common\
-CR 2 (XP 450; PB +2)
+> [!quote]- Printed stat block (not read; edit the table above)
+> AC 13 Initiative +2 (12)\
+> HP 44 (8d8 + 8)\
+> Speed 30 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 11 +0 +0 Dex 14 +2 +2 Con 12 +1 +1\
+> Int 10 +0 +0 Wis 14 +2 +4 Cha 13 +1 +1\
+> Skills Deception +3, Persuasion +3, Religion +2\
+> Gear Holy Symbol, Leather Armor\
+> Senses Passive Perception 12\
+> Languages Common\
+> CR 2 (XP 450; PB +2)
+
 
 ### Actions
 
@@ -47,47 +74,11 @@ Spiritual Weapon (2/Day). The cultist casts the Spiritual Weapon spell, using th
 
 Original layout: [[../../srd-5.2.1/pages/278|page 278]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` medium ` |
-| ` type ` | ` humanoid ` |
-| ` alignment ` | ` Neutral ` |
-| ` size_options_text ` | ` Medium or Small ` |
-| ` movement_text ` | ` 30 ft. ` |
-| ` skills_text ` | ` Deception +3, Persuasion +3, Religion +2 ` |
-| ` gear_text ` | ` Holy Symbol, Leather Armor ` |
-| ` senses_text ` | ` Passive Perception 12 ` |
-| ` languages_text ` | ` Common ` |
-| ` cr_text ` | ` 2 (XP 450; PB +2) ` |
-| ` hit_points_text ` | ` 44 (8d8 + 8) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 11 ` | ` 0 ` |
-| ` Dexterity ` | ` 14 ` | ` 2 ` |
-| ` Constitution ` | ` 12 ` | ` 1 ` |
-| ` Intelligence ` | ` 10 ` | ` 0 ` |
-| ` Wisdom ` | ` 14 ` | ` 4 ` |
-| ` Charisma ` | ` 13 ` | ` 1 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 13 ` |  |
-| ` max_hp ` | ` 44 ` |  |
-| ` initiative ` | ` 2 ` |  |
-| ` speed ` | ` 30 ` | ` ft ` |
 
 ## Health
 

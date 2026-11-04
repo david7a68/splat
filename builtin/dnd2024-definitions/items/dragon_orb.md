@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: b30e8d90-84cb-5cf9-a633-b10541f71465
 splat_kind: item
 splat_key: dnd2024:items/dragon_orb
 splat_name: Dragon Orb
-splat_origin:
-  key: dnd2024:reference/magic_item/dragon_orb
+splat_origin: dnd2024:reference/magic_item/dragon_orb
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 218
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 218, https://www.dndbeyond.com/srd
 ---
 
 # Dragon Orb
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Wondrous Item |
+| Rarity | Artifact |
+| Attunement | Yes |
+
 
 ## Source text
 
@@ -42,22 +49,9 @@ Destroying an Orb. A Dragon Orb has AC 20 and is destroyed if it takes damage fr
 
 Original layout: [[../../srd-5.2.1/pages/218|page 218]].
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` wondrous_item ` |
-| ` rarity ` | ` artifact ` |
 
-### Equipment
-
-<!-- splat:values path=splat_item/equipment -->
-
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` required ` |
 
 ## Rule
 

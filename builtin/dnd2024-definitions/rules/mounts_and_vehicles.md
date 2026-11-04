@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 017c8afb-915f-514b-a8b7-592487ac13aa
 splat_kind: rule
 splat_key: dnd2024:rules/mounts_and_vehicles
 splat_name: Mounts and Vehicles
-splat_origin:
-  key: dnd2024:reference/pages/100
+splat_origin: dnd2024:reference/pages/100
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 100
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 100, https://www.dndbeyond.com/srd
 ---
 
 # Mounts and Vehicles

@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: cf9dd38b-9f7f-5049-a177-221ade70596b
 splat_kind: rule
 splat_key: dnd2024:rules/combat_initiative
 splat_name: Initiative
-splat_origin:
-  key: dnd2024:reference/pages/013
+splat_origin: dnd2024:reference/pages/013
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 13
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 13, https://www.dndbeyond.com/srd
 ---
 
 # Initiative

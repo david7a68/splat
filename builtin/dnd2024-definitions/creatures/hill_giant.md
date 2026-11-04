@@ -1,34 +1,60 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: f0ab06b4-adb6-53ac-b983-62c72d1555cd
 splat_kind: creature
 splat_key: dnd2024:creatures/hill_giant
 splat_name: Hill Giant
-splat_origin:
-  key: dnd2024:reference/creature/hill_giant
+splat_origin: dnd2024:reference/creature/hill_giant
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 298
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 298, https://www.dndbeyond.com/srd
 ---
 
 # Hill Giant
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Huge |
+| Type | Giant |
+| Alignment | Chaotic Evil |
+| Armor Class | 13 |
+| Hit Points | 105 (10d12 + 40) |
+| Initiative | +2 (12) |
+| Speed | 40 ft. |
+| Challenge | 5 (XP 1,800; PB +3) |
+| Skills | Perception +2 |
+| Senses | Passive Perception 12 |
+| Languages | Giant |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 21 | +5 | +5 |
+| Dex | 8 | -1 | -1 |
+| Con | 19 | +4 | +4 |
+| Int | 5 | -3 | -3 |
+| Wis | 9 | -1 | -1 |
+| Cha | 6 | -2 | -2 |
+
 
 ## Source text
 
 <!-- SRD page 298 -->
 
-Huge Giant, Chaotic Evil\
-AC 13 Initiative +2 (12)\
-HP 105 (10d12 + 40)\
-Speed 40 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 21 +5 +5 Dex 8 −1 −1 Con 19 +4 +4\
-Int 5 −3 −3 Wis 9 −1 −1 Cha 6 −2 −2\
-Skills Perception +2\
-Senses Passive Perception 12\
-Languages Giant\
-CR 5 (XP 1,800; PB +3)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Huge Giant, Chaotic Evil\
+> AC 13 Initiative +2 (12)\
+> HP 105 (10d12 + 40)\
+> Speed 40 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 21 +5 +5 Dex 8 −1 −1 Con 19 +4 +4\
+> Int 5 −3 −3 Wis 9 −1 −1 Cha 6 −2 −2\
+> Skills Perception +2\
+> Senses Passive Perception 12\
+> Languages Giant\
+> CR 5 (XP 1,800; PB +3)
+
 
 ### Actions
 
@@ -40,45 +66,11 @@ Trash Lob. Ranged Attack Roll: +8, range 60/240 ft. Hit: 16 (2d10 + 5) Bludgeoni
 
 Original layout: [[../../srd-5.2.1/pages/298|page 298]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` huge ` |
-| ` type ` | ` giant ` |
-| ` alignment ` | ` Chaotic Evil ` |
-| ` movement_text ` | ` 40 ft. ` |
-| ` skills_text ` | ` Perception +2 ` |
-| ` senses_text ` | ` Passive Perception 12 ` |
-| ` languages_text ` | ` Giant ` |
-| ` cr_text ` | ` 5 (XP 1,800; PB +3) ` |
-| ` hit_points_text ` | ` 105 (10d12 + 40) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 21 ` | ` 5 ` |
-| ` Dexterity ` | ` 8 ` | ` -1 ` |
-| ` Constitution ` | ` 19 ` | ` 4 ` |
-| ` Intelligence ` | ` 5 ` | ` -3 ` |
-| ` Wisdom ` | ` 9 ` | ` -1 ` |
-| ` Charisma ` | ` 6 ` | ` -2 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 13 ` |  |
-| ` max_hp ` | ` 105 ` |  |
-| ` initiative ` | ` 2 ` |  |
-| ` speed ` | ` 40 ` | ` ft ` |
 
 ## Health
 

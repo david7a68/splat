@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "bb225568-5bcc-5132-bd0e-40f84691cc85"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/spider"
 splat_name: "Spider"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [361], "executable": false}
+splat_pages:
+- 361
 ---
 
 # Spider
@@ -34,3 +35,13 @@ Web Walker. The spider ignores movement restrictions caused by webs, and the spi
 Bite. Melee Attack Roll: +4, reach 5 ft. Hit: 1 Piercing damage plus 2 (1d4) Poison damage.
 
 Original layout: [[../pages/361|page 361]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

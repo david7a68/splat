@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: b08a4a47-e37e-55ae-85de-18860c15fb64
 splat_kind: rule
 splat_key: dnd2024:class_features/oath_of_devotion_level_3_oath_of_devotion_spells
 splat_name: 'Level 3: Oath of Devotion Spells'
-splat_origin:
-  key: dnd2024:reference/pages/056
+splat_origin: dnd2024:reference/pages/056
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 56
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 56, https://www.dndbeyond.com/srd
 ---
 
 # Level 3: Oath of Devotion Spells

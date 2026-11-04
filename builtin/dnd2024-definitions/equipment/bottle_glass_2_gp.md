@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: d4189637-d8d4-525f-ae00-4155c9137439
 splat_kind: item
 splat_key: dnd2024:equipment/bottle_glass_2_gp
 splat_name: Bottle, Glass (2 GP)
-splat_origin:
-  key: dnd2024:reference/pages/096
+splat_origin: dnd2024:reference/pages/096
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 96
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 96, https://www.dndbeyond.com/srd
 ---
 
 # Bottle, Glass (2 GP)
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Adventuring Gear |
+| Rarity |  |
+| Attunement | No |
+
 
 ## Source text
 
@@ -20,39 +27,13 @@ splat_sources:
 
 A Glass Bottle holds up to 1½ pints.
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` adventuring_gear ` |
 
-### Equipment
 
-<!-- splat:values path=splat_item/equipment -->
 
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` none ` |
 
-### Price
 
-<!-- splat:values path=splat_item/price -->
-
-| Field | Value |
-| --- | --- |
-| ` value ` | ` 2 ` |
-| ` unit ` | ` gp ` |
-
-### Mass
-
-<!-- splat:values path=splat_item/mass -->
-
-| Field | Value |
-| --- | --- |
-| ` value ` | ` 2.0 ` |
-| ` unit ` | ` lb ` |
 
 ## Rule
 
@@ -81,3 +62,16 @@ A Glass Bottle holds up to 1½ pints.
 | --- | --- |
 | ` value ` | ` 2.0 ` |
 | ` unit ` | ` lb ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_item_extras -->
+> 
+> ```yaml
+> price:
+>   unit: gp
+>   value: 2
+> mass:
+>   unit: lb
+>   value: 2.0
+> ```
+

@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "3f277781-b99f-5043-be7e-b46b5585d070"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/hallucinatory_terrain"
 splat_name: "Hallucinatory Terrain"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [139], "executable": false}
+splat_pages:
+- 139
 ---
 
 # Hallucinatory Terrain
@@ -22,3 +23,13 @@ You make natural terrain in a 150-foot Cube in range look, sound, and smell like
 The tactile characteristics of the terrain are unchanged, so creatures entering the area are likely to notice the illusion. If the difference isn’t obvious by touch, a creature examining the illusion can take the Study action to make an Intelligence (Investigation) check against your spell save DC to disbelieve it. If a creature discerns that the terrain is illusory, the creature sees a vague image superimposed on the real terrain.
 
 Original layout: [[../pages/139|page 139]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

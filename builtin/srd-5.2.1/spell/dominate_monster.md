@@ -1,10 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "87f6d09b-291f-530d-a8da-9fe6f77ab3b8"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/dominate_monster"
 splat_name: "Dominate Monster"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [125, 126], "executable": false}
+splat_pages:
+- 125
+- 126
 ---
 
 # Dominate Monster
@@ -28,3 +30,13 @@ You can command the target to take a Reaction but must take your own Reaction to
 Using a Higher-Level Spell Slot. Your Concentration can last longer with a level 9 spell slot (up to 8 hours).
 
 Original layout: [[../pages/125|page 125]], [[../pages/126|page 126]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

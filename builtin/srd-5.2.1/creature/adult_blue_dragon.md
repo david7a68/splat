@@ -1,10 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "b6acc03c-3daa-525a-8423-0b0ba5053357"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/adult_blue_dragon"
 splat_name: "Adult Blue Dragon"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [266, 267], "executable": false}
+splat_pages:
+- 266
+- 267
 ---
 
 # Adult Blue Dragon
@@ -54,3 +56,13 @@ Sonic Boom. The dragon uses Spellcasting to cast Shatter. The dragon can’t tak
 Tail Swipe. The dragon makes one Rend attack.
 
 Original layout: [[../pages/266|page 266]], [[../pages/267|page 267]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

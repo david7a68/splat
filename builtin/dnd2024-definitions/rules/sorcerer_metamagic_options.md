@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: b490eeaa-912b-5065-bd7b-111cab3d29cf
 splat_kind: rule
 splat_key: dnd2024:rules/sorcerer_metamagic_options
 splat_name: Metamagic Options
-splat_origin:
-  key: dnd2024:reference/pages/066
+splat_origin: dnd2024:reference/pages/066
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 66
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 66, https://www.dndbeyond.com/srd
 ---
 
 # Metamagic Options

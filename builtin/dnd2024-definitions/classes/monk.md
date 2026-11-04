@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: d2158bed-a30b-5114-8de1-f38d011610c0
 splat_kind: rule_group
 splat_key: dnd2024:classes/monk
 splat_name: Monk
-splat_origin:
-  key: dnd2024:reference/pages/049
+splat_origin: dnd2024:reference/pages/049
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 49
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 49, https://www.dndbeyond.com/srd
 ---
 
 # Monk

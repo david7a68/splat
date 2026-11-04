@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: dc1a41b8-fe17-5e55-9061-81c41e8570cb
 splat_kind: item
 splat_key: dnd2024:items/mithral_armor
 splat_name: Mithral Armor
-splat_origin:
-  key: dnd2024:reference/magic_item/mithral_armor
+splat_origin: dnd2024:reference/magic_item/mithral_armor
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 231
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 231, https://www.dndbeyond.com/srd
 ---
 
 # Mithral Armor
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Armor |
+| Rarity | Uncommon |
+| Attunement | No |
+
 
 ## Source text
 
@@ -24,22 +31,9 @@ Mithral is a light, flexible metal. Armor made of this substance can be worn und
 
 Original layout: [[../../srd-5.2.1/pages/231|page 231]].
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` armor ` |
-| ` rarity ` | ` uncommon ` |
 
-### Equipment
-
-<!-- splat:values path=splat_item/equipment -->
-
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` none ` |
 
 ## Rule
 

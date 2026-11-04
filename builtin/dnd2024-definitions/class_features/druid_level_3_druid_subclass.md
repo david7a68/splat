@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: c8176565-b08a-54a0-83f7-e5b6e25b40b2
 splat_kind: rule
 splat_key: dnd2024:class_features/druid_level_3_druid_subclass
 splat_name: 'Level 3: Druid Subclass'
-splat_origin:
-  key: dnd2024:reference/pages/043
+splat_origin: dnd2024:reference/pages/043
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 43
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 43, https://www.dndbeyond.com/srd
 ---
 
 # Level 3: Druid Subclass

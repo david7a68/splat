@@ -487,19 +487,18 @@ pub fn type_label(kind: &str) -> String {
 }
 
 /// The fields every new world entry starts with.
-fn entry_fields(id: Uuid, name: &str, kind: &str) -> [(&'static str, Value); 5] {
-    let mut world = Mapping::new();
-    world.insert("type".into(), kind.into());
-    if kind == "npc" {
-        world.insert("status".into(), "alive".into());
-    }
-    [
-        ("splat_schema", 1.into()),
+fn entry_fields(id: Uuid, name: &str, kind: &str) -> Vec<(&'static str, Value)> {
+    let mut fields = vec![
+        ("splat_schema", 2.into()),
         ("splat_id", id.to_string().into()),
         ("splat_kind", "world".into()),
         ("splat_name", name.into()),
-        ("splat_world", Value::Mapping(world)),
-    ]
+        ("splat_type", kind.into()),
+    ];
+    if kind == "npc" {
+        fields.push(("splat_status", "alive".into()));
+    }
+    fields
 }
 
 fn frontmatter(id: Uuid, name: &str, kind: &str) -> Result<String, String> {
@@ -508,7 +507,7 @@ fn frontmatter(id: Uuid, name: &str, kind: &str) -> Result<String, String> {
         .map(|(key, value)| (key.into(), value))
         .collect();
     let yaml = serde_yaml_ng::to_string(&fields).map_err(|e| e.to_string())?;
-    splat::content::formats::convert("World.md", &format!("---\n{yaml}---\n"))
+    Ok(format!("---\n{yaml}---\n"))
 }
 
 /// A new NPC or location from a name typed at the table. Nothing else is required.
@@ -599,12 +598,14 @@ pub fn make_entry(campaign: &Campaign, item: &Item, kind: &str) -> Result<Uuid, 
     let id = crate::hermetic::new_uuid();
     let name = &item.entry.name;
     let updated = if sessions::split_note(&text).is_some() {
-        let changes = entry_fields(id, name, kind).map(|(key, value)| (key, Some(value)));
+        let changes = entry_fields(id, name, kind)
+            .into_iter()
+            .map(|(key, value)| (key, Some(value)))
+            .collect::<Vec<_>>();
         patch_fields(&text, &changes)?
     } else {
         format!("{}\n{text}", frontmatter(id, name, kind)?)
     };
-    let updated = splat::content::formats::convert(relative, &updated)?;
     write_note(&campaign.path, relative, Some(&text), &updated)?;
     Ok(id)
 }
@@ -620,7 +621,6 @@ fn set_world_field(
     let text = fs::read_to_string(&path).map_err(|e| e.to_string())?;
     Entry::parse(&entry.path, &text)?;
     let updated = fields::patch(&text, name, value)?;
-    let updated = splat::content::formats::convert(&entry.path, &updated)?;
     write_note(&campaign.path, &entry.path, Some(&text), &updated)?;
     Ok(Change {
         path: entry.path.clone(),
@@ -1327,29 +1327,13 @@ impl Reader {
             let before = fs::read_to_string(note_path(&campaign.path, &item.entry.path)?)
                 .map_err(|e| e.to_string())?;
             let patched = fields::patch(&before, key, value)?;
-            let after = splat::content::formats::convert_resolved(
-                &item.entry.path,
-                &patched,
-                index.items.iter().map(|item| &item.entry),
-            )?;
+            let after = patched;
             write_note(&campaign.path, &item.entry.path, Some(&before), &after)?;
             Ok::<_, String>(Change {
                 path: item.entry.path.clone(),
                 before: before.clone(),
                 after: after.clone(),
-                word: format!(
-                    "{label}: {before_name} → {after_name}.{}",
-                    if Entry::parse(&item.entry.path, &before)
-                        .is_ok_and(|entry| splat::content::formats::schema(&entry.fields) == Ok(1))
-                        && Entry::parse(&item.entry.path, &after).is_ok_and(|entry| {
-                            splat::content::formats::schema(&entry.fields) == Ok(2)
-                        })
-                    {
-                        " Saved in the new layout."
-                    } else {
-                        ""
-                    }
-                ),
+                word: format!("{label}: {before_name} → {after_name}."),
             })
         })();
         match result {
@@ -1979,17 +1963,7 @@ impl Reader {
                     });
                     match set_world_field(campaign, &item.entry, "creature", stored.into()) {
                         Ok(mut change) => {
-                            change.word = format!(
-                                "Stat block: not set → {}.{}",
-                                stat_block.name,
-                                if Entry::parse(&item.entry.path, &change.before).is_ok_and(
-                                    |entry| splat::content::formats::schema(&entry.fields) == Ok(1)
-                                ) {
-                                    " Saved in the new layout."
-                                } else {
-                                    ""
-                                }
-                            );
+                            change.word = format!("Stat block: not set → {}.", stat_block.name);
                             self.undo = Some(change);
                         }
                         Err(error) => self.error = Some(error),
@@ -2136,7 +2110,7 @@ mod tests {
         ctx.enable_accesskit();
         let output = ctx.run(Default::default(), |ctx| {
             egui::CentralPanel::default().show(ctx, |ui| {
-                Reader::change_notice(ui, "In: Watch House → North Gate. Saved in the new layout.");
+                Reader::change_notice(ui, "In: Watch House → North Gate.");
             });
         });
         let nodes = output.platform_output.accesskit_update.unwrap().nodes;
@@ -2193,7 +2167,7 @@ mod tests {
             dndbeyond_campaign_id: None,
             dndbeyond_campaign_name: None,
         };
-        let before = patch_fields(
+        let before = splat::content::formats::patch_model(
             &crate::library::note_text("Rook", "world", None),
             &[(
                 "splat_world",

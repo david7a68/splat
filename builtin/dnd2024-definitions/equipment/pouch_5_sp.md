@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: b1b73d18-7615-589b-9425-3e74a3ec54c8
 splat_kind: item
 splat_key: dnd2024:equipment/pouch_5_sp
 splat_name: Pouch (5 SP)
-splat_origin:
-  key: dnd2024:reference/pages/099
+splat_origin: dnd2024:reference/pages/099
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 99
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 99, https://www.dndbeyond.com/srd
 ---
 
 # Pouch (5 SP)
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Adventuring Gear |
+| Rarity |  |
+| Attunement | No |
+
 
 ## Source text
 
@@ -20,39 +27,13 @@ splat_sources:
 
 A Pouch holds up to 6 pounds within one-fifth of a cubic foot.
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` adventuring_gear ` |
 
-### Equipment
 
-<!-- splat:values path=splat_item/equipment -->
 
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` none ` |
 
-### Price
 
-<!-- splat:values path=splat_item/price -->
-
-| Field | Value |
-| --- | --- |
-| ` value ` | ` 5 ` |
-| ` unit ` | ` sp ` |
-
-### Mass
-
-<!-- splat:values path=splat_item/mass -->
-
-| Field | Value |
-| --- | --- |
-| ` value ` | ` 1.0 ` |
-| ` unit ` | ` lb ` |
 
 ## Rule
 
@@ -82,3 +63,16 @@ A Pouch holds up to 6 pounds within one-fifth of a cubic foot.
 | --- | --- |
 | ` value ` | ` 1.0 ` |
 | ` unit ` | ` lb ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_item_extras -->
+> 
+> ```yaml
+> price:
+>   unit: sp
+>   value: 5
+> mass:
+>   unit: lb
+>   value: 1.0
+> ```
+

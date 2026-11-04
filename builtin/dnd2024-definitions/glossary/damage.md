@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 73579bfa-70aa-5fd8-9085-b1cc03856533
 splat_kind: rule
 splat_key: dnd2024:glossary/damage
 splat_name: Damage
-splat_origin:
-  key: dnd2024:reference/glossary/damage
+splat_origin: dnd2024:reference/glossary/damage
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 180
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 180, https://www.dndbeyond.com/srd
 ---
 
 # Damage

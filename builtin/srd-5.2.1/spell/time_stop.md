@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "207ca642-cbdd-5bc4-8500-e631bc4d1036"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/time_stop"
 splat_name: "Time Stop"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [169], "executable": false}
+splat_pages:
+- 169
 ---
 
 # Time Stop
@@ -22,3 +23,13 @@ You briefly stop the flow of time for everyone but yourself. No time passes for 
 This spell ends if one of the actions you use during this period, or any effects that you create during it, affects a creature other than you or an object being worn or carried by someone other than you. In addition, the spell ends if you move to a place more than 1,000 feet from the location where you cast it.
 
 Original layout: [[../pages/169|page 169]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

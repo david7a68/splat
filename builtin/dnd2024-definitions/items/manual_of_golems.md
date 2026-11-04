@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: aa4e9ca8-b2d8-52e1-9d3b-35342f1a6965
 splat_kind: item
 splat_key: dnd2024:items/manual_of_golems
 splat_name: Manual of Golems
-splat_origin:
-  key: dnd2024:reference/magic_item/manual_of_golems
+splat_origin: dnd2024:reference/magic_item/manual_of_golems
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 229, 230
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 229, 230, https://www.dndbeyond.com/srd
 ---
 
 # Manual of Golems
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Wondrous Item |
+| Rarity | Very Rare |
+| Attunement | No |
+
 
 ## Source text
 
@@ -37,22 +44,9 @@ Once you finish creating the golem, the book is consumed in eldritch flames. The
 
 Original layout: [[../../srd-5.2.1/pages/229|page 229]], [[../../srd-5.2.1/pages/230|page 230]].
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` wondrous_item ` |
-| ` rarity ` | ` very_rare ` |
 
-### Equipment
-
-<!-- splat:values path=splat_item/equipment -->
-
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` none ` |
 
 ## Rule
 

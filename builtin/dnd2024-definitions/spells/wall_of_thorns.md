@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: f189d34d-37cc-5a3a-8c99-504e524dbfd3
 splat_kind: spell
 splat_key: dnd2024:spells/wall_of_thorns
 splat_name: Wall of Thorns
-splat_origin:
-  key: dnd2024:reference/spell/wall_of_thorns
+splat_origin: dnd2024:reference/spell/wall_of_thorns
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 173
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 173, https://www.dndbeyond.com/srd
 ---
 
 # Wall of Thorns
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 6 |
+| School | Conjuration |
+| Classes | Druid |
+| Casting Time | Action |
+| Range | 120 feet |
+| Components | V, S, M (a handful of thorns) |
+| Duration | Concentration, up to 10 minutes |
+
 
 ## Source text
 
@@ -34,37 +45,11 @@ Using a Higher-Level Spell Slot. Both types of damage increase by 1d8 for each s
 
 Original layout: [[../../srd-5.2.1/pages/173|page 173]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 6 ` |
-| ` school ` | ` conjuration ` |
-| ` classes ` | ` ["druid"] ` |
-| ` components ` | ` ["verbal", "somatic", "material"] ` |
-| ` concentration ` | ` true ` |
-| ` duration ` | ` Concentration, up to 10 minutes ` |
-| ` casting_time ` | ` Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
 
-<!-- splat:values path=splat_spell/range -->
 
-| Field | Value |
-| --- | --- |
-| ` feet ` | ` 120 ` |
-
-### Material
-
-<!-- splat:values path=splat_spell/material -->
-
-| Field | Value |
-| --- | --- |
-| ` description ` | ` a handful of thorns ` |
-| ` consumed ` | ` false ` |
 
 ## Rule
 
@@ -169,3 +154,12 @@ maximum_saves_per_creature_per_turn: 1
 | ` piercing_dice ` | ` 1 ` |
 | ` slashing_dice ` | ` 1 ` |
 | ` sides ` | ` 8 ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_spell_extras -->
+> 
+> ```yaml
+> material:
+>   consumed: false
+> ```
+

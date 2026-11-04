@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 523247e2-233b-5d10-ab0e-df2df3b7968f
 splat_kind: rule
 splat_key: dnd2024:rules/casting_spells_combining_spell_effects
 splat_name: Combining Spell Effects
-splat_origin:
-  key: dnd2024:reference/pages/106
+splat_origin: dnd2024:reference/pages/106
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 106
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 106, https://www.dndbeyond.com/srd
 ---
 
 # Combining Spell Effects

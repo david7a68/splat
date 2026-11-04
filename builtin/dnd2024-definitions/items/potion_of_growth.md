@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: a91e7a5c-29f3-5ae1-bd9f-fcc4b5fbc863
 splat_kind: item
 splat_key: dnd2024:items/potion_of_growth
 splat_name: Potion of Growth
-splat_origin:
-  key: dnd2024:reference/magic_item/potion_of_growth
+splat_origin: dnd2024:reference/magic_item/potion_of_growth
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 235
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 235, https://www.dndbeyond.com/srd
 ---
 
 # Potion of Growth
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Potion |
+| Rarity | Uncommon |
+| Attunement | No |
+
 
 ## Source text
 
@@ -26,22 +33,9 @@ The red in the potion’s liquid continuously expands from a tiny bead to color 
 
 Original layout: [[../../srd-5.2.1/pages/235|page 235]].
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` potion ` |
-| ` rarity ` | ` uncommon ` |
 
-### Equipment
-
-<!-- splat:values path=splat_item/equipment -->
-
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` none ` |
 
 ## Rule
 

@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 148f9e56-912a-5c76-a42e-de36e6d7c9eb
 splat_kind: rule
 splat_key: dnd2024:class_features/monk_level_5_stunning_strike
 splat_name: 'Level 5: Stunning Strike'
-splat_origin:
-  key: dnd2024:reference/pages/051
+splat_origin: dnd2024:reference/pages/051
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 51
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 51, https://www.dndbeyond.com/srd
 ---
 
 # Level 5: Stunning Strike

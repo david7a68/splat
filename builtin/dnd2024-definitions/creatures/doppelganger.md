@@ -1,35 +1,62 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 7a623dd0-f983-5f68-adfa-2b9262f43ec8
 splat_kind: creature
 splat_key: dnd2024:creatures/doppelganger
 splat_name: Doppelganger
-splat_origin:
-  key: dnd2024:reference/creature/doppelganger
+splat_origin: dnd2024:reference/creature/doppelganger
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 280
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 280, https://www.dndbeyond.com/srd
 ---
 
 # Doppelganger
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Medium |
+| Type | Monstrosity |
+| Alignment | Neutral |
+| Armor Class | 14 |
+| Hit Points | 52 (8d8 + 16) |
+| Initiative | +4 (14) |
+| Speed | 30 ft. |
+| Challenge | 3 (XP 700; PB +2) |
+| Skills | Deception +6, Insight +3 |
+| Senses | Darkvision 60 ft.; Passive Perception 11 |
+| Languages | Common plus three other languages |
+| Immunities | Charmed |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 11 | +0 | +0 |
+| Dex | 18 | +4 | +4 |
+| Con | 14 | +2 | +2 |
+| Int | 11 | +0 | +0 |
+| Wis | 12 | +1 | +1 |
+| Cha | 14 | +2 | +2 |
+
 
 ## Source text
 
 <!-- SRD page 280 -->
 
-Medium Monstrosity, Neutral\
-AC 14 Initiative +4 (14)\
-HP 52 (8d8 + 16)\
-Speed 30 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 11 +0 +0 Dex 18 +4 +4 Con 14 +2 +2\
-Int 11 +0 +0 Wis 12 +1 +1 Cha 14 +2 +2\
-Skills Deception +6, Insight +3\
-Immunities Charmed\
-Senses Darkvision 60 ft.; Passive Perception 11\
-Languages Common plus three other languages\
-CR 3 (XP 700; PB +2)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Medium Monstrosity, Neutral\
+> AC 14 Initiative +4 (14)\
+> HP 52 (8d8 + 16)\
+> Speed 30 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 11 +0 +0 Dex 18 +4 +4 Con 14 +2 +2\
+> Int 11 +0 +0 Wis 12 +1 +1 Cha 14 +2 +2\
+> Skills Deception +6, Insight +3\
+> Immunities Charmed\
+> Senses Darkvision 60 ft.; Passive Perception 11\
+> Languages Common plus three other languages\
+> CR 3 (XP 700; PB +2)
+
 
 ### Actions
 
@@ -47,46 +74,11 @@ Shape-Shift. The doppelganger shape-shifts into a Medium or Small Humanoid, or i
 
 Original layout: [[../../srd-5.2.1/pages/280|page 280]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` medium ` |
-| ` type ` | ` monstrosity ` |
-| ` alignment ` | ` Neutral ` |
-| ` movement_text ` | ` 30 ft. ` |
-| ` skills_text ` | ` Deception +6, Insight +3 ` |
-| ` immunities_text ` | ` Charmed ` |
-| ` senses_text ` | ` Darkvision 60 ft.; Passive Perception 11 ` |
-| ` languages_text ` | ` Common plus three other languages ` |
-| ` cr_text ` | ` 3 (XP 700; PB +2) ` |
-| ` hit_points_text ` | ` 52 (8d8 + 16) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 11 ` | ` 0 ` |
-| ` Dexterity ` | ` 18 ` | ` 4 ` |
-| ` Constitution ` | ` 14 ` | ` 2 ` |
-| ` Intelligence ` | ` 11 ` | ` 0 ` |
-| ` Wisdom ` | ` 12 ` | ` 1 ` |
-| ` Charisma ` | ` 14 ` | ` 2 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 14 ` |  |
-| ` max_hp ` | ` 52 ` |  |
-| ` initiative ` | ` 4 ` |  |
-| ` speed ` | ` 30 ` | ` ft ` |
 
 ## Health
 

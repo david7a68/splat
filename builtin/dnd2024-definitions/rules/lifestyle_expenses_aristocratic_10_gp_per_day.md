@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 463ae7df-d2d9-58a6-84b7-ff8761526d86
 splat_kind: rule
 splat_key: dnd2024:rules/lifestyle_expenses_aristocratic_10_gp_per_day
 splat_name: Aristocratic (10 GP per Day)
-splat_origin:
-  key: dnd2024:reference/pages/101
+splat_origin: dnd2024:reference/pages/101
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 101
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 101, https://www.dndbeyond.com/srd
 ---
 
 # Aristocratic (10 GP per Day)

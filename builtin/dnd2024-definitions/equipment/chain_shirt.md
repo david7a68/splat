@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: c540d98d-1960-508d-997f-581ab48f8d57
 splat_kind: item
 splat_key: dnd2024:equipment/chain_shirt
 splat_name: Chain Shirt
-splat_origin:
-  key: dnd2024:reference/pages/092
+splat_origin: dnd2024:reference/pages/092
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 92
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 92, https://www.dndbeyond.com/srd
 ---
 
 # Chain Shirt
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Armor |
+| Rarity |  |
+| Attunement |  |
+
 
 ## Source text
 
@@ -37,43 +44,13 @@ Source table, SRD 5.2.1 page 92.
   "category": "armor"
 }
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` armor ` |
 
-### Armor
 
-<!-- splat:values path=splat_item/armor -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` medium armor ` |
-| ` stealth_disadvantage ` | ` false ` |
-| ` base_ac ` | ` 13 ` |
-| ` add_dexterity_modifier ` | ` true ` |
-| ` dexterity_modifier_max ` | ` 2 ` |
 
-### Price
 
-<!-- splat:values path=splat_item/price -->
-
-| Field | Value |
-| --- | --- |
-| ` value ` | ` 50 ` |
-| ` unit ` | ` gp ` |
-
-### Mass
-
-<!-- splat:values path=splat_item/mass -->
-
-| Field | Value |
-| --- | --- |
-| ` value ` | ` 20.0 ` |
-| ` unit ` | ` lb ` |
 
 ## Rule
 
@@ -140,3 +117,22 @@ without_training:
 | ` actor ` | ` equipper ` |
 | ` item ` | ` equipped_instance ` |
 | ` inactive_if_not_equipped ` | ` true ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_item_extras -->
+> 
+> ```yaml
+> armor:
+>   add_dexterity_modifier: true
+>   base_ac: 13
+>   category: medium armor
+>   dexterity_modifier_max: 2
+>   stealth_disadvantage: false
+> price:
+>   unit: gp
+>   value: 50
+> mass:
+>   unit: lb
+>   value: 20.0
+> ```
+

@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 683841dc-a0ff-5b2e-a884-d671e301c0c8
 splat_kind: rule
 splat_key: dnd2024:glossary/hide_action
 splat_name: Hide [Action]
-splat_origin:
-  key: dnd2024:reference/glossary/hide_action
+splat_origin: dnd2024:reference/glossary/hide_action
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 183
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 183, https://www.dndbeyond.com/srd
 ---
 
 # Hide [Action]

@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 74b311c4-16a8-53a2-a8bf-e375602b61e8
 splat_kind: item
 splat_key: dnd2024:items/armor_of_resistance
 splat_name: Armor of Resistance
-splat_origin:
-  key: dnd2024:reference/magic_item/armor_of_resistance
+splat_origin: dnd2024:reference/magic_item/armor_of_resistance
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 210
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 210, https://www.dndbeyond.com/srd
 ---
 
 # Armor of Resistance
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Armor |
+| Rarity | Rare |
+| Attunement | Yes |
+
 
 ## Source text
 
@@ -32,22 +39,9 @@ You have Resistance to one type of damage while you wear this armor. The GM choo
 
 Original layout: [[../../srd-5.2.1/pages/210|page 210]].
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` armor ` |
-| ` rarity ` | ` rare ` |
 
-### Equipment
-
-<!-- splat:values path=splat_item/equipment -->
-
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` required ` |
 
 ## Rule
 

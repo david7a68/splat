@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "4279cb4a-ab6c-5572-bffe-dd4ee899dd93"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/glossary/search_action"
 splat_name: "Search [Action]"
-splat_reference: {"source": "SRD 5.2.1", "category": "glossary", "pages": [187], "executable": false}
+splat_pages:
+- 187
 ---
 
 # Search [Action]
@@ -23,3 +24,13 @@ When you take the Search action, you make a Wisdom check to discern something th
 | Survival | Tracks or food |
 
 Original layout: [[../pages/187|page 187]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: glossary
+> executable: false
+> ```
+

@@ -477,18 +477,10 @@ impl CampaignContent {
             self.message = None;
         }
         self.repair_section(ui, campaigns, &active);
-        let notice_path = self
-            .snapshot
-            .as_ref()
-            .map(|s| active.path.join(&s.document.path));
-        if self.layouts.has_action() && !self.layouts.current(notice_path.as_deref()) {
-            self.message = None;
-        }
         if self.layouts.show_conversion(
             ui,
             self.run_open
                 .then_some("Close the run before converting files."),
-            notice_path.as_deref(),
         ) {
             self.reload(ui.ctx(), campaigns, active.clone());
         }
@@ -534,7 +526,7 @@ impl CampaignContent {
             }
         }
         if let Some(message) = &self.message
-            && !self.layouts.current(notice_path.as_deref())
+            && !self.layouts.current()
         {
             design::message(ui, Tone::Success, message);
         }
@@ -942,15 +934,8 @@ impl CampaignContent {
                         selection.name = Some(module.name.clone());
                     }
                 }
-                let before_layout = document.text.clone();
                 match document.save() {
                     Ok(()) => {
-                        self.layouts.remember_conversion(
-                            &active.path,
-                            &document.path,
-                            &before_layout,
-                            &document.text,
-                        );
                         self.saved_selections = document.selections.clone();
                         self.reconcile.checked_at = None;
                         self.message = Some("Campaign selections saved.".into());
@@ -967,11 +952,7 @@ impl CampaignContent {
                 });
             });
         }
-        let notice_path = active.path.join(&document.path);
-        if self.layouts.show_saved(ui, Some(&notice_path)) {
-            self.message = None;
-            self.refresh_pending = true;
-        }
+
         for module in campaigns.modules() {
             if let Some(problem) = catalogue.manifest_problems.get(&module.id) {
                 ui.horizontal_wrapped(|ui| {
@@ -1103,15 +1084,8 @@ impl CampaignContent {
                 } else {
                     let after = document.selections.clone();
                     document.selections = removed.before.clone();
-                    let before_layout = document.text.clone();
                     match document.save() {
                         Ok(()) => {
-                            self.layouts.remember_conversion(
-                                &active.path,
-                                &document.path,
-                                &before_layout,
-                                &document.text,
-                            );
                             self.saved_selections = document.selections.clone();
                             self.removed_package = None;
                             self.reconcile.checked_at = None;
@@ -1333,15 +1307,8 @@ impl CampaignContent {
             let before = document.selections.clone();
             let users = selection.campaign_users(catalogue);
             document.selections.remove(i);
-            let before_layout = document.text.clone();
             match document.save() {
                 Ok(()) => {
-                    self.layouts.remember_conversion(
-                        &active.path,
-                        &document.path,
-                        &before_layout,
-                        &document.text,
-                    );
                     self.saved_selections = document.selections.clone();
                     self.removed_package = Some(RemovedPackage {
                         campaign: active.id,
@@ -1810,36 +1777,6 @@ impl CampaignContent {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn i19_h1_campaign_selection_save_has_one_named_undo_and_restores_old_bytes() {
-        let dir = tempfile::tempdir().unwrap();
-        let campaign = campaign(dir.path());
-        let path = dir.path().join("Campaign.md");
-        let old = format!(
-            "---\nsplat_schema: 1\nsplat_id: {}\nsplat_kind: campaign\nsplat_name: Test campaign\nsplat_namespace: test_campaign\nsplat_campaign: {{}}\nsplat_packages: [{{name: Book, package: {{id: {}}}, selection: {{mode: all}}}}]\n---\n",
-            campaign.id,
-            Uuid::new_v4()
-        );
-        fs::write(&path, &old).unwrap();
-        let mut document = CampaignDocument::load(&campaign).unwrap();
-        assert_eq!(document.selections.len(), 1);
-        document.selections.clear();
-        document.save().unwrap();
-        assert!(
-            CampaignDocument::load(&campaign)
-                .unwrap()
-                .selections
-                .is_empty()
-        );
-        let mut layouts = crate::formats_ui::State::default();
-        layouts.remember_conversion(dir.path(), "Campaign.md", &old, &document.text);
-        let labels = crate::formats_ui::test_notice_labels(&mut layouts, &path);
-        assert!(labels.iter().any(|s| s == "Undo selections"), "{labels:?}");
-        assert!(!labels.iter().any(|s| s == "Undo"));
-        layouts.undo().unwrap();
-        assert_eq!(fs::read_to_string(&path).unwrap(), old);
-    }
 
     #[test]
     fn folder_recovery_requires_exactly_one_matching_identity() {

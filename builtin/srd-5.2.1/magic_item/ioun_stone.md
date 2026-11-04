@@ -1,10 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "f0b382c9-3b6a-545f-beb0-52045fb7eab5"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/magic_item/ioun_stone"
 splat_name: "Ioun Stone"
-splat_reference: {"source": "SRD 5.2.1", "category": "magic_item", "pages": [227, 228], "executable": false}
+splat_pages:
+- 227
+- 228
 ---
 
 # Ioun Stone
@@ -56,3 +58,13 @@ Strength (Very Rare). Your Strength increases by 2, to a maximum of 20, while th
 Sustenance (Rare). You don’t need to eat or drink while this clear spindle orbits your head.
 
 Original layout: [[../pages/227|page 227]], [[../pages/228|page 228]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: magic_item
+> executable: false
+> ```
+

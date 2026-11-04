@@ -1,10 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "3202d273-16ff-5b2b-ae1e-a24c0389aaf1"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/magic_item/figurine_of_wondrous_power"
 splat_name: "Figurine of Wondrous Power"
-splat_reference: {"source": "SRD 5.2.1", "category": "magic_item", "pages": [221, 222], "executable": false}
+splat_pages:
+- 221
+- 222
 ---
 
 # Figurine of Wondrous Power
@@ -61,3 +63,13 @@ Serpentine Owl (Rare). This serpentine statuette of an owl can become a Giant Ow
 Silver Raven (Uncommon). This silver statuette of a raven can become a Raven for up to 12 hours. Once it has been used, it can’t be used again until 2 days have passed. While in raven form, the figurine grants you the ability to cast Animal Messenger on it.
 
 Original layout: [[../pages/221|page 221]], [[../pages/222|page 222]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: magic_item
+> executable: false
+> ```
+

@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "2e58fbc1-cf2d-5a11-87d7-45e4fb51808a"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/blindness_deafness"
 splat_name: "Blindness/Deafness"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [113], "executable": false}
+splat_pages:
+- 113
 ---
 
 # Blindness/Deafness
@@ -22,3 +23,13 @@ One creature that you can see within range must succeed on a Constitution saving
 Using a Higher-Level Spell Slot. You can target one additional creature for each spell slot level above 2.
 
 Original layout: [[../pages/113|page 113]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

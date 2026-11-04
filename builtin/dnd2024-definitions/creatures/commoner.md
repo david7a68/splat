@@ -1,34 +1,60 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 64bcc909-76f0-5047-bcbb-66ce3c75d0f8
 splat_kind: creature
 splat_key: dnd2024:creatures/commoner
 splat_name: Commoner
-splat_origin:
-  key: dnd2024:reference/creature/commoner
+splat_origin: dnd2024:reference/creature/commoner
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 275
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 275, https://www.dndbeyond.com/srd
 ---
 
 # Commoner
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Medium or Small |
+| Type | Humanoid |
+| Alignment | Neutral |
+| Armor Class | 10 |
+| Hit Points | 4 (1d8) |
+| Initiative | +0 (10) |
+| Speed | 30 ft. |
+| Challenge | 0 (XP 10; PB +2) |
+| Senses | Passive Perception 10 |
+| Languages | Common |
+| Gear | Club |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 10 | +0 | +0 |
+| Dex | 10 | +0 | +0 |
+| Con | 10 | +0 | +0 |
+| Int | 10 | +0 | +0 |
+| Wis | 10 | +0 | +0 |
+| Cha | 10 | +0 | +0 |
+
 
 ## Source text
 
 <!-- SRD page 275 -->
 
 Medium or Small Humanoid, Neutral\
-AC 10 Initiative +0 (10)\
-HP 4 (1d8)\
-Speed 30 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 10 +0 +0 Dex 10 +0 +0 Con 10 +0 +0\
-Int 10 +0 +0 Wis 10 +0 +0 Cha 10 +0 +0\
-Gear Club\
-Senses Passive Perception 10\
-Languages Common\
-CR 0 (XP 10; PB +2)
+> [!quote]- Printed stat block (not read; edit the table above)
+> AC 10 Initiative +0 (10)\
+> HP 4 (1d8)\
+> Speed 30 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 10 +0 +0 Dex 10 +0 +0 Con 10 +0 +0\
+> Int 10 +0 +0 Wis 10 +0 +0 Cha 10 +0 +0\
+> Gear Club\
+> Senses Passive Perception 10\
+> Languages Common\
+> CR 0 (XP 10; PB +2)
+
 
 ### Traits
 
@@ -40,46 +66,11 @@ Club. Melee Attack Roll: +2, reach 5 ft. Hit: 2 (1d4) Bludgeoning damage.
 
 Original layout: [[../../srd-5.2.1/pages/275|page 275]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` medium ` |
-| ` type ` | ` humanoid ` |
-| ` alignment ` | ` Neutral ` |
-| ` size_options_text ` | ` Medium or Small ` |
-| ` movement_text ` | ` 30 ft. ` |
-| ` gear_text ` | ` Club ` |
-| ` senses_text ` | ` Passive Perception 10 ` |
-| ` languages_text ` | ` Common ` |
-| ` cr_text ` | ` 0 (XP 10; PB +2) ` |
-| ` hit_points_text ` | ` 4 (1d8) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 10 ` | ` 0 ` |
-| ` Dexterity ` | ` 10 ` | ` 0 ` |
-| ` Constitution ` | ` 10 ` | ` 0 ` |
-| ` Intelligence ` | ` 10 ` | ` 0 ` |
-| ` Wisdom ` | ` 10 ` | ` 0 ` |
-| ` Charisma ` | ` 10 ` | ` 0 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 10 ` |  |
-| ` max_hp ` | ` 4 ` |  |
-| ` initiative ` | ` 0 ` |  |
-| ` speed ` | ` 30 ` | ` ft ` |
 
 ## Health
 

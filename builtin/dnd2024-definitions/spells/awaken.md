@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 62374024-138f-53e9-ac03-6d7e614f524c
 splat_kind: spell
 splat_key: dnd2024:spells/awaken
 splat_name: Awaken
-splat_origin:
-  key: dnd2024:reference/spell/awaken
+splat_origin: dnd2024:reference/spell/awaken
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 111, 112
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 111, 112, https://www.dndbeyond.com/srd
 ---
 
 # Awaken
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 5 |
+| School | Transmutation |
+| Classes | Bard, Druid |
+| Casting Time | 8 hours |
+| Range |  |
+| Components | V, S, M (an agate worth 1,000+ GP, which the spell consumes) |
+| Duration | Instantaneous |
+
 
 ## Source text
 
@@ -32,37 +43,11 @@ The awakened target has the Charmed condition for 30 days or until you or your a
 
 Original layout: [[../../srd-5.2.1/pages/111|page 111]], [[../../srd-5.2.1/pages/112|page 112]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 5 ` |
-| ` school ` | ` transmutation ` |
-| ` classes ` | ` ["bard", "druid"] ` |
-| ` components ` | ` ["verbal", "somatic", "material"] ` |
-| ` concentration ` | ` false ` |
-| ` duration ` | ` Instantaneous ` |
-| ` casting_time ` | ` 8 hours ` |
-| ` ritual ` | ` false ` |
 
-### Range
 
-<!-- splat:values path=splat_spell/range -->
 
-| Field | Value |
-| --- | --- |
-| ` mode ` | ` touch ` |
-
-### Material
-
-<!-- splat:values path=splat_spell/material -->
-
-| Field | Value |
-| --- | --- |
-| ` description ` | ` an agate worth 1,000+ GP, which the spell consumes ` |
-| ` consumed ` | ` true ` |
 
 ## Rule
 
@@ -170,3 +155,14 @@ concentration: false
 maximum:
   kind: instantaneous
 ```
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_spell_extras -->
+> 
+> ```yaml
+> material:
+>   consumed: true
+> range:
+>   mode: touch
+> ```
+

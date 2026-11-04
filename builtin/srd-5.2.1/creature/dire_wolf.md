@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "dc5c84af-873c-5abb-a89a-212763a32eb4"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/dire_wolf"
 splat_name: "Dire Wolf"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [347], "executable": false}
+splat_pages:
+- 347
 ---
 
 # Dire Wolf
@@ -32,3 +33,13 @@ Pack Tactics. The wolf has Advantage on an attack roll against a creature if at 
 Bite. Melee Attack Roll: +5, reach 5 ft. Hit: 8 (1d10 + 3) Piercing damage. If the target is a Large or smaller creature, it has the Prone condition.
 
 Original layout: [[../pages/347|page 347]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

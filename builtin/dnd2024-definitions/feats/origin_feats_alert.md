@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 42bc1a6d-829d-5d92-8f01-3d2fd68d5155
 splat_kind: rule
 splat_key: dnd2024:feats/origin_feats_alert
 splat_name: Alert
-splat_origin:
-  key: dnd2024:reference/pages/087
+splat_origin: dnd2024:reference/pages/087
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 87
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 87, https://www.dndbeyond.com/srd
 ---
 
 # Alert

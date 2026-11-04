@@ -1,36 +1,64 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: fc14b342-51b7-59a4-9a62-b0680cb2fdd5
 splat_kind: creature
 splat_key: dnd2024:creatures/ettin
 splat_name: Ettin
-splat_origin:
-  key: dnd2024:reference/creature/ettin
+splat_origin: dnd2024:reference/creature/ettin
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 284
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 284, https://www.dndbeyond.com/srd
 ---
 
 # Ettin
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Large |
+| Type | Giant |
+| Alignment | Chaotic Evil |
+| Armor Class | 12 |
+| Hit Points | 85 (10d10 + 30) |
+| Initiative | -1 (9) |
+| Speed | 40 ft. |
+| Challenge | 4 (XP 1,100; PB +2) |
+| Skills | Perception +4 |
+| Senses | Darkvision 60 ft.; Passive Perception 14 |
+| Languages | Giant |
+| Gear | Battleaxe, Morningstar |
+| Immunities | Blinded, Charmed, Deafened, Frightened, Stunned, Unconscious |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 21 | +5 | +5 |
+| Dex | 8 | -1 | -1 |
+| Con | 17 | +3 | +3 |
+| Int | 6 | -2 | -2 |
+| Wis | 10 | +0 | +0 |
+| Cha | 8 | -1 | -1 |
+
 
 ## Source text
 
 <!-- SRD page 284 -->
 
-Large Giant, Chaotic Evil\
-AC 12  Initiative −1 (9)\
-HP 85 (10d10 + 30)\
-Speed 40 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 21 +5 +5 Dex 8 −1 −1 Con 17 +3 +3\
-Int 6 −2 −2 Wis 10 +0 +0 Cha 8 −1 −1\
-Skills Perception +4\
-Immunities Blinded, Charmed, Deafened, Frightened, Stunned, Unconscious\
-Gear Battleaxe, Morningstar\
-Senses Darkvision 60 ft.; Passive Perception 14\
-Languages Giant\
-CR 4 (XP 1,100; PB +2)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Large Giant, Chaotic Evil\
+> AC 12  Initiative −1 (9)\
+> HP 85 (10d10 + 30)\
+> Speed 40 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 21 +5 +5 Dex 8 −1 −1 Con 17 +3 +3\
+> Int 6 −2 −2 Wis 10 +0 +0 Cha 8 −1 −1\
+> Skills Perception +4\
+> Immunities Blinded, Charmed, Deafened, Frightened, Stunned, Unconscious\
+> Gear Battleaxe, Morningstar\
+> Senses Darkvision 60 ft.; Passive Perception 14\
+> Languages Giant\
+> CR 4 (XP 1,100; PB +2)
+
 
 ### Actions
 
@@ -42,47 +70,11 @@ Morningstar. Melee Attack Roll: +7, reach 5 ft. Hit: 14 (2d8 + 5) Piercing damag
 
 Original layout: [[../../srd-5.2.1/pages/284|page 284]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` large ` |
-| ` type ` | ` giant ` |
-| ` alignment ` | ` Chaotic Evil ` |
-| ` movement_text ` | ` 40 ft. ` |
-| ` skills_text ` | ` Perception +4 ` |
-| ` immunities_text ` | ` Blinded, Charmed, Deafened, Frightened, Stunned, Unconscious ` |
-| ` gear_text ` | ` Battleaxe, Morningstar ` |
-| ` senses_text ` | ` Darkvision 60 ft.; Passive Perception 14 ` |
-| ` languages_text ` | ` Giant ` |
-| ` cr_text ` | ` 4 (XP 1,100; PB +2) ` |
-| ` hit_points_text ` | ` 85 (10d10 + 30) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 21 ` | ` 5 ` |
-| ` Dexterity ` | ` 8 ` | ` -1 ` |
-| ` Constitution ` | ` 17 ` | ` 3 ` |
-| ` Intelligence ` | ` 6 ` | ` -2 ` |
-| ` Wisdom ` | ` 10 ` | ` 0 ` |
-| ` Charisma ` | ` 8 ` | ` -1 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 12 ` |  |
-| ` max_hp ` | ` 85 ` |  |
-| ` initiative ` | ` -1 ` |  |
-| ` speed ` | ` 40 ` | ` ft ` |
 
 ## Health
 

@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "a575da1d-f98a-51cf-8f21-62123e9a5d2f"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/crab"
 splat_name: "Crab"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [347], "executable": false}
+splat_pages:
+- 347
 ---
 
 # Crab
@@ -32,3 +33,13 @@ Amphibious. The crab can breathe air and water.
 Claw. Melee Attack Roll: +2, reach 5 ft. Hit: 1 Bludgeoning damage.
 
 Original layout: [[../pages/347|page 347]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

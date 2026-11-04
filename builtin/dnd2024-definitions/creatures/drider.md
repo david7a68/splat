@@ -1,34 +1,60 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: db69f9e6-632e-5775-b339-3f413b618d47
 splat_kind: creature
 splat_key: dnd2024:creatures/drider
 splat_name: Drider
-splat_origin:
-  key: dnd2024:reference/creature/drider
+splat_origin: dnd2024:reference/creature/drider
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 281
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 281, https://www.dndbeyond.com/srd
 ---
 
 # Drider
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Large |
+| Type | Monstrosity |
+| Alignment | Chaotic Evil |
+| Armor Class | 19 |
+| Hit Points | 123 (13d10 + 52) |
+| Initiative | +4 (14) |
+| Speed | 30 ft., Climb 30 ft. |
+| Challenge | 6 (XP 2,300; PB +3) |
+| Skills | Perception +6, Stealth +10 |
+| Senses | Darkvision 120 ft.; Passive Perception 16 |
+| Languages | Elvish, Undercommon |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 16 | +3 | +3 |
+| Dex | 19 | +4 | +4 |
+| Con | 18 | +4 | +4 |
+| Int | 13 | +1 | +1 |
+| Wis | 16 | +3 | +3 |
+| Cha | 12 | +1 | +1 |
+
 
 ## Source text
 
 <!-- SRD page 281 -->
 
-Large Monstrosity, Chaotic Evil\
-AC 19 Initiative +4 (14)\
-HP 123 (13d10 + 52)\
-Speed 30 ft., Climb 30 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 16 +3 +3 Dex 19 +4 +4 Con 18 +4 +4\
-Int 13 +1 +1 Wis 16 +3 +3 Cha 12 +1 +1\
-Skills Perception +6, Stealth +10\
-Senses Darkvision 120 ft.; Passive Perception 16\
-Languages Elvish, Undercommon\
-CR 6 (XP 2,300; PB +3)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Large Monstrosity, Chaotic Evil\
+> AC 19 Initiative +4 (14)\
+> HP 123 (13d10 + 52)\
+> Speed 30 ft., Climb 30 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 16 +3 +3 Dex 19 +4 +4 Con 18 +4 +4\
+> Int 13 +1 +1 Wis 16 +3 +3 Cha 12 +1 +1\
+> Skills Perception +6, Stealth +10\
+> Senses Darkvision 120 ft.; Passive Perception 16\
+> Languages Elvish, Undercommon\
+> CR 6 (XP 2,300; PB +3)
+
 
 ### Traits
 
@@ -52,46 +78,11 @@ Magic of the Spider Queen (Recharge 5–6). The drider casts Darkness, Faerie Fi
 
 Original layout: [[../../srd-5.2.1/pages/281|page 281]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` large ` |
-| ` type ` | ` monstrosity ` |
-| ` alignment ` | ` Chaotic Evil ` |
-| ` movement_text ` | ` 30 ft., Climb 30 ft. ` |
-| ` skills_text ` | ` Perception +6, Stealth +10 ` |
-| ` senses_text ` | ` Darkvision 120 ft.; Passive Perception 16 ` |
-| ` languages_text ` | ` Elvish, Undercommon ` |
-| ` cr_text ` | ` 6 (XP 2,300; PB +3) ` |
-| ` hit_points_text ` | ` 123 (13d10 + 52) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 16 ` | ` 3 ` |
-| ` Dexterity ` | ` 19 ` | ` 4 ` |
-| ` Constitution ` | ` 18 ` | ` 4 ` |
-| ` Intelligence ` | ` 13 ` | ` 1 ` |
-| ` Wisdom ` | ` 16 ` | ` 3 ` |
-| ` Charisma ` | ` 12 ` | ` 1 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 19 ` |  |
-| ` max_hp ` | ` 123 ` |  |
-| ` initiative ` | ` 4 ` |  |
-| ` speed ` | ` 30 ` | ` ft ` |
-| ` climb_speed ` | ` 30 ` | ` ft ` |
 
 ## Health
 
@@ -320,3 +311,13 @@ other_components: spell_definition_unless_waived
 | ` provider ` | ` caller ` |
 | ` required_facts ` | ` ["distance", "area_membership", "visibility", "occupancy", "movement_path"] ` |
 | ` validate_against_typed_constraints ` | ` true ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_stats_extras -->
+> 
+> ```yaml
+> climb_speed:
+>   unit: ft
+>   value: 30
+> ```
+

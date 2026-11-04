@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 7652eed9-eb1e-5d0c-8598-a193dc31cedd
 splat_kind: spell
 splat_key: dnd2024:spells/mind_spike
 splat_name: Mind Spike
-splat_origin:
-  key: dnd2024:reference/spell/mind_spike
+splat_origin: dnd2024:reference/spell/mind_spike
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 149
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 149, https://www.dndbeyond.com/srd
 ---
 
 # Mind Spike
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 2 |
+| School | Divination |
+| Classes | Sorcerer, Warlock, Wizard |
+| Casting Time | Action |
+| Range | 120 feet |
+| Components | S |
+| Duration | Concentration, up to 1 hour |
+
 
 ## Source text
 
@@ -30,28 +41,9 @@ Using a Higher-Level Spell Slot. The damage increases by 1d8 for each spell slot
 
 Original layout: [[../../srd-5.2.1/pages/149|page 149]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 2 ` |
-| ` school ` | ` divination ` |
-| ` classes ` | ` ["sorcerer", "warlock", "wizard"] ` |
-| ` components ` | ` ["somatic"] ` |
-| ` concentration ` | ` true ` |
-| ` duration ` | ` Concentration, up to 1 hour ` |
-| ` casting_time ` | ` Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
-
-<!-- splat:values path=splat_spell/range -->
-
-| Field | Value |
-| --- | --- |
-| ` feet ` | ` 120 ` |
 
 ## Rule
 

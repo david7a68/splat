@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 481e80c6-2f2e-5a32-b487-836f6b1955e4
 splat_kind: spell
 splat_key: dnd2024:spells/blur
 splat_name: Blur
-splat_origin:
-  key: dnd2024:reference/spell/blur
+splat_origin: dnd2024:reference/spell/blur
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 114
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 114, https://www.dndbeyond.com/srd
 ---
 
 # Blur
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 2 |
+| School | Illusion |
+| Classes | Sorcerer, Wizard |
+| Casting Time | Action |
+| Range |  |
+| Components | V |
+| Duration | Concentration, up to 1 minute |
+
 
 ## Source text
 
@@ -28,28 +39,9 @@ Your body becomes blurred. For the duration, any creature has Disadvantage on at
 
 Original layout: [[../../srd-5.2.1/pages/114|page 114]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 2 ` |
-| ` school ` | ` illusion ` |
-| ` classes ` | ` ["sorcerer", "wizard"] ` |
-| ` components ` | ` ["verbal"] ` |
-| ` concentration ` | ` true ` |
-| ` duration ` | ` Concentration, up to 1 minute ` |
-| ` casting_time ` | ` Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
-
-<!-- splat:values path=splat_spell/range -->
-
-| Field | Value |
-| --- | --- |
-| ` mode ` | ` self ` |
 
 ## Rule
 
@@ -79,3 +71,12 @@ Original layout: [[../../srd-5.2.1/pages/114|page 114]].
 | ` disadvantage ` | ` true ` |
 | ` duration ` | ` spell_duration ` |
 | ` immune_if_attacker_perceives_caster_using ` | ` ["blindsight", "truesight"] ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_spell_extras -->
+> 
+> ```yaml
+> range:
+>   mode: self
+> ```
+

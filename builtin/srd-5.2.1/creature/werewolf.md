@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "0bf87b00-0f54-5ab0-869b-3bcb87383fb5"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/werewolf"
 splat_name: "Werewolf"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [339], "executable": false}
+splat_pages:
+- 339
 ---
 
 # Werewolf
@@ -43,3 +44,13 @@ Longbow (Humanoid or Hybrid Form Only). Ranged Attack Roll: +4, range 150/600 ft
 Shape-Shift. The werewolf shape-shifts into a Large wolf-humanoid hybrid or a Medium wolf, or it returns to its true humanoid form. Its game statistics, other than its size, are the same in each form. Any equipment it is wearing or carrying isn’t transformed.
 
 Original layout: [[../pages/339|page 339]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: fc0703ea-5fa2-5f10-8ebd-bfa9f9873944
 splat_kind: rule
 splat_key: dnd2024:rules/weapons
 splat_name: Weapons
-splat_origin:
-  key: dnd2024:reference/pages/089
+splat_origin: dnd2024:reference/pages/089
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 89, 91
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 89, 91, https://www.dndbeyond.com/srd
 ---
 
 # Weapons

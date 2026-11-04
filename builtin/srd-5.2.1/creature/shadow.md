@@ -1,10 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "b4d1d2d9-a74a-51f6-af3f-452c04ee7980"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/shadow"
 splat_name: "Shadow"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [322, 323], "executable": false}
+splat_pages:
+- 322
+- 323
 ---
 
 # Shadow
@@ -43,3 +45,13 @@ Draining Swipe. Melee Attack Roll: +4, reach 5 ft. Hit: 5 (1d6 + 2) Necrotic dam
 Shadow Stealth. While in Dim Light or Darkness, the shadow takes the Hide action.
 
 Original layout: [[../pages/322|page 322]], [[../pages/323|page 323]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 0ee51c4e-fe73-5bf0-8068-64b3e13f4b8c
 splat_kind: rule
 splat_key: dnd2024:rules/magic_items_2
 splat_name: Magic Items
-splat_origin:
-  key: dnd2024:reference/pages/204
+splat_origin: dnd2024:reference/pages/204
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 204
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 204, https://www.dndbeyond.com/srd
 ---
 
 # Magic Items

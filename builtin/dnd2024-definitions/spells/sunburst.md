@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 9484799d-b608-508a-b072-41698346c374
 splat_kind: spell
 splat_key: dnd2024:spells/sunburst
 splat_name: Sunburst
-splat_origin:
-  key: dnd2024:reference/spell/sunburst
+splat_origin: dnd2024:reference/spell/sunburst
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 167
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 167, https://www.dndbeyond.com/srd
 ---
 
 # Sunburst
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 8 |
+| School | Evocation |
+| Classes | Cleric, Druid, Sorcerer, Wizard |
+| Casting Time | Action |
+| Range | 150 feet |
+| Components | V, S, M (a piece of sunstone) |
+| Duration | Instantaneous |
+
 
 ## Source text
 
@@ -32,37 +43,11 @@ This spell dispels Darkness in its area that was created by any spell.
 
 Original layout: [[../../srd-5.2.1/pages/167|page 167]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 8 ` |
-| ` school ` | ` evocation ` |
-| ` classes ` | ` ["cleric", "druid", "sorcerer", "wizard"] ` |
-| ` components ` | ` ["verbal", "somatic", "material"] ` |
-| ` concentration ` | ` false ` |
-| ` duration ` | ` Instantaneous ` |
-| ` casting_time ` | ` Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
 
-<!-- splat:values path=splat_spell/range -->
 
-| Field | Value |
-| --- | --- |
-| ` feet ` | ` 150 ` |
-
-### Material
-
-<!-- splat:values path=splat_spell/material -->
-
-| Field | Value |
-| --- | --- |
-| ` description ` | ` a piece of sunstone ` |
-| ` consumed ` | ` false ` |
 
 ## Rule
 
@@ -144,3 +129,12 @@ success:
 | ` in_area ` | ` true ` |
 | ` effect ` | ` darkness ` |
 | ` created_by ` | ` any_spell ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_spell_extras -->
+> 
+> ```yaml
+> material:
+>   consumed: false
+> ```
+

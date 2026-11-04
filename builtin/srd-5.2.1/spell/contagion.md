@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "6ddf95a4-3bd4-5b7d-a377-63b51697c88e"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/contagion"
 splat_name: "Contagion"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [119], "executable": false}
+splat_pages:
+- 119
 ---
 
 # Contagion
@@ -24,3 +25,13 @@ The target must repeat the saving throw at the end of each of its turns until it
 Whenever the Poisoned target receives an effect that would end the Poisoned condition, the target must succeed on a Constitution saving throw, or the Poisoned condition doesn’t end on it.
 
 Original layout: [[../pages/119|page 119]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

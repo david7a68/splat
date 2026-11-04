@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "973ff678-7fe5-5b4c-8625-4ca4032a7f3b"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/otherworldly_steed"
 splat_name: "Otherworldly Steed"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [131], "executable": false}
+splat_pages:
+- 131
 ---
 
 # Otherworldly Steed
@@ -39,3 +40,13 @@ Fey Step (Fey Only; Recharges after a Long Rest). The steed teleports, along wit
 Healing Touch (Celestial Only; Recharges after a Long Rest). One creature within 5 feet of the steed regains a number of Hit Points equal to 2d8 plus the spell’s level.
 
 Original layout: [[../pages/131|page 131]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

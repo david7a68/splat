@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: f3314c8d-5295-5e5d-8945-3625bab644fc
 splat_kind: item
 splat_key: dnd2024:items/cloak_of_invisibility
 splat_name: Cloak of Invisibility
-splat_origin:
-  key: dnd2024:reference/magic_item/cloak_of_invisibility
+splat_origin: dnd2024:reference/magic_item/cloak_of_invisibility
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 215, 216
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 215, 216, https://www.dndbeyond.com/srd
 ---
 
 # Cloak of Invisibility
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Wondrous Item |
+| Rarity | Legendary |
+| Attunement | Yes |
+
 
 ## Source text
 
@@ -24,22 +31,9 @@ This cloak has 3 charges and regains 1d3 expended charges daily at dawn. While w
 
 Original layout: [[../../srd-5.2.1/pages/215|page 215]], [[../../srd-5.2.1/pages/216|page 216]].
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` wondrous_item ` |
-| ` rarity ` | ` legendary ` |
 
-### Equipment
-
-<!-- splat:values path=splat_item/equipment -->
-
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` required ` |
 
 ## Rule
 

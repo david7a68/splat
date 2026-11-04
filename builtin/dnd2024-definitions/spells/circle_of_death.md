@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 6d81fcb1-cee3-5b8e-8192-2a12d5c40bd8
 splat_kind: spell
 splat_key: dnd2024:spells/circle_of_death
 splat_name: Circle of Death
-splat_origin:
-  key: dnd2024:reference/spell/circle_of_death
+splat_origin: dnd2024:reference/spell/circle_of_death
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 115
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 115, https://www.dndbeyond.com/srd
 ---
 
 # Circle of Death
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 6 |
+| School | Necromancy |
+| Classes | Sorcerer, Warlock, Wizard |
+| Casting Time | Action |
+| Range | 150 feet |
+| Components | V, S, M (the powder of a crushed black pearl worth 500+ GP) |
+| Duration | Instantaneous |
+
 
 ## Source text
 
@@ -30,37 +41,11 @@ Using a Higher-Level Spell Slot. The damage increases by 2d8 for each spell slot
 
 Original layout: [[../../srd-5.2.1/pages/115|page 115]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 6 ` |
-| ` school ` | ` necromancy ` |
-| ` classes ` | ` ["sorcerer", "warlock", "wizard"] ` |
-| ` components ` | ` ["verbal", "somatic", "material"] ` |
-| ` concentration ` | ` false ` |
-| ` duration ` | ` Instantaneous ` |
-| ` casting_time ` | ` Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
 
-<!-- splat:values path=splat_spell/range -->
 
-| Field | Value |
-| --- | --- |
-| ` feet ` | ` 150 ` |
-
-### Material
-
-<!-- splat:values path=splat_spell/material -->
-
-| Field | Value |
-| --- | --- |
-| ` description ` | ` the powder of a crushed black pearl worth 500+ GP ` |
-| ` consumed ` | ` false ` |
 
 ## Rule
 
@@ -142,3 +127,12 @@ type: necrotic
 | ` source ` | ` supplied_world_geometry ` |
 | ` unknown_facts ` | ` require_resolution ` |
 | ` infer_unprovided_geometry ` | ` false ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_spell_extras -->
+> 
+> ```yaml
+> material:
+>   consumed: false
+> ```
+

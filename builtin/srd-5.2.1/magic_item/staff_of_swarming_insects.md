@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "92276cfa-298c-58d4-ba11-706b7e9db3e8"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/magic_item/staff_of_swarming_insects"
 splat_name: "Staff of Swarming Insects"
-splat_reference: {"source": "SRD 5.2.1", "category": "magic_item", "pages": [246], "executable": false}
+splat_pages:
+- 246
 ---
 
 # Staff of Swarming Insects
@@ -27,3 +28,13 @@ Spells. While holding the staff, you can cast one of the spells on the following
 Regaining Charges. The staff regains 1d6 + 4 expended charges daily at dawn. If you expend the last charge, roll 1d20. On a 1, a swarm of insects consumes and destroys the staff, then disperses.
 
 Original layout: [[../pages/246|page 246]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: magic_item
+> executable: false
+> ```
+

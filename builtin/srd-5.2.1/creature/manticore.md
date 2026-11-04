@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "994a14d1-2309-5860-a680-8a97776beeed"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/manticore"
 splat_name: "Manticore"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [306], "executable": false}
+splat_pages:
+- 306
 ---
 
 # Manticore
@@ -31,3 +32,13 @@ Rend. Melee Attack Roll: +5, reach 5 ft. Hit: 7 (1d8 + 3) Slashing damage.
 Tail Spike. Ranged Attack Roll: +5, range 100/200 ft. Hit: 7 (1d8 + 3) Piercing damage.
 
 Original layout: [[../pages/306|page 306]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

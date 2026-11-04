@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 2d39873f-7dc8-5f51-b6d6-87cef64321af
 splat_kind: spell
 splat_key: dnd2024:spells/conjure_woodland_beings
 splat_name: Conjure Woodland Beings
-splat_origin:
-  key: dnd2024:reference/spell/conjure_woodland_beings
+splat_origin: dnd2024:reference/spell/conjure_woodland_beings
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 118, 119
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 118, 119, https://www.dndbeyond.com/srd
 ---
 
 # Conjure Woodland Beings
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 4 |
+| School | Conjuration |
+| Classes | Druid, Ranger |
+| Casting Time | Action |
+| Range |  |
+| Components | V, S |
+| Duration | Concentration, up to 10 minutes |
+
 
 ## Source text
 
@@ -34,28 +45,9 @@ Using a Higher-Level Spell Slot. The damage increases by 1d8 for each spell slot
 
 Original layout: [[../../srd-5.2.1/pages/118|page 118]], [[../../srd-5.2.1/pages/119|page 119]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 4 ` |
-| ` school ` | ` conjuration ` |
-| ` classes ` | ` ["druid", "ranger"] ` |
-| ` components ` | ` ["verbal", "somatic"] ` |
-| ` concentration ` | ` true ` |
-| ` duration ` | ` Concentration, up to 10 minutes ` |
-| ` casting_time ` | ` Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
-
-<!-- splat:values path=splat_spell/range -->
-
-| Field | Value |
-| --- | --- |
-| ` mode ` | ` self ` |
 
 ## Rule
 
@@ -144,3 +136,12 @@ success:
 | ` per_slot_above ` | ` 4 ` |
 | ` damage_dice ` | ` 1 ` |
 | ` sides ` | ` 8 ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_spell_extras -->
+> 
+> ```yaml
+> range:
+>   mode: self
+> ```
+

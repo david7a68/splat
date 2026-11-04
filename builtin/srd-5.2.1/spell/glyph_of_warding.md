@@ -1,10 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "c14683cd-cfa4-5264-a550-f16c15e7701e"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/glyph_of_warding"
 splat_name: "Glyph of Warding"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [136, 137], "executable": false}
+splat_pages:
+- 136
+- 137
 ---
 
 # Glyph of Warding
@@ -38,3 +40,13 @@ When the glyph is triggered, the stored spell takes effect. If the spell has a t
 Using a Higher-Level Spell Slot. The damage of an explosive rune increases by 1d8 for each spell slot level above 3. If you create a spell glyph, you can store any spell of up to the same level as the spell slot you use for the Glyph of Warding.
 
 Original layout: [[../pages/136|page 136]], [[../pages/137|page 137]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

@@ -3452,6 +3452,16 @@ pub struct FightRow {
     pub present: bool,
 }
 
+/// Check the same saved-run model as normal loading, without opening a campaign.
+pub(crate) fn check_saved_text(text: &str) -> Result<(), String> {
+    let saved: SavedRun =
+        serde_json::from_str(text).map_err(|e| format!("Invalid saved run: {e}"))?;
+    if saved.version != 1 {
+        return Err("Unsupported run version.".into());
+    }
+    Ok(())
+}
+
 /// A saved run's file, within the size limit.
 fn read_saved(path: &Path, campaign: Uuid) -> Result<SavedRun, String> {
     if fs::metadata(path).map_err(|e| e.to_string())?.len() > 64 * 1024 * 1024 {
@@ -3794,7 +3804,7 @@ mod tests {
     }
     use crate::combat_sync::SyncState;
     fn creature() -> Entry {
-        Entry::parse("monster.md", &format!("---\nsplat_schema: 1\nsplat_id: {}\nsplat_kind: creature\nsplat_name: Guard\nsplat_creature: {{type: humanoid}}\nsplat_stats:\n  max_hp: {{value: 20}}\n  armor_class: {{value: 16}}\n  initiative: {{value: 2}}\nsplat_initial:\n  hp: 17\n  temporary_hp: 3\n  conditions: [Poisoned]\n  death_saves: {{successes: 1, failures: 0}}\n---\n\n## Actions\nSpear attack.\n", Uuid::new_v4())).unwrap()
+        Entry::parse("monster.md", &splat::content::formats::convert("Fixture.md", &format!("---\nsplat_schema: 1\nsplat_id: {}\nsplat_kind: creature\nsplat_name: Guard\nsplat_creature: {{type: humanoid}}\nsplat_stats:\n  max_hp: {{value: 20}}\n  armor_class: {{value: 16}}\n  initiative: {{value: 2}}\nsplat_initial:\n  hp: 17\n  temporary_hp: 3\n  conditions: [Poisoned]\n  death_saves: {{successes: 1, failures: 0}}\n---\n\n## Actions\nSpear attack.\n", Uuid::new_v4())).expect("schema-2 fixture")).unwrap()
     }
     pub(super) fn run() -> Run {
         let entry = creature();
@@ -4029,6 +4039,56 @@ mod tests {
         assert_eq!(fs::read(&path).unwrap(), external);
         assert!(Run::open(&path, Uuid::new_v4()).is_err());
     }
+    #[test]
+    fn an_old_run_copy_requires_explicit_conversion_and_keeps_combat_state() {
+        fn downgrade(value: &mut serde_json::Value) {
+            if value
+                .get("fields")
+                .is_some_and(|f| f.get("splat_schema").is_some())
+            {
+                value["fields"]["splat_schema"] = 1.into();
+                value["body"] = "## Actions\nSpear attack.\n".into();
+            } else {
+                match value {
+                    serde_json::Value::Object(map) => map.values_mut().for_each(downgrade),
+                    serde_json::Value::Array(values) => values.iter_mut().for_each(downgrade),
+                    _ => {}
+                }
+            }
+        }
+        let dir = tempfile::tempdir().unwrap();
+        let campaign = Uuid::new_v4();
+        let mut run = run();
+        begin(&mut run);
+        run.apply(Command::Damage(0, 5)).unwrap();
+        run.apply(Command::Next).unwrap();
+        run.configure_storage(campaign, dir.path(), Initiative::default())
+            .unwrap();
+        let path = run.storage.as_ref().unwrap().path.clone();
+        let mut old: serde_json::Value = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
+        downgrade(&mut old);
+        let before = serde_json::to_string_pretty(&old).unwrap();
+        fs::write(&path, &before).unwrap();
+        assert!(
+            Run::open(&path, campaign)
+                .err()
+                .unwrap()
+                .contains(splat::content::OLD_LAYOUT)
+        );
+        assert_eq!(fs::read_to_string(&path).unwrap(), before);
+        let relative = path.strip_prefix(dir.path()).unwrap().to_str().unwrap();
+        let file = crate::conversion::preview(dir.path(), relative, before, &[]).unwrap();
+        crate::conversion::publish(&file).unwrap();
+        let reopened = Run::open(&path, campaign).unwrap();
+        assert_eq!(reopened.id, run.id);
+        assert_eq!(reopened.current(), run.current());
+        assert_eq!(reopened.state.log, run.state.log);
+        assert_eq!(
+            reopened.state.participants[0].hp,
+            run.state.participants[0].hp
+        );
+    }
+
     /// Change the saved file behind the run's back, as a vault sync tool would.
     fn run_with_changed_file() -> (tempfile::TempDir, Run, PathBuf, Vec<u8>, Uuid) {
         let dir = tempfile::tempdir().unwrap();
@@ -5605,9 +5665,9 @@ mod tests {
         let id = Uuid::new_v4();
         let entry = Entry::parse(
             "Hero.md",
-            &format!(
+            &splat::content::formats::convert("Fixture.md", &format!(
                 "---\nsplat_schema: 1\nsplat_id: {id}\nsplat_kind: creature\nsplat_name: Hero\nsplat_creature: {{size: medium}}\nsplat_external: {{provider: test}}\nsplat_stats:\n  max_hp: {{value: 41}}\nsplat_initial:\n  hp: 11\n---\n"
-            ),
+            )).expect("schema-2 fixture"),
         )
         .unwrap();
         let mut hero =
@@ -5653,9 +5713,9 @@ mod tests {
         let id = Uuid::new_v4();
         let entry = Entry::parse(
             "Wolf.md",
-            &format!(
+            &splat::content::formats::convert("Fixture.md", &format!(
                 "---\nsplat_schema: 1\nsplat_id: {id}\nsplat_kind: creature\nsplat_name: Wolf\nsplat_creature: {{size: medium}}\nsplat_stats:\n  max_hp: {{value: 11}}\n---\n"
-            ),
+            )).expect("schema-2 fixture"),
         )
         .unwrap();
         let mut wolf = Participant::new(
@@ -5969,7 +6029,7 @@ mod tests {
         Overrides::parse(&serde_yaml_ng::from_str(text).unwrap()).unwrap()
     }
     fn beast() -> Entry {
-        Entry::parse("beast.md", &format!("---\nsplat_schema: 1\nsplat_id: {}\nsplat_kind: creature\nsplat_name: Beast\nsplat_creature: {{type: beast}}\nsplat_stats:\n  max_hp: {{value: 40}}\n  armor_class: {{value: 12}}\n  initiative: {{value: -1}}\n  speed: {{value: 40}}\n---\n", Uuid::new_v4())).unwrap()
+        Entry::parse("beast.md", &splat::content::formats::convert("Fixture.md", &format!("---\nsplat_schema: 1\nsplat_id: {}\nsplat_kind: creature\nsplat_name: Beast\nsplat_creature: {{type: beast}}\nsplat_stats:\n  max_hp: {{value: 40}}\n  armor_class: {{value: 12}}\n  initiative: {{value: -1}}\n  speed: {{value: 40}}\n---\n", Uuid::new_v4())).expect("schema-2 fixture")).unwrap()
     }
     #[test]
     fn group_summary_counts_members_and_changes() {
@@ -6788,7 +6848,7 @@ mod tests {
         let mut empty = (*guard_group("Empty", 1)).clone();
         empty.members.clear();
         check(&mut run, Arc::new(empty), Some(4), "no members");
-        let unknown = Entry::parse("u.md", &format!("---\nsplat_schema: 1\nsplat_id: {}\nsplat_kind: creature\nsplat_name: Unknown\nsplat_creature: {{}}\n---\n", Uuid::new_v4())).unwrap();
+        let unknown = Entry::parse("u.md", &splat::content::formats::convert("Fixture.md", &format!("---\nsplat_schema: 1\nsplat_id: {}\nsplat_kind: creature\nsplat_name: Unknown\nsplat_creature: {{}}\n---\n", Uuid::new_v4())).expect("schema-2 fixture")).unwrap();
         check(
             &mut run,
             group_of(

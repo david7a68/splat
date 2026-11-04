@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "d73bd2d4-1013-5747-86f6-1ecce49dd50c"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/spell/conjure_elemental"
 splat_name: "Conjure Elemental"
-splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [118], "executable": false}
+splat_pages:
+- 118
 ---
 
 # Conjure Elemental
@@ -24,3 +25,13 @@ Whenever a creature you can see enters the spirit’s space or starts its turn w
 Using a Higher-Level Spell Slot. The damage increases by 1d8 for each spell slot level above 5.
 
 Original layout: [[../pages/118|page 118]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: spell
+> executable: false
+> ```
+

@@ -1,15 +1,12 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: df41374b-9104-5a0b-880d-302104d30e2c
 splat_kind: rule
 splat_key: dnd2024:glossary/stable
 splat_name: Stable
-splat_origin:
-  key: dnd2024:reference/glossary/stable
+splat_origin: dnd2024:reference/glossary/stable
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 188
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 188, https://www.dndbeyond.com/srd
 ---
 
 # Stable

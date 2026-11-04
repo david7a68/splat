@@ -1,33 +1,58 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 034f7f82-aba5-5784-b239-2f9bc92ae296
 splat_kind: creature
 splat_key: dnd2024:creatures/venomous_snake
 splat_name: Venomous Snake
-splat_origin:
-  key: dnd2024:reference/creature/venomous_snake
+splat_origin: dnd2024:reference/creature/venomous_snake
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 363
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 363, https://www.dndbeyond.com/srd
 ---
 
 # Venomous Snake
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Tiny |
+| Type | Beast |
+| Alignment | Unaligned |
+| Armor Class | 12 |
+| Hit Points | 5 (2d4) |
+| Initiative | +2 (12) |
+| Speed | 30 ft., Swim 30 ft. |
+| Challenge | 1/8 (XP 25; PB +2) |
+| Senses | Blindsight 10 ft.; Passive Perception 10 |
+| Languages | None |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 2 | -4 | -4 |
+| Dex | 15 | +2 | +2 |
+| Con | 11 | +0 | +0 |
+| Int | 1 | -5 | -5 |
+| Wis | 10 | +0 | +0 |
+| Cha | 3 | -4 | -4 |
+
 
 ## Source text
 
 <!-- SRD page 363 -->
 
-Tiny Beast, Unaligned\
-AC 12  Initiative +2 (12)\
-HP 5 (2d4)\
-Speed 30 ft., Swim 30 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 2 −4 −4 Dex 15 +2 +2 Con 11 +0 +0\
-Int 1 −5 −5 Wis 10 +0 +0 Cha 3 −4 −4\
-Senses Blindsight 10 ft.; Passive Perception 10\
-Languages None\
-CR 1/8 (XP 25; PB +2)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Tiny Beast, Unaligned\
+> AC 12  Initiative +2 (12)\
+> HP 5 (2d4)\
+> Speed 30 ft., Swim 30 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 2 −4 −4 Dex 15 +2 +2 Con 11 +0 +0\
+> Int 1 −5 −5 Wis 10 +0 +0 Cha 3 −4 −4\
+> Senses Blindsight 10 ft.; Passive Perception 10\
+> Languages None\
+> CR 1/8 (XP 25; PB +2)
+
 
 ### Actions
 
@@ -35,45 +60,11 @@ Bite. Melee Attack Roll: +4, reach 5 ft. Hit: 4 (1d4 + 2) Piercing damage plus 3
 
 Original layout: [[../../srd-5.2.1/pages/363|page 363]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` tiny ` |
-| ` type ` | ` beast ` |
-| ` alignment ` | ` Unaligned ` |
-| ` movement_text ` | ` 30 ft., Swim 30 ft. ` |
-| ` senses_text ` | ` Blindsight 10 ft.; Passive Perception 10 ` |
-| ` languages_text ` | ` None ` |
-| ` cr_text ` | ` 1/8 (XP 25; PB +2) ` |
-| ` hit_points_text ` | ` 5 (2d4) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 2 ` | ` -4 ` |
-| ` Dexterity ` | ` 15 ` | ` 2 ` |
-| ` Constitution ` | ` 11 ` | ` 0 ` |
-| ` Intelligence ` | ` 1 ` | ` -5 ` |
-| ` Wisdom ` | ` 10 ` | ` 0 ` |
-| ` Charisma ` | ` 3 ` | ` -4 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 12 ` |  |
-| ` max_hp ` | ` 5 ` |  |
-| ` initiative ` | ` 2 ` |  |
-| ` speed ` | ` 30 ` | ` ft ` |
-| ` swim_speed ` | ` 30 ` | ` ft ` |
 
 ## Health
 
@@ -204,3 +195,13 @@ geometry_assumptions:
   - plane
   - form_appearance
 ```
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_stats_extras -->
+> 
+> ```yaml
+> swim_speed:
+>   unit: ft
+>   value: 30
+> ```
+

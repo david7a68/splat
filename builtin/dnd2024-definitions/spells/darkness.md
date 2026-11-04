@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 8ed4e98a-af2e-52fe-9716-7adf6f73930a
 splat_kind: spell
 splat_key: dnd2024:spells/darkness
 splat_name: Darkness
-splat_origin:
-  key: dnd2024:reference/spell/darkness
+splat_origin: dnd2024:reference/spell/darkness
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 122
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 122, https://www.dndbeyond.com/srd
 ---
 
 # Darkness
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 2 |
+| School | Evocation |
+| Classes | Sorcerer, Warlock, Wizard |
+| Casting Time | Action |
+| Range | 60 feet |
+| Components | V, M (bat fur and a piece of coal) |
+| Duration | Concentration, up to 10 minutes |
+
 
 ## Source text
 
@@ -32,37 +43,11 @@ If any of this spell’s area overlaps with an area of Bright Light or Dim Light
 
 Original layout: [[../../srd-5.2.1/pages/122|page 122]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 2 ` |
-| ` school ` | ` evocation ` |
-| ` classes ` | ` ["sorcerer", "warlock", "wizard"] ` |
-| ` components ` | ` ["verbal", "material"] ` |
-| ` concentration ` | ` true ` |
-| ` duration ` | ` Concentration, up to 10 minutes ` |
-| ` casting_time ` | ` Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
 
-<!-- splat:values path=splat_spell/range -->
 
-| Field | Value |
-| --- | --- |
-| ` feet ` | ` 60 ` |
-
-### Material
-
-<!-- splat:values path=splat_spell/material -->
-
-| Field | Value |
-| --- | --- |
-| ` description ` | ` bat fur and a piece of coal ` |
-| ` consumed ` | ` false ` |
 
 ## Rule
 
@@ -113,3 +98,12 @@ object:
 | ` light_levels ` | ` ["bright", "dim"] ` |
 | ` created_by_spell_maximum_level ` | ` 2 ` |
 | ` effect ` | ` dispel_other_spell ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_spell_extras -->
+> 
+> ```yaml
+> material:
+>   consumed: false
+> ```
+

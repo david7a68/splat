@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "40a404d8-199a-5cbe-bb04-9f63120f8cee"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/mage"
 splat_name: "Mage"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [305], "executable": false}
+splat_pages:
+- 305
 ---
 
 # Mage
@@ -45,3 +46,13 @@ Misty Step (3/Day). The mage casts Misty Step, using the same spellcasting abili
 Protective Magic (3/Day). The mage casts Counterspell or Shield in response to the spell’s trigger, using the same spellcasting ability as Spellcasting.
 
 Original layout: [[../pages/305|page 305]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

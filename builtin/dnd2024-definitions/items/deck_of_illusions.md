@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 12a23b10-d2a5-5f8f-b36c-8c5fe9570cb3
 splat_kind: item
 splat_key: dnd2024:items/deck_of_illusions
 splat_name: Deck of Illusions
-splat_origin:
-  key: dnd2024:reference/magic_item/deck_of_illusions
+splat_origin: dnd2024:reference/magic_item/deck_of_illusions
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 217, 218
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 217, 218, https://www.dndbeyond.com/srd
 ---
 
 # Deck of Illusions
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Wondrous Item |
+| Rarity | Uncommon |
+| Attunement | No |
+
 
 ## Source text
 
@@ -73,22 +80,9 @@ Any physical interaction with the illusory creature reveals it to be false, beca
 
 Original layout: [[../../srd-5.2.1/pages/217|page 217]], [[../../srd-5.2.1/pages/218|page 218]].
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` wondrous_item ` |
-| ` rarity ` | ` uncommon ` |
 
-### Equipment
-
-<!-- splat:values path=splat_item/equipment -->
-
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` none ` |
 
 ## Rule
 

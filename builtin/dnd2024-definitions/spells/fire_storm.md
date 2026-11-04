@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: e5e91d65-5f33-5e24-aa7f-dc5c4154bb28
 splat_kind: spell
 splat_key: dnd2024:spells/fire_storm
 splat_name: Fire Storm
-splat_origin:
-  key: dnd2024:reference/spell/fire_storm
+splat_origin: dnd2024:reference/spell/fire_storm
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 132
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 132, https://www.dndbeyond.com/srd
 ---
 
 # Fire Storm
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 7 |
+| School | Evocation |
+| Classes | Cleric, Druid, Sorcerer |
+| Casting Time | Action |
+| Range | 150 feet |
+| Components | V, S |
+| Duration | Instantaneous |
+
 
 ## Source text
 
@@ -30,28 +41,9 @@ Flammable objects in the area that aren’t being worn or carried start burning.
 
 Original layout: [[../../srd-5.2.1/pages/132|page 132]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 7 ` |
-| ` school ` | ` evocation ` |
-| ` classes ` | ` ["cleric", "druid", "sorcerer"] ` |
-| ` components ` | ` ["verbal", "somatic"] ` |
-| ` concentration ` | ` false ` |
-| ` duration ` | ` Instantaneous ` |
-| ` casting_time ` | ` Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
-
-<!-- splat:values path=splat_spell/range -->
-
-| Field | Value |
-| --- | --- |
-| ` feet ` | ` 150 ` |
 
 ## Rule
 

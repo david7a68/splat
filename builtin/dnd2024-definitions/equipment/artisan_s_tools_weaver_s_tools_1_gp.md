@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: e1d15a2f-7172-557d-b647-188b224a322e
 splat_kind: item
 splat_key: dnd2024:equipment/artisan_s_tools_weaver_s_tools_1_gp
 splat_name: Weaver’s Tools (1 GP)
-splat_origin:
-  key: dnd2024:reference/pages/094
+splat_origin: dnd2024:reference/pages/094
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 94
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 94, https://www.dndbeyond.com/srd
 ---
 
 # Weaver’s Tools (1 GP)
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Adventuring Gear |
+| Rarity |  |
+| Attunement | No |
+
 
 ## Source text
 
@@ -22,39 +29,13 @@ Ability: Dexterity Weight: 5 lb.\
 Utilize: Mend a tear in clothing (DC 10), or sew a Tiny design (DC 10)\
 Craft: Padded Armor, Basket, Bedroll, Blanket, Fine Clothes, Net, Robe, Rope, Sack, String, Tent, Traveler’s Clothes
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` adventuring_gear ` |
 
-### Equipment
 
-<!-- splat:values path=splat_item/equipment -->
 
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` none ` |
 
-### Price
 
-<!-- splat:values path=splat_item/price -->
-
-| Field | Value |
-| --- | --- |
-| ` value ` | ` 1 ` |
-| ` unit ` | ` gp ` |
-
-### Mass
-
-<!-- splat:values path=splat_item/mass -->
-
-| Field | Value |
-| --- | --- |
-| ` value ` | ` 5 ` |
-| ` unit ` | ` lb ` |
 
 ## Rule
 
@@ -115,3 +96,16 @@ crafting_rule:
 | --- | --- |
 | ` value ` | ` 5 ` |
 | ` unit ` | ` lb ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_item_extras -->
+> 
+> ```yaml
+> price:
+>   unit: gp
+>   value: 1
+> mass:
+>   unit: lb
+>   value: 5
+> ```
+

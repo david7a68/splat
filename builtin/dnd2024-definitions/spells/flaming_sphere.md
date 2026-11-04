@@ -1,18 +1,29 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: d39e9d55-9f59-51d3-af63-660d2d0a482f
 splat_kind: spell
 splat_key: dnd2024:spells/flaming_sphere
 splat_name: Flaming Sphere
-splat_origin:
-  key: dnd2024:reference/spell/flaming_sphere
+splat_origin: dnd2024:reference/spell/flaming_sphere
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 132
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 132, https://www.dndbeyond.com/srd
 ---
 
 # Flaming Sphere
+
+
+## Spell
+
+| Field | Value |
+| --- | --- |
+| Level | 2 |
+| School | Conjuration |
+| Classes | Druid, Sorcerer, Wizard |
+| Casting Time | Action |
+| Range | 60 feet |
+| Components | V, S, M (a ball of wax) |
+| Duration | Concentration, up to 1 minute |
+
 
 ## Source text
 
@@ -34,37 +45,11 @@ Using a Higher-Level Spell Slot. The damage increases by 1d6 for each spell slot
 
 Original layout: [[../../srd-5.2.1/pages/132|page 132]].
 
-## Spell
 
-<!-- splat:values path=splat_spell -->
 
-| Field | Value |
-| --- | --- |
-| ` level ` | ` 2 ` |
-| ` school ` | ` conjuration ` |
-| ` classes ` | ` ["druid", "sorcerer", "wizard"] ` |
-| ` components ` | ` ["verbal", "somatic", "material"] ` |
-| ` concentration ` | ` true ` |
-| ` duration ` | ` Concentration, up to 1 minute ` |
-| ` casting_time ` | ` Action ` |
-| ` ritual ` | ` false ` |
 
-### Range
 
-<!-- splat:values path=splat_spell/range -->
 
-| Field | Value |
-| --- | --- |
-| ` feet ` | ` 60 ` |
-
-### Material
-
-<!-- splat:values path=splat_spell/material -->
-
-| Field | Value |
-| --- | --- |
-| ` description ` | ` a ball of wax ` |
-| ` consumed ` | ` false ` |
 
 ## Rule
 
@@ -146,3 +131,12 @@ creature_space_entry:
 | ` per_slot_above ` | ` 2 ` |
 | ` damage_dice ` | ` 1 ` |
 | ` sides ` | ` 6 ` |
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_spell_extras -->
+> 
+> ```yaml
+> material:
+>   consumed: false
+> ```
+

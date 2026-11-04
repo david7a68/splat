@@ -1,10 +1,11 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: "a8ba0433-94c2-59e1-8289-146cf7e9090b"
 splat_kind: "reference"
 splat_key: "dnd2024:reference/creature/young_brass_dragon"
 splat_name: "Young Brass Dragon"
-splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [268], "executable": false}
+splat_pages:
+- 268
 ---
 
 # Young Brass Dragon
@@ -35,3 +36,13 @@ Fire Breath (Recharge 5–6). Dexterity Saving Throw: DC 14, each creature in a 
 Sleep Breath. Constitution Saving Throw: DC 14, each creature in a 30-foot Cone. Failure: The target has the Incapacitated condition until the end of its next turn, at which point it repeats the save. Second Failure: The target has the Unconscious condition for 1 minute. This effect ends for the target if it takes damage or a creature within 5 feet of it takes an action to wake it.
 
 Original layout: [[../pages/268|page 268]].
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_reference -->
+> 
+> ```yaml
+> source: SRD 5.2.1
+> category: creature
+> executable: false
+> ```
+

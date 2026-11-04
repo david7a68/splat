@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 4d6e7068-1a87-5043-864b-72f2bd1dc6fd
 splat_kind: item
 splat_key: dnd2024:items/thunderous_greatclub
 splat_name: Thunderous Greatclub
-splat_origin:
-  key: dnd2024:reference/magic_item/thunderous_greatclub
+splat_origin: dnd2024:reference/magic_item/thunderous_greatclub
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 249
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 249, https://www.dndbeyond.com/srd
 ---
 
 # Thunderous Greatclub
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Weapon |
+| Rarity | Very Rare |
+| Attunement | Yes |
+
 
 ## Source text
 
@@ -30,22 +37,9 @@ Earthquake. As a Magic action, you can strike the weapon against the ground to c
 
 Original layout: [[../../srd-5.2.1/pages/249|page 249]].
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` weapon ` |
-| ` rarity ` | ` very_rare ` |
 
-### Equipment
-
-<!-- splat:values path=splat_item/equipment -->
-
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` required ` |
 
 ## Rule
 

@@ -1,35 +1,62 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 33a71319-c74a-5cb6-9de9-2cd913a6f3f4
 splat_kind: creature
 splat_key: dnd2024:creatures/kraken
 splat_name: Kraken
-splat_origin:
-  key: dnd2024:reference/creature/kraken
+splat_origin: dnd2024:reference/creature/kraken
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 303
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 303, https://www.dndbeyond.com/srd
 ---
 
 # Kraken
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size | Gargantuan |
+| Type | Monstrosity (Titan) |
+| Alignment | Chaotic Evil |
+| Armor Class | 18 |
+| Hit Points | 481 (26d20 + 208) |
+| Initiative | +14 (24) |
+| Speed | 30 ft., Swim 120 ft. |
+| Challenge | 23 (XP 50,000, or 62,000 in lair; PB +7) |
+| Skills | History +13, Perception +11 |
+| Senses | Truesight 120 ft.; Passive Perception 21 |
+| Languages | Understands Abyssal, Celestial, Infernal, and Primordial but can’t speak; telepathy 120 ft. |
+| Immunities | Cold, Lightning; Frightened, Grappled, Paralyzed, Restrained |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str | 30 | +10 | +17 |
+| Dex | 11 | +0 | +7 |
+| Con | 26 | +8 | +15 |
+| Int | 22 | +6 | +6 |
+| Wis | 18 | +4 | +11 |
+| Cha | 20 | +5 | +5 |
+
 
 ## Source text
 
 <!-- SRD page 303 -->
 
-Gargantuan Monstrosity (Titan), Chaotic Evil\
-AC 18 Initiative +14 (24)\
-HP 481 (26d20 + 208)\
-Speed 30 ft., Swim 120 ft.\
-MOD SAVE MOD SAVE MOD SAVE\
-Str 30 +10 +17 Dex 11 +0 +7 Con 26 +8 +15\
-Int 22 +6 +6 Wis 18 +4 +11 Cha 20 +5 +5\
-Skills History +13, Perception +11\
-Immunities Cold, Lightning; Frightened, Grappled, Paralyzed, Restrained\
-Senses Truesight 120 ft.; Passive Perception 21\
-Languages Understands Abyssal, Celestial, Infernal, and Primordial but can’t speak; telepathy 120 ft.\
-CR 23 (XP 50,000, or 62,000 in lair; PB +7)
+> [!quote]- Printed stat block (not read; edit the table above)
+> Gargantuan Monstrosity (Titan), Chaotic Evil\
+> AC 18 Initiative +14 (24)\
+> HP 481 (26d20 + 208)\
+> Speed 30 ft., Swim 120 ft.\
+> MOD SAVE MOD SAVE MOD SAVE\
+> Str 30 +10 +17 Dex 11 +0 +7 Con 26 +8 +15\
+> Int 22 +6 +6 Wis 18 +4 +11 Cha 20 +5 +5\
+> Skills History +13, Perception +11\
+> Immunities Cold, Lightning; Frightened, Grappled, Paralyzed, Restrained\
+> Senses Truesight 120 ft.; Passive Perception 21\
+> Languages Understands Abyssal, Celestial, Infernal, and Primordial but can’t speak; telepathy 120 ft.\
+> CR 23 (XP 50,000, or 62,000 in lair; PB +7)
+
 
 ### Traits
 
@@ -63,48 +90,11 @@ Toxic Ink. Constitution Saving Throw: DC 23, each creature in a 15-foot Emanatio
 
 Original layout: [[../../srd-5.2.1/pages/303|page 303]].
 
-## Creature
 
-<!-- splat:values path=splat_creature -->
 
-| Field | Value |
-| --- | --- |
-| ` size ` | ` gargantuan ` |
-| ` type ` | ` monstrosity ` |
-| ` alignment ` | ` Chaotic Evil ` |
-| ` tags_text ` | ` (Titan) ` |
-| ` movement_text ` | ` 30 ft., Swim 120 ft. ` |
-| ` skills_text ` | ` History +13, Perception +11 ` |
-| ` immunities_text ` | ` Cold, Lightning; Frightened, Grappled, Paralyzed, Restrained ` |
-| ` senses_text ` | ` Truesight 120 ft.; Passive Perception 21 ` |
-| ` languages_text ` | ` Understands Abyssal, Celestial, Infernal, and Primordial but can’t speak; telepathy 120 ft. ` |
-| ` cr_text ` | ` 23 (XP 50,000, or 62,000 in lair; PB +7) ` |
-| ` hit_points_text ` | ` 481 (26d20 + 208) ` |
 
-## Abilities
 
-<!-- splat:abilities path=splat_stats -->
 
-| Ability | Score | Save override |
-| --- | --- | --- |
-| ` Strength ` | ` 30 ` | ` 17 ` |
-| ` Dexterity ` | ` 11 ` | ` 7 ` |
-| ` Constitution ` | ` 26 ` | ` 15 ` |
-| ` Intelligence ` | ` 22 ` | ` 6 ` |
-| ` Wisdom ` | ` 18 ` | ` 11 ` |
-| ` Charisma ` | ` 20 ` | ` 5 ` |
-
-## Stats
-
-<!-- splat:map path=splat_stats -->
-
-| Key | value | unit |
-| --- | --- | --- |
-| ` armor_class ` | ` 18 ` |  |
-| ` max_hp ` | ` 481 ` |  |
-| ` initiative ` | ` 14 ` |  |
-| ` speed ` | ` 30 ` | ` ft ` |
-| ` swim_speed ` | ` 120 ` | ` ft ` |
 
 ## Health
 
@@ -510,3 +500,13 @@ geometry:
 unlisted_success_branch: no_effect
 unlisted_duration: until_removed_by_applicable_rule
 ```
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_stats_extras -->
+> 
+> ```yaml
+> swim_speed:
+>   unit: ft
+>   value: 120
+> ```
+

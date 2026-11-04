@@ -1,18 +1,25 @@
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: e4a7c15f-aadc-550c-bb18-c86442166399
 splat_kind: item
 splat_key: dnd2024:items/dragon_scale_mail
 splat_name: Dragon Scale Mail
-splat_origin:
-  key: dnd2024:reference/magic_item/dragon_scale_mail
+splat_origin: dnd2024:reference/magic_item/dragon_scale_mail
 splat_sources:
-- title: SRD 5.2.1
-  locator: pp. 218, 219
-  url: https://www.dndbeyond.com/srd
+- SRD 5.2.1, pp. 218, 219, https://www.dndbeyond.com/srd
 ---
 
 # Dragon Scale Mail
+
+
+## Item
+
+| Field | Value |
+| --- | --- |
+| Type | Armor |
+| Rarity | Very Rare |
+| Attunement | Yes |
+
 
 ## Source text
 
@@ -38,22 +45,9 @@ Additionally, you can focus your senses as a Magic action to discern the distanc
 
 Original layout: [[../../srd-5.2.1/pages/218|page 218]], [[../../srd-5.2.1/pages/219|page 219]].
 
-## Item
 
-<!-- splat:values path=splat_item -->
 
-| Field | Value |
-| --- | --- |
-| ` category ` | ` armor ` |
-| ` rarity ` | ` very_rare ` |
 
-### Equipment
-
-<!-- splat:values path=splat_item/equipment -->
-
-| Field | Value |
-| --- | --- |
-| ` attunement ` | ` required ` |
 
 ## Rule
 
