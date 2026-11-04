@@ -5652,7 +5652,17 @@ pub mod session_notes {
         std::fs::write(&path, format!("{disk}\n<!-- Changed outside Splat. -->\n")).unwrap();
         d.app_mut().timeline.save();
         d.settle();
-        d.expect("Timeline.md changed on disk. Your draft is safe until you choose.");
+        d.expect("Timeline.md also changed outside Splat. Both changes are kept.");
+        d.observe_both(
+            "i20-S1",
+            "Separate Timeline edits save without a conflict or a rail error",
+            |d| {
+                !d.has("Overwrite with my timeline")
+                    && !d.has("Timeline not saved")
+                    && !d.has("Timeline changed on disk")
+                    && d.visible_text("Both changes are kept.")
+            },
+        );
         d.state("timeline-disk-conflict", Sizes::All);
     }
 }
@@ -7527,8 +7537,35 @@ pub mod session_plan {
         let session = d.app_mut().sessions.current();
         assert!(!crate::timeline::party_state(&d.app_mut().timeline.events, session).rested);
         d.state("plan-rest-ruling-off", Sizes::All);
+        let sizes = [(960.0, 640.0), (1200.0, 800.0)];
+        let before = sizes.map(|size| {
+            d.at_size(size, |d| {
+                d.nodes()
+                    .iter()
+                    .find(|n| n.name == "Everyone at full")
+                    .unwrap()
+                    .rect
+                    .top()
+            })
+        });
         d.click("Everyone at full");
         assert!(crate::timeline::party_state(&d.app_mut().timeline.events, session).rested);
+        let after = sizes.map(|size| {
+            d.at_size(size, |d| {
+                d.nodes()
+                    .iter()
+                    .find(|n| n.name == "Not at full")
+                    .unwrap()
+                    .rect
+                    .top()
+            })
+        });
+        d.observe(
+            "i20-S2",
+            before.iter().zip(after).all(|(a, b)| (a - b).abs() < 1.0),
+            "The open rest ruling stays at the same height at both sizes",
+        );
+        d.expect_same("The ruling changes words and colour; the open row stays in place.");
         d.state("plan-rest-ruling-on", Sizes::All);
         d.click("Undo ruling");
         assert!(!crate::timeline::party_state(&d.app_mut().timeline.events, session).rested);

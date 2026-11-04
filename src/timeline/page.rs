@@ -206,8 +206,14 @@ pub fn problems(ui: &mut egui::Ui, book: &mut Book) -> bool {
         design::message(
             ui,
             Tone::Warning,
-            &format!("Line {}: {}", flag.line, flag.message),
+            &format!("Timeline.md, line {}: {}", flag.line, flag.message),
         );
+    }
+    if !book.flags.is_empty()
+        && let Some(path) = &book.path
+        && let Some(folder) = path.parent()
+    {
+        crate::world::entry_file_actions(ui, folder, super::FILE, true);
     }
     book.layouts.current(book.path.as_deref());
     if let Some(warning) = &book.duplicate {
@@ -405,7 +411,14 @@ impl TimelinePage {
         self.reset_detail = true;
     }
 
-    fn row(&mut self, ui: &mut egui::Ui, event: &Event, day: u32, session: Option<&str>) {
+    fn row(
+        &mut self,
+        ui: &mut egui::Ui,
+        event: &Event,
+        day: u32,
+        session: Option<&str>,
+        flagged: bool,
+    ) {
         let c = colors();
         let selected = self.selected.as_deref() == Some(event.id.as_str());
         let title = event.label(day);
@@ -448,9 +461,15 @@ impl TimelinePage {
             painter.text(
                 egui::pos2(spine, icon_y),
                 egui::Align2::CENTER_CENTER,
-                event.kind.icon(),
+                if flagged {
+                    icons::WARN
+                } else {
+                    event.kind.icon()
+                },
                 Type::Name.font(ui),
-                if event.kind == Kind::Day {
+                if flagged {
+                    c.result.warning
+                } else if event.kind == Kind::Day {
                     c.text
                 } else {
                     c.muted
@@ -634,6 +653,22 @@ impl TimelinePage {
 
     fn list(&mut self, ui: &mut egui::Ui, book: &mut Book, sessions: &[SessionLink]) {
         self.list_messages(ui, book);
+        if book.merged_outside {
+            ui.label(
+                Type::Small
+                    .rich(
+                        ui,
+                        "Timeline.md also changed outside Splat. Both changes are kept.",
+                    )
+                    .color(colors().muted),
+            );
+        }
+        let flagged = book
+            .baseline
+            .as_deref()
+            .and_then(|bytes| std::str::from_utf8(bytes).ok())
+            .map(super::formats::flagged_days)
+            .unwrap_or_default();
         let days = day_numbers(&book.events);
         let rows: Vec<usize> = (0..book.events.len())
             .filter(|&index| self.matches(&book.events[index], days[index]))
@@ -673,7 +708,7 @@ impl TimelinePage {
                     .session
                     .and_then(|id| sessions.iter().find(|session| session.id == id))
                     .map(|session| short_session(&session.label));
-                self.row(ui, event, days[index], session);
+                self.row(ui, event, days[index], session, flagged.contains(&event.id));
             }
         });
     }

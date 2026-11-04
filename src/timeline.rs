@@ -605,6 +605,7 @@ pub struct Book {
     last_check: Option<Instant>,
     /// The file changed on disk during an edit. Saving stops until the DM chooses.
     pub conflict: bool,
+    pub merged_outside: bool,
     /// The file cannot be read as a timeline. It is left as it is, and nothing saves.
     pub unreadable: Option<String>,
     /// The file was here, and it is gone. Its events stay in memory until the DM chooses.
@@ -662,6 +663,7 @@ impl Book {
         self.dirty = false;
         self.reordered.clear();
         self.conflict = false;
+        self.merged_outside = false;
         self.error = None;
         self.unreadable = None;
         self.gone = false;
@@ -736,6 +738,7 @@ impl Book {
     /// Note an edit. It saves after a short pause, or at the next `save`.
     pub fn touch(&mut self) {
         self.run_write = false;
+        self.merged_outside = false;
         self.rest_undo = None;
         let days = day_numbers(&self.events);
         for (at, event) in self.events.iter().enumerate() {
@@ -781,12 +784,103 @@ impl Book {
         }
     }
 
+    /// Keep outside-only edits; require a choice only for an item edited on both sides.
+    fn merged_events(&self, disk: &str, overwrite: bool) -> Result<Vec<Event>, String> {
+        let disk = if formats::is_v2(disk) {
+            formats::parse_with_sessions(disk, &self.session_links).0
+        } else {
+            parse(disk)?
+        };
+        let mut merged = disk.clone();
+        for old in &self.saved_events {
+            let ours = self.events.iter().find(|e| e.id == old.id);
+            let theirs = disk.iter().find(|e| e.id == old.id);
+            if ours == Some(old) {
+                continue;
+            }
+            if !overwrite && theirs != Some(old) && ours != theirs {
+                return Err("The same timeline item changed on both sides.".into());
+            }
+            if ours.is_none() {
+                merged.retain(|e| e.id != old.id);
+            }
+        }
+        for (index, event) in self.events.iter().enumerate() {
+            if self.saved_events.iter().any(|old| old == event) {
+                continue;
+            }
+            let at = merged
+                .iter()
+                .position(|e| e.id == event.id)
+                .unwrap_or_else(|| {
+                    self.events[..index]
+                        .iter()
+                        .rev()
+                        .find_map(|previous| merged.iter().position(|e| e.id == previous.id))
+                        .map_or(0, |at| at + 1)
+                });
+            let existing = merged.get(at).is_some_and(|e| e.id == event.id);
+            let mut event = event.clone();
+            if overwrite
+                && self
+                    .saved_events
+                    .iter()
+                    .find(|old| old.id == event.id)
+                    .is_some_and(|old| old.extra == event.extra)
+                && let Some(theirs) = disk.iter().find(|e| e.id == event.id)
+            {
+                event.extra.clone_from(&theirs.extra);
+            }
+            if existing {
+                merged[at] = event;
+            } else {
+                merged.insert(at, event);
+            }
+        }
+        // Reordering changes the relationship between items. Keep outside order otherwise.
+        let order = |events: &[Event]| {
+            events
+                .iter()
+                .filter(|e| {
+                    self.saved_events.iter().any(|old| old.id == e.id)
+                        && self.events.iter().any(|ours| ours.id == e.id)
+                        && disk.iter().any(|theirs| theirs.id == e.id)
+                })
+                .map(|e| e.id.clone())
+                .collect::<Vec<_>>()
+        };
+        let baseline_order = order(&self.saved_events);
+        let ours = order(&self.events);
+        let theirs = order(&disk);
+        if ours != baseline_order {
+            if !overwrite && theirs != baseline_order && ours != theirs {
+                return Err("The timeline order changed on both sides.".into());
+            }
+            let ordered: Vec<_> = self
+                .events
+                .iter()
+                .filter_map(|e| merged.iter().find(|m| m.id == e.id).cloned())
+                .collect();
+            let mut ordered = ordered.into_iter();
+            for event in &mut merged {
+                if self.events.iter().any(|e| e.id == event.id) {
+                    *event = ordered.next().unwrap();
+                }
+            }
+        }
+        Ok(merged)
+    }
+
     pub fn conflict_comparison(&self) -> Result<(String, String), String> {
         let path = self.path.as_ref().ok_or("No campaign is open.")?;
         let disk = fs::read_to_string(path).map_err(|e| format!("{}: {e}", path.display()))?;
         let disk_events = parse(&disk)?;
-        let mut events = self.events.clone();
-        for event in &mut events {
+        let mut events = if formats::is_v2(&disk) {
+            self.merged_events(&disk, true)?
+        } else {
+            self.events.clone()
+        };
+        for event in events.iter_mut().filter(|_| !formats::is_v2(&disk)) {
             if let Some(disk) = disk_events.iter().find(|disk| disk.id == event.id) {
                 event.extra.extend(disk.extra.clone());
             }
@@ -799,8 +893,23 @@ impl Book {
     fn write(&mut self) -> Result<(), String> {
         self.layouts.clear();
         let path = self.path.as_ref().ok_or("No campaign is open.")?;
-        let source = self
-            .baseline
+        let current = fs::read(path).ok();
+        let outside = current != self.baseline;
+        let mut events = self.events.clone();
+        if outside {
+            let disk = current
+                .as_deref()
+                .and_then(|bytes| std::str::from_utf8(bytes).ok());
+            if let Some(disk) = disk.filter(|text| formats::is_v2(text)) {
+                events = self
+                    .merged_events(disk, false)
+                    .inspect_err(|_| self.conflict = true)?;
+            } else {
+                self.conflict = true;
+                return Err("Timeline.md changed on disk. Compare it before saving.".into());
+            }
+        }
+        let source = current
             .as_deref()
             .map(std::str::from_utf8)
             .transpose()
@@ -808,7 +917,7 @@ impl Book {
         let conversion = source
             .filter(|text| !formats::is_v2(text) && !self.run_write && !self.run_open)
             .map(str::to_owned);
-        let text = self.text_for(&self.events, source)?;
+        let text = self.text_for(&events, source)?;
         let text = if !self.run_write && !self.run_open {
             formats::convert(&text, &self.session_links)?
         } else {
@@ -826,11 +935,11 @@ impl Book {
         temp.write_all(text.as_bytes())
             .and_then(|()| temp.as_file().sync_all())
             .map_err(|e| e.to_string())?;
-        if fs::read(path).ok() != self.baseline {
+        if fs::read(path).ok() != current {
             self.conflict = true;
             return Err("Timeline.md changed again on disk. Compare it before saving.".into());
         }
-        if self.baseline.is_some() {
+        if current.is_some() {
             temp.persist(path)
         } else {
             temp.persist_noclobber(path)
@@ -846,10 +955,17 @@ impl Book {
                 .map(|event| event.id.clone());
             self.layouts.remember(parent, FILE, &before, &text);
         }
+        self.flags = if formats::is_v2(&text) {
+            formats::parse_with_sessions(&text, &self.session_links).1
+        } else {
+            Vec::new()
+        };
         self.baseline = Some(text.into_bytes());
         self.written_body = Some(body);
         self.body_changed = false;
+        self.events = events;
         self.saved_events.clone_from(&self.events);
+        self.merged_outside = outside;
         self.dirty = false;
         self.run_write = false;
         self.reordered.clear();
@@ -859,19 +975,10 @@ impl Book {
     }
 
     pub fn save(&mut self) {
-        if !self.dirty || self.conflict || self.unreadable.is_some() {
+        if !self.dirty || self.conflict || self.unreadable.is_some() || self.path.is_none() {
             return;
         }
         if self.body_changed {
-            self.layouts.clear();
-            self.conflict = true;
-            return;
-        }
-        let Some(path) = &self.path else {
-            return;
-        };
-        let current = fs::read(path).ok();
-        if current != self.baseline {
             self.layouts.clear();
             self.conflict = true;
             return;
@@ -891,7 +998,20 @@ impl Book {
                 .and_then(parse)
             {
                 Ok(events) => {
-                    for event in &mut self.events {
+                    if formats::is_v2(std::str::from_utf8(&bytes).unwrap()) {
+                        match self.merged_events(std::str::from_utf8(&bytes).unwrap(), true) {
+                            Ok(merged) => self.events = merged,
+                            Err(error) => {
+                                self.error = Some(error);
+                                return;
+                            }
+                        }
+                    }
+                    for event in self
+                        .events
+                        .iter_mut()
+                        .filter(|_| !formats::is_v2(std::str::from_utf8(&bytes).unwrap()))
+                    {
                         if let Some(disk) = events.iter().find(|disk| disk.id == event.id) {
                             event.extra.extend(disk.extra.clone());
                         }
@@ -949,6 +1069,26 @@ impl Book {
             self.events = events;
             self.touch();
         }
+    }
+
+    pub fn attention_status(&self) -> Option<crate::design::Status<'static>> {
+        self.not_saved().then(|| crate::design::Status {
+            icon: if self.conflict {
+                icons::WARN
+            } else {
+                icons::ERROR
+            },
+            word: if self.conflict {
+                "Timeline changed on disk"
+            } else {
+                "Timeline not saved"
+            },
+            color: if self.conflict {
+                crate::design::colors().document.external
+            } else {
+                crate::design::colors().document.invalid
+            },
+        })
     }
 
     pub fn not_saved(&self) -> bool {
@@ -1297,6 +1437,100 @@ impl Book {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn i20_s1_separate_edits_keep_both_changes_without_a_conflict() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join(FILE);
+        let mut book = book(dir.path());
+        let first = book.add(Kind::Travel, None);
+        let second = book.add(Kind::Travel, None);
+        book.save();
+        let baseline = fs::read_to_string(&path).unwrap();
+        book.event_mut(&first).unwrap().title = "Splat road".into();
+        book.touch();
+        let mut disk_events = parse(&baseline).unwrap();
+        disk_events[1].title = "Outside road".into();
+        let disk = formats::patch(&baseline, &disk_events, &BTreeMap::new(), false).unwrap();
+        fs::write(&path, format!("{disk}\nOutside prose.\n")).unwrap();
+        book.save();
+        assert!(!book.conflict && !book.unsaved(), "{:?}", book.error);
+        let saved = fs::read_to_string(&path).unwrap();
+        let events = parse(&saved).unwrap();
+        assert_eq!(
+            events.iter().find(|e| e.id == first).unwrap().title,
+            "Splat road"
+        );
+        assert_eq!(
+            events.iter().find(|e| e.id == second).unwrap().title,
+            "Outside road"
+        );
+        assert!(saved.contains("Outside prose."));
+        assert_eq!(book.events, events);
+    }
+
+    #[test]
+    fn i20_s1_same_event_conflicts_and_overwrite_keeps_other_outside_edits() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut book = book(dir.path());
+        book.add(Kind::Travel, None);
+        book.add(Kind::Travel, None);
+        book.save();
+        let path = dir.path().join(FILE);
+        let before = fs::read_to_string(&path).unwrap();
+        book.events[0].title = "My road".into();
+        book.touch();
+        let mut disk_events = parse(&before).unwrap();
+        disk_events[0].title = "Their road".into();
+        disk_events[1].notes = "Outside notes".into();
+        let disk = formats::patch(&before, &disk_events, &BTreeMap::new(), false).unwrap();
+        fs::write(&path, &disk).unwrap();
+        book.save();
+        assert!(book.conflict && book.not_saved());
+        let (draft, compared_disk) = book.conflict_comparison().unwrap();
+        assert_eq!(compared_disk, disk);
+        assert_eq!(
+            draft
+                .lines()
+                .zip(disk.lines())
+                .filter(|(a, b)| a != b)
+                .count(),
+            1
+        );
+        assert!(draft.contains("Outside notes"));
+        book.overwrite();
+        assert!(!book.conflict && !book.unsaved());
+        assert_eq!(fs::read_to_string(&path).unwrap(), draft);
+    }
+
+    #[test]
+    fn i20_s1_outside_add_remove_and_reorder_survive_a_run_result_save() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut book = book(dir.path());
+        for _ in 0..3 {
+            book.add(Kind::Travel, None);
+        }
+        book.save();
+        let path = dir.path().join(FILE);
+        let before = fs::read_to_string(&path).unwrap();
+        let mut disk_events = parse(&before).unwrap();
+        disk_events.remove(1);
+        disk_events.swap(0, 1);
+        let mut added = disk_events[0].clone();
+        added.id = "t-outside".into();
+        added.title = "Outside addition".into();
+        disk_events.push(added);
+        let disk = formats::patch(&before, &disk_events, &BTreeMap::new(), false).unwrap();
+        fs::write(&path, format!("{disk}Outside prose.\n")).unwrap();
+        book.events[0].result = "Round 2".into();
+        book.dirty = true;
+        book.run_write = true;
+        book.save();
+        assert!(!book.conflict && !book.unsaved(), "{:?}", book.error);
+        disk_events[1].result = "Round 2".into();
+        assert_eq!(book.events, disk_events);
+        assert!(fs::read_to_string(path).unwrap().contains("Outside prose."));
+    }
 
     #[test]
     fn i19_s2_legacy_conflict_shows_the_changed_paragraph_at_both_sizes() {
@@ -1692,7 +1926,7 @@ mod tests {
             text.contains(&format!("## Day 1: Harvest Eve\n%% splat id={day} %%")),
             "{text}"
         );
-        assert!(text.contains(&format!("- Long rest:  ^{rest}")), "{text}");
+        assert!(text.contains(&format!("- Long rest ^{rest}")), "{text}");
         assert!(text.contains("3 days"), "{text}");
         // The catalogue scan treats any `splat_` frontmatter line as an entry.
         assert!(!text.lines().any(|line| line.starts_with("splat_")));
