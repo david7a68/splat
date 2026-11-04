@@ -27,11 +27,15 @@ pub mod encounter_group;
 pub mod overrides;
 mod reading;
 pub use reading::Reading;
+pub mod formats;
+pub mod layout;
 mod markdown;
 mod shared;
 pub use shared::validate_with_builtin;
 mod table_mapping;
 
+#[cfg(test)]
+mod formats_tests;
 #[cfg(test)]
 mod tests;
 
@@ -46,6 +50,8 @@ pub struct Entry {
     pub body: String,
     pub inventory: Vec<InventoryRow>,
     pub inventory_containers: Vec<String>,
+    #[serde(default)]
+    pub flags: Vec<layout::Flag>,
 }
 
 /// Parsed fields are read repeatedly by independent catalogues and app views.
@@ -167,11 +173,7 @@ impl Entry {
         let Value::Mapping(mut fields) = value else {
             return Err("Frontmatter must be a mapping".into());
         };
-        if field(&fields, "splat_schema").and_then(Value::as_u64) != Some(1) {
-            return Err(
-                "Unsupported content schema (expected 1); raw source remains unchanged".into(),
-            );
-        }
+        let schema = formats::schema(&fields)?;
         let id =
             Uuid::parse_str(string(&fields, "splat_id")?).map_err(|_| "Invalid splat_id UUID")?;
         let name = string(&fields, "splat_name")?.to_owned();
@@ -213,6 +215,7 @@ impl Entry {
         };
         let body = rest.get(end + 5..).unwrap_or("").to_owned();
         markdown::read(&body, &mut fields)?;
+        let flags = formats::read(schema, &text, &mut fields);
         let (inventory, inventory_containers) = inventory(&body)?;
         let entry = Self {
             path: path.into(),
@@ -224,6 +227,7 @@ impl Entry {
             body,
             inventory,
             inventory_containers,
+            flags,
         };
         entry.validate_shape()?;
         entry.reading()?;
@@ -273,6 +277,7 @@ impl Entry {
             encounter_group::EncounterGroup::of(self)?;
         }
         if self.kind == "world"
+            && formats::schema(&self.fields)? == 1
             && field(&self.fields, "splat_world")
                 .and_then(|world| world.get("type"))
                 .and_then(Value::as_str)
@@ -572,6 +577,14 @@ fn references(value: &Value, out: &mut Vec<Reference>) -> Result<(), String> {
 /// Required content references, excluding provenance and optional selections.
 /// Engine contract names are not content entry references.
 pub fn required_references(entry: &Entry) -> Result<Vec<Reference>, String> {
+    if let Some(raw) = entry
+        .fields
+        .get("splat_requires")
+        .and_then(Value::as_sequence)
+        .and_then(|values| values.iter().find_map(Value::as_str))
+    {
+        return Err(format!("Requirement {raw} needs a catalogue match"));
+    }
     let fields: Mapping = entry
         .fields
         .iter()
@@ -974,12 +987,41 @@ pub fn patch_fields(
     let map = value.as_mapping().ok_or("Frontmatter must be a mapping")?;
     let lines: Vec<_> = front.split(newline).collect();
     let mut remove = std::collections::BTreeSet::new();
-    for (key, _) in changes {
+    let mut replacements = BTreeMap::new();
+    let mut appended = Vec::new();
+    let mut expected = map.clone();
+    for (key, value) in changes {
+        if let Some(value) = value {
+            expected.insert((*key).into(), value.clone());
+        } else {
+            expected.remove(*key);
+        }
+        let encoded = if let Some(value) = value {
+            let mut field = Mapping::new();
+            field.insert((*key).into(), value.clone());
+            serde_yaml_ng::to_string(&field)
+                .map_err(|e| e.to_string())?
+                .trim_end()
+                .replace('\n', newline)
+        } else {
+            String::new()
+        };
         if map.contains_key(*key) {
             let matches: Vec<_> = lines
                 .iter()
                 .enumerate()
-                .filter(|(_, line)| line.starts_with(&format!("{key}:")))
+                .filter(|(_, line)| {
+                    if line.starts_with([' ', '\t', '#', '-']) {
+                        return false;
+                    }
+                    line.split_once(':').is_some_and(|(raw, _)| {
+                        serde_yaml_ng::from_str::<Value>(raw)
+                            .ok()
+                            .and_then(|v| v.as_str().map(str::to_owned))
+                            .as_deref()
+                            == Some(key)
+                    })
+                })
                 .map(|(i, _)| i)
                 .collect();
             if matches.len() != 1 {
@@ -988,6 +1030,54 @@ pub fn patch_fields(
                 ));
             }
             let start = matches[0];
+            if let Some(value) = value
+                && !value.is_mapping()
+                && !value.is_sequence()
+                && map
+                    .get(*key)
+                    .is_some_and(|v| !v.is_mapping() && !v.is_sequence())
+            {
+                let line = lines[start];
+                let colon = line.find(':').unwrap() + 1;
+                let raw = &line[colon..];
+                if !raw.trim_start().starts_with(['|', '>']) {
+                    let mut quote = None;
+                    let mut escaped = false;
+                    let mut comment = raw.len();
+                    for (at, ch) in raw.char_indices() {
+                        if ch == '#'
+                            && quote.is_none()
+                            && (at == 0 || raw.as_bytes()[at - 1].is_ascii_whitespace())
+                        {
+                            comment = at;
+                            break;
+                        }
+                        if !escaped && matches!(ch, '\'' | '"') {
+                            if quote == Some(ch) {
+                                quote = None;
+                            } else if quote.is_none() {
+                                quote = Some(ch);
+                            }
+                        }
+                        escaped = ch == '\\' && !escaped;
+                    }
+                    let old = &raw[..comment];
+                    let begin = colon + old.len() - old.trim_start().len();
+                    let end = colon + old.trim_end().len();
+                    let scalar = serde_yaml_ng::to_string(value).map_err(|e| e.to_string())?;
+                    if !scalar.trim_end().contains('\n') {
+                        let mut updated = line.to_string();
+                        let encoded = format!(
+                            "{}{}",
+                            if raw.is_empty() { " " } else { "" },
+                            scalar.trim_end()
+                        );
+                        updated.replace_range(begin..end.max(begin), &encoded);
+                        replacements.insert(start, updated);
+                        continue;
+                    }
+                }
+            }
             let mut stop = start + 1;
             while stop < lines.len() {
                 let line = lines[stop];
@@ -1001,24 +1091,37 @@ pub fn patch_fields(
                 stop += 1;
             }
             remove.insert(start);
+            if value.is_some() {
+                replacements.insert(start, encoded);
+            }
+        } else if value.is_some() {
+            appended.push(encoded);
         }
     }
     let mut output = format!("{prefix}{start}");
     for (i, line) in lines.iter().enumerate() {
-        if !remove.contains(&i) {
+        if let Some(replacement) = replacements.get(&i) {
+            output.push_str(replacement);
+            output.push_str(newline);
+        } else if !remove.contains(&i) {
             output.push_str(line);
             output.push_str(newline);
         }
     }
-    for (key, value) in changes {
-        if let Some(value) = value {
-            let mut field = serde_yaml_ng::Mapping::new();
-            field.insert((*key).into(), value.clone());
-            let yaml = serde_yaml_ng::to_string(&field).map_err(|e| e.to_string())?;
-            output.push_str(&yaml.replace('\n', newline));
-        }
+    for encoded in appended {
+        output.push_str(&encoded);
+        output.push_str(newline);
     }
     output.push_str(raw[index + newline.len()..].as_ref());
+    let result = output
+        .trim_start_matches('\u{feff}')
+        .strip_prefix(&start)
+        .ok_or("Missing frontmatter")?;
+    let end = result.find(&end).ok_or("Missing frontmatter end")?;
+    let checked: Mapping = serde_yaml_ng::from_str(&result[..end]).map_err(|e| e.to_string())?;
+    if checked != expected {
+        return Err("Edit changed another property. The file was kept.".into());
+    }
     Ok(output)
 }
 

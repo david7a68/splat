@@ -163,6 +163,27 @@ fn campaign_bundle_uses_content_inventory_and_normalized_sheet() {
     assert_ne!(creature.inventory[0].key, creature.inventory[1].key);
     assert!(creature.fields.contains_key("splat_character"));
     assert!(creature.fields.contains_key("splat_import"));
+    assert!(creature.flags.is_empty(), "{:?}", creature.flags);
+    let path = record.campaign_path(dir.path());
+    let saved = std::fs::read_to_string(path).unwrap();
+    let front = saved
+        .strip_prefix("---\n")
+        .unwrap()
+        .split("\n---\n")
+        .next()
+        .unwrap();
+    let front: serde_yaml_ng::Mapping = serde_yaml_ng::from_str(front).unwrap();
+    assert!(
+        front
+            .values()
+            .all(|value| !value.is_mapping() && !value.is_sequence())
+    );
+    assert_eq!(
+        saved
+            .matches("<!-- splat:yaml path=splat_payload -->")
+            .count(),
+        1
+    );
     assert_eq!(
         creature.fields["splat_initial"]["resources"]["spell_slots_1"].as_i64(),
         Some(1)

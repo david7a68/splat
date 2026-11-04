@@ -460,7 +460,11 @@ fn unlink_planned_fight(body: &str, name: &str, occurrence: usize) -> String {
                     if found == occurrence {
                         removed = true;
                         let prefix = line[..at].trim();
-                        if matches!(prefix, "" | "-" | "*") && line[end..].trim().is_empty() {
+                        if matches!(
+                            prefix,
+                            "" | "-" | "*" | "- [ ]" | "- [x]" | "- [X]" | "* [ ]" | "* [x]"
+                        ) && line[end..].trim().is_empty()
+                        {
                             return None;
                         }
                         return Some(format!(
@@ -5627,7 +5631,7 @@ impl Sessions {
                         Type::Small
                             .rich(
                                 ui,
-                                "A new session starts from a template. Splat fills in {{number}}, {{title}}, {{date}} and {{campaign}}.",
+                                "Splat fills {{number}}, {{title}}, {{date}} and {{campaign}}. Obsidian's core Templates plugin also fills {{date}} and {{title}}.",
                             )
                             .color(c.muted),
                     )
@@ -6423,6 +6427,27 @@ mod tests {
             )
         );
         assert_eq!(unlink_planned_fight(body, "Missing", 0), body);
+    }
+
+    #[test]
+    fn fmt_f1_unlink_plan_task_removes_whole_line_only_in_plan() {
+        let body = "## Recap\n- [ ] [[Bridge]]\n## Plan for tonight\n- [ ] [[Bridge]]\n- [x] [[Bridge|Again]]\nMeet [[Bridge]] at dusk.\n## What happened\n- [ ] [[Bridge]]\n";
+        assert_eq!(
+            unlink_planned_fight(body, "Bridge", 0),
+            body.replacen(
+                "## Plan for tonight\n- [ ] [[Bridge]]\n",
+                "## Plan for tonight\n",
+                1
+            )
+        );
+        assert_eq!(
+            unlink_planned_fight(body, "Bridge", 1),
+            body.replace("- [x] [[Bridge|Again]]\n", "")
+        );
+        assert_eq!(
+            crate::sessions::each_linked_name("- [ ] [[Bridge]]\n- [x] [[Shrine]]"),
+            ["Bridge", "Shrine"]
+        );
     }
 
     #[test]

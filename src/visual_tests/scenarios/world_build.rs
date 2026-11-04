@@ -157,31 +157,29 @@ pub fn places(d: &mut Driver<'_>) {
         d.interaction_count() - before <= 3,
         "Give an NPC a stat block in three interactions",
     );
-    d.expect("Stat block: not set → Guard.");
+    d.expect("Saved in the new layout.");
     assert!(
         fs::read_to_string(root(d).join("NPCs/Rook Ambry.md"))
             .unwrap()
-            .contains("creature:")
+            .contains("splat_stat_block:")
     );
-    d.expect_same(
-        "Adding the stat block changes only its short link and the confirmation message.",
-    );
+    d.expect_same("Adding the stat block keeps the note's content and offers conversion Undo.");
     d.state("npc-stat-block-changed", Sizes::All);
-    d.click_containing("Undo stat block change for");
+    d.click("Undo");
     d.observe(
         "W3",
         !fs::read_to_string(root(d).join("NPCs/Rook Ambry.md"))
             .unwrap()
-            .contains("creature:"),
+            .contains("splat_stat_block:"),
         "Undo removes only the new stat block key",
     );
     d.click("Change In");
     d.click("New location…");
     d.type_into("Location name", "Watch House");
     d.click("Create location here");
-    d.expect("In:");
+    d.expect("Saved in the new layout.");
     d.state("npc-new-place", Sizes::All);
-    d.click_containing("Undo place change for");
+    d.click("Undo");
     d.click("Ashfall Keep");
     d.observe(
         "World places",
@@ -218,9 +216,9 @@ pub fn places(d: &mut Driver<'_>) {
             .fields["splat_world"]["in"]
     );
     d.wait_for_text("Obsidian added the watch schedule.");
-    d.expect("In:");
+    d.expect("Saved in the new layout.");
     d.state("place-change-keeps-disk-edit", Sizes::All);
-    d.click_containing("Undo place change for");
+    d.click("Undo");
     assert_eq!(fs::read_to_string(&path).unwrap(), external);
 }
 
@@ -1091,9 +1089,9 @@ pub fn world_note_moved(d: &mut Driver<'_>) {
     d.expect("This link matches more than one note. Choose one.");
     d.state("duplicate-place-chooser-in-world", Sizes::All);
     d.click("Always use Locations/Watch House.md");
-    d.expect("Undo place change for Rook Ambry");
+    d.expect("Saved in the new layout.");
     d.state("place-choice-kept-with-undo", Sizes::All);
-    d.click("Undo place change for Rook Ambry");
+    d.click("Undo");
     d.click_containing("Watch House · 2 matches");
     d.click("Locations/Watch House.md");
     look_up(d, "Rook Ambry");
@@ -1132,7 +1130,7 @@ pub fn world_note_moved(d: &mut Driver<'_>) {
     d.click("Change In");
     d.type_text("North Gate");
     d.click("North Gate");
-    d.expect("In: Watch House → North Gate.");
+    d.expect("Saved in the new layout.");
     assert!(
         fs::read_to_string(&moved_npc)
             .unwrap()

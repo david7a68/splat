@@ -219,6 +219,7 @@ pub fn note_entry(path: &str, name: &str, body: String) -> Entry {
         body,
         inventory: Vec::new(),
         inventory_containers: Vec::new(),
+        flags: Vec::new(),
     }
 }
 
@@ -434,10 +435,6 @@ pub fn aliases(entry: &Entry) -> Vec<&str> {
         .collect()
 }
 
-pub fn place(entry: &Entry) -> Option<Reference> {
-    reference(world_field(entry, "in")?)
-}
-
 fn link_name(value: &Value, fallback: &str) -> String {
     value
         .as_str()
@@ -510,7 +507,7 @@ fn frontmatter(id: Uuid, name: &str, kind: &str) -> Result<String, String> {
         .map(|(key, value)| (key.into(), value))
         .collect();
     let yaml = serde_yaml_ng::to_string(&fields).map_err(|e| e.to_string())?;
-    Ok(format!("---\n{yaml}---\n"))
+    splat::content::formats::convert("World.md", &format!("---\n{yaml}---\n"))
 }
 
 /// A new NPC or location from a name typed at the table. Nothing else is required.
@@ -527,8 +524,8 @@ pub(crate) fn broken_links(item: &Item, index: &ContentIndex) -> Vec<&'static st
     {
         problems.push("Place not found");
     }
-    if let Some(reference) = creature(&item.entry)
-        && index.position_of(&reference).is_none()
+    if world_field(&item.entry, "creature").is_some_and(|value| !value.is_null())
+        && index.world_target(&item.entry, "creature").is_none()
     {
         problems.push("Stat block not found");
     }
@@ -606,6 +603,7 @@ pub fn make_entry(campaign: &Campaign, item: &Item, kind: &str) -> Result<Uuid, 
     } else {
         format!("{}\n{text}", frontmatter(id, name, kind)?)
     };
+    let updated = splat::content::formats::convert(relative, &updated)?;
     write_note(&campaign.path, relative, Some(&text), &updated)?;
     Ok(id)
 }
@@ -616,12 +614,19 @@ fn set_world_field(
     entry: &Entry,
     name: &str,
     value: Value,
-) -> Result<(), String> {
+) -> Result<Change, String> {
     let path = note_path(&campaign.path, &entry.path)?;
     let text = fs::read_to_string(&path).map_err(|e| e.to_string())?;
     Entry::parse(&entry.path, &text)?;
     let updated = fields::patch(&text, name, value)?;
-    write_note(&campaign.path, &entry.path, Some(&text), &updated).map(|_| ())
+    let updated = splat::content::formats::convert(&entry.path, &updated)?;
+    write_note(&campaign.path, &entry.path, Some(&text), &updated)?;
+    Ok(Change {
+        path: entry.path.clone(),
+        before: text,
+        after: updated,
+        word: "World value saved.".into(),
+    })
 }
 
 /// One NPC, as an encounter group of one, so a run adds them the way it adds any group.
@@ -1004,6 +1009,12 @@ impl Reader {
         if let Some(error) = &self.error {
             design::message(ui, Tone::Error, error);
         }
+        if self.converted(item)
+            && design::message_with_action(ui, Tone::Success, "Saved in the new layout.", "Undo")
+            && let Some(campaign) = campaign
+        {
+            return self.undo_change(campaign, item.entry.id);
+        }
         if !self.compact
             && (item.is_world_note() || item.entry.kind == "world")
             && item.is_private()
@@ -1278,7 +1289,11 @@ impl Reader {
         key: &str,
         value: Value,
     ) -> Option<Go> {
-        let label = if key == "in" { "In" } else { "Stat block" };
+        let label = match key {
+            "in" => "In",
+            "status" => "Status",
+            _ => "Stat block",
+        };
         let name = |value: &Value| {
             serde_yaml_ng::from_value::<EntryRef>(value.clone())
                 .ok()
@@ -1295,10 +1310,30 @@ impl Reader {
         };
         let before_name = world_field(&item.entry, key).map_or_else(|| "not set".into(), name);
         let after_name = name(&value);
+        let value = reference(&value)
+            .and_then(|r| index.position_of(&r))
+            .map(|at| {
+                let target = &index.items[at].entry;
+                if let Some(key) = &target.key {
+                    Value::String(key.clone())
+                } else {
+                    Value::String(format!(
+                        "[[{}|{}]]",
+                        target.path.trim_end_matches(".md"),
+                        target.name
+                    ))
+                }
+            })
+            .unwrap_or(value);
         let result = (|| {
             let before = fs::read_to_string(note_path(&campaign.path, &item.entry.path)?)
                 .map_err(|e| e.to_string())?;
-            let after = fields::patch(&before, key, value)?;
+            let patched = fields::patch(&before, key, value)?;
+            let after = splat::content::formats::convert_resolved(
+                &item.entry.path,
+                &patched,
+                index.items.iter().map(|item| &item.entry),
+            )?;
             write_note(&campaign.path, &item.entry.path, Some(&before), &after)?;
             Ok::<_, String>(Change {
                 path: item.entry.path.clone(),
@@ -1444,6 +1479,20 @@ impl Reader {
         }
     }
 
+    fn converted(&self, item: &Item) -> bool {
+        self.undo.as_ref().is_some_and(|change| {
+            change.path == item.entry.path
+                && Entry::parse(&change.path, &change.before)
+                    .is_ok_and(|e| e.fields.get("splat_schema").and_then(Value::as_u64) == Some(1))
+                && item
+                    .entry
+                    .fields
+                    .get("splat_schema")
+                    .and_then(Value::as_u64)
+                    == Some(2)
+        })
+    }
+
     fn relationships(
         &mut self,
         ui: &mut egui::Ui,
@@ -1460,13 +1509,14 @@ impl Reader {
             let target = if key == "in" {
                 index.place_of(item.entry.id)
             } else {
-                creature(&item.entry).and_then(|r| index.position_of(&r))
+                index.world_target(&item.entry, "creature")
             };
             let notice = self
                 .undo
                 .as_ref()
                 .filter(|change| {
-                    change.path == item.entry.path
+                    !self.converted(item)
+                        && change.path == item.entry.path
                         && change
                             .word
                             .starts_with(if key == "in" { "In:" } else { "Stat block:" })
@@ -1665,10 +1715,7 @@ impl Reader {
         if self.compact {
             ui.horizontal_wrapped(|ui| {
                 let targets = [
-                    (
-                        "Fights as",
-                        creature(&item.entry).and_then(|r| index.position_of(&r)),
-                    ),
+                    ("Fights as", index.world_target(&item.entry, "creature")),
                     ("In", index.place_of(item.entry.id)),
                 ];
                 let mut first = true;
@@ -1819,20 +1866,19 @@ impl Reader {
                             .clicked();
                     });
                     if save {
-                        match set_world_field(campaign, &item.entry, "status", wanted.into()) {
-                            Ok(()) => {
-                                self.status_editing = false;
-                                self.status_drafts.remove(&item.entry.id);
-                                return Some(Go::Reload(item.entry.id));
-                            }
-                            Err(error) => self.error = Some(error),
+                        let result = self.change(campaign, item, index, "status", wanted.into());
+                        if result.is_some() {
+                            self.status_editing = false;
+                            self.status_drafts.remove(&item.entry.id);
                         }
+                        return result;
                     }
                 }
             }
         }
         if !self.compact
             && let Some(change) = &self.undo
+            && !self.converted(item)
             && change.path == item.entry.path
             && !Self::notice_fits(ui, Self::relationship_width(ui), &change.word)
             && ui
@@ -1872,7 +1918,7 @@ impl Reader {
                 .clicked()
             {
                 self.adding = Some(Adding {
-                    stat_block: creature(&item.entry).and_then(|r| index.position_of(&r)),
+                    stat_block: index.world_target(&item.entry, "creature"),
                     save: true,
                     side: if sides.is_empty() || sides.iter().any(|side| side == "enemies") {
                         "enemies".to_owned()
@@ -1898,15 +1944,18 @@ impl Reader {
                         }
                     },
                 };
-                let saved = adding.save && creature(&item.entry).is_none();
+                let saved = adding.save && index.world_target(&item.entry, "creature").is_none();
                 if saved {
-                    let stored = serde_yaml_ng::to_value(EntryRef::id(stat_block.id))
-                        .map_err(|e| e.to_string())
-                        .and_then(|stored| {
-                            set_world_field(campaign, &item.entry, "creature", stored)
-                        });
-                    if let Err(error) = stored {
-                        self.error = Some(error);
+                    let stored = stat_block.key.clone().unwrap_or_else(|| {
+                        format!(
+                            "[[{}|{}]]",
+                            stat_block.path.trim_end_matches(".md"),
+                            stat_block.name
+                        )
+                    });
+                    match set_world_field(campaign, &item.entry, "creature", stored.into()) {
+                        Ok(change) => self.undo = Some(change),
+                        Err(error) => self.error = Some(error),
                     }
                 }
                 let group = npc_group(&item.entry, stat_block, &adding.side);

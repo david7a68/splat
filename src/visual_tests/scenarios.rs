@@ -14,6 +14,7 @@ use super::{
     steps::*,
 };
 use eframe::egui::{self, Key, Pos2, pos2};
+pub mod file_formats;
 pub mod integrity;
 pub mod world_build;
 
@@ -372,6 +373,10 @@ pub mod library_author {
         d.type_into(NEW_NAME_FIELD, NEW_NAME);
         d.click(CREATE_ENTRY);
         d.expect(NEW_NAME);
+        assert!(
+            !d.has("Saved in the new layout."),
+            "A single-file conversion notice belongs to its file"
+        );
         d.state("new-entry-created", Sizes::All);
         d.goal("create a new entry");
 

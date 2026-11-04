@@ -1025,6 +1025,53 @@ impl Catalogue {
                 });
             }
         }
+        let mut resolved = Vec::new();
+        for (id, indexed) in &result.entries {
+            if let Some(values) = indexed
+                .entry
+                .fields
+                .get("splat_requires")
+                .and_then(Value::as_sequence)
+            {
+                for (at, value) in values.iter().enumerate() {
+                    if let Some(raw) = value.as_str() {
+                        let reference = content::formats::resolve_readable(
+                            raw,
+                            result.entries.values().map(|item| &item.entry),
+                        );
+                        resolved.push((*id, at, reference));
+                    }
+                }
+            }
+        }
+        for (id, at, reference) in resolved {
+            let indexed = result.entries.get_mut(&id).unwrap();
+            match reference {
+                Ok(id) => {
+                    indexed
+                        .entry
+                        .fields
+                        .get_mut("splat_requires")
+                        .and_then(Value::as_sequence_mut)
+                        .unwrap()[at] =
+                        serde_yaml_ng::to_value(EntryRef::id(id)).map_err(|e| e.to_string())?
+                }
+                Err(message) => {
+                    let line = result
+                        .files
+                        .get(&id)
+                        .and_then(|(_, text)| {
+                            text.lines()
+                                .position(|line| line.contains("splat_requires:"))
+                        })
+                        .map_or(1, |at| at + 1);
+                    indexed
+                        .entry
+                        .flags
+                        .push(content::layout::Flag { line, message });
+                }
+            }
+        }
         Ok(result)
     }
     pub fn selectable(&self, id: Uuid) -> bool {
@@ -1569,12 +1616,34 @@ pub fn redirect_reference(text: &str, old: &Entry, new_id: Uuid) -> Result<Strin
             continue;
         }
         let mut updated = value.clone();
+        // Readable references are model leaves, never prose substitutions.
+        let redirect = |value: &mut Value| {
+            if value
+                .as_str()
+                .is_some_and(|raw| content::formats::resolve_readable(raw, [old]) == Ok(old.id))
+            {
+                *value = serde_yaml_ng::to_value(EntryRef::id(new_id)).expect("entry reference");
+            }
+        };
+        if key.as_str() == Some("splat_requires") {
+            if let Some(values) = updated.as_sequence_mut() {
+                for value in values {
+                    redirect(value);
+                }
+            }
+        } else if key.as_str() == Some("splat_world") {
+            for field in ["creature", "in"] {
+                if let Some(value) = updated.get_mut(field) {
+                    redirect(value);
+                }
+            }
+        }
         replace(&mut updated, old, new_id);
         if updated != *value {
             changes.push((key.as_str().ok_or("Invalid field name")?, Some(updated)));
         }
     }
-    let updated = patch_fields(text, &changes)?;
+    let updated = content::formats::patch_model(text, &changes)?;
     let Some((front, body)) = crate::sessions::split_note(&updated) else {
         return Ok(updated);
     };
@@ -1605,7 +1674,9 @@ pub struct CopyPlan {
 /// Copies use the same creature fields as a new note. Keep every prose block.
 pub(crate) fn creature_copy_fields(text: &str, entry: &Entry) -> Result<String, String> {
     use pulldown_cmark::{Event, Options, Parser, Tag, TagEnd};
-    if entry.kind != "creature" {
+    if entry.kind != "creature"
+        || entry.fields.get("splat_schema").and_then(Value::as_u64) == Some(2)
+    {
         return Ok(text.to_owned());
     }
     let mut heading = None;
@@ -1758,6 +1829,27 @@ fn flow_yaml(value: &Value) -> Result<String, String> {
 }
 
 impl CopyPlan {
+    fn requirements(entry: &Entry, catalogue: &Catalogue) -> Result<Vec<Reference>, String> {
+        let mut entry = entry.clone();
+        if let Some(values) = entry
+            .fields
+            .get_mut("splat_requires")
+            .and_then(Value::as_sequence_mut)
+        {
+            for value in values {
+                if let Some(raw) = value.as_str() {
+                    let id = content::formats::resolve_readable(
+                        raw,
+                        catalogue.entries.values().map(|item| &item.entry),
+                    )?;
+                    *value =
+                        serde_yaml_ng::to_value(EntryRef::id(id)).map_err(|e| e.to_string())?;
+                }
+            }
+        }
+        content::required_references(&entry)
+    }
+
     pub fn prepare(
         source: &CopySource,
         destination: &Path,
@@ -1788,7 +1880,7 @@ impl CopyPlan {
         let mut entries = BTreeMap::from([(source.entry.id, source.entry.clone())]);
         let mut queue = VecDeque::from([source.entry.clone()]);
         while let Some(entry) = queue.pop_front() {
-            for reference in content::required_references(&entry)? {
+            for reference in Self::requirements(&entry, catalogue)? {
                 let id = catalogue.resolve(&reference)?;
                 if let std::collections::btree_map::Entry::Vacant(slot) = entries.entry(id) {
                     let dependency = catalogue.entries[&id].entry.clone();
@@ -1806,7 +1898,7 @@ impl CopyPlan {
         loop {
             let before = copying.len();
             for (id, entry) in &entries {
-                if content::required_references(entry)?
+                if Self::requirements(entry, catalogue)?
                     .iter()
                     .any(|r| catalogue.resolve(r).is_ok_and(|id| copying.contains(&id)))
                 {
@@ -1904,7 +1996,7 @@ impl CopyPlan {
         let mut queue = VecDeque::from([source.entry.clone()]);
         let mut seen = BTreeSet::from([source.entry.id]);
         while let Some(entry) = queue.pop_front() {
-            for reference in content::required_references(&entry)? {
+            for reference in Self::requirements(&entry, catalogue)? {
                 let id = catalogue.resolve(&reference)?;
                 // Its own structured references follow the copy, below.
                 if id == source.entry.id {
@@ -1928,6 +2020,14 @@ impl CopyPlan {
         // A were-creature's curse makes more of this creature, and the copy's makes more of the
         // copy. Prose that only names the original keeps its words.
         let normalized = creature_copy_fields(&source.text, &source.entry)?;
+        let normalized = if let Some((generated, tail)) =
+            normalized.rsplit_once("\n<!-- splat-generated-sha256:")
+            && let Some((_, notes)) = tail.split_once(" -->\n")
+        {
+            format!("{generated}{notes}")
+        } else {
+            normalized
+        };
         let source_text = own_references_to(&normalized, &source.entry, new_id);
         let mut text = patch_fields(
             &source_text,
@@ -1935,13 +2035,7 @@ impl CopyPlan {
                 ("splat_id", Some(new_id.to_string().into())),
                 ("splat_key", None),
                 ("splat_name", Some(name.trim().into())),
-                (
-                    "splat_origin",
-                    Some(
-                        serde_yaml_ng::to_value(EntryRef::id(source.entry.id))
-                            .map_err(|e| e.to_string())?,
-                    ),
-                ),
+                ("splat_origin", Some(source.entry.id.to_string().into())),
             ],
         )?;
         // Rename only the first matching H1. Keep all other prose and citations.
@@ -1980,6 +2074,7 @@ impl CopyPlan {
                 "A note already exists at this destination. Choose another name or folder.".into(),
             );
         }
+        let text = content::formats::convert(&relative, &text)?;
         Entry::parse(&relative, &text)?;
         Ok(Self {
             root: destination.into(),
@@ -2537,6 +2632,62 @@ mod tests {
                 .unwrap();
         }
         campaign
+    }
+
+    #[test]
+    fn fmt_f1_readable_requirements_resolve_or_stay_flagged() {
+        let dir = tempfile::tempdir().unwrap();
+        let campaign = campaign(dir.path().into());
+        fs::create_dir(dir.path().join("Rules")).unwrap();
+        let target = note_text("Beacon", "rule", None);
+        let target_id = note_id(&target).unwrap();
+        fs::write(dir.path().join("Rules/Beacon.md"), target).unwrap();
+        let source = patch_fields(
+            &note_text("Rook", "rule", None),
+            &[(
+                "splat_requires",
+                Some(Value::Sequence(vec!["[[Rules/Beacon|Beacon]]".into()])),
+            )],
+        )
+        .unwrap();
+        let source = content::formats::convert("Rook.md", &source).unwrap();
+        let source_id = note_id(&source).unwrap();
+        fs::write(dir.path().join("Rook.md"), &source).unwrap();
+        let cat = Catalogue::load(&[], Some(&campaign)).unwrap();
+        assert_eq!(
+            content::required_references(&cat.entries[&source_id].entry).unwrap(),
+            [Reference::Id(target_id)]
+        );
+        assert!(cat.entries[&source_id].entry.flags.is_empty());
+        let copy_source = CopySource {
+            entry: Entry::parse("Rook.md", &source).unwrap(),
+            text: source.clone(),
+            root: Some(dir.path().into()),
+            campaign: Some(campaign.clone()),
+        };
+        let destination = tempfile::tempdir().unwrap();
+        let plan =
+            CopyPlan::prepare_sharing(&copy_source, destination.path(), "Rook copy", "", &cat)
+                .unwrap();
+        assert_eq!(plan.shared.len(), 1);
+        let copied = plan.save().unwrap();
+        let dependency = Entry::parse(
+            "Beacon.md",
+            &fs::read_to_string(destination.path().join("Beacon.md")).unwrap(),
+        )
+        .unwrap();
+        assert_eq!(
+            content::required_references(&copied).unwrap(),
+            [Reference::Id(dependency.id)]
+        );
+        fs::remove_file(dir.path().join("Rules/Beacon.md")).unwrap();
+        let cat = Catalogue::load(&[], Some(&campaign)).unwrap();
+        assert!(content::required_references(&cat.entries[&source_id].entry).is_err());
+        assert_eq!(cat.entries[&source_id].entry.flags.len(), 1);
+        assert_eq!(
+            fs::read_to_string(dir.path().join("Rook.md")).unwrap(),
+            source
+        );
     }
     fn require(entry: &mut Entry, id: Uuid) {
         entry.fields.insert(

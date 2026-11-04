@@ -7,7 +7,7 @@ use super::{
     content::{ContentNote, item_identity, spell_identity},
     rules, stable_id,
 };
-use crate::content::{Entry, Reference, patch_fields};
+use crate::content::{Entry, Reference};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::collections::{BTreeMap, BTreeSet, HashMap};
@@ -361,7 +361,12 @@ impl Manifest {
             )
         });
         let routes = serde_yaml_ng::to_value(&self.routes).map_err(|e| e.to_string())?;
-        patch_fields(&base, &[(ROUTES, Some(routes))])
+        let text = crate::content::formats::patch_model(&base, &[(ROUTES, Some(routes))])?;
+        if self.previous.is_none() {
+            crate::content::formats::convert(MANIFEST, &text)
+        } else {
+            Ok(text)
+        }
     }
 }
 pub fn package_id(campaign: Uuid) -> Uuid {
@@ -443,6 +448,27 @@ fn rewritten(
             .map_err(|e| e.to_string())?;
     let mut fields: Value = serde_json::from_str(&replace(fields)).map_err(|e| e.to_string())?;
     refresh_coverage(&mut fields)?;
+    if entry
+        .fields
+        .get("splat_schema")
+        .and_then(serde_yaml_ng::Value::as_u64)
+        == Some(2)
+        && crate::content::formats::eligible(&entry)
+    {
+        // Routing edits the model, then emits its one payload. Reusing the
+        // previous fence here would create a second source for the same facts.
+        fields["splat_schema"] = 1.into();
+        let body = replace(
+            entry
+                .body
+                .split("\n## Splat data")
+                .next()
+                .unwrap_or(&entry.body)
+                .to_owned(),
+        );
+        let legacy = rules::rendered(fields, &body)?;
+        return crate::content::formats::convert(relative_path, &legacy);
+    }
     rules::rendered(fields, &replace(entry.body))
 }
 fn refresh_coverage(fields: &mut Value) -> Result<(), String> {
@@ -606,6 +632,9 @@ fn package_write(
     note: Option<&Entry>,
     ids: &[String],
 ) -> Result<Option<SharedWrite>, String> {
+    if fs::metadata(path).is_ok_and(|meta| meta.permissions().readonly()) {
+        return Err("This package file is read only.".into());
+    }
     let previous = fs::read_to_string(path).map_err(|e| e.to_string())?;
     let target = Entry::parse(&path.to_string_lossy(), &previous)?;
     let mut merged = serde_json::to_value(&target.fields).map_err(|e| e.to_string())?;
@@ -662,7 +691,7 @@ fn package_write(
                 .map_err(|e| e.to_string())
         })
         .collect::<Result<Vec<_>, _>>()?;
-    let text = patch_fields(&previous, &changes)?;
+    let text = crate::content::formats::patch_model(&previous, &changes)?;
     Entry::parse(&path.to_string_lossy(), &text).map_err(|e| format!("{}: {e}", target.name))?;
     Ok(Some(SharedWrite {
         path: path.to_owned(),
@@ -1131,6 +1160,51 @@ pub(super) fn replace(path: &Path, previous: Option<&str>, text: &str) -> Result
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn fmt_f1_import_routes_stay_in_the_end_fence_when_refreshed() {
+        let root = tempfile::tempdir().unwrap();
+        let mut manifest = super::Manifest::read(root.path()).unwrap();
+        let owner = uuid::Uuid::new_v4();
+        let text = manifest.text(owner).unwrap();
+        assert!(text.contains("splat_schema: 2"));
+        assert!(text.contains("<!-- splat:yaml path=splat_import_routes -->"));
+        let path = root.path().join(super::MANIFEST);
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(&path, format!("{text}\n%% Keep %%\n")).unwrap();
+        manifest = super::Manifest::read(root.path()).unwrap();
+        manifest.routes.insert(
+            "test".into(),
+            super::Route {
+                name: "Test".into(),
+                kind: "rule".into(),
+                id: uuid::Uuid::new_v4(),
+                package: None,
+                sources: vec![],
+                link: None,
+            },
+        );
+        let after = manifest.text(owner).unwrap();
+        assert_eq!(
+            after
+                .matches("<!-- splat:yaml path=splat_import_routes -->")
+                .count(),
+            1
+        );
+        assert!(after.ends_with("%% Keep %%\n"));
+        assert!(
+            !after
+                .split("\n---\n")
+                .next()
+                .unwrap()
+                .contains("splat_import_routes:")
+        );
+        std::fs::write(path, after).unwrap();
+        assert_eq!(
+            super::Manifest::read(root.path()).unwrap().routes,
+            manifest.routes
+        );
+    }
+
     use super::super::tests::sample;
     use super::*;
 
