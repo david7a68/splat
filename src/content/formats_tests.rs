@@ -933,8 +933,10 @@ fn fmt_f3_campaign_toggle_ignores_unrelated_tasks_and_rule_edit_is_one_cell() {
     assert_eq!(
         edited,
         new.replace(
-            &format!("{id} %% splat rule=dnd2024:rules/combat_initiative id={id}"),
-            &format!("{other} %% splat rule=dnd2024:rules/combat_initiative id={other}")
+            &format!("Campaign initiative %% splat rule=dnd2024:rules/combat_initiative id={id}"),
+            &format!(
+                "Campaign initiative %% splat rule=dnd2024:rules/combat_initiative id={other}"
+            )
         )
     );
 }
