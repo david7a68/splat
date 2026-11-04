@@ -173,6 +173,8 @@ opens a modal with each file's before and after text, the counts by kind in word
 and files skipped. Its wide source panes use about 60% of the window height. Source lines do not wrap;
 the two panes scroll together. Changed lines are
 marked, both sides scroll together, and it opens at the first difference.
+Encounter and group conflict comparisons use the disk's layout. The draft includes
+outside properties and prose that Overwrite keeps. Conversion follows the choice.
 It is blocked while a run is open. Malformed flat properties stay in the
 file; the reader shows a warning with the line number and keeps the note available. Timeline version 2 uses event lists and day IDs in comments below the headings.
 Campaign packages use tasks; a toggle changes one character. Rule choices, group members,

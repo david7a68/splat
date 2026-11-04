@@ -217,6 +217,9 @@ impl GroupDraft {
         )?;
         Ok(text)
     }
+    fn comparison_text(&self, snapshot: &Snapshot) -> Result<String, String> {
+        super::disk::comparison_text(&self.path, self.text()?, snapshot)
+    }
     fn write_text(&self, snapshot: &Snapshot) -> Result<String, String> {
         splat::content::formats::convert_resolved(
             &self.path,
@@ -469,7 +472,7 @@ impl GroupDraft {
         root: &std::path::Path,
         snapshot: &Snapshot,
     ) -> Result<Option<bool>, String> {
-        let choice = self.recovery.show(ui, &self.write_text(snapshot)?);
+        let choice = self.recovery.show(ui, &self.comparison_text(snapshot)?);
         if let Some(keep) = choice {
             if keep {
                 if let Some(change) = self.recovery.accept() {
@@ -809,7 +812,7 @@ impl Encounters {
         }
         if let Some(keep) = draft
             .recovery
-            .show(ui, &draft.write_text(snapshot).unwrap_or_default())
+            .show(ui, &draft.comparison_text(snapshot).unwrap_or_default())
         {
             if keep {
                 if let Some(change) = draft.recovery.accept() {
@@ -3257,7 +3260,8 @@ mod tests {
     }
 
     #[test]
-    fn i19_p1_group_comparison_matches_overwrite() {
+    fn i19_e_group_comparison_matches_disk_layout_and_overwrite() {
+        use egui_kittest::kittest::Queryable;
         for schema in [1, 2] {
             let dir = tempfile::tempdir().unwrap();
             let campaign = campaign(dir.path());
@@ -3280,16 +3284,69 @@ mod tests {
             fs::write(&path, &external).unwrap();
             group.name = "Dawn scouts".into();
             assert!(group.save(&campaign, &[]).is_err());
-            let comparison = group
-                .write_text(&Snapshot::load(&campaign, &[]).unwrap())
+            let snapshot = Snapshot::load(&campaign, &[]).unwrap();
+            let mut harness = egui_kittest::Harness::new(|ctx| {
+                egui::CentralPanel::default().show(ctx, |ui| {
+                    assert_eq!(group.disk_choice(ui, dir.path(), &snapshot).unwrap(), None);
+                });
+            });
+            harness.run_steps(2);
+            harness.get_by_label("1 line differs");
+            drop(harness);
+            let editor = Encounters {
+                group_draft: Some(group),
+                snapshot: Some(Snapshot::load(&campaign, &[]).unwrap()),
+                ..Default::default()
+            };
+            let mut harness = egui_kittest::Harness::builder().build_state(
+                |ctx, editor: &mut Encounters| {
+                    egui::CentralPanel::default().show(ctx, |ui| {
+                        if !editor.group_disk_view(ui, &campaign, &[]) {
+                            editor.layout_notice(ui, &campaign, &[]);
+                        }
+                    });
+                },
+                editor,
+            );
+            harness.run_steps(2);
+            harness.get_by_label("1 line differs");
+            let comparison = harness
+                .state()
+                .group_draft
+                .as_ref()
+                .unwrap()
+                .comparison_text(&snapshot)
                 .unwrap();
+            assert_eq!(
+                comparison,
+                external.replace("splat_name: Scouts", "splat_name: Dawn scouts")
+            );
+            let overwrite = splat::content::formats::convert_resolved(
+                &harness.state().group_draft.as_ref().unwrap().path,
+                &comparison,
+                snapshot
+                    .catalogue
+                    .entries
+                    .values()
+                    .map(|entry| &entry.entry),
+            )
+            .unwrap();
+            if schema == 2 {
+                assert_eq!(comparison, overwrite, "schema 2 keeps the current layout");
+            }
             assert!(comparison.contains("tags: [dawn]"));
             assert!(comparison.contains("DM's outside account."));
-            let change = group.recovery.accept().unwrap();
-            group.source = change.text.clone().unwrap();
-            group.baseline = change.text;
-            group.save(&campaign, &[]).unwrap();
-            assert_eq!(fs::read_to_string(path).unwrap(), comparison);
+            harness.get_by_label("Overwrite with my draft").click();
+            harness.run_steps(2);
+            assert_eq!(harness.state().error, None);
+            assert_eq!(fs::read_to_string(&path).unwrap(), overwrite);
+            if schema == 1 {
+                harness.get_by_label("Undo save");
+                assert!(harness.query_by_label("Undo").is_none());
+                harness.get_by_label("Undo save").click();
+                harness.run_steps(2);
+                assert_eq!(fs::read_to_string(&path).unwrap(), external);
+            }
         }
     }
 

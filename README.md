@@ -824,6 +824,8 @@ After **Unregister**, Library offers **Undo unregister**. Campaign keeps the las
 Splat reads both layouts. A DM save converts an old file once, with an Undo action.
 Library and Campaign also offer **Convert files…** with a comparison before saving.
 A run never converts `Timeline.md`.
+Encounter and group disk comparisons use the file's current layout. Overwrite then
+converts the saved file and keeps the outside tags and prose shown in the draft.
 
 - Timeline version 2 keeps days and events in the body. Day IDs sit in `%% splat id=… %%`
   below the heading. Event IDs stay at the end of the list item.

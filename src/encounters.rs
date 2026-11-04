@@ -291,6 +291,9 @@ impl Draft {
         )?;
         Ok(text)
     }
+    fn comparison_text(&self, snapshot: &Snapshot) -> Result<String, String> {
+        disk::comparison_text(&self.path, self.text()?, snapshot)
+    }
     fn write_text(&self, snapshot: &Snapshot) -> Result<String, String> {
         splat::content::formats::convert_resolved(
             &self.path,
@@ -4906,7 +4909,8 @@ mod tests {
     }
 
     #[test]
-    fn i19_p1_encounter_comparison_matches_overwrite() {
+    fn i19_e_encounter_comparison_matches_disk_layout_and_overwrite() {
+        use egui_kittest::kittest::Queryable;
         for schema in [1, 2] {
             let dir = tempfile::tempdir().unwrap();
             let campaign = campaign(dir.path());
@@ -4928,16 +4932,61 @@ mod tests {
             fs::write(&path, &external).unwrap();
             draft.name = "Dawn".into();
             assert!(draft.save(&campaign, &[]).is_err());
-            let comparison = draft
-                .write_text(&Snapshot::load(&campaign, &[]).unwrap())
+            let snapshot = Snapshot::load(&campaign, &[]).unwrap();
+            let editor = Encounters {
+                draft: Some(draft),
+                snapshot: Some(Snapshot::load(&campaign, &[]).unwrap()),
+                ..Default::default()
+            };
+            let mut harness = egui_kittest::Harness::builder().build_state(
+                |ctx, editor: &mut Encounters| {
+                    egui::CentralPanel::default().show(ctx, |ui| {
+                        if !editor.encounter_disk_view(ui, &campaign, &[]) {
+                            editor.layout_notice(ui, &campaign, &[]);
+                        }
+                    });
+                },
+                editor,
+            );
+            harness.run_steps(2);
+            harness.get_by_label("1 line differs");
+            let comparison = harness
+                .state()
+                .draft
+                .as_ref()
+                .unwrap()
+                .comparison_text(&snapshot)
                 .unwrap();
+            assert_eq!(
+                comparison,
+                external.replace("splat_name: New encounter", "splat_name: Dawn")
+            );
+            let overwrite = splat::content::formats::convert_resolved(
+                &harness.state().draft.as_ref().unwrap().path,
+                &comparison,
+                snapshot
+                    .catalogue
+                    .entries
+                    .values()
+                    .map(|entry| &entry.entry),
+            )
+            .unwrap();
+            if schema == 2 {
+                assert_eq!(comparison, overwrite, "schema 2 keeps the current layout");
+            }
             assert!(comparison.contains("tags: [dawn]"));
             assert!(comparison.contains("DM's outside account."));
-            let change = draft.recovery.accept().unwrap();
-            draft.source = change.text.clone().unwrap();
-            draft.baseline = change.text;
-            draft.save(&campaign, &[]).unwrap();
-            assert_eq!(fs::read_to_string(path).unwrap(), comparison);
+            harness.get_by_label("Overwrite with my draft").click();
+            harness.run_steps(2);
+            assert_eq!(harness.state().error, None);
+            assert_eq!(fs::read_to_string(&path).unwrap(), overwrite);
+            if schema == 1 {
+                harness.get_by_label("Undo save");
+                assert!(harness.query_by_label("Undo").is_none());
+                harness.get_by_label("Undo save").click();
+                harness.run_steps(2);
+                assert_eq!(fs::read_to_string(&path).unwrap(), external);
+            }
         }
     }
 
