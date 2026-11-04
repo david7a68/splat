@@ -59,6 +59,16 @@ pub mod library_browse {
 
     pub fn run(d: &mut Driver<'_>) {
         d.expect(ENTRY_COUNT);
+        d.observe_both(
+            "i20 C4 header space",
+            "Without notices, the message and columns keep their audit-18 tops",
+            |d| {
+                d.place_of("Add campaign")
+                    .is_some_and(|rect| (rect.top() - 67.0).abs() < 1.0)
+                    && d.place_of("What the Library shows: Everything")
+                        .is_some_and(|rect| (rect.top() - 105.0).abs() < 1.0)
+            },
+        );
         d.state("first-launch", Sizes::AllAndHiDpi);
         d.check_tab_order("library, first launch");
         d.begin_task();
@@ -263,7 +273,24 @@ pub mod library_author {
         d.state("saved-with-ctrl-s", Sizes::All);
         d.goal("save with the keyboard");
 
+        let on_disk = d.root.join(NOTE_FILE);
+        d.click("Undo save");
+        d.expect(UNSAVED_NOTE);
+        assert!(d.editor_text().unwrap().contains(DRAFT_WORDS));
+        assert!(
+            !std::fs::read_to_string(&on_disk)
+                .unwrap()
+                .contains(DRAFT_WORDS)
+        );
+        d.state("undo-save-keeps-unsaved-draft", Sizes::All);
+        d.click(DISCARD);
+        d.expect(UNDO_DISCARD);
+        d.click(UNDO_DISCARD);
+        assert!(d.editor_text().unwrap().contains(DRAFT_WORDS));
+        d.click(SAVE);
+
         // External change: the draft stays, and each way out is a control that works.
+        d.begin_task();
         d.type_into_editor(SECOND_WORDS);
         let on_disk = d.root.join(NOTE_FILE);
         let edited =

@@ -176,6 +176,8 @@ Library shows the old-layout file count in its header and Packages menu.
 
 A save after a change in Splat converts supported old notes. Its message stays beside
 the action with one named Undo, which restores the whole change and the old layout.
+In Library, Undo save keeps the typed text as an unsaved draft. Save writes it again;
+Discard drops it, with Undo discard.
 Reading and polling do not convert files. Convert files has its own **Undo convert**.
 Convert files is unavailable during a run and skips read-only files.
 Its wide preview groups files by owner. Source lines do not wrap, and the two panes

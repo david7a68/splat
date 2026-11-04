@@ -83,6 +83,15 @@ pub(crate) fn category(entry: &Entry) -> &str {
         .unwrap_or_else(|| entry.category())
 }
 
+pub(super) fn book_case(value: &str) -> String {
+    value
+        .replace('_', " ")
+        .split_whitespace()
+        .map(crate::design::reader::human_label)
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
 /// A list's second line. Everyday words and existing facts only: never schema terms.
 pub(crate) fn subtitle(entry: &Entry) -> String {
     if entry.kind == "package" {
@@ -95,7 +104,16 @@ pub(crate) fn subtitle(entry: &Entry) -> String {
             status => format!("{kind} · {status}"),
         };
     }
-    let category = category(entry).replace('_', " ");
+    let category = if entry
+        .fields
+        .get("splat_item")
+        .and_then(|item| item.get("rarity"))
+        .is_some()
+    {
+        "magic item".into()
+    } else {
+        category(entry).replace('_', " ")
+    };
     let mut category = {
         let mut letters = category.chars();
         letters.next().map_or_else(String::new, |first| {
@@ -112,11 +130,20 @@ pub(crate) fn subtitle(entry: &Entry) -> String {
         .and_then(|meta| meta.get("parent_name"))
         .and_then(|value| value.as_str());
     // Only a real parent. A file's name is not a word for a reader.
-    match parent {
+    let line = match parent {
         Some(parent) if !parent.eq_ignore_ascii_case(&entry.name) => {
             format!("{category} · {parent}")
         }
         _ => category,
+    };
+    if ["creature", "spell", "item"].contains(&entry.kind.as_str()) && !entry.flags.is_empty() {
+        format!(
+            "{} {} · {line}",
+            design::icons::WARN,
+            design::count(entry.flags.len(), "flagged value", "flagged values")
+        )
+    } else {
+        line
     }
 }
 
@@ -194,7 +221,7 @@ fn list_fact(entry: &Entry) -> Option<String> {
         };
     }
     let rarity = entry.fields.get("splat_item")?.get("rarity")?.as_str()?;
-    Some(rarity.replace('_', " "))
+    Some(book_case(rarity))
 }
 
 /// Class scope already owns the feature's class and required level.

@@ -264,10 +264,21 @@ struct Loaded {
 }
 impl Loaded {
     fn old_layout_count(&self) -> usize {
+        let generated: std::collections::HashSet<_> = self
+            .owners
+            .iter()
+            .filter_map(|owner| {
+                let Owner::Package(module) = owner else {
+                    return None;
+                };
+                crate::content_workspace::generated_package(&module.path).then_some(module.id)
+            })
+            .collect();
         self.notes
             .iter()
             .filter(|note| {
                 note.owner.editable()
+                    && !note.owner.id().is_some_and(|id| generated.contains(&id))
                     && note.entry.as_ref().is_some_and(|entry| {
                         content::formats::eligible(entry)
                             && content::formats::schema(&entry.fields) == Ok(1)
@@ -429,6 +440,10 @@ impl Loaded {
             .filter(|note| note.owner != Owner::Builtin)
         {
             if let Some(entry) = &note.entry {
+                for flag in &entry.flags {
+                    self.diagnostics
+                        .push(format!("{}: {}", note.path, flag.message));
+                }
                 let faults = crate::roll_table::fault_count(&entry.body);
                 if faults > 0 {
                     self.diagnostics.push(format!(
@@ -748,7 +763,7 @@ pub(crate) fn note_text(name: &str, kind: &str, namespace: Option<&str>) -> Stri
         fields.insert(
             "splat_creature".into(),
             serde_yaml_ng::from_str::<serde_yaml_ng::Value>(
-                "size: medium\ntype: humanoid\nalignment: Neutral\ncr_text: '1 (XP 200; PB +2)'\n",
+                "size: medium\ntype: humanoid\nalignment: Neutral\nmovement_text: 30 ft.\ncr_text: '1 (XP 200; PB +2)'\n",
             )
             .expect("creature identity"),
         );
@@ -1936,7 +1951,7 @@ impl Library {
         design::page_header(
             ui,
             "Library",
-            (total > 0)
+            (total > 0 && ui.available_width() >= design::READER_MEASURE)
                 .then(|| design::count(total, "entry", "entries"))
                 .as_deref(),
             |ui| {
@@ -1962,14 +1977,6 @@ impl Library {
                             reload = true;
                             ui.close();
                         }
-                        let old = self.loaded.as_ref().map_or(0, Loaded::old_layout_count);
-                        if old > 0 {
-                            ui.label(design::count(
-                                old,
-                                "file uses the old layout",
-                                "files use the old layout",
-                            ));
-                        }
                         if Action::quiet("Convert files…")
                             .blocked(
                                 locked.or(self
@@ -1992,67 +1999,73 @@ impl Library {
                         }
                     });
                 });
-            },
-        );
-        ui.horizontal_wrapped(|ui| {
-            if let Some(loaded) = &self.loaded {
-                let old = loaded.old_layout_count();
-                if old > 0
-                    && design::status_link(
+                if let Some(loaded) = &self.loaded {
+                    let old = loaded.old_layout_count();
+                    if old > 0
+                        && design::locked(
+                            ui,
+                            locked.or(self
+                                .run_open
+                                .then_some("Close the run before converting files.")),
+                            |ui| {
+                                design::status_link(
+                                    ui,
+                                    Status {
+                                        icon: icons::INFO,
+                                        word: &design::count(
+                                            old,
+                                            "file uses the old layout",
+                                            "files use the old layout",
+                                        ),
+                                        color: colors().muted,
+                                    },
+                                )
+                            },
+                        )
+                        .clicked()
+                    {
+                        self.layouts.scan(campaigns);
+                    }
+                }
+                if let Some(loaded) = &self.loaded
+                    && !loaded.diagnostics.is_empty()
+                {
+                    let word = design::count(
+                        loaded
+                            .diagnostics
+                            .iter()
+                            .map(|message| message.split(": ").next().unwrap_or(message))
+                            .collect::<std::collections::HashSet<_>>()
+                            .len(),
+                        "file needs fixing",
+                        "files need fixing",
+                    );
+                    let response = design::status_link(
                         ui,
                         Status {
-                            icon: icons::INFO,
-                            word: &design::count(
-                                old,
-                                "file uses the old layout",
-                                "files use the old layout",
-                            ),
-                            color: colors().muted,
+                            icon: icons::WARN,
+                            word: &word,
+                            color: colors().result.warning,
                         },
-                    )
-                    .clicked()
-                {
-                    self.layouts.scan(campaigns);
+                    );
+                    egui::Popup::menu(&response).show(|ui| {
+                        ui.set_max_width(design::READER_MEASURE);
+                        egui::ScrollArea::vertical()
+                            .max_height(design::XXL * 6.0)
+                            .show(ui, |ui| {
+                                for message in &loaded.diagnostics {
+                                    ui.add(
+                                        egui::Label::new(
+                                            Type::Small.rich(ui, message).color(colors().muted),
+                                        )
+                                        .wrap(),
+                                    );
+                                }
+                            });
+                    });
                 }
-            }
-            if let Some(loaded) = &self.loaded
-                && !loaded.diagnostics.is_empty()
-            {
-                let word = design::count(
-                    loaded
-                        .diagnostics
-                        .iter()
-                        .map(|message| message.split(": ").next().unwrap_or(message))
-                        .collect::<std::collections::HashSet<_>>()
-                        .len(),
-                    "file needs fixing",
-                    "files need fixing",
-                );
-                let response = design::status_link(
-                    ui,
-                    Status {
-                        icon: icons::WARN,
-                        word: &word,
-                        color: colors().result.warning,
-                    },
-                );
-                egui::Popup::menu(&response).show(|ui| {
-                    ui.set_max_width(design::READER_MEASURE);
-                    egui::ScrollArea::vertical()
-                        .max_height(design::XXL * 6.0)
-                        .show(ui, |ui| {
-                            for message in &loaded.diagnostics {
-                                ui.add(
-                                    egui::Label::new(
-                                        Type::Small.rich(ui, message).color(colors().muted),
-                                    )
-                                    .wrap(),
-                                );
-                            }
-                        });
-                });
-            }
-        });
+            },
+        );
         if new_entry {
             self.new_form = true;
             self.new_folder = kind_folder(&self.new_kind).into();
@@ -2071,9 +2084,10 @@ impl Library {
         {
             self.layouts.clear();
         }
-        if self
-            .layouts
-            .show_conversion(ui, convert_blocked.as_deref(), file.as_deref())
+        if self.pending.is_none()
+            && self
+                .layouts
+                .show_conversion(ui, convert_blocked.as_deref(), file.as_deref())
         {
             self.stale = true;
             self.content_changed = campaigns.active_campaign().map(|c| c.path.clone());
@@ -4411,9 +4425,7 @@ impl Library {
                     .show(ui)
                     .clicked();
                     ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
-                        if !conversion_notice
-                            && design::save_row_state(ui, state, dirty && !conflict, None)
-                        {
+                        if design::save_row_state(ui, state, dirty && !conflict, None) {
                             self.layouts.clear();
                             self.discarded =
                                 Some((note.owner.id(), note.path.clone(), self.draft.clone()));
@@ -4448,7 +4460,23 @@ impl Library {
                 );
                 let ui = &mut slot_ui;
                 if conversion_notice {
-                    undo_save = self.layouts.show_saved(ui, notice_path.as_deref());
+                    let name = notice_path
+                        .as_deref()
+                        .and_then(Path::file_name)
+                        .unwrap_or_default()
+                        .to_string_lossy();
+                    ui.label(Type::Small.rich(ui, format!("{name} saved in the new layout.")));
+                    if Action::quiet("Undo save")
+                        .icon(icons::UNDO)
+                        .density(Density::Read)
+                        .show(ui)
+                        .clicked()
+                    {
+                        match self.layouts.undo() {
+                            Ok(()) => undo_save = true,
+                            Err(error) => self.error = Some(error),
+                        }
+                    }
                 } else if discard_is_for(self.discarded.as_ref(), note) && self.draft == note.text {
                     ui.label(Type::Small.rich(ui, format!("{} draft discarded.", note.name())));
                     if Action::quiet("Undo discard")
@@ -4910,10 +4938,10 @@ impl Library {
                 self.content_changed = Some(root.to_path_buf());
                 if let Ok(text) = fs::read_to_string(root.join(&note.path)) {
                     note.entry = Entry::parse(&note.path, &text).ok();
-                    self.draft.clone_from(&text);
                     note.text = text;
                     self.just_saved = false;
                     self.loaded.as_mut().unwrap().invalidate();
+                    self.loaded.as_mut().unwrap().refresh_diagnostics();
                 }
             }
         }
@@ -5047,6 +5075,221 @@ mod tests {
         loaded.invalidate();
         check(&loaded);
         assert!(loaded.duplicate_ids().is_empty());
+    }
+
+    #[test]
+    fn i20_c1_stat_flags_reach_list_subtitles_and_header_count() {
+        let dir = tempfile::tempdir().unwrap();
+        let module = create_module(&dir.path().join("book"), "Book", "book").unwrap();
+        for (name, kind, table) in [
+            (
+                "Wolf",
+                "creature",
+                "## Stat block\n\n| Stat | Value |\n| --- | --- |\n| Hit Points | about twenty |\n",
+            ),
+            (
+                "Spark",
+                "spell",
+                "## Spell\n\n| Field | Value |\n| --- | --- |\n| Level | many |\n",
+            ),
+        ] {
+            fs::write(module.path.join(format!("{name}.md")), format!(
+                "---\nsplat_schema: 2\nsplat_id: {}\nsplat_kind: {kind}\nsplat_name: {name}\n---\n\n{table}", Uuid::new_v4()
+            )).unwrap();
+        }
+        let mut loaded = load(Some(&module)).unwrap();
+        loaded.refresh_diagnostics();
+        for name in ["Wolf", "Spark"] {
+            let at = loaded
+                .notes
+                .iter()
+                .position(|note| note.name() == name)
+                .unwrap();
+            assert!(loaded.subtitles()[at].contains("1 flagged value"));
+        }
+        let mut library = Library {
+            loaded: Some(loaded),
+            ..Default::default()
+        };
+        let ctx = egui::Context::default();
+        let output = ctx.run(
+            egui::RawInput {
+                screen_rect: Some(egui::Rect::from_min_size(
+                    egui::Pos2::ZERO,
+                    egui::vec2(1200.0, 800.0),
+                )),
+                ..Default::default()
+            },
+            |ctx| {
+                egui::CentralPanel::default()
+                    .show(ctx, |ui| library.show(ui, &mut Campaigns::default()));
+            },
+        );
+        assert!(output.shapes.iter().any(|shape| matches!(&shape.shape, egui::Shape::Text(text) if text.galley.job.text.contains("2 files need fixing"))));
+        let diagnostics = &library.loaded.as_ref().unwrap().diagnostics;
+        assert!(
+            diagnostics
+                .iter()
+                .any(|s| s.contains("Wolf.md: Hit Points \"about twenty\" not read"))
+        );
+        assert!(
+            diagnostics
+                .iter()
+                .any(|s| s.contains("Spark.md: Level \"many\" not read"))
+        );
+    }
+
+    #[test]
+    fn i20_u3_generated_files_do_not_add_to_layout_count() {
+        let dir = tempfile::tempdir().unwrap();
+        let module = create_module(&dir.path().join("book"), "Book", "book").unwrap();
+        fs::write(
+            module.path.join("Wolf.md"),
+            format!("---\nsplat_schema: 1\nsplat_id: {}\nsplat_kind: creature\nsplat_name: Wolf\nsplat_creature: {{size: medium, type: beast}}\n---\n", Uuid::new_v4()),
+        )
+        .unwrap();
+        let manifest = module.path.join("Package.md");
+        fs::rename(module.path.join("Module.md"), &manifest).unwrap();
+        let text = fs::read_to_string(&manifest).unwrap();
+        fs::write(
+            &manifest,
+            content::patch_fields(&text, &[("splat_generated", Some(true.into()))]).unwrap(),
+        )
+        .unwrap();
+        let loaded = load_all(std::slice::from_ref(&module), None).unwrap();
+        assert_eq!(loaded.old_layout_count(), 0);
+        fs::write(manifest, text).unwrap();
+        assert!(loaded.old_layout_count() > 0);
+    }
+
+    #[test]
+    fn i20_w8_moved_save_notice_survives_catalogue_reload_and_undo_targets_new_path() {
+        let dir = tempfile::tempdir().unwrap();
+        let module = create_module(&dir.path().join("book"), "Book", "book").unwrap();
+        let before = format!(
+            "---\nsplat_schema: 1\nsplat_id: {}\nsplat_kind: rule\nsplat_name: Ruling\nsplat_rule: {{}}\n---\n\nOld ruling.\n",
+            Uuid::new_v4()
+        );
+        let old = module.path.join("Ruling.md");
+        let moved = module.path.join("Moved.md");
+        fs::write(&old, &before).unwrap();
+        let mut campaigns = Campaigns::at(dir.path().join("settings.json"));
+        campaigns.register_module(module.clone()).unwrap();
+        let loaded = load_all(std::slice::from_ref(&module), None).unwrap();
+        let selected = loaded
+            .notes
+            .iter()
+            .position(|n| n.path == "Ruling.md")
+            .unwrap();
+        let mut library = Library {
+            loaded: Some(loaded),
+            selected: Some(selected),
+            draft: format!("{before}My moved draft.\n"),
+            ..Default::default()
+        };
+        fs::rename(&old, &moved).unwrap();
+        library.save_selected(true);
+        assert!(library.error.is_none(), "{:?}", library.error);
+        assert!(library.layouts.current(Some(&moved)));
+        // Hold the reload at the same boundary as the background loader.
+        let (tx, rx) = mpsc::channel();
+        library.pending = Some(rx);
+        library.load_key = Some(load_key(&campaigns));
+        library.loaded = None;
+        library.selected = None;
+        library.reselect = Some((Some(module.id), "Moved.md".into()));
+        library.stale = false;
+        let ctx = egui::Context::default();
+        let mut frame = || {
+            ctx.run(Default::default(), |ctx| {
+                egui::CentralPanel::default().show(ctx, |ui| library.show(ui, &mut campaigns));
+            })
+        };
+        frame();
+        tx.send(load_all(std::slice::from_ref(&module), None))
+            .unwrap();
+        frame();
+        assert!(library.layouts.current(Some(&moved)));
+        library.layouts.undo().unwrap();
+        assert_eq!(fs::read(&moved).unwrap(), before.as_bytes());
+        assert!(!old.exists());
+    }
+
+    #[test]
+    fn i20_c2_undo_save_keeps_typed_text_as_unsaved_draft() {
+        let dir = tempfile::tempdir().unwrap();
+        let module = create_module(&dir.path().join("book"), "Book", "book").unwrap();
+        let before = format!(
+            "---\nsplat_schema: 1\nsplat_id: {}\nsplat_kind: rule\nsplat_name: Ruling\nsplat_rule: {{}}\n---\n\nOld ruling.\n",
+            Uuid::new_v4()
+        );
+        let path = module.path.join("Ruling.md");
+        fs::write(&path, &before).unwrap();
+        let loaded = load(Some(&module)).unwrap();
+        let selected = loaded
+            .notes
+            .iter()
+            .position(|n| n.path == "Ruling.md")
+            .unwrap();
+        let mut library = Library {
+            loaded: Some(loaded),
+            selected: Some(selected),
+            source: true,
+            draft: format!("{before}Rangers of the ash line are exempt.\n"),
+            ..Default::default()
+        };
+        library.save_selected(false);
+        assert!(library.error.is_none(), "{:?}", library.error);
+        let typed = library.draft.clone();
+        let ctx = egui::Context::default();
+        let mut frame = |events| {
+            ctx.run(
+                egui::RawInput {
+                    screen_rect: Some(egui::Rect::from_min_size(
+                        egui::Pos2::ZERO,
+                        egui::vec2(960.0, 640.0),
+                    )),
+                    events,
+                    ..Default::default()
+                },
+                |ctx| {
+                    egui::CentralPanel::default().show(ctx, |ui| {
+                        library.editor(ui, "Rule · Book", &Campaigns::default());
+                    });
+                },
+            )
+        };
+        frame(vec![]);
+        let output = frame(vec![]);
+        let label = output
+            .shapes
+            .iter()
+            .find_map(|shape| match &shape.shape {
+                egui::Shape::Text(text) if text.galley.job.text == "Undo save" => Some(text),
+                _ => None,
+            })
+            .expect("Undo save is visible");
+        let pos = label.pos + label.galley.size() * 0.5;
+        for pressed in [true, false] {
+            frame(vec![
+                egui::Event::PointerMoved(pos),
+                egui::Event::PointerButton {
+                    pos,
+                    button: egui::PointerButton::Primary,
+                    pressed,
+                    modifiers: Default::default(),
+                },
+            ]);
+        }
+        assert_eq!(fs::read(&path).unwrap(), before.as_bytes());
+        assert_eq!(library.draft, typed);
+        assert!(library.dirty());
+        library.save_selected(false);
+        assert!(
+            fs::read_to_string(path)
+                .unwrap()
+                .contains("Rangers of the ash line are exempt.")
+        );
     }
 
     #[test]

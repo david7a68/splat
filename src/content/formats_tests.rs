@@ -577,7 +577,7 @@ fn fmt_f2_malformed_cells_stay_first_alias_wins_and_old_yaml_is_ignored() {
     );
     assert!(entry.fields["splat_stats"].get("save_dexterity").is_none());
     for words in [
-        "Hit Points \"about twenty\" needs a number first",
+        "Hit Points \"about twenty\" not read",
         "Duplicate Hit Points",
         "Save needs",
         "Old data ignored",
@@ -593,7 +593,7 @@ fn fmt_f2_malformed_cells_stay_first_alias_wins_and_old_yaml_is_ignored() {
             entry
                 .flags
                 .iter()
-                .find(|f| f.message.contains("Hit Points \"about twenty\" needs"))
+                .find(|f| f.message.contains("Hit Points \"about twenty\" not read"))
                 .unwrap()
                 .line
                 - 1
@@ -1505,4 +1505,79 @@ fn i19_x9_saved_links_use_catalogue_names_and_keep_custom_aliases() {
         formats::convert_resolved("Campaign.md", &campaign, [&target]).unwrap(),
         campaign.replace("[goblin warrior]", "[Goblin Warrior]")
     );
+}
+
+#[test]
+fn i20_x25_plain_vitals_need_no_prose_presence_hints() {
+    let old = note(
+        "creature",
+        "splat_creature: {size: medium, type: beast}\nsplat_stats: {armor_class: {value: 13}, max_hp: {value: 22}, speed: {value: 40, unit: ft}}",
+        "# Rook\n",
+    );
+    let new = formats::convert("Rook.md", &old).unwrap();
+    for path in [
+        "splat_creature/armor_class_text",
+        "splat_creature/hit_points_text",
+        "splat_creature/movement_text",
+    ] {
+        assert!(!new.contains(path), "{new}");
+    }
+    assert_eq!(model(&old), model(&new));
+    assert!(new.contains("| Speed | 40 |"));
+    let formula = new.replace("| Hit Points | 22 |", "| Hit Points | 22 (4d8 + 4) |");
+    assert_eq!(
+        model(&formula)["splat_creature"]["hit_points_text"],
+        Value::from("22 (4d8 + 4)")
+    );
+    let conflict = old.replace("type: beast", "type: beast, hit_points_text: '30'");
+    assert_eq!(
+        model(&conflict)["splat_creature"]["hit_points_text"],
+        Value::from("30")
+    );
+    assert!(
+        formats::convert("Rook.md", &conflict).is_err(),
+        "A conflicting legacy value needs review"
+    );
+}
+
+#[test]
+fn i20_x26_all_machine_fences_are_folded_and_empty_defaults_are_omitted() {
+    for (kind, fields) in [
+        (
+            "creature",
+            "splat_creature: {size: medium, type: beast}\nsplat_rule: {parameters: {a: b}}",
+        ),
+        ("rule", "splat_rule: {parameters: {a: b}}"),
+        ("effect", "splat_effect: {duration: 3}"),
+        (
+            "encounter",
+            "splat_encounter: {roster: [], sides: {party: {hostile_to: [enemies]}, enemies: {hostile_to: [party]}}, assumptions: [], completion: {mode: side_defeated, side: enemies}, limits: {rounds: 30, resolution_events: 10000}}\nsplat_rule: {parameters: {a: b}}",
+        ),
+    ] {
+        let old = note(kind, fields, "# Rook\n");
+        let new = formats::convert("Rook.md", &old).unwrap_or_else(|e| panic!("{kind}: {e}"));
+        assert!(
+            new.contains("> [!note]- Splat data (edit in Splat)"),
+            "{new}"
+        );
+        assert!(!new.contains("## Splat data"));
+        assert_eq!(model(&old), model(&new));
+        assert_eq!(new, formats::convert("Rook.md", &new).unwrap());
+        if kind == "encounter" {
+            let mut encounter = model(&new)["splat_encounter"].clone();
+            encounter["limits"]["rounds"] = Value::from(40);
+            encounter["completion"]["side"] = Value::from("party");
+            let revised =
+                formats::patch_model(&new, &[("splat_encounter", Some(encounter.clone()))])
+                    .unwrap();
+            assert_eq!(model(&revised)["splat_encounter"], encounter);
+            assert!(revised.contains("> [!note]- Splat data (edit in Splat)"));
+        }
+    }
+    for kind in ["rule", "effect", "rule_group"] {
+        let old = note(kind, &format!("splat_{kind}: {{}}"), "# Rook\n");
+        let new = formats::convert("Rook.md", &old).unwrap();
+        assert!(!new.contains("```"), "{new}");
+        assert_eq!(model(&old), model(&new));
+    }
 }
