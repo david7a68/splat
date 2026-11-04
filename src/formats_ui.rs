@@ -86,7 +86,7 @@ impl State {
                 continue;
             }
             let root = &group.root;
-            let Ok((entries, errors)) = splat::content::read_directory(&root) else {
+            let Ok((entries, errors)) = splat::content::read_directory(root) else {
                 continue;
             };
             self.skipped.extend(
@@ -99,7 +99,7 @@ impl State {
                     continue;
                 }
                 let result = (|| {
-                    let path = note_path(&root, &entry.path)?;
+                    let path = note_path(root, &entry.path)?;
                     if !seen.insert(path.clone()) {
                         return Ok(None);
                     }

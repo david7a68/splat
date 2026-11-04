@@ -604,7 +604,10 @@ fn fmt_f2_every_book_stat_block_converts_or_refuses_conflicting_legacy_values() 
                 if !review.contains(&name) {
                     errors.push(format!("{}: {error}", entry.path));
                 }
-                assert!(error.contains("unsupported") || error.contains("without changing"));
+                assert!(
+                    error.contains("unsupported")
+                        || error == "The printed stats and saved stats disagree."
+                );
             }
         }
     }
