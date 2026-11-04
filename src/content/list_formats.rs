@@ -27,9 +27,23 @@ pub fn machine(text: &str, key: &str) -> Option<String> {
             .find_map(|term| term.strip_prefix(&format!("{key}=")).map(str::to_owned))
     })
 }
-fn visible(text: &str) -> &str {
-    text.split("%% splat ").next().unwrap_or(text).trim()
+fn visible(text: &str) -> String {
+    let mut out = String::new();
+    let mut rest = text;
+    while let Some(start) = rest.find("%% splat ") {
+        let Some(end) = rest[start + 9..].find("%%") else {
+            break;
+        };
+        out.push_str(&rest[..start]);
+        rest = &rest[start + 9 + end + 2..];
+        if out.ends_with(char::is_whitespace) {
+            rest = rest.trim_start();
+        }
+    }
+    out.push_str(rest);
+    out.trim().to_owned()
 }
+
 fn map(items: &[(&str, Value)]) -> Value {
     Value::Mapping(
         items
@@ -59,13 +73,30 @@ pub fn changes(text: &str, name: &str, note: &str) -> Result<Mapping, String> {
     }
     let mut conditions = Vec::new();
     for term in text.split(',').map(str::trim).filter(|s| !s.is_empty()) {
+        if term.to_ascii_lowercase().starts_with("start hp ") {
+            return Err("Start HP is set on an encounter's roster".into());
+        }
         if let Some((stat, rest)) = term.split_once(' ') {
+            if stat.eq_ignore_ascii_case("side") {
+                if rest.trim().is_empty() || out.contains_key("side") {
+                    return Err("Changes: invalid Side".into());
+                }
+                out.insert("side".into(), rest.trim().into());
+                continue;
+            }
             let (_, key) = STATS
                 .iter()
                 .find(|(label, _)| label.eq_ignore_ascii_case(stat))
                 .ok_or_else(|| format!("Changes: {term} not read"))?;
-            let number: i64 = rest
-                .trim()
+            let amount = if *key == "speed" {
+                rest.trim()
+                    .strip_suffix(" ft.")
+                    .or_else(|| rest.trim().strip_suffix(" ft"))
+                    .unwrap_or(rest.trim())
+            } else {
+                rest.trim()
+            };
+            let number: i64 = amount
                 .parse()
                 .map_err(|_| format!("Changes: {term} not read"))?;
             if out.contains_key(*key) {
@@ -94,17 +125,26 @@ pub fn changes(text: &str, name: &str, note: &str) -> Result<Mapping, String> {
     super::overrides::Overrides::parse(&out)?;
     Ok(out)
 }
-fn show_changes(overrides: &Value) -> String {
+pub fn show_changes(overrides: &Value) -> String {
     let mut terms = Vec::new();
     for (label, key) in STATS {
         if let Some(change) = overrides.get(*key) {
             if let Some(n) = change.get("add").and_then(Value::as_i64) {
-                terms.push(format!("{label} {n:+}"));
+                terms.push(format!(
+                    "{label} {n:+}{}",
+                    if *key == "speed" { " ft." } else { "" }
+                ));
             }
             if let Some(n) = change.get("set").and_then(Value::as_i64) {
-                terms.push(format!("{label} {n}"));
+                terms.push(format!(
+                    "{label} {n}{}",
+                    if *key == "speed" { " ft." } else { "" }
+                ));
             }
         }
+    }
+    if let Some(side) = overrides.get("side").and_then(Value::as_str) {
+        terms.push(format!("Side {side}"));
     }
     terms.extend(super::overrides::condition_names(&overrides["conditions"]));
     terms.join(", ")
@@ -132,7 +172,7 @@ fn reference(text: &str) -> Result<Value, String> {
         result.insert("link".into(), raw.into());
         return Ok(Value::Mapping(result));
     }
-    let value = formats::model_reference(raw.into());
+    let value = formats::model_reference(raw.clone().into());
     if value.is_mapping() {
         Ok(value)
     } else if !raw.is_empty() {
@@ -174,6 +214,7 @@ pub struct UnreadGroupMember {
     pub before: usize,
     pub creature: Option<Value>,
     pub label: String,
+    pub name: String,
     pub count: Option<u64>,
     pub flag: Flag,
 }
@@ -192,6 +233,9 @@ pub fn unread_group_members(text: &str, flags: &[Flag]) -> Vec<UnreadGroupMember
                     before,
                     creature: reference(label).ok(),
                     label: label.into(),
+                    name: row
+                        .get(2)
+                        .map_or_else(String::new, |cell| cell.value.clone()),
                     count: row
                         .first()
                         .and_then(|cell| {
@@ -505,6 +549,7 @@ pub fn read(text: &str, fields: &mut Mapping, flags: &mut Vec<Flag>) {
     }
     let mut rows = Vec::new();
     let mut keys = std::collections::BTreeSet::new();
+    let mut party_slots = std::collections::BTreeSet::new();
     if let Some(table) = table(
         text,
         if group { "Members" } else { "Roster" },
@@ -533,7 +578,7 @@ pub fn read(text: &str, fields: &mut Mapping, flags: &mut Vec<Flag>) {
                     }
                 }
                 let mut overrides =
-                    changes(&terms.join(", "), &row[2].value, visible(&row[4].value))?;
+                    changes(&terms.join(", "), &row[2].value, &visible(&row[4].value))?;
                 if group {
                     let creature = reference(&row[1].value)?;
                     if let Some(extra) = model
@@ -576,6 +621,14 @@ pub fn read(text: &str, fields: &mut Mapping, flags: &mut Vec<Flag>) {
                         .and_then(Value::as_mapping)
                         .cloned()
                         .unwrap_or_default();
+                    if let Some(party) = extra.get("party_slot").and_then(Value::as_str)
+                        && !party_slots.insert(party.to_owned())
+                    {
+                        return Err("This party member is already in the roster".into());
+                    }
+                    if slot != original_slot {
+                        extra.clear();
+                    }
                     if row[1].value.is_empty() && extra.contains_key("party_slot") {
                         extra.remove("creature");
                     } else {
@@ -662,10 +715,20 @@ fn set_selection(value: &Value, selection: Value) -> Value {
     value
 }
 fn cell(value: &str) -> String {
-    value.replace('|', "\\|").replace(['\n', '\r'], " ")
+    value
+        .replace("\\|", "|")
+        .replace('|', "\\|")
+        .replace(['\n', '\r'], " ")
 }
 fn row(values: &[String]) -> String {
-    format!("| {} |\n", values.join(" | "))
+    format!(
+        "| {} |\n",
+        values
+            .iter()
+            .map(|value| cell(value))
+            .collect::<Vec<_>>()
+            .join(" | ")
+    )
 }
 fn header(headers: &[&str]) -> String {
     format!(
@@ -801,7 +864,7 @@ fn render(fields: &Mapping) -> Result<Rendered, String> {
         for (_, key) in STATS {
             overrides_left.remove(*key);
         }
-        for key in ["name", "note", "conditions"] {
+        for key in ["name", "note", "conditions", "side"] {
             overrides_left.remove(key);
         }
         members_data.push(Value::Mapping(overrides_left.clone()));
@@ -1339,7 +1402,7 @@ pub fn patch(text: &str, changes: &[(&str, Option<Value>)]) -> Result<String, St
                 ];
                 for (column, (a, b)) in old.iter().zip(new).enumerate() {
                     if changed[column] && a.value != b.value {
-                        patches.push((a.range.clone(), b.value.clone()));
+                        patches.push((a.range.clone(), cell(&b.value)));
                     }
                 }
             }
@@ -1473,6 +1536,30 @@ fn patch_data(text: &str, data: &Mapping) -> Result<String, String> {
     }
 }
 
+fn visible_target(raw: &str) -> &str {
+    raw.split_once("](splat:")
+        .and_then(|(_, tail)| tail.strip_suffix(')'))
+        .unwrap_or(raw)
+}
+
+fn resolve_reference(reference: &Value, entries: &[&Entry]) -> Result<Uuid, String> {
+    if let Some(link) = reference.get("link").and_then(Value::as_str)
+        && let Ok(id) = formats::resolve_readable(
+            visible_target(&link.replace("\\|", "|")),
+            entries.iter().copied(),
+        )
+    {
+        return Ok(id);
+    }
+    let raw = reference
+        .get("key")
+        .or_else(|| reference.get("id"))
+        .or_else(|| reference.get("link"))
+        .and_then(Value::as_str)
+        .ok_or("Creature reference not read")?;
+    formats::resolve_readable(raw, entries.iter().copied())
+}
+
 /// Save resolved cells with the catalogue's name, preserving all other cells and prose.
 pub fn write_references<'a>(
     text: &str,
@@ -1493,32 +1580,28 @@ pub fn write_references<'a>(
                     continue;
                 };
                 let reference = reference(&cell.value)?;
-                let raw = reference
-                    .get("key")
-                    .or_else(|| reference.get("id"))
-                    .or_else(|| reference.get("link"))
-                    .and_then(Value::as_str)
-                    .ok_or("Creature reference not read")?;
-                let id = formats::resolve_readable(raw, entries.iter().copied())?;
+                let id = resolve_reference(&reference, &entries)?;
                 let target = entries
                     .iter()
                     .find(|entry| entry.id == id)
                     .ok_or("Creature not found")?;
                 let shown = if let Some(key) = &target.key {
-                    // Keep a hand-written alias. Replace only the label made from a key.
-                    if let Some((label, _)) = visible(&cell.value)
+                    // Keep a hand-written alias while refreshing its backup identity.
+                    let visible = visible(&cell.value);
+                    let label = visible
                         .strip_prefix('[')
                         .and_then(|link| link.split_once("](splat:"))
-                        && label != key.rsplit('/').next().unwrap_or(key).replace('_', " ")
-                    {
-                        continue;
-                    }
+                        .map(|(label, _)| label)
+                        .filter(|label| {
+                            *label != key.rsplit('/').next().unwrap_or(key).replace('_', " ")
+                        })
+                        .unwrap_or(&target.name);
                     let backup = if reference.get("key").is_none() {
                         format!(" %% splat id={} %%", target.id)
                     } else {
                         String::new()
                     };
-                    format!("[{}](splat:{key}){backup}", target.name)
+                    format!("[{label}](splat:{key}){backup}")
                 } else {
                     format!(
                         "[[{}|{}]] %% splat id={} %%",
@@ -1528,7 +1611,7 @@ pub fn write_references<'a>(
                     )
                 };
                 if cell.value != shown {
-                    patches.push((cell.range.clone(), shown));
+                    patches.push((cell.range.clone(), self::cell(&shown)));
                 }
             }
         }
@@ -1541,16 +1624,36 @@ pub fn write_references<'a>(
                 .iter()
                 .any(|prefix| line.trim_start().starts_with(prefix))
             {
-                for target in &entries {
-                    if let Some(key) = &target.key {
-                        let suffix = format!("](splat:{key})");
-                        if let Some(end) = line.find(&suffix)
-                            && let Some(start) = line[..end].rfind('[')
-                        {
-                            patches.push((offset + start + 1..offset + end, target.name.clone()));
+                let start = line.find("Only:").unwrap() + "Only:".len();
+                let raw = line[start..].trim();
+                let refs = only_references(raw)?;
+                let mut shown = Vec::new();
+                for reference in refs {
+                    let target = resolve_reference(&reference, &entries)
+                        .ok()
+                        .and_then(|id| entries.iter().find(|entry| entry.id == id));
+                    shown.push(if let Some(target) = target {
+                        let backup = reference
+                            .get("id")
+                            .map(|_| format!(" %% splat id={} %%", target.id))
+                            .unwrap_or_default();
+                        if let Some(key) = &target.key {
+                            format!("[{}](splat:{key}){backup}", target.name)
+                        } else {
+                            format!(
+                                "[[{}|{}]]{backup}",
+                                target.path.trim_end_matches(".md"),
+                                target.name
+                            )
                         }
-                    }
+                    } else {
+                        show_reference(&reference)
+                    });
                 }
+                patches.push((
+                    offset + start..offset + line.trim_end().len(),
+                    format!(" {}", shown.join(", ")),
+                ));
             }
             offset += line.len();
         }
@@ -1569,44 +1672,50 @@ pub fn resolve(entry: &mut Entry, entries: &[Entry], source: &str) {
         !(flag.message.starts_with("Creature ")
             && flag.message.ends_with(" not found or ambiguous"))
     });
-    fn visit(value: &mut Value, entries: &[Entry]) {
+    fn visit(value: &mut Value, entries: &[Entry], kind: Option<&str>) {
         match value {
             Value::Mapping(m) => {
-                // A named package link keeps its saved id when the package is absent.
-                // A changed, valid link still takes the identity shown in the cell.
-                if m.contains_key("id")
-                    && let Some(key) = m.get("link").and_then(Value::as_str).and_then(|raw| {
-                        raw.split_once("](splat:")
-                            .and_then(|(_, tail)| tail.strip_suffix(')'))
-                    })
-                    && let Some(target) = entries
+                if let Some(raw) = m
+                    .get("link")
+                    .and_then(Value::as_str)
+                    .map(|raw| raw.replace("\\|", "|"))
+                    && let Ok(id) = formats::resolve_readable(
+                        visible_target(&raw),
+                        entries.iter().filter(|entry| match kind {
+                            Some("encounter") => entry.kind == "encounter",
+                            Some("creature") => {
+                                ["creature", "world"].contains(&entry.kind.as_str())
+                            }
+                            Some("package") => entry.kind == "package",
+                            _ => true,
+                        }),
+                    )
+                {
+                    if m.contains_key("id") {
+                        m.remove("key");
+                        m.insert("id".into(), id.to_string().into());
+                    } else if let Some(key) = entries
                         .iter()
-                        .find(|entry| entry.key.as_deref() == Some(key))
-                {
-                    m.insert("id".into(), target.id.to_string().into());
-                }
-                if let Some(raw) = m.get("link").and_then(Value::as_str).map(str::to_owned)
-                    && !m.contains_key("id")
-                    && !m.contains_key("key")
-                    && let Ok(id) = formats::resolve_readable(&raw, entries.iter())
-                {
-                    if let Some(target) = entries.iter().find(|entry| entry.id == id)
-                        && let Some(key) = &target.key
+                        .find(|entry| entry.id == id)
+                        .and_then(|entry| entry.key.as_ref())
                     {
-                        m.remove("id");
                         m.remove("link");
                         m.insert("key".into(), key.clone().into());
                     } else {
+                        m.remove("key");
                         m.insert("id".into(), id.to_string().into());
                     }
                 }
-                for value in m.values_mut() {
-                    visit(value, entries);
+                for (key, value) in m.iter_mut() {
+                    let kind = key
+                        .as_str()
+                        .filter(|key| ["encounter", "creature", "package"].contains(key));
+                    visit(value, entries, kind);
                 }
             }
             Value::Sequence(a) => {
                 for value in a {
-                    visit(value, entries)
+                    visit(value, entries, None)
                 }
             }
             _ => {}
@@ -1710,7 +1819,7 @@ pub fn resolve(entry: &mut Entry, entries: &[Entry], source: &str) {
     }
     if ["campaign", "encounter", "encounter_group"].contains(&entry.kind.as_str()) {
         for value in entry.fields.values_mut() {
-            visit(value, entries);
+            visit(value, entries, None);
         }
     }
 }

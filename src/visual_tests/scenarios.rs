@@ -6396,7 +6396,7 @@ pub mod encounter_groups {
         );
         d.observe(
             "T13.1",
-            d.visible_text("XP not known")
+            d.visible_text("XP 250 + unknown")
                 && d.has_containing("Member 1, Unknown creature: not in this campaign's packages")
                 && d.visible_text("1\u{a0}×\u{a0}Unknown\u{a0}creature"),
             "A broken member has a readable name in both its summary and its fault",
@@ -6458,7 +6458,7 @@ pub mod encounter_groups {
         // The card of a creature that arrived: where it came from, and its changes.
         d.click_row(RIVAL_NAME);
         d.click("Stat block");
-        d.expect("Arrived with Rival Team");
+        d.expect("Changed · arrived with Rival Team");
         d.state("card-of-an-added-member", Sizes::Default);
         fight_tab(d, GROUPS_TAB);
 

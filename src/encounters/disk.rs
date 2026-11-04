@@ -113,8 +113,8 @@ impl Recovery {
                 draft,
                 text,
                 (&change.path, text),
-                design::Type::Body.font(ui),
-                design::Type::Body.line(),
+                design::Type::Mono.font(ui),
+                design::Type::Mono.line(),
             );
         }
         choice

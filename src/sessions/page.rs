@@ -3866,14 +3866,16 @@ impl Sessions {
                     any = true;
                     let row = ui.push_id(group.id, |ui| {
                         let mut read_group = false;
-                        let group_action = if plan.arrivals_open { Action::quiet("Arrivals").icon(icons::GROUP) } else { Action::quiet("Edit") };
+                        let edit_word = if group.warnings.is_empty() { "Edit" } else { "Edit group" };
+                        let group_action = if plan.arrivals_open { Action::quiet("Arrivals").icon(icons::GROUP) } else { Action::quiet(edit_word) };
                         let action_width = group_action.density(Density::Read).natural_width(ui) + Density::Read.control() + design::S;
                         let group_widths = [width - action_width - design::S, action_width];
                         plan_row(ui, &group_widths, icons::GROUP, |ui| {
                             if design::wrapped_link(ui, &group.name).clicked() { read_group = true; }
                         }, |ui| {
                             let summary = group.summary();
-                            plan_group_summary(ui, &summary);
+                            if group.warnings.is_empty() { plan_group_summary(ui, &summary); }
+                            else { wrapped_words(ui, Type::Small, &summary, c.muted); }
                             if let Some(problem) = &group.problem { wrapped_words(ui, Type::Small, problem, c.result.warning); }
                         }, |ui| {
                             design::row_menu(ui, &group.name, |ui| {
@@ -3887,7 +3889,7 @@ impl Sessions {
                                     .name(&format!("Go to Arrivals for {}", group.name)).density(Density::Read).show(ui).clicked() {
                                     self.wants_arrivals = true;
                                 }
-                            } else if Action::quiet("Edit").name(&format!("Edit group {}", group.name))
+                            } else if Action::quiet(edit_word).name(&format!("Edit group {}", group.name))
                                 .density(Density::Read).blocked(plan.group_blocked).show(ui).clicked() {
                                 self.wants_group = Some(group.path.clone()); self.group_session = self.selected;
                             }
@@ -6250,7 +6252,7 @@ impl Sessions {
             self.open_form();
         }
         if folder_missing {
-            let action = Action::quiet("Choose folder…").density(Density::Read);
+            let action = Action::quiet("Choose folder").density(Density::Read);
             let width =
                 ui.available_width() - action.natural_width(ui) - ui.spacing().item_spacing.x;
             ui.horizontal_top(|ui| {
@@ -6261,7 +6263,7 @@ impl Sessions {
                         ui.add_space((Density::Read.control() - Type::Body.line()) / 2.0);
                         design::message(
                             ui,
-                            Tone::Error,
+                            Tone::Warning,
                             self.folder_error
                                 .as_deref()
                                 .unwrap_or("The session folder is not available."),

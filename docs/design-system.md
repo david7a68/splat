@@ -881,8 +881,16 @@ World place choices stay beside In. Always use this one saves a path with Undo. 
 Unreadable content names its path and keeps other files available. Missing Campaign.md needs an explicit write from held text. Paused stat blocks state when their snapshot differs from the current file.
 
 Flagged group members name their file and line. They keep Edit in Obsidian, Show file,
-Edit and a row menu with Remove member. Edit shows the original Changes cell; Done
-repairs that cell in the draft. Unknown member XP adds `+ unknown` to the total.
+Edit and a row menu with Remove member, aligned with the other member actions.
+Edit opens the normal change form with the readable values, the unread text, its
+reason, and an example. Done keeps the name and note. Remove offers Undo.
+Groups, Arrivals and the plan say how many members can join and name the creature
+that needs fixing. Readable members can still join. Unknown member XP adds
+`+ unknown` to the total. Changed member summaries also name the base creature.
+Encounter search names hidden duplicate notes and offers file-specific identity
+repair with Undo. Source comparisons use the monospace face.
+An arriving member's card says `Changed · arrived with <group>` once. Add by hand
+comes first. Changed Speed uses the stat table's label and value columns.
 
 ## Campaign and World audit, iteration 19
 

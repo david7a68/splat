@@ -577,7 +577,7 @@ fn fmt_f2_malformed_cells_stay_first_alias_wins_and_old_yaml_is_ignored() {
     );
     assert!(entry.fields["splat_stats"].get("save_dexterity").is_none());
     for words in [
-        "Hit Points \"about twenty\" not read",
+        "Hit Points \"about twenty\" not read (line 21). Use a number first.",
         "Duplicate Hit Points",
         "Save needs",
         "Old data ignored",
@@ -1546,6 +1546,245 @@ fn i19_x9_saved_links_use_catalogue_names_and_keep_custom_aliases() {
     assert_eq!(
         formats::convert_resolved("Campaign.md", &campaign, [&target]).unwrap(),
         campaign.replace("[goblin warrior]", "[Goblin Warrior]")
+    );
+}
+
+#[test]
+fn i20_x20_wiki_links_keep_five_obsidian_table_columns_and_read_both_forms() {
+    let old = note(
+        "encounter_group",
+        "splat_encounter_group: {side: enemies, members: [{creature: {id: '00000000-0000-0000-0000-000000000002', link: '[[Characters/Rook|Rook]]'}, count: 1, overrides: {note: 'Before [[Gate|door]] after'}}]}",
+        "",
+    );
+    let saved = formats::convert("Group.md", &old).unwrap();
+    let row = saved
+        .lines()
+        .find(|line| line.starts_with("| 1 |"))
+        .unwrap();
+    let separators = row
+        .char_indices()
+        .filter(|(at, ch)| *ch == '|' && (*at == 0 || row.as_bytes()[at - 1] != b'\\'))
+        .count();
+    assert_eq!(separators, 6, "Obsidian must keep five cells: {row}");
+    assert!(saved.contains(r"[[Characters/Rook\|Rook]]"));
+    assert_eq!(model(&saved), model(&old));
+    assert_eq!(model(&saved.replace(r"\|", "|")), model(&old));
+    let target = Entry::parse(
+        "Characters/Rook.md",
+        &note("creature", "splat_creature: {}", "").replace(
+            "00000000-0000-0000-0000-000000000001",
+            "00000000-0000-0000-0000-000000000002",
+        ),
+    )
+    .unwrap();
+    let written = super::list_formats::write_references(&saved, [&target]).unwrap();
+    assert!(written.contains(r"[[Characters/Rook\|Rook]]"));
+}
+
+#[test]
+fn i20_x21_note_keeps_text_on_both_sides_of_machine_comments() {
+    for note_cell in [
+        "%% splat slot=actor_one %% Watch the door",
+        "Watch %% splat slot=actor_one %% the door",
+        "Watch the door %% splat slot=actor_one %%",
+    ] {
+        let text = note("encounter", "", &format!("## Roster\n\n| Side | Creature | Name | Changes | Note |\n| --- | --- | --- | --- | --- |\n| enemies | [[Rook]] | | | {note_cell} |\n")).replace("splat_schema: 1", "splat_schema: 2");
+        let entry = Entry::parse("Fight.md", &text).unwrap();
+        assert_eq!(
+            entry.fields["splat_encounter"]["roster"][0]["overrides"]["note"],
+            Value::from("Watch the door")
+        );
+        assert_eq!(
+            entry.fields["splat_encounter"]["roster"][0]["key"],
+            Value::from("actor_one")
+        );
+    }
+}
+
+#[test]
+fn i20_x22_visible_vault_link_wins_over_backup_id_in_roster_group_and_only() {
+    let first_id = "00000000-0000-0000-0000-000000000002";
+    let second_id = "00000000-0000-0000-0000-000000000003";
+    let targets: Vec<_> = [("First", first_id), ("Second", second_id)]
+        .into_iter()
+        .map(|(name, id)| {
+            Entry::parse(
+                &format!("Characters/{name}.md"),
+                &note("creature", "splat_creature: {}", "")
+                    .replace("splat_name: Rook", &format!("splat_name: {name}"))
+                    .replace("00000000-0000-0000-0000-000000000001", id),
+            )
+            .unwrap()
+        })
+        .collect();
+    for kind in ["encounter_group", "encounter", "campaign"] {
+        let link = format!(r"[[Characters/Second\|Second]] %% splat id={first_id} %%");
+        let body = if kind == "campaign" {
+            format!(
+                "## Packages\n\n- [x] Friends ^00000000-0000-0000-0000-000000000004\n  - Only: {link}\n"
+            )
+        } else {
+            format!(
+                "## {}\n\n| {} | Creature | Name | Changes | Note |\n| --- | --- | --- | --- | --- |\n| {} | {link} | | | %% splat slot=actor_one %% |\n",
+                if kind == "encounter" {
+                    "Roster"
+                } else {
+                    "Members"
+                },
+                if kind == "encounter" { "Side" } else { "Count" },
+                if kind == "encounter" { "party" } else { "1" }
+            )
+        };
+        let text = note(
+            kind,
+            if kind == "campaign" {
+                "splat_namespace: friends"
+            } else if kind == "encounter_group" {
+                "splat_side: enemies"
+            } else {
+                ""
+            },
+            &body,
+        )
+        .replace("splat_schema: 1", "splat_schema: 2");
+        let reference = |entry: &Entry| {
+            if kind == "campaign" {
+                entry.fields["splat_packages"][0]["selection"]["entries"][0].clone()
+            } else {
+                entry.fields[if kind == "encounter" {
+                    "splat_encounter"
+                } else {
+                    "splat_encounter_group"
+                }][if kind == "encounter" {
+                    "roster"
+                } else {
+                    "members"
+                }][0]["creature"]
+                    .clone()
+            }
+        };
+        let mut entry = Entry::parse("List.md", &text).unwrap();
+        super::list_formats::resolve(&mut entry, &targets, &text);
+        assert_eq!(reference(&entry)["id"], Value::from(second_id), "{kind}");
+        let saved = formats::convert_resolved("List.md", &text, targets.iter()).unwrap();
+        assert!(saved.contains(&format!("id={second_id}")), "{saved}");
+        let missing = text.replace("Characters/Second", "Characters/Moved");
+        let mut entry = Entry::parse("List.md", &missing).unwrap();
+        super::list_formats::resolve(&mut entry, &targets, &missing);
+        assert_eq!(reference(&entry)["id"], Value::from(first_id));
+    }
+}
+
+#[test]
+fn i20_x27_copied_party_row_is_flagged_and_monster_copy_keeps_only_visible_cells() {
+    let old = note(
+        "encounter",
+        "splat_encounter: {roster: [{key: actor_party, party_slot: lead, side: party, controller: {kind: manual, role: player}, overrides: {}}], sides: {party: {hostile_to: [enemies]}, enemies: {hostile_to: [party]}}, assumptions: [], completion: {mode: manual}, limits: {rounds: 20, resolution_events: 10000}}",
+        "",
+    );
+    let saved = formats::convert("Fight.md", &old).unwrap();
+    let row = saved
+        .lines()
+        .find(|line| line.starts_with("| party |"))
+        .unwrap();
+    let copied = saved.replace(row, &format!("{row}\n{row}"));
+    let entry = Entry::parse("Fight.md", &copied).unwrap();
+    assert!(
+        entry
+            .flags
+            .iter()
+            .any(|flag| flag.message == "This party member is already in the roster")
+    );
+    assert_eq!(
+        entry.fields["splat_encounter"]["roster"]
+            .as_sequence()
+            .unwrap()
+            .len(),
+        1
+    );
+    let monster = old.replace(
+        "party_slot: lead",
+        "creature: {key: 'srd:creature/guard'}, initial: {temp_hp: 9}",
+    );
+    let saved = formats::convert("Fight.md", &monster).unwrap();
+    let row = saved
+        .lines()
+        .find(|line| line.starts_with("| party |"))
+        .unwrap();
+    let copied = saved.replace(row, &format!("{row}\n{row}"));
+    let entry = Entry::parse("Fight.md", &copied).unwrap();
+    assert!(entry.flags.is_empty());
+    assert_eq!(
+        entry.fields["splat_encounter"]["roster"][0]["initial"]["temp_hp"],
+        Value::from(9)
+    );
+    assert!(entry.fields["splat_encounter"]["roster"][1]["initial"].is_null());
+}
+
+#[test]
+fn i20_x28_member_side_moves_with_its_visible_row() {
+    let old = note(
+        "encounter_group",
+        "splat_encounter_group: {side: enemies, members: [{creature: {key: 'srd:creature/guard'}, count: 1, overrides: {name: Scout, side: rivals}}, {creature: {key: 'srd:creature/guard'}, count: 2}]}",
+        "",
+    );
+    let saved = formats::convert("Group.md", &old).unwrap();
+    assert!(saved.contains("Side rivals"));
+    assert!(!saved.contains("members_data"));
+    let first = saved
+        .lines()
+        .find(|line| line.starts_with("| 1 |"))
+        .unwrap();
+    let second = saved
+        .lines()
+        .find(|line| line.starts_with("| 2 |"))
+        .unwrap();
+    let moved = saved.replace(&format!("{first}\n{second}"), &format!("{second}\n{first}"));
+    let entry = Entry::parse("Group.md", &moved).unwrap();
+    let members = &entry.fields["splat_encounter_group"]["members"];
+    assert!(members[0]["overrides"]["side"].is_null());
+    assert_eq!(members[1]["overrides"]["side"], Value::from("rivals"));
+    let deleted = saved.replace(&format!("{first}\n"), "");
+    let entry = Entry::parse("Group.md", &deleted).unwrap();
+    assert!(entry.fields["splat_encounter_group"]["members"][0]["overrides"]["side"].is_null());
+}
+
+#[test]
+fn i20_x30_changes_accept_speed_units_and_explain_group_start_hp() {
+    for speed in ["Speed 40 ft.", "Speed 40 ft", "Speed 40"] {
+        let changes = super::list_formats::changes(speed, "", "").unwrap();
+        assert_eq!(changes["speed"]["set"], Value::from(40));
+        assert_eq!(
+            super::list_formats::show_changes(&Value::Mapping(changes)),
+            "Speed 40 ft."
+        );
+    }
+    assert_eq!(
+        super::list_formats::changes("Start HP 12", "", "").unwrap_err(),
+        "Start HP is set on an encounter's roster"
+    );
+}
+
+#[test]
+fn i20_x22_named_package_alias_also_refreshes_the_backup_id() {
+    let id = "00000000-0000-0000-0000-000000000003";
+    let target = Entry::parse(
+        "Guard.md",
+        &note(
+            "creature",
+            "splat_key: core:creatures/guard\nsplat_creature: {}",
+            "",
+        )
+        .replace("00000000-0000-0000-0000-000000000001", id),
+    )
+    .unwrap();
+    let text = note("encounter_group", "splat_side: enemies", "## Members\n\n| Count | Creature | Name | Changes | Note |\n| --- | --- | --- | --- | --- |\n| 1 | [Door watch](splat:core:creatures/guard) %% splat id=00000000-0000-0000-0000-000000000002 %% | | | |\n").replace("splat_schema: 1", "splat_schema: 2");
+    let saved = formats::convert_resolved("Group.md", &text, [&target]).unwrap();
+    assert!(
+        saved.contains(&format!(
+            "[Door watch](splat:core:creatures/guard) %% splat id={id} %%"
+        )),
+        "{saved}"
     );
 }
 

@@ -112,6 +112,8 @@ pub(crate) struct RunGroup {
     pub unavailable_members: Vec<(usize, u64, String)>,
     /// Every reason this group cannot be added now.
     pub problem: Option<String>,
+    /// Unread rows do not block the readable members.
+    pub warnings: Vec<String>,
 }
 impl RunGroup {
     /// The first member's bonus decides a shared roll, as it does for any initiative group.
@@ -125,7 +127,7 @@ impl RunGroup {
         let mut summary = format!(
             "{} · {} · {}",
             crate::design::reader::human_label(&self.side),
-            crate::design::count(self.creature_count() as usize, "member", "members"),
+            self.count_label(),
             self.xp_label()
         );
         if self
@@ -139,7 +141,24 @@ impl RunGroup {
         if !members.is_empty() {
             summary.push_str(&format!(" · {members}"));
         }
+        for warning in &self.warnings {
+            summary.push_str(&format!(" · {warning}"));
+        }
         summary
+    }
+    pub(crate) fn joinable_count(&self) -> u64 {
+        self.members.iter().map(|member| member.count).sum()
+    }
+    pub(crate) fn count_label(&self) -> String {
+        if self.warnings.is_empty() {
+            crate::design::count(self.creature_count() as usize, "member", "members")
+        } else {
+            format!(
+                "{} of {} members can join",
+                self.joinable_count(),
+                self.creature_count()
+            )
+        }
     }
     pub(crate) fn xp_label(&self) -> String {
         if self.xp_unknown.is_empty() && self.unavailable == 0 {
@@ -160,6 +179,11 @@ impl RunGroup {
                     .overrides
                     .resolve(&base)
                     .map_or(base.name, |resolved| resolved.name);
+                let name = if member.overrides.name.is_some() {
+                    format!("{name} (as {})", member.entry.name)
+                } else {
+                    name
+                };
                 format!(
                     "{} × {name}",
                     crate::design::count(member.count as usize, "", "").trim()
@@ -3143,10 +3167,7 @@ impl Run {
     }
     pub fn list(directory: &Path, campaign: Uuid) -> Result<Vec<SavedRunInfo>, String> {
         if !directory.exists() {
-            return Err(format!(
-                "Run folder not found: {}. Choose folder in Campaign, Rules and runs.",
-                directory.display()
-            ));
+            return Err(format!("Run folder not found: {}.", directory.display()));
         }
         let mut runs = Vec::new();
         let mut close_order = BTreeMap::new();
@@ -5940,6 +5961,7 @@ mod tests {
             xp_unknown: Vec::new(),
             unavailable: 0,
             unavailable_members: Vec::new(),
+            warnings: Vec::new(),
             problem: None,
         })
     }

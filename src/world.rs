@@ -665,6 +665,7 @@ pub fn npc_group(npc: &Entry, stat_block: &Entry, side: &str) -> Arc<RunGroup> {
         xp_unknown: Vec::new(),
         unavailable: 0,
         unavailable_members: Vec::new(),
+        warnings: Vec::new(),
         problem,
     })
 }
@@ -757,7 +758,8 @@ struct Picker {
     focus: bool,
 }
 
-struct Change {
+#[derive(Clone)]
+pub(crate) struct Change {
     path: String,
     before: String,
     after: String,
@@ -765,12 +767,12 @@ struct Change {
 }
 
 impl Change {
-    fn undo(&self, campaign: &Campaign) -> Result<(), String> {
+    pub(crate) fn undo(&self, campaign: &Campaign) -> Result<(), String> {
         write_note(&campaign.path, &self.path, Some(&self.after), &self.before).map(|_| ())
     }
 }
 
-fn new_identity(campaign: &Campaign, relative: &str) -> Result<(Change, Uuid), String> {
+pub(crate) fn new_identity(campaign: &Campaign, relative: &str) -> Result<(Change, Uuid), String> {
     let path = note_path(&campaign.path, relative)?;
     let before = fs::read_to_string(path).map_err(|e| e.to_string())?;
     let id = crate::hermetic::new_uuid();

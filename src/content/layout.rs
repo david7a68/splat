@@ -193,7 +193,7 @@ fn cells(text: &str, offset: usize, line: &str) -> Vec<Cell> {
             Cell {
                 range: offset + begin..offset + end,
                 line: text[..offset].bytes().filter(|b| *b == b'\n').count() + 1,
-                value: raw.trim().into(),
+                value: raw.trim().replace("\\|", "|"),
             }
         })
         .collect()
