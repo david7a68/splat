@@ -396,6 +396,53 @@ fn fmt_f2_creature_spell_item_independent_golden_pairs() {
 }
 
 #[test]
+fn fmt_f2_printed_identity_fills_missing_properties_and_writes_reader_case() {
+    let old = note(
+        "creature",
+        "splat_creature: {}\nsplat_stats: {max_hp: {value: 22}}",
+        "# Rook\n\n## Source text\n\nMedium beast, Unaligned\\\nHP 22\n",
+    );
+    let (_, golden) = stat_note(
+        "creature",
+        "",
+        "## Stat block\n\n%% splat omit=splat_creature/hit_points_text %%\n\n| Stat | Value |\n| --- | --- |\n| Size | Medium |\n| Type | Beast |\n| Alignment | Unaligned |\n| Hit Points | 22 |\n",
+    );
+    assert_eq!(model(&old), model(&golden));
+    let converted = formats::convert("Rook.md", &old).unwrap();
+    assert_eq!(model(&converted), model(&golden));
+    for row in [
+        "| Size | Medium |",
+        "| Type | Beast |",
+        "| Alignment | Unaligned |",
+    ] {
+        assert!(converted.contains(row), "{row}");
+    }
+    assert_eq!(converted, formats::convert("Rook.md", &converted).unwrap());
+    assert_eq!(
+        model(&converted),
+        model(
+            &converted
+                .replace("| Size | Medium |", "| Size | mEDiUm |")
+                .replace("| Type | Beast |", "| Type | bEaSt |")
+        )
+    );
+    let no_alignment = old.replace(", Unaligned", "");
+    assert!(
+        !formats::convert("Rook.md", &no_alignment)
+            .unwrap()
+            .contains("| Alignment |")
+    );
+    let explicit = old.replace(
+        "splat_creature: {}",
+        "splat_creature: {size: small, type: fey, alignment: Neutral}",
+    );
+    let explicit = formats::convert("Rook.md", &explicit).unwrap();
+    assert!(explicit.contains("| Size | Small |"));
+    assert!(explicit.contains("| Type | Fey |"));
+    assert!(explicit.contains("| Alignment | Neutral |"));
+}
+
+#[test]
 fn fmt_f2_book_conversions_keep_mechanics_without_second_stat_source() {
     for path in [
         "creatures/wolf.md",
@@ -509,7 +556,12 @@ fn fmt_f2_malformed_cells_stay_first_alias_wins_and_old_yaml_is_ignored() {
         );
     let entry = Entry::parse("Rook.md", &bad).unwrap();
     let reading = super::stat_blocks::reading_body(&entry, &entry.body);
-    assert!(reading.contains("about twenty"));
+    assert!(!reading.contains("about twenty"));
+    assert_eq!(
+        super::stat_blocks::invalid_vital(&entry, "max_hp").as_deref(),
+        Some("about twenty")
+    );
+    assert!(bad.contains("| Hit Points | about twenty |"));
     assert!(!reading.contains("%% splat omit="));
     assert!(entry.fields["splat_stats"].get("max_hp").is_none());
     assert_eq!(
@@ -518,7 +570,7 @@ fn fmt_f2_malformed_cells_stay_first_alias_wins_and_old_yaml_is_ignored() {
     );
     assert!(entry.fields["splat_stats"].get("save_dexterity").is_none());
     for words in [
-        "Hit Points needs a number first",
+        "Hit Points \"about twenty\" needs a number first",
         "Duplicate Hit Points",
         "Mod differs",
         "Save needs",
@@ -536,7 +588,7 @@ fn fmt_f2_malformed_cells_stay_first_alias_wins_and_old_yaml_is_ignored() {
             entry
                 .flags
                 .iter()
-                .find(|f| f.message.contains("Hit Points needs"))
+                .find(|f| f.message.contains("Hit Points \"about twenty\" needs"))
                 .unwrap()
                 .line
                 - 1

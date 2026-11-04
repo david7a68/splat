@@ -179,6 +179,8 @@ Creatures use a `Stat block` section with `Stat | Value` and `Ability | Score | 
 tables. Spells and items use a `Field | Value` table in `Spell` or `Item`.
 These tables supply the stats in schema 2. A bad cell stays in the file and gets a
 line flag; its value is not set. Printed modifiers and passive initiative are checked.
+Rejected vital text stays in its reader row with a warning. Conversion fills missing
+creature identity from the printed line and writes `Medium` and `Beast` in reader case.
 Stat edits keep formulas, spacing, and other text. New entries use this layout.
 If old values conflict, conversion keeps the file and asks you to review it.
 Creature edits can keep the old layout with a warning when conversion needs review.

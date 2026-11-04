@@ -148,7 +148,8 @@ show their future path below the name. A missing place stays visible as `Not fou
 
 Schema-2 creature readers use the same stat block as schema 1. The Markdown table
 supplies each value once. A bad cell shows a warning with its file line; valid
-values still lead in the reader and beside a run. Unknown rows stay readable.
+values still lead in the reader and beside a run. Rejected vitals show their original
+text with a warning in the vitals area. Unknown rows stay readable.
 
 A schema conversion shows `Saved in the new layout.` with `Undo`. Convert files
 groups files by owner, with only the campaign checked at first. Generated packages

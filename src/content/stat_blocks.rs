@@ -126,7 +126,11 @@ fn checked<T>(
                         })
                     })
                     .map_or(table.header[0].line, |r| r[0].line),
-                message: format!("{name} {message}"),
+                message: if name == "Hit Points" {
+                    format!("{name} {raw:?} {message}")
+                } else {
+                    format!("{name} {message}")
+                },
             });
             None
         }
@@ -307,75 +311,131 @@ fn metadata<'a>(source: &'a str, kind: &str, key: &str) -> Vec<&'a str> {
         .collect()
 }
 
+const IDENTITY: &[(&str, &str, &[&str])] = &[
+    (
+        "Size",
+        "size",
+        &["tiny", "small", "medium", "large", "huge", "gargantuan"],
+    ),
+    (
+        "Type",
+        "type",
+        &[
+            "aberration",
+            "beast",
+            "celestial",
+            "construct",
+            "dragon",
+            "elemental",
+            "fey",
+            "fiend",
+            "giant",
+            "humanoid",
+            "monstrosity",
+            "ooze",
+            "plant",
+            "undead",
+        ],
+    ),
+];
+
+fn identity_value(key: &str, raw: &str) -> Option<Mapping> {
+    let (_, _, allowed) = IDENTITY.iter().find(|(_, k, _)| *k == key)?;
+    let lower = raw.to_lowercase();
+    let valid = if key == "size" {
+        let lower = lower
+            .replace(" swarm of ", " or ")
+            .replace(" or smaller", "");
+        lower.split(" or ").all(|s| allowed.contains(&s))
+    } else {
+        let head = lower.split(" (").next().unwrap_or("");
+        head.replace(", or ", ", ")
+            .replace(" or ", ", ")
+            .split(", ")
+            .all(|s| allowed.contains(&s))
+    };
+    if !valid {
+        return None;
+    }
+    let mut creature = Mapping::new();
+    let first = lower
+        .split_whitespace()
+        .next()
+        .unwrap_or("")
+        .trim_end_matches(',');
+    if key == "size" && lower != first {
+        creature.insert("size".into(), first.into());
+        creature.insert("size_options_text".into(), raw.into());
+    } else if key == "type" && lower.contains(" or ") {
+        creature.insert("type".into(), first.into());
+        creature.insert("type_options_text".into(), raw.into());
+    } else if key == "type"
+        && let Some((kind, tags)) = raw.split_once(" (")
+    {
+        creature.insert("type".into(), kind.to_lowercase().into());
+        creature.insert("tags_text".into(), format!("({tags}").into());
+    } else {
+        creature.insert(key.into(), lower.into());
+    }
+    Some(creature)
+}
+
+/// Legacy printed identity supplies only properties missing from its YAML model.
+pub fn read_legacy_identity(body: &str, fields: &mut Mapping) {
+    let source = Document::new(body)
+        .section_at_level("Source text", Some(pulldown_cmark::HeadingLevel::H2))
+        .map(|s| &body[s.range()])
+        .unwrap_or(body);
+    for (event, range) in Parser::new_ext(source, Options::ENABLE_TABLES).into_offset_iter() {
+        if !matches!(event, Event::Start(Tag::Paragraph)) {
+            continue;
+        }
+        let line = source[range]
+            .lines()
+            .next()
+            .unwrap_or("")
+            .trim()
+            .trim_end_matches('\\')
+            .trim()
+            .trim_matches('*');
+        let (identity, alignment) = line
+            .split_once(',')
+            .map_or((line, None), |(a, b)| (a, Some(b.trim())));
+        let Some((size, kind)) = identity.split_once(' ') else {
+            continue;
+        };
+        let Some(mut printed) = identity_value("size", size) else {
+            continue;
+        };
+        let Some(kind) = identity_value("type", kind) else {
+            continue;
+        };
+        printed.extend(kind);
+        if let Some(alignment) = alignment.filter(|s| !s.is_empty()) {
+            printed.insert("alignment".into(), alignment.into());
+        }
+        if let Some(creature) = fields
+            .entry(Value::from("splat_creature"))
+            .or_insert_with(|| Value::Mapping(Mapping::new()))
+            .as_mapping_mut()
+        {
+            for (key, value) in printed {
+                creature.entry(key).or_insert(value);
+            }
+        }
+        break;
+    }
+}
+
 fn creature(table: &Table, source: &str, fields: &mut Mapping, flags: &mut Vec<Flag>) {
     let mut creature = Mapping::new();
     let mut stats = Mapping::new();
-    for (name, key, allowed) in [
-        (
-            "Size",
-            "size",
-            &["tiny", "small", "medium", "large", "huge", "gargantuan"][..],
-        ),
-        (
-            "Type",
-            "type",
-            &[
-                "aberration",
-                "beast",
-                "celestial",
-                "construct",
-                "dragon",
-                "elemental",
-                "fey",
-                "fiend",
-                "giant",
-                "humanoid",
-                "monstrosity",
-                "ooze",
-                "plant",
-                "undead",
-            ][..],
-        ),
-    ] {
+    for (name, key, _) in IDENTITY {
         let raw = read(table, &[name], flags);
-        if let Some(raw) = checked(raw, name, table, flags, |s| {
-            let lower = s.to_lowercase();
-            let valid = if key == "size" {
-                let lower = lower
-                    .replace(" swarm of ", " or ")
-                    .replace(" or smaller", "");
-                lower.split(" or ").all(|s| allowed.contains(&s))
-            } else {
-                let head = lower.split(" (").next().unwrap_or("");
-                head.replace(", or ", ", ")
-                    .replace(" or ", ", ")
-                    .split(", ")
-                    .all(|s| allowed.contains(&s))
-            };
-            valid
-                .then(|| s.to_owned())
-                .ok_or_else(|| "needs a known size or creature type".into())
+        if let Some(identity) = checked(raw, name, table, flags, |s| {
+            identity_value(key, s).ok_or_else(|| "needs a known size or creature type".into())
         }) {
-            let lower = raw.to_lowercase();
-            let first = lower
-                .split_whitespace()
-                .next()
-                .unwrap_or("")
-                .trim_end_matches(',');
-            if key == "size" && lower != first {
-                creature.insert("size".into(), first.into());
-                creature.insert("size_options_text".into(), raw.into());
-            } else if key == "type" && lower.contains(" or ") {
-                creature.insert("type".into(), first.into());
-                creature.insert("type_options_text".into(), raw.into());
-            } else if key == "type"
-                && let Some((kind, tags)) = raw.split_once(" (")
-            {
-                creature.insert("type".into(), kind.to_lowercase().into());
-                creature.insert("tags_text".into(), format!("({tags}").into());
-            } else {
-                creature.insert(key.into(), lower.into());
-            }
+            creature.extend(identity);
         }
     }
     text(
@@ -713,6 +773,13 @@ fn owned_keys(root: &str) -> Vec<&'static str> {
     }
 }
 
+fn printed_identity(value: String) -> String {
+    let mut chars = value.chars();
+    chars.next().map_or_else(String::new, |first| {
+        first.to_uppercase().chain(chars).collect()
+    })
+}
+
 pub fn render(fields: &Mapping, kind: &str) -> String {
     let mut rows: Vec<(&str, String)> = Vec::new();
     match kind {
@@ -726,12 +793,12 @@ pub fn render(fields: &Mapping, kind: &str) -> String {
                     val(fields, "splat_creature", "size_options_text")
                         .and_then(Value::as_str)
                         .map(str::to_owned)
-                        .unwrap_or_else(|| string(fields, "splat_creature", key))
+                        .unwrap_or_else(|| printed_identity(string(fields, "splat_creature", key)))
                 } else if name == "Type" {
                     let mut value = val(fields, "splat_creature", "type_options_text")
                         .and_then(Value::as_str)
                         .map(str::to_owned)
-                        .unwrap_or_else(|| string(fields, "splat_creature", key));
+                        .unwrap_or_else(|| printed_identity(string(fields, "splat_creature", key)));
                     let tags = string(fields, "splat_creature", "tags_text");
                     if !tags.is_empty() {
                         value.push(' ');
@@ -741,7 +808,9 @@ pub fn render(fields: &Mapping, kind: &str) -> String {
                 } else {
                     string(fields, "splat_creature", key)
                 };
-                rows.push((name, value));
+                if name != "Alignment" || !value.is_empty() {
+                    rows.push((name, value));
+                }
             }
             for (name, key, prose) in [
                 ("Armor Class", "armor_class", "armor_class_text"),
@@ -1379,8 +1448,37 @@ fn set_cell(
     Ok(after)
 }
 
-/// Omit only valid, model-backed stat rows from the creature reader. Unknown and
-/// malformed rows remain visible as text, beside their line flags.
+/// Rejected vitals are display text only. The model still has no numeric value.
+pub fn invalid_vital(entry: &Entry, key: &str) -> Option<String> {
+    if entry.kind != "creature"
+        || entry.fields.get("splat_schema").and_then(Value::as_u64) != Some(2)
+        || numeric(&entry.fields, key).is_some()
+    {
+        return None;
+    }
+    let names: &[&str] = match key {
+        "max_hp" => &["Hit Points", "HP"],
+        "armor_class" => &["Armor Class", "AC"],
+        "initiative" => &["Initiative"],
+        _ => return None,
+    };
+    let table = Document::new(&entry.body)
+        .section_at_level("Stat block", Some(pulldown_cmark::HeadingLevel::H2))?
+        .table(&["Stat", "Value"])?;
+    let row = table.rows.iter().find(|row| {
+        row.first().is_some_and(|cell| {
+            names
+                .iter()
+                .any(|name| layout::label(name) == layout::label(&cell.value))
+        })
+    })?;
+    row.get(1)
+        .map(|cell| cell.value.replace("\\|", "|"))
+        .filter(|raw| !raw.is_empty())
+}
+
+/// Omit model-backed rows and rejected vitals shown in the reader's stat area.
+/// Unknown rows remain visible as text.
 pub fn reading_body(entry: &Entry, body: &str) -> String {
     if entry.fields.get("splat_schema").and_then(Value::as_u64) != Some(2) {
         return body.into();
@@ -1453,6 +1551,7 @@ pub fn reading_body(entry: &Entry, body: &str) -> String {
                     };
                     if key.is_none_or(|key| {
                         raw.is_empty()
+                            || invalid_vital(entry, key).as_deref() == Some(raw)
                             || number(raw, key == "initiative")
                                 .ok()
                                 .is_some_and(|n| Some(n) == numeric(&entry.fields, key))

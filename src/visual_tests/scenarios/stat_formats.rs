@@ -11,8 +11,14 @@ pub fn run(d: &mut Driver<'_>) {
     d.state("schema-2-creature-library", Sizes::All);
     search_library(d, "Flagged Wolf");
     d.click_containing("Flagged Wolf · Creature");
-    d.expect("Hit Points needs a number first");
+    d.expect("Hit Points \"about twenty\" needs a number first (line 21).");
     d.expect("about twenty");
+    d.expect("HIT POINTS");
+    d.observe(
+        "F2 rejected HP in vitals",
+        !d.visible_text("| Hit Points | about twenty |"),
+        "Rejected HP uses the reader's vital row, without raw table text",
+    );
     d.state("flagged-hp-cell", Sizes::All);
 
     go_encounters(d);
@@ -47,6 +53,9 @@ pub fn run(d: &mut Driver<'_>) {
     d.expect("| Stat | Value |");
     d.scroll_at(pos2(640.0, 360.0), 2);
     d.expect("| Hit Points | 22 (4d8 + 4) |");
+    d.expect("| Size | Medium |");
+    d.expect("| Type | Beast |");
+    d.expect("| Alignment | Unaligned |");
     d.state("creature-conversion-preview", Sizes::All);
     d.click("Cancel");
     let text = fs::read_to_string(

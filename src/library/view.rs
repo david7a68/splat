@@ -201,7 +201,11 @@ fn show_inner(
             design::message(
                 ui,
                 crate::design::Tone::Warning,
-                &format!("Line {}: {}", flag.line, flag.message),
+                &if flag.message.starts_with("Hit Points \"") {
+                    format!("{} (line {}).", flag.message, flag.line)
+                } else {
+                    format!("Line {}: {}", flag.line, flag.message)
+                },
             );
         }
     }

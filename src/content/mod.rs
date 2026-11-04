@@ -225,6 +225,9 @@ impl Entry {
         } else {
             markdown::read(&body, &mut fields)?;
         }
+        if schema == 1 && kind == "creature" && !fields.contains_key("splat_character") {
+            stat_blocks::read_legacy_identity(&body, &mut fields);
+        }
         let flags = formats::read(schema, &text, &mut fields);
         let (inventory, inventory_containers) = inventory(&body)?;
         let entry = Self {

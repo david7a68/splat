@@ -424,7 +424,8 @@ fn vital_rows(entry: &Entry) -> Vec<(&'static str, String)> {
                     .map(|text| text.trim_end_matches('\\').trim().to_owned())
             })
         })
-        .or_else(|| stat(entry, "max_hp").map(|hp| hp.to_string()));
+        .or_else(|| stat(entry, "max_hp").map(|hp| hp.to_string()))
+        .or_else(|| splat::content::stat_blocks::invalid_vital(entry, "max_hp"));
     let armor_class = field(entry, "armor_class_text")
         .filter(|text| {
             text.split_whitespace()
@@ -433,11 +434,17 @@ fn vital_rows(entry: &Entry) -> Vec<(&'static str, String)> {
                 == stat(entry, "armor_class")
         })
         .map(str::to_owned)
-        .or_else(|| stat(entry, "armor_class").map(|ac| ac.to_string()));
+        .or_else(|| stat(entry, "armor_class").map(|ac| ac.to_string()))
+        .or_else(|| splat::content::stat_blocks::invalid_vital(entry, "armor_class"));
     [
         ("ARMOR CLASS", armor_class),
         ("HIT POINTS", hp),
-        ("INITIATIVE", stat(entry, "initiative").map(design::signed)),
+        (
+            "INITIATIVE",
+            stat(entry, "initiative")
+                .map(design::signed)
+                .or_else(|| splat::content::stat_blocks::invalid_vital(entry, "initiative")),
+        ),
     ]
     .into_iter()
     .filter_map(|(label, text)| text.map(|text| (label, text)))
@@ -479,8 +486,20 @@ pub(super) fn vitals(ui: &mut egui::Ui, entry: &Entry, values: Option<&super::vi
                             .map_or_else(|| "Unknown".to_owned(), |hp| hp.to_string())
                     )
                 });
+                let printed = match label {
+                    "ARMOR CLASS" => stat(entry, "armor_class"),
+                    "HIT POINTS" => stat(entry, "max_hp"),
+                    _ => stat(entry, "initiative"),
+                };
+                let invalid = entry.fields.get("splat_schema").and_then(|v| v.as_u64()) == Some(2)
+                    && printed.is_none() && text != "Unknown";
+                let display = if invalid {
+                    format!("{} {text}", design::icons::WARN)
+                } else {
+                    text.clone()
+                };
                 let width = design::number_width(ui, label, &Type::Label.font(ui))
-                    .max(design::number_width(ui, &text, &Type::Prose.font(ui)))
+                    .max(design::number_width(ui, &display, &Type::Prose.font(ui)))
                     .max(design::number_width(
                         ui,
                         run_hp.as_deref().unwrap_or(&text),
@@ -498,11 +517,6 @@ pub(super) fn vitals(ui: &mut egui::Ui, entry: &Entry, values: Option<&super::vi
                             "HIT POINTS" => values.hp,
                             _ => values.initiative,
                         });
-                        let printed = match label {
-                            "ARMOR CLASS" => stat(entry, "armor_class"),
-                            "HIT POINTS" => stat(entry, "max_hp"),
-                            _ => stat(entry, "initiative"),
-                        };
                         let shown = live.map_or_else(
                             || text.clone(),
                             |n| {
@@ -518,7 +532,16 @@ pub(super) fn vitals(ui: &mut egui::Ui, entry: &Entry, values: Option<&super::vi
                                 )
                             },
                         );
-                        ui.label(Type::Prose.rich(ui, run_hp.unwrap_or(shown)).color(c.text));
+                        let shown = run_hp.unwrap_or(shown);
+                        if invalid {
+                            ui.label(
+                                Type::Prose
+                                    .rich(ui, format!("{} {shown}", design::icons::WARN))
+                                    .color(c.result.warning),
+                            );
+                        } else {
+                            ui.label(Type::Prose.rich(ui, shown).color(c.text));
+                        }
                         if let Some(live) = live
                             && live != printed
                         {
@@ -769,6 +792,26 @@ mod tests {
         entry.fields.get_mut("splat_creature").unwrap()["cr_text"] = "2 (XP 450)".into();
         assert_eq!(detail(&entry, "cr_text").as_deref(), Some("2 (XP 450)"));
         assert!(!rules_prose(&entry, source).contains("CR 1"));
+    }
+
+    #[test]
+    fn fmt_f2_rejected_hp_uses_the_vital_row_without_becoming_a_stat() {
+        let text = crate::library::note_text("Bad HP", "creature", None)
+            .replace("| Hit Points |  |", "| Hit Points | about twenty |");
+        let entry = Entry::parse("Bad HP.md", &text).unwrap();
+        assert_eq!(stat(&entry, "max_hp"), None);
+        assert!(vital_rows(&entry).contains(&("HIT POINTS", "about twenty".into())));
+        assert!(!without_vitals(&entry, &entry.body).contains("| Hit Points |"));
+        assert!(text.contains("| Hit Points | about twenty |"));
+        let repaired = use_vital(&text, &entry, "max_hp", 22).unwrap();
+        let repaired = Entry::parse("Bad HP.md", &repaired).unwrap();
+        assert_eq!(stat(&repaired, "max_hp"), Some(22));
+        assert!(
+            repaired
+                .flags
+                .iter()
+                .all(|flag| !flag.message.starts_with("Hit Points"))
+        );
     }
 
     #[test]
