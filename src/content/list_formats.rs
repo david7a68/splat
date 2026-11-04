@@ -164,6 +164,49 @@ fn table(text: &str, section: &str, headers: &[&str]) -> Option<super::layout::T
         })
 }
 
+/// A rejected table row stays visible without becoming a runnable member.
+pub struct UnreadGroupMember {
+    pub before: usize,
+    pub creature: Option<Value>,
+    pub label: String,
+    pub count: Option<u64>,
+    pub flag: Flag,
+}
+
+pub fn unread_group_members(text: &str, flags: &[Flag]) -> Vec<UnreadGroupMember> {
+    let mut before = 0;
+    let mut unread = Vec::new();
+    if let Some(table) = table(text, "Members", GROUP) {
+        for row in table.rows {
+            if let Some(flag) = flags
+                .iter()
+                .find(|flag| row.first().is_some_and(|c| c.line == flag.line))
+            {
+                let label = row.get(1).map_or("", |cell| cell.value.as_str());
+                unread.push(UnreadGroupMember {
+                    before,
+                    creature: reference(label).ok(),
+                    label: label.into(),
+                    count: row
+                        .first()
+                        .and_then(|cell| {
+                            if cell.value.is_empty() {
+                                Some(1)
+                            } else {
+                                cell.value.parse().ok()
+                            }
+                        })
+                        .filter(|count| (1..=super::encounter_group::MAX_COUNT).contains(count)),
+                    flag: flag.clone(),
+                });
+            } else {
+                before += 1;
+            }
+        }
+    }
+    unread
+}
+
 pub fn read(text: &str, fields: &mut Mapping, flags: &mut Vec<Flag>) {
     let kind = fields
         .get("splat_kind")

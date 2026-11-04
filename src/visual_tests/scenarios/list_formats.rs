@@ -66,8 +66,29 @@ pub fn run(d: &mut Driver<'_>) {
     d.click(NAV_ENCOUNTERS);
     d.click_starting("GROUPS");
     d.click("Edit group Bridge guards");
-    d.expect("Changes: HP lots not read");
+    d.expect("Goblin Warrior: Changes \"HP lots\" not read (line 15).");
     d.expect("Goblin Warrior");
+    d.observe_both(
+        "F3 member warning",
+        "The named warning is below its member summary and before the next member",
+        |d| {
+            let nodes = d.nodes();
+            let find = |name: &str| nodes.iter().find(|node| node.name == name);
+            let first = find("1. Goblin Warrior");
+            let next = find("2. Goblin Warrior");
+            let warning = find("Goblin Warrior: Changes \"HP lots\" not read (line 15).");
+            let summary = find("Count 1 · CR 1/4 · HP 10 · AC 15");
+            first.zip(summary).zip(warning).zip(next).is_some_and(
+                |(((first, summary), warning), next)| {
+                    first.rect.bottom() <= summary.rect.top()
+                        && summary.rect.bottom() <= warning.rect.top()
+                        && warning.rect.bottom() < next.rect.top()
+                        && warning.rect.left() >= first.rect.left()
+                        && warning.in_view()
+                },
+            ) && d.visible_text("This member cannot join a fight until its Changes cell is fixed. Other members can join.")
+        },
+    );
     d.state("group-flagged-changes-cell", Sizes::All);
     let text = fs::read_to_string(campaign.path.join("Encounter Groups/Bridge guards.md")).unwrap();
     assert!(text.contains("HP lots | Keep this row"));

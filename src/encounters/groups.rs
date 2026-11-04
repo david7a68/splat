@@ -429,6 +429,9 @@ impl GroupDraft {
     pub(super) fn saved_text(&mut self, text: &str) {
         self.recovery = Default::default();
         self.source = text.to_owned();
+        if let Ok(entry) = Entry::parse(&self.path, text) {
+            self.flags = entry.flags;
+        }
         self.baseline = Some(text.to_owned());
         self.saved_name = self.name.clone();
         self.saved_setup = self.setup.clone();
@@ -1663,13 +1666,6 @@ impl Encounters {
         let saved_note = self.message.clone();
         let focus_name = std::mem::take(&mut self.focus_name);
         let draft = self.group_draft.as_mut().expect("the editor has a draft");
-        for flag in &draft.flags {
-            design::message(
-                ui,
-                Tone::Warning,
-                &format!("Line {}: {}", flag.line, flag.message),
-            );
-        }
         let (mut back, mut save, mut discard) = (false, false, false);
         ui.horizontal(|ui| {
             back = Action::quiet(icons::BACK)
@@ -1739,6 +1735,17 @@ impl Encounters {
             }
         });
         design::rule(ui);
+        let unread =
+            splat::content::list_formats::unread_group_members(&draft.source, &draft.flags);
+        for flag in &draft.flags {
+            if !unread.iter().any(|member| member.flag.line == flag.line) {
+                design::message(
+                    ui,
+                    Tone::Warning,
+                    &format!("Line {}: {}", flag.line, flag.message),
+                );
+            }
+        }
         if back {
             self.close_group_in_plan();
             self.error = None;
@@ -1950,12 +1957,14 @@ fn group_fields(
         belongs_to(ui, draft, snapshot, open);
     }
     ui.add_space(design::S);
+    let unread = splat::content::list_formats::unread_group_members(&draft.source, &draft.flags);
     let count = draft
         .setup
         .members
         .iter()
         .map(|member| member.count)
-        .sum::<u64>();
+        .sum::<u64>()
+        + unread.iter().filter_map(|member| member.count).sum::<u64>();
     ui.horizontal(|ui| {
         ui.spacing_mut().item_spacing.x = 0.0;
         design::group_heading(ui, "Members", count as usize);
@@ -1967,7 +1976,7 @@ fn group_fields(
             );
         }
     });
-    if draft.setup.members.is_empty() {
+    if draft.setup.members.is_empty() && unread.is_empty() {
         let empty = "No members yet. Add creatures from the search.";
         ui.add(egui::Label::new(Type::Small.rich(ui, empty).color(colors().muted)).wrap());
     }
@@ -2015,7 +2024,25 @@ fn members(
     let total = draft.setup.members.len();
     let side = draft.setup.side.clone();
     let path = draft.path.clone();
-    for (index, member) in draft.setup.members.iter_mut().enumerate() {
+    let unread = splat::content::list_formats::unread_group_members(&draft.source, &draft.flags);
+    for index in 0..=total {
+        let preceding = unread.iter().filter(|member| member.before < index).count();
+        for (offset, member) in unread
+            .iter()
+            .filter(|member| member.before.min(total) == index)
+            .enumerate()
+        {
+            unread_member(ui, member, index + preceding + offset + 1, snapshot);
+        }
+        let Some(member) = draft.setup.members.get_mut(index) else {
+            break;
+        };
+        let number = index
+            + unread
+                .iter()
+                .filter(|member| member.before <= index)
+                .count()
+            + 1;
         ui.push_id(index, |ui| {
             let entry = snapshot
                 .catalogue
@@ -2045,7 +2072,7 @@ fn members(
                 .unwrap_or_default();
             let key = format!("{path}:member_{index}");
             let is_open = expanded.as_deref() == Some(key.as_str());
-            let member_row = ui.label(Type::Strong.rich(ui, format!("{}. {name}", index + 1)).color(colors().text)).on_hover_text(&name).rect;
+            let member_row = ui.label(Type::Strong.rich(ui, format!("{number}. {name}")).color(colors().text)).on_hover_text(&name).rect;
             if !detail.is_empty() {
                 let response = ui.add(egui::Label::new(Type::Small.rich(ui, super::stat_line(&detail)).color(colors().muted)).wrap());
                 design::named(ui, &response, &detail);
@@ -2103,6 +2130,69 @@ fn members(
     } else if let Some(index) = lower {
         draft.setup.members.swap(index, index + 1);
     }
+}
+
+fn unread_member(
+    ui: &mut egui::Ui,
+    member: &splat::content::list_formats::UnreadGroupMember,
+    number: usize,
+    snapshot: &Snapshot,
+) {
+    let reference: Option<EntryRef> = member
+        .creature
+        .clone()
+        .and_then(|value| serde_yaml_ng::from_value(value).ok());
+    let entry = reference
+        .as_ref()
+        .and_then(|reference| snapshot.catalogue.resolve_ref(reference).ok())
+        .and_then(|id| snapshot.catalogue.entries.get(&id));
+    let name = entry.map_or_else(
+        || missing_member_name(None, Some(&member.label)),
+        |entry| entry.entry.name.clone(),
+    );
+    ui.label(
+        Type::Strong
+            .rich(ui, format!("{number}. {name}"))
+            .color(colors().text),
+    );
+    let count = member
+        .count
+        .map_or_else(|| "Count not read".into(), |count| format!("Count {count}"));
+    let detail = entry
+        .and_then(|entry| snapshot.creatures.iter().find(|c| c.id == entry.entry.id))
+        .map_or(count.clone(), |creature| {
+            format!("{count} · {}", creature.detail)
+        });
+    let summary = ui.add(
+        egui::Label::new(
+            Type::Small
+                .rich(ui, super::stat_line(&detail))
+                .color(colors().muted),
+        )
+        .wrap(),
+    );
+    design::named(ui, &summary, &detail);
+    let problem = member
+        .flag
+        .message
+        .strip_prefix("Changes: ")
+        .and_then(|text| text.strip_suffix(" not read"))
+        .map_or_else(
+            || member.flag.message.clone(),
+            |term| format!("Changes \"{term}\" not read"),
+        );
+    design::message(
+        ui,
+        Tone::Warning,
+        &format!("{name}: {problem} (line {}).", member.flag.line),
+    );
+    let blocked = if member.flag.message.starts_with("Changes:") {
+        "This member cannot join a fight until its Changes cell is fixed. Other members can join."
+    } else {
+        "This member cannot join a fight until this row is fixed. Other members can join."
+    };
+    ui.add(egui::Label::new(Type::Small.rich(ui, blocked).color(colors().muted)).wrap());
+    design::rule(ui);
 }
 
 fn packages_link(ui: &mut egui::Ui) -> bool {
@@ -2483,6 +2573,49 @@ mod tests {
         assert!(
             !names.contains(&"Hero"),
             "a sheet can be added once, on the roster"
+        );
+    }
+
+    #[test]
+    fn an_unread_changes_row_cannot_join_but_other_members_stay_usable() {
+        let dir = tempfile::tempdir().unwrap();
+        let active = campaign(dir.path());
+        let scout = creature(dir.path(), "Scout");
+        let source = format!(
+            "---\nsplat_schema: 2\nsplat_id: {}\nsplat_kind: encounter_group\nsplat_name: Broken row\nsplat_side: enemies\n---\n\n## Members\n\n| Count | Creature | Name | Changes | Note |\n| --- | --- | --- | --- | --- |\n| 7 | [[Scout]] | | HP lots | Keep this row |\n| 2 | [[Scout]] | | | |\n",
+            Uuid::new_v4()
+        );
+        fs::write(dir.path().join("Broken row.md"), &source).unwrap();
+        let snapshot = Snapshot::load(&active, &[]).unwrap();
+        let group = snapshot
+            .groups
+            .iter()
+            .find(|group| group.name == "Broken row")
+            .unwrap();
+        assert!(
+            group.problem.is_none(),
+            "the valid members can join: {:?}",
+            group.problem
+        );
+        assert_eq!(group.members.len(), 1);
+        assert_eq!(group.members[0].entry.id, scout);
+        assert_eq!(
+            group.creature_count(),
+            2,
+            "the seven bad members cannot join"
+        );
+        let draft = GroupDraft::open(dir.path(), "Broken row.md").unwrap();
+        let unread =
+            splat::content::list_formats::unread_group_members(&draft.source, &draft.flags);
+        assert_eq!(unread.len(), 1);
+        assert_eq!(
+            unread[0].before, 0,
+            "the rejected row precedes the valid member"
+        );
+        assert_eq!(unread[0].count, Some(7));
+        assert_eq!(
+            fs::read_to_string(dir.path().join("Broken row.md")).unwrap(),
+            source
         );
     }
 
