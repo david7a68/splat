@@ -4693,9 +4693,12 @@ fn snapshot_notice(snapshot: &Entry, current: Option<&Entry>, unreadable: bool) 
             .map(|(key, value)| (key.clone(), value.clone()))
             .collect::<serde_yaml_ng::Mapping>()
     };
-    (splat::content::stat_blocks::comparison_body(snapshot)
-        != splat::content::stat_blocks::comparison_body(current)
-        || fields(snapshot) != fields(current))
+    // Normalization ignores schema/run metadata. With the same model and kind,
+    // identical source bodies therefore have identical normalized bodies too.
+    (fields(snapshot) != fields(current)
+        || ((snapshot.body != current.body || snapshot.kind != current.kind)
+            && splat::content::stat_blocks::comparison_body(snapshot)
+                != splat::content::stat_blocks::comparison_body(current)))
     .then(|| format!("As at the start of this fight. {name} has changed since."))
 }
 
@@ -5908,6 +5911,31 @@ mod tests {
     use super::*;
     use serde_yaml_ng::Mapping;
     use splat::content::{Entry, overrides::Overrides};
+
+    #[test]
+    fn run_snapshot_notice_ignores_metadata_but_keeps_model_and_prose_changes() {
+        let source =
+            splat::content::definitions::source_file("definitions/creatures/wolf.md").unwrap();
+        let current = Entry::parse("Wolf.md", source).unwrap();
+        let mut snapshot = current.clone();
+        snapshot.fields.insert("splat_schema".into(), 2.into());
+        snapshot
+            .fields
+            .insert("splat_run_source_owner".into(), "Ashen Marches".into());
+        assert!(snapshot_notice(&snapshot, Some(&current), false).is_none());
+
+        let mut changed = current.clone();
+        changed.fields["splat_stats"]["max_hp"]["value"] = 12.into();
+        assert!(snapshot_notice(&snapshot, Some(&changed), false).is_some());
+
+        let mut changed = current.clone();
+        changed.body.push_str("\n\nA new attack.\n");
+        assert!(snapshot_notice(&snapshot, Some(&changed), false).is_some());
+
+        let mut whitespace = current.clone();
+        whitespace.body.push_str("\n\n");
+        assert!(snapshot_notice(&snapshot, Some(&whitespace), false).is_none());
+    }
 
     #[test]
     fn run_copy_ignores_conversion_but_reports_hp_and_source_removal() {
