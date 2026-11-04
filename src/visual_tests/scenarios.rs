@@ -813,9 +813,7 @@ pub mod campaign_content {
         std::fs::remove_file(&manifest).unwrap();
         d.click(RELOAD);
         d.wait_for_text("Write Campaign.md again");
-        d.expect(
-            "Campaign.md is missing. Splat still has the copy it last read: 2 packages, 0 rules.",
-        );
+        d.expect("Campaign.md is missing. Splat still has the copy it last read: 2 packages.");
         assert!(!manifest.exists());
         d.state("missing-campaign-manifest-needs-explicit-write", Sizes::All);
         d.click("Write Campaign.md again");
@@ -4693,7 +4691,9 @@ pub mod world {
             d.has_containing(NPC) && d.has(CLOSE_RUN),
             "A new NPC joins the fight, and the run stays on screen",
         );
-        d.state("world-npc-in-run", Sizes::Default);
+        d.expect("Stat block: not set → Guard.");
+        d.expect("Undo stat block change");
+        d.state("world-npc-in-run", Sizes::All);
         d.observe(
             "NPC arrival",
             d.has_containing("In the run · initiative 11") && !d.has("Add to run"),
@@ -4962,7 +4962,7 @@ pub mod session_notes {
             d.has_containing("Written in Obsidian."),
             "A conflict shows the file's words, so the DM chooses knowing both",
         );
-        d.state("note-conflict", Sizes::Default);
+        d.state("note-conflict", Sizes::All);
         d.click("Record this session");
         d.expect("Start recording");
         d.observe(
@@ -7871,6 +7871,18 @@ pub mod package_to_table {
             "the creature's ability table is painted"
         );
         d.state("new-creature-read", Sizes::All);
+        d.click("New entry");
+        d.type_into("Entry name", "Copper Spark");
+        d.click("Kind of entry");
+        d.click("Spell");
+        d.click("Create entry");
+        let spell = d.editor_text().expect("new spell table");
+        assert!(spell.contains("| Field | Value |"));
+        assert!(spell.contains("| Level | 1 |"));
+        d.state("new-spell-table-editor", Sizes::All);
+        d.click("Read");
+        d.expect("Describe the spell.");
+        d.state("new-spell-table-reader", Sizes::All);
         go_encounters(d);
         d.replace_text_in("Encounter name", "Copper Coast patrol");
         d.click("Start fight");
