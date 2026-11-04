@@ -55,20 +55,13 @@ fn event(kind: Kind, id: String, title: String) -> Event {
     }
 }
 fn kind(raw: &str) -> Option<Kind> {
-    match raw.to_lowercase().as_str() {
-        "encounter" => Some(Kind::Encounter),
+    match raw.trim().to_lowercase().as_str() {
+        "fight" | "encounter" => Some(Kind::Encounter),
         "short rest" => Some(Kind::ShortRest),
         "long rest" => Some(Kind::LongRest),
         "travel" => Some(Kind::Travel),
-        "event" => Some(Kind::Event),
+        "major event" | "event" => Some(Kind::Event),
         _ => None,
-    }
-}
-fn word(kind: Kind) -> &'static str {
-    match kind {
-        Kind::Encounter => "Encounter",
-        Kind::Event => "Event",
-        _ => kind.word(),
     }
 }
 fn meta(event: &mut Event, text: &str) {
@@ -129,45 +122,23 @@ fn rows(text: &str) -> (Vec<Row>, Vec<Flag>) {
                 None
             }
         } else if let Some(item) = raw.strip_prefix("- ") {
-            if let Some((label, title)) = item.split_once(':') {
-                if let Some(kind) = kind(label) {
-                    let (title, id) = title
-                        .rsplit_once(" ^")
-                        .map_or((title.trim(), None), |(title, id)| {
-                            (title, Some(id.to_owned()))
-                        });
-                    Some((kind, title.trim().trim_matches('*').to_owned(), id))
-                } else {
-                    flags.push(Flag {
-                        line: line.number,
-                        message: "Timeline item not read".into(),
-                    });
-                    None
-                }
+            let (item, id) = item
+                .rsplit_once(" ^")
+                .map_or((item, None), |(item, id)| (item, Some(id.to_owned())));
+            let (label, title) = item.split_once(':').unwrap_or((item, ""));
+            if let Some(kind) = kind(label) {
+                Some((kind, title.trim().trim_matches('*').to_owned(), id))
             } else {
+                flags.push(Flag {
+                    line: line.number,
+                    message: "Timeline item not read. Start it with Fight, Travel, Short rest, Long rest or Major event.".into(),
+                });
                 None
             }
         } else {
             None
         };
         if let Some((kind, title, id)) = parsed {
-            if kind == Kind::Day {
-                let expected = rows
-                    .iter()
-                    .filter(|row| row.event.kind == Kind::Day)
-                    .count()
-                    + 1;
-                let typed = raw
-                    .strip_prefix("## Day ")
-                    .and_then(|day| day.split(':').next())
-                    .and_then(|n| n.trim().parse::<usize>().ok());
-                if typed != Some(expected) {
-                    flags.push(Flag {
-                        line: line.number,
-                        message: "Day number comes from the order of days".into(),
-                    });
-                }
-            }
             let missing_id = id.is_none();
             let id = id.unwrap_or_else(|| stable_id(&line));
             rows.push(Row {
@@ -263,6 +234,23 @@ fn rows(text: &str) -> (Vec<Row>, Vec<Flag>) {
             meta(&mut row.event, &line.text);
         }
     }
+    let events: Vec<_> = rows.iter().map(|row| row.event.clone()).collect();
+    for (row, expected) in rows.iter().zip(day_numbers(&events)) {
+        if row.event.kind == Kind::Day {
+            let typed = row
+                .head
+                .text
+                .strip_prefix("## Day ")
+                .and_then(|day| day.split(':').next())
+                .and_then(|n| n.trim().parse::<u32>().ok());
+            if let Some(typed) = typed.filter(|typed| *typed != expected) {
+                flags.push(Flag {
+                    line: row.head.number,
+                    message: format!("\"Day {typed}\" is day {expected} in order. Splat renumbers it when it saves."),
+                });
+            }
+        }
+    }
     rows.retain(|row| {
         if !seen.insert(row.event.id.clone()) {
             flags.push(Flag {
@@ -275,6 +263,15 @@ fn rows(text: &str) -> (Vec<Row>, Vec<Flag>) {
         }
     });
     (rows, flags)
+}
+pub fn flagged_days(text: &str) -> Vec<String> {
+    let (rows, flags) = rows(text);
+    rows.into_iter()
+        .filter(|row| {
+            row.event.kind == Kind::Day && flags.iter().any(|flag| flag.line == row.head.number)
+        })
+        .map(|row| row.event.id)
+        .collect()
 }
 pub fn parse(text: &str) -> (Vec<Event>, Vec<Flag>) {
     let (rows, flags) = rows(text);
@@ -358,12 +355,12 @@ fn head(event: &Event, day: u32) -> String {
         format!("## {}\n", clean(&event.label(day)))
     } else {
         format!(
-            "- {}: {} ^{}\n",
-            word(event.kind),
+            "- {}{} ^{}\n",
+            event.kind.word(),
             if event.title.is_empty() {
                 String::new()
             } else {
-                format!("**{}**", clean(&event.title))
+                format!(": **{}**", clean(&event.title))
             },
             event.id
         )
@@ -686,6 +683,14 @@ pub fn patch(
             after.replace_range(row.head.range.start..end, &chunks[&event.id]);
         }
     }
+    // Normalize headings after moving chunks, using the app's words and day numbers.
+    let (current, _) = rows(&after);
+    for (row, day) in current.iter().zip(day_numbers(events)).rev() {
+        let heading = head(&row.event, day).replace('\n', newline);
+        if after[row.head.range.clone()] != heading {
+            after.replace_range(row.head.range.clone(), &heading);
+        }
+    }
     let parse_model = |raw: &str| -> Result<serde_yaml_ng::Value, String> {
         let mut model = serde_yaml_ng::Mapping::new();
         model.insert(
@@ -709,6 +714,105 @@ pub fn patch(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn i20_x24_app_and_file_kind_words_read_in_any_case_with_or_without_colons() {
+        for (label, kind) in [
+            ("Fight", Kind::Encounter),
+            ("Encounter", Kind::Encounter),
+            ("Major event", Kind::Event),
+            ("Event", Kind::Event),
+            ("Travel", Kind::Travel),
+            ("Short rest", Kind::ShortRest),
+            ("Long rest", Kind::LongRest),
+        ] {
+            for label in [label.to_owned(), label.to_uppercase(), label.to_lowercase()] {
+                for suffix in [": **At the bridge** ^t-one", " ^t-one", ""] {
+                    let text = format!("---\ntimeline_version: 2\n---\n\n- {label}{suffix}\n");
+                    let (events, flags) = parse(&text);
+                    assert!(flags.is_empty(), "{text}: {flags:?}");
+                    assert_eq!(events.len(), 1, "{text}");
+                    assert_eq!(events[0].kind, kind);
+                    let after = patch(&text, &events, &BTreeMap::new(), false).unwrap();
+                    assert!(after.contains(&format!("- {}", kind.word())), "{after}");
+                    assert_eq!(parse(&after).0, events);
+                }
+            }
+        }
+        for item in ["Dance: Around the fire", "Dance"] {
+            let (_, flags) = parse(&format!("- {item}\n"));
+            assert_eq!(flags.len(), 1);
+            assert_eq!(
+                flags[0].message,
+                "Timeline item not read. Start it with Fight, Travel, Short rest, Long rest or Major event."
+            );
+        }
+        let text = render(
+            &[
+                event(Kind::Encounter, "t-fight".into(), "Bridge".into()),
+                event(Kind::Event, "t-event".into(), "Dawn".into()),
+                event(Kind::LongRest, "t-rest".into(), String::new()),
+            ],
+            &BTreeMap::new(),
+        );
+        assert!(text.contains("- Fight: **Bridge** ^t-fight"));
+        assert!(text.contains("- Major event: **Dawn** ^t-event"));
+        assert!(text.contains("- Long rest ^t-rest"));
+    }
+
+    #[test]
+    fn i20_x23_every_write_renumbers_days_after_add_remove_move_and_outside_edits() {
+        let sessions = BTreeMap::new();
+        let days: Vec<_> = ["Start", "Bridge", "Storm"]
+            .iter()
+            .enumerate()
+            .map(|(i, title)| event(Kind::Day, format!("t-{i}"), (*title).into()))
+            .collect();
+        let text = render(&days, &sessions);
+        for (events, headings) in [
+            (
+                vec![days[0].clone(), days[2].clone()],
+                vec!["## Day 1: Start", "## Day 2: Storm"],
+            ),
+            (
+                vec![days[2].clone(), days[0].clone(), days[1].clone()],
+                vec!["## Day 1: Storm", "## Day 2: Start", "## Day 3: Bridge"],
+            ),
+            (
+                vec![
+                    event(Kind::Day, "t-new".into(), "New".into()),
+                    days[0].clone(),
+                    days[1].clone(),
+                    days[2].clone(),
+                ],
+                vec![
+                    "## Day 1: New",
+                    "## Day 2: Start",
+                    "## Day 3: Bridge",
+                    "## Day 4: Storm",
+                ],
+            ),
+        ] {
+            let after = patch(&text, &events, &sessions, false).unwrap();
+            assert_eq!(
+                after
+                    .lines()
+                    .filter(|line| line.starts_with("## Day "))
+                    .collect::<Vec<_>>(),
+                headings
+            );
+            assert!(parse(&after).1.is_empty());
+        }
+        let outside = text.replace("## Day 1:", "## Day 5:");
+        let (events, flags) = parse(&outside);
+        assert_eq!(
+            flags[0].message,
+            "\"Day 5\" is day 1 in order. Splat renumbers it when it saves."
+        );
+        let after = patch(&outside, &events, &sessions, true).unwrap();
+        assert!(after.contains("## Day 1: Start"));
+        assert!(parse(&after).1.is_empty());
+    }
+
     #[test]
     fn fmt_f3_session_link_wins_and_invalid_link_uses_fallback() {
         let first = Uuid::new_v4();
@@ -816,9 +920,8 @@ mod tests {
         let text = "---\ntimeline_version: 2\n---\n\n## Day 1: Start\n%% splat id=t-one %%\n\n## Day 5: Storm\n%% splat id=t-two %%\n";
         let (events, flags) = parse(text);
         assert_eq!(events.len(), 2);
-        assert!(flags.iter().any(
-            |flag| flag.line == 8 && flag.message == "Day number comes from the order of days"
-        ));
+        assert!(flags.iter().any(|flag| flag.line == 8
+            && flag.message == "\"Day 5\" is day 2 in order. Splat renumbers it when it saves."));
     }
 
     #[test]
@@ -890,20 +993,24 @@ mod tests {
         let mut events = parse(new).0;
         events[1].result = "Party won".into();
         let edited = patch(new, &events, &BTreeMap::new(), true).unwrap();
-        assert_eq!(edited, new.replace("Round 1", "Party won"));
+        assert_eq!(
+            edited,
+            new.replace("Round 1", "Party won")
+                .replace("- Encounter:", "- Fight:")
+        );
     }
     #[test]
     fn fmt_f3_timeline_bad_items_duplicates_and_missing_ids_survive() {
-        let text = "---\ntimeline_version: 2\n---\n\n# Timeline\n\n- Travel: **Road** ^t-road\n  - Loot: 30 gp\n- Fight: Not read\n- Event: **Duplicate** ^t-road\n- Event: **New**\n\nKeep this prose.\n";
+        let text = "---\ntimeline_version: 2\n---\n\n# Timeline\n\n- Travel: **Road** ^t-road\n  - Loot: 30 gp\n- Dance: Not read\n- Event: **Duplicate** ^t-road\n- Event: **New**\n\nKeep this prose.\n";
         let (events, flags) = parse(text);
         assert_eq!(events.len(), 2);
         assert_eq!(flags.len(), 2);
         let edited = patch(text, &events, &BTreeMap::new(), false).unwrap();
-        assert!(edited.contains("- Fight: Not read"));
+        assert!(edited.contains("- Dance: Not read"));
         assert!(edited.contains("- Event: **Duplicate** ^t-road"));
         assert!(edited.contains("Keep this prose."));
         assert!(edited.contains("- Loot: 30 gp"));
-        assert!(edited.contains(&format!("- Event: **New** ^{}", events[1].id)));
+        assert!(edited.contains(&format!("- Major event: **New** ^{}", events[1].id)));
     }
     #[test]
     fn fmt_f3_run_does_not_convert_legacy_timeline() {

@@ -3726,7 +3726,7 @@ impl Sessions {
                             } else if let Some(saved) = saved {
                                 design::status(ui, Status { icon: icons::RUN,
                                     word: &plan_saved_status(saved), color: c.muted });
-                            } else {
+                            } else if !(is_open && event.kind == Kind::LongRest) {
                                 plan_event_summary(ui, &summary, event.kind == Kind::LongRest && event.restores);
                             }
                         }, |ui| {
