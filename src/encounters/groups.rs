@@ -2425,7 +2425,18 @@ fn unread_member(
                     for term in raw.split(',') {
                         if let Ok(read) = splat::content::list_formats::changes(term.trim(), "", "")
                         {
-                            block.extend(read);
+                            for (key, value) in read {
+                                if key.as_str() == Some("conditions") {
+                                    block
+                                        .entry(key)
+                                        .or_insert_with(|| Value::Sequence(Vec::new()))
+                                        .as_sequence_mut()
+                                        .unwrap()
+                                        .extend(value.as_sequence().unwrap().iter().cloned());
+                                } else {
+                                    block.insert(key, value);
+                                }
+                            }
                         }
                     }
                 }
@@ -2537,7 +2548,7 @@ mod tests {
         let active = campaign(dir.path());
         creature(dir.path(), "Goblin");
         let source = format!(
-            "---\nsplat_schema: 2\nsplat_id: {}\nsplat_kind: encounter_group\nsplat_name: Guards\nsplat_side: enemies\n---\n\n## Members\n\n| Count | Creature | Name | Changes | Note |\n| --- | --- | --- | --- | --- |\n| 1 | [[Goblin]] | Scout | HP lots, AC +2 | Keep this row |\n",
+            "---\nsplat_schema: 2\nsplat_id: {}\nsplat_kind: encounter_group\nsplat_name: Guards\nsplat_side: enemies\n---\n\n## Members\n\n| Count | Creature | Name | Changes | Note |\n| --- | --- | --- | --- | --- |\n| 1 | [[Goblin]] | Scout | HP lots, AC +2, Blessed, Poisoned | Keep this row |\n",
             Uuid::new_v4()
         );
         fs::write(dir.path().join("Guards.md"), &source).unwrap();
@@ -2581,6 +2592,7 @@ mod tests {
         assert_eq!(changes.name.as_deref(), Some("Scout"));
         assert_eq!(changes.note.as_deref(), Some("Keep this row"));
         assert_eq!(changes.armor_class, Some(Change::Add(2)));
+        assert_eq!(changes.conditions, vec!["Blessed", "Poisoned"]);
     }
 
     #[test]
