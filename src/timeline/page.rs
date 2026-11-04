@@ -219,7 +219,15 @@ pub fn problems(ui: &mut egui::Ui, book: &mut Book) -> bool {
         design::message(ui, Tone::Warning, warning);
     }
     if let Some(error) = book.unreadable.clone() {
-        design::message(ui, Tone::Error, &error);
+        if crate::formats_ui::is_old(&error) {
+            crate::formats_ui::old_notice(
+                ui,
+                &crate::formats_ui::old_message(super::FILE),
+                book.path.clone().into_iter().collect(),
+            );
+        } else {
+            design::message(ui, Tone::Error, &error);
+        }
         ui.horizontal(|ui| {
             if Action::secondary("Read the file again").show(ui).clicked() {
                 book.reload();

@@ -93,6 +93,14 @@ impl Repair {
                 .as_ref(),
         );
         super::file_actions(ui, campaign, &self.path);
+        if problem.as_deref().is_some_and(crate::formats_ui::is_old) {
+            crate::formats_ui::old_notice(
+                ui,
+                &crate::formats_ui::old_message(&self.path),
+                vec![campaign.path.join(&self.path)],
+            );
+            return false;
+        }
         if let Some(disk) = self.disk.clone() {
             design::message(
                 ui,

@@ -659,6 +659,7 @@ pub struct Catalogue {
 pub struct UnreadableNote {
     pub path: PathBuf,
     pub word: String,
+    pub old_layout: bool,
     key: Option<String>,
 }
 
@@ -793,6 +794,7 @@ impl Catalogue {
                 UnreadableNote {
                     path,
                     word,
+                    old_layout: false,
                     key: entry.key.clone(),
                 },
             );
@@ -822,11 +824,17 @@ impl Catalogue {
             let (_, line) = crate::campaign_content::repair_problem(&error.path, &text);
             let name = path.file_name().unwrap_or_default().to_string_lossy();
             let line = line.map_or(String::new(), |line| format!(" (line {line})"));
+            let old_layout = crate::formats_ui::is_old(&error.message);
             self.unreadable.insert(
                 id,
                 UnreadableNote {
                     key: note_property(&text, "splat_key:"),
-                    word: format!("{name} cannot be read{line}"),
+                    word: if old_layout {
+                        crate::formats_ui::old_message(&error.path)
+                    } else {
+                        format!("{name} cannot be read{line}")
+                    },
+                    old_layout,
                     path,
                 },
             );
@@ -922,6 +930,16 @@ impl Catalogue {
                     .values()
                     .find(|note| note.key.as_deref() == Some(key))
             })
+    }
+    pub(crate) fn old_layout_ref(&self, reference: &Reference) -> Option<Uuid> {
+        self.unreadable.iter().find_map(|(id, note)| {
+            (note.old_layout
+                && match reference {
+                    Reference::Id(target) => id == target,
+                    Reference::Key(key) => note.key.as_ref() == Some(key),
+                })
+            .then_some(*id)
+        })
     }
     /// The package an unresolved reference points into, when no such package is loaded.
     fn missing_package(&self, reference: &Reference) -> Option<String> {
@@ -1045,7 +1063,17 @@ impl Catalogue {
                     "Duplicate package namespace: {ns}. Choose a new identity in Library."
                 ));
             }
-            let ids = entries.iter().map(|e| e.id).collect();
+            let ids = entries
+                .iter()
+                .map(|e| e.id)
+                .chain(
+                    result
+                        .unreadable
+                        .iter()
+                        .filter(|(_, note)| note.old_layout && note.path.starts_with(&module.path))
+                        .map(|(id, _)| *id),
+                )
+                .collect();
             let name = manifests[0].name.clone();
             for entry in entries {
                 if entry.kind == "package" && result.manifest_problems.contains_key(&module.id) {
@@ -1225,6 +1253,9 @@ impl Catalogue {
                         } else if let Some(note) = self.unreadable.get(&id)
                             && !result.errors.contains(&note.word)
                         {
+                            if note.old_layout {
+                                result.old_layout.insert(id);
+                            }
                             result.errors.push(note.word.clone());
                         }
                     }
@@ -1234,6 +1265,18 @@ impl Catalogue {
                         match self.resolve_ref(reference) {
                             Ok(id) if self.entries[&id].owner == module.id => {
                                 result.direct.insert(id);
+                            }
+                            _ if reference
+                                .reference()
+                                .ok()
+                                .and_then(|reference| self.old_layout_ref(&reference))
+                                .is_some() =>
+                            {
+                                let id = self
+                                    .old_layout_ref(&reference.reference().unwrap())
+                                    .unwrap();
+                                result.old_layout.insert(id);
+                                result.errors.push(self.unreadable[&id].word.clone());
                             }
                             _ => result.errors.push(format!(
                                 "Selected entry unavailable in {}: {}",
@@ -1282,6 +1325,13 @@ impl Catalogue {
                                         .insert(entry.entry.name.clone());
                                 }
                                 queue.push_back(dep);
+                            }
+                            Err(_) if self.old_layout_ref(&reference).is_some() => {
+                                let id = self.old_layout_ref(&reference).unwrap();
+                                result.old_layout.insert(id);
+                                if !result.errors.contains(&self.unreadable[&id].word) {
+                                    result.errors.push(self.unreadable[&id].word.clone());
+                                }
                             }
                             Err(_) => match self.missing_package(&reference) {
                                 Some(package) => {
@@ -1359,6 +1409,7 @@ pub struct Closure {
     pub direct: BTreeSet<Uuid>,
     pub required: BTreeMap<Uuid, BTreeSet<String>>,
     pub errors: Vec<String>,
+    pub old_layout: BTreeSet<Uuid>,
 }
 
 fn campaign_manifest(root: &Path, expected: Option<Uuid>) -> Result<Option<Entry>, String> {
@@ -2571,6 +2622,73 @@ mod tests {
             note_id(&format!("---\nsplat_id: [\n---\nsplat_id: {id}")),
             None
         );
+    }
+
+    #[test]
+    fn old_layout_only_blocks_selections_that_need_it() {
+        let owner = Uuid::new_v4();
+        let old = Uuid::new_v4();
+        let mut cat = Catalogue::default();
+        let mut manifest = entry("Module", "rule");
+        manifest.kind = "package".into();
+        manifest.id = owner;
+        cat.insert(manifest, owner, false).unwrap();
+        let optional = entry("Optional", "item");
+        let optional_id = optional.id;
+        cat.insert(optional, owner, false).unwrap();
+        cat.unreadable.insert(
+            old,
+            UnreadableNote {
+                path: "NPCs/Rook.md".into(),
+                word: crate::formats_ui::old_message("NPCs/Rook.md"),
+                old_layout: true,
+                key: Some("test:rook".into()),
+            },
+        );
+        cat.modules.push(ModuleIndex {
+            id: owner,
+            name: "Module".into(),
+            entries: vec![old, optional_id],
+            private: false,
+        });
+        let selected = |reference| {
+            vec![PackageSelection {
+                name: None,
+                package: EntryRef::id(owner),
+                selection: Selection::Selected {
+                    entries: vec![reference],
+                },
+            }]
+        };
+        let campaign = Uuid::new_v4();
+        assert!(cat.closure(&[], campaign).old_layout.is_empty());
+        assert!(
+            cat.closure(&selected(EntryRef::id(optional_id)), campaign)
+                .old_layout
+                .is_empty()
+        );
+        let needed = cat.closure(&selected(EntryRef::id(old)), campaign);
+        assert_eq!(needed.old_layout, BTreeSet::from([old]));
+        assert_eq!(
+            needed.errors,
+            vec![crate::formats_ui::old_message("NPCs/Rook.md")]
+        );
+        assert_eq!(
+            cat.closure(
+                &[PackageSelection {
+                    name: None,
+                    package: EntryRef::id(owner),
+                    selection: Selection::All
+                }],
+                campaign
+            )
+            .old_layout,
+            BTreeSet::from([old])
+        );
+        let mut user = entry("Uses Rook", "world");
+        require(&mut user, old);
+        cat.insert(user, campaign, true).unwrap();
+        assert_eq!(cat.closure(&[], campaign).old_layout, BTreeSet::from([old]));
     }
 
     #[test]

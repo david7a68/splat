@@ -549,6 +549,9 @@ impl Loaded {
                     || {
                         let (_, line) =
                             crate::campaign_content::repair_problem(&note.path, &note.text);
+                        if note.error.as_deref().is_some_and(crate::formats_ui::is_old) {
+                            return "Old layout".to_owned();
+                        }
                         line.map_or_else(
                             || "Cannot be read".to_owned(),
                             |line| format!("Line {line}"),
@@ -4503,7 +4506,19 @@ impl Library {
         if note.error.is_some()
             && let Some(problem) = &repair_problem
         {
-            design::message(ui, Tone::Error, problem);
+            if crate::formats_ui::is_old(problem) {
+                crate::formats_ui::old_notice(
+                    ui,
+                    &crate::formats_ui::old_message(&note.path),
+                    note.owner
+                        .root()
+                        .map(|root| root.join(&note.path))
+                        .into_iter()
+                        .collect(),
+                );
+            } else {
+                design::message(ui, Tone::Error, problem);
+            }
         }
         if let Some(module) = recovery {
             let path = crate::content_workspace::package_manifest_path(&module);
@@ -4654,7 +4669,8 @@ impl Library {
                         state.store(ui.ctx(), response.id);
                     }
                 } else {
-                    let body = parsed.as_ref().map_or(self.draft.as_str(), |e| &e.body);
+                    // A failed parse must never render YAML properties as book prose.
+                    let body = parsed.as_ref().map_or("", |e| e.body.as_str());
                     ui.push_id(&note.path, |ui| {
                         reader_style::measure(ui, |ui| {
                             ui.add_space(design::XS);
@@ -4667,7 +4683,7 @@ impl Library {
                             };
                             let subtitle = reading_subtitle;
                             let subtitle = subtitle.strip_suffix(" · Campaign").unwrap_or(subtitle);
-                            let subtitle = if subtitle == "Campaign" { note.section().label().trim_end_matches('s') } else { subtitle };
+                            let subtitle = if note.error.is_some() { "" } else if subtitle == "Campaign" { note.section().label().trim_end_matches('s') } else { subtitle };
                             view::title_with_art(ui, title, subtitle, parsed.as_ref().ok());
                         });
                         open_link = view::show_with_related(

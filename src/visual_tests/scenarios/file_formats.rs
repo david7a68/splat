@@ -20,14 +20,60 @@ pub fn run(d: &mut Driver<'_>) {
     go_library(d);
     search_library(d, "NPCs/Rook.md");
     d.click_containing("NPCs/Rook.md");
-    d.expect(splat::content::OLD_LAYOUT);
+    d.expect("NPCs/Rook.md uses the old layout. Splat no longer reads it.");
+    d.observe_both(
+        "Old-layout reader",
+        "Front matter stays out of prose and the unreadable label appears once",
+        |d| {
+            !d.nodes()
+                .iter()
+                .any(|node| node.name.contains("splat_schema:"))
+                && d.nodes()
+                    .iter()
+                    .filter(|node| {
+                        node.role == egui::accesskit::Role::Label
+                            && node.in_view()
+                            && node.name.contains("Cannot be read")
+                    })
+                    .count()
+                    == 1
+        },
+    );
     d.state("old-layout-flagged-in-library", Sizes::All);
     assert_eq!(fs::read_to_string(&path).unwrap(), before);
-    d.click(NAV_CAMPAIGN);
-    d.expect(splat::content::OLD_LAYOUT);
-    d.expect("NPCs/Rook.md");
-    d.state("old-layout-flagged-in-campaign", Sizes::All);
     d.click("Convert files…");
+    d.expect("NPCs/Rook.md");
+    d.expect(
+        before
+            .lines()
+            .find(|line| line.starts_with("splat_id:"))
+            .unwrap(),
+    );
+    d.click("Cancel");
+    d.click(NAV_CAMPAIGN);
+    d.expect("2 files use the old layout.");
+    d.observe_both(
+        "Old-layout campaign",
+        "One conversion notice replaces repair rows and empty package separators",
+        |d| {
+            !d.has("Repair")
+                && d.nodes()
+                    .iter()
+                    .filter(|node| {
+                        node.role == egui::accesskit::Role::Label
+                            && node.in_view()
+                            && node.name == "2 files use the old layout."
+                    })
+                    .count()
+                    == 1
+                && !d
+                    .nodes()
+                    .iter()
+                    .any(|node| node.name.trim_end().ends_with('·'))
+        },
+    );
+    d.state("old-layout-flagged-in-campaign", Sizes::All);
+    d.click_beside_exact("2 files use the old layout.", "Convert files…");
     d.click("File to convert");
     d.click("NPCs/Rook.md");
     d.expect("BEFORE");
@@ -109,7 +155,11 @@ pub fn run(d: &mut Driver<'_>) {
         .name;
     assert!(d.is_disabled(&old));
     assert!(d.tooltip_contains(&old, "Close the run before converting files."));
+    assert!(d.is_disabled("Convert files…"));
+    assert!(d.tooltip_contains("Convert files…", "Close the run before converting files."));
     d.state("old-layout-notice-blocked-by-run", Sizes::All);
+    // Test the package-menu action without a second Convert button behind its popup.
+    search_library(d, "Aboleth");
     d.click("Packages");
     assert!(d.is_disabled("Convert files…"));
     assert!(d.tooltip_contains("Convert files…", "Close the run before converting files."));

@@ -596,9 +596,11 @@ pub(super) fn load(
                         .and_then(Value::as_str);
                     let name = missing_member_name(member.overrides.name.as_deref(), link);
                     let fault_name = &name;
-                    problems.push(format!(
+                    problems.push(if let Some(note) = catalogue.old_layout_ref(&member.creature).and_then(|id| catalogue.unreadable.get(&id)) {
+                        note.word.clone()
+                    } else { format!(
                         "{what}, {fault_name}: not in this campaign's packages. Campaign → Packages."
-                    ));
+                    ) });
                     unavailable_members.push((index, member.count, name.to_owned()));
                     unavailable = unavailable.saturating_add(member.count);
                     continue;
@@ -634,6 +636,14 @@ pub(super) fn load(
             }
             let mut warnings = Vec::new();
             for member in unread {
+                let reference = member.creature.clone().and_then(|value| serde_yaml_ng::from_value::<EntryRef>(value).ok());
+                if let Some(note) = reference.as_ref().and_then(|reference| catalogue.unreadable_ref(reference)).filter(|note| note.old_layout) {
+                    warnings.push(note.word.clone());
+                    let count = member.count.unwrap_or(1);
+                    unavailable = unavailable.saturating_add(count);
+                    unavailable_members.push((member.before, count, member.label.clone()));
+                    continue;
+                }
                 let name = member.creature.clone()
                     .and_then(|value| serde_yaml_ng::from_value::<EntryRef>(value).ok())
                     .and_then(|reference| catalogue.resolve_ref(&reference).ok())
@@ -645,7 +655,7 @@ pub(super) fn load(
                 let shown = if member.name.is_empty() { &name } else { &member.name };
                 unavailable_members.push((member.before, count, format!("{shown} (not read)")));
             }
-            if members.is_empty() && !warnings.is_empty() { problems.push("No members can join. Edit group to fix them.".into()); }
+            if members.is_empty() && warnings.iter().any(|word| !word.contains("uses the old layout.")) { problems.push("No members can join. Edit group to fix them.".into()); }
             Some(Arc::new(RunGroup {
                 id: e.entry.id,
                 path: e.entry.path.clone(),
@@ -2199,6 +2209,9 @@ fn members(
                 let response = ui.add(egui::Label::new(Type::Small.rich(ui, super::stat_line(&detail)).color(colors().muted)).wrap());
                 design::named(ui, &response, &detail);
             }
+            if let Some(note) = snapshot.catalogue.unreadable_ref(&member.creature).filter(|note| note.old_layout) {
+                crate::formats_ui::old_notice(ui, &note.word, vec![note.path.clone()]);
+            }
             ui.horizontal(|ui| {
                 ui.label(Type::Small.rich(ui, "Count").color(colors().muted));
                 let count = ui.add(egui::DragValue::new(&mut member.count).range(1..=MAX_COUNT)
@@ -2280,6 +2293,14 @@ fn unread_member(
         .creature
         .clone()
         .and_then(|value| serde_yaml_ng::from_value(value).ok());
+    if let Some(note) = reference
+        .as_ref()
+        .and_then(|reference| snapshot.catalogue.unreadable_ref(reference))
+        .filter(|note| note.old_layout)
+    {
+        crate::formats_ui::old_notice(ui, &note.word, vec![note.path.clone()]);
+        return;
+    }
     let entry = reference
         .as_ref()
         .and_then(|reference| snapshot.catalogue.resolve_ref(reference).ok())
