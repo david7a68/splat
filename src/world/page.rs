@@ -252,7 +252,11 @@ impl WorldPage {
                                     ROW,
                                     self.repair.as_ref().is_some_and(|r| r.path == *path),
                                     path,
-                                    "Cannot be read",
+                                    if crate::formats_ui::is_old(problem) {
+                                        "Old layout"
+                                    } else {
+                                        "Cannot be read"
+                                    },
                                 )
                                 .on_hover_text(problem);
                                 if response.clicked() {

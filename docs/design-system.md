@@ -168,9 +168,15 @@ not report a changed creature. A removed package is named without saying its fil
 was deleted.
 
 Splat reads schema 2 and Timeline version 2 only. An old file is not loaded. Its
-flag names the path and says `Old layout: Splat no longer reads this file. Use Convert files.`
+warning says `<path> uses the old layout. Splat no longer reads it.`
 Library keeps the old-layout count in its header. Reading and polling write nothing.
 Ordinary saves have no layout notice.
+
+Old-layout files offer `Convert files…`, which opens their preview. They do not offer
+Repair. Campaign combines several old files into one count line. An unused old file
+does not block Save selections; a required old file is named beside the conversion
+action. The Library reader shows the unreadable state once and keeps front matter
+out of prose. An empty package count has no separator.
 
 Convert files groups files by owner, with only the campaign checked at first.
 Generated packages start unticked and can be selected. They warn that their

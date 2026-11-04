@@ -462,7 +462,7 @@ impl Draft {
                             } else {
                                 format!("{name} has no creature. Its package entry was deleted. Choose a replacement in the roster.")
                             },
-                                |note| format!("{}. Open in {} to fix it.", note.word, if crate::world::repair_in_world(&note.path) { "World" } else { "Library" }))
+                                |note| if note.old_layout { note.word.clone() } else { format!("{}. Open in {} to fix it.", note.word, if crate::world::repair_in_world(&note.path) { "World" } else { "Library" }) })
                     })?;
                     if !snapshot.creatures.iter().any(|c| c.id == id) { return Err(format!("{}: creature is unavailable in campaign content.", slot.key)); }
                     self.validate_overrides(slot, &snapshot.catalogue.entries[&id].entry)?;
@@ -3877,7 +3877,11 @@ impl Encounters {
                             if menu_action(ui, "Remove", None) { remove = Some(i); }
                         });
                         if let Some(note) = unreadable {
-                            if Action::quiet(if crate::world::repair_in_world(&note.path) { "Open in World" } else { "Open in Library" }).density(Density::Read).show(ui).clicked() {
+                            if note.old_layout {
+                                if Action::quiet("Convert files…").density(Density::Read).show(ui).clicked() {
+                                    ui.ctx().data_mut(|data| data.insert_temp(egui::Id::new("convert_old_files"), vec![note.path.clone()]));
+                                }
+                            } else if Action::quiet(if crate::world::repair_in_world(&note.path) { "Open in World" } else { "Open in Library" }).density(Density::Read).show(ui).clicked() {
                                 ui.ctx().data_mut(|data| data.insert_temp(egui::Id::new("open_library_repair"), note.path.clone()));
                             }
                         } else if Action::quiet(if creature.is_none() { "Replace…" } else { "Edit" })

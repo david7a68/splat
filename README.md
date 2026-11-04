@@ -176,6 +176,10 @@ Splat reads `splat_schema: 2` and `timeline_version: 2` only. A schema-1 file st
 on disk and is flagged with its path: `Old layout: Splat no longer reads this file.
 Use Convert files.` Library keeps the old-layout count in its header.
 
+Old-layout warnings offer **Convert files…**. They do not offer Repair. Campaign
+combines several old files into one count line. An unused old file does not block
+**Save selections**. The reader never shows front matter as prose.
+
 Library's **Packages** menu and Campaign offer **Convert files…**. The preview lists
 each file before and after conversion. Changes are marked, and both sides scroll
 together from the first difference. Only the campaign is selected at first.

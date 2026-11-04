@@ -662,7 +662,40 @@ impl CampaignContent {
 
     fn repair_section(&mut self, ui: &mut egui::Ui, campaigns: &Campaigns, active: &Campaign) {
         let mut repaired = false;
+        let old: Vec<_> = self
+            .repairs
+            .iter()
+            .filter(|(path, _, draft)| {
+                Entry::parse(path, draft)
+                    .err()
+                    .is_some_and(|error| crate::formats_ui::is_old(&error))
+            })
+            .map(|(path, _, _)| path.clone())
+            .collect();
+        if !old.is_empty() {
+            let message = if old.len() == 1 {
+                crate::formats_ui::old_message(&old[0])
+            } else {
+                format!("{} files use the old layout.", old.len())
+            };
+            if design::locked(
+                ui,
+                self.run_open
+                    .then_some("Close the run before converting files."),
+                |ui| design::message_with_action(ui, Tone::Warning, &message, "Convert files…"),
+            ) {
+                self.layouts.scan_paths(
+                    campaigns,
+                    &old.iter()
+                        .map(|path| active.path.join(path))
+                        .collect::<Vec<_>>(),
+                );
+            }
+        }
         for (path, baseline, draft) in &mut self.repairs {
+            if old.contains(path) {
+                continue;
+            }
             let (problem, error_line) = repair_problem(path, draft);
             let problem = problem
                 .as_deref()
@@ -836,8 +869,25 @@ impl CampaignContent {
             let dirty = document.selections != self.saved_selections || document.baseline.is_none();
             let repair_text = self
                 .repairs
-                .first()
-                .map(|(path, _, _)| format!("Fix {path} first."));
+                .iter()
+                .find(|(path, _, draft)| {
+                    !Entry::parse(path, draft)
+                        .err()
+                        .is_some_and(|error| crate::formats_ui::is_old(&error))
+                })
+                .map(|(path, _, _)| format!("Fix {path} first."))
+                .or_else(|| {
+                    closure.old_layout.iter().next().map(|id| {
+                        format!(
+                            "Convert {} first.",
+                            catalogue.unreadable[id]
+                                .path
+                                .file_name()
+                                .unwrap_or_default()
+                                .to_string_lossy()
+                        )
+                    })
+                });
             let repair = repair_text.as_deref();
             let save_key = dirty
                 && repair.is_none()
@@ -915,6 +965,24 @@ impl CampaignContent {
                     .blocked(blocked)
                     .show(ui)
                     .clicked();
+                    if !closure.old_layout.is_empty()
+                        && Action::quiet("Convert files…")
+                            .blocked(
+                                self.run_open
+                                    .then_some("Close the run before converting files."),
+                            )
+                            .show(ui)
+                            .clicked()
+                    {
+                        self.layouts.scan_paths(
+                            campaigns,
+                            &closure
+                                .old_layout
+                                .iter()
+                                .map(|id| catalogue.unreadable[id].path.clone())
+                                .collect::<Vec<_>>(),
+                        );
+                    }
                     if reason_fits {
                         design::blocked_reason(ui, repair);
                     } else {
@@ -1102,15 +1170,21 @@ impl CampaignContent {
             .errors
             .iter()
             .filter(|error| {
-                !catalogue.manifest_problems.iter().any(|(id, problem)| {
-                    error.contains(problem)
-                        || catalogue
-                            .entries
-                            .get(id)
-                            .is_some_and(|entry| error.contains(&entry.entry.path))
-                })
+                !crate::formats_ui::is_old(error)
+                    && !catalogue.manifest_problems.iter().any(|(id, problem)| {
+                        error.contains(problem)
+                            || catalogue
+                                .entries
+                                .get(id)
+                                .is_some_and(|entry| error.contains(&entry.entry.path))
+                    })
             })
-            .chain(closure.errors.iter())
+            .chain(closure.errors.iter().filter(|error| {
+                !closure
+                    .old_layout
+                    .iter()
+                    .any(|id| catalogue.unreadable[id].word == **error)
+            }))
             .collect();
         let missing_package = document.selections.iter().any(|selection| {
             catalogue
@@ -1434,7 +1508,7 @@ impl CampaignContent {
                                             )
                                         } else {
                                             format!(
-                                                "{} · {}",
+                                                "{}{}",
                                                 if partial {
                                                     design::count(count, "selected", "selected")
                                                 } else if enabled {
@@ -1442,7 +1516,14 @@ impl CampaignContent {
                                                 } else {
                                                     "None".into()
                                                 },
-                                                design::count(total, "entry", "entries"),
+                                                if total == 0 {
+                                                    String::new()
+                                                } else {
+                                                    format!(
+                                                        " · {}",
+                                                        design::count(total, "entry", "entries")
+                                                    )
+                                                },
                                             )
                                         },
                                     )

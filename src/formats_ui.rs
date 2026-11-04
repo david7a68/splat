@@ -11,6 +11,30 @@ use splat::content::Entry;
 use splat::content::formats;
 use std::{fs, path::PathBuf};
 
+pub fn is_old(problem: &str) -> bool {
+    problem.contains(splat::content::OLD_LAYOUT)
+}
+
+pub fn old_message(path: &str) -> String {
+    format!("{path} uses the old layout. Splat no longer reads it.")
+}
+
+pub fn old_notice(ui: &mut egui::Ui, message: &str, paths: Vec<PathBuf>) {
+    let run_open = ui
+        .ctx()
+        .data(|data| data.get_temp::<bool>(egui::Id::new("conversion_run_open")))
+        .unwrap_or(false);
+    if design::locked(
+        ui,
+        run_open.then_some("Close the run before converting files."),
+        |ui| design::message_with_action(ui, Tone::Warning, message, "Convert files…"),
+    ) {
+        ui.ctx().data_mut(|data| {
+            data.insert_temp(egui::Id::new("convert_old_files"), paths);
+        });
+    }
+}
+
 pub struct Preview {
     owner: usize,
     root: PathBuf,
@@ -52,6 +76,19 @@ pub struct State {
 }
 
 impl State {
+    pub fn scan_paths(&mut self, campaigns: &Campaigns, paths: &[PathBuf]) {
+        self.scan(campaigns);
+        if let Some(files) = &self.preview {
+            self.selected = files
+                .iter()
+                .position(|file| paths.contains(&file.root.join(&file.path)))
+                .unwrap_or(0);
+            for owner in &mut self.owners {
+                owner.checked = paths.iter().any(|path| path.starts_with(&owner.root));
+            }
+        }
+    }
+
     pub fn clear(&mut self) {
         self.undo.clear();
         self.error = None;

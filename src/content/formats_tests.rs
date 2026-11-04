@@ -17,6 +17,25 @@ fn model(text: &str) -> Mapping {
 }
 
 #[test]
+fn converted_optional_spell_rows_do_not_repeat_in_reader_prose() {
+    let old = note(
+        "spell",
+        "splat_spell: {level: 1, school: evocation, ritual: false, concentration: false, range: {feet: 30}, range_text: 'Within sight'}",
+        "# Rook\n\nKeep this spell text.\n",
+    );
+    let converted = formats::convert("Rook.md", &old).unwrap();
+    let entry = Entry::parse("Rook.md", &converted).unwrap();
+    assert!(entry.body.contains("| Ritual | No |"));
+    assert!(entry.body.contains("| Concentration | No |"));
+    assert!(entry.body.contains("| Range Text | Within sight |"));
+    let reading = super::stat_blocks::reading_body(&entry, &entry.body);
+    assert!(reading.contains("Keep this spell text."));
+    for row in ["| Ritual |", "| Concentration |", "| Range Text |"] {
+        assert!(!reading.contains(row), "{reading}");
+    }
+}
+
+#[test]
 fn fmt_f1_world_conversion_and_obsidian_properties_rewrite() {
     let old = note(
         "world",
