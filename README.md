@@ -191,7 +191,7 @@ The existing binary also has two commands that open no window:
 
 ```sh
 devenv shell -- cargo build --locked --bin splat
-devenv shell -- ./target/debug/splat convert /path/to/folder --dry-run
+devenv shell -- ./target/debug/splat convert /path/to/folder --dry-run --verify
 devenv shell -- ./target/debug/splat convert /path/to/folder
 devenv shell -- ./target/debug/splat convert /path/to/folder --include-generated
 devenv shell -- ./target/debug/splat check /path/to/folder
@@ -200,7 +200,11 @@ devenv shell -- ./target/debug/splat check /path/to/folder
 The folder can be a vault, campaign or package. `convert` uses the same converter
 and baseline-checked writes as the dialog. It prints each converted or skipped file,
 its reason and a total. `--dry-run` writes nothing. Generated packages are skipped
-unless `--include-generated` is set. Exit status is 1 if any file is skipped.
+unless `--include-generated` is set. `--verify` requires `--dry-run` and compares
+the old and converted reader models in memory, with counts for each file kind.
+References use built-in content, registered packages and campaigns, and the selected
+folder. Missing identities stay unchanged and produce warnings, not skips.
+Exit status is 1 if any file is skipped.
 `check` uses the schema-2 readers, prints flagged or unreadable paths with their line
 and reason, and prints counts. Exit status is 1 if any file is flagged or unreadable.
 Invalid command arguments or a folder that cannot be opened return status 2.
@@ -212,7 +216,10 @@ line flag; its value is not set. Printed modifiers and passive initiative are ch
 Rejected vital text stays in its reader row with a warning. Conversion fills missing
 creature identity from the printed line and writes `Medium` and `Beast` in reader case.
 Stat edits keep formulas, spacing, and other text. New entries use this layout.
-If old values conflict, conversion keeps the file and asks you to review it.
+Conversion writes creature tables from the saved model. Original printed stat lines
+stay unchanged inside a folded quote callout and are not read as stats. Table shape
+hints preserve legacy compound identities and text ranges; explicit spell ritual
+and concentration rows preserve both true and false values.
 Timeline uses event lists. Campaign packages use task items. Groups and encounter
 rosters use tables. Character copies use their character's name once,
 keep their identity after a rename, and put imported data in a foldable end section.
