@@ -156,6 +156,14 @@ fn timeline_body(d: &mut Driver<'_>, folder: &std::path::Path) {
         fs::read_to_string(&path).unwrap() == text,
         "An edited body stays on disk until the DM chooses",
     );
+    d.observe_both(
+        "i20-S4",
+        "Timeline conflict uses the rail warning words",
+        |d| d.has("Timeline changed on disk") && !d.has("Timeline not saved"),
+    );
+    let status = d.app_mut().timeline.attention_status().unwrap();
+    assert_eq!(status.color, crate::design::colors().document.external);
+    assert_eq!(status.icon, crate::design::icons::WARN);
     d.state("timeline-body-conflict", Sizes::All);
     d.click("Overwrite with my timeline");
 }

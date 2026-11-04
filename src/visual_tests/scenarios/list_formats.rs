@@ -145,6 +145,32 @@ pub fn run(d: &mut Driver<'_>) {
     fs::write(&path, text.replace("## Day 1:", "## Day 5:")).unwrap();
     d.app_mut().timeline.reload();
     d.click(NAV_TIMELINE);
-    d.expect("Day number comes from the order of days");
+    d.expect("Timeline.md, line 9: \"Day 5\" is day 1 in order.");
+    d.expect("Splat renumbers it when it saves.");
+    d.observe_both(
+        "i20-S3",
+        "A Timeline flag names the file, displayed day, and repair routes",
+        |d| {
+            d.has("Edit in Obsidian")
+                && d.has("Show file")
+                && d.visible_text("Timeline.md, line 9:")
+                && d.visible_text("Splat renumbers it when it saves.")
+        },
+    );
     d.state("timeline-item-edited-and-flagged-in-obsidian", Sizes::All);
+    d.app_mut().timeline.touch();
+    d.app_mut().timeline.save();
+    d.settle();
+    d.observe_both(
+        "i20-X23",
+        "Saving renumbers the day and clears its flag",
+        |d| !d.has_containing("Splat renumbers it when it saves."),
+    );
+    assert!(
+        fs::read_to_string(&path)
+            .unwrap()
+            .contains("## Day 1: The crossing")
+    );
+    d.expect_same("Saving the corrected day returns to the original unflagged Timeline.");
+    d.state("timeline-day-renumbered-on-save", Sizes::All);
 }

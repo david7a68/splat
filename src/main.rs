@@ -875,7 +875,7 @@ impl Splat {
                 ),
                 (
                     self.timeline.not_saved(),
-                    "Timeline not saved",
+                    self.timeline.attention_status().map_or("Timeline not saved", |state| state.word),
                     Page::Timeline,
                 ),
             ] {
@@ -887,12 +887,14 @@ impl Splat {
                                 .sessions
                                 .attention_status()
                                 .filter(|_| target == Page::Sessions)
+                                .or_else(|| self.timeline.attention_status().filter(|_| target == Page::Timeline))
                                 .map_or(icons::ERROR, |state| state.icon),
                             word,
                             color: self
                                 .sessions
                                 .attention_status()
                                 .filter(|_| target == Page::Sessions)
+                                .or_else(|| self.timeline.attention_status().filter(|_| target == Page::Timeline))
                                 .map_or(colors().document.invalid, |state| state.color),
                         },
                     );
