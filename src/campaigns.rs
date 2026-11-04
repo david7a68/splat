@@ -472,18 +472,21 @@ impl Campaigns {
                 .get("splat_rule_choices")
                 .and_then(serde_yaml_ng::Value::as_mapping)
                 .map_or(0, serde_yaml_ng::Mapping::len);
+            let counts = [
+                design::count(packages, "package", "packages"),
+                design::count(rules, "rule", "rules"),
+            ]
+            .into_iter()
+            .filter(|part| !part.is_empty())
+            .collect::<Vec<_>>()
+            .join(", ");
             (
                 format!(
-                    "Splat still has the copy it last read: {}, {}.",
-                    if packages == 0 {
-                        "0 packages".into()
+                    "Splat still has the copy it last read: {}.",
+                    if counts.is_empty() {
+                        "no package or rule selections"
                     } else {
-                        design::count(packages, "package", "packages")
-                    },
-                    if rules == 0 {
-                        "0 rules".into()
-                    } else {
-                        design::count(rules, "rule", "rules")
+                        &counts
                     }
                 ),
                 "Write Campaign.md again",
@@ -1323,7 +1326,7 @@ mod tests {
         assert!(CampaignDocument::load(&campaign).is_err());
         assert!(format!("{:?}", campaigns.error).contains("Campaign.md is missing"));
         let (preview, action) = campaigns.campaign_write_preview(&campaign);
-        assert!(preview.contains("Splat still has the copy it last read: 1 package, 0 rules."));
+        assert!(preview.contains("Splat still has the copy it last read: 1 package."));
         assert_eq!(action, "Write Campaign.md again");
         let fresh = Campaigns::at(temp.path().join("new-settings.json"));
         assert_eq!(

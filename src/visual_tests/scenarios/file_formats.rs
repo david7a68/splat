@@ -82,10 +82,11 @@ pub fn run(d: &mut Driver<'_>) {
     d.click_containing("files use the old layout");
     fs::write(&path, format!("{before}Outside edit after preview.\n")).unwrap();
     d.click("Convert files");
-    d.expect("Saved in the new layout.");
+    d.expect("2 files now use the new layout. 1 file was skipped.");
     d.expect("Undo convert");
-    d.click("Files skipped");
-    d.expect("NPCs/Rook.md: This entry changed on disk.");
+    d.expect(
+        "NPCs/Rook.md changed on disk after the preview. Open Convert files again to convert it.",
+    );
     d.observe_both(
         "W11 conversion result",
         "One batch Undo and the skipped file stay with the conversion result",
@@ -96,13 +97,37 @@ pub fn run(d: &mut Driver<'_>) {
                 .count()
                 == 1
                 && d.visible_text("Undo convert")
+                && d.visible_text("NPCs/Rook.md changed on disk after the preview. Open Convert files again to convert it.")
         },
     );
     d.state("converted-with-skipped-file-and-one-undo", Sizes::All);
     d.click("Undo convert");
+    d.expect("Conversion undone.");
+    d.observe_both(
+        "W12 Undo convert",
+        "Undo restores the old layouts and clears the skipped result",
+        |d| !d.has("Undo convert") && !d.has("FILES SKIPPED"),
+    );
+    d.state("conversion-undone", Sizes::All);
     assert!(
         fs::read_to_string(&path)
             .unwrap()
             .contains("Outside edit after preview.")
     );
+    go_encounters(d);
+    resume_run_from_cold_start(d);
+    go_library(d);
+    let old = d
+        .nodes()
+        .into_iter()
+        .find(|node| node.name.ends_with("files use the old layout"))
+        .unwrap()
+        .name;
+    assert!(d.is_disabled(&old));
+    assert!(d.tooltip_contains(&old, "Close the run before converting files."));
+    d.state("old-layout-notice-blocked-by-run", Sizes::All);
+    d.click("Packages");
+    assert!(d.is_disabled("Convert files…"));
+    assert!(d.tooltip_contains("Convert files…", "Close the run before converting files."));
+    d.state("convert-files-blocked-by-run", Sizes::All);
 }

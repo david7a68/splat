@@ -2162,7 +2162,7 @@ pub fn grouped_draft_comparison(
                 .map(|lines| {
                     ui.fonts_mut(|fonts| {
                         fonts.layout(
-                            lines.get(line).copied().unwrap_or("No line").to_owned(),
+                            lines.get(line).copied().unwrap_or("").to_owned(),
                             face.clone(),
                             colors().text,
                             text_width,
@@ -2203,6 +2203,17 @@ pub fn grouped_draft_comparison(
                         .show(&mut columns[at], |ui| {
                             ui.set_min_width(ui.available_width());
                             ui.set_min_height(row_height - ui.spacing().item_spacing.y);
+                            if lines.get(line).is_none() {
+                                let (rect, _) = ui.allocate_exact_size(
+                                    vec2(
+                                        ui.available_width(),
+                                        row_height - ui.spacing().item_spacing.y,
+                                    ),
+                                    Sense::hover(),
+                                );
+                                comparison_missing_row(ui, rect);
+                                return;
+                            }
                             ui.horizontal_top(|ui| {
                                 let (mark, _) = ui.allocate_exact_size(
                                     egui::vec2(XS, line_height),
@@ -2217,17 +2228,13 @@ pub fn grouped_draft_comparison(
                                 }
                                 ui.add(
                                     egui::Label::new(
-                                        egui::RichText::new(
-                                            lines.get(line).copied().unwrap_or("No line"),
-                                        )
-                                        .font(face.clone())
-                                        .color(
-                                            if lines.get(line).is_some() {
+                                        egui::RichText::new(lines.get(line).copied().unwrap_or(""))
+                                            .font(face.clone())
+                                            .color(if lines.get(line).is_some() {
                                                 colors().text
                                             } else {
                                                 colors().muted
-                                            },
-                                        ),
+                                            }),
                                     )
                                     .wrap(),
                                 );
@@ -2349,13 +2356,15 @@ pub fn source_comparison(ui: &mut Ui, text: [&str; 2], id: impl std::hash::Hash)
                             .show(ui, |ui| {
                                 ui.set_min_width(min_width);
                                 ui.set_min_height(line_height);
-                                ui.add(
-                                    egui::Label::new(Type::Mono.rich(
-                                        ui,
-                                        lines[side].get(at).copied().unwrap_or("No line"),
-                                    ))
-                                    .extend(),
-                                );
+                                if let Some(line) = lines[side].get(at) {
+                                    ui.add(egui::Label::new(Type::Mono.rich(ui, *line)).extend());
+                                } else {
+                                    let (rect, _) = ui.allocate_exact_size(
+                                        vec2(min_width, line_height),
+                                        Sense::hover(),
+                                    );
+                                    comparison_missing_row(ui, rect);
+                                }
                             });
                     }
                 });
@@ -2365,6 +2374,26 @@ pub fn source_comparison(ui: &mut Ui, text: [&str; 2], id: impl std::hash::Hash)
         }
     });
     ui.data_mut(|data| data.insert_temp(state, next));
+}
+
+/// A missing source row has no file text. Its name remains available to screen readers.
+fn comparison_missing_row(ui: &mut Ui, rect: egui::Rect) {
+    let response = ui.interact(rect, ui.next_auto_id(), Sense::hover());
+    ui.skip_ahead_auto_ids(1);
+    response.widget_info(|| WidgetInfo::new(WidgetType::Label));
+    named(ui, &response, "No line");
+    let painter = ui.painter().with_clip_rect(rect.intersect(ui.clip_rect()));
+    let mut x = rect.left() - rect.height();
+    while x < rect.right() {
+        painter.line_segment(
+            [
+                egui::pos2(x, rect.bottom()),
+                egui::pos2(x + rect.height(), rect.top()),
+            ],
+            Stroke::new(HAIRLINE_WIDTH, colors().rule),
+        );
+        x += S;
+    }
 }
 
 fn comparison_offset(heights: &[f32], line: usize, height: f32) -> f32 {
@@ -2465,7 +2494,7 @@ pub fn draft_comparison_labeled(
                 .map(|lines| {
                     ui.fonts_mut(|fonts| {
                         fonts.layout(
-                            lines.get(line).copied().unwrap_or("No line").to_owned(),
+                            lines.get(line).copied().unwrap_or("").to_owned(),
                             face.clone(),
                             colors().text,
                             text_width,
@@ -2532,14 +2561,14 @@ pub fn draft_comparison_labeled(
                             .max_rect(text_rect)
                             .layout(Layout::top_down(Align::Min)),
                     );
-                    let color = if lines.get(line).is_some() {
-                        colors().text
-                    } else {
-                        colors().muted
-                    };
+                    if lines.get(line).is_none() {
+                        comparison_missing_row(&mut cell, text_rect);
+                        continue;
+                    }
+                    let color = colors().text;
                     let galley = cell.fonts_mut(|fonts| {
                         fonts.layout(
-                            lines.get(line).copied().unwrap_or("No line").to_owned(),
+                            lines.get(line).copied().unwrap_or("").to_owned(),
                             face.clone(),
                             color,
                             text_rect.width(),
@@ -2641,6 +2670,7 @@ mod tests {
         for (prefix, wrapped) in [(0, false), (3, false), (50, false), (50, true)] {
             let context = egui::Context::default();
             super::super::theme::install(&context);
+            context.enable_accesskit();
             let context_lines = (0..prefix)
                 .map(|n| {
                     if wrapped && n % 3 == 0 {
@@ -2704,12 +2734,23 @@ mod tests {
                 }
                 if prefix == 0 {
                     assert!(
-                        output.shapes.iter().any(|shape| visible(
+                        !output.shapes.iter().any(|shape| visible(
                             &shape.shape,
                             shape.clip_rect,
                             "No line"
                         )),
-                        "missing lines need words"
+                        "missing rows must not look like file text"
+                    );
+                    assert!(
+                        output
+                            .platform_output
+                            .accesskit_update
+                            .as_ref()
+                            .unwrap()
+                            .nodes
+                            .iter()
+                            .any(|(_, node)| node.label() == Some("No line")),
+                        "missing rows keep their accessible name"
                     );
                 }
             }
