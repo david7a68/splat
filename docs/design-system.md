@@ -151,6 +151,15 @@ supplies each value once. A bad cell shows a warning with its file line; valid
 values still lead in the reader and beside a run. Rejected vitals show their original
 text with a warning in the vitals area. Unknown rows stay readable.
 
+Converted spells and items show facts once, with no empty rows or machine lines.
+Creature types use book case and keep their tags. CR supplies missing XP and PB;
+an explicit mismatch has a line warning, except for lair values. Ability modifiers
+and passive initiative follow their score or bonus. Conversion keeps printed
+creature headers in a folded quote marked as a record, outside the reading view.
+Run copy notices compare the model and readable words, so conversion alone does
+not report a changed creature. A removed package is named without saying its file
+was deleted.
+
 A schema conversion shows `Saved in the new layout.` with `Undo`. Convert files
 groups files by owner, with only the campaign checked at first. Generated packages
 are disabled and say `Generated package; its converter writes the layout`.

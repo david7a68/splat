@@ -1368,7 +1368,12 @@ pub mod encounter_run {
         d.press_ctrl(Key::K);
         d.type_text(KEYBOARD_LOOKUP);
         let search = d.has("Bless");
-        d.state("lookup-by-keyboard", Sizes::Default);
+        d.observe(
+            "i19 converted spell",
+            !d.visible_text("%% splat") && !d.visible_text("Field"),
+            "Lookup hides machine lines and empty field rows",
+        );
+        d.state("lookup-by-keyboard", Sizes::All);
         d.press(Key::Escape);
         let back = !d.has(SEARCH_LOOKUP);
         let keys = d.goal("run a turn, damage, undo and a lookup by keyboard alone");
@@ -1875,6 +1880,11 @@ pub mod run_lookup {
             "Keys",
             d.visible_text("Keys"),
             "Keys keeps its word beside Lookup at 960x640",
+        );
+        d.observe(
+            "i19 character-copy spell",
+            !d.visible_text("%% splat") && !d.visible_text("Field"),
+            "The character-copy spell reads without machine lines or an empty field table",
         );
         d.state("reading-spell-beside-run", Sizes::All);
         d.goal_within("T2.1", "read a spell from a run", 3);
@@ -7922,6 +7932,12 @@ pub mod remove_package_in_use {
         go_encounters(d);
         resume_run_from_cold_start(d);
         d.wait_for_text(NEXT_TURN);
+        d.expect("As at the start of this fight. Ashen Marches is not used in this campaign now.");
+        d.observe(
+            "i19 removed package",
+            !d.visible_text("was deleted"),
+            "A package removal does not say its creature file was deleted",
+        );
         d.state("paused-run-after-package-removal", Sizes::All);
     }
 }
