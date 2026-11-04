@@ -91,6 +91,7 @@ fn made_up_entry(name: &str, hp: i64, ac: Option<i64>) -> Entry {
         kind: "creature".into(),
         fields: fields.into(),
         body: String::new(),
+        body_line: 1,
         inventory: Vec::new(),
         inventory_containers: Vec::new(),
         flags: Vec::new(),

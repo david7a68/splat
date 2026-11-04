@@ -3791,12 +3791,18 @@ impl Library {
 
     fn editor_pane(&mut self, ui: &mut egui::Ui, subtitle: &str, campaigns: &Campaigns) {
         if let Some(write) = &self.manifest_write
-            && write.replaced()
-            && Action::quiet("Undo write Package.md")
-                .icon(icons::UNDO)
-                .blocked(self.draft_reason())
-                .show(ui)
-                .clicked()
+            && design::locked(ui, self.draft_reason(), |ui| {
+                design::message_with_action(
+                    ui,
+                    Tone::Success,
+                    if write.replaced() {
+                        "Package.md was replaced."
+                    } else {
+                        "Package.md was written again."
+                    },
+                    "Undo write Package.md",
+                )
+            })
         {
             match write.undo() {
                 Ok(root) => {

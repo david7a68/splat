@@ -638,10 +638,14 @@ pub fn package_manifest_broken(d: &mut Driver<'_>) {
         crate::library::local_module(&folder).unwrap().id,
         crate::content_workspace::note_id(&valid).unwrap()
     );
-    d.expect_same(
-        "Writing the registered details restores the same valid Campaign state as a backup repair.",
-    );
+    d.expect("Package.md was written again.");
+    d.expect("Undo write Package.md");
     d.state("manifest-written-again-campaign", Sizes::All);
+    d.click("Undo write Package.md");
+    d.wait_for_text("Package.md was deleted");
+    assert!(!path.exists());
+    d.click("Write Package.md again");
+    d.settle();
     fs::remove_file(&path).unwrap();
     d.focus_window(false);
     d.focus_window(true);
@@ -657,6 +661,8 @@ pub fn package_manifest_broken(d: &mut Driver<'_>) {
     d.click("Write Package.md again");
     d.settle();
     assert!(!d.has_containing("Package.md was deleted"));
+    d.expect("Package.md was written again.");
+    d.expect("Undo write Package.md");
     d.state("manifest-written-again-library", Sizes::All);
     go_encounters(d);
     d.expect("Cinder Wolf");

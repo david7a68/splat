@@ -8,7 +8,7 @@ pub fn run(d: &mut Driver<'_>) {
     let before = fs::read_to_string(&path).unwrap();
     d.click(NAV_WORLD);
     d.click_containing("Malformed · ");
-    d.expect("Line 7: splat_status: value not read");
+    d.expect("Status \"[alive]\" not read (line 7). Use a short word, such as alive.");
     d.expect("A note for tonight.");
     d.state("flagged-malformed-value", Sizes::All);
     assert_eq!(
