@@ -2025,6 +2025,11 @@ pub fn reading_body(entry: &Entry, body: &str) -> String {
     };
     for head in heads {
         if let Some(table) = stat_section.table(head) {
+            let extra_rows: &[&str] = match kind {
+                "spell" => &["Ritual", "Concentration", "Range Text"],
+                "creature" => &["Type Tags", "Type Options"],
+                _ => &[],
+            };
             let known = |name: &str| {
                 (if kind == "spell" {
                     SPELL_ROWS
@@ -2034,6 +2039,7 @@ pub fn reading_body(entry: &Entry, body: &str) -> String {
                     CREATURE_ROWS
                 })
                 .iter()
+                .chain(extra_rows.iter())
                 .chain(["HP", "AC", "CR"].iter())
                 .chain(DETAILS.iter().map(|(name, _)| name))
                 .any(|n| layout::label(n) == layout::label(name))
