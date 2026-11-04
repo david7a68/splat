@@ -1354,6 +1354,21 @@ mod tests {
                     .any(|shape| visible(&shape.shape, shape.clip_rect)),
                 "changed paragraph is hidden at {width}×{height}"
             );
+            for shape in &output.shapes {
+                if let egui::Shape::Text(text) = &shape.shape
+                    && text.galley.text().contains("The party followed the river.")
+                {
+                    let bounds = text.visual_bounding_rect();
+                    if bounds.intersects(shape.clip_rect) {
+                        assert!(
+                            bounds.top() >= shape.clip_rect.top()
+                                && bounds.bottom() <= shape.clip_rect.bottom(),
+                            "partial comparison row at {width}×{height}: {bounds:?}, clip {:?}",
+                            shape.clip_rect
+                        );
+                    }
+                }
+            }
         }
     }
 

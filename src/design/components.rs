@@ -2492,58 +2492,64 @@ pub fn draft_comparison_labeled(
         scroll_heights.push(padding);
         scroll = scroll.vertical_scroll_offset(comparison_offset(&scroll_heights, line, height));
     }
-    scroll.auto_shrink([false, false]).show(ui, |ui| {
-        for (line, &row_height) in heights.iter().enumerate() {
-            let differs = left.get(line) != right.get(line);
-            let width = ui.available_width();
-            let (row, _) = ui.allocate_exact_size(vec2(width, row_height), Sense::hover());
-            let gap = ui.spacing().item_spacing.x;
-            let column = (width - gap) / 2.0;
-            for (side, lines) in [&left, &right].into_iter().enumerate() {
-                let rect = egui::Rect::from_min_size(
-                    row.min + vec2(side as f32 * (column + gap), 0.0),
-                    vec2(column, row_height),
-                );
-                ui.painter().rect_filled(
-                    rect,
-                    0.0,
-                    if differs {
-                        colors().selected
-                    } else {
-                        colors().page
-                    },
-                );
-                if differs {
-                    ui.painter().vline(
-                        rect.left() + XS / 2.0,
-                        rect.y_range(),
-                        Stroke::new(HAIRLINE_WIDTH, colors().accent),
+    scroll
+        .auto_shrink([false, false])
+        .show_viewport(ui, |ui, viewport| {
+            // Keep the previous row's descenders outside the comparison viewport.
+            let viewport = viewport.translate(ui.max_rect().min.to_vec2());
+            ui.set_clip_rect(ui.clip_rect().intersect(viewport));
+            for (line, &row_height) in heights.iter().enumerate() {
+                let differs = left.get(line) != right.get(line);
+                let width = ui.available_width();
+                let (row, _) = ui.allocate_exact_size(vec2(width, row_height), Sense::hover());
+                let gap = ui.spacing().item_spacing.x;
+                let column = (width - gap) / 2.0;
+                for (side, lines) in [&left, &right].into_iter().enumerate() {
+                    let rect = egui::Rect::from_min_size(
+                        row.min + vec2(side as f32 * (column + gap), 0.0),
+                        vec2(column, row_height),
                     );
+                    ui.painter().rect_filled(
+                        rect,
+                        0.0,
+                        if differs {
+                            colors().selected
+                        } else {
+                            colors().page
+                        },
+                    );
+                    if differs {
+                        ui.painter().vline(
+                            rect.left() + XS / 2.0,
+                            rect.y_range(),
+                            Stroke::new(HAIRLINE_WIDTH, colors().accent),
+                        );
+                    }
+                    let text_rect =
+                        egui::Rect::from_min_max(rect.min + vec2(XS + gap, 0.0), rect.max);
+                    let mut cell = ui.new_child(
+                        egui::UiBuilder::new()
+                            .max_rect(text_rect)
+                            .layout(Layout::top_down(Align::Min)),
+                    );
+                    let color = if lines.get(line).is_some() {
+                        colors().text
+                    } else {
+                        colors().muted
+                    };
+                    let galley = cell.fonts_mut(|fonts| {
+                        fonts.layout(
+                            lines.get(line).copied().unwrap_or("No line").to_owned(),
+                            face.clone(),
+                            color,
+                            text_rect.width(),
+                        )
+                    });
+                    cell.add(egui::Label::new(galley));
                 }
-                let text_rect = egui::Rect::from_min_max(rect.min + vec2(XS + gap, 0.0), rect.max);
-                let mut cell = ui.new_child(
-                    egui::UiBuilder::new()
-                        .max_rect(text_rect)
-                        .layout(Layout::top_down(Align::Min)),
-                );
-                let color = if lines.get(line).is_some() {
-                    colors().text
-                } else {
-                    colors().muted
-                };
-                let galley = cell.fonts_mut(|fonts| {
-                    fonts.layout(
-                        lines.get(line).copied().unwrap_or("No line").to_owned(),
-                        face.clone(),
-                        color,
-                        text_rect.width(),
-                    )
-                });
-                cell.add(egui::Label::new(galley));
             }
-        }
-        ui.add_space(padding);
-    });
+            ui.add_space(padding);
+        });
     ui.spacing_mut().item_spacing.y = row_gap;
 }
 
