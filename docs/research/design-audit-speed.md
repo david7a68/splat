@@ -1432,3 +1432,123 @@ ignored `artifacts/screenshots/audit-speed-16/`; captures use sibling
 stack sample and is excluded from the clean timing comparison. Build output and
 captures stay in the worktree; no large files were placed in `/tmp`, and no
 `artifacts/design-audit/` files are committed.
+
+## Seventeenth scan: unchanged run snapshot comparisons
+
+2026-11-03. Fetched and merged `origin/main` first; base
+`bf57b324ab0a6954a8067773cc89d4e35dc672e5` (PR 103). Used the lead's
+reflinked warm `target/`, without `CARGO_TARGET_DIR`. Waited until the lead's
+`visual-test audit-19` ended and no Cargo/compiler process remained before
+starting the baseline. Commands run from this worktree through `devenv shell --`,
+with video disabled. Our full runs are sequential; process checks during the
+standalone runs found no unrelated Cargo/compiler run. Host load averages include
+the suite's own many scenario threads and are not a separate contention measurement.
+
+### Cause and retained fix
+
+`snapshot_notice` compared each run creature with the current catalogue on every
+frame. It normalized both Markdown bodies before comparing the model, even when
+the source bodies were identical. Normalization strips legacy/printed stat
+blocks, reads the stat tables and joins whitespace. Temporary aggregate timers
+in a full original-source repeat measured:
+
+| Boundary | Calls | Sum of overlapping elapsed times |
+| --- | ---: | ---: |
+| `comparison_body` | 25,588 | 15.422 s |
+| `reading_body`, including comparison calls | 42,386 | 4.260 s |
+| `invalid_vital`, including reader calls | 2,974 | 0.018 s |
+| `convert_resolved` | 234 | 3.328 s |
+| List reference resolution | 4,065,347 | 10.143 s |
+| `Catalogue::load` | 1,085 | 139.738 s |
+| Encounter/group recovery disk checks | 18 | 0.797 s |
+| Explicit Convert files scans | 4 | 3.748 s |
+
+These nested, concurrent sums are not suite wall times or predicted savings.
+The instrumented repeat passed in 120.89 s with the original behavior. Catalogue
+loads include changed files and campaign selections; their inputs cannot safely
+be cached by path alone. CR/XP defaults already use a fixed table. Run-folder
+warnings return before scanning when the folder is unchanged. No new scenario
+adds a fixed sleep; the driver keeps its existing busy/repaint settling rules.
+
+The retained fix compares the same filtered model first. A changed model already
+requires the notice. With an equal model, equal kind and byte-identical bodies
+cannot differ after normalization: normalization forces schema 2 and does not use
+run metadata. Only differing bodies or kinds need the original normalized-body
+comparison. There is no cache or changed disk check, and nothing to invalidate.
+
+A focused temporary harness used the real `snapshot_notice`, a parsed Wolf and
+an unchanged copy carrying run-source metadata. It asserted no notice on every
+call and used `black_box` inputs/results. The permanent regression test covers
+ignored schema/run metadata, a changed model with identical prose, changed prose
+with identical model, and whitespace-only body changes. Existing conversion,
+HP-change, unreadable-source and deleted-source tests also pass.
+
+### Measurements
+
+Both standalone commands set `SPLAT_VISUAL_VIDEO=0 SPLAT_VISUAL_TIMINGS=1`.
+The baseline uses `visual-test speed-17` (its captures were then moved to
+`speed-17-before`); retained source uses `visual-test speed-17-after`. Suite times
+come from the built-in timer and exclude compilation.
+
+| Work | Original source | Retained fix |
+| --- | ---: | ---: |
+| 10,000 unchanged snapshot notices | 7.674 s | 0.794 s |
+| Full standalone visual suite | 118.08 s | 113.49 s |
+| Test build in that standalone command | 22.93 s | 4.59 s |
+| Scenarios / captures | 68 / 1,595 | 68 / 1,595 |
+| Full `audit-gate speed-17` visual suite | — | 118.29 s |
+| Full gate, including builds and ordinary tests | — | 146.00 s |
+
+The focused work falls by 89.7%. The standalone pair saves 4.59 s / 3.9%; this
+single pair is not a statistical throughput estimate. The first build follows
+the reflink into a new worktree, while the retained build is an incremental edit;
+the build-time difference is not a compiler improvement. No build profile,
+dependency, toolchain or test-binary setting changed.
+
+PR 98's gate suite took 111.09 s for 68 scenarios and 1,561 captures. The current
+baseline is 6.99 s slower, with 34 additional captures and iteration 19's new
+checks. The retained standalone run is 2.40 s above that older gate measurement;
+the commands and coverage differ, so these numbers do not isolate a regression.
+
+### Final gate and fidelity
+
+`SPLAT_VISUAL_VIDEO=0 devenv shell -- audit-gate speed-17`, also setting
+`SPLAT_VISUAL_TIMINGS=1`, passed formatting, warnings-denied all-target Clippy,
+240 library tests and 711 binary tests. The same 12 opt-in tests remain ignored;
+other binary/documentation targets passed. A shell `time` around the unchanged
+gate command measured 146.004 s after devenv entry. The test build took 8.57 s;
+Clippy/check took 31.38 s including its build-lock wait and overlapped tests as
+before. Other worktrees' Cargo/compiler processes appeared near the end of the
+gate. Its 118.29 s visual suite is a passing full-gate proof, without an
+original-gate control; the speed comparison is the standalone pair above.
+
+All four full runs have the same 1,595 capture names and dimensions: 609 at
+960×640, 607 at 1200×800, 362 at 1920×1080 and 17 at 2400×1600. Every manifest
+hash was verified against its PNG. Ergonomics JSON/Markdown and chrome
+observations are byte-identical across all four runs. No scenario, check,
+capture, size, baseline, allowance, mask, tolerance or wait changed.
+
+The unchanged `visual-compare` command, at its default channel tolerance of two,
+reports the existing full-suite pixel variation:
+
+| Original baseline versus | Byte-identical PNGs | Within tolerance | Above tolerance |
+| --- | ---: | ---: | ---: |
+| Original-behavior instrumented repeat | 1,489 | 81 | 25 |
+| Retained standalone run | 1,512 | 57 | 26 |
+| Retained full gate | 1,556 | 16 | 23 |
+
+All three comparisons correctly exit 101. The varying files are in
+`book-to-package`, `dialogs`, `session-notes`, `session-recording` and
+`share-to-package`. Twenty-two of the gate's 23 above-tolerance files also vary
+in the original-behavior repeat. The gate's remaining file, and the standalone
+run's five additional files, differ only in the existing transient “Recording
+saved” rail notice; all six changed regions were inspected. This proves matching
+coverage/reports and preserves existing varying states, not byte-identical
+screenshots from independent runs.
+
+All aggregate timers and the focused timing harness were removed before the
+final standalone/gate runs. Raw logs, probe backups, the temporary harness,
+hash/inventory verification and comparisons are under ignored
+`artifacts/screenshots/audit-speed-17/`; captures use sibling `speed-17*`
+labels. Build output stays in `target/`; no large files were put in `/tmp`, and
+no `artifacts/design-audit/` files are committed. `git diff --check` passed.
