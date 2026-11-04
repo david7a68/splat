@@ -111,7 +111,7 @@ pub(super) fn without_vitals(entry: &Entry, body: &str) -> String {
         }
     }
     output.push_str(&body[start..]);
-    output
+    splat::content::stat_blocks::reading_body(entry, &output)
 }
 
 pub(super) fn use_vital(
@@ -120,6 +120,11 @@ pub(super) fn use_vital(
     key: &str,
     value: i64,
 ) -> Result<String, String> {
+    if entry.fields.get("splat_schema").and_then(|v| v.as_u64()) == Some(2) {
+        let mut stats = entry.fields["splat_stats"].clone();
+        stats[key]["value"] = value.into();
+        return splat::content::formats::patch_model(text, &[("splat_stats", Some(stats))]);
+    }
     // Book copies keep stats in a marked Markdown map. Change its value cell only.
     let mut in_stats = false;
     let mut offset = 0;
@@ -548,6 +553,9 @@ fn unbroken_dice(text: &str) -> String {
 /// The body line that gives this creature's hit points, such as `HP 22 (4d8 + 4)`. The
 /// vitals show it, with the dice, so the page says it once.
 fn hit_points_line(entry: &Entry) -> Option<&str> {
+    if entry.fields.get("splat_schema").and_then(|v| v.as_u64()) == Some(2) {
+        return None;
+    }
     let max = stat(entry, "max_hp")?;
     entry.body.lines().map(str::trim).find(|line| {
         line.strip_prefix("HP ")
@@ -601,6 +609,9 @@ fn detail(entry: &Entry, key: &str) -> Option<String> {
         .collect::<Vec<_>>();
     if !movement.is_empty() {
         return Some(movement.join(", "));
+    }
+    if entry.fields.get("splat_schema").and_then(|v| v.as_u64()) == Some(2) {
+        return None;
     }
     entry.body.lines().find_map(|line| {
         line.trim()
@@ -717,6 +728,14 @@ mod tests {
     fn legacy_source_cr_and_speed_are_shown_once_without_markdown_breaks() {
         let text = crate::library::note_text("Cinder Wolf", "creature", None);
         let mut entry = Entry::parse("Cinder Wolf.md", &text).unwrap();
+        entry.fields.insert("splat_schema".into(), 1.into());
+        entry
+            .fields
+            .get_mut("splat_creature")
+            .unwrap()
+            .as_mapping_mut()
+            .unwrap()
+            .remove("movement_text");
         entry
             .fields
             .get_mut("splat_creature")
@@ -756,10 +775,9 @@ mod tests {
     fn prose_vitals_warn_and_use_updates_the_fight_source() {
         let text = format!(
             "{}\n**Hit Points** 45\n\n**Armor Class** 17\n",
-            crate::library::note_text("Guard", "creature", None).replace(
-                "splat_stats:\n",
-                "splat_stats:\n  max_hp: {value: 1}\n  armor_class: {value: 10}\n"
-            )
+            crate::library::note_text("Guard", "creature", None)
+                .replace("| Hit Points |  |", "| Hit Points | 1 |")
+                .replace("| Armor Class |  |", "| Armor Class | 10 |")
         );
         let entry = Entry::parse("Guard.md", &text).unwrap();
         let checks = vital_checks(&entry);

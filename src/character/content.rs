@@ -28,8 +28,10 @@ fn activation(value: &Value) -> Option<String> {
 }
 fn duration(value: &Value) -> String {
     match value["durationInterval"].as_u64() {
-        Some(amount) => format!("{amount} {}", string(&value["durationUnit"]).to_lowercase()),
-        None => string(&value["durationType"]).to_lowercase(),
+        Some(amount) if !string(&value["durationUnit"]).is_empty() => {
+            format!("{amount} {}", string(&value["durationUnit"]).to_lowercase())
+        }
+        _ => string(&value["durationType"]).to_lowercase(),
     }
 }
 pub(super) fn reference_id(record: &EntitySnapshot, kind: &str, source: &str) -> Uuid {

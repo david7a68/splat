@@ -11,7 +11,7 @@ use eframe::egui;
 use serde::{Deserialize, Serialize};
 use serde_yaml_ng::{Mapping, Value};
 use splat::content::{
-    Entry,
+    self, Entry,
     overrides::{Overrides, Resolved},
 };
 use std::{
@@ -544,6 +544,35 @@ impl CreatureEditor {
         };
         let new_hp = number(hp, "Hit points")?;
         let new_armor_class = number(armor_class, "Armor class")?;
+        let entry = Entry::parse(&self.path, &self.baseline)?;
+        if content::formats::schema(&entry.fields)? == 2 {
+            let text = if *body == self.saved.body {
+                self.baseline.clone()
+            } else {
+                with_body(&self.baseline, body)
+            };
+            let mut stats = Entry::parse(&self.path, &text)?.fields["splat_stats"].clone();
+            for (key, changed, value) in [
+                ("max_hp", *hp != self.saved.hp, new_hp),
+                (
+                    "armor_class",
+                    *armor_class != self.saved.armor_class,
+                    new_armor_class,
+                ),
+            ] {
+                if changed {
+                    stats
+                        .as_mapping_mut()
+                        .ok_or("Missing stats")?
+                        .insert(key.into(), yaml(&format!("{{value: {value}}}")));
+                }
+            }
+            let mut changes = vec![("splat_stats", Some(stats))];
+            if *name != self.saved.name {
+                changes.push(("splat_name", Some(name.trim().into())));
+            }
+            return content::formats::patch_model(&text, &changes);
+        }
         let mut body = body.clone();
         // A number the DM left alone stays as it is, and so does any edit to the text. The stats
         // of an imported creature are rows in its text. Other notes hold them above.
@@ -587,8 +616,10 @@ impl CreatureEditor {
         self.recovery
             .check(root, &mut self.path, Some(&self.baseline))?;
         let text = self.text()?;
+        let text = content::formats::convert(&self.path, &text)?;
         Entry::parse(&self.path, &text)?;
         write_note(root, &self.path, Some(&self.baseline), &text)?;
+        self.fields.body = Entry::parse(&self.path, &text)?.body.trim().to_owned();
         self.baseline = text;
         self.saved = self.fields.clone();
         self.recovery = Default::default();
@@ -1263,6 +1294,8 @@ pub struct Encounters {
     discarded_group: Option<GroupDraft>,
     /// A creature made the campaign's own, with its text open beside the roster.
     creature: Option<CreatureEditor>,
+    /// The shared conversion notice and Undo for a creature saved here.
+    creature_layout: Option<(std::path::PathBuf, crate::formats_ui::State)>,
     /// The open encounter came from the Session page, and goes back there.
     pub from_session: bool,
     /// A new encounter joins the session's plan when it is first saved.
@@ -2033,8 +2066,16 @@ impl Encounters {
         let Some(editor) = &mut self.creature else {
             return;
         };
+        let before = editor.baseline.clone();
+        let old_layout = Entry::parse(&editor.path, &before)
+            .is_ok_and(|entry| content::formats::schema(&entry.fields) == Ok(1));
         match editor.save(&active.path) {
             Ok(()) => {
+                if old_layout {
+                    let mut layouts = crate::formats_ui::State::default();
+                    layouts.remember(&active.path, &editor.path, &before, &editor.baseline);
+                    self.creature_layout = Some((active.path.join(&editor.path), layouts));
+                }
                 self.creature = None;
                 self.clear_creature_block();
                 self.reload_snapshot(active, modules);
@@ -2382,6 +2423,16 @@ impl Encounters {
         }
         if self.draft_dirty() {
             self.message = None;
+        }
+        if self
+            .creature_layout
+            .as_mut()
+            .is_some_and(|(path, layouts)| {
+                path.starts_with(&active.path) && layouts.show(ui, None, Some(path))
+            })
+        {
+            self.reload_snapshot(&active, campaigns.modules());
+            self.saved = true;
         }
         if self.group_draft.is_some() {
             // Taken up on this page, it is this page's. Its save stays here, and links nothing.
@@ -4361,10 +4412,9 @@ mod tests {
         campaign
     }
     fn creature(root: &std::path::Path, name: &str, party: bool) -> Uuid {
-        let text = crate::library::note_text(name, "creature", None).replace(
-            "splat_stats:\n",
-            "splat_stats:\n  max_hp: {value: 1}\n  armor_class: {value: 10}\n",
-        );
+        let text = crate::library::note_text(name, "creature", None)
+            .replace("| Hit Points |  |", "| Hit Points | 1 |")
+            .replace("| Armor Class |  |", "| Armor Class | 10 |");
         let text = if party {
             patch_fields(
                 &text,
@@ -4586,6 +4636,49 @@ mod tests {
         draft.save(&campaign, &[]).unwrap();
         let saved = fs::read_to_string(path).unwrap();
         assert!(saved.contains("tags: [DM]") && saved.contains("My words"));
+    }
+
+    #[test]
+    fn fmt_f2_creature_editor_preserves_bytes_outside_the_hp_cell() {
+        let dir = tempfile::tempdir().unwrap();
+        let text = crate::library::note_text("Wolf", "creature", None)
+            .replace("| Hit Points |  |", "| Hit Points | 22 (4d8 + 4) |")
+            .replace("| Armor Class |  |", "| Armor Class | 13 |")
+            .replace("## Actions", "%% My comment %%\n\n## Actions")
+            .replace('\n', "\r\n");
+        fs::write(dir.path().join("Wolf.md"), &text).unwrap();
+        let mut editor = CreatureEditor::open(dir.path(), "Wolf.md").unwrap();
+        editor.fields.hp = "23".into();
+        editor.save(dir.path()).unwrap();
+        assert_eq!(
+            fs::read_to_string(dir.path().join("Wolf.md")).unwrap(),
+            text.replace("| Hit Points | 22", "| Hit Points | 23")
+        );
+    }
+
+    #[test]
+    fn fmt_f2_creature_save_converts_once_and_shared_undo_restores_old_bytes() {
+        let dir = tempfile::tempdir().unwrap();
+        let campaign = campaign(dir.path());
+        let text = format!(
+            "---\nsplat_schema: 1\nsplat_id: {}\nsplat_kind: creature\nsplat_name: Wolf\nsplat_creature: {{}}\nsplat_stats: {{max_hp: {{value: 22}}, armor_class: {{value: 13}}}}\n---\n\n# Wolf\n",
+            Uuid::new_v4()
+        );
+        fs::write(dir.path().join("Wolf.md"), &text).unwrap();
+        let mut encounters = Encounters {
+            creature: Some(CreatureEditor::open(dir.path(), "Wolf.md").unwrap()),
+            ..Default::default()
+        };
+        encounters.creature.as_mut().unwrap().fields.hp = "23".into();
+        encounters.save_creature(&campaign, &[]);
+        assert!(encounters.creature.is_none());
+        let saved = fs::read_to_string(dir.path().join("Wolf.md")).unwrap();
+        assert!(saved.contains("splat_schema: 2"));
+        assert!(saved.contains("| Hit Points | 23 |"));
+        let (path, layouts) = encounters.creature_layout.as_mut().unwrap();
+        assert_eq!(*path, dir.path().join("Wolf.md"));
+        layouts.undo().unwrap();
+        assert_eq!(fs::read_to_string(path).unwrap(), text);
     }
 
     #[test]

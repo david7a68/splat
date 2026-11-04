@@ -164,6 +164,14 @@ pub(crate) fn challenge_text(entry: &Entry) -> Option<&str> {
         .and_then(serde_yaml_ng::Value::as_str)
         .filter(|text| !text.trim().is_empty())
         .or_else(|| {
+            if entry
+                .fields
+                .get("splat_schema")
+                .and_then(serde_yaml_ng::Value::as_u64)
+                == Some(2)
+            {
+                return None;
+            }
             entry
                 .body
                 .lines()
@@ -212,7 +220,10 @@ pub(crate) struct ReadingSection<'a> {
 /// its reading view; authored Markdown and the stored source are never rewritten.
 pub(crate) fn hidden_provenance_line(line: &str) -> bool {
     let line = line.trim().trim_end_matches('\\');
-    line.starts_with("<!-- SRD page ") || line.starts_with("Original layout: [[")
+    line.starts_with("<!-- SRD page ")
+        || line.starts_with("Original layout: [[")
+        || ((line.starts_with("%% splat omit=") || line.starts_with("%% splat shape="))
+            && line.ends_with(" %%"))
 }
 
 pub(crate) fn overview_markdown(source: &str) -> String {

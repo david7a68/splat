@@ -53,6 +53,14 @@ impl<'a> Document<'a> {
     }
 
     pub fn section(&self, name: &str) -> Option<Section<'a>> {
+        self.section_at_level(name, None)
+    }
+
+    pub fn section_at_level(
+        &self,
+        name: &str,
+        required: Option<pulldown_cmark::HeadingLevel>,
+    ) -> Option<Section<'a>> {
         let mut heading = None;
         let mut words = String::new();
         let mut found = None;
@@ -73,7 +81,11 @@ impl<'a> Document<'a> {
                 }
                 Event::Text(word) | Event::Code(word) if heading.is_some() => words.push_str(&word),
                 Event::End(TagEnd::Heading(_)) => {
-                    if label(&words) == label(name) && found.is_none() {
+                    if label(&words) == label(name)
+                        && found.is_none()
+                        && required
+                            .is_none_or(|level| heading.is_some_and(|(actual, _)| actual == level))
+                    {
                         found = heading;
                     }
                     heading = None;
@@ -89,6 +101,10 @@ impl<'a> Document<'a> {
 }
 
 impl Section<'_> {
+    pub fn range(&self) -> Range<usize> {
+        self.range.clone()
+    }
+
     pub fn table(&self, headers: &[&str]) -> Option<Table> {
         for (event, range) in
             Parser::new_ext(&self.text[self.range.clone()], Options::ENABLE_TABLES)
@@ -239,8 +255,20 @@ pub fn replace_cell(
     column: usize,
     value: &str,
 ) -> Result<String, String> {
+    replace_cell_at_level(text, section, headers, name, column, value, None)
+}
+
+pub fn replace_cell_at_level(
+    text: &str,
+    section: &str,
+    headers: &[&str],
+    name: &str,
+    column: usize,
+    value: &str,
+    level: Option<pulldown_cmark::HeadingLevel>,
+) -> Result<String, String> {
     let table = Document::new(text)
-        .section(section)
+        .section_at_level(section, level)
         .and_then(|s| s.table(headers))
         .ok_or("Table not found")?;
     let row = table
@@ -261,7 +289,7 @@ pub fn replace_cell(
     let mut after = text.to_owned();
     after.replace_range(cell.range.clone(), value);
     let checked = Document::new(&after)
-        .section(section)
+        .section_at_level(section, level)
         .and_then(|s| s.table(headers))
         .ok_or("Edit changed the table layout")?;
     if model(&checked) != expected || value.contains(['\n', '\r']) {

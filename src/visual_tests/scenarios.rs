@@ -16,6 +16,7 @@ use super::{
 use eframe::egui::{self, Key, Pos2, pos2};
 pub mod file_formats;
 pub mod integrity;
+pub mod stat_formats;
 pub mod world_build;
 
 /// The middle of the reading pane and of the entry list, at the minimum window.
@@ -7712,12 +7713,10 @@ pub mod package_to_table {
         go_library(d);
         let text = d.editor_text().expect("new creature editor");
         let edited = text
-            .replace(
-                "splat_stats:\n",
-                "splat_stats:\n  max_hp: {value: 22}\n  armor_class: {value: 15}\n",
-            )
-            .replace("strength: {value: 10}", "strength: {value: 18}")
-            .replace("dexterity: {value: 10}", "dexterity: {value: 14}");
+            .replace("| Hit Points |  |", "| Hit Points | 22 |")
+            .replace("| Armor Class |  |", "| Armor Class | 15 |")
+            .replace("| Str | 10 | +0 |", "| Str | 18 | +4 |")
+            .replace("| Dex | 10 | +0 |", "| Dex | 14 | +2 |");
         assert_ne!(text, edited);
         d.replace_editor_text(&edited);
         d.click("Save");

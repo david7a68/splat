@@ -171,9 +171,15 @@ Library's Packages menu also counts files that still use the old layout.
 
 A save after a change in Splat converts supported old notes and shows
 **Saved in the new layout.** with **Undo**. Reading and polling do not convert files.
-Convert files is unavailable during a run and skips read-only files. Stat blocks,
+Convert files is unavailable during a run and skips read-only files.
+Creatures use a `Stat block` section with `Stat | Value` and `Ability | Score | Mod | Save`
+tables. Spells and items use a `Field | Value` table in `Spell` or `Item`.
+These tables supply the stats in schema 2. A bad cell stays in the file and gets a
+line flag; its value is not set. Printed modifiers and passive initiative are checked.
+Stat edits keep formulas, spacing, and other text. New entries use this layout.
+If old values conflict, conversion keeps the file and asks you to review it.
 Timeline, campaign lists, groups and encounter rosters keep their existing layout
-until their later format phases. Character copies use their character's name once,
+until their later format phase. Character copies use their character's name once,
 keep their identity after a rename, and put imported data in a foldable end section.
 Existing character copies keep their layout when a provider refreshes them.
 
