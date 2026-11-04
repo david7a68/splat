@@ -80,6 +80,9 @@ fn recording_without_audio(d: &mut Driver<'_>, folder: &std::path::Path, session
     d.expect("Audio removed");
     d.expect("Summary");
     d.expect("Raw transcript");
+    d.observe_both("i19-S6", "Missing audio has no size", |d| {
+        !d.has_containing("Audio removed ·")
+    });
     d.state("recording-audio-removed", Sizes::All);
 }
 
@@ -140,6 +143,11 @@ fn missing_folders(
     d.settle();
     d.expect("Run folder not found");
     d.expect("Choose folder");
+    d.observe_both(
+        "i19-P2",
+        "A missing run folder leaves no Resume or paused run",
+        |d| !d.has("Resume") && !d.has_containing("Paused run ·"),
+    );
     d.state("run-folder-gone", Sizes::All);
     fs::rename(&moved, run_folder).unwrap();
     d.click(NAV_SESSIONS);
@@ -163,6 +171,15 @@ fn missing_folders(
                 && message.zip(action).is_some_and(|(message, action)| {
                     message.rect.y_range().contains(action.rect.center().y)
                 })
+        },
+    );
+    d.observe_both(
+        "i19-S5",
+        "The missing session folder owns its rail link and recovery",
+        |d| {
+            d.in_view("Session folder not found")
+                && !d.has("Timeline not readable")
+                && !d.has("New session")
         },
     );
     d.state("session-folder-gone", Sizes::All);

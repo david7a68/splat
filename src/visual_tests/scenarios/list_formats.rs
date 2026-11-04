@@ -66,7 +66,7 @@ pub fn run(d: &mut Driver<'_>) {
     d.click(NAV_ENCOUNTERS);
     d.click_starting("GROUPS");
     d.click("Edit group Bridge guards");
-    d.expect("Goblin Warrior: Changes \"HP lots\" not read (line 15).");
+    d.expect("Bridge guards.md, line 15: Changes \"HP lots\" not read.");
     d.expect("Goblin Warrior");
     d.observe_both(
         "F3 member warning",
@@ -76,7 +76,7 @@ pub fn run(d: &mut Driver<'_>) {
             let find = |name: &str| nodes.iter().find(|node| node.name == name);
             let first = find("1. Goblin Warrior");
             let next = find("2. Goblin Warrior");
-            let warning = find("Goblin Warrior: Changes \"HP lots\" not read (line 15).");
+            let warning = find("Bridge guards.md, line 15: Changes \"HP lots\" not read.");
             let summary = find("Count 1 · CR 1/4 · HP 10 · AC 15");
             first.zip(summary).zip(warning).zip(next).is_some_and(
                 |(((first, summary), warning), next)| {
@@ -89,7 +89,25 @@ pub fn run(d: &mut Driver<'_>) {
             ) && d.visible_text("This member cannot join a fight until its Changes cell is fixed. Other members can join.")
         },
     );
+    d.expect("XP 100 + unknown");
+    d.expect("Edit in Obsidian");
+    d.expect("Show file");
+    d.expect("Edit flagged member");
     d.state("group-flagged-changes-cell", Sizes::All);
     let text = fs::read_to_string(campaign.path.join("Encounter Groups/Bridge guards.md")).unwrap();
     assert!(text.contains("HP lots | Keep this row"));
+    d.click("More actions for flagged member");
+    d.expect("Remove member");
+    d.state("flagged-member-menu", Sizes::All);
+    d.press(Key::Escape);
+    d.click("Edit flagged member");
+    d.expect("Changes cell");
+    d.state("group-repair-changes-cell", Sizes::All);
+    d.replace_text_in("Changes cell", "HP +5");
+    d.click("Done");
+    d.click("Save group");
+    let saved =
+        fs::read_to_string(campaign.path.join("Encounter Groups/Bridge guards.md")).unwrap();
+    assert_eq!(saved, text.replace("HP lots", "HP +5"));
+    d.state("group-changes-cell-repaired", Sizes::All);
 }

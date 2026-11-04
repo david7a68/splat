@@ -132,8 +132,10 @@ fn reference(text: &str) -> Result<Value, String> {
     let value = formats::model_reference(raw.into());
     if value.is_mapping() {
         Ok(value)
+    } else if !raw.is_empty() {
+        Ok(map(&[("link", raw.into())]))
     } else {
-        Err("Creature: use one link".into())
+        Err("Creature: enter a name or one link".into())
     }
 }
 fn show_reference(value: &Value) -> String {
@@ -178,10 +180,10 @@ pub fn unread_group_members(text: &str, flags: &[Flag]) -> Vec<UnreadGroupMember
     let mut unread = Vec::new();
     if let Some(table) = table(text, "Members", GROUP) {
         for row in table.rows {
-            if let Some(flag) = flags
-                .iter()
-                .find(|flag| row.first().is_some_and(|c| c.line == flag.line))
-            {
+            if let Some(flag) = flags.iter().find(|flag| {
+                row.first().is_some_and(|c| c.line == flag.line)
+                    && !flag.message.starts_with("Creature ")
+            }) {
                 let label = row.get(1).map_or("", |cell| cell.value.as_str());
                 unread.push(UnreadGroupMember {
                     before,
@@ -444,7 +446,25 @@ pub fn read(text: &str, fields: &mut Mapping, flags: &mut Vec<Flag>) {
                 if row.len() != 5 {
                     return Err("Missing or extra cells".into());
                 }
-                let mut overrides = changes(&row[3].value, &row[2].value, visible(&row[4].value))?;
+                let mut start_hp = None;
+                let mut terms = Vec::new();
+                for term in row[3].value.split(',').map(str::trim) {
+                    if !group && term.to_ascii_lowercase().starts_with("start hp ") {
+                        let hp = term[9..]
+                            .trim()
+                            .parse::<i64>()
+                            .ok()
+                            .filter(|hp| *hp >= 0)
+                            .ok_or_else(|| format!("Changes: {term} not read"))?;
+                        if start_hp.replace(hp).is_some() {
+                            return Err("Changes: duplicate Start HP".into());
+                        }
+                    } else {
+                        terms.push(term);
+                    }
+                }
+                let mut overrides =
+                    changes(&terms.join(", "), &row[2].value, visible(&row[4].value))?;
                 if group {
                     let creature = reference(&row[1].value)?;
                     if let Some(extra) = model
@@ -473,14 +493,17 @@ pub fn read(text: &str, fields: &mut Mapping, flags: &mut Vec<Flag>) {
                     }
                     Ok(member)
                 } else {
-                    let slot = machine(&row[4].value, "slot")
+                    let original_slot = machine(&row[4].value, "slot")
                         .unwrap_or_else(|| format!("actor_line_{}", row[0].line));
-                    if !keys.insert(slot.clone()) {
-                        return Err("Duplicate slot key".into());
+                    let mut slot = original_slot.clone();
+                    let mut suffix = 1;
+                    while !keys.insert(slot.clone()) {
+                        slot = format!("actor_line_{}_{}", row[0].line, suffix);
+                        suffix += 1;
                     }
                     let mut extra = model
                         .get("slots")
-                        .and_then(|v| v.get(slot.as_str()))
+                        .and_then(|v| v.get(original_slot.as_str()))
                         .and_then(Value::as_mapping)
                         .cloned()
                         .unwrap_or_default();
@@ -515,6 +538,15 @@ pub fn read(text: &str, fields: &mut Mapping, flags: &mut Vec<Flag>) {
                         .to_owned();
                     if side.is_empty() {
                         return Err("Side not set".into());
+                    }
+                    if let Some(hp) = start_hp {
+                        let initial = extra
+                            .entry(Value::from("initial"))
+                            .or_insert_with(|| map(&[]));
+                        initial
+                            .as_mapping_mut()
+                            .ok_or("Invalid starting values")?
+                            .insert("hp".into(), hp.into());
                     }
                     extra.insert("key".into(), slot.into());
                     extra.insert("side".into(), side.into());
@@ -703,6 +735,18 @@ fn render(fields: &Mapping) -> Result<Rendered, String> {
             overrides_left.remove(key);
         }
         members_data.push(Value::Mapping(overrides_left.clone()));
+        let mut shown_changes = show_changes(&overrides);
+        if !group
+            && let Some(hp) = member
+                .get("initial")
+                .and_then(|initial| initial.get("hp"))
+                .and_then(Value::as_i64)
+        {
+            if !shown_changes.is_empty() {
+                shown_changes.push_str(", ");
+            }
+            shown_changes.push_str(&format!("Start HP {hp}"));
+        }
         let mut note = cell(words(&overrides, "note"));
         let first = if group {
             member
@@ -729,6 +773,9 @@ fn render(fields: &Mapping) -> Result<Rendered, String> {
                     .is_some_and(|m| m.len() == 2)
             {
                 extra.remove("controller");
+            }
+            if let Some(initial) = extra.get_mut("initial").and_then(Value::as_mapping_mut) {
+                initial.remove("hp");
             }
             if extra
                 .get("initial")
@@ -757,7 +804,7 @@ fn render(fields: &Mapping) -> Result<Rendered, String> {
                 show_reference(&member["creature"])
             },
             cell(words(&overrides, "name")),
-            show_changes(&overrides),
+            shown_changes,
             note,
         ]));
     }
@@ -921,7 +968,25 @@ pub fn patch(text: &str, changes: &[(&str, Option<Value>)]) -> Result<String, St
     }
     let mut after = text.to_owned();
     for (key, value) in changes {
-        if original.fields.get(*key) == value.as_ref() {
+        let needs_slot_keys = *key == "splat_encounter"
+            && table(text, "Roster", ROSTER).is_some_and(|table| {
+                table
+                    .rows
+                    .iter()
+                    .zip(seq(&original.fields["splat_encounter"], "roster"))
+                    .any(|(row, slot)| {
+                        row.get(4)
+                            .and_then(|cell| machine(&cell.value, "slot"))
+                            .as_deref()
+                            != Some(words(&slot, "key"))
+                            || (slot
+                                .get("initial")
+                                .and_then(|initial| initial.get("hp"))
+                                .is_some()
+                                && !row[3].value.to_ascii_lowercase().contains("start hp "))
+                    })
+            });
+        if original.fields.get(*key) == value.as_ref() && !needs_slot_keys {
             continue;
         }
         if *key == "splat_packages" {
@@ -1181,11 +1246,18 @@ pub fn patch(text: &str, changes: &[(&str, Option<Value>)]) -> Result<String, St
                         != clean_reference(new_value.get("creature")),
                     old_value.get("overrides").and_then(|v| v.get("name"))
                         != new_value.get("overrides").and_then(|v| v.get("name")),
-                    show_changes(&old_value["overrides"]) != show_changes(&new_value["overrides"]),
+                    show_changes(&old_value["overrides"]) != show_changes(&new_value["overrides"])
+                        || old_value.get("initial").and_then(|v| v.get("hp"))
+                            != new_value.get("initial").and_then(|v| v.get("hp"))
+                        || (!group
+                            && new_value.get("initial").and_then(|v| v.get("hp")).is_some()
+                            && !old[3].value.to_ascii_lowercase().contains("start hp ")),
                     old_value.get("overrides").and_then(|v| v.get("note"))
                         != new_value.get("overrides").and_then(|v| v.get("note"))
                         || old_value.get("key") != new_value.get("key")
-                        || (!group && machine(&old[4].value, "slot").is_none()),
+                        || (!group
+                            && machine(&old[4].value, "slot").as_deref()
+                                != new_value.get("key").and_then(Value::as_str)),
                 ];
                 for (column, (a, b)) in old.iter().zip(new).enumerate() {
                     if changed[column] && a.value != b.value {
@@ -1309,15 +1381,109 @@ fn patch_data(text: &str, data: &Mapping) -> Result<String, String> {
     }
 }
 
+/// Save resolved cells with the catalogue's name, preserving all other cells and prose.
+pub fn write_references<'a>(
+    text: &str,
+    entries: impl IntoIterator<Item = &'a Entry>,
+) -> Result<String, String> {
+    let entries: Vec<_> = entries.into_iter().collect();
+    let entry = Entry::parse("note.md", text)?;
+    let mut patches = Vec::new();
+    if ["encounter", "encounter_group"].contains(&entry.kind.as_str()) {
+        let group = entry.kind == "encounter_group";
+        if let Some(table) = table(
+            text,
+            if group { "Members" } else { "Roster" },
+            if group { GROUP } else { ROSTER },
+        ) {
+            for row in table.rows {
+                let Some(cell) = row.get(1).filter(|cell| !cell.value.is_empty()) else {
+                    continue;
+                };
+                let reference = reference(&cell.value)?;
+                let raw = reference
+                    .get("key")
+                    .or_else(|| reference.get("id"))
+                    .or_else(|| reference.get("link"))
+                    .and_then(Value::as_str)
+                    .ok_or("Creature reference not read")?;
+                let id = formats::resolve_readable(raw, entries.iter().copied())?;
+                let target = entries
+                    .iter()
+                    .find(|entry| entry.id == id)
+                    .ok_or("Creature not found")?;
+                let shown = if let Some(key) = &target.key {
+                    // Keep a hand-written alias. Replace only the label made from a key.
+                    if let Some((label, _)) = visible(&cell.value)
+                        .strip_prefix('[')
+                        .and_then(|link| link.split_once("](splat:"))
+                        && label != key.rsplit('/').next().unwrap_or(key).replace('_', " ")
+                    {
+                        continue;
+                    }
+                    format!("[{}](splat:{key})", target.name)
+                } else {
+                    format!(
+                        "[[{}|{}]] %% splat id={} %%",
+                        target.path.trim_end_matches(".md"),
+                        target.name,
+                        target.id
+                    )
+                };
+                if cell.value != shown {
+                    patches.push((cell.range.clone(), shown));
+                }
+            }
+        }
+    }
+    // Only: cells use the same catalogue labels as roster cells.
+    if entry.kind == "campaign" {
+        let mut offset = 0;
+        for line in text.split_inclusive('\n') {
+            if line.trim_start().starts_with("- Only:") {
+                for target in &entries {
+                    if let Some(key) = &target.key {
+                        let suffix = format!("](splat:{key})");
+                        if let Some(end) = line.find(&suffix)
+                            && let Some(start) = line[..end].rfind('[')
+                        {
+                            patches.push((offset + start + 1..offset + end, target.name.clone()));
+                        }
+                    }
+                }
+            }
+            offset += line.len();
+        }
+    }
+    patches.sort_by_key(|(range, _)| range.start);
+    let mut after = text.to_owned();
+    for (range, shown) in patches.into_iter().rev() {
+        after.replace_range(range, &shown);
+    }
+    Ok(after)
+}
+
 /// Resolve Obsidian links after all files have been read; no bytes are written.
-pub fn resolve(entry: &mut Entry, entries: &[Entry]) {
+pub fn resolve(entry: &mut Entry, entries: &[Entry], source: &str) {
+    entry.flags.retain(|flag| {
+        !(flag.message.starts_with("Creature ")
+            && flag.message.ends_with(" not found or ambiguous"))
+    });
     fn visit(value: &mut Value, entries: &[Entry]) {
         match value {
             Value::Mapping(m) => {
                 if let Some(raw) = m.get("link").and_then(Value::as_str).map(str::to_owned)
-                    && let Ok(id) = formats::resolve_readable(&raw, entries)
+                    && let Ok(id) = formats::resolve_readable(&raw, entries.iter())
                 {
-                    m.insert("id".into(), id.to_string().into());
+                    if let Some(target) = entries.iter().find(|entry| entry.id == id)
+                        && let Some(key) = &target.key
+                    {
+                        m.remove("id");
+                        m.remove("link");
+                        m.insert("key".into(), key.clone().into());
+                    } else {
+                        m.insert("id".into(), id.to_string().into());
+                    }
                 }
                 for value in m.values_mut() {
                     visit(value, entries);
@@ -1329,6 +1495,30 @@ pub fn resolve(entry: &mut Entry, entries: &[Entry]) {
                 }
             }
             _ => {}
+        }
+    }
+    if ["encounter", "encounter_group"].contains(&entry.kind.as_str()) {
+        let group = entry.kind == "encounter_group";
+        if let Some(table) = table(
+            source,
+            if group { "Members" } else { "Roster" },
+            if group { GROUP } else { ROSTER },
+        ) {
+            for row in table.rows {
+                if let Some(cell) = row.get(1)
+                    && let Ok(reference) = reference(&cell.value)
+                    && reference.get("id").is_none()
+                    && reference.get("key").is_none()
+                    && let Some(raw) = reference.get("link").and_then(Value::as_str)
+                    && formats::resolve_readable(raw, entries.iter()).is_err()
+                    && !entry.flags.iter().any(|flag| flag.line == cell.line)
+                {
+                    entry.flags.push(Flag {
+                        line: cell.line,
+                        message: format!("Creature {raw} not found or ambiguous"),
+                    });
+                }
+            }
         }
     }
     if ["campaign", "encounter", "encounter_group"].contains(&entry.kind.as_str()) {

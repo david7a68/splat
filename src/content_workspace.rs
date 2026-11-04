@@ -1071,7 +1071,11 @@ impl Catalogue {
         }
         let list_entries: Vec<_> = result.entries.values().map(|e| e.entry.clone()).collect();
         for indexed in result.entries.values_mut() {
-            content::list_formats::resolve(&mut indexed.entry, &list_entries);
+            let source = result
+                .files
+                .get(&indexed.entry.id)
+                .map_or("", |(_, source)| source.as_str());
+            content::list_formats::resolve(&mut indexed.entry, &list_entries, source);
             if indexed.entry.kind == "campaign"
                 && content::formats::schema(&indexed.entry.fields) == Ok(2)
                 && let Some((_, source)) = result.files.get(&indexed.entry.id)

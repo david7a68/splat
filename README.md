@@ -824,6 +824,9 @@ A run never converts `Timeline.md`.
   Clear a package task in Obsidian to turn that package off.
 - Encounter groups use a member table. Saved encounters use a roster table, with slot
   keys in comments in the Note cell. New files use the entry name.
+  Creature cells accept a unique name or `[[Name]]`; save writes a named link.
+  Copying a roster row creates another slot; save writes its separate key.
+  Starting HP is visible as `Start HP 12` in Changes.
 
 Bad rows stay in the file and have a line warning. Saves keep other prose and properties.
 Run files stay JSON. Turn on Obsidian Sync's **other file types** option to sync them.

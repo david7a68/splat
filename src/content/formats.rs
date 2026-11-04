@@ -402,6 +402,7 @@ pub fn resolve_readable<'a>(
             .collect();
         return match found.as_slice() {
             [entry] => Ok(entry.id),
+            [] => resolve_readable(target, entries.iter().copied()),
             _ => Err(format!("Requirement {raw} not found or ambiguous")),
         };
     }
@@ -714,11 +715,11 @@ pub fn convert_resolved<'a>(
                 after.replace_range(range, &value);
             }
         }
-        return Ok(after);
+        return super::list_formats::write_references(&after, entries.iter().copied());
     }
     let mut after = convert(path, text)?;
     if schema(&original.fields)? != 1 || original.kind != "world" {
-        return Ok(after);
+        return super::list_formats::write_references(&after, entries.iter().copied());
     }
     for (key, flat) in [("creature", "splat_stat_block"), ("in", "splat_in")] {
         let Some(raw) = original

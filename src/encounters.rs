@@ -259,14 +259,20 @@ impl Draft {
         }
     }
     fn text(&self) -> Result<String, String> {
+        let disk_source = self
+            .recovery
+            .change
+            .as_ref()
+            .and_then(|change| change.text.as_deref())
+            .unwrap_or(&self.source);
         let source = if self.body == self.saved_body {
-            self.source.clone()
-        } else if splat::content::formats::schema(&Entry::parse(&self.path, &self.source)?.fields)
+            disk_source.to_owned()
+        } else if splat::content::formats::schema(&Entry::parse(&self.path, disk_source)?.fields)
             == Ok(2)
         {
-            splat::content::list_formats::with_prose(&self.source, &self.body)?
+            splat::content::list_formats::with_prose(disk_source, &self.body)?
         } else {
-            with_body(&self.source, &self.body)
+            with_body(disk_source, &self.body)
         };
         let patch = if self.baseline.is_none() {
             patch_fields
@@ -285,6 +291,18 @@ impl Draft {
         )?;
         Ok(text)
     }
+    fn write_text(&self, snapshot: &Snapshot) -> Result<String, String> {
+        splat::content::formats::convert_resolved(
+            &self.path,
+            &self.text()?,
+            snapshot
+                .catalogue
+                .entries
+                .values()
+                .map(|entry| &entry.entry),
+        )
+    }
+
     fn add(&mut self, id: Uuid, party: bool) {
         self.setup.roster.push(Slot {
             key: format!("actor_{}", Uuid::new_v4().simple()),
@@ -312,12 +330,7 @@ impl Draft {
             .check(&campaign.path, &mut self.path, self.baseline.as_deref())?;
         let snapshot = Snapshot::load(campaign, modules)?;
         self.validate(&snapshot)?;
-        let text = self.text()?;
-        let text = splat::content::formats::convert_resolved(
-            &self.path,
-            &text,
-            snapshot.catalogue.entries.values().map(|e| &e.entry),
-        )?;
+        let text = self.write_text(&snapshot)?;
         let entry = Entry::parse(&self.path, &text)?;
         debug_assert_eq!(entry.id, self.id);
         // Nothing is written unless the encounter and every changed group can be.
@@ -1115,6 +1128,7 @@ struct SearchRoster<'a> {
 }
 
 struct Snapshot {
+    campaign_root: std::path::PathBuf,
     catalogue: Catalogue,
     known_creature_names: BTreeMap<String, String>,
     creatures: Vec<Creature>,
@@ -1344,6 +1358,7 @@ impl Snapshot {
             }
         }
         Ok(Self {
+            campaign_root: campaign.path.clone(),
             groups,
             known_creature_names,
             run_creatures,
@@ -2518,8 +2533,17 @@ impl Encounters {
                 .directory(active)
                 .and_then(|dir| crate::encounter_run::Run::list(&dir, active.id))
             {
-                Ok(runs) => s.runs = runs,
-                Err(e) => self.error = Some(e),
+                Ok(runs) => {
+                    s.runs = runs;
+                    s.issues
+                        .retain(|issue| !issue.starts_with("Run folder not found"));
+                }
+                Err(error) => {
+                    s.runs.clear();
+                    if !s.issues.contains(&error) {
+                        s.issues.push(error);
+                    }
+                }
             }
         }
     }
@@ -4806,6 +4830,42 @@ mod tests {
     }
 
     #[test]
+    fn i19_p1_encounter_comparison_matches_overwrite() {
+        for schema in [1, 2] {
+            let dir = tempfile::tempdir().unwrap();
+            let campaign = campaign(dir.path());
+            let mut draft = Draft::new();
+            draft.add(creature(dir.path(), "Monster", false), false);
+            let legacy = draft.text().unwrap();
+            draft.save(&campaign, &[]).unwrap();
+            if schema == 1 {
+                fs::write(dir.path().join(&draft.path), legacy).unwrap();
+                draft = Draft::open(dir.path(), &draft.path).unwrap();
+            }
+            let path = dir.path().join(&draft.path);
+            let external = format!(
+                "{}\nDM's outside account.\n",
+                fs::read_to_string(&path)
+                    .unwrap()
+                    .replace("splat_schema:", "tags: [dawn]\nsplat_schema:")
+            );
+            fs::write(&path, &external).unwrap();
+            draft.name = "Dawn".into();
+            assert!(draft.save(&campaign, &[]).is_err());
+            let comparison = draft
+                .write_text(&Snapshot::load(&campaign, &[]).unwrap())
+                .unwrap();
+            assert!(comparison.contains("tags: [dawn]"));
+            assert!(comparison.contains("DM's outside account."));
+            let change = draft.recovery.accept().unwrap();
+            draft.source = change.text.clone().unwrap();
+            draft.baseline = change.text;
+            draft.save(&campaign, &[]).unwrap();
+            assert_eq!(fs::read_to_string(path).unwrap(), comparison);
+        }
+    }
+
+    #[test]
     fn fmt_f2_creature_editor_preserves_bytes_outside_the_hp_cell() {
         let dir = tempfile::tempdir().unwrap();
         let text = crate::library::note_text("Wolf", "creature", None)
@@ -5067,6 +5127,54 @@ mod tests {
         assert!(
             editor.draft.is_some(),
             "a refused start must keep the editor"
+        );
+    }
+
+    #[test]
+    fn i19_p2_missing_run_folder_clears_resume_and_reports_one_issue() {
+        let dir = tempfile::tempdir().unwrap();
+        let campaign = campaign(dir.path());
+        let mut draft = Draft::new();
+        draft.add(stat_creature(dir.path(), "Wolf", 20), false);
+        draft.save(&campaign, &[]).unwrap();
+        let mut editor = Encounters {
+            draft: Some(draft),
+            ..Default::default()
+        };
+        let run = editor.start_run(&campaign, &[]).unwrap();
+        let folder = run.path().unwrap().parent().unwrap().to_owned();
+        drop(run);
+        editor.snapshot = Some(Snapshot::load(&campaign, &[]).unwrap());
+        assert_eq!(editor.paused_run_count(), 1);
+        fs::rename(&folder, dir.path().join("Moved runs")).unwrap();
+        editor.read_runs_again(&campaign);
+        editor.read_runs_again(&campaign);
+        assert!(editor.saved_runs().is_empty());
+        assert!(editor.paused_run().is_none());
+        assert_eq!(editor.paused_run_count(), 0);
+        assert!(editor.error.is_none());
+        assert_eq!(
+            editor
+                .snapshot
+                .as_ref()
+                .unwrap()
+                .issues
+                .iter()
+                .filter(|issue| issue.starts_with("Run folder not found"))
+                .count(),
+            1
+        );
+        fs::rename(dir.path().join("Moved runs"), folder).unwrap();
+        editor.read_runs_again(&campaign);
+        assert_eq!(editor.paused_run_count(), 1);
+        assert!(
+            !editor
+                .snapshot
+                .as_ref()
+                .unwrap()
+                .issues
+                .iter()
+                .any(|issue| issue.starts_with("Run folder not found"))
         );
     }
 

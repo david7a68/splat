@@ -4935,6 +4935,11 @@ pub mod session_notes {
                 .is_some_and(|text| text.contains(&format!("# Session 1: {LONG_TITLE}"))),
             "Renaming a session moves the heading the template made",
         );
+        d.observe_both(
+            "i19-S4",
+            "The renamed heading stays visible at the top of the note",
+            |d| d.first_source_line_visible("# Session 1: The Long Road"),
+        );
         d.state("session-long-title", Sizes::All);
         d.click("Edit session details");
         d.replace_text_in("Session title", TITLE);
@@ -5439,10 +5444,7 @@ pub mod session_notes {
                     d.painted_rect_in("Round 2", area)
                         .zip(d.painted_rect_in(RUN, title.rect))
                         .is_some_and(|(line, first)| {
-                            (line.top()
-                                - first.top()
-                                - crate::design::Density::Read.control()
-                                - crate::design::XS / 2.0)
+                            (line.top() - first.top() - crate::design::Density::Read.control())
                                 .abs()
                                 <= 2.0
                         })
@@ -5769,7 +5771,11 @@ pub mod session_recording {
             "iter-18-A-key",
             "The speech key is focused and in view",
             |d| {
-                d.focused_name().as_deref() == Some("Speech API key") && d.in_view("Speech API key")
+                d.focused_name().as_deref() == Some("Speech API key")
+                    && d.in_view("Speech API key")
+                    && d.in_view_containing(
+                        "Before you can process: save an OpenAI key under Speech service.",
+                    )
             },
         );
         d.state("processing-settings", Sizes::All);
@@ -6980,7 +6986,7 @@ pub mod session_plan_groups {
         d.click("Add a group");
         d.click(&format!("Plan {GROUP_RIVALS}"));
         d.expect(&format!("Edit group {GROUP_RIVALS}"));
-        d.state("plan-with-groups", Sizes::Default);
+        d.state("plan-with-groups", Sizes::All);
         d.begin_task();
         d.click(&format!("More actions for {GROUP_RIVALS}"));
         d.click(&format!("Remove group {GROUP_RIVALS} from the plan"));
