@@ -1743,6 +1743,7 @@ pub fn redirect_reference(text: &str, old: &Entry, new_id: Uuid) -> Result<Strin
                         .is_some_and(|key| map.get("key").and_then(Value::as_str) == Some(key));
                 if matches {
                     map.remove("key");
+                    map.remove("link");
                     map.insert("id".into(), new_id.to_string().into());
                 }
                 if let Some(Value::Mapping(related)) = map.get_mut("related") {
@@ -2945,6 +2946,24 @@ mod tests {
             fs::read_to_string(source_root.join(&dependency.path)).unwrap(),
             dependency_text
         );
+    }
+
+    #[test]
+    fn i19_source_change_replaces_a_named_link_and_its_backup_together() {
+        let mut old = entry("Wolf", "creature");
+        old.key = Some("test:creatures/wolf".into());
+        let source = format!(
+            "---\nsplat_schema: 2\nsplat_id: {}\nsplat_kind: encounter_group\nsplat_name: Wolves\nsplat_side: enemies\n---\n\n## Members\n\n| Count | Creature | Name | Changes | Note |\n| --- | --- | --- | --- | --- |\n| 2 | [Wolf](splat:test:creatures/wolf) %% splat id={} %% | | HP +5 | keep |\n",
+            Uuid::new_v4(),
+            old.id
+        );
+        let new_id = Uuid::new_v4();
+        let changed = redirect_reference(&source, &old, new_id).unwrap();
+        let parsed = Entry::parse("Wolves.md", &changed).unwrap();
+        let creature = &parsed.fields["splat_encounter_group"]["members"][0]["creature"];
+        assert_eq!(creature["id"], Value::from(new_id.to_string()));
+        assert!(!changed.contains("test:creatures/wolf"));
+        assert!(changed.contains("HP +5 | keep"));
     }
 
     #[test]
