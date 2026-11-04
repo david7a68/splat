@@ -263,6 +263,9 @@ impl EntitySnapshot {
                 fields.insert("splat_schema".into(), 1.into());
                 let body = entry
                     .body
+                    .split("\n> [!note]- Splat data")
+                    .next()
+                    .unwrap()
                     .split("\n## Splat data")
                     .next()
                     .unwrap_or(&entry.body);
@@ -735,7 +738,7 @@ mod tests {
         let root = tempfile::tempdir().unwrap();
         let mut record = super::super::tests::sample();
         let new = record.entry_markdown().unwrap();
-        assert!(new.contains("## Splat data (from D&D Beyond; do not edit)"));
+        assert!(new.contains("> [!note]- Splat data (from D&D Beyond; do not edit)"));
         assert_eq!(
             new.matches("<!-- splat:yaml path=splat_payload -->")
                 .count(),
@@ -744,7 +747,14 @@ mod tests {
         let entry = Entry::parse("sheet.md", &new).unwrap();
         let mut fields = (*entry.fields).clone();
         fields.insert("splat_schema".into(), 1.into());
-        let body = entry.body.split("\n## Splat data").next().unwrap();
+        let body = entry
+            .body
+            .split("\n> [!note]- Splat data")
+            .next()
+            .unwrap()
+            .split("\n## Splat data")
+            .next()
+            .unwrap();
         let legacy = format!(
             "---\n{}---\n{body}",
             serde_yaml_ng::to_string(&fields).unwrap()

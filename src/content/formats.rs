@@ -109,7 +109,9 @@ pub fn read(schema: u64, text: &str, fields: &mut Mapping) -> Vec<Flag> {
                 if let Some(value) = fields.remove(flat) {
                     let valid = match old {
                         "type" => value.as_str().is_some_and(|s| {
-                            ["npc", "location", "faction", "item", "other"].contains(&s)
+                            ["npc", "location", "faction", "item", "other"]
+                                .iter()
+                                .any(|kind| s.eq_ignore_ascii_case(kind))
                         }),
                         "aliases" => value
                             .as_sequence()
@@ -121,12 +123,29 @@ pub fn read(schema: u64, text: &str, fields: &mut Mapping) -> Vec<Flag> {
                             old.into(),
                             if ["creature", "in"].contains(&old) {
                                 model_reference(value)
+                            } else if old == "type" {
+                                value.as_str().unwrap().to_ascii_lowercase().into()
                             } else {
                                 value
                             },
                         );
                     } else {
-                        flag(&mut flags, flat, &format!("{flat}: value not read"));
+                        let shown = text
+                            .lines()
+                            .find_map(|line| line.strip_prefix(&format!("{flat}:")))
+                            .map(str::trim)
+                            .unwrap_or("");
+                        let (label, help) = match old {
+                            "type" => ("Type", "Use npc, location, faction, item or other."),
+                            "status" => ("Status", "Use a short word, such as alive."),
+                            "creature" => ("Stat block", "Use one creature name or link."),
+                            "in" => ("In", "Use one place name or link."),
+                            _ => ("Aliases", "Use a list of names."),
+                        };
+                        flag(&mut flags, flat, "");
+                        let last = flags.last_mut().unwrap();
+                        last.message =
+                            format!("{label} \"{shown}\" not read (line {}). {help}", last.line);
                     }
                 }
             }
@@ -301,7 +320,7 @@ pub fn patch_model(text: &str, changes: &[(&str, Option<Value>)]) -> Result<Stri
         let payload = "<!-- splat:yaml path=splat_payload -->";
         let direct = fence_value(&after, &direct)?;
         let payload = fence_value(&after, payload)?.filter(|range| {
-            serde_yaml_ng::from_str::<Mapping>(&after[range.clone()])
+            serde_yaml_ng::from_str::<Mapping>(&fence_text(&after[range.clone()]))
                 .is_ok_and(|payload| payload.contains_key(*key))
         });
         let marked = direct
@@ -311,7 +330,8 @@ pub fn patch_model(text: &str, changes: &[(&str, Option<Value>)]) -> Result<Stri
             let (start, stop) = (range.start, range.end);
             let encoded = if in_payload {
                 let mut payload: Mapping =
-                    serde_yaml_ng::from_str(&after[start..stop]).map_err(|e| e.to_string())?;
+                    serde_yaml_ng::from_str(&fence_text(&after[start..stop]))
+                        .map_err(|e| e.to_string())?;
                 if let Some(value) = value {
                     payload.insert((*key).into(), value.clone());
                 } else {
@@ -325,6 +345,14 @@ pub fn patch_model(text: &str, changes: &[(&str, Option<Value>)]) -> Result<Stri
                         .ok_or("Cannot remove a required data fence")?,
                 )
                 .map_err(|e| e.to_string())?
+            };
+            let encoded = if after[start..stop].starts_with('>') {
+                encoded
+                    .lines()
+                    .map(|line| format!("> {line}\n"))
+                    .collect::<String>()
+            } else {
+                encoded
             };
             let encoded = if after.contains("\r\n") {
                 encoded.replace('\n', "\r\n")
@@ -371,7 +399,12 @@ fn fence_value(text: &str, marker: &str) -> Result<Option<std::ops::Range<usize>
     };
     let open = text[at..].find("```yaml").ok_or("Missing data fence")? + at + "```yaml".len();
     let start = text[open..].find('\n').ok_or("Missing data line")? + open + 1;
-    let stop = text[start..].find("\n```").ok_or("Missing fence end")? + start + 1;
+    let stop = text[start..]
+        .find("\n```")
+        .or_else(|| text[start..].find("\n> ```"))
+        .ok_or("Missing fence end")?
+        + start
+        + 1;
     Ok(Some(start..stop))
 }
 
@@ -426,6 +459,40 @@ pub fn resolve_readable<'a>(
     }
 }
 
+fn folded_data(text: &str) -> String {
+    let Some(at) = text.find("\n## Splat data") else {
+        return text.into();
+    };
+    let title_end = text[at + 1..].find('\n').map_or(text.len(), |n| at + 1 + n);
+    let section_end = text[title_end..]
+        .find("\n## ")
+        .map_or(text.len(), |n| title_end + n);
+    let Some(close) = text[title_end..section_end].rfind("\n```") else {
+        return text.into();
+    };
+    let end = title_end + close + "\n```".len();
+    let title = text[at + 4..title_end].trim();
+    let newline = if text.contains("\r\n") { "\r\n" } else { "\n" };
+    let mut folded = format!("{newline}> [!note]- {title}{newline}");
+    for line in text[title_end..end].trim_matches(['\n', '\r']).lines() {
+        folded.push_str("> ");
+        folded.push_str(line.trim_end_matches('\r'));
+        folded.push_str(newline);
+    }
+    format!("{}{folded}{}", &text[..at], &text[end..])
+}
+
+fn fence_text(raw: &str) -> String {
+    raw.lines()
+        .map(|line| {
+            line.strip_prefix("> ")
+                .or_else(|| line.strip_prefix('>'))
+                .unwrap_or(line)
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
 pub fn convert(path: &str, text: &str) -> Result<String, String> {
     // Keep a generated sheet's checksum around the generated part, with its
     // personal notes outside it. A format conversion is not a local sheet edit.
@@ -448,7 +515,13 @@ pub fn convert(path: &str, text: &str) -> Result<String, String> {
     }
     let entry = Entry::parse(path, text)?;
     if schema(&entry.fields)? == 2 || !eligible(&entry) {
-        return Ok(text.into());
+        return Ok(
+            if entry.kind == "package" || entry.fields.contains_key("splat_character") {
+                folded_data(text)
+            } else {
+                text.into()
+            },
+        );
     }
     if !entry.flags.is_empty() {
         return Err("Fix flagged values before converting this file.".into());
@@ -607,6 +680,9 @@ pub fn convert(path: &str, text: &str) -> Result<String, String> {
         ));
         after.push_str(&fences.replace('\n', newline));
     }
+    if character || entry.kind == "package" {
+        after = folded_data(&after);
+    }
     let checked = Entry::parse(path, &after)?;
     let mut before = (*entry.fields).clone();
     let mut next = (*checked.fields).clone();
@@ -618,8 +694,8 @@ pub fn convert(path: &str, text: &str) -> Result<String, String> {
     Ok(after)
 }
 
-/// During the one-time conversion, replace resolvable World ids with readable
-/// links. Check the resolved identity before accepting each replacement.
+/// Write readable references and refresh rule-choice ids from their visible text.
+/// Check the resolved identity before accepting each replacement.
 pub fn convert_resolved<'a>(
     path: &str,
     text: &str,
@@ -627,6 +703,50 @@ pub fn convert_resolved<'a>(
 ) -> Result<String, String> {
     let original = Entry::parse(path, text)?;
     let entries: Vec<_> = entries.into_iter().collect();
+    if original.kind == "campaign" && schema(&original.fields)? == 2 {
+        let mut resolved = original.clone();
+        super::list_formats::resolve(
+            &mut resolved,
+            &entries.iter().map(|e| (*e).clone()).collect::<Vec<_>>(),
+        );
+        let mut after = text.to_owned();
+        if let Some(table) = super::layout::Document::new(text)
+            .section("Rule choices")
+            .and_then(|s| s.table(super::list_formats::RULES))
+        {
+            for row in table.rows.into_iter().rev().filter(|row| row.len() == 2) {
+                if original
+                    .flags
+                    .iter()
+                    .any(|flag| flag.line == row[1].line && flag.message == "Duplicate rule choice")
+                {
+                    continue;
+                }
+                let slot =
+                    super::list_formats::machine(&row[1].value, "rule").unwrap_or_else(|| {
+                        if row[0].value.eq_ignore_ascii_case("Combat initiative") {
+                            "dnd2024:rules/combat_initiative".into()
+                        } else {
+                            row[0].value.clone()
+                        }
+                    });
+                if let Some(id) = resolved
+                    .fields
+                    .get("splat_rule_choices")
+                    .and_then(|v| v.get(&slot))
+                    .and_then(|v| v.get("id"))
+                    .and_then(Value::as_str)
+                {
+                    let visible = row[1].value.split("%%").next().unwrap_or("").trim();
+                    after.replace_range(
+                        row[1].range.clone(),
+                        &format!("{visible} %% splat rule={slot} id={id} %%"),
+                    );
+                }
+            }
+        }
+        return Ok(after);
+    }
     if schema(&original.fields)? == 1
         && ["campaign", "encounter_group", "encounter"].contains(&original.kind.as_str())
     {
@@ -717,7 +837,48 @@ pub fn convert_resolved<'a>(
         return Ok(after);
     }
     let mut after = convert(path, text)?;
-    if schema(&original.fields)? != 1 || original.kind != "world" {
+    if let Some(required) = original
+        .fields
+        .get("splat_requires")
+        .and_then(Value::as_sequence)
+    {
+        let readable: Vec<_> = required
+            .iter()
+            .map(|value| {
+                let raw = flat_reference(value);
+                let Some(raw) = raw.as_str() else {
+                    return raw;
+                };
+                let Ok(id) = resolve_readable(raw, entries.iter().copied()) else {
+                    return raw.into();
+                };
+                let target = entries.iter().find(|entry| entry.id == id).unwrap();
+                if let Some(key) = target
+                    .key
+                    .as_ref()
+                    .filter(|key| key.starts_with("dnd2024:"))
+                {
+                    if resolve_readable(&target.name, entries.iter().copied()) == Ok(id) {
+                        target.name.clone().into()
+                    } else {
+                        key.clone().into()
+                    }
+                } else {
+                    format!(
+                        "[[{}|{}]]",
+                        target.path.trim_end_matches(".md"),
+                        target.name
+                    )
+                    .into()
+                }
+            })
+            .collect();
+        after = patch_fields(
+            &after,
+            &[("splat_requires", Some(Value::Sequence(readable)))],
+        )?;
+    }
+    if original.kind != "world" {
         return Ok(after);
     }
     for (key, flat) in [("creature", "splat_stat_block"), ("in", "splat_in")] {
@@ -741,18 +902,24 @@ pub fn convert_resolved<'a>(
         let Some(target) = entries.iter().find(|entry| entry.id == id) else {
             continue;
         };
-        let readable = target
-            .key
-            .as_ref()
-            .filter(|key| key.starts_with("dnd2024:"))
-            .cloned()
-            .unwrap_or_else(|| {
-                format!(
-                    "[[{}|{}]]",
-                    target.path.trim_end_matches(".md"),
-                    target.name
-                )
-            });
+        let readable = if key == "creature"
+            && resolve_readable(&target.name, entries.iter().copied()) == Ok(id)
+        {
+            target.name.clone()
+        } else {
+            target
+                .key
+                .as_ref()
+                .filter(|target_key| key == "creature" || target_key.starts_with("dnd2024:"))
+                .cloned()
+                .unwrap_or_else(|| {
+                    format!(
+                        "[[{}|{}]]",
+                        target.path.trim_end_matches(".md"),
+                        target.name
+                    )
+                })
+        };
         if resolve_readable(&readable, entries.iter().copied()) != Ok(id) {
             continue;
         }

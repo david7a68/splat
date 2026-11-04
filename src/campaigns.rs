@@ -458,6 +458,45 @@ impl Campaigns {
         );
     }
 
+    pub fn campaign_write_preview(&self, campaign: &Campaign) -> (String, &'static str) {
+        if let Some((path, text)) = self.held_manifests.borrow().get(&campaign.id)
+            && let Ok(entry) = splat::content::Entry::parse(path, text)
+        {
+            let packages = entry
+                .fields
+                .get("splat_packages")
+                .and_then(serde_yaml_ng::Value::as_sequence)
+                .map_or(0, Vec::len);
+            let rules = entry
+                .fields
+                .get("splat_rule_choices")
+                .and_then(serde_yaml_ng::Value::as_mapping)
+                .map_or(0, serde_yaml_ng::Mapping::len);
+            (
+                format!(
+                    "Splat still has the Campaign.md it last read ({}, {}).",
+                    if packages == 0 {
+                        "0 packages".into()
+                    } else {
+                        design::count(packages, "package", "packages")
+                    },
+                    if rules == 0 {
+                        "0 rules".into()
+                    } else {
+                        design::count(rules, "rule", "rules")
+                    }
+                ),
+                "Write Campaign.md again",
+            )
+        } else {
+            (
+                "Splat has no copy. This writes a new Campaign.md with the default packages."
+                    .into(),
+                "Write a new Campaign.md",
+            )
+        }
+    }
+
     pub fn write_campaign_again(
         &self,
         campaign: &Campaign,
@@ -1283,6 +1322,20 @@ mod tests {
         assert!(!path.exists(), "Reload must never recreate the manifest");
         assert!(CampaignDocument::load(&campaign).is_err());
         assert!(format!("{:?}", campaigns.error).contains("Campaign.md is missing"));
+        let (preview, action) = campaigns.campaign_write_preview(&campaign);
+        assert!(
+            preview.contains("Splat still has the Campaign.md it last read (1 package, 0 rules).")
+        );
+        assert_eq!(action, "Write Campaign.md again");
+        let fresh = Campaigns::at(temp.path().join("new-settings.json"));
+        assert_eq!(
+            fresh.campaign_write_preview(&campaign),
+            (
+                "Splat has no copy. This writes a new Campaign.md with the default packages."
+                    .into(),
+                "Write a new Campaign.md"
+            )
+        );
         let write = campaigns.write_campaign_again(&campaign).unwrap();
         assert_eq!(std::fs::read_to_string(&path).unwrap(), text);
         write.undo().unwrap();
