@@ -164,7 +164,8 @@ ones they share are in `steps.rs`. Goals use the test IDs in `docs/ux-intent.md`
 World notes support `splat_schema: 1` and `2`. New notes use flat properties such as
 `splat_type`, `splat_status`, `splat_stat_block`, `splat_in`, and Obsidian `aliases`.
 Library's **Packages** menu and Campaign offer **Convert files…**. The preview lists
-each supported file before and after conversion. Files changed on disk are skipped.
+each supported file before and after conversion. Lines wrap, changes are marked,
+and both sides scroll together from the first difference. Files changed on disk are skipped.
 One **Undo** restores the saved bytes and refuses to replace later edits.
 Library's Packages menu also counts files that still use the old layout.
 

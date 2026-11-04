@@ -34,8 +34,30 @@ pub fn run(d: &mut Driver<'_>) {
     d.click("Convert files…");
     d.click("File to convert");
     d.click("NPCs/Rook.md");
-    d.expect("Before");
-    d.expect("After");
+    d.expect("BEFORE");
+    d.expect("AFTER");
+    let identity = before
+        .lines()
+        .find(|line| line.starts_with("splat_id:"))
+        .unwrap();
+    let world = before
+        .lines()
+        .find(|line| line.starts_with("splat_world:"))
+        .unwrap();
+    d.observe_both(
+        "F1 preview",
+        "The comparison opens on the schema change with full identity and World lines",
+        |d| {
+            d.visible_text("splat_schema: 1")
+                && d.visible_text("splat_schema: 2")
+                && d.visible_text(identity)
+                && d.visible_text(world)
+                && d.visible_text("1 package file · 2 rule files · 1 World note")
+                && d.visible_text("Next difference")
+                && d.visible_text("Convert files")
+                && d.visible_text("Cancel")
+        },
+    );
     d.state("convert-files-preview", Sizes::All);
     d.click("Cancel");
     assert_eq!(fs::read_to_string(&path).unwrap(), before);

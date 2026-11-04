@@ -162,7 +162,12 @@ impl State {
                 let mut kinds = std::collections::BTreeMap::<String, usize>::new();
                 for file in files {
                     if let Ok(entry) = Entry::parse(&file.path, &file.before) {
-                        *kinds.entry(entry.kind).or_default() += 1;
+                        let kind = if entry.fields.contains_key("splat_character") {
+                            "character".into()
+                        } else {
+                            entry.kind
+                        };
+                        *kinds.entry(kind).or_default() += 1;
                     }
                 }
                 ui.label(
@@ -170,7 +175,14 @@ impl State {
                         ui,
                         kinds
                             .iter()
-                            .map(|(kind, n)| format!("{kind}: {n}"))
+                            .map(|(kind, n)| {
+                                let label = if kind == "world" {
+                                    "World note".into()
+                                } else {
+                                    format!("{} file", kind.replace('_', " "))
+                                };
+                                design::count(*n, &label, &format!("{label}s"))
+                            })
                             .collect::<Vec<_>>()
                             .join(" · "),
                     ),
@@ -185,23 +197,16 @@ impl State {
                         });
                     design::named(ui, &picker.response, "File to convert");
                     let file = &files[self.selected];
-                    ui.label(Type::Small.rich(ui, file.root.display().to_string()));
-                    ui.columns(2, |columns| {
-                        for (column, (title, text)) in columns
-                            .iter_mut()
-                            .zip([("Before", &file.before), ("After", &file.after)])
-                        {
-                            column.label(Type::Strong.rich(column, title));
-                            egui::ScrollArea::both()
-                                .id_salt(title)
-                                .max_height(design::XXL * 7.0)
-                                .show(column, |ui| {
-                                    ui.add(
-                                        egui::Label::new(Type::Mono.rich(ui, text))
-                                            .wrap_mode(egui::TextWrapMode::Extend),
-                                    );
-                                });
-                        }
+                    let height = (ui.available_height() - design::XXL).min(design::XXL * 10.0);
+                    ui.allocate_ui(egui::vec2(ui.available_width(), height), |ui| {
+                        design::draft_comparison_labeled(
+                            ui,
+                            [&file.before, &file.after],
+                            ["Before", "After"],
+                            ("convert_file", &file.root, &file.path, &file.before),
+                            Type::Mono.font(ui),
+                            Type::Mono.line(),
+                        );
                     });
                 }
                 if !self.skipped.is_empty() {

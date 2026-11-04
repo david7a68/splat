@@ -147,8 +147,10 @@ World uses labelled `Stat block`, `In` and `Status` rows with `Change` actions. 
 show their future path below the name. A missing place stays visible as `Not found`.
 
 A schema conversion shows `Saved in the new layout.` with `Undo`. Convert files
-opens a modal with each file's before and after text, the counts by kind, and files
-skipped. It is blocked while a run is open. Malformed flat properties stay in the
+opens a modal with each file's before and after text, the counts by kind in words,
+and files skipped. It uses the shared comparison: lines wrap, changed lines are
+marked, both sides scroll together, and it opens at the first difference.
+It is blocked while a run is open. Malformed flat properties stay in the
 file; the reader shows a warning with the line number and keeps the note available.
 
 `theme::install` sets one global `egui::Style`, so any plain egui widget still fits: hover,
