@@ -101,10 +101,21 @@ fn item_summary(ui: &mut egui::Ui, entry: &Entry, printed: Option<&str>) {
     let identity = ["weapon_category", "category", "rarity"]
         .into_iter()
         .filter_map(|key| item.get(key).map(display_value))
+        .map(|value| presentation::book_case(&value))
         .collect::<Vec<_>>()
-        .join(" · ")
-        .replace('_', " ");
-    // One line: the book's own has attunement in it, and says what the fields say.
+        .join(", ");
+    let attunement = item
+        .get("equipment")
+        .and_then(|v| v.get("attunement"))
+        .and_then(|v| v.as_str());
+    let identity = match attunement {
+        Some("required") => format!("{identity} (Requires Attunement)"),
+        Some(value) if !["none", ""].contains(&value) => format!(
+            "{identity} (Requires Attunement {})",
+            style::human_label(value)
+        ),
+        _ => identity,
+    };
     let identity = printed.map_or(identity, str::to_owned);
     if !identity.is_empty() {
         style::identity(ui, &identity);
@@ -140,27 +151,6 @@ fn item_summary(ui: &mut egui::Ui, entry: &Entry, printed: Option<&str>) {
     if let Some(ac) = item.get("armor").and_then(|armor| armor.get("base_ac")) {
         facts.insert(0, ("Base AC".into(), display_value(ac)));
     }
-    if entry
-        .fields
-        .get("splat_schema")
-        .and_then(|value| value.as_u64())
-        == Some(2)
-        && let Some(attunement) = item
-            .get("equipment")
-            .and_then(|equipment| equipment.get("attunement"))
-            .and_then(|value| value.as_str())
-            .filter(|value| !value.is_empty())
-    {
-        facts.push((
-            "Attunement".into(),
-            match attunement {
-                "none" => "No",
-                "required" => "Yes",
-                value => value,
-            }
-            .into(),
-        ));
-    }
     style::facts(ui, &facts);
     for (key, value) in item {
         let Some(key) = key.as_str() else { continue };
@@ -188,17 +178,12 @@ fn item_summary(ui: &mut egui::Ui, entry: &Entry, printed: Option<&str>) {
 }
 
 fn remaining_item_detail(
-    entry: &Entry,
+    _entry: &Entry,
     key: &serde_yaml_ng::Value,
     value: &serde_yaml_ng::Value,
 ) -> serde_yaml_ng::Value {
     let mut value = value.clone();
-    if entry
-        .fields
-        .get("splat_schema")
-        .and_then(|value| value.as_u64())
-        == Some(2)
-        && key.as_str() == Some("equipment")
+    if key.as_str() == Some("equipment")
         && let Some(equipment) = value.as_mapping_mut()
     {
         equipment.remove("attunement");
@@ -517,7 +502,9 @@ mod tests {
             assert!(text.iter().any(|text| text.contains("Keep this effect.")));
             if fields.contains("attunement: required") {
                 assert_eq!(
-                    text.iter().filter(|text| **text == "Yes").count(),
+                    text.iter()
+                        .filter(|text| **text == "Wondrous Item, Uncommon (Requires Attunement)")
+                        .count(),
                     1,
                     "{text:?}"
                 );

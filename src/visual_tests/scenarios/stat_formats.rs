@@ -10,8 +10,9 @@ pub fn run(d: &mut Driver<'_>) {
     d.expect("Bite.");
     d.state("schema-2-creature-library", Sizes::All);
     search_library(d, "Flagged Wolf");
-    d.click_containing("Flagged Wolf · Creature");
-    d.expect("Hit Points \"about twenty\" needs a number first (line 19).");
+    d.expect("1 flagged value");
+    d.click_containing("Flagged Wolf · ");
+    d.expect("Hit Points \"about twenty\" not read (line 19). Use a number first.");
     d.expect("about twenty");
     d.expect("HIT POINTS");
     d.observe(
@@ -22,8 +23,9 @@ pub fn run(d: &mut Driver<'_>) {
     d.state("flagged-hp-cell", Sizes::All);
 
     search_library(d, "Flagged Spark");
-    d.click_containing("Flagged Spark · Spell");
-    d.expect("Level needs a number from 0 to 9");
+    d.expect("1 flagged value");
+    d.click_containing("Flagged Spark · ");
+    d.expect("Level \"many\" not read (line 15). Use a number from 0 to 9.");
     d.expect("Keep the spark effect.");
     d.observe(
         "i19 valid spell fact",
@@ -39,12 +41,12 @@ pub fn run(d: &mut Driver<'_>) {
     d.state("flagged-spell-cell", Sizes::All);
     search_library(d, "Bound Charm");
     d.click_containing("Bound Charm · ");
-    d.expect("Yes");
+    d.expect("Wondrous Item, Uncommon (Requires Attunement)");
     d.expect("Keep the charm effect.");
     d.observe(
         "i19 converted item",
-        d.visible_text("Attunement") && !d.visible_text("%% splat") && !d.visible_text("Field"),
-        "The converted item keeps its Attunement fact without raw data",
+        !d.has("Attunement") && !d.visible_text("%% splat") && !d.visible_text("Field"),
+        "The converted item keeps attunement in its identity line without a repeated fact",
     );
     d.state("converted-item-facts", Sizes::All);
 
