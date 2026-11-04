@@ -106,11 +106,19 @@ impl EntitySnapshot {
             .collect();
         for error in errors {
             let path = campaign.join(&error.path);
-            if fs::read_to_string(&path)
-                .is_ok_and(|text| text.contains(&self.definition.splat_id.to_string()))
-            {
-                return Err(format!("{}: {}", path.display(), error.message).into());
+            let Ok(text) = fs::read_to_string(&path) else {
+                continue;
+            };
+            if !text.contains(&self.definition.splat_id.to_string()) {
+                continue;
             }
+            // An old-layout copy of this sheet is still its file: a refresh rewrites it.
+            let identity = format!("\nsplat_id: {}\n", self.definition.splat_id);
+            if error.message == crate::content::OLD_LAYOUT && text.contains(&identity) {
+                paths.push(path);
+                continue;
+            }
+            return Err(format!("{}: {}", path.display(), error.message).into());
         }
         match paths.len() {
             0 => {
@@ -243,13 +251,9 @@ impl EntitySnapshot {
             if edited && on_edits == OnEdits::Stop {
                 return Err(conflict(&path));
             }
+            // The checksum, not the layout, decides: an old-layout copy is generated text like
+            // any other, so a refresh rewrites it and Replace archives its edits first.
             let notes = copy.map_or(PERSONAL_NOTES, |copy| copy.notes);
-            if previous
-                .as_deref()
-                .is_some_and(|text| text.contains("splat_schema: 1"))
-            {
-                return Err(crate::content::OLD_LAYOUT.into());
-            }
             let text = stamped(&markdown, notes);
             staged.push(Note {
                 path,
@@ -705,6 +709,49 @@ mod tests {
         );
         // The next ordinary refresh has nothing left to object to.
         record.save_campaign_copy(root.path()).unwrap();
+    }
+
+    #[test]
+    fn old_layout_copy_is_refreshed_or_replaced_like_any_copy() {
+        // A generated copy holds no DM data outside its notes, so its layout never blocks a
+        // refresh. Edits still stop an ordinary refresh, and Replace archives them first.
+        let root = tempfile::tempdir().unwrap();
+        let mut record = super::super::tests::sample();
+        let creature = record.save_campaign_copy(root.path()).unwrap();
+        let old = |generated: &str, intact: bool| {
+            let hash = if intact {
+                checksum(generated)
+            } else {
+                "0".repeat(64)
+            };
+            format!("{generated}{MARKER}{hash} -->\n{PERSONAL_NOTES}Kept note.\n")
+        };
+        let generated = format!(
+            "---\nsplat_schema: 1\nsplat_id: {}\nsplat_kind: creature\nsplat_name: Old copy\n---\n\nOld sheet.\n",
+            record.definition.splat_id
+        );
+
+        fs::write(&creature, old(&generated, true)).unwrap();
+        record.definition.splat_name = "Refreshed".into();
+        record.save_campaign_copy(root.path()).unwrap();
+        let refreshed = fs::read_to_string(&creature).unwrap();
+        assert!(refreshed.contains("splat_schema: 2") && refreshed.contains("Refreshed"));
+        assert!(refreshed.ends_with("Kept note.\n"));
+
+        let edited = old(&generated, false);
+        fs::write(&creature, &edited).unwrap();
+        assert_eq!(
+            record.save_campaign_copy(root.path()),
+            Err(CampaignCopyError::Conflict(creature.clone()))
+        );
+        let archive = creature.with_extension("md.splat-archive");
+        assert_eq!(
+            record.overwrite_campaign_copy(root.path()).unwrap(),
+            std::slice::from_ref(&archive)
+        );
+        assert_eq!(fs::read_to_string(&archive).unwrap(), edited);
+        let replaced = fs::read_to_string(&creature).unwrap();
+        assert!(replaced.contains("splat_schema: 2") && replaced.ends_with("Kept note.\n"));
     }
 
     #[test]
