@@ -111,6 +111,7 @@ const ROSE: Color32 = rgb(0xF29BC4);
 const RED: Color32 = rgb(0xF4898A);
 const MUTED: Color32 = rgb(0xBDB3A3);
 const FAINT: Color32 = rgb(0x9D9384);
+const TEXT: Color32 = rgb(0xE9E1D3);
 
 pub const DARK: Colors = Colors {
     page: rgb(0x1B1815),
@@ -123,7 +124,7 @@ pub const DARK: Colors = Colors {
     hairline: rgb(0x342E28),
     rule: rgb(0x4A4238),
     field_border: rgb(0x7A6E5F),
-    text: rgb(0xE9E1D3),
+    text: TEXT,
     muted: MUTED,
     faint: FAINT,
     disabled: rgb(0x8A7F70),
@@ -140,7 +141,7 @@ pub const DARK: Colors = Colors {
     },
     hp: Hp {
         healthy: rgb(0x8FB08A),
-        damaged: rgb(0xC9B27C),
+        damaged: TEXT,
         bloodied: rgb(0xEBA176),
         zero: RED,
         temp: rgb(0x86C5C0),
@@ -151,7 +152,7 @@ pub const DARK: Colors = Colors {
         absent: FAINT,
         concentrating: rgb(0x7CCBEA),
         condition: rgb(0xDCCBA9),
-        changed: rgb(0xE3AFC0),
+        changed: MUTED,
     },
     side: Side {
         party: rgb(0xCFC6B4),
@@ -620,6 +621,8 @@ mod tests {
             ("enemies, error", c.side.enemies, c.result.error),
             ("side, condition", c.side.enemies, c.participant.condition),
             ("temp, healthy", c.hp.temp, c.hp.healthy),
+            ("changed, conflict", c.participant.changed, c.sync.conflict),
+            ("damaged, warning", c.hp.damaged, c.result.warning),
         ] {
             assert!(distance(a, b) >= 60, "{name}: {}", distance(a, b));
         }

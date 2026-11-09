@@ -1602,7 +1602,7 @@ pub fn draft_discarded(ui: &mut Ui, name: &str) -> bool {
 
 /// A message with one action beside it. Returns true when the action is used.
 pub fn message_with_action(ui: &mut Ui, tone: Tone, text: &str, action: &str) -> bool {
-    let button = Action::quiet(action).density(Density::Read);
+    let button = Action::secondary(action).density(Density::Read);
     let button_width = button.natural_width(ui);
     let icon_width = number_width(ui, tone.parts().0, &Type::Body.font(ui));
     let inset = S + 1.0 + icon_width + ui.spacing().item_spacing.x * 2.0 - XS;
@@ -1613,7 +1613,7 @@ pub fn message_with_action(ui: &mut Ui, tone: Tone, text: &str, action: &str) ->
         message(ui, tone, text);
         ui.horizontal(|ui| {
             ui.add_space((inset - gap).max(0.0));
-            pressed = button.line_start().show(ui).clicked();
+            pressed = button.show(ui).clicked();
         });
     } else {
         ui.horizontal_top(|ui| {
@@ -1626,6 +1626,40 @@ pub fn message_with_action(ui: &mut Ui, tone: Tone, text: &str, action: &str) ->
         });
     }
     pressed
+}
+
+/// The same safe-first choice for a draft whose file changed on disk.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum DiskConflictChoice {
+    Overwrite,
+    Reload,
+}
+
+pub fn disk_conflict_choices(ui: &mut Ui) -> Option<DiskConflictChoice> {
+    message(
+        ui,
+        Tone::Warning,
+        "This entry changed on disk. Your draft is safe until you choose.",
+    );
+    let mut choice = None;
+    ui.horizontal_wrapped(|ui| {
+        if Action::secondary("Overwrite with my draft")
+            .density(Density::Read)
+            .show(ui)
+            .clicked()
+        {
+            choice = Some(DiskConflictChoice::Overwrite);
+        }
+        ui.add_space(L);
+        if Action::destructive("Reload and lose my draft")
+            .density(Density::Read)
+            .show(ui)
+            .clicked()
+        {
+            choice = Some(DiskConflictChoice::Reload);
+        }
+    });
+    choice
 }
 
 /// A recovery message whose action restores the previous state.
@@ -2078,6 +2112,25 @@ fn grouped_comparison_shows_the_first_change_without_a_next_control() {
     }
 }
 
+/// Keep the count and its heading in one sentence, on one baseline.
+fn comparison_summary(ui: &mut Ui, count: &str, lines: &[&str], line: usize) {
+    let heading = lines
+        .iter()
+        .take(line + 1)
+        .rev()
+        .find(|line| line.trim_start().starts_with('#'));
+    let words = heading.map_or_else(
+        || count.to_owned(),
+        |heading| {
+            format!(
+                "{count} · Under the heading “{}”",
+                heading.trim_start_matches('#').trim()
+            )
+        },
+    );
+    ui.label(Type::Small.rich(ui, words).color(colors().muted));
+}
+
 /// A source comparison that navigates separate changes, rather than adjacent lines.
 pub fn grouped_draft_comparison(
     ui: &mut Ui,
@@ -2112,13 +2165,13 @@ pub fn grouped_draft_comparison(
     ui.data_mut(|data| data.insert_temp(state.with("size"), size));
     let mut target =
         (current.is_none() || previous_size != Some(size)).then_some(current.unwrap_or(first));
-    ui.horizontal(|ui| {
+    ui.horizontal_wrapped(|ui| {
         let words = if differences.is_empty() {
             "No lines differ".into()
         } else {
             super::count(line_count, "line differs", "lines differ")
         };
-        ui.label(Type::Small.rich(ui, words).color(colors().muted));
+        comparison_summary(ui, &words, &left, target.or(current).unwrap_or(first));
         if differences.len() > 1 && Action::quiet("Next difference").show(ui).clicked() {
             target = Some(
                 differences
@@ -2131,18 +2184,6 @@ pub fn grouped_draft_comparison(
     });
     if let Some(line) = target {
         ui.data_mut(|data| data.insert_temp(state, line));
-    }
-    if let Some(heading) = left
-        .iter()
-        .take(target.or(current).unwrap_or(first) + 1)
-        .rev()
-        .find(|line| line.trim_start().starts_with('#'))
-    {
-        ui.label(
-            Type::Small
-                .rich(ui, format!("In {}", heading.trim_start_matches('#').trim()))
-                .color(colors().muted),
-        );
     }
     ui.columns(2, |columns| {
         group_label(&mut columns[0], "Your draft");
@@ -2444,13 +2485,13 @@ pub fn draft_comparison_labeled(
     ui.data_mut(|data| data.insert_temp(state.with("size"), size));
     let mut target =
         (current.is_none() || previous_size != Some(size)).then_some(current.unwrap_or(first));
-    ui.horizontal(|ui| {
+    ui.horizontal_wrapped(|ui| {
         let words = if differences.is_empty() {
             "No lines differ".into()
         } else {
             super::count(differences.len(), "line differs", "lines differ")
         };
-        ui.label(Type::Small.rich(ui, words).color(colors().muted));
+        comparison_summary(ui, &words, &left, target.or(current).unwrap_or(first));
         if differences.len() > 1 && Action::quiet("Next difference").show(ui).clicked() {
             target = Some(
                 differences
@@ -2463,18 +2504,6 @@ pub fn draft_comparison_labeled(
     });
     if let Some(line) = target {
         ui.data_mut(|data| data.insert_temp(state, line));
-    }
-    if let Some(heading) = left
-        .iter()
-        .take(target.or(current).unwrap_or(first) + 1)
-        .rev()
-        .find(|line| line.trim_start().starts_with('#'))
-    {
-        ui.label(
-            Type::Small
-                .rich(ui, format!("In {}", heading.trim_start_matches('#').trim()))
-                .color(colors().muted),
-        );
     }
     ui.columns(2, |columns| {
         group_label(&mut columns[0], headings[0]);
@@ -2763,6 +2792,49 @@ mod tests {
         assert_eq!(count(1, "entry", "entries"), "1 entry");
         assert_eq!(count(2108, "entry", "entries"), "2,108 entries");
         assert_eq!(count(1234567, "", ""), "1,234,567");
+    }
+
+    #[test]
+    fn comparison_heading_sits_beside_the_line_count() {
+        for disk in ["# Recovery\nsame\nnew\nnext", "# Recovery\nsame\nnew\nlast"] {
+            let ctx = egui::Context::default();
+            super::super::theme::install(&ctx);
+            let output = ctx.run(
+                egui::RawInput {
+                    screen_rect: Some(egui::Rect::from_min_size(
+                        egui::Pos2::ZERO,
+                        vec2(524.0, 300.0),
+                    )),
+                    ..Default::default()
+                },
+                |ctx| {
+                    egui::CentralPanel::default().show(ctx, |ui| {
+                        grouped_draft_comparison(
+                            ui,
+                            "# Recovery\nsame\nold\nlast",
+                            disk,
+                            disk,
+                            true,
+                        );
+                    });
+                },
+            );
+            let count = if disk.ends_with("next") {
+                "2 lines differ"
+            } else {
+                "1 line differs"
+            };
+            let words = format!("{count} · Under the heading “Recovery”");
+            let text = output
+                .shapes
+                .iter()
+                .find_map(|shape| match &shape.shape {
+                    egui::Shape::Text(text) if text.galley.text() == words => Some(text),
+                    _ => None,
+                })
+                .expect("The count and heading share one label");
+            assert_eq!(text.galley.rows.len(), 1, "The summary fits on one line");
+        }
     }
 
     #[test]

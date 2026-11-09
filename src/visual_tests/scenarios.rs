@@ -89,6 +89,17 @@ pub mod library_browse {
 
         search_library(d, "fireball");
         d.click_starting(SPELL_ROW);
+        let reader_at_left = |d: &Driver<'_>| {
+            d.painted_left("Fireball").is_some_and(|left| {
+                (left - d.column_edge("library_entries") - crate::design::L).abs() < 2.0
+            })
+        };
+        let large_anchor = d.at_size(LARGE, reader_at_left);
+        d.observe_both(
+            "iter-1-A-reader-anchor",
+            "The Library reader starts beside the list at all three window sizes",
+            |d| large_anchor && reader_at_left(d),
+        );
         d.state("spell", Sizes::All);
         d.goal("open a spell");
 
@@ -3243,7 +3254,7 @@ pub mod gallery {
         d.expect("Spell · Level 3 · D&D 2024");
         d.state("messages", Sizes::AllAndHiDpi);
         let edges = (
-            d.painted_left("Use the saved HP"),
+            d.place_of("Use the saved HP").map(|rect| rect.left()),
             d.painted_left("Party HP is full after the long rest."),
         );
         d.observe(
@@ -3252,12 +3263,12 @@ pub mod gallery {
                 .0
                 .zip(edges.1)
                 .is_some_and(|(action, message)| (action - message).abs() < 1.0),
-            format!("A quiet action aligns with its message text: {edges:?}"),
+            format!("The bordered action starts at its message text: {edges:?}"),
         );
         d.observe(
             "U6",
             !d.visible_passage("Second use of widget ID"),
-            "A line-start action registers its click target once",
+            "The message action registers its click target once",
         );
         d.goal("see every part of the design system");
         d.click("Markdown");
@@ -4962,7 +4973,7 @@ pub mod session_notes {
         // Renaming keeps notes unchanged until the DM accepts the update.
         d.expect("Update 1 link in notes");
         d.expect_same("The rename offer is already in the event detail. Checking it leaves the view unchanged.");
-        d.state("event-link-update-offered", Sizes::Default);
+        d.state("event-link-update-offered", Sizes::All);
         d.click("Update 1 link in notes");
         d.expect("Undo update links");
         d.state("event-links-updated", Sizes::Default);
@@ -6545,7 +6556,7 @@ pub mod encounter_groups {
                 .any(|node| node.name.contains(RIVAL_NAME) && node.name.contains("Initiative 14")),
             "A typed total places the group, with no roll",
         );
-        d.state("group-added-with-a-total", Sizes::Default);
+        d.state("group-added-with-a-total", Sizes::All);
         d.observe(
             "T13.2",
             d.has_containing("Undo: add Rival Team")

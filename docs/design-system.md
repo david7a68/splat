@@ -74,7 +74,7 @@ HP and initiative hold their place because the font's digits have one width.
 | `Mono` | Monospace 13 | Markdown source |
 
 **Measure.** Lists of rows with actions use `LIST_MEASURE` (880 px), so actions stay near the names. `READER_MEASURE` is 488 px at `Prose`, about 62 characters on average and
-at most 75 (T6.1). Prose never fills a wide window.
+at most 75 (T6.1). Prose never fills a wide window. Every reader starts at the pane’s left edge, including Library; its text keeps `READER_MEASURE`.
 
 **The run has its own scale.** `RunScale` holds a row height and type sizes, and
 `RunScale::fit(height, width, rows)` takes the largest that fits with no scrolling.
@@ -100,8 +100,8 @@ has a word, an icon, or a shape, and `src/design/tokens.rs` tests the contrast p
 | Accent | `accent accent_fill accent_hover on_accent focus` | Focus also has a 2 px ring |
 | Recording | `recording` | `Recording` with its time and a record icon, in the rail on every page |
 | Turn | `turn.current turn.next` | The word `Turn` and a bar; the word `Next` |
-| HP | `hp.healthy damaged bloodied zero temp unknown track` | Numbers tinted by state, a bar under them, `Bloodied`, a neutral mark with `0 HP` (a skull would be a verdict, and death is the DM's ruling), `+5` with a shield and a strip above the bar, `?` |
-| Participant | `participant.absent concentrating condition changed` | `Absent`, `Conc`, each condition by name, a pencil and `Changed` |
+| HP | `hp.healthy damaged bloodied zero temp unknown track` | Damaged HP uses the text colour and a part-filled bar; other numbers are tinted by state, with a bar under them, `Bloodied`, a neutral mark with `0 HP` (a skull would be a verdict, and death is the DM's ruling), `+5` with a shield and a strip above the bar, `?` |
+| Participant | `participant.absent concentrating condition changed` | `Absent`, `Conc`, each condition by name, a neutral muted pencil and `Changed` |
 | Side | `side.party enemies other` | The side name, with a square, a diamond or a circle. No red and green |
 | Sync | `sync.off first_read matching pending conflict read_only error` | Icon and word in every case |
 | Connection | `connection.connected offline busy` | Icon and word |
@@ -238,7 +238,7 @@ tooltips, and separators. Text cursors do not blink, because motion draws the ey
 | Group heading | `group_heading` | `Type::Label` in capitals and a muted, nonzero count after it. No rule. Serif headings belong to readers and stat blocks |
 | Row menu | `row_menu` | Quiet `⋯` at the right edge, named `More actions for <name>`. Put Remove and Delete here |
 | Add strip | `hanging_add_strip` | `Add` in its own Label column; quiet icon-and-word buttons wrap at the first button's left edge. Fight, Group (plan only), Day, Long rest, Short rest, Travel, Major event |
-| Message | `message`, `message_with_action`, `Tone` | Inline. Measure the full action, including padding. Move it below the text, aligned with the text, when both cannot fit on one line |
+| Message | `message`, `message_with_action`, `Tone` | Inline. An action without an icon uses the secondary border, including when it wraps below the message. Measure the full action, including padding. Move it below the text, aligned with the text, when both cannot fit on one line |
 | Side panel | `side_panel_width`, `panel_header` | One width rule for Lookup, Notes and the run. The run separates participant tabs from fight tabs |
 | Column | `Column::left / right / panel` | Every side column: the rail, a page's list, a panel. A drag handle on its inner edge. Natural width until dragged, then the DM's width, here and after a restart. A drag always leaves the page its room, and the run's roster keeps `RUN_LIST_KEEPS`. What sits beside a column reaches its edge, so no blank band opens between them. Text keeps its measure inside that room |
 | Link | `link` | A real `Link` role, at least 24 px high |
@@ -551,7 +551,7 @@ again on the visible recording row; other pages keep the bottom banner.
 
 Each recording keeps its failure or stop reason beside its status, including the last processing step. Dismissing a banner does not remove that row state. While a recording is live or processing, its stored stop or cancellation reason stays hidden. A cancellation says which part stopped and offers Continue processing. Failed and Stopped use the error icon and colour; Cancelled uses warning. A recording stopped by a missing input offers Choose an input before Record again and Process. Silence uses the warning colour on every page. The result viewer uses one segmented control for Summary, Clean transcript, What the check changed, and Raw transcript. Every generated view uses the same Small draft notice. If the check did not run, the row says `No check ran` beside Raw transcript. The row menu stays beside the title, and L space separates its actions from the events heading. The result viewer has its back link and muted date on the first line, with Add to notes at the right on Summary. Its view choices start at the left on a second line. The segmented control never wraps; if the full set does not fit, one dropdown shows the current view name. Tabs and page headers omit zero counts. Templates names its own page and uses Campaign as the owner word.
 
-Lookup shows up to five one-line results with the open result selected. A result shows its name, then muted type and level. Campaign-owned entries add Campaign; a source shows only when it differs from the campaign’s main source. Only the muted part is shortened with an ellipsis. The hover and accessible name keep the full row. Result lists never scroll sideways. A click on a result, or scrolling into its reader, closes the list. `Show all` offers the remaining results. Creation actions follow the results and include the proposed name. They appear only without an exact match; Generate NPC appears only for an empty search.
+Lookup shows up to five one-line results with the open result selected. When its one result is open, the list closes. A result shows its name, then muted type and level. Campaign-owned entries add Campaign; a source shows only when it differs from the campaign’s main source. Only the muted part is shortened with an ellipsis. The hover and accessible name keep the full row. Result lists never scroll sideways. A click on a result, or scrolling into its reader, closes the list. `Show all` offers the remaining results. Creation actions follow the results and include the proposed name. They appear only without an exact match; Generate NPC appears only for an empty search.
 
 A copy starts with the original name selected. Its destination and dependency preview update with the fields. Create copy saves it in one step. Edit the copy selects the result and opens its Markdown editor. An open encounter draft keeps Add to its encounter as the primary completion action. A Library disk conflict uses the full reader width for its single row of choices.
 
@@ -675,7 +675,7 @@ Process again… in its menu above Delete…, with the same inline confirmation.
 Keep the recording is secondary. The consent step hides the header Record action.
 
 A quiet Action that starts a line uses line_start to align its text with the line above;
-its target extends into the gutter. A message action below its message uses the same rule.
+its target extends into the gutter. An icon-bearing quiet message action below its message uses the same rule. Other message actions use the secondary border.
 A draft comparison offers Next difference only when at least two lines differ.
 
 ## Session and preparation audit, iteration 5
@@ -908,6 +908,14 @@ Library puts nonzero file status links in the header, before Packages. Generated
 add to the old-layout count. Flagged stat cells appear in list rows and the file warning count.
 Stat warnings name the field, bad value, line and repair. Magic items use book case and put
 attunement in their identity line. End fences use a folded Splat data callout; empty defaults need no fence.
+
+## Design score, iteration 1: shared design
+
+Disk conflicts use `disk_conflict_choices`: “This entry changed on disk. Your draft is safe until you choose.” Keep the secondary `Overwrite with my draft` first, then red `Reload and lose my draft`. World saves on Overwrite and keeps the replaced draft for one `Undo reload` on its message line until the next edit. If the draft is still invalid, Overwrite returns to its repair editor and leaves the file unchanged.
+
+Comparisons put `Under the heading “Recovery”` beside the differing-line count, with the actual heading name. The line wraps as needed. Changed participants use the neutral muted token with their pencil; damaged HP uses the text token with its part-filled bar. Both stay distinct from warning and conflict tokens in the colour-distance test.
+
+Duplicate World readers keep their path on the file line only. Search results keep the path to tell duplicate names apart. Generated NPCs show the table marker for custom names in the app, with no link out.
 
 ## Design score, iteration 1: campaign and session
 

@@ -2810,10 +2810,9 @@ impl Run {
                                 &full,
                                 &self.state.participants,
                                 &font,
-                                ui.available_width() - design::S * 2.0,
+                                ui.available_width() - design::M * 2.0,
                             );
-                            if Action::quiet(&shown)
-                                .line_start()
+                            if Action::secondary(&shown)
                                 .name(&full)
                                 .hint(&full)
                                 .density(Density::Read)
