@@ -7,6 +7,7 @@ splat_name: Goblin Boss
 splat_origin: dnd2024:reference/creature/goblin_boss
 splat_sources:
 - SRD 5.2.1, pp. 290, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 143, Habitat
 ---
 
 # Goblin Boss
@@ -28,6 +29,7 @@ splat_sources:
 | Senses | Darkvision 60 ft.; Passive Perception 9 |
 | Languages | Common, Goblin |
 | Gear | Chain Shirt, Scimitar, Shield, Shortbow |
+| Habitat | Forest, Grassland, Hill, Underdark, Planar (Acheron, Feywild) |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

@@ -7,6 +7,7 @@ splat_name: Ogre
 splat_origin: dnd2024:reference/creature/ogre
 splat_sources:
 - SRD 5.2.1, pp. 312, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 231, Habitat
 ---
 
 # Ogre
@@ -27,6 +28,7 @@ splat_sources:
 | Senses | Darkvision 60 ft.; Passive Perception 8 |
 | Languages | Common, Giant |
 | Gear | Greatclub, Javelins (3) |
+| Habitat | Arctic, Desert, Forest, Grassland, Hill, Mountain, Swamp, Underdark |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

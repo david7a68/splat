@@ -7,6 +7,7 @@ splat_name: Young Brass Dragon
 splat_origin: dnd2024:reference/creature/young_brass_dragon
 splat_sources:
 - SRD 5.2.1, pp. 268, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 54, Habitat
 ---
 
 # Young Brass Dragon
@@ -28,6 +29,7 @@ splat_sources:
 | Senses | Blindsight 30 ft., Darkvision 120 ft.; Passive Perception 16 |
 | Languages | Common, Draconic |
 | Immunities | Fire |
+| Habitat | Desert |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

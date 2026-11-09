@@ -7,6 +7,7 @@ splat_name: Baboon
 splat_origin: dnd2024:reference/creature/baboon
 splat_sources:
 - SRD 5.2.1, pp. 345, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 349, Habitat
 ---
 
 # Baboon
@@ -26,6 +27,7 @@ splat_sources:
 | Challenge | 0 (XP 10; PB +2) |
 | Senses | Passive Perception 11 |
 | Languages | None |
+| Habitat | Forest, Hill |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

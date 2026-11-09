@@ -7,6 +7,7 @@ splat_name: Hill Giant
 splat_origin: dnd2024:reference/creature/hill_giant
 splat_sources:
 - SRD 5.2.1, pp. 298, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 168, Habitat
 ---
 
 # Hill Giant
@@ -27,6 +28,7 @@ splat_sources:
 | Skills | Perception +2 |
 | Senses | Passive Perception 12 |
 | Languages | Giant |
+| Habitat | Hill |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

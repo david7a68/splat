@@ -7,6 +7,7 @@ splat_name: Nightmare
 splat_origin: dnd2024:reference/creature/nightmare
 splat_sources:
 - SRD 5.2.1, pp. 311, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 226, Habitat
 ---
 
 # Nightmare
@@ -27,6 +28,7 @@ splat_sources:
 | Senses | Passive Perception 11 |
 | Languages | Understands Abyssal, Common, and Infernal but can’t speak |
 | Immunities | Fire |
+| Habitat | Planar (Lower Planes) |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

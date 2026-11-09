@@ -7,6 +7,7 @@ splat_name: Stirge
 splat_origin: dnd2024:reference/creature/stirge
 splat_sources:
 - SRD 5.2.1, pp. 329, 330, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 299, Habitat
 ---
 
 # Stirge
@@ -26,6 +27,7 @@ splat_sources:
 | Challenge | 1/8 (XP 25; PB +2) |
 | Senses | Darkvision 60 ft.; Passive Perception 9 |
 | Languages | None |
+| Habitat | Desert, Forest, Grassland, Hill, Mountain, Swamp, Underdark, Urban |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

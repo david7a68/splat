@@ -7,6 +7,7 @@ splat_name: Adult Copper Dragon
 splat_origin: dnd2024:reference/creature/adult_copper_dragon
 splat_sources:
 - SRD 5.2.1, pp. 276, 277, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 79, Habitat
 ---
 
 # Adult Copper Dragon
@@ -28,6 +29,7 @@ splat_sources:
 | Senses | Blindsight 60 ft., Darkvision 120 ft.; Passive Perception 22 |
 | Languages | Common, Draconic |
 | Immunities | Acid |
+| Habitat | Hill |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

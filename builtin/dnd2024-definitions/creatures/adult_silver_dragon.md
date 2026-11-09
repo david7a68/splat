@@ -7,6 +7,7 @@ splat_name: Adult Silver Dragon
 splat_origin: dnd2024:reference/creature/adult_silver_dragon
 splat_sources:
 - SRD 5.2.1, pp. 324, 325, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 279, Habitat
 ---
 
 # Adult Silver Dragon
@@ -28,6 +29,7 @@ splat_sources:
 | Senses | Blindsight 60 ft., Darkvision 120 ft.; Passive Perception 21 |
 | Languages | Common, Draconic |
 | Immunities | Cold |
+| Habitat | Mountain, Urban |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

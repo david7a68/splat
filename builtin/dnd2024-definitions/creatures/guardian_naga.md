@@ -7,6 +7,7 @@ splat_name: Guardian Naga
 splat_origin: dnd2024:reference/creature/guardian_naga
 splat_sources:
 - SRD 5.2.1, pp. 296, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 161, Habitat
 ---
 
 # Guardian Naga
@@ -28,6 +29,7 @@ splat_sources:
 | Senses | Darkvision 60 ft.; Passive Perception 14 |
 | Languages | Celestial, Common |
 | Immunities | Poison; Charmed, Paralyzed, Poisoned, Restrained |
+| Habitat | Desert, Forest, Planar (Upper Planes) |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

@@ -7,6 +7,7 @@ splat_name: Ancient Gold Dragon
 splat_origin: dnd2024:reference/creature/ancient_gold_dragon
 splat_sources:
 - SRD 5.2.1, pp. 292, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 146, Habitat
 ---
 
 # Ancient Gold Dragon
@@ -28,6 +29,7 @@ splat_sources:
 | Senses | Blindsight 60 ft., Darkvision 120 ft.; Passive Perception 27 |
 | Languages | Common, Draconic |
 | Immunities | Fire |
+| Habitat | Forest, Grassland |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

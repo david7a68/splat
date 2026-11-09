@@ -7,6 +7,7 @@ splat_name: Shambling Mound
 splat_origin: dnd2024:reference/creature/shambling_mound
 splat_sources:
 - SRD 5.2.1, pp. 323, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 276, Habitat
 ---
 
 # Shambling Mound
@@ -29,6 +30,7 @@ splat_sources:
 | Languages | None |
 | Resistances | Cold, Fire |
 | Immunities | Lightning; Deafened, Exhaustion |
+| Habitat | Forest, Swamp |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

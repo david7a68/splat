@@ -7,6 +7,7 @@ splat_name: Awakened Shrub
 splat_origin: dnd2024:reference/creature/awakened_shrub
 splat_sources:
 - SRD 5.2.1, pp. 260, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 23, Habitat
 ---
 
 # Awakened Shrub
@@ -28,6 +29,7 @@ splat_sources:
 | Languages | Common plus one other language |
 | Resistances | Piercing |
 | Vulnerabilities | Fire |
+| Habitat | Forest |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

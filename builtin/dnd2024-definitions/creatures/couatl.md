@@ -7,6 +7,7 @@ splat_name: Couatl
 splat_origin: dnd2024:reference/creature/couatl
 splat_sources:
 - SRD 5.2.1, pp. 277, 278, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 82, Habitat
 ---
 
 # Couatl
@@ -28,6 +29,7 @@ splat_sources:
 | Languages | All; telepathy 120 ft. |
 | Resistances | Bludgeoning, Piercing, Slashing |
 | Immunities | Psychic, Radiant |
+| Habitat | Desert, Forest, Grassland, Urban |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

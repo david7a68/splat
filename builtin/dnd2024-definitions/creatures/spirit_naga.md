@@ -7,6 +7,7 @@ splat_name: Spirit Naga
 splat_origin: dnd2024:reference/creature/spirit_naga
 splat_sources:
 - SRD 5.2.1, pp. 329, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 297, Habitat
 ---
 
 # Spirit Naga
@@ -27,6 +28,7 @@ splat_sources:
 | Senses | Darkvision 60 ft.; Passive Perception 12 |
 | Languages | Abyssal, Common |
 | Immunities | Poison; Charmed, Poisoned |
+| Habitat | Underdark, Planar (Lower Planes) |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

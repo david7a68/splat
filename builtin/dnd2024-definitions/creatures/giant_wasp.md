@@ -7,6 +7,7 @@ splat_name: Giant Wasp
 splat_origin: dnd2024:reference/creature/giant_wasp
 splat_sources:
 - SRD 5.2.1, pp. 354, 355, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 361, Habitat
 ---
 
 # Giant Wasp
@@ -26,6 +27,7 @@ splat_sources:
 | Challenge | 1/2 (XP 100; PB +2) |
 | Senses | Passive Perception 10 |
 | Languages | None |
+| Habitat | Forest, Grassland, Urban |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

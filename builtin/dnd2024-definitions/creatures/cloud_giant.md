@@ -7,6 +7,7 @@ splat_name: Cloud Giant
 splat_origin: dnd2024:reference/creature/cloud_giant
 splat_sources:
 - SRD 5.2.1, pp. 275, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 74, Habitat
 ---
 
 # Cloud Giant
@@ -27,6 +28,7 @@ splat_sources:
 | Skills | Insight +7, Perception +11 |
 | Senses | Passive Perception 21 |
 | Languages | Common, Giant |
+| Habitat | Mountain |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

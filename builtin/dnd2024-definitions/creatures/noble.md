@@ -7,6 +7,7 @@ splat_name: Noble
 splat_origin: dnd2024:reference/creature/noble
 splat_sources:
 - SRD 5.2.1, pp. 312, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 227, Habitat
 ---
 
 # Noble
@@ -28,6 +29,7 @@ splat_sources:
 | Senses | Passive Perception 12 |
 | Languages | Common plus two other languages |
 | Gear | Breastplate, Rapier |
+| Habitat | Any |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

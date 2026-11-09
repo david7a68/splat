@@ -7,6 +7,7 @@ splat_name: Swarm of Venomous Snakes
 splat_origin: dnd2024:reference/creature/swarm_of_venomous_snakes
 splat_sources:
 - SRD 5.2.1, pp. 362, 363, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 371, Habitat
 ---
 
 # Swarm of Venomous Snakes
@@ -28,6 +29,7 @@ splat_sources:
 | Languages | None |
 | Resistances | Bludgeoning, Piercing, Slashing |
 | Immunities | Charmed, Frightened, Grappled, Paralyzed, Petrified, Prone, Restrained, Stunned |
+| Habitat | Coastal, Desert, Forest, Grassland, Hill, Swamp |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

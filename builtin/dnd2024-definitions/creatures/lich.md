@@ -7,6 +7,7 @@ splat_name: Lich
 splat_origin: dnd2024:reference/creature/lich
 splat_sources:
 - SRD 5.2.1, pp. 304, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 196, Habitat
 ---
 
 # Lich
@@ -30,6 +31,7 @@ splat_sources:
 | Gear | Component Pouch |
 | Resistances | Cold, Lightning |
 | Immunities | Necrotic, Poison; Charmed, Exhaustion, Frightened, Paralyzed, Poisoned |
+| Habitat | Any |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

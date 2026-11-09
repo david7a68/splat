@@ -7,6 +7,7 @@ splat_name: Young Green Dragon
 splat_origin: dnd2024:reference/creature/young_green_dragon
 splat_sources:
 - SRD 5.2.1, pp. 293, 294, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 152, Habitat
 ---
 
 # Young Green Dragon
@@ -28,6 +29,7 @@ splat_sources:
 | Senses | Blindsight 30 ft., Darkvision 120 ft.; Passive Perception 17 |
 | Languages | Common, Draconic |
 | Immunities | Poison; Poisoned |
+| Habitat | Forest |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

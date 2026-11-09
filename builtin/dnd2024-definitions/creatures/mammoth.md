@@ -7,6 +7,7 @@ splat_name: Mammoth
 splat_origin: dnd2024:reference/creature/mammoth
 splat_sources:
 - SRD 5.2.1, pp. 357, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 365, Habitat
 ---
 
 # Mammoth
@@ -26,6 +27,7 @@ splat_sources:
 | Challenge | 6 (XP 2,300; PB +3) |
 | Senses | Passive Perception 10 |
 | Languages | None |
+| Habitat | Arctic |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

@@ -7,6 +7,7 @@ splat_name: Lamia
 splat_origin: dnd2024:reference/creature/lamia
 splat_sources:
 - SRD 5.2.1, pp. 303, 304, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 192, Habitat
 ---
 
 # Lamia
@@ -27,6 +28,7 @@ splat_sources:
 | Skills | Deception +7, Insight +4, Stealth +5 |
 | Senses | Darkvision 60 ft.; Passive Perception 12 |
 | Languages | Abyssal, Common |
+| Habitat | Desert |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

@@ -7,6 +7,7 @@ splat_name: Harpy
 splat_origin: dnd2024:reference/creature/harpy
 splat_sources:
 - SRD 5.2.1, pp. 297, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 164, Habitat
 ---
 
 # Harpy
@@ -26,6 +27,7 @@ splat_sources:
 | Challenge | 1 (XP 200; PB +2) |
 | Senses | Passive Perception 10 |
 | Languages | Common |
+| Habitat | Coastal, Forest, Hill, Mountain |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

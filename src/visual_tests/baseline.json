@@ -4,10 +4,11 @@
       "book-to-package": 50,
       "campaign-content": 88,
       "column-resize": 96,
+      "creature-filter": 15,
       "data-integrity": 26,
       "dialogs": 51,
       "empty": 22,
-      "encounter-build": 54,
+      "encounter-build": 55,
       "encounter-groups": 99,
       "encounter-history": 30,
       "encounter-owned-groups": 89,
@@ -91,10 +92,11 @@
       "book-to-package": 50,
       "campaign-content": 88,
       "column-resize": 96,
+      "creature-filter": 15,
       "data-integrity": 26,
       "dialogs": 50,
       "empty": 21,
-      "encounter-build": 54,
+      "encounter-build": 55,
       "encounter-groups": 99,
       "encounter-history": 30,
       "encounter-owned-groups": 82,
@@ -167,6 +169,11 @@
     "column-resize": {
       "resize the columns and go on working": 20
     },
+    "creature-filter": {
+      "find the aberrations of the Underdark": 7,
+      "remove the filters": 2,
+      "search by immunity and challenge": 2
+    },
     "dialogs": {
       "ask to close with unsaved changes": 8,
       "copy an entry to a campaign": 6,
@@ -176,7 +183,7 @@
     "empty": {
       "add a first campaign": 6,
       "see the no-campaign state": 1,
-      "see the other empty tabs": 4
+      "see the other empty tabs": 2
     },
     "encounter-build": {
       "T5.3: save a roster of party and monsters from a cold start": 9,
@@ -213,7 +220,7 @@
       "open a note for editing": 2,
       "open and close the package form": 3,
       "save with the keyboard": 1,
-      "try each way out of a failed save": 19
+      "try each way out of a failed save": 18
     },
     "library-browse": {
       "open a class": 4,
@@ -258,7 +265,7 @@
     },
     "run-add-creature": {
       "add a creature made up at the table to a running fight": 11,
-      "add two of a campaign's creatures to a running fight": 9
+      "add two of a campaign's creatures to a running fight": 7
     },
     "run-edge-states": {
       "record a long effect": 6,

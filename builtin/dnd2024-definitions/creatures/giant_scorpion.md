@@ -7,6 +7,7 @@ splat_name: Giant Scorpion
 splat_origin: dnd2024:reference/creature/giant_scorpion
 splat_sources:
 - SRD 5.2.1, pp. 353, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 359, Habitat
 ---
 
 # Giant Scorpion
@@ -26,6 +27,7 @@ splat_sources:
 | Challenge | 3 (XP 700; PB +2) |
 | Senses | Blindsight 60 ft.; Passive Perception 9 |
 | Languages | None |
+| Habitat | Desert |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

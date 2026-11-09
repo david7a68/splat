@@ -7,6 +7,7 @@ splat_name: Animated Flying Sword
 splat_origin: dnd2024:reference/creature/animated_flying_sword
 splat_sources:
 - SRD 5.2.1, pp. 259, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 17, Habitat
 ---
 
 # Animated Flying Sword
@@ -27,6 +28,7 @@ splat_sources:
 | Senses | Blindsight 60 ft.; Passive Perception 7 |
 | Languages | None |
 | Immunities | Poison, Psychic; Charmed, Deafened, Exhaustion, Frightened, Paralyzed, Petrified, Poisoned |
+| Habitat | Urban |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

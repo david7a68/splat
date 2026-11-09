@@ -7,6 +7,7 @@ splat_name: Satyr
 splat_origin: dnd2024:reference/creature/satyr
 splat_sources:
 - SRD 5.2.1, pp. 321, 322, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 268, Habitat
 ---
 
 # Satyr
@@ -27,6 +28,7 @@ splat_sources:
 | Skills | Perception +2, Performance +6, Stealth +5 |
 | Senses | Passive Perception 12 |
 | Languages | Common, Elvish, Sylvan |
+| Habitat | Forest, Planar (Feywild) |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

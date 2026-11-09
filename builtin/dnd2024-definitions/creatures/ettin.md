@@ -7,6 +7,7 @@ splat_name: Ettin
 splat_origin: dnd2024:reference/creature/ettin
 splat_sources:
 - SRD 5.2.1, pp. 284, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 116, Habitat
 ---
 
 # Ettin
@@ -29,6 +30,7 @@ splat_sources:
 | Languages | Giant |
 | Gear | Battleaxe, Morningstar |
 | Immunities | Blinded, Charmed, Deafened, Frightened, Stunned, Unconscious |
+| Habitat | Hill, Mountain, Underdark |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

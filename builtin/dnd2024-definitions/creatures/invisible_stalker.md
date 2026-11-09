@@ -7,6 +7,7 @@ splat_name: Invisible Stalker
 splat_origin: dnd2024:reference/creature/invisible_stalker
 splat_sources:
 - SRD 5.2.1, pp. 301, 302, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 180, Habitat
 ---
 
 # Invisible Stalker
@@ -29,6 +30,7 @@ splat_sources:
 | Languages | Common, Primordial (Auran) |
 | Resistances | Bludgeoning, Piercing, Slashing |
 | Immunities | Poison; Exhaustion, Grappled, Paralyzed, Petrified, Poisoned, Prone, Restrained, Unconscious |
+| Habitat | Urban |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

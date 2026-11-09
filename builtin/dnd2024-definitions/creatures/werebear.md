@@ -7,6 +7,7 @@ splat_name: Werebear
 splat_origin: dnd2024:reference/creature/werebear
 splat_sources:
 - SRD 5.2.1, pp. 337, 338, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 324, Habitat
 ---
 
 # Werebear
@@ -28,6 +29,7 @@ splat_sources:
 | Senses | Darkvision 60 ft.; Passive Perception 17 |
 | Languages | Common (can’t speak in bear form) |
 | Gear | Handaxes (4) |
+| Habitat | Arctic, Forest, Hill |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

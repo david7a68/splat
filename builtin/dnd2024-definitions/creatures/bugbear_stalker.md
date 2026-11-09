@@ -7,6 +7,7 @@ splat_name: Bugbear Stalker
 splat_origin: dnd2024:reference/creature/bugbear_stalker
 splat_sources:
 - SRD 5.2.1, pp. 271, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 62, Habitat
 ---
 
 # Bugbear Stalker
@@ -28,6 +29,7 @@ splat_sources:
 | Senses | Darkvision 60 ft.; Passive Perception 11 |
 | Languages | Common, Goblin |
 | Gear | Chain Shirt, Javelins (6), Morningstar |
+| Habitat | Forest, Grassland, Underdark, Planar (Feywild) |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

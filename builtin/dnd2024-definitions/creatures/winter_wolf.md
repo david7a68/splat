@@ -7,6 +7,7 @@ splat_name: Winter Wolf
 splat_origin: dnd2024:reference/creature/winter_wolf
 splat_sources:
 - SRD 5.2.1, pp. 342, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 334, Habitat
 ---
 
 # Winter Wolf
@@ -28,6 +29,7 @@ splat_sources:
 | Senses | Passive Perception 15 |
 | Languages | Common, Giant |
 | Immunities | Cold |
+| Habitat | Arctic |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |
