@@ -839,7 +839,7 @@ impl Splat {
                         color,
                     },
                 );
-                let full = if state == "Processing warning" {
+                let full = if state == "Processed" && self.sessions.job_warned() {
                     sessions::page::processed_warning().word.to_owned()
                 } else {
                     self.sessions
@@ -883,7 +883,7 @@ impl Splat {
                 (
                     self.sessions.busy_with_edit(),
                     if self.sessions.notes_changed_on_disk() {
-                        "Changed on disk"
+                        "Notes changed"
                     } else {
                         "Notes not saved"
                     },
@@ -1333,6 +1333,8 @@ impl Splat {
                     // Keep fields at the usual column edge inside the wider viewport.
                     let mut viewport = ui.available_rect_before_wrap();
                     viewport.min.x -= design::S;
+                    // Keep scrolled text below a clear margin under the tab rule.
+                    viewport.min.y += design::L;
                     let clip = viewport.intersect(ui.clip_rect());
                     ui.scope_builder(egui::UiBuilder::new().max_rect(viewport), |ui| {
                         egui::ScrollArea::vertical()
@@ -1340,7 +1342,6 @@ impl Splat {
                             .auto_shrink([false, false])
                             .show(ui, |ui| {
                                 ui.set_clip_rect(ui.clip_rect().intersect(clip));
-                                ui.add_space(design::L);
                                 let mut fields = ui.available_rect_before_wrap();
                                 fields.min.x += design::S;
                                 ui.scope_builder(egui::UiBuilder::new().max_rect(fields), |ui| {

@@ -63,7 +63,7 @@ HP and initiative hold their place because the font's digits have one width.
 | `Strong` | UI Medium 14 / 20 | Button, selected item |
 | `Name` | UI SemiBold 15 / 20 | A participant's name on a run row |
 | `Small` | UI Regular 12 / 16 | Second line, help, status |
-| `Label` | UI SemiBold 11 / 14, tracked +0.6, capitals | Field label, column heading |
+| `Label` | UI SemiBold 11 / 14, tracked +0.6, capitals | Column and compact group heading |
 | `Numeral` | UI SemiBold 14 | AC, initiative, outside the run's scale |
 | `NumeralLarge` | UI Bold 18 | Current HP, outside the run's scale |
 | `Round` | UI Bold 18 | The round number in the run header |
@@ -569,7 +569,7 @@ The `Touchpad` Settings tab has one `TOUCHPAD` group. `Scrolling speed` is a `se
 
 Settings shows one Connecting status, and Cancel aligns with the column. Connect is primary when a cookie is entered, no campaign form is open and no run owns the primary action. An unchanged campaign form blocks Save details with No changes to save. Settings leaves its header context empty; campaign counts stay on their list heading. The rail wraps Connected · not remembered across two lines; its hover text and accessible name keep the full state. The import form keeps the campaign name in its field and omits the remote identifier, repeated heading and open row's Add action. A warning names the saved key’s service and the chosen service. An API key saved for another service keeps Save key visible with Paste a key first; removing that other key is a separate quiet action.
 
-Recording settings clip at the tab rule, with `L` above each section. Recording, Speech service and LLM use `group_heading`; their field labels use muted Small text through `small_field` and `small_text_field`. Visible field labels are `Service`, `Address`, `Model` and `API key`; accessible names keep the service context. A remove-key button names its slot and service, for example Remove speech key (OpenAI). It sits below the key state at the column’s left edge. A saved key for the chosen service with no replacement typed hides Save key and its empty-field reason.
+Recording settings clip at the tab rule, with `L` above each section. Recording, Speech service and Transcript and summary use `group_heading`; their field labels use muted Small text through `small_field` and `small_text_field`. Visible field labels are `Service`, `Address`, `Model` and `API key`; accessible names keep the service context. A remove-key button names its slot and service, for example Remove speech key (OpenAI). It sits below the key state at the column’s left edge. A saved key for the chosen service with no replacement typed hides Save key and its empty-field reason.
 
 Recording retries say Continue processing. Process again is reserved for replacing existing results; its one info message names the transcript and context sent to the chosen LLM, and says the audio is not sent again. Its confirmation has secondary Not now and red Replace the results. A live row puts Stop recording first, beside Process. A job shows one spinner and one Processing progress line. The session list omits the date while a recording or job runs. Not processed uses the neutral file icon. Transcript marker actions sit beside the marker in the text.
 
@@ -910,6 +910,32 @@ Library puts nonzero file status links in the header, before Packages. Generated
 add to the old-layout count. Flagged stat cells appear in list rows and the file warning count.
 Stat warnings name the field, bad value, line and repair. Magic items use book case and put
 attunement in their identity line. End fences use a folded Splat data callout; empty defaults need no fence.
+
+## Design score, iteration 1: campaign and session
+
+Form field labels use sentence-case, muted `Small` text on Campaign and Settings.
+`Label` stays for column and compact group headings. Campaign Packages keeps its
+save row directly below the tabs, before every notice. Campaign flags appear once
+in the content issue count. Their warning line includes the file and repair actions.
+With no campaigns, Settings hides Reload from disk unless settings need repair.
+
+The session folder has one heading, no repeated visible Folder label, and keeps
+its accessible field name. Its field and save actions end at `FORM_WIDTH`.
+Timeline omits a row's day under the day heading; search and filtered lists keep it.
+Long-rest actions say Mark everyone at full and Mark not at full. The state words
+stay Everyone at full and Not at full, with one Undo ruling.
+
+Completed processing says Processed in the rail for both clean and warned results.
+A warning keeps its icon and colour; hover text and the accessible name say
+Processed, with a warning. A note conflict says Notes changed in the rail and
+Notes changed on disk on hover. A stalled recording makes Record again primary
+when no open run owns the primary action.
+
+Speech setup first says how to turn a recording into text. API compatibility help
+sits beside a custom service. Codex limits appear only when Codex is selected.
+Recording settings keep an `L` margin below the tabs outside the scrolling content.
+Combat sync help uses muted Small text. Disconnected campaign-link help opens
+Settings from an inline link.
 
 ## Library and files, design score iteration 1
 

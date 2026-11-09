@@ -476,6 +476,9 @@ impl CampaignContent {
         if self.dirty() {
             self.message = None;
         }
+        if self.snapshot.is_some() {
+            self.selection_bar(ui, campaigns, &active);
+        }
         self.repair_section(ui, campaigns, &active);
         if self.layouts.show_conversion(
             ui,
@@ -826,36 +829,10 @@ impl CampaignContent {
         }
     }
 
-    fn packages(&mut self, ui: &mut egui::Ui, campaigns: &Campaigns, active: &Campaign) {
-        let manifest_locked = self
-            .dirty()
-            .then_some("Save or discard campaign changes first.");
+    fn selection_bar(&mut self, ui: &mut egui::Ui, campaigns: &Campaigns, active: &Campaign) {
         let snapshot = self.snapshot.as_mut().unwrap();
         let catalogue = &snapshot.catalogue;
         let document = &mut snapshot.document;
-        if let Some(entry) = catalogue.entries.get(&active.id) {
-            for flag in &entry.entry.flags {
-                design::message(
-                    ui,
-                    Tone::Warning,
-                    &format!("{}, line {}: {}", document.path, flag.line, flag.message),
-                );
-            }
-            if !entry.entry.flags.is_empty() {
-                ui.horizontal_wrapped(|ui| {
-                    crate::world::entry_file_parts(ui, &active.path, &document.path, true);
-                    if entry
-                        .entry
-                        .flags
-                        .iter()
-                        .any(|flag| flag.message.contains(" choice \""))
-                    {
-                        self.open_run_settings =
-                            Action::quiet("Choose in Rules and runs").show(ui).clicked();
-                    }
-                });
-            }
-        }
         if snapshot.closure.0 != document.selections {
             snapshot.closure = (
                 document.selections.clone(),
@@ -1022,6 +999,21 @@ impl CampaignContent {
             });
         }
 
+        if reload {
+            self.reload(ui.ctx(), campaigns, active.clone());
+        }
+    }
+
+    fn packages(&mut self, ui: &mut egui::Ui, campaigns: &Campaigns, active: &Campaign) {
+        let manifest_locked = self
+            .dirty()
+            .then_some("Save or discard campaign changes first.");
+        let snapshot = self.snapshot.as_mut().unwrap();
+        let catalogue = &snapshot.catalogue;
+        let document = &mut snapshot.document;
+        let closure = &snapshot.closure.1;
+        let c = colors();
+
         for module in campaigns.modules() {
             if let Some(problem) = catalogue.manifest_problems.get(&module.id) {
                 ui.horizontal_wrapped(|ui| {
@@ -1167,11 +1159,19 @@ impl CampaignContent {
                 }
             }
         }
+        let campaign_flags = catalogue
+            .entries
+            .get(&active.id)
+            .map(|entry| entry.entry.flags.as_slice())
+            .unwrap_or_default();
         let errors: Vec<_> = catalogue
             .errors
             .iter()
             .filter(|error| {
                 !crate::formats_ui::is_old(error)
+                    && !campaign_flags
+                        .iter()
+                        .any(|flag| error.contains(&flag.message))
                     && !catalogue.manifest_problems.iter().any(|(id, problem)| {
                         error.contains(problem)
                             || catalogue
@@ -1193,57 +1193,86 @@ impl CampaignContent {
                 .ok()
                 .is_none_or(|id| !catalogue.modules.iter().any(|module| module.id == id))
         });
-        if !errors.is_empty()
-            && self.repairs.is_empty()
+        let issues_shown = self.repairs.is_empty()
             && !missing_package
             && !self
                 .removed_package
                 .as_ref()
-                .is_some_and(|removed| removed.campaign == active.id && !removed.users.is_empty())
-        {
-            design::section(
-                ui,
-                if affected.is_empty() {
-                    design::count(
-                        errors.len(),
-                        "content issue to repair",
-                        "content issues to repair",
-                    )
+                .is_some_and(|removed| removed.campaign == active.id && !removed.users.is_empty());
+        let flag_lines = |ui: &mut egui::Ui, open_run_settings: &mut bool| {
+            for flag in campaign_flags {
+                ui.horizontal_wrapped(|ui| {
+                    design::message(
+                        ui,
+                        Tone::Warning,
+                        &format!("Line {}: {}", flag.line, flag.message),
+                    );
+                    crate::world::entry_file_parts(ui, &active.path, &document.path, true);
+                    if flag.message.contains(" choice \"") {
+                        *open_run_settings |=
+                            Action::quiet("Choose in Rules and runs").show(ui).clicked();
+                    }
+                });
+            }
+        };
+        // Campaign.md flags stay in view while another repair hides the issue list.
+        if !issues_shown && !campaign_flags.is_empty() {
+            flag_lines(ui, &mut self.open_run_settings);
+        }
+        if (!errors.is_empty() || !campaign_flags.is_empty()) && issues_shown {
+            egui::CollapsingHeader::new(if affected.is_empty() {
+                design::count(
+                    errors.len() + campaign_flags.len(),
+                    "content issue to repair",
+                    "content issues to repair",
+                )
+            } else {
+                let gone = format!(
+                    "{} need a creature that is gone",
+                    design::count(affected.len(), "encounter", "encounters")
+                );
+                if campaign_flags.is_empty() {
+                    gone
                 } else {
                     format!(
-                        "{} need a creature that is gone",
-                        design::count(affected.len(), "encounter", "encounters")
+                        "{gone} · {}",
+                        design::count(
+                            campaign_flags.len(),
+                            "Campaign.md issue",
+                            "Campaign.md issues"
+                        )
                     )
-                },
-                |ui| {
-                    egui::ScrollArea::vertical()
-                        .max_height(120.0)
-                        .id_salt("campaign_issues")
-                        .show(ui, |ui| {
-                            for e in errors {
-                                ui.add(
-                                    egui::Label::new(
-                                        Type::Small.rich(ui, e.as_str()).color(c.muted),
-                                    )
+                }
+            })
+            .icon(design::section_icon)
+            .default_open(!campaign_flags.is_empty())
+            .show(ui, |ui| {
+                egui::ScrollArea::vertical()
+                    .max_height(design::FORM_WIDTH / 2.0)
+                    .id_salt("campaign_issues")
+                    .show(ui, |ui| {
+                        flag_lines(ui, &mut self.open_run_settings);
+                        for e in errors {
+                            ui.add(
+                                egui::Label::new(Type::Small.rich(ui, e.as_str()).color(c.muted))
                                     .wrap(),
-                                );
+                            );
+                        }
+                        for entry in catalogue.entries.values().filter(|entry| entry.private) {
+                            if splat::content::required_references(&entry.entry).is_ok_and(
+                                |references| {
+                                    references
+                                        .iter()
+                                        .any(|reference| catalogue.resolve(reference).is_err())
+                                },
+                            ) && design::link(ui, &format!("Open {}", entry.entry.name))
+                                .clicked()
+                            {
+                                self.open_lookup = Some(entry.entry.id);
                             }
-                            for entry in catalogue.entries.values().filter(|entry| entry.private) {
-                                if splat::content::required_references(&entry.entry).is_ok_and(
-                                    |references| {
-                                        references
-                                            .iter()
-                                            .any(|reference| catalogue.resolve(reference).is_err())
-                                    },
-                                ) && design::link(ui, &format!("Open {}", entry.entry.name))
-                                    .clicked()
-                                {
-                                    self.open_lookup = Some(entry.entry.id);
-                                }
-                            }
-                        });
-                },
-            );
+                        }
+                    });
+            });
         }
         // Unavailable registrations and references remain explicit and editable.
         let unavailable: Vec<_> = document
@@ -1859,9 +1888,6 @@ impl CampaignContent {
                     }
                 }
             });
-        if reload {
-            self.reload(ui.ctx(), campaigns, active.clone());
-        }
     }
 }
 
@@ -2017,8 +2043,10 @@ mod tests {
         let ctx = egui::Context::default();
         let frame = |content: &mut CampaignContent| {
             let _ = ctx.run(Default::default(), |ctx| {
-                egui::CentralPanel::default()
-                    .show(ctx, |ui| content.packages(ui, &campaigns, &active));
+                egui::CentralPanel::default().show(ctx, |ui| {
+                    content.selection_bar(ui, &campaigns, &active);
+                    content.packages(ui, &campaigns, &active);
+                });
             });
         };
         let kept =
