@@ -1,9 +1,10 @@
 //! Read-only Markdown presentation. Content cannot execute UI actions, but it can say which note
 //! a link names, and a roll table can ask for a roll. Whoever drew it decides what happens next.
 use crate::design::{self, Type, colors};
+use eframe::egui::util::cache::{ComputerMut, FrameCache};
 use eframe::egui::{self, text::LayoutJob};
 use pulldown_cmark::{Event, Options, Parser, Tag, TagEnd};
-use std::borrow::Cow;
+use std::{borrow::Cow, sync::Arc};
 
 /// A link to a note, as `world::with_links` writes one.
 pub const NOTE_LINK: &str = "splat-note:";
@@ -64,6 +65,54 @@ pub fn show_compact(ui: &mut egui::Ui, markdown: &str) {
     });
 }
 
+/// A note with its links resolved, which `linked_markdown` keeps from one frame to the next.
+#[derive(Clone, Copy)]
+struct Linking<'a> {
+    index: &'a crate::lookup::ContentIndex,
+    markdown: &'a str,
+    from: Option<uuid::Uuid>,
+}
+
+impl std::hash::Hash for Linking<'_> {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.index.generation().hash(state);
+        self.markdown.hash(state);
+        self.from.hash(state);
+    }
+}
+
+#[derive(Default)]
+struct Linker;
+
+impl ComputerMut<Linking<'_>, Arc<str>> for Linker {
+    fn compute(&mut self, linking: Linking<'_>) -> Arc<str> {
+        linking
+            .index
+            .reader_markdown(linking.markdown, linking.from)
+            .into()
+    }
+}
+
+/// Resolving each link searches the index. A reader repaints on each frame of a scroll, so
+/// it resolves a note's links again only when the note, the index, or the reader changes.
+fn linked_markdown(
+    ctx: &egui::Context,
+    index: &crate::lookup::ContentIndex,
+    markdown: &str,
+    from: Option<uuid::Uuid>,
+) -> Arc<str> {
+    ctx.memory_mut(|memory| {
+        memory
+            .caches
+            .cache::<FrameCache<Arc<str>, Linker>>()
+            .get(Linking {
+                index,
+                markdown,
+                from,
+            })
+    })
+}
+
 fn show_with_density(ui: &mut egui::Ui, markdown: &str, dense: bool) {
     let prose = if dense {
         Type::Stat
@@ -96,9 +145,9 @@ fn show_with_density(ui: &mut egui::Ui, markdown: &str, dense: bool) {
     let from = ui
         .ctx()
         .data(|data| data.get_temp::<uuid::Uuid>(egui::Id::new("reader_document")));
-    let linked = index.map_or_else(
-        || markdown.to_owned(),
-        |index| index.reader_markdown(markdown, from),
+    let linked: Arc<str> = index.map_or_else(
+        || markdown.into(),
+        |index| linked_markdown(&ctx, &index, markdown, from),
     );
     let source = local_figure_links(&linked, |url| crate::art::link_art(&ctx, url).is_some());
     for (event, range) in Parser::new_ext(
@@ -1273,5 +1322,34 @@ mod tests {
             text.iter()
                 .any(|text| text.galley.job.text == "Strength" && text.galley.rows.len() == 1)
         );
+    }
+
+    /// A scroll repaints the reader on each frame. Its links must not be resolved again until
+    /// the note or the index changes.
+    #[test]
+    fn a_note_keeps_its_resolved_links_while_it_is_unchanged() {
+        let ctx = egui::Context::default();
+        let index = crate::lookup::ContentIndex::load(&[], None).unwrap();
+        let reloaded = crate::lookup::ContentIndex::load(&[], None).unwrap();
+        let note = "[[Wolf]] and [[Gone]]";
+        let mut seen = Vec::new();
+        for (index, note) in [
+            (&index, note),
+            (&index, note),
+            (&index, "[[Wolf]]"),
+            (&reloaded, "[[Wolf]]"),
+        ] {
+            let _ = ctx.run(egui::RawInput::default(), |ctx| {
+                seen.push(linked_markdown(ctx, index, note, None));
+            });
+        }
+        assert!(
+            Arc::ptr_eq(&seen[0], &seen[1]),
+            "the same note, frame after frame"
+        );
+        assert!(!Arc::ptr_eq(&seen[1], &seen[2]), "a changed note");
+        assert!(!Arc::ptr_eq(&seen[2], &seen[3]), "a reloaded index");
+        assert_eq!(&*seen[2], &*seen[3]);
+        assert_eq!(*seen[0], *index.reader_markdown(note, None));
     }
 }
