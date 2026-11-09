@@ -175,7 +175,9 @@ fn links(text: &str) -> Links {
                 return None;
             };
             let target = if matches!(link_type, LinkType::WikiLink { .. }) {
-                LinkTarget::Note(dest_url.into_string())
+                // What the link names, read as the Reader reads it.
+                let (_, _, note, _) = crate::world::each_link(&text[range.clone()]).pop()?;
+                LinkTarget::Note(note)
             } else {
                 LinkTarget::from_destination(&dest_url)?
             };
@@ -328,6 +330,14 @@ fn link_at(
         return None;
     }
     let galley = &output.galley;
+    let text = &galley.job.text;
+    // Read first, so that the cache stays while the pointer crosses the gaps between words.
+    let links = ui.ctx().memory_mut(|memory| {
+        memory
+            .caches
+            .cache::<FrameCache<Links, Linker>>()
+            .get(text.as_str())
+    });
     let local = (pointer - output.galley_pos).to_pos2();
     let mut at = 0;
     let mut rows = galley.rows.iter();
@@ -343,15 +353,7 @@ fn link_at(
         .glyphs
         .iter()
         .position(|glyph| glyph.pos.x <= x && x < glyph.pos.x + glyph.advance_width)?;
-    let text = &galley.job.text;
     let byte = text.char_indices().nth(at)?.0;
-    // Only a pointer over the text asks, so the links are found again only when it is there.
-    let links = ui.ctx().memory_mut(|memory| {
-        memory
-            .caches
-            .cache::<FrameCache<Links, Linker>>()
-            .get(text.as_str())
-    });
     links
         .iter()
         .find(|(range, _)| range.contains(&byte))
@@ -380,27 +382,15 @@ pub fn pressed_note_link(
     if !response.sense.senses_click() || !ui.input(|input| input.modifiers.command) {
         return None;
     }
-    let target = link_at(ui, output, response.hover_pos()?)?;
+    let mut target = link_at(ui, output, response.hover_pos()?)?;
     if let LinkTarget::Note(note) = &target
         && names_nothing(ui, note, from)
     {
-        response.clone().on_hover_text("Not found in this campaign");
-        return None;
+        target = LinkTarget::Missing;
     }
-    ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
-    if let LinkTarget::Url(url) = &target {
-        response.clone().on_hover_text(url);
-    }
-    if !response.clicked() {
-        return None;
-    }
-    match target {
-        LinkTarget::Note(note) => Some(note),
-        LinkTarget::Url(url) => {
-            ui.ctx().open_url(egui::OpenUrl::new_tab(url));
-            None
-        }
-        LinkTarget::Missing | LinkTarget::Lookup(_) => None,
+    match crate::markdown_view::press(ui, response, &target)? {
+        LinkTarget::Note(note) => Some(note.clone()),
+        _ => None,
     }
 }
 
@@ -586,10 +576,12 @@ mod tests {
     fn press_in_editor(text: &str, words: &str, ctrl: bool) -> (Option<String>, Vec<String>) {
         let context = egui::Context::default();
         design::theme::install(&context);
+        let at = text[..text.find(words).unwrap()].chars().count();
         let mut body = text.to_owned();
+        // The text does not move, so each frame finds the same place.
         let pointer = std::cell::Cell::new(egui::Pos2::ZERO);
-        let noted = std::cell::Cell::new(None);
-        let mut draw = |ctx: &egui::Context, find: bool| {
+        let mut noted = None;
+        let mut draw = |ctx: &egui::Context| {
             egui::CentralPanel::default().show(ctx, |ui| {
                 let mut layouter = layouter;
                 // One row, so that no word is split between two.
@@ -597,24 +589,18 @@ mod tests {
                     .layouter(&mut layouter)
                     .desired_width(1000.0)
                     .show(ui);
-                if let Some(note) = pressed_note_link(ui, &output, None) {
-                    noted.set(Some(note));
-                }
-                if find {
-                    let at = text[..text.find(words).unwrap()].chars().count();
-                    let cursor = |at| {
-                        output
-                            .galley
-                            .pos_from_cursor(egui::text::CCursor::new(at))
-                            .center()
-                    };
-                    pointer.set(
-                        output.galley_pos + (cursor(at).to_vec2() + cursor(at + 1).to_vec2()) / 2.0,
-                    );
-                }
+                noted = noted.take().or(pressed_note_link(ui, &output, None));
+                let cursor = |at| {
+                    output
+                        .galley
+                        .pos_from_cursor(egui::text::CCursor::new(at))
+                        .center()
+                        .to_vec2()
+                };
+                pointer.set(output.galley_pos + (cursor(at) + cursor(at + 1)) / 2.0);
             });
         };
-        let _ = context.run(egui::RawInput::default(), |ctx| draw(ctx, true));
+        let _ = context.run(egui::RawInput::default(), &mut draw);
         let modifiers = if ctrl {
             egui::Modifiers::COMMAND
         } else {
@@ -623,29 +609,28 @@ mod tests {
         let pointer = pointer.get();
         let mut urls = Vec::new();
         for pressed in [true, false] {
-            let output = context.run(
-                egui::RawInput {
+            let events = vec![
+                egui::Event::PointerMoved(pointer),
+                egui::Event::PointerButton {
+                    pos: pointer,
+                    button: egui::PointerButton::Primary,
+                    pressed,
                     modifiers,
-                    events: vec![
-                        egui::Event::PointerMoved(pointer),
-                        egui::Event::PointerButton {
-                            pos: pointer,
-                            button: egui::PointerButton::Primary,
-                            pressed,
-                            modifiers,
-                        },
-                    ],
-                    ..Default::default()
                 },
-                |ctx| draw(ctx, false),
-            );
+            ];
+            let input = egui::RawInput {
+                modifiers,
+                events,
+                ..Default::default()
+            };
+            let output = context.run(input, &mut draw);
             for command in output.platform_output.commands {
                 if let egui::OutputCommand::OpenUrl(url) = command {
                     urls.push(url.url);
                 }
             }
         }
-        (noted.take(), urls)
+        (noted, urls)
     }
 
     #[test]
