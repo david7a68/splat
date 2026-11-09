@@ -684,7 +684,7 @@ struct Creature {
 const ROSTER_MAX_WIDTH: f32 = 860.0;
 const ADD_PANE: &str = "encounter_add";
 const ADD_PANE_MAX_WIDTH: f32 = 640.0;
-const RESULT_ROW: f32 = 40.0;
+const RESULT_ROW: f32 = design::XL + design::L + design::S;
 /// A result's stats, each in its own place, so that they can be compared down the list. The
 /// first place holds a party copy's word, which has no challenge rating. The package follows
 /// if the row has room for it.
@@ -718,7 +718,12 @@ pub(crate) fn detail_columns(ui: &mut egui::Ui, detail: &str, source: Option<&st
     ui.horizontal(|ui| {
         ui.spacing_mut().item_spacing.x = 0.0;
         for (prefix, widest) in COLUMNS {
-            let width = design::number_width(ui, widest, &Type::Small.font(ui)) + design::S;
+            let gap = if prefix == "CR " {
+                design::M
+            } else {
+                design::S
+            };
+            let width = design::number_width(ui, widest, &Type::Small.font(ui)) + gap;
             let part = parts
                 .iter()
                 .find(|part| part.starts_with(prefix))
