@@ -7,6 +7,7 @@ splat_name: Kobold Warrior
 splat_origin: dnd2024:reference/creature/kobold_warrior
 splat_sources:
 - SRD 5.2.1, pp. 302, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 185, Habitat
 ---
 
 # Kobold Warrior
@@ -27,6 +28,7 @@ splat_sources:
 | Senses | Darkvision 60 ft.; Passive Perception 8 |
 | Languages | Common, Draconic |
 | Gear | Daggers (3) |
+| Habitat | Arctic, Coastal, Desert, Forest, Hill, Mountain, Swamp, Underdark, Urban |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

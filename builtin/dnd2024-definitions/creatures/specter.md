@@ -7,6 +7,7 @@ splat_name: Specter
 splat_origin: dnd2024:reference/creature/specter
 splat_sources:
 - SRD 5.2.1, pp. 327, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 290, Habitat
 ---
 
 # Specter
@@ -28,6 +29,7 @@ splat_sources:
 | Languages | Understands Common plus one other language but can’t speak |
 | Resistances | Acid, Bludgeoning, Cold, Fire, Lightning, Piercing, Slashing, Thunder |
 | Immunities | Necrotic, Poison; Charmed, Exhaustion, Grappled, Paralyzed, Petrified, Poisoned, Prone, Restrained, Unconscious |
+| Habitat | Underdark, Urban |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

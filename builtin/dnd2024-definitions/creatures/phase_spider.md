@@ -7,6 +7,7 @@ splat_name: Phase Spider
 splat_origin: dnd2024:reference/creature/phase_spider
 splat_sources:
 - SRD 5.2.1, pp. 313, 314, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 239, Habitat
 ---
 
 # Phase Spider
@@ -27,6 +28,7 @@ splat_sources:
 | Skills | Stealth +7 |
 | Senses | Darkvision 60 ft.; Passive Perception 10 |
 | Languages | None |
+| Habitat | Desert, Forest, Grassland, Hill, Underdark, Urban, Planar (Ethereal Plane) |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

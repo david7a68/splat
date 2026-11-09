@@ -23,6 +23,8 @@ splat_sources:
 | Range | 100 feet |
 | Components | V, S, M (ruby dust worth 1,500+ GP, which the spell consumes) |
 | Duration | Concentration, up to 1 hour |
+| Ritual | No |
+| Concentration | Yes |
 
 
 ## Source text

@@ -7,6 +7,7 @@ splat_name: Giant Vulture
 splat_origin: dnd2024:reference/creature/giant_vulture
 splat_sources:
 - SRD 5.2.1, pp. 354, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 361, Habitat
 ---
 
 # Giant Vulture
@@ -28,6 +29,7 @@ splat_sources:
 | Senses | Darkvision 60 ft.; Passive Perception 13 |
 | Languages | Understands Common but can’t speak |
 | Resistances | Necrotic |
+| Habitat | Desert, Grassland, Hill |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

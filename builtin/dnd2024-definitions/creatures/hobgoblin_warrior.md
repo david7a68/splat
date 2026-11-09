@@ -7,6 +7,7 @@ splat_name: Hobgoblin Warrior
 splat_origin: dnd2024:reference/creature/hobgoblin_warrior
 splat_sources:
 - SRD 5.2.1, pp. 298, 299, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 170, Habitat
 ---
 
 # Hobgoblin Warrior
@@ -27,6 +28,7 @@ splat_sources:
 | Senses | Darkvision 60 ft.; Passive Perception 10 |
 | Languages | Common, Goblin |
 | Gear | Half Plate Armor, Longbow, Longsword, Shield |
+| Habitat | Desert, Forest, Grassland, Hill, Mountain, Underdark, Planar (Acheron) |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

@@ -23,6 +23,8 @@ splat_sources:
 | Range | 300 feet |
 | Components | V, S, M (a mushroom) |
 | Duration | 24 hours |
+| Ritual | No |
+| Concentration | No |
 
 
 ## Source text

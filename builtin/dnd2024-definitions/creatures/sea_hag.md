@@ -7,6 +7,7 @@ splat_name: Sea Hag
 splat_origin: dnd2024:reference/creature/sea_hag
 splat_sources:
 - SRD 5.2.1, pp. 322, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 271, Habitat
 ---
 
 # Sea Hag
@@ -26,6 +27,7 @@ splat_sources:
 | Challenge | 2 (XP 450; PB +2) |
 | Senses | Darkvision 60 ft.; Passive Perception 11 |
 | Languages | Common, Giant, Primordial (Aquan) |
+| Habitat | Coastal, Underwater |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

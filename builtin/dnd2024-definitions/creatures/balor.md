@@ -7,6 +7,7 @@ splat_name: Balor
 splat_origin: dnd2024:reference/creature/balor
 splat_sources:
 - SRD 5.2.1, pp. 261, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 26, Habitat
 ---
 
 # Balor
@@ -29,6 +30,7 @@ splat_sources:
 | Languages | Abyssal; telepathy 120 ft. |
 | Resistances | Cold, Lightning |
 | Immunities | Fire, Poison; Charmed, Frightened, Poisoned |
+| Habitat | Planar (Abyss) |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

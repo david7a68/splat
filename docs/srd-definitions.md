@@ -65,6 +65,27 @@ its hash only after comparing the published wording. Do not paraphrase rules in
 the renderer. Reading metadata is excluded from mechanical fingerprints and
 required dependencies.
 
+## Creature habitats
+
+The SRD does not print a creature's habitat. The 2024 Monster Manual prints one
+under each stat block, for example `Habitat: Underdark, Underwater`.
+[`scripts/srd_inputs/habitats.yaml`](../scripts/srd_inputs/habitats.yaml) gives
+each SRD creature its habitat and Monster Manual page, or `null` for the six
+stat blocks that only a spell or feature prints. Conversion adds the value as
+the creature's `Habitat` row and cites the page in `splat_sources`. Conversion
+fails if a creature is missing from the file or the file names an unknown
+creature. The values came from a community transcription of the Monster Manual
+(the 5etools `bestiary-xmm.json` data). Check a changed value against the book
+before you commit it.
+
+Library and the encounter creature search use the habitat with the creature's
+type, size, alignment, challenge, movement, senses, languages, resistances,
+immunities and vulnerabilities. Choose values from **Filter**, or type terms in
+the search, such as `habitat:forest`, `type:dragon`, `cr:5-10`, `immune:fire` or
+`lang:"deep speech"`. Plain words also find these values, so `darkvision` finds
+creatures with Darkvision. A creature with habitat `Any` is found under every
+habitat.
+
 ## Conversion is distinct from engine support
 
 A **conversion gap** means a rule lacks a complete typed specification. There

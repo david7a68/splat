@@ -23,6 +23,8 @@ splat_sources:
 | Range | 90 feet |
 | Components | V, S, M (a rotten egg) |
 | Duration | Concentration, up to 1 minute |
+| Ritual | No |
+| Concentration | Yes |
 
 
 ## Source text

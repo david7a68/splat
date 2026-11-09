@@ -7,6 +7,7 @@ splat_name: Knight
 splat_origin: dnd2024:reference/creature/knight
 splat_sources:
 - SRD 5.2.1, pp. 302, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 184, Habitat
 ---
 
 # Knight
@@ -28,6 +29,7 @@ splat_sources:
 | Languages | Common plus one other language |
 | Gear | Greatsword, Heavy Crossbow, Plate Armor |
 | Immunities | Frightened |
+| Habitat | Any |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

@@ -7,6 +7,7 @@ splat_name: Succubus
 splat_origin: dnd2024:reference/creature/succubus
 splat_sources:
 - SRD 5.2.1, pp. 331, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 303, Habitat
 ---
 
 # Succubus
@@ -28,6 +29,7 @@ splat_sources:
 | Senses | Darkvision 60 ft.; Passive Perception 15 |
 | Languages | Abyssal, Common, Infernal; telepathy 60 ft. |
 | Resistances | Cold, Fire, Poison, Psychic |
+| Habitat | Urban, Planar (Lower Planes) |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

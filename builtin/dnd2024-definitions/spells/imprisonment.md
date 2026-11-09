@@ -23,6 +23,8 @@ splat_sources:
 | Range | 30 feet |
 | Components | V, S, M (a statuette of the target worth 5,000+ GP) |
 | Duration | Until dispelled |
+| Ritual | No |
+| Concentration | No |
 
 
 ## Source text

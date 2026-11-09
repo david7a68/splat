@@ -23,6 +23,8 @@ splat_sources:
 | Range |  |
 | Components | V, S, M (2 Copper Pieces, which the spell consumes) |
 | Duration | 10 days |
+| Ritual | Yes |
+| Concentration | No |
 
 
 ## Source text

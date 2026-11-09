@@ -7,6 +7,7 @@ splat_name: Warrior Veteran
 splat_origin: dnd2024:reference/creature/warrior_veteran
 splat_sources:
 - SRD 5.2.1, pp. 337, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 320, Habitat
 ---
 
 # Warrior Veteran
@@ -28,6 +29,7 @@ splat_sources:
 | Senses | Passive Perception 12 |
 | Languages | Common plus one other language |
 | Gear | Greatsword, Heavy Crossbow, Splint Armor |
+| Habitat | Any |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

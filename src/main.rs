@@ -7,6 +7,7 @@ mod commands;
 mod content_workspace;
 mod conversion;
 mod copy_dialog;
+mod creature_filter;
 mod credentials;
 mod design;
 mod dndbeyond;

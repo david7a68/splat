@@ -23,6 +23,8 @@ splat_sources:
 | Range |  |
 | Components | V, S, M (a chest, 3 feet by 2 feet by 2 feet, constructed from rare materials worth 5,000+ GP, and a Tiny replica of the chest made from the same materials worth 50+ GP) |
 | Duration | Until dispelled |
+| Ritual | No |
+| Concentration | No |
 
 
 ## Source text

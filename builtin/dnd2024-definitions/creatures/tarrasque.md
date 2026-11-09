@@ -7,6 +7,7 @@ splat_name: Tarrasque
 splat_origin: dnd2024:reference/creature/tarrasque
 splat_sources:
 - SRD 5.2.1, pp. 331, 332, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 305, Habitat
 ---
 
 # Tarrasque
@@ -29,6 +30,7 @@ splat_sources:
 | Languages | None |
 | Resistances | Bludgeoning, Piercing, Slashing |
 | Immunities | Fire, Poison; Charmed, Deafened, Frightened, Paralyzed, Poisoned |
+| Habitat | Urban |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

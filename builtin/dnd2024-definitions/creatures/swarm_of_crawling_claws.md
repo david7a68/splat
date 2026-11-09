@@ -7,6 +7,7 @@ splat_name: Swarm of Crawling Claws
 splat_origin: dnd2024:reference/creature/swarm_of_crawling_claws
 splat_sources:
 - SRD 5.2.1, pp. 278, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 83, Habitat
 ---
 
 # Swarm of Crawling Claws
@@ -28,6 +29,7 @@ splat_sources:
 | Languages | Understands Common but can’t speak |
 | Resistances | Bludgeoning, Piercing, Slashing |
 | Immunities | Necrotic, Poison; Charmed, Exhaustion, Frightened, Grappled, Incapacitated, Paralyzed, Petrified, Poisoned, Prone, Restrained, Stunned |
+| Habitat | Any |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

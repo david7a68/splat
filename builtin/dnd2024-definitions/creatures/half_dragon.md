@@ -7,6 +7,7 @@ splat_name: Half-Dragon
 splat_origin: dnd2024:reference/creature/half_dragon
 splat_sources:
 - SRD 5.2.1, pp. 297, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 163, Habitat
 ---
 
 # Half-Dragon
@@ -28,6 +29,7 @@ splat_sources:
 | Senses | Blindsight 10 ft., Darkvision 60 ft.; Passive Perception 15 |
 | Languages | Common, Draconic |
 | Resistances | Damage type chosen for the Draconic Origin trait below |
+| Habitat | Any |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

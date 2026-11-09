@@ -23,6 +23,8 @@ splat_sources:
 | Range |  |
 | Components | V, S, M (powdered diamond worth 200+ GP, which the spell consumes) |
 | Duration | Until dispelled or triggered |
+| Ritual | No |
+| Concentration | No |
 
 
 ## Source text

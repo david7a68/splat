@@ -23,6 +23,8 @@ splat_sources:
 | Range | 150 feet |
 | Components | V, S, M (three silver pins) |
 | Duration | Instantaneous |
+| Ritual | No |
+| Concentration | No |
 
 
 ## Source text

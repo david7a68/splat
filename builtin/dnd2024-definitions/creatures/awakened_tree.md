@@ -7,6 +7,7 @@ splat_name: Awakened Tree
 splat_origin: dnd2024:reference/creature/awakened_tree
 splat_sources:
 - SRD 5.2.1, pp. 260, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 23, Habitat
 ---
 
 # Awakened Tree
@@ -28,6 +29,7 @@ splat_sources:
 | Languages | Common plus one other language |
 | Resistances | Bludgeoning, Piercing |
 | Vulnerabilities | Fire |
+| Habitat | Forest |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

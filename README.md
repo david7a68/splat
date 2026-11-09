@@ -110,6 +110,17 @@ Converted creature, spell and item files use readable tables. The reader shows
 each set fact once and hides machine lines. A creature's CR supplies missing XP
 and PB; mismatches are flagged unless they describe a lair. Printed creature stats
 stay in a folded quote as a record; edit the table above it to change the values.
+A creature's `Habitat` row holds its 2024 Monster Manual habitat, such as
+`Underdark, Underwater`. Built-in creatures get it from
+`scripts/srd_inputs/habitats.yaml`, because the SRD does not print it.
+
+Library's Creatures section, Library search results and the encounter creature
+search have **Filter**. It filters by habitat, type, size, alignment, challenge,
+movement, senses, languages, resistances, immunities and vulnerabilities. Each
+chosen value shows as a chip; click a chip to remove it. Search also finds these
+values: `darkvision`, `habitat:forest`, `type:dragon`, `cr:5-10`, `cr:5+`,
+`immune:fire` or `lang:"deep speech"`. A creature with habitat `Any` is found
+under every habitat.
 
 A live initiative change says `acts next round` when its place has passed. Setup counts
 rows below the visible list, including missing initiatives and ties between independent rolls. Shared rolls do not produce a tie warning. Session note boxes

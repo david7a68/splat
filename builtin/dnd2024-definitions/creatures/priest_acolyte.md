@@ -7,6 +7,7 @@ splat_name: Priest Acolyte
 splat_origin: dnd2024:reference/creature/priest_acolyte
 splat_sources:
 - SRD 5.2.1, pp. 316, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 247, Habitat
 ---
 
 # Priest Acolyte
@@ -28,6 +29,7 @@ splat_sources:
 | Senses | Passive Perception 12 |
 | Languages | Common |
 | Gear | Chain Shirt, Holy Symbol, Mace |
+| Habitat | Any |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

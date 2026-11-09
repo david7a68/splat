@@ -7,6 +7,7 @@ splat_name: Flying Snake
 splat_origin: dnd2024:reference/creature/flying_snake
 splat_sources:
 - SRD 5.2.1, pp. 348, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 353, Habitat
 ---
 
 # Flying Snake
@@ -26,6 +27,7 @@ splat_sources:
 | Challenge | 1/8 (XP 25; PB +2) |
 | Senses | Blindsight 10 ft.; Passive Perception 11 |
 | Languages | None |
+| Habitat | Desert, Forest, Grassland |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

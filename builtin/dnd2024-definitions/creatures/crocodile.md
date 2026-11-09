@@ -7,6 +7,7 @@ splat_name: Crocodile
 splat_origin: dnd2024:reference/creature/crocodile
 splat_sources:
 - SRD 5.2.1, pp. 347, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 352, Habitat
 ---
 
 # Crocodile
@@ -27,6 +28,7 @@ splat_sources:
 | Skills | Stealth +2 |
 | Senses | Passive Perception 10 |
 | Languages | None |
+| Habitat | Coastal, Swamp, Urban |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

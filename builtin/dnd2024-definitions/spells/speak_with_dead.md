@@ -23,6 +23,8 @@ splat_sources:
 | Range | 10 feet |
 | Components | V, S, M (burning incense) |
 | Duration | 10 minutes |
+| Ritual | No |
+| Concentration | No |
 
 
 ## Source text

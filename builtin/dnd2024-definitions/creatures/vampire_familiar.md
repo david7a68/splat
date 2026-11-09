@@ -7,6 +7,7 @@ splat_name: Vampire Familiar
 splat_origin: dnd2024:reference/creature/vampire_familiar
 splat_sources:
 - SRD 5.2.1, pp. 334, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 314, Habitat
 ---
 
 # Vampire Familiar
@@ -30,6 +31,7 @@ splat_sources:
 | Gear | Daggers (10) |
 | Resistances | Necrotic |
 | Immunities | Charmed (except from its vampire master) |
+| Habitat | Underdark, Urban |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

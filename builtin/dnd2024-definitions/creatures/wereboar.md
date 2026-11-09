@@ -7,6 +7,7 @@ splat_name: Wereboar
 splat_origin: dnd2024:reference/creature/wereboar
 splat_sources:
 - SRD 5.2.1, pp. 338, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 325, Habitat
 ---
 
 # Wereboar
@@ -28,6 +29,7 @@ splat_sources:
 | Senses | Passive Perception 12 |
 | Languages | Common (can’t speak in boar form) |
 | Gear | Javelins (6) |
+| Habitat | Forest, Grassland, Hill |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

@@ -7,6 +7,7 @@ splat_name: Bugbear Warrior
 splat_origin: dnd2024:reference/creature/bugbear_warrior
 splat_sources:
 - SRD 5.2.1, pp. 272, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 62, Habitat
 ---
 
 # Bugbear Warrior
@@ -28,6 +29,7 @@ splat_sources:
 | Senses | Darkvision 60 ft.; Passive Perception 10 |
 | Languages | Common, Goblin |
 | Gear | Hide Armor, Light Hammers (3) |
+| Habitat | Forest, Grassland, Underdark, Planar (Feywild) |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

@@ -158,6 +158,63 @@ pub mod library_browse {
     }
 }
 
+/// Find creatures by habitat, type and other facts, with Filter and with search terms.
+pub mod creature_filter {
+    use super::*;
+    const CREATURES_COUNT: &str = "CREATURES 336";
+    const FILTER: &str = "Filter creatures";
+    const UNDERDARK: &str = "Remove filter Habitat: Underdark";
+    const ABERRATION: &str = "Remove filter Type: Aberration";
+    const SEARCH_RESULTS: &str = "SEARCH RESULTS";
+
+    pub fn run(d: &mut Driver<'_>) {
+        d.click("Section");
+        d.click("Library section: Creatures");
+        d.expect(CREATURES_COUNT);
+        d.begin_task();
+
+        d.click(FILTER);
+        // egui names a submenu button with its arrow, `Habitat ⏵`.
+        d.click_starting("Habitat");
+        d.click("Filter Habitat: Underdark");
+        d.click_starting("Type");
+        d.click("Filter Type: Aberration");
+        d.press(Key::Escape);
+        d.expect(UNDERDARK);
+        d.expect(ABERRATION);
+        d.state("underdark-aberrations", Sizes::All);
+        d.goal("find the aberrations of the Underdark");
+        d.observe(
+            "creature filter",
+            d.has_containing("Aboleth") && !d.has_containing("Adult Black Dragon"),
+            "Habitat and Type keep the Aboleth and drop a swamp dragon",
+        );
+
+        d.begin_task();
+        d.click(ABERRATION);
+        d.expect(UNDERDARK);
+        d.observe(
+            "creature filter chip",
+            !d.has(ABERRATION) && d.has_containing("Archmage") && d.has_containing("Basilisk"),
+            "Removing the Type chip keeps the habitat; Archmage (Any) and Basilisk return",
+        );
+        d.click(UNDERDARK);
+        d.expect(CREATURES_COUNT);
+        d.goal("remove the filters");
+
+        d.begin_task();
+        search_library(d, "immune:fire cr:17+");
+        d.expect(SEARCH_RESULTS);
+        d.state("search-terms", Sizes::Default);
+        d.goal("search by immunity and challenge");
+        d.observe(
+            "creature search terms",
+            d.has_containing("Ancient Red Dragon") && !d.has_containing("Aboleth"),
+            "immune:fire cr:17+ finds an ancient red dragon only among fire-immune creatures",
+        );
+    }
+}
+
 /// W8: edit a note in a local package, then manage packages and add an entry.
 pub mod library_author {
     use super::*;

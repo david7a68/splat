@@ -7,6 +7,7 @@ splat_name: Manticore
 splat_origin: dnd2024:reference/creature/manticore
 splat_sources:
 - SRD 5.2.1, pp. 306, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 202, Habitat
 ---
 
 # Manticore
@@ -26,6 +27,7 @@ splat_sources:
 | Challenge | 3 (XP 700; PB +2) |
 | Senses | Darkvision 60 ft.; Passive Perception 11 |
 | Languages | Common |
+| Habitat | Arctic, Coastal, Grassland, Hill, Mountain |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

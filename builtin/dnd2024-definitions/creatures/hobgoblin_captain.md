@@ -7,6 +7,7 @@ splat_name: Hobgoblin Captain
 splat_origin: dnd2024:reference/creature/hobgoblin_captain
 splat_sources:
 - SRD 5.2.1, pp. 299, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 171, Habitat
 ---
 
 # Hobgoblin Captain
@@ -27,6 +28,7 @@ splat_sources:
 | Senses | Darkvision 60 ft.; Passive Perception 10 |
 | Languages | Common, Goblin |
 | Gear | Greatsword, Half Plate Armor, Longbow |
+| Habitat | Desert, Forest, Grassland, Hill, Mountain, Underdark, Planar (Acheron) |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

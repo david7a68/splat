@@ -7,6 +7,7 @@ splat_name: Imp
 splat_origin: dnd2024:reference/creature/imp
 splat_sources:
 - SRD 5.2.1, pp. 300, 301, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 177, Habitat
 ---
 
 # Imp
@@ -29,6 +30,7 @@ splat_sources:
 | Languages | Common, Infernal |
 | Resistances | Cold |
 | Immunities | Fire, Poison; Poisoned |
+| Habitat | Any |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

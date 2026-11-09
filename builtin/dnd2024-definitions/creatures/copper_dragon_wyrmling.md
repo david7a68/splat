@@ -7,6 +7,7 @@ splat_name: Copper Dragon Wyrmling
 splat_origin: dnd2024:reference/creature/copper_dragon_wyrmling
 splat_sources:
 - SRD 5.2.1, pp. 275, 276, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 78, Habitat
 ---
 
 # Copper Dragon Wyrmling
@@ -28,6 +29,7 @@ splat_sources:
 | Senses | Blindsight 10 ft., Darkvision 60 ft.; Passive Perception 14 |
 | Languages | Draconic |
 | Immunities | Acid |
+| Habitat | Hill |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

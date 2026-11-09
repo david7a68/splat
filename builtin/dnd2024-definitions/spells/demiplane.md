@@ -23,6 +23,8 @@ splat_sources:
 | Range | 60 feet |
 | Components | S |
 | Duration | 1 hour |
+| Ritual | No |
+| Concentration | No |
 
 
 ## Source text

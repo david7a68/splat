@@ -7,6 +7,7 @@ splat_name: Air Elemental
 splat_origin: dnd2024:reference/creature/air_elemental
 splat_sources:
 - SRD 5.2.1, pp. 258, 259, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 13, Habitat
 ---
 
 # Air Elemental
@@ -28,6 +29,7 @@ splat_sources:
 | Languages | Primordial (Auran) |
 | Resistances | Bludgeoning, Lightning, Piercing, Slashing |
 | Immunities | Poison, Thunder; Exhaustion, Grappled, Paralyzed, Petrified, Poisoned, Prone, Restrained, Unconscious |
+| Habitat | Desert, Mountain, Planar (Elemental Plane of Air) |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

@@ -7,6 +7,7 @@ splat_name: Riding Horse
 splat_origin: dnd2024:reference/creature/riding_horse
 splat_sources:
 - SRD 5.2.1, pp. 360, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 368, Habitat
 ---
 
 # Riding Horse
@@ -26,6 +27,7 @@ splat_sources:
 | Challenge | 1/4 (XP 50; PB +2) |
 | Senses | Passive Perception 10 |
 | Languages | None |
+| Habitat | Grassland, Urban |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

@@ -7,6 +7,7 @@ splat_name: Nalfeshnee
 splat_origin: dnd2024:reference/creature/nalfeshnee
 splat_sources:
 - SRD 5.2.1, pp. 310, 311, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 224, Habitat
 ---
 
 # Nalfeshnee
@@ -28,6 +29,7 @@ splat_sources:
 | Languages | Abyssal; telepathy 120 ft. |
 | Resistances | Cold, Fire, Lightning |
 | Immunities | Poison; Frightened, Poisoned |
+| Habitat | Planar (Abyss) |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

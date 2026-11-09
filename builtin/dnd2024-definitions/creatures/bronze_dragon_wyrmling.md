@@ -7,6 +7,7 @@ splat_name: Bronze Dragon Wyrmling
 splat_origin: dnd2024:reference/creature/bronze_dragon_wyrmling
 splat_sources:
 - SRD 5.2.1, pp. 269, 270, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 58, Habitat
 ---
 
 # Bronze Dragon Wyrmling
@@ -28,6 +29,7 @@ splat_sources:
 | Senses | Blindsight 10 ft., Darkvision 60 ft.; Passive Perception 14 |
 | Languages | Draconic |
 | Immunities | Lightning |
+| Habitat | Coastal |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

@@ -23,6 +23,8 @@ splat_sources:
 | Range |  |
 | Components | V, S, M (specially marked sticks, bones, cards, or other divinatory tokens worth 25+ GP) |
 | Duration | Instantaneous |
+| Ritual | Yes |
+| Concentration | No |
 
 
 ## Source text

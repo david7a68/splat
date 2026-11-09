@@ -7,6 +7,7 @@ splat_name: Mule
 splat_origin: dnd2024:reference/creature/mule
 splat_sources:
 - SRD 5.2.1, pp. 357, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 365, Habitat
 ---
 
 # Mule
@@ -26,6 +27,7 @@ splat_sources:
 | Challenge | 1/8 (XP 25; PB +2) |
 | Senses | Passive Perception 10 |
 | Languages | None |
+| Habitat | Desert, Hill, Urban |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

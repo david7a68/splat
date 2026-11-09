@@ -7,6 +7,7 @@ splat_name: Will-o’-Wisp
 splat_origin: dnd2024:reference/creature/will_o_wisp
 splat_sources:
 - SRD 5.2.1, pp. 341, 342, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 333, Habitat
 ---
 
 # Will-o’-Wisp
@@ -28,6 +29,7 @@ splat_sources:
 | Languages | Common plus one other language |
 | Resistances | Acid, Bludgeoning, Cold, Fire, Necrotic, Piercing, Slashing |
 | Immunities | Lightning, Poison; Exhaustion, Grappled, Paralyzed, Petrified, Poisoned, Prone, Restrained, Unconscious |
+| Habitat | Forest, Swamp, Urban |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

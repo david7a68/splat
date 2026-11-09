@@ -7,6 +7,7 @@ splat_name: Green Hag
 splat_origin: dnd2024:reference/creature/green_hag
 splat_sources:
 - SRD 5.2.1, pp. 295, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 156, Habitat
 ---
 
 # Green Hag
@@ -27,6 +28,7 @@ splat_sources:
 | Skills | Arcana +5, Deception +4, Perception +4, Stealth +3 |
 | Senses | Darkvision 60 ft.; Passive Perception 14 |
 | Languages | Common, Elvish, Sylvan |
+| Habitat | Forest, Hill, Swamp |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

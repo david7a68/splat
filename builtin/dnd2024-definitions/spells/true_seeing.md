@@ -23,6 +23,8 @@ splat_sources:
 | Range |  |
 | Components | V, S, M (mushroom powder worth 25+ GP, which the spell consumes) |
 | Duration | 1 hour |
+| Ritual | No |
+| Concentration | No |
 
 
 ## Source text

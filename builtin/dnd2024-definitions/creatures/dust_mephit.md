@@ -7,6 +7,7 @@ splat_name: Dust Mephit
 splat_origin: dnd2024:reference/creature/dust_mephit
 splat_sources:
 - SRD 5.2.1, pp. 307, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 206, Habitat
 ---
 
 # Dust Mephit
@@ -29,6 +30,7 @@ splat_sources:
 | Languages | Primordial (Auran, Terran) |
 | Immunities | Poison; Exhaustion, Poisoned |
 | Vulnerabilities | Fire |
+| Habitat | Planar (Elemental Planes) |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

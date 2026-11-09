@@ -7,6 +7,7 @@ splat_name: Adult Blue Dragon
 splat_origin: dnd2024:reference/creature/adult_blue_dragon
 splat_sources:
 - SRD 5.2.1, pp. 266, 267, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 49, Habitat
 ---
 
 # Adult Blue Dragon
@@ -28,6 +29,7 @@ splat_sources:
 | Senses | Blindsight 60 ft., Darkvision 120 ft.; Passive Perception 22 |
 | Languages | Common, Draconic |
 | Immunities | Lightning |
+| Habitat | Coastal, Desert |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

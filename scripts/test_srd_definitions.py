@@ -120,6 +120,22 @@ class DefinitionTests(unittest.TestCase):
             self.assertEqual(r['status']=='partial',bool(r['conversion_gaps']))
         self.assertEqual(report['counts']['executable_full_definitions'],0)
 
+    def test_every_creature_has_its_reviewed_habitat_and_citation(self):
+        from convert_srd_definitions import HABITATS, MONSTER_MANUAL
+        habitats=yaml.safe_load(HABITATS.read_text())
+        creatures=sorted((OUTPUT/'creatures').glob('*.md'))
+        self.assertEqual({'dnd2024:creatures/'+p.stem for p in creatures},set(habitats))
+        for path in creatures:
+            text=path.read_text()
+            reviewed=habitats['dnd2024:creatures/'+path.stem]
+            if reviewed is None:
+                self.assertNotIn('| Habitat |',text)
+                self.assertNotIn(MONSTER_MANUAL,text)
+                continue
+            self.assertIn(f"| Habitat | {reviewed['habitat']} |",text)
+            self.assertIn(f"- {MONSTER_MANUAL}, p. {reviewed['page']}, Habitat",text)
+        self.assertEqual(sum(v is None for v in habitats.values()),6)
+
 
 class CompletedContractTests(unittest.TestCase):
     @classmethod

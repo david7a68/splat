@@ -7,6 +7,7 @@ splat_name: Rat
 splat_origin: dnd2024:reference/creature/rat
 splat_sources:
 - SRD 5.2.1, pp. 359, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 367, Habitat
 ---
 
 # Rat
@@ -27,6 +28,7 @@ splat_sources:
 | Skills | Perception +2 |
 | Senses | Darkvision 30 ft.; Passive Perception 12 |
 | Languages | None |
+| Habitat | Forest, Swamp, Underdark, Urban |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

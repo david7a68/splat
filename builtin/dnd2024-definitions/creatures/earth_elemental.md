@@ -7,6 +7,7 @@ splat_name: Earth Elemental
 splat_origin: dnd2024:reference/creature/earth_elemental
 splat_sources:
 - SRD 5.2.1, pp. 282, 283, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 108, Habitat
 ---
 
 # Earth Elemental
@@ -28,6 +29,7 @@ splat_sources:
 | Languages | Primordial (Terran) |
 | Immunities | Poison; Exhaustion, Paralyzed, Petrified, Poisoned, Unconscious |
 | Vulnerabilities | Thunder |
+| Habitat | Mountain, Underdark, Planar (Elemental Plane of Earth) |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

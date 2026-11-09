@@ -7,6 +7,7 @@ splat_name: Giant Crocodile
 splat_origin: dnd2024:reference/creature/giant_crocodile
 splat_sources:
 - SRD 5.2.1, pp. 350, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 356, Habitat
 ---
 
 # Giant Crocodile
@@ -27,6 +28,7 @@ splat_sources:
 | Skills | Stealth +5 |
 | Senses | Passive Perception 10 |
 | Languages | None |
+| Habitat | Coastal, Swamp |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

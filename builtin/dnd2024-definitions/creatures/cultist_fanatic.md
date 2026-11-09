@@ -7,6 +7,7 @@ splat_name: Cultist Fanatic
 splat_origin: dnd2024:reference/creature/cultist_fanatic
 splat_sources:
 - SRD 5.2.1, pp. 278, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 85, Habitat
 ---
 
 # Cultist Fanatic
@@ -28,6 +29,7 @@ splat_sources:
 | Senses | Passive Perception 12 |
 | Languages | Common |
 | Gear | Holy Symbol, Leather Armor |
+| Habitat | Any |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

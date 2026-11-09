@@ -7,6 +7,7 @@ splat_name: Black Pudding
 splat_origin: dnd2024:reference/creature/black_pudding
 splat_sources:
 - SRD 5.2.1, pp. 265, 266, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 42, Habitat
 ---
 
 # Black Pudding
@@ -27,6 +28,7 @@ splat_sources:
 | Senses | Blindsight 60 ft.; Passive Perception 8 |
 | Languages | None |
 | Immunities | Acid, Cold, Lightning, Slashing; Charmed, Deafened, Exhaustion, Frightened, Grappled, Prone, Restrained |
+| Habitat | Underdark |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |
