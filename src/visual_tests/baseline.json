@@ -32,7 +32,7 @@
       "package-manifest-broken": 22,
       "package-rename": 15,
       "package-to-table": 6,
-      "party": 15,
+      "party": 16,
       "party-from-run": 9,
       "prep-to-table": 3,
       "reader-tables": 18,
@@ -112,7 +112,7 @@
       "package-manifest-broken": 98,
       "package-rename": 100,
       "package-to-table": 60,
-      "party": 56,
+      "party": 59,
       "party-from-run": 43,
       "prep-to-table": 40,
       "reader-tables": 48,
@@ -237,7 +237,7 @@
     },
     "party": {
       "change character": 1,
-      "read every sheet page": 11,
+      "read every sheet page": 12,
       "see a campaign with no link": 2,
       "see a linked campaign with no characters": 2,
       "see the party and a sheet": 1
