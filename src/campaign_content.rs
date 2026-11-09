@@ -2022,8 +2022,10 @@ mod tests {
         let ctx = egui::Context::default();
         let frame = |content: &mut CampaignContent| {
             let _ = ctx.run(Default::default(), |ctx| {
-                egui::CentralPanel::default()
-                    .show(ctx, |ui| content.packages(ui, &campaigns, &active));
+                egui::CentralPanel::default().show(ctx, |ui| {
+                    content.selection_bar(ui, &campaigns, &active);
+                    content.packages(ui, &campaigns, &active);
+                });
             });
         };
         let kept =
