@@ -3840,7 +3840,7 @@ pub mod run_sync_states {
                 && d.has(USE_REMOTE),
             "With a conflict, Close is blocked in the ended view, whose row and controls show it",
         );
-        d.state("ended-with-conflict", Sizes::Default);
+        d.state("ended-with-conflict", Sizes::All);
         // A pair of choices is never cut: both are in view, at the minimum window too.
         let both = |d: &Driver<'_>| {
             let nodes = d.nodes();
@@ -4895,7 +4895,7 @@ pub mod session_notes {
         // Renaming keeps notes unchanged until the DM accepts the update.
         d.expect("Update 1 link in notes");
         d.expect_same("The rename offer is already in the event detail. Checking it leaves the view unchanged.");
-        d.state("event-link-update-offered", Sizes::Default);
+        d.state("event-link-update-offered", Sizes::All);
         d.click("Update 1 link in notes");
         d.expect("Undo update links");
         d.state("event-links-updated", Sizes::Default);
@@ -6424,7 +6424,7 @@ pub mod encounter_groups {
                 .any(|node| node.name.contains(RIVAL_NAME) && node.name.contains("Initiative 14")),
             "A typed total places the group, with no roll",
         );
-        d.state("group-added-with-a-total", Sizes::Default);
+        d.state("group-added-with-a-total", Sizes::All);
         d.observe(
             "T13.2",
             d.has_containing("Undo: add Rival Team")
