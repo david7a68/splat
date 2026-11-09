@@ -331,9 +331,15 @@ impl CopyDialog {
                 }
                 if !plan.dependencies.is_empty() {
                     design::section(ui, "Review Markdown", |ui| {
-                        egui::ScrollArea::both().max_height(160.0).show(ui, |ui| {
-                            ui.monospace(&plan.text);
-                        });
+                        let height =
+                            (ui.available_height() - design::Density::Read.control() - design::L)
+                                .clamp(design::XXL, design::XXL * 5.0);
+                        egui::ScrollArea::both()
+                            .max_height(height)
+                            .auto_shrink([false, true])
+                            .show(ui, |ui| {
+                                ui.monospace(&plan.text);
+                            });
                     });
                 }
                 let mut create = false;
@@ -341,7 +347,7 @@ impl CopyDialog {
                     create = Action::primary(if plan.shared.is_empty() {
                         "Create copy"
                     } else {
-                        "Share both"
+                        "Copy both"
                     })
                     .show(ui)
                     .clicked();

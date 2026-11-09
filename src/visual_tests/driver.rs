@@ -415,6 +415,43 @@ impl<'a> Driver<'a> {
         }
     }
 
+    /// The painted field frame around the visible part of a text input.
+    pub fn input_frame(&self, name: &str) -> Option<(egui::Rect, egui::Rect)> {
+        let shown = self
+            .nodes()
+            .into_iter()
+            .find(|node| node.name == name)?
+            .shown;
+        fn visit(
+            shape: &egui::Shape,
+            clip: egui::Rect,
+            shown: egui::Rect,
+            found: &mut Vec<(egui::Rect, egui::Rect)>,
+        ) {
+            match shape {
+                egui::Shape::Vec(shapes) => {
+                    for shape in shapes {
+                        visit(shape, clip, shown, found);
+                    }
+                }
+                egui::Shape::Rect(rect)
+                    if rect.stroke.color == crate::design::colors().field_border
+                        && rect.rect.contains_rect(shown) =>
+                {
+                    found.push((rect.rect, clip))
+                }
+                _ => {}
+            }
+        }
+        let mut found = Vec::new();
+        for shape in &self.harness.output().shapes {
+            visit(&shape.shape, shape.clip_rect, shown, &mut found);
+        }
+        found
+            .into_iter()
+            .min_by(|a, b| a.0.area().total_cmp(&b.0.area()))
+    }
+
     /// Where a control is, by its exact name.
     pub fn place_of(&self, name: &str) -> Option<egui::Rect> {
         self.nodes()

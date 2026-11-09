@@ -218,9 +218,9 @@ pub mod library_author {
         d.click(EDIT_MARKDOWN);
         d.state("edit-markdown", Sizes::All);
         let edges_match = |d: &Driver<'_>| {
-            let editor = d.place_of("Markdown editor").unwrap();
+            let (frame, clip) = d.input_frame("Markdown editor").unwrap();
             let save = d.place_of("Save").unwrap();
-            (editor.right() - save.right()).abs() <= 1.0
+            (frame.right() - save.right()).abs() <= 1.0 && clip.expand(1.0).contains_rect(frame)
         };
         d.observe_both(
             "C3",
@@ -473,6 +473,11 @@ pub mod library_navigation {
             "C4",
             !d.has("Close Lookup"),
             "A wiki link opens in the Library reader",
+        );
+        d.observe_both(
+            "Library toolbar anchor",
+            "Read stays before Back after following a link",
+            |d| d.place_of("Read").unwrap().left() < d.place_of("Back").unwrap().left(),
         );
         d.state("wiki-link-in-library", Sizes::All);
         d.click("Back");
@@ -7942,7 +7947,7 @@ pub mod share_to_package {
         d.wait_for_text("Watch/Captains/Watch Orders.md");
         d.click("Review Markdown");
         d.state("share-to-new-folder", Sizes::All);
-        d.click("Share both");
+        d.click("Copy both");
         d.wait_for_text(
             "Copied Watch Orders and Captain Varra to Ashen Marches, in Watch/Captains.",
         );
@@ -7956,7 +7961,7 @@ pub mod share_to_package {
             splat::content::required_references(orders).unwrap()
                 == vec![splat::content::Reference::Id(captain.id)]
                 && captain.id != varra.id,
-            "Share both copies the dependency and reconnects the new entry",
+            "Copy both copies the dependency and reconnects the new entry",
         );
         d.state("shared-copy-created", Sizes::All);
         d.click("Close");

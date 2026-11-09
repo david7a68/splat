@@ -2080,7 +2080,11 @@ impl Library {
         {
             self.layouts.clear();
         }
-        if self.pending.is_none() && self.layouts.show_conversion(ui, convert_blocked.as_deref()) {
+        if self.pending.is_none()
+            && self
+                .layouts
+                .show_conversion(ui, convert_blocked.as_deref(), campaigns)
+        {
             self.stale = true;
             self.content_changed = campaigns.active_campaign().map(|c| c.path.clone());
         }
@@ -4063,16 +4067,6 @@ impl Library {
         let show_key = with_key <= ui.available_width();
         let overflow = base_width + extras > ui.available_width();
         ui.horizontal(|ui| {
-            if !self.history.is_empty()
-                && (if show_key { back.key("Alt+Left") } else { back })
-                    .hint(
-                        "Return to the entry before this link. During a draft, read it in Lookup.",
-                    )
-                    .show(ui)
-                    .clicked()
-            {
-                go_back = true;
-            }
             let edit_label = if editable {
                 "Edit Markdown"
             } else {
@@ -4082,6 +4076,32 @@ impl Library {
             design::segmented(ui, &mut self.source, &[(false, "Read"), (true, edit_label)]);
             if self.source != was_source {
                 self.scope_notice = None;
+            }
+            if !overflow {
+                if can_copy {
+                    copy_clicked = Action::quiet("Copy to…")
+                        .icon(icons::COPY)
+                        .density(Density::Read)
+                        .blocked(copy_reason)
+                        .show(ui)
+                        .clicked();
+                }
+                if can_make {
+                    make_clicked = Action::quiet("Make NPC note")
+                        .blocked(draft_reason)
+                        .show(ui)
+                        .clicked();
+                }
+            }
+            if !self.history.is_empty()
+                && (if show_key { back.key("Alt+Left") } else { back })
+                    .hint(
+                        "Return to the entry before this link. During a draft, read it in Lookup.",
+                    )
+                    .show(ui)
+                    .clicked()
+            {
+                go_back = true;
             }
             if overflow {
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
@@ -4109,21 +4129,6 @@ impl Library {
                         }
                     });
                 });
-            } else {
-                if can_copy {
-                    copy_clicked = Action::quiet("Copy to…")
-                        .icon(icons::COPY)
-                        .density(Density::Read)
-                        .blocked(copy_reason)
-                        .show(ui)
-                        .clicked();
-                }
-                if can_make {
-                    make_clicked = Action::quiet("Make NPC note")
-                        .blocked(draft_reason)
-                        .show(ui)
-                        .clicked();
-                }
             }
         });
         if copy_clicked {
@@ -4229,6 +4234,17 @@ impl Library {
                 {
                     use_every = Some(module.clone());
                 }
+                if let Owner::Package(module) = &note.owner
+                    && !about
+                    && !self.loaded.as_ref().unwrap().in_scope(note, Scope::Uses)
+                    && let Some(entry) = &note.entry
+                    && Action::quiet("Use in this campaign")
+                        .blocked(draft_reason)
+                        .show(ui)
+                        .clicked()
+                {
+                    self.use_entry = Some((module.id, entry.id));
+                }
                 if !file_below {
                     file_line(ui);
                 }
@@ -4251,22 +4267,11 @@ impl Library {
                 },
             );
         }
-        if let Owner::Package(module) = &note.owner
-            && !about
-            && !self.loaded.as_ref().unwrap().in_scope(note, Scope::Uses)
-            && let Some(entry) = &note.entry
-            && Action::quiet("Use in this campaign")
-                .blocked(draft_reason)
-                .show(ui)
-                .clicked()
-        {
-            self.use_entry = Some((module.id, entry.id));
-        }
         if !duplicate_indices.is_empty() {
             design::message(
                 ui,
                 Tone::Warning,
-                "These files share an identity. Choose which file gets a new one.",
+                "These two files claim to be the same entry. Choose which one becomes a separate entry.",
             );
             let loaded = self.loaded.as_ref().unwrap();
             let users: Vec<_> = loaded
@@ -4297,7 +4302,7 @@ impl Library {
                 } else {
                     filename.into_owned()
                 };
-                if Action::quiet(&format!("New identity for {filename}"))
+                if Action::quiet(&format!("Make {filename} a separate entry"))
                     .blocked(draft_reason)
                     .show(ui)
                     .clicked()
@@ -4324,7 +4329,7 @@ impl Library {
                                 ui,
                                 format!("{} will then use {remaining}.", name_list(&users)),
                             )
-                            .color(colors().result.warning),
+                            .color(colors().muted),
                     );
                 }
             }
@@ -4334,7 +4339,7 @@ impl Library {
                 if shown.insert(owner.id())
                     && let Some(paths) = loaded.duplicate_folder_paths(owner)
                     && Action::quiet(&format!(
-                        "New identity for all {} files in {}/",
+                        "Make all {} files in {}/ separate entries",
                         paths.len(),
                         owner.folder()
                     ))
@@ -4349,15 +4354,22 @@ impl Library {
         if let Some((_, words)) = &self.identities_undo {
             design::locked(ui, draft_reason, |ui| {
                 undo_identities =
-                    design::undo_message(ui, Tone::Success, words, "Undo folder identities");
+                    design::undo_message(ui, Tone::Success, words, "Undo separate entries");
             });
         }
-        if self.identity_undo.is_some() {
-            undo_identity = Action::quiet("Undo new identity")
-                .icon(icons::UNDO)
-                .blocked(draft_reason)
-                .show(ui)
-                .clicked();
+        if let Some(undo) = &self.identity_undo {
+            let filename = Path::new(&undo.path)
+                .file_name()
+                .unwrap_or_default()
+                .to_string_lossy();
+            design::locked(ui, draft_reason, |ui| {
+                undo_identity = design::undo_message(
+                    ui,
+                    Tone::Success,
+                    &format!("{filename} is now a separate entry."),
+                    "Undo separate entry",
+                );
+            });
         }
         // Save and Discard are one row, as far apart as the pane allows.
         if save_row && !conflict {
@@ -4623,7 +4635,78 @@ impl Library {
         let mut open_link = None;
         let mut copy_dependency = None;
         let mut undo_dependency = false;
-        egui::ScrollArea::vertical()
+        if self.source && self.disk_change.is_none() {
+            egui::Frame::new()
+                .fill(colors().well)
+                .stroke(egui::Stroke::new(
+                    design::HAIRLINE_WIDTH,
+                    colors().field_border,
+                ))
+                .corner_radius(design::RADIUS_CONTROL)
+                .inner_margin(design::S)
+                .show(ui, |ui| {
+                    ui.set_max_width(editor_width - (design::S + design::HAIRLINE_WIDTH) * 2.0);
+                    let visible_height = ui.available_height().max(design::XL);
+                    egui::ScrollArea::vertical()
+                        .id_salt(("library_source", note.owner.id(), &note.path))
+                        .max_height(visible_height)
+                        .auto_shrink([false, false])
+                        .show(ui, |ui| {
+                            let response = ui.add(
+                                egui::TextEdit::multiline(&mut self.draft)
+                                    .id_salt(("library_markdown", note.owner.id(), &note.path))
+                                    .font(egui::TextStyle::Monospace)
+                                    .frame(false)
+                                    .margin(egui::Vec2::ZERO)
+                                    .desired_width(ui.available_width())
+                                    .min_size(egui::vec2(0.0, visible_height))
+                                    .interactive(editable),
+                            );
+                            design::named(ui, &response, "Markdown editor");
+                            if std::mem::take(&mut self.focus_markdown) {
+                                response.request_focus();
+                            }
+                            if std::mem::take(&mut self.focus_repair)
+                                && let Some(line) = repair_line
+                            {
+                                let at = self
+                                    .draft
+                                    .lines()
+                                    .take(line.saturating_sub(1))
+                                    .map(|line| line.chars().count() + 1)
+                                    .sum();
+                                response.request_focus();
+                                let mut state = egui::TextEdit::load_state(ui.ctx(), response.id)
+                                    .unwrap_or_default();
+                                state
+                                    .cursor
+                                    .set_char_range(Some(egui::text::CCursorRange::one(
+                                        egui::text::CCursor::new(at),
+                                    )));
+                                state.store(ui.ctx(), response.id);
+                            }
+                            if std::mem::take(&mut self.focus_hp)
+                                && let Some(at) = self
+                                    .draft
+                                    .find("initiative: ")
+                                    .map(|at| at + "initiative: ".len())
+                            {
+                                response.request_focus();
+                                let at = self.draft[..at].chars().count();
+                                let mut state = egui::TextEdit::load_state(ui.ctx(), response.id)
+                                    .unwrap_or_default();
+                                state
+                                    .cursor
+                                    .set_char_range(Some(egui::text::CCursorRange::two(
+                                        egui::text::CCursor::new(at),
+                                        egui::text::CCursor::new(at + 1),
+                                    )));
+                                state.store(ui.ctx(), response.id);
+                            }
+                        });
+                });
+        } else {
+            egui::ScrollArea::vertical()
             .id_salt(("entry_body", note.owner.id(), &note.path))
             .auto_shrink([false, false])
             .show(ui, |ui| {
@@ -4638,35 +4721,6 @@ impl Library {
                     }
                     return;
                 }
-                if self.source {
-                    let response = ui.add(
-                        egui::TextEdit::multiline(&mut self.draft)
-                            .id_salt(("library_markdown", note.owner.id(), &note.path))
-                            .font(egui::TextStyle::Monospace)
-                            .margin(egui::vec2(design::S, design::S))
-                            .desired_width(editor_width - 2.0 * design::S)
-                            .min_size(egui::vec2(0.0, ui.available_height()))
-                            .interactive(editable),
-                    );
-                    design::named(ui, &response, "Markdown editor");
-                    if std::mem::take(&mut self.focus_markdown) { response.request_focus(); }
-                    if std::mem::take(&mut self.focus_repair) && let Some(line) = repair_line {
-                        let at = self.draft.lines().take(line.saturating_sub(1)).map(|line| line.chars().count() + 1).sum();
-                        response.request_focus();
-                        let mut state = egui::TextEdit::load_state(ui.ctx(), response.id).unwrap_or_default();
-                        state.cursor.set_char_range(Some(egui::text::CCursorRange::one(egui::text::CCursor::new(at))));
-                        state.store(ui.ctx(), response.id);
-                    }
-                    if std::mem::take(&mut self.focus_hp)
-                        && let Some(at) = self.draft.find("initiative: ").map(|at| at + "initiative: ".len())
-                    {
-                        response.request_focus();
-                        let at = self.draft[..at].chars().count();
-                        let mut state = egui::TextEdit::load_state(ui.ctx(), response.id).unwrap_or_default();
-                        state.cursor.set_char_range(Some(egui::text::CCursorRange::two(egui::text::CCursor::new(at), egui::text::CCursor::new(at + 1))));
-                        state.store(ui.ctx(), response.id);
-                    }
-                } else {
                     // A failed parse must never render YAML properties as book prose.
                     let body = parsed.as_ref().map_or("", |e| e.body.as_str());
                     ui.push_id(&note.path, |ui| {
@@ -4713,8 +4767,8 @@ impl Library {
                             },
                         );
                     });
-                }
             });
+        }
         let reconnect = (|| -> Result<(), String> {
             if undo_dependency
                 && let Some(DependencyUndo {
@@ -4890,7 +4944,7 @@ impl Library {
                 self.identities_undo = Some((
                     edits,
                     format!(
-                        "New IDs for {} in {folder}/.",
+                        "{} in {folder}/ are now separate entries.",
                         design::count(paths.len(), "file", "files")
                     ),
                 ));
@@ -6441,6 +6495,121 @@ mod tests {
                 }
             }
             assert!(library.draft.contains("# College of Lore"));
+        }
+    }
+
+    #[test]
+    fn library_toolbar_keeps_back_visible_with_more_menu() {
+        let loaded = load(None).unwrap();
+        let mut library = Library {
+            loaded: Some(loaded),
+            ..Default::default()
+        };
+        library.open_entry(0);
+        library.open_entry(1);
+        let ctx = egui::Context::default();
+        crate::design::theme::install(&ctx);
+        let mut rendered = Vec::new();
+        for _ in 0..3 {
+            let output = ctx.run(
+                egui::RawInput {
+                    screen_rect: Some(egui::Rect::from_min_size(
+                        egui::Pos2::ZERO,
+                        egui::vec2(360.0, 640.0),
+                    )),
+                    ..Default::default()
+                },
+                |ctx| {
+                    egui::CentralPanel::default().show(ctx, |ui| {
+                        library.editor(ui, "Entry", &Campaigns::default());
+                    });
+                },
+            );
+            rendered = output
+                .shapes
+                .into_iter()
+                .filter_map(|shape| match shape.shape {
+                    egui::Shape::Text(text)
+                        if shape.clip_rect.contains_rect(text.visual_bounding_rect()) =>
+                    {
+                        Some(text.galley.job.text.clone())
+                    }
+                    _ => None,
+                })
+                .collect();
+        }
+        for word in ["Read", "Back", "More"] {
+            assert!(
+                rendered.iter().any(|text| text == word),
+                "Missing {word}: {rendered:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn source_editor_keeps_its_frame_inside_the_remaining_height() {
+        for size in [egui::vec2(480.0, 480.0), egui::vec2(960.0, 920.0)] {
+            let source = format!(
+                "{}\n{}",
+                note_text("Long rule", "rule", None),
+                "Long source line.\n".repeat(200)
+            );
+            let mut library = Library {
+                loaded: Some(Loaded {
+                    notes: vec![Note {
+                        path: "Long rule.md".into(),
+                        text: source.clone(),
+                        entry: Some(Entry::parse("Long rule.md", &source).unwrap()),
+                        error: None,
+                        owner: Owner::Builtin,
+                    }],
+                    ..Default::default()
+                }),
+                selected: Some(0),
+                source: true,
+                draft: source,
+                ..Default::default()
+            };
+            let ctx = egui::Context::default();
+            crate::design::theme::install(&ctx);
+            for _ in 0..3 {
+                let output = ctx.run(
+                    egui::RawInput {
+                        screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, size)),
+                        ..Default::default()
+                    },
+                    |ctx| {
+                        egui::CentralPanel::default().show(ctx, |ui| {
+                            library.editor(ui, "Rule", &Campaigns::default());
+                        });
+                    },
+                );
+                let frames: Vec<_> = output
+                    .shapes
+                    .iter()
+                    .filter_map(|shape| {
+                        if let egui::Shape::Rect(rect) = &shape.shape
+                            && rect.stroke.color == colors().field_border
+                            && rect.rect.height() > design::XXL
+                        {
+                            Some((rect.rect, shape.clip_rect))
+                        } else {
+                            None
+                        }
+                    })
+                    .collect();
+                assert!(!frames.is_empty(), "The source needs a visible frame");
+                for (frame, clip) in frames {
+                    assert!(
+                        clip.expand(design::HAIRLINE_WIDTH).contains_rect(frame),
+                        "Frame {frame:?} leaves viewport {clip:?}"
+                    );
+                    assert!(
+                        frame.bottom() <= size.y,
+                        "Frame leaves the window: {frame:?}"
+                    );
+                }
+            }
         }
     }
 

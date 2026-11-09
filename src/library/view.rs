@@ -265,9 +265,11 @@ fn show_inner(
             ui, entry, reading, &sections, styled, builtin, links, values,
         );
         let open_link = open_link.or(related(ui));
-        ui.add_space(design::L);
-        design::rule(ui);
-        reference(ui, entry, &sections, styled.is_some(), origin);
+        if entry.is_some() {
+            ui.add_space(design::L);
+            design::rule(ui);
+            reference(ui, entry, &sections, styled.is_some(), origin);
+        }
         open_link
     })
 }
@@ -373,20 +375,23 @@ fn reference(
         Some("partial") => "Conversion incomplete",
         _ => "Not established",
     };
-    // A verdict means nothing at a table, so it waits inside. Someone in the world has none.
-    if entry.is_none_or(|entry| !["world", "package"].contains(&entry.kind.as_str())) {
-        design::quiet_section(ui, "Engine support", |ui| {
-            ui.label(support);
-            if conversion.is_some() {
-                for gap in gap_list("conversion_gaps").chain(open_gaps.iter().copied()) {
-                    ui.monospace(gap);
-                }
-            } else {
-                ui.label("Draft structure does not establish engine support.");
-            }
-        });
+    // An unreadable file has no source or support details to report.
+    if entry.is_none() {
+        return;
     }
     design::quiet_section(ui, "Source and identifiers", |ui| {
+        if entry.is_some_and(|entry| !["world", "package"].contains(&entry.kind.as_str())) {
+            design::quiet_section(ui, "What Splat applies", |ui| {
+                ui.label(support);
+                if conversion.is_some() {
+                    for gap in gap_list("conversion_gaps").chain(open_gaps.iter().copied()) {
+                        ui.monospace(gap);
+                    }
+                } else {
+                    ui.label("Splat has not established what it applies from this entry.");
+                }
+            });
+        }
         ui.label(origin.owner);
         ui.label(origin.path);
         if let Some(entry) = entry {
