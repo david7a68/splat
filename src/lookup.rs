@@ -105,6 +105,11 @@ pub struct Item {
     lower_body: String,
 }
 
+fn next_generation() -> u64 {
+    static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
+    NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+}
+
 /// Every entry the active campaign can see, including all registered packages.
 #[derive(Default)]
 pub struct ContentIndex {
@@ -118,6 +123,12 @@ pub struct ContentIndex {
     creatures: Vec<usize>,
     /// Lower-case file stems and paths in the campaign, as Obsidian finds a link's target.
     files: HashMap<String, Vec<usize>>,
+    /// Every name a note link can use for an item, in item order: its lower-case name, file
+    /// stem and path, and its aliases. Headings are not link names.
+    link_names: HashMap<String, Vec<usize>>,
+    /// Different for each index this process loads, so a cache of its answers can tell when
+    /// the index changed.
+    generation: u64,
     /// Plain world notes and world entries.
     world: Vec<usize>,
     mentions: HashMap<Uuid, Vec<usize>>,
@@ -397,6 +408,7 @@ impl ContentIndex {
                 .collect(),
             errors: catalogue.errors.clone(),
             files_seen,
+            generation: next_generation(),
             ..Default::default()
         };
         for (position, item) in items.iter().enumerate() {
@@ -411,6 +423,19 @@ impl ContentIndex {
                 index.creatures.push(position);
             }
             let heading = matches!(item.source, Source::Heading(..));
+            if !heading {
+                let [stem, path] = item.file_keys();
+                // `resolve_link` compares aliases without regard to ASCII case only.
+                let aliases = world::aliases(&item.entry)
+                    .into_iter()
+                    .map(str::to_ascii_lowercase);
+                for name in [item.lower.clone(), stem, path].into_iter().chain(aliases) {
+                    let positions = index.link_names.entry(name).or_default();
+                    if positions.last() != Some(&position) {
+                        positions.push(position);
+                    }
+                }
+            }
             if item.private && !heading {
                 let [stem, path] = item.file_keys();
                 index.files.entry(stem).or_default().push(position);
@@ -652,31 +677,7 @@ impl ContentIndex {
         if let Some(at) = self.position_of(&reference) {
             return Go::Item(at, heading);
         }
-        let key = name.trim_end_matches(".md").to_lowercase();
-        let found: Vec<_> = self
-            .items
-            .iter()
-            .enumerate()
-            .filter(|(_, item)| {
-                if matches!(item.source, Source::Heading(..)) {
-                    return false;
-                }
-                if !item.is_world_note()
-                    && self
-                        .usable
-                        .as_ref()
-                        .is_some_and(|usable| !usable.contains(&item.entry.id))
-                {
-                    return false;
-                }
-                item.lower == key
-                    || item.file_keys().contains(&key)
-                    || world::aliases(&item.entry)
-                        .iter()
-                        .any(|alias| alias.eq_ignore_ascii_case(&key))
-            })
-            .map(|(at, _)| at)
-            .collect();
+        let found = self.named(&name.trim_end_matches(".md").to_lowercase());
         match found.as_slice() {
             &[at] => Go::Item(at, heading),
             [] => Go::Missing(name.into()),
@@ -707,6 +708,30 @@ impl ContentIndex {
                 }) && matches!(self.resolve_link(target, Some(from)), Go::Missing(_))
             })
             .count()
+    }
+
+    /// The items a link can name with this lower-case key, in item order. Only World notes
+    /// and entries this campaign can use are name targets.
+    fn named(&self, key: &str) -> Vec<usize> {
+        self.link_names
+            .get(key)
+            .into_iter()
+            .flatten()
+            .copied()
+            .filter(|&at| {
+                let item = &self.items[at];
+                item.is_world_note()
+                    || self
+                        .usable
+                        .as_ref()
+                        .is_none_or(|usable| usable.contains(&item.entry.id))
+            })
+            .collect()
+    }
+
+    /// Which load of the index this is. See `generation` on the struct.
+    pub(crate) fn generation(&self) -> u64 {
+        self.generation
     }
 
     pub fn reader_markdown(&self, body: &str, from: Option<Uuid>) -> String {
@@ -2523,5 +2548,86 @@ mod tests {
         assert!(rendered.contains("[my words](<splat-missing:Gone>)"));
         assert!(rendered.contains("[the door](<splat-note:Place#Door>)"));
         assert!(rendered.contains("`[[Code]]`"));
+    }
+
+    /// Link names come from a map built with the index. They must find exactly what a search
+    /// of every item found, whatever the case, file name, alias or campaign scope.
+    #[test]
+    fn link_names_find_what_a_search_of_every_item_finds() {
+        fn search(index: &ContentIndex, key: &str) -> Vec<usize> {
+            index
+                .items
+                .iter()
+                .enumerate()
+                .filter(|(_, item)| {
+                    if matches!(item.source, Source::Heading(..)) {
+                        return false;
+                    }
+                    if !item.is_world_note()
+                        && index
+                            .usable
+                            .as_ref()
+                            .is_some_and(|usable| !usable.contains(&item.entry.id))
+                    {
+                        return false;
+                    }
+                    item.lower == key
+                        || item.file_keys().contains(&key.to_owned())
+                        || world::aliases(&item.entry)
+                            .iter()
+                            .any(|alias| alias.eq_ignore_ascii_case(key))
+                })
+                .map(|(at, _)| at)
+                .collect()
+        }
+        let (dir, campaign) = campaign_with(&[
+            ("Place.md", "# Place\n\n## Door\n"),
+            ("Other/Place.md", "# Place\n"),
+            ("Wolf.md", "# Wolf\n\nOur own wolf.\n"),
+        ]);
+        let text = crate::library::note_text("Campaign rule", "rule", None);
+        let rule = Entry::parse("Rule.md", &text).unwrap();
+        std::fs::write(dir.path().join("Rule.md"), text).unwrap();
+        for (name, aliases) in [
+            ("Harbour", "[Docks, The OLD Quay]"),
+            ("Élan Keep", "[ÉLAN, Keep of Élan]"),
+            ("Twin", "[Harbour]"),
+        ] {
+            std::fs::write(
+                dir.path().join(format!("{name}.md")),
+                entry_note(
+                    Uuid::new_v4(),
+                    name,
+                    &format!("  type: location\n  aliases: {aliases}"),
+                ),
+            )
+            .unwrap();
+        }
+        let mut index = ContentIndex::load(&[], Some(&campaign)).unwrap();
+        index.usable.as_mut().unwrap().remove(&rule.id);
+        let mut keys = vec![
+            "missing".to_owned(),
+            "door".to_owned(),
+            "élan".to_owned(),
+            "the old quay".to_owned(),
+        ];
+        for item in &index.items {
+            keys.push(item.lower.clone());
+            keys.extend(item.file_keys());
+            keys.extend(
+                world::aliases(&item.entry)
+                    .into_iter()
+                    .map(str::to_lowercase),
+            );
+        }
+        let mut shared = 0;
+        for key in &keys {
+            let found = index.named(key);
+            assert_eq!(found, search(&index, key), "{key:?}");
+            shared += usize::from(found.len() > 1);
+        }
+        assert!(shared > 0, "Some names must lead to more than one item");
+        assert!(index.named("campaign rule").is_empty());
+        assert!(index.named("door").is_empty());
     }
 }
