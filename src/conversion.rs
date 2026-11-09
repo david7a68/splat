@@ -72,7 +72,13 @@ pub fn unresolved(entry: &Entry, catalogue: &[Entry]) -> usize {
             _ => 0,
         }
     }
-    entry.fields.values().map(|v| visit(v, catalogue)).sum()
+    // A contract's `id` names the contract the entry declares, not another entry.
+    entry
+        .fields
+        .iter()
+        .filter(|(key, _)| key.as_str() != Some("splat_contracts"))
+        .map(|(_, v)| visit(v, catalogue))
+        .sum()
 }
 
 pub fn publish(file: &File) -> Result<Change, String> {
@@ -341,6 +347,13 @@ mod tests {
         let group = content::legacy::parse("Group.md", &file.before).unwrap();
         assert_eq!(unresolved(&group, &catalogue), 0);
         assert_eq!(unresolved(&group, &[]), 1);
+    }
+
+    #[test]
+    fn declared_contracts_are_not_unresolved_references() {
+        let text = "---\nsplat_schema: 2\nsplat_id: 00000000-0000-0000-0000-000000000002\nsplat_kind: item\nsplat_name: Mess Kit\nsplat_requires_mechanics: [dndbeyond:rules/mess_kit_2014]\nsplat_contracts: [{id: dndbeyond:rules/mess_kit_2014, inputs: {}, outputs: [], events: [], capabilities: [declarative_rule_parameters]}]\n---\n# Mess Kit\n";
+        let entry = Entry::parse("Mess Kit.md", text).unwrap();
+        assert_eq!(unresolved(&entry, &[]), 0);
     }
 
     #[test]
