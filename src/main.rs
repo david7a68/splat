@@ -31,6 +31,7 @@ mod roll_table;
 mod sessions;
 mod settings;
 mod timeline;
+mod touchpad;
 mod ui_state;
 #[cfg(test)]
 mod visual_tests;
@@ -79,6 +80,8 @@ struct Splat {
     page: Page,
     campaign_tab: CampaignTab,
     settings_tab: SettingsTab,
+    /// How far a touchpad scroll moves content. It belongs to this computer, not a campaign.
+    touchpad_speed: touchpad::TouchpadSpeed,
     shown_page: Page,
     /// Notes closed for Lookup, and they come back with it closed.
     notes_gave_way: bool,
@@ -122,6 +125,7 @@ impl Default for Splat {
             page: Page::default(),
             campaign_tab: CampaignTab::default(),
             settings_tab: SettingsTab::default(),
+            touchpad_speed: touchpad::TouchpadSpeed::default(),
             shown_page: Page::default(),
             notes_gave_way: false,
             started: false,
@@ -228,6 +232,7 @@ enum SettingsTab {
     #[default]
     Account,
     Recording,
+    Touchpad,
 }
 
 impl Splat {
@@ -237,6 +242,7 @@ impl Splat {
         self.started = true;
         let saved = self.ui_store.load();
         design::restore_column_widths(ctx, saved.column_widths);
+        self.touchpad_speed = saved.touchpad_speed;
         self.sessions.restored_session = saved.playing;
         let active = self.campaigns.active_campaign();
         self.page =
@@ -265,6 +271,7 @@ impl Splat {
         let active = self.campaigns.active_campaign();
         let state = ui_state::UiState {
             column_widths: design::column_widths(ctx),
+            touchpad_speed: self.touchpad_speed,
             // With a run open, the page it began on: Close run goes back there after a restart.
             page: Some(
                 if self.page == Page::Run {
@@ -1295,12 +1302,31 @@ impl Splat {
                     &[
                         (SettingsTab::Account, "Account and campaigns"),
                         (SettingsTab::Recording, "Recording and processing"),
+                        (SettingsTab::Touchpad, "Touchpad"),
                     ],
                 );
                 if tab_changed {
                     self.processing.look_again();
                 }
                 design::rule(ui);
+                if self.settings_tab == SettingsTab::Touchpad {
+                    ui.add_space(design::L);
+                    design::group_heading(ui, "Touchpad", 0);
+                    design::small_field(
+                        ui,
+                        "Scrolling speed",
+                        Some("Mouse wheels keep their speed."),
+                        None,
+                        |ui| {
+                            design::segmented(
+                                ui,
+                                &mut self.touchpad_speed,
+                                &touchpad::TouchpadSpeed::ALL,
+                            )
+                        },
+                    );
+                    return;
+                }
                 if self.settings_tab == SettingsTab::Recording {
                     // Line-start quiet actions use the gutter for their hit area.
                     // Keep fields at the usual column edge inside the wider viewport.
@@ -1952,6 +1978,10 @@ impl Splat {
 }
 
 impl eframe::App for Splat {
+    fn raw_input_hook(&mut self, _: &egui::Context, raw_input: &mut egui::RawInput) {
+        self.touchpad_speed.apply(&mut raw_input.events);
+    }
+
     fn update(&mut self, ctx: &egui::Context, _: &mut eframe::Frame) {
         if !self.started {
             self.start(ctx);
