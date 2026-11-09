@@ -7,6 +7,7 @@ splat_name: Adult Red Dragon
 splat_origin: dnd2024:reference/creature/adult_red_dragon
 splat_sources:
 - SRD 5.2.1, pp. 318, 319, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 255, Habitat
 ---
 
 # Adult Red Dragon
@@ -28,6 +29,7 @@ splat_sources:
 | Senses | Blindsight 60 ft., Darkvision 120 ft.; Passive Perception 23 |
 | Languages | Common, Draconic |
 | Immunities | Fire |
+| Habitat | Hill, Mountain |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

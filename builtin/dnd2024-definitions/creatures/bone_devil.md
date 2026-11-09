@@ -7,6 +7,7 @@ splat_name: Bone Devil
 splat_origin: dnd2024:reference/creature/bone_devil
 splat_sources:
 - SRD 5.2.1, pp. 267, 268, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 52, Habitat
 ---
 
 # Bone Devil
@@ -29,6 +30,7 @@ splat_sources:
 | Languages | Infernal; telepathy 120 ft. |
 | Resistances | Cold |
 | Immunities | Fire, Poison; Poisoned |
+| Habitat | Planar (Nine Hells) |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

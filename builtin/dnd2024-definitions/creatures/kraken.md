@@ -7,6 +7,7 @@ splat_name: Kraken
 splat_origin: dnd2024:reference/creature/kraken
 splat_sources:
 - SRD 5.2.1, pp. 303, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 187, Habitat
 ---
 
 # Kraken
@@ -28,6 +29,7 @@ splat_sources:
 | Senses | Truesight 120 ft.; Passive Perception 21 |
 | Languages | Understands Abyssal, Celestial, Infernal, and Primordial but can’t speak; telepathy 120 ft. |
 | Immunities | Cold, Lightning; Frightened, Grappled, Paralyzed, Restrained |
+| Habitat | Underwater |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

@@ -13,7 +13,10 @@ use crate::{
 };
 use eframe::egui;
 use presentation::Section;
-use splat::content::{self, Entry};
+use splat::content::{
+    self, Entry,
+    creature_filter::{Facets, Filter, Query},
+};
 use std::{
     fs,
     io::Write,
@@ -232,14 +235,19 @@ impl Note {
             .as_ref()
             .map_or(Section::Unreadable, Section::for_entry)
     }
-    fn matches(&self, section: Section, query: &str) -> bool {
-        if !query.is_empty() {
-            self.name().to_lowercase().contains(query)
-                || self.path.to_lowercase().contains(query)
-                || self.section().label().to_lowercase().contains(query)
-        } else {
-            section == Section::All || self.section() == section
+    /// Plain words match the name, path or section, or a creature's facts. `habitat:forest`
+    /// and the other fact terms match creatures only.
+    fn matches(&self, section: Section, query: &Query, facets: Option<&Facets>) -> bool {
+        let words = query.words.as_str();
+        if words.is_empty() && !query.names_facts() {
+            return section == Section::All || self.section() == section;
         }
+        let text = words.is_empty()
+            || self.name().to_lowercase().contains(words)
+            || self.path.to_lowercase().contains(words)
+            || self.section().label().to_lowercase().contains(words)
+            || facets.is_some_and(|facets| query.words_in(self.name(), facets));
+        text && (!query.names_facts() || facets.is_some_and(|facets| query.matches_facts(facets)))
     }
 }
 #[derive(Default)]
@@ -261,8 +269,18 @@ struct Loaded {
     counts: std::sync::OnceLock<Vec<(Section, usize)>>,
     duplicate_ids: std::sync::OnceLock<std::collections::HashSet<Uuid>>,
     duplicates: std::sync::OnceLock<DuplicateIndex>,
+    /// Each note's creature facts, for search and the creature filter.
+    facets: std::sync::OnceLock<Vec<Option<Facets>>>,
 }
 impl Loaded {
+    fn facets(&self) -> &[Option<Facets>] {
+        self.facets.get_or_init(|| {
+            self.notes
+                .iter()
+                .map(|note| note.entry.as_ref().and_then(Facets::of))
+                .collect()
+        })
+    }
     fn old_layout_count(&self) -> usize {
         self.notes
             .iter()
@@ -534,6 +552,7 @@ impl Loaded {
         self.counts.take();
         self.duplicate_ids.take();
         self.duplicates.take();
+        self.facets.take();
     }
     fn build_subtitles(&self) -> Vec<String> {
         let mut subtitles: Vec<_> = self
@@ -1314,6 +1333,10 @@ pub struct Library {
     draft: String,
     search: String,
     matches: Option<(Section, String, Vec<usize>)>,
+    /// Chosen creature facts. They apply in Creatures and to search results.
+    filter: Filter,
+    /// The filter that `matches` used.
+    matched_filter: Filter,
     section: Section,
     unreadable_kind: Option<Section>,
     error: Option<String>,
@@ -2517,16 +2540,24 @@ impl Library {
                 .is_none_or(|(section, cached_query, _)| {
                     *section != self.section || *cached_query != query
                 })
+            || self.matched_filter != self.filter
         {
+            self.matched_filter = self.filter.clone();
             self.reveal_row |= self.matches_scope != Some(scope);
             self.matches_scope = Some(scope);
+            let parsed = Query::parse(&query);
+            let facets = loaded.facets();
+            let filtering = (self.section == Section::Creatures || !query.is_empty())
+                && !self.filter.is_empty();
             let mut found: Vec<usize> = loaded
                 .notes
                 .iter()
                 .enumerate()
-                .filter(|(_, n)| {
+                .filter(|(i, n)| {
                     loaded.in_scope(n, scope)
-                        && n.matches(self.section, &query)
+                        && n.matches(self.section, &parsed, facets[*i].as_ref())
+                        && (!filtering
+                            || facets[*i].as_ref().is_some_and(|f| self.filter.matches(f)))
                         && (!query.is_empty()
                             || self.section != Section::Unreadable
                             || self
@@ -2535,11 +2566,11 @@ impl Library {
                 })
                 .map(|(i, _)| i)
                 .collect();
-            if !query.is_empty() {
+            if !parsed.words.is_empty() {
                 // Best first: the exact name, then a prefix, then a whole word.
                 found.sort_by_key(|i| {
                     let name = loaded.notes[*i].name().to_lowercase();
-                    let rank = crate::lookup::name_rank(&name, &query).unwrap_or(4);
+                    let rank = crate::lookup::name_rank(&name, &parsed.words).unwrap_or(4);
                     (
                         rank,
                         crate::lookup::entry_origin(
@@ -2632,7 +2663,7 @@ impl Library {
                         ui,
                         SEARCH_NAME,
                         &mut self.search,
-                        "Search by name…",
+                        "Search by name or detail…",
                         width,
                     );
                     if !self.search.is_empty()
@@ -2644,6 +2675,21 @@ impl Library {
                         self.search.clear();
                     }
                 });
+                if self.section == Section::Creatures || searching {
+                    let notes = &loaded.notes;
+                    let facets = loaded.facets();
+                    let changed = crate::creature_filter::filter_bar(ui, &mut self.filter, || {
+                        notes
+                            .iter()
+                            .zip(facets)
+                            .filter(|(note, _)| loaded.in_scope(note, scope))
+                            .filter_map(|(_, facets)| facets.as_ref())
+                            .collect()
+                    });
+                    if changed {
+                        ui.ctx().request_repaint();
+                    }
+                }
                 ui.add_space(design::XS);
                 if searching || (compact && self.section != Section::All) {
                     design::group_heading(ui, if searching { "Search results" } else { self.section.label() }, matches.len());
@@ -2664,7 +2710,10 @@ impl Library {
                         }
                         if create { self.new_form = true; self.focus_new_name = true; self.new_kind = "creature".into(); self.new_folder = "Creatures".into(); }
                     } else {
-                    let text = if scope == Scope::Campaign && !searching {
+                    let filtered = !self.filter.is_empty() && (searching || self.section == Section::Creatures);
+                    let text = if filtered {
+                        "No creatures match these filters. Remove a filter, or try Everything."
+                    } else if scope == Scope::Campaign && !searching {
                         "No campaign entries yet. Copy an entry here with Copy to…, or create one with New entry."
                     } else if searching {
                         "No entries found in this scope. Try fewer words, or Everything."

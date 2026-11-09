@@ -7,6 +7,7 @@ splat_name: Red Dragon Wyrmling
 splat_origin: dnd2024:reference/creature/red_dragon_wyrmling
 splat_sources:
 - SRD 5.2.1, pp. 318, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 254, Habitat
 ---
 
 # Red Dragon Wyrmling
@@ -28,6 +29,7 @@ splat_sources:
 | Senses | Blindsight 10 ft., Darkvision 60 ft.; Passive Perception 14 |
 | Languages | Draconic |
 | Immunities | Fire |
+| Habitat | Hill, Mountain |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

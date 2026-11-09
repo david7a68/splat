@@ -23,6 +23,8 @@ splat_sources:
 | Range |  |
 | Components | V, S, M (a leather strap) |
 | Duration | 1 hour |
+| Ritual | No |
+| Concentration | No |
 
 
 ## Source text

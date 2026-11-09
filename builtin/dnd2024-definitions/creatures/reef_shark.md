@@ -7,6 +7,7 @@ splat_name: Reef Shark
 splat_origin: dnd2024:reference/creature/reef_shark
 splat_sources:
 - SRD 5.2.1, pp. 360, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 368, Habitat
 ---
 
 # Reef Shark
@@ -27,6 +28,7 @@ splat_sources:
 | Skills | Perception +2 |
 | Senses | Blindsight 30 ft.; Passive Perception 12 |
 | Languages | None |
+| Habitat | Underwater |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

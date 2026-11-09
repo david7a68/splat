@@ -7,6 +7,7 @@ splat_name: Otyugh
 splat_origin: dnd2024:reference/creature/otyugh
 splat_sources:
 - SRD 5.2.1, pp. 313, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 233, Habitat
 ---
 
 # Otyugh
@@ -26,6 +27,7 @@ splat_sources:
 | Challenge | 5 (XP 1,800; PB +3) |
 | Senses | Darkvision 120 ft.; Passive Perception 11 |
 | Languages | Otyugh; telepathy 120 ft. (doesn’t allow the receiving creature to respond telepathically) |
+| Habitat | Underdark |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

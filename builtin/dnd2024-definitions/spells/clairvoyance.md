@@ -23,6 +23,8 @@ splat_sources:
 | Range |  |
 | Components | V, S, M (a focus worth 100+ GP, either a jeweled horn for hearing or a glass eye for seeing) |
 | Duration | Concentration, up to 10 minutes |
+| Ritual | No |
+| Concentration | Yes |
 
 
 ## Source text

@@ -7,6 +7,7 @@ splat_name: Ochre Jelly
 splat_origin: dnd2024:reference/creature/ochre_jelly
 splat_sources:
 - SRD 5.2.1, pp. 312, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 230, Habitat
 ---
 
 # Ochre Jelly
@@ -28,6 +29,7 @@ splat_sources:
 | Languages | None |
 | Resistances | Acid |
 | Immunities | Lightning, Slashing; Charmed, Deafened, Exhaustion, Frightened, Grappled, Prone, Restrained |
+| Habitat | Underdark |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

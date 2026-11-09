@@ -7,6 +7,7 @@ splat_name: Medusa
 splat_origin: dnd2024:reference/creature/medusa
 splat_sources:
 - SRD 5.2.1, pp. 306, 307, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 205, Habitat
 ---
 
 # Medusa
@@ -27,6 +28,7 @@ splat_sources:
 | Skills | Deception +5, Perception +4, Stealth +6 |
 | Senses | Darkvision 150 ft.; Passive Perception 14 |
 | Languages | Common plus one other language |
+| Habitat | Desert |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

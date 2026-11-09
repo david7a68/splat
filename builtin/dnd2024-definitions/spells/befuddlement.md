@@ -23,6 +23,8 @@ splat_sources:
 | Range | 150 feet |
 | Components | V, S, M (a key ring with no keys) |
 | Duration | Instantaneous |
+| Ritual | No |
+| Concentration | No |
 
 
 ## Source text

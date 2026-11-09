@@ -7,6 +7,7 @@ splat_name: Spider
 splat_origin: dnd2024:reference/creature/spider
 splat_sources:
 - SRD 5.2.1, pp. 361, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 369, Habitat
 ---
 
 # Spider
@@ -27,6 +28,7 @@ splat_sources:
 | Skills | Stealth +4 |
 | Senses | Darkvision 30 ft.; Passive Perception 10 |
 | Languages | None |
+| Habitat | Desert, Forest, Swamp, Underdark, Urban |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

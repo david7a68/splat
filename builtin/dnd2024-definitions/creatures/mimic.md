@@ -7,6 +7,7 @@ splat_name: Mimic
 splat_origin: dnd2024:reference/creature/mimic
 splat_sources:
 - SRD 5.2.1, pp. 308, 309, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 212, Habitat
 ---
 
 # Mimic
@@ -28,6 +29,7 @@ splat_sources:
 | Senses | Darkvision 60 ft.; Passive Perception 11 |
 | Languages | None |
 | Immunities | Acid; Prone |
+| Habitat | Underdark, Urban |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

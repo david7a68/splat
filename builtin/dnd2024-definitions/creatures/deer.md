@@ -7,6 +7,7 @@ splat_name: Deer
 splat_origin: dnd2024:reference/creature/deer
 splat_sources:
 - SRD 5.2.1, pp. 347, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 352, Habitat
 ---
 
 # Deer
@@ -27,6 +28,7 @@ splat_sources:
 | Skills | Perception +4 |
 | Senses | Darkvision 60 ft.; Passive Perception 14 |
 | Languages | None |
+| Habitat | Forest, Grassland |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

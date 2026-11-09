@@ -7,6 +7,7 @@ splat_name: Giant Crab
 splat_origin: dnd2024:reference/creature/giant_crab
 splat_sources:
 - SRD 5.2.1, pp. 350, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 356, Habitat
 ---
 
 # Giant Crab
@@ -27,6 +28,7 @@ splat_sources:
 | Skills | Stealth +3 |
 | Senses | Blindsight 30 ft.; Passive Perception 9 |
 | Languages | None |
+| Habitat | Coastal, Underwater |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

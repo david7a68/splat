@@ -7,6 +7,7 @@ splat_name: Xorn
 splat_origin: dnd2024:reference/creature/xorn
 splat_sources:
 - SRD 5.2.1, pp. 343, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 338, Habitat
 ---
 
 # Xorn
@@ -28,6 +29,7 @@ splat_sources:
 | Senses | Darkvision 60 ft., Tremorsense 60 ft.; Passive Perception 16 |
 | Languages | Primordial (Terran) |
 | Immunities | Poison; Paralyzed, Petrified, Poisoned |
+| Habitat | Underdark, Planar (Elemental Plane of Earth) |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

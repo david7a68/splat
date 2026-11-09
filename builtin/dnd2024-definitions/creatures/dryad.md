@@ -7,6 +7,7 @@ splat_name: Dryad
 splat_origin: dnd2024:reference/creature/dryad
 splat_sources:
 - SRD 5.2.1, pp. 282, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 107, Habitat
 ---
 
 # Dryad
@@ -27,6 +28,7 @@ splat_sources:
 | Skills | Perception +4, Stealth +5 |
 | Senses | Darkvision 60 ft.; Passive Perception 14 |
 | Languages | Elvish, Sylvan |
+| Habitat | Forest |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

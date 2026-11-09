@@ -7,6 +7,7 @@ splat_name: Pteranodon
 splat_origin: dnd2024:reference/creature/pteranodon
 splat_sources:
 - SRD 5.2.1, pp. 359, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 367, Habitat
 ---
 
 # Pteranodon
@@ -27,6 +28,7 @@ splat_sources:
 | Skills | Perception +1 |
 | Senses | Passive Perception 11 |
 | Languages | None |
+| Habitat | Coastal, Grassland, Mountain |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

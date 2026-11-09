@@ -7,6 +7,7 @@ splat_name: Triceratops
 splat_origin: dnd2024:reference/creature/triceratops
 splat_sources:
 - SRD 5.2.1, pp. 363, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 372, Habitat
 ---
 
 # Triceratops
@@ -26,6 +27,7 @@ splat_sources:
 | Challenge | 5 (XP 1,800; PB +3) |
 | Senses | Passive Perception 10 |
 | Languages | None |
+| Habitat | Grassland |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

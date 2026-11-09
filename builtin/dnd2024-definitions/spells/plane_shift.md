@@ -23,6 +23,8 @@ splat_sources:
 | Range |  |
 | Components | V, S, M (a forked, metal rod worth 250+ GP and attuned to a plane of existence) |
 | Duration | Instantaneous |
+| Ritual | No |
+| Concentration | No |
 
 
 ## Source text

@@ -7,6 +7,7 @@ splat_name: Rhinoceros
 splat_origin: dnd2024:reference/creature/rhinoceros
 splat_sources:
 - SRD 5.2.1, pp. 360, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 368, Habitat
 ---
 
 # Rhinoceros
@@ -26,6 +27,7 @@ splat_sources:
 | Challenge | 2 (XP 450; PB +2) |
 | Senses | Passive Perception 11 |
 | Languages | None |
+| Habitat | Grassland |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

@@ -23,6 +23,8 @@ splat_sources:
 | Range | 150 feet |
 | Components | V, S, M (a piece of sunstone) |
 | Duration | Instantaneous |
+| Ritual | No |
+| Concentration | No |
 
 
 ## Source text

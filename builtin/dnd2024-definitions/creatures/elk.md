@@ -7,6 +7,7 @@ splat_name: Elk
 splat_origin: dnd2024:reference/creature/elk
 splat_sources:
 - SRD 5.2.1, pp. 348, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 353, Habitat
 ---
 
 # Elk
@@ -27,6 +28,7 @@ splat_sources:
 | Skills | Perception +2 |
 | Senses | Darkvision 60 ft.; Passive Perception 12 |
 | Languages | None |
+| Habitat | Forest, Grassland, Hill |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

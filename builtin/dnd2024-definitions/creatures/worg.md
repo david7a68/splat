@@ -7,6 +7,7 @@ splat_name: Worg
 splat_origin: dnd2024:reference/creature/worg
 splat_sources:
 - SRD 5.2.1, pp. 342, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 335, Habitat
 ---
 
 # Worg
@@ -27,6 +28,7 @@ splat_sources:
 | Skills | Perception +4 |
 | Senses | Darkvision 60 ft.; Passive Perception 14 |
 | Languages | Goblin, Worg |
+| Habitat | Forest, Grassland, Hill, Planar (Feywild) |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

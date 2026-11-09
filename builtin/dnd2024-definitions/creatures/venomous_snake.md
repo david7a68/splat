@@ -7,6 +7,7 @@ splat_name: Venomous Snake
 splat_origin: dnd2024:reference/creature/venomous_snake
 splat_sources:
 - SRD 5.2.1, pp. 363, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 372, Habitat
 ---
 
 # Venomous Snake
@@ -26,6 +27,7 @@ splat_sources:
 | Challenge | 1/8 (XP 25; PB +2) |
 | Senses | Blindsight 10 ft.; Passive Perception 10 |
 | Languages | None |
+| Habitat | Coastal, Desert, Forest, Grassland, Hill, Swamp |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

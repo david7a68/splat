@@ -7,6 +7,7 @@ splat_name: Young Black Dragon
 splat_origin: dnd2024:reference/creature/young_black_dragon
 splat_sources:
 - SRD 5.2.1, pp. 264, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 38, Habitat
 ---
 
 # Young Black Dragon
@@ -28,6 +29,7 @@ splat_sources:
 | Senses | Blindsight 30 ft., Darkvision 120 ft.; Passive Perception 16 |
 | Languages | Common, Draconic |
 | Immunities | Acid |
+| Habitat | Swamp |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

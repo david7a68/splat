@@ -7,6 +7,7 @@ splat_name: Magma Mephit
 splat_origin: dnd2024:reference/creature/magma_mephit
 splat_sources:
 - SRD 5.2.1, pp. 307, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 207, Habitat
 ---
 
 # Magma Mephit
@@ -29,6 +30,7 @@ splat_sources:
 | Languages | Primordial (Ignan, Terran) |
 | Immunities | Fire, Poison; Exhaustion, Poisoned |
 | Vulnerabilities | Cold |
+| Habitat | Planar (Elemental Planes) |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

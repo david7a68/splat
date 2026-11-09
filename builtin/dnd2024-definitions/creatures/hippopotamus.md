@@ -7,6 +7,7 @@ splat_name: Hippopotamus
 splat_origin: dnd2024:reference/creature/hippopotamus
 splat_sources:
 - SRD 5.2.1, pp. 355, 356, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 362, Habitat
 ---
 
 # Hippopotamus
@@ -27,6 +28,7 @@ splat_sources:
 | Skills | Perception +3 |
 | Senses | Passive Perception 13 |
 | Languages | None |
+| Habitat | Forest, Grassland, Swamp |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

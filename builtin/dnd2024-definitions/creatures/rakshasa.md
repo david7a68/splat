@@ -7,6 +7,7 @@ splat_name: Rakshasa
 splat_origin: dnd2024:reference/creature/rakshasa
 splat_sources:
 - SRD 5.2.1, pp. 317, 318, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 253, Habitat
 ---
 
 # Rakshasa
@@ -29,6 +30,7 @@ splat_sources:
 | Languages | Common, Infernal |
 | Immunities | Charmed, Frightened |
 | Vulnerabilities | Piercing damage from weapons wielded by creatures under the effect of a Bless spell |
+| Habitat | Urban, Planar (Nine Hells) |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

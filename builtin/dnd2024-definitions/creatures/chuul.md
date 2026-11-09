@@ -7,6 +7,7 @@ splat_name: Chuul
 splat_origin: dnd2024:reference/creature/chuul
 splat_sources:
 - SRD 5.2.1, pp. 273, 274, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 71, Habitat
 ---
 
 # Chuul
@@ -28,6 +29,7 @@ splat_sources:
 | Senses | Darkvision 60 ft.; Passive Perception 14 |
 | Languages | Understands Deep Speech but can’t speak |
 | Immunities | Poison; Poisoned |
+| Habitat | Coastal, Swamp, Underdark |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

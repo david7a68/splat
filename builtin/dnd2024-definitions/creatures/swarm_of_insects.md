@@ -7,6 +7,7 @@ splat_name: Swarm of Insects
 splat_origin: dnd2024:reference/creature/swarm_of_insects
 splat_sources:
 - SRD 5.2.1, pp. 361, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 370, Habitat
 ---
 
 # Swarm of Insects
@@ -28,6 +29,7 @@ splat_sources:
 | Languages | None |
 | Resistances | Bludgeoning, Piercing, Slashing |
 | Immunities | Charmed, Frightened, Grappled, Paralyzed, Petrified, Prone, Restrained, Stunned |
+| Habitat | Desert, Forest, Grassland, Hill, Swamp, Underdark, Urban |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

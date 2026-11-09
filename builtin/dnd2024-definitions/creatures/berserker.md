@@ -7,6 +7,7 @@ splat_name: Berserker
 splat_origin: dnd2024:reference/creature/berserker
 splat_sources:
 - SRD 5.2.1, pp. 263, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 37, Habitat
 ---
 
 # Berserker
@@ -27,6 +28,7 @@ splat_sources:
 | Senses | Passive Perception 10 |
 | Languages | Common |
 | Gear | Greataxe, Hide Armor |
+| Habitat | Any |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

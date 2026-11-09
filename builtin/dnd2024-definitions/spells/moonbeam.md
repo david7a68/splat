@@ -23,6 +23,8 @@ splat_sources:
 | Range | 120 feet |
 | Components | V, S, M (a moonseed leaf) |
 | Duration | Concentration, up to 1 minute |
+| Ritual | No |
+| Concentration | Yes |
 
 
 ## Source text

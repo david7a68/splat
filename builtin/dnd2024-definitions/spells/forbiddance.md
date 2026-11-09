@@ -23,6 +23,8 @@ splat_sources:
 | Range |  |
 | Components | V, S, M (ruby dust worth 1,000+ GP) |
 | Duration | 1 day |
+| Ritual | Yes |
+| Concentration | No |
 
 
 ## Source text

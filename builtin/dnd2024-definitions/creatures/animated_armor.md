@@ -7,6 +7,7 @@ splat_name: Animated Armor
 splat_origin: dnd2024:reference/creature/animated_armor
 splat_sources:
 - SRD 5.2.1, pp. 259, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 16, Habitat
 ---
 
 # Animated Armor
@@ -27,6 +28,7 @@ splat_sources:
 | Senses | Blindsight 60 ft.; Passive Perception 6 |
 | Languages | None |
 | Immunities | Poison, Psychic; Charmed, Deafened, Exhaustion, Frightened, Paralyzed, Petrified, Poisoned |
+| Habitat | Urban |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

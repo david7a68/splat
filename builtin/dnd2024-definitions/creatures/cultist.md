@@ -7,6 +7,7 @@ splat_name: Cultist
 splat_origin: dnd2024:reference/creature/cultist
 splat_sources:
 - SRD 5.2.1, pp. 278, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 84, Habitat
 ---
 
 # Cultist
@@ -28,6 +29,7 @@ splat_sources:
 | Senses | Passive Perception 10 |
 | Languages | Common |
 | Gear | Leather Armor, Sickle |
+| Habitat | Any |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

@@ -7,6 +7,7 @@ splat_name: Polar Bear
 splat_origin: dnd2024:reference/creature/polar_bear
 splat_sources:
 - SRD 5.2.1, pp. 359, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 367, Habitat
 ---
 
 # Polar Bear
@@ -28,6 +29,7 @@ splat_sources:
 | Senses | Darkvision 60 ft.; Passive Perception 15 |
 | Languages | None |
 | Resistances | Cold |
+| Habitat | Arctic |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

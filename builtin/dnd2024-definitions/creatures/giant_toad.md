@@ -7,6 +7,7 @@ splat_name: Giant Toad
 splat_origin: dnd2024:reference/creature/giant_toad
 splat_sources:
 - SRD 5.2.1, pp. 354, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 360, Habitat
 ---
 
 # Giant Toad
@@ -26,6 +27,7 @@ splat_sources:
 | Challenge | 1 (XP 200; PB +2) |
 | Senses | Darkvision 60 ft.; Passive Perception 10 |
 | Languages | None |
+| Habitat | Coastal, Forest, Swamp, Underdark |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

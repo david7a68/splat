@@ -7,6 +7,7 @@ splat_name: Sphinx of Wonder
 splat_origin: dnd2024:reference/creature/sphinx_of_wonder
 splat_sources:
 - SRD 5.2.1, pp. 327, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 291, Habitat
 ---
 
 # Sphinx of Wonder
@@ -28,6 +29,7 @@ splat_sources:
 | Senses | Darkvision 60 ft.; Passive Perception 11 |
 | Languages | Celestial, Common |
 | Resistances | Necrotic, Psychic, Radiant |
+| Habitat | Desert, Planar (Upper Planes) |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

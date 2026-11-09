@@ -7,6 +7,7 @@ splat_name: Black Dragon Wyrmling
 splat_origin: dnd2024:reference/creature/black_dragon_wyrmling
 splat_sources:
 - SRD 5.2.1, pp. 263, 264, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 38, Habitat
 ---
 
 # Black Dragon Wyrmling
@@ -28,6 +29,7 @@ splat_sources:
 | Senses | Blindsight 10 ft., Darkvision 60 ft.; Passive Perception 14 |
 | Languages | Draconic |
 | Immunities | Acid |
+| Habitat | Swamp |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

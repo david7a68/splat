@@ -7,6 +7,7 @@ splat_name: Wyvern
 splat_origin: dnd2024:reference/creature/wyvern
 splat_sources:
 - SRD 5.2.1, pp. 343, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 337, Habitat
 ---
 
 # Wyvern
@@ -27,6 +28,7 @@ splat_sources:
 | Skills | Perception +4 |
 | Senses | Darkvision 120 ft.; Passive Perception 14 |
 | Languages | None |
+| Habitat | Hill, Mountain |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

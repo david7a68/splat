@@ -23,6 +23,8 @@ splat_sources:
 | Range |  |
 | Components | V, S, M (a bit of fur and a crystal rod) |
 | Duration | Instantaneous |
+| Ritual | No |
+| Concentration | No |
 
 
 ## Source text

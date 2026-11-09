@@ -7,6 +7,7 @@ splat_name: Tiger
 splat_origin: dnd2024:reference/creature/tiger
 splat_sources:
 - SRD 5.2.1, pp. 363, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 371, Habitat
 ---
 
 # Tiger
@@ -27,6 +28,7 @@ splat_sources:
 | Skills | Perception +3, Stealth +7 |
 | Senses | Darkvision 60 ft.; Passive Perception 13 |
 | Languages | None |
+| Habitat | Forest, Grassland |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

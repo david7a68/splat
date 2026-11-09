@@ -7,6 +7,7 @@ splat_name: Giant Ape
 splat_origin: dnd2024:reference/creature/giant_ape
 splat_sources:
 - SRD 5.2.1, pp. 349, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 354, Habitat
 ---
 
 # Giant Ape
@@ -27,6 +28,7 @@ splat_sources:
 | Skills | Athletics +9, Perception +4, Survival +4 |
 | Senses | Passive Perception 14 |
 | Languages | None |
+| Habitat | Forest |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

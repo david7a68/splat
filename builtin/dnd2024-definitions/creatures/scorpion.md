@@ -7,6 +7,7 @@ splat_name: Scorpion
 splat_origin: dnd2024:reference/creature/scorpion
 splat_sources:
 - SRD 5.2.1, pp. 360, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 369, Habitat
 ---
 
 # Scorpion
@@ -26,6 +27,7 @@ splat_sources:
 | Challenge | 0 (XP 10; PB +2) |
 | Senses | Blindsight 10 ft.; Passive Perception 9 |
 | Languages | None |
+| Habitat | Desert |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

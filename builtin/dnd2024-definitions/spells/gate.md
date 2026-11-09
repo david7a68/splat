@@ -23,6 +23,8 @@ splat_sources:
 | Range | 60 feet |
 | Components | V, S, M (a diamond worth 5,000+ GP) |
 | Duration | Concentration, up to 1 minute |
+| Ritual | No |
+| Concentration | Yes |
 
 
 ## Source text

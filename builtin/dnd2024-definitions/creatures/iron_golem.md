@@ -7,6 +7,7 @@ splat_name: Iron Golem
 splat_origin: dnd2024:reference/creature/iron_golem
 splat_sources:
 - SRD 5.2.1, pp. 302, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 181, Habitat
 ---
 
 # Iron Golem
@@ -27,6 +28,7 @@ splat_sources:
 | Senses | Darkvision 120 ft.; Passive Perception 10 |
 | Languages | Understands Common plus two other languages but can’t speak |
 | Immunities | Fire, Poison, Psychic; Charmed, Exhaustion, Frightened, Paralyzed, Petrified, Poisoned |
+| Habitat | Any |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

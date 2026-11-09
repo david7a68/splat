@@ -7,6 +7,7 @@ splat_name: Giant Centipede
 splat_origin: dnd2024:reference/creature/giant_centipede
 splat_sources:
 - SRD 5.2.1, pp. 349, 350, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 355, Habitat
 ---
 
 # Giant Centipede
@@ -26,6 +27,7 @@ splat_sources:
 | Challenge | 1/4 (XP 50; PB +2) |
 | Senses | Blindsight 30 ft.; Passive Perception 8 |
 | Languages | None |
+| Habitat | Underdark, Urban |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

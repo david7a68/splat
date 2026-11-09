@@ -23,6 +23,8 @@ splat_sources:
 | Range |  |
 | Components | V, S, M (a yew leaf) |
 | Duration | Concentration, up to 10 minutes |
+| Ritual | Yes |
+| Concentration | Yes |
 
 
 ## Source text

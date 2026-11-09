@@ -7,6 +7,7 @@ splat_name: Badger
 splat_origin: dnd2024:reference/creature/badger
 splat_sources:
 - SRD 5.2.1, pp. 345, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 349, Habitat
 ---
 
 # Badger
@@ -28,6 +29,7 @@ splat_sources:
 | Senses | Darkvision 30 ft.; Passive Perception 13 |
 | Languages | None |
 | Resistances | Poison |
+| Habitat | Forest |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

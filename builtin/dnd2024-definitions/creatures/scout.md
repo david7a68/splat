@@ -7,6 +7,7 @@ splat_name: Scout
 splat_origin: dnd2024:reference/creature/scout
 splat_sources:
 - SRD 5.2.1, pp. 322, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 270, Habitat
 ---
 
 # Scout
@@ -28,6 +29,7 @@ splat_sources:
 | Senses | Passive Perception 15 |
 | Languages | Common plus one other language |
 | Gear | Leather Armor, Longbow, Shortsword |
+| Habitat | Any |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

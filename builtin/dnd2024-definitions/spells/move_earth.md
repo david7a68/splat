@@ -23,6 +23,8 @@ splat_sources:
 | Range | 120 feet |
 | Components | V, S, M (a miniature shovel) |
 | Duration | Concentration, up to 2 hours |
+| Ritual | No |
+| Concentration | Yes |
 
 
 ## Source text

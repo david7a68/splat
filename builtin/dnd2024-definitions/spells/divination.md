@@ -23,6 +23,8 @@ splat_sources:
 | Range |  |
 | Components | V, S, M (incense worth 25+ GP, which the spell consumes) |
 | Duration | Instantaneous |
+| Ritual | Yes |
+| Concentration | No |
 
 
 ## Source text

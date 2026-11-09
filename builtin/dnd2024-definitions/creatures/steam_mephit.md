@@ -7,6 +7,7 @@ splat_name: Steam Mephit
 splat_origin: dnd2024:reference/creature/steam_mephit
 splat_sources:
 - SRD 5.2.1, pp. 308, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 208, Habitat
 ---
 
 # Steam Mephit
@@ -28,6 +29,7 @@ splat_sources:
 | Senses | Darkvision 60 ft.; Passive Perception 10 |
 | Languages | Primordial (Aquan, Ignan) |
 | Immunities | Fire, Poison; Exhaustion, Poisoned |
+| Habitat | Planar (Elemental Planes) |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

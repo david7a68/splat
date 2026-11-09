@@ -23,6 +23,8 @@ splat_sources:
 | Range | 60 feet |
 | Components | V, S, M (a bit of pork rind or butter) |
 | Duration | 1 minute |
+| Ritual | No |
+| Concentration | No |
 
 
 ## Source text

@@ -7,6 +7,7 @@ splat_name: Shrieker Fungus
 splat_origin: dnd2024:reference/creature/shrieker_fungus
 splat_sources:
 - SRD 5.2.1, pp. 286, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 125, Habitat
 ---
 
 # Shrieker Fungus
@@ -27,6 +28,7 @@ splat_sources:
 | Senses | Blindsight 30 ft.; Passive Perception 6 |
 | Languages | None |
 | Immunities | Blinded, Charmed, Deafened, Frightened |
+| Habitat | Underdark |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

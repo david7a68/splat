@@ -23,6 +23,8 @@ splat_sources:
 | Range |  |
 | Components | V, S, M (a pinch of colorful sand) |
 | Duration | Instantaneous |
+| Ritual | No |
+| Concentration | No |
 
 
 ## Source text

@@ -23,6 +23,8 @@ splat_sources:
 | Range |  |
 | Components | V, S, M (a reliquary worth 1,000+ GP) |
 | Duration | Concentration, up to 1 minute |
+| Ritual | No |
+| Concentration | Yes |
 
 
 ## Source text

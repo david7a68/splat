@@ -7,6 +7,7 @@ splat_name: Warhorse Skeleton
 splat_origin: dnd2024:reference/creature/warhorse_skeleton
 splat_sources:
 - SRD 5.2.1, pp. 326, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 282, Habitat
 ---
 
 # Warhorse Skeleton
@@ -28,6 +29,7 @@ splat_sources:
 | Languages | None |
 | Immunities | Poison; Exhaustion, Poisoned |
 | Vulnerabilities | Bludgeoning |
+| Habitat | Underdark, Urban, Planar (Shadowfell) |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

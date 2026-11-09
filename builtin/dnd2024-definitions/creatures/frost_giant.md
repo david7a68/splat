@@ -7,6 +7,7 @@ splat_name: Frost Giant
 splat_origin: dnd2024:reference/creature/frost_giant
 splat_sources:
 - SRD 5.2.1, pp. 285, 286, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 124, Habitat
 ---
 
 # Frost Giant
@@ -28,6 +29,7 @@ splat_sources:
 | Senses | Passive Perception 13 |
 | Languages | Giant |
 | Immunities | Cold |
+| Habitat | Arctic, Mountain |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

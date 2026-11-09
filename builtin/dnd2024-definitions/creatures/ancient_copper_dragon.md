@@ -7,6 +7,7 @@ splat_name: Ancient Copper Dragon
 splat_origin: dnd2024:reference/creature/ancient_copper_dragon
 splat_sources:
 - SRD 5.2.1, pp. 277, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 80, Habitat
 ---
 
 # Ancient Copper Dragon
@@ -28,6 +29,7 @@ splat_sources:
 | Senses | Blindsight 60 ft., Darkvision 120 ft.; Passive Perception 27 |
 | Languages | Common, Draconic |
 | Immunities | Acid |
+| Habitat | Hill |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

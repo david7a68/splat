@@ -23,6 +23,8 @@ splat_sources:
 | Range |  |
 | Components | V, S |
 | Duration | 8 hours |
+| Ritual | No |
+| Concentration | No |
 
 
 ## Source text

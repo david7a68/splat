@@ -23,6 +23,8 @@ splat_sources:
 | Range |  |
 | Components | V, S, M (a pinch of dirt) |
 | Duration | 1 hour |
+| Ritual | No |
+| Concentration | No |
 
 
 ## Source text

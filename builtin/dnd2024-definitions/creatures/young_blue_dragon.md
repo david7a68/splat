@@ -7,6 +7,7 @@ splat_name: Young Blue Dragon
 splat_origin: dnd2024:reference/creature/young_blue_dragon
 splat_sources:
 - SRD 5.2.1, pp. 266, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 48, Habitat
 ---
 
 # Young Blue Dragon
@@ -28,6 +29,7 @@ splat_sources:
 | Senses | Blindsight 30 ft., Darkvision 120 ft.; Passive Perception 19 |
 | Languages | Common, Draconic |
 | Immunities | Lightning |
+| Habitat | Coastal, Desert |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

@@ -7,6 +7,7 @@ splat_name: Vulture
 splat_origin: dnd2024:reference/creature/vulture
 splat_sources:
 - SRD 5.2.1, pp. 363, 364, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 372, Habitat
 ---
 
 # Vulture
@@ -27,6 +28,7 @@ splat_sources:
 | Skills | Perception +3 |
 | Senses | Passive Perception 13 |
 | Languages | None |
+| Habitat | Desert, Grassland, Hill |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

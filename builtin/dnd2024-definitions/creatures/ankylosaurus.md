@@ -7,6 +7,7 @@ splat_name: Ankylosaurus
 splat_origin: dnd2024:reference/creature/ankylosaurus
 splat_sources:
 - SRD 5.2.1, pp. 344, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 348, Habitat
 ---
 
 # Ankylosaurus
@@ -26,6 +27,7 @@ splat_sources:
 | Challenge | 3 (XP 700; PB +2) |
 | Senses | Passive Perception 11 |
 | Languages | None |
+| Habitat | Grassland |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

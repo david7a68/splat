@@ -7,6 +7,7 @@ splat_name: Sphinx of Lore
 splat_origin: dnd2024:reference/creature/sphinx_of_lore
 splat_sources:
 - SRD 5.2.1, pp. 327, 328, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 293, Habitat
 ---
 
 # Sphinx of Lore
@@ -29,6 +30,7 @@ splat_sources:
 | Languages | Celestial, Common |
 | Resistances | Necrotic, Radiant |
 | Immunities | Psychic; Charmed, Frightened |
+| Habitat | Desert, Planar (Upper Planes) |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

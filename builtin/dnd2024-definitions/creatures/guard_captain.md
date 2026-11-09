@@ -7,6 +7,7 @@ splat_name: Guard Captain
 splat_origin: dnd2024:reference/creature/guard_captain
 splat_sources:
 - SRD 5.2.1, pp. 296, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 162, Habitat
 ---
 
 # Guard Captain
@@ -28,6 +29,7 @@ splat_sources:
 | Senses | Passive Perception 14 |
 | Languages | Common |
 | Gear | Breastplate, Javelins (6), Longsword, Shield |
+| Habitat | Any |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |
