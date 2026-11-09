@@ -351,7 +351,7 @@ mod tests {
 
     #[test]
     fn declared_contracts_are_not_unresolved_references() {
-        let text = "---\nsplat_schema: 2\nsplat_id: 00000000-0000-0000-0000-000000000002\nsplat_kind: item\nsplat_name: Mess Kit\nsplat_requires_mechanics: [dndbeyond:rules/mess_kit_2014]\nsplat_contracts: [{id: dndbeyond:rules/mess_kit_2014, inputs: {}, outputs: [], events: [], capabilities: []}]\n---\n# Mess Kit\n";
+        let text = "---\nsplat_schema: 2\nsplat_id: 00000000-0000-0000-0000-000000000002\nsplat_kind: item\nsplat_name: Mess Kit\nsplat_requires_mechanics: [dndbeyond:rules/mess_kit_2014]\nsplat_contracts: [{id: dndbeyond:rules/mess_kit_2014, inputs: {}, outputs: [], events: [], capabilities: [declarative_rule_parameters]}]\n---\n# Mess Kit\n";
         let entry = Entry::parse("Mess Kit.md", text).unwrap();
         assert_eq!(unresolved(&entry, &[]), 0);
     }
