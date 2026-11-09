@@ -299,7 +299,7 @@ Imported rules text is reflowed for reading, and the stored note is never change
 `design::reader::run_in_title` finds a named paragraph (`Acid Breath (Recharge 5–6).`), and
 only that turns bold. A title-case line above prose is a heading. Three or more rows of
 numbers, or of a name and a number, become a table. `presentation::reading_tests` runs these
-rules over every built-in note, so a fault cannot come back unseen. Collapsed source, engine support and technical details follow the body in its scroll area.
+rules over every built-in note, so a fault cannot come back unseen. Collapsed Source and identifiers and Technical details follow the body in its scroll area. What Splat applies sits inside Source and identifiers. Unreadable files omit these empty sections.
 Here and Mentioned in stay above them, at the reader measure.
 
 ## The session's plan
@@ -617,7 +617,7 @@ An encounter row whose creature was deleted keeps its last known name or says Mi
 Folder is one editable field with a suggestion menu, followed by its help line.
 New packages default to the parent of the last registered package.
 A completed copy says where it went and keeps its path in hover text.
-Share both copies a campaign dependency with its entry and reconnects the new references.
+Copy both copies a campaign dependency with its entry and reconnects the new references.
 The warning action copies and reconnects one dependency. Undo restores the reference and removes the unchanged copy.
 A compact NPC reader shows Fights as and In on one read-only line; both names open in Lookup.
 Lookup keeps Back and its close icon on the title line. Clear appears beside search only when search has text. Result rows use Scan height, Body text for names, and Small muted text for metadata.
@@ -933,3 +933,21 @@ sits beside a custom service. Codex limits appear only when Codex is selected.
 Recording settings keep an `L` margin below the tabs outside the scrolling content.
 Combat sync help uses muted Small text. Disconnected campaign-link help opens
 Settings from an inline link.
+
+## Library and files, design score iteration 1
+
+Library source mode keeps one frame at the remaining pane height. All four edges stay
+visible while only the source text scrolls. Read mode keeps its outer body scroll.
+The toolbar keeps Read and Edit Markdown at the left; Back follows the visible copy and creation actions. When those actions fold into More, Back stays before that menu.
+Use in this campaign stays on the file line.
+
+Duplicate-file repair says which file becomes a separate entry. Its result names the
+file and keeps Undo separate entry on the message line. Folder repair uses separate
+entries and Undo separate entries. A result that explains which entry an encounter
+will use is Small muted text below the action.
+
+A found package folder uses bordered secondary Use this folder. Find the folder… is
+quiet when that match exists. The missing-package sentence uses Body text throughout.
+Skipped conversions offer Convert files… beside each file. Reopening the preview keeps
+the previous Undo until a new conversion is applied. The copy preview leaves space for
+Copy both and Cancel, without an outer scroll handle below them.

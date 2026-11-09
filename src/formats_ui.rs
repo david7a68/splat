@@ -296,7 +296,12 @@ impl State {
         changed
     }
 
-    pub fn show_conversion(&mut self, ui: &mut egui::Ui, blocked: Option<&str>) -> bool {
+    pub fn show_conversion(
+        &mut self,
+        ui: &mut egui::Ui,
+        blocked: Option<&str>,
+        campaigns: &Campaigns,
+    ) -> bool {
         let changed_notice = self.current();
         let mut changed = changed_notice && self.show_notice(ui);
         if let Some(error) = &self.error {
@@ -444,7 +449,27 @@ impl State {
                     ),
                 );
             }
-            skipped_list(ui, &self.skipped);
+            design::group_label(ui, "Files skipped");
+            let mut retry = false;
+            for file in &self.skipped {
+                retry |= design::locked(ui, blocked, |ui| {
+                    design::message_with_action(ui, Tone::Warning, file, "Convert files…")
+                });
+            }
+            if retry {
+                let undo = std::mem::take(&mut self.undo);
+                let checked: Vec<_> = self
+                    .owners
+                    .iter()
+                    .filter(|owner| owner.checked)
+                    .map(|owner| owner.root.clone())
+                    .collect();
+                self.scan(campaigns);
+                for owner in &mut self.owners {
+                    owner.checked = checked.contains(&owner.root);
+                }
+                self.undo = undo;
+            }
         }
         changed
     }
@@ -507,7 +532,7 @@ mod tests {
                     },
                     |ctx| {
                         egui::CentralPanel::default().show(ctx, |ui| {
-                            state.show_conversion(ui, None);
+                            state.show_conversion(ui, None, &Campaigns::default());
                         });
                     },
                 ));

@@ -48,7 +48,7 @@ pub fn broken(d: &mut Driver<'_>) {
     d.expect("Save repaired note");
     d.observe(
         "W5",
-        d.visible_text("line 3 opens a list") && d.has("Edit in Obsidian"),
+        d.visible_text("Line 3 opens a list") && d.has("Edit in Obsidian"),
         "The broken note opens the shared repair editor and its file actions",
     );
     d.state("broken-note-repair", Sizes::All);
@@ -609,7 +609,7 @@ pub fn package_manifest_broken(d: &mut Driver<'_>) {
     d.state("manifest-invalid-campaign", Sizes::All);
     d.click("Open in Library");
     d.expect("Markdown editor");
-    d.expect("line 4 opens a list");
+    d.expect("Line 4 opens a list");
     d.expect("Replace with a basic Package.md");
     d.expect("Keeps the id, name and namespace. Drops the rest.");
     d.state("manifest-opened-for-repair", Sizes::All);
@@ -728,7 +728,24 @@ pub fn package_file_changed(d: &mut Driver<'_>) {
         !d.has_containing("Undo discard"),
         "a later disk edit clears the discarded draft"
     );
+    let visible_frame = |d: &Driver<'_>| {
+        d.input_frame("Markdown editor")
+            .is_some_and(|(frame, clip)| clip.expand(1.0).contains_rect(frame))
+    };
+    d.observe_both(
+        "AD2",
+        "All source frame edges remain visible",
+        visible_frame,
+    );
+    assert!(d.at_size((1920.0, 1080.0), visible_frame));
     d.state("package-yaml-repair-editor", Sizes::All);
+    let before_scroll = d.input_frame("Markdown editor").unwrap().0;
+    d.scroll_at(before_scroll.center(), 3);
+    assert_eq!(
+        d.input_frame("Markdown editor").unwrap().0,
+        before_scroll,
+        "Only the source text scrolls"
+    );
     d.replace_editor_text(&valid);
     d.click("Save");
     d.click("Read");
@@ -752,7 +769,7 @@ pub fn package_file_changed(d: &mut Driver<'_>) {
     d.state("invalid-package-blocks-new-fight", Sizes::All);
     d.click("Open in Library");
     d.expect("Markdown editor");
-    d.expect("line 4 opens a list");
+    d.expect("Line 4 opens a list");
     d.state("invalid-package-opened-for-repair", Sizes::All);
     go_encounters(d);
     d.click("Back to encounters");
@@ -953,7 +970,7 @@ pub fn package_duplicate_id(d: &mut Driver<'_>) {
     d.wait_for_text("Duplicate identity");
     d.state("duplicate-package-library-list", Sizes::All);
     d.click_starting("Cinder Wolf · ");
-    d.expect("New identity for Cinder Wolf copy.md");
+    d.expect("Make Cinder Wolf copy.md a separate entry");
     d.click(EDIT_MARKDOWN);
     d.state("duplicate-original-editor", Sizes::All);
     d.type_into_editor("Saved only to the original.\n");
@@ -970,7 +987,7 @@ pub fn package_duplicate_id(d: &mut Driver<'_>) {
     d.expect("Cinder Wolf copy.md and Cinder Wolf.md share an identity. Choose one in Library.");
     d.state("duplicate-package-in-roster", Sizes::All);
     d.click("Open in Library");
-    d.expect("New identity for Cinder Wolf copy.md");
+    d.expect("Make Cinder Wolf copy.md a separate entry");
     assert_eq!(
         d.app_mut().library.selected_name(),
         Some("Cinder Wolf copy")
@@ -978,8 +995,9 @@ pub fn package_duplicate_id(d: &mut Driver<'_>) {
     d.click("Read");
     d.state("duplicate-copy-reader", Sizes::All);
     d.expect("Creature · CR 1");
-    d.click("New identity for Cinder Wolf copy.md");
-    d.wait_for_text("Undo new identity");
+    d.click("Make Cinder Wolf copy.md a separate entry");
+    d.wait_for_text("Undo separate entry");
+    d.expect("Cinder Wolf copy.md is now a separate entry.");
     assert_eq!(
         crate::content_workspace::note_id(&fs::read_to_string(&original).unwrap()),
         original_id
@@ -987,7 +1005,7 @@ pub fn package_duplicate_id(d: &mut Driver<'_>) {
     let copy_id = crate::content_workspace::note_id(&fs::read_to_string(&copy).unwrap());
     assert_ne!(original_id, copy_id);
     d.state("duplicate-copy-new-identity", Sizes::All);
-    d.click("Undo new identity");
+    d.click("Undo separate entry");
     d.wait_for_text("Duplicate identity");
     assert_eq!(
         crate::content_workspace::note_id(&fs::read_to_string(&copy).unwrap()),
@@ -995,8 +1013,9 @@ pub fn package_duplicate_id(d: &mut Driver<'_>) {
     );
     d.expect_same("Undo restores both identity warnings and the original copy reader.");
     d.state("duplicate-identity-restored", Sizes::All);
-    d.click("New identity for Cinder Wolf copy.md");
-    d.wait_for_text("Undo new identity");
+    d.click("Make Cinder Wolf copy.md a separate entry");
+    d.wait_for_text("Undo separate entry");
+    d.expect("Cinder Wolf copy.md is now a separate entry.");
     d.click("Use in this campaign");
     d.wait_for_text("Ashen Marches · Used here");
     go_encounters(d);
@@ -1390,7 +1409,7 @@ pub fn package_folder_copied(d: &mut Driver<'_>) {
     d.state("manifest-only-hand-repair-keeps-both-files", Sizes::All);
     search_library(d, "Cinder Wolf");
     d.click_containing("· ashen-marches/");
-    d.expect("New identity for Cinder Wolf.md in ashen-marches-copy/");
+    d.expect("Make Cinder Wolf.md in ashen-marches-copy/ a separate entry");
     d.expect_same("The duplicate identity view already selects this file and names both folders.");
     d.state("same-filenames-name-the-folder", Sizes::All);
     let (copied_entries, _) = splat::content::read_directory(&copied).unwrap();
@@ -1399,21 +1418,21 @@ pub fn package_folder_copied(d: &mut Driver<'_>) {
         .filter(|entry| entry.kind != "package")
         .count();
     d.click(&format!(
-        "New identity for all {count} files in ashen-marches-copy/"
+        "Make all {count} files in ashen-marches-copy/ separate entries"
     ));
-    d.wait_for_text("Undo folder identities");
+    d.wait_for_text("Undo separate entries");
     d.expect(&format!(
-        "New IDs for {count} files in ashen-marches-copy/."
+        "{count} files in ashen-marches-copy/ are now separate entries."
     ));
     d.state("copied-folder-identities-repaired-together", Sizes::All);
-    d.click("Undo folder identities");
-    d.wait_for_text("New identity for Cinder Wolf.md in ashen-marches-copy/");
+    d.click("Undo separate entries");
+    d.wait_for_text("Make Cinder Wolf.md in ashen-marches-copy/ a separate entry");
     d.expect_same(
         "Undo restores the same duplicate identities and folder-specific repair actions.",
     );
     d.state("copied-folder-identities-undone", Sizes::All);
     d.click(&format!(
-        "New identity for all {count} files in ashen-marches-copy/"
+        "Make all {count} files in ashen-marches-copy/ separate entries"
     ));
     let wolf = copied_entries
         .iter()
@@ -1428,7 +1447,7 @@ pub fn package_folder_copied(d: &mut Driver<'_>) {
     d.click("Reload from disk");
     search_library(d, "Cinder Wolf");
     d.click_containing("· ashen-marches/");
-    d.expect("New identity for Cinder Wolf.md in ashen-marches-copy/");
+    d.expect("Make Cinder Wolf.md in ashen-marches-copy/ a separate entry");
     d.state("one-entry-copied-between-registered-packages", Sizes::All);
     go_encounters(d);
     if d.has("Back to encounters") {
