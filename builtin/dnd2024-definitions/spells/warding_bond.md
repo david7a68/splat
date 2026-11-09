@@ -23,6 +23,8 @@ splat_sources:
 | Range |  |
 | Components | V, S, M (a pair of platinum rings worth 50+ GP each, which you and the target must wear for the duration) |
 | Duration | 1 hour |
+| Ritual | No |
+| Concentration | No |
 
 
 ## Source text

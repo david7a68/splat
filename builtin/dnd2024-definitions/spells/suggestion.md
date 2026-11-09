@@ -23,6 +23,8 @@ splat_sources:
 | Range | 30 feet |
 | Components | V, M (a drop of honey) |
 | Duration | Concentration, up to 8 hours |
+| Ritual | No |
+| Concentration | Yes |
 
 
 ## Source text

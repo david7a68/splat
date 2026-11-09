@@ -7,6 +7,7 @@ splat_name: Piranha
 splat_origin: dnd2024:reference/creature/piranha
 splat_sources:
 - SRD 5.2.1, pp. 358, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 366, Habitat
 ---
 
 # Piranha
@@ -26,6 +27,7 @@ splat_sources:
 | Challenge | 0 (XP 10; PB +2) |
 | Senses | Darkvision 60 ft.; Passive Perception 8 |
 | Languages | None |
+| Habitat | Underwater |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

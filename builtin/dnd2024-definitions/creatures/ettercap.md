@@ -7,6 +7,7 @@ splat_name: Ettercap
 splat_origin: dnd2024:reference/creature/ettercap
 splat_sources:
 - SRD 5.2.1, pp. 284, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 115, Habitat
 ---
 
 # Ettercap
@@ -27,6 +28,7 @@ splat_sources:
 | Skills | Perception +3, Stealth +4, Survival +3 |
 | Senses | Darkvision 60 ft.; Passive Perception 13 |
 | Languages | None |
+| Habitat | Forest |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

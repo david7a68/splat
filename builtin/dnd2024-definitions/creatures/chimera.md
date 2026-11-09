@@ -7,6 +7,7 @@ splat_name: Chimera
 splat_origin: dnd2024:reference/creature/chimera
 splat_sources:
 - SRD 5.2.1, pp. 273, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 70, Habitat
 ---
 
 # Chimera
@@ -27,6 +28,7 @@ splat_sources:
 | Skills | Perception +8 |
 | Senses | Darkvision 60 ft.; Passive Perception 18 |
 | Languages | Understands Draconic but can’t speak |
+| Habitat | Grassland, Hill, Mountain |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

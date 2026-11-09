@@ -23,6 +23,8 @@ splat_sources:
 | Range |  |
 | Components | V, S, M (a crystal bead) |
 | Duration | 8 hours |
+| Ritual | Yes |
+| Concentration | No |
 
 
 ## Source text

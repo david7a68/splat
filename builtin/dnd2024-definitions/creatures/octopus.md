@@ -7,6 +7,7 @@ splat_name: Octopus
 splat_origin: dnd2024:reference/creature/octopus
 splat_sources:
 - SRD 5.2.1, pp. 357, 358, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 365, Habitat
 ---
 
 # Octopus
@@ -27,6 +28,7 @@ splat_sources:
 | Skills | Perception +2, Stealth +6 |
 | Senses | Darkvision 30 ft.; Passive Perception 12 |
 | Languages | None |
+| Habitat | Underwater |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

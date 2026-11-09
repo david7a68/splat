@@ -7,6 +7,7 @@ splat_name: Dretch
 splat_origin: dnd2024:reference/creature/dretch
 splat_sources:
 - SRD 5.2.1, pp. 281, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 103, Habitat
 ---
 
 # Dretch
@@ -28,6 +29,7 @@ splat_sources:
 | Languages | Abyssal; telepathy 60 ft. (works only with creatures that understand Abyssal) |
 | Resistances | Cold, Fire, Lightning |
 | Immunities | Poison; Poisoned |
+| Habitat | Planar (Abyss) |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

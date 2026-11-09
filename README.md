@@ -110,6 +110,17 @@ Converted creature, spell and item files use readable tables. The reader shows
 each set fact once and hides machine lines. A creature's CR supplies missing XP
 and PB; mismatches are flagged unless they describe a lair. Printed creature stats
 stay in a folded quote as a record; edit the table above it to change the values.
+A creature's `Habitat` row holds its 2024 Monster Manual habitat, such as
+`Underdark, Underwater`. Built-in creatures get it from
+`scripts/srd_inputs/habitats.yaml`, because the SRD does not print it.
+
+Library's Creatures section, Library search results and the encounter creature
+search have **Filter**. It filters by habitat, type, size, alignment, challenge,
+movement, senses, languages, resistances, immunities and vulnerabilities. Each
+chosen value shows as a chip; click a chip to remove it. Search also finds these
+values: `darkvision`, `habitat:forest`, `type:dragon`, `cr:5-10`, `cr:5+`,
+`immune:fire` or `lang:"deep speech"`. A creature with habitat `Any` is found
+under every habitat.
 
 A live initiative change says `acts next round` when its place has passed. Setup counts
 rows below the visible list, including missing initiatives and ties between independent rolls. Shared rolls do not produce a tie warning. Session note boxes
@@ -376,6 +387,13 @@ and any event adds its length when it reads as a number and a unit, such as `3 d
 moves nothing, and the row says so. A fight does not move the clock. The list in its frontmatter is the record, and Splat
 writes the body from it. An encounter run adds its own event when combat begins. New events and runs go to the newest
 session unless you choose another on the Timeline page. **Notes** (Ctrl+J) opens that session's note beside any page.
+
+Type `/` at the start of a line or a word in a session note to open its commands. Type more letters to narrow them, and
+use the arrows and Enter, or click. With only the `/` typed, Enter still starts a new line. **Generate NPC** rolls an NPC
+as in Lookup, and **Save NPC** (or Enter) writes it to `NPCs/`. **Search** finds an entry, a world note or a heading, as
+Lookup does. Each puts a link such as `[[Verori]]` where the `/` was. Escape in the list closes it and keeps what you
+typed. Escape after you choose a command goes back to the note without a link. A slash inside a word, as in `and/or`,
+stays a slash.
 
 A planned fight with a saved run offers **Resume**, as the primary action for the first waiting fight when no run is open. A run before combat says **Setup**; a closed unfinished run adds **Paused**. Its menu holds **Start a new run** and **Delete the saved run**, with undo for deletion. Every planned fight also has **Remove from tonight**: it removes one link from the plan and offers **Undo remove** below the row. The open fight has a status link in the plan; the run strip keeps **Back to run**. A played fight shows its result and shared run state once, such as **Held the bridge · Ended · Round 1**. It opens a grid of final party HP with first names, then **Log**, **Whole run** and **Timeline** links. Plan summaries use the width below the row action. Removing a planned group keeps its message and Undo in that row’s place.
 

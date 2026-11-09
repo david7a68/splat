@@ -7,6 +7,7 @@ splat_name: Lizard
 splat_origin: dnd2024:reference/creature/lizard
 splat_sources:
 - SRD 5.2.1, pp. 357, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 364, Habitat
 ---
 
 # Lizard
@@ -26,6 +27,7 @@ splat_sources:
 | Challenge | 0 (XP 10; PB +2) |
 | Senses | Darkvision 30 ft.; Passive Perception 9 |
 | Languages | None |
+| Habitat | Coastal, Desert, Forest, Swamp, Underdark |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

@@ -7,6 +7,7 @@ splat_name: Skeleton
 splat_origin: dnd2024:reference/creature/skeleton
 splat_sources:
 - SRD 5.2.1, pp. 325, 326, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 282, Habitat
 ---
 
 # Skeleton
@@ -29,6 +30,7 @@ splat_sources:
 | Gear | Shortbow, Shortsword |
 | Immunities | Poison; Exhaustion, Poisoned |
 | Vulnerabilities | Bludgeoning |
+| Habitat | Underdark, Urban, Planar (Shadowfell) |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

@@ -23,6 +23,8 @@ splat_sources:
 | Range |  |
 | Components | V, S, M (a focus worth 1,000+ GP, such as a crystal ball, mirror, or water-filled font) |
 | Duration | Concentration, up to 10 minutes |
+| Ritual | No |
+| Concentration | Yes |
 
 
 ## Source text

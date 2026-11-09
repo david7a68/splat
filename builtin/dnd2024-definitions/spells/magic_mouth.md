@@ -23,6 +23,8 @@ splat_sources:
 | Range | 30 feet |
 | Components | V, S, M (jade dust worth 10+ GP, which the spell consumes) |
 | Duration | Until dispelled |
+| Ritual | Yes |
+| Concentration | No |
 
 
 ## Source text

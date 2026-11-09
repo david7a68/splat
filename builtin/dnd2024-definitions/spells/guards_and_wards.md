@@ -23,6 +23,8 @@ splat_sources:
 | Range |  |
 | Components | V, S, M (a silver rod worth 10+ GP) |
 | Duration | 24 hours |
+| Ritual | No |
+| Concentration | No |
 
 
 ## Source text

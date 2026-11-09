@@ -23,6 +23,8 @@ splat_sources:
 | Range | 30 feet |
 | Components | V, S, M (a bell and silver wire) |
 | Duration | 8 hours |
+| Ritual | Yes |
+| Concentration | No |
 
 
 ## Source text

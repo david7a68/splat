@@ -23,6 +23,8 @@ splat_sources:
 | Range |  |
 | Components | V, S, M (a sapphire worth 1,000+ GP) |
 | Duration | Until dispelled |
+| Ritual | Yes |
+| Concentration | No |
 
 
 ## Source text

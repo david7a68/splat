@@ -7,6 +7,7 @@ splat_name: Ancient Brass Dragon
 splat_origin: dnd2024:reference/creature/ancient_brass_dragon
 splat_sources:
 - SRD 5.2.1, pp. 269, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 56, Habitat
 ---
 
 # Ancient Brass Dragon
@@ -28,6 +29,7 @@ splat_sources:
 | Senses | Blindsight 60 ft., Darkvision 120 ft.; Passive Perception 24 |
 | Languages | Common, Draconic |
 | Immunities | Fire |
+| Habitat | Desert |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

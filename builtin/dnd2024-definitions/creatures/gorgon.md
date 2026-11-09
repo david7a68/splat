@@ -7,6 +7,7 @@ splat_name: Gorgon
 splat_origin: dnd2024:reference/creature/gorgon
 splat_sources:
 - SRD 5.2.1, pp. 292, 293, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 148, Habitat
 ---
 
 # Gorgon
@@ -28,6 +29,7 @@ splat_sources:
 | Senses | Darkvision 60 ft.; Passive Perception 17 |
 | Languages | None |
 | Immunities | Exhaustion, Petrified |
+| Habitat | Forest, Grassland, Hill |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

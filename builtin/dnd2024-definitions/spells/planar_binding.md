@@ -23,6 +23,8 @@ splat_sources:
 | Range | 60 feet |
 | Components | V, S, M (a jewel worth 1,000+ GP, which the spell consumes) |
 | Duration | 24 hours |
+| Ritual | No |
+| Concentration | No |
 
 
 ## Source text

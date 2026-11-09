@@ -23,6 +23,8 @@ splat_sources:
 | Range | 10 feet |
 | Components | V, S, M (a drop of blood, a piece of flesh, and a pinch of bone dust) |
 | Duration | Instantaneous |
+| Ritual | No |
+| Concentration | No |
 
 
 ## Source text

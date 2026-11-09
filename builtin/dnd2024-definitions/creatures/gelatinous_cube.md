@@ -7,6 +7,7 @@ splat_name: Gelatinous Cube
 splat_origin: dnd2024:reference/creature/gelatinous_cube
 splat_sources:
 - SRD 5.2.1, pp. 286, 287, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 129, Habitat
 ---
 
 # Gelatinous Cube
@@ -27,6 +28,7 @@ splat_sources:
 | Senses | Blindsight 60 ft.; Passive Perception 8 |
 | Languages | None |
 | Immunities | Acid; Blinded, Charmed, Deafened, Exhaustion, Frightened, Prone |
+| Habitat | Underdark |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

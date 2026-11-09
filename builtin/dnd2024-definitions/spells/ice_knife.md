@@ -23,6 +23,8 @@ splat_sources:
 | Range | 60 feet |
 | Components | S, M (a drop of water or a piece of ice) |
 | Duration | Instantaneous |
+| Ritual | No |
+| Concentration | No |
 
 
 ## Source text

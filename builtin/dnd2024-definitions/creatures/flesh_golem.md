@@ -7,6 +7,7 @@ splat_name: Flesh Golem
 splat_origin: dnd2024:reference/creature/flesh_golem
 splat_sources:
 - SRD 5.2.1, pp. 285, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 121, Habitat
 ---
 
 # Flesh Golem
@@ -27,6 +28,7 @@ splat_sources:
 | Senses | Darkvision 60 ft.; Passive Perception 10 |
 | Languages | Understands Common plus one other language but can’t speak |
 | Immunities | Lightning, Poison; Charmed, Exhaustion, Frightened, Paralyzed, Petrified, Poisoned |
+| Habitat | Any |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

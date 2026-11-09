@@ -7,6 +7,7 @@ splat_name: Roc
 splat_origin: dnd2024:reference/creature/roc
 splat_sources:
 - SRD 5.2.1, pp. 320, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 261, Habitat
 ---
 
 # Roc
@@ -27,6 +28,7 @@ splat_sources:
 | Skills | Perception +8 |
 | Senses | Passive Perception 18 |
 | Languages | None |
+| Habitat | Arctic, Coastal, Desert, Hill, Mountain |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

@@ -7,6 +7,7 @@ splat_name: Hydra
 splat_origin: dnd2024:reference/creature/hydra
 splat_sources:
 - SRD 5.2.1, pp. 300, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 175, Habitat
 ---
 
 # Hydra
@@ -28,6 +29,7 @@ splat_sources:
 | Senses | Darkvision 60 ft.; Passive Perception 16 |
 | Languages | None |
 | Immunities | Blinded, Charmed, Deafened, Frightened, Stunned, Unconscious |
+| Habitat | Coastal, Swamp |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

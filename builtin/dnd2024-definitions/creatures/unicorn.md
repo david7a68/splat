@@ -7,6 +7,7 @@ splat_name: Unicorn
 splat_origin: dnd2024:reference/creature/unicorn
 splat_sources:
 - SRD 5.2.1, pp. 334, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 313, Habitat
 ---
 
 # Unicorn
@@ -27,6 +28,7 @@ splat_sources:
 | Senses | Darkvision 60 ft.; Passive Perception 13 |
 | Languages | Celestial, Elvish, Sylvan; telepathy 120 ft. |
 | Immunities | Poison; Charmed, Paralyzed, Poisoned |
+| Habitat | Forest, Planar (Feywild) |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

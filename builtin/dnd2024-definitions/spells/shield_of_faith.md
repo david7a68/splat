@@ -23,6 +23,8 @@ splat_sources:
 | Range | 60 feet |
 | Components | V, S, M (a prayer scroll) |
 | Duration | Concentration, up to 10 minutes |
+| Ritual | No |
+| Concentration | Yes |
 
 
 ## Source text

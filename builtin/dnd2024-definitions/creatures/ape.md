@@ -7,6 +7,7 @@ splat_name: Ape
 splat_origin: dnd2024:reference/creature/ape
 splat_sources:
 - SRD 5.2.1, pp. 344, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 348, Habitat
 ---
 
 # Ape
@@ -27,6 +28,7 @@ splat_sources:
 | Skills | Athletics +5, Perception +3 |
 | Senses | Passive Perception 13 |
 | Languages | None |
+| Habitat | Forest |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

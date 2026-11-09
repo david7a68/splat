@@ -7,6 +7,7 @@ splat_name: Wight
 splat_origin: dnd2024:reference/creature/wight
 splat_sources:
 - SRD 5.2.1, pp. 341, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 332, Habitat
 ---
 
 # Wight
@@ -30,6 +31,7 @@ splat_sources:
 | Gear | Studded Leather Armor |
 | Resistances | Necrotic |
 | Immunities | Poison; Exhaustion, Poisoned |
+| Habitat | Desert, Swamp, Underdark, Urban, Planar (Shadowfell) |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

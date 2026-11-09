@@ -7,6 +7,7 @@ splat_name: Giant Fire Beetle
 splat_origin: dnd2024:reference/creature/giant_fire_beetle
 splat_sources:
 - SRD 5.2.1, pp. 351, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 357, Habitat
 ---
 
 # Giant Fire Beetle
@@ -27,6 +28,7 @@ splat_sources:
 | Senses | Blindsight 30 ft.; Passive Perception 8 |
 | Languages | None |
 | Resistances | Fire |
+| Habitat | Underdark |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

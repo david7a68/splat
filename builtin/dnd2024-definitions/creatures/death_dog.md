@@ -7,6 +7,7 @@ splat_name: Death Dog
 splat_origin: dnd2024:reference/creature/death_dog
 splat_sources:
 - SRD 5.2.1, pp. 279, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 91, Habitat
 ---
 
 # Death Dog
@@ -28,6 +29,7 @@ splat_sources:
 | Senses | Darkvision 120 ft.; Passive Perception 15 |
 | Languages | None |
 | Immunities | Blinded, Charmed, Deafened, Frightened, Stunned, Unconscious |
+| Habitat | Desert |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

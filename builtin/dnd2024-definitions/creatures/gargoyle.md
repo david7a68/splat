@@ -7,6 +7,7 @@ splat_name: Gargoyle
 splat_origin: dnd2024:reference/creature/gargoyle
 splat_sources:
 - SRD 5.2.1, pp. 286, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 128, Habitat
 ---
 
 # Gargoyle
@@ -28,6 +29,7 @@ splat_sources:
 | Senses | Darkvision 60 ft.; Passive Perception 10 |
 | Languages | Primordial (Terran) |
 | Immunities | Poison; Exhaustion, Petrified, Poisoned |
+| Habitat | Underdark, Urban |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

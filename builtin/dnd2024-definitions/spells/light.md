@@ -23,6 +23,8 @@ splat_sources:
 | Range |  |
 | Components | V, M (a firefly or phosphorescent moss) |
 | Duration | 1 hour |
+| Ritual | No |
+| Concentration | No |
 
 
 ## Source text

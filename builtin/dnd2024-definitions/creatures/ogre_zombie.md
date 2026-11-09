@@ -7,6 +7,7 @@ splat_name: Ogre Zombie
 splat_origin: dnd2024:reference/creature/ogre_zombie
 splat_sources:
 - SRD 5.2.1, pp. 344, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 346, Habitat
 ---
 
 # Ogre Zombie
@@ -27,6 +28,7 @@ splat_sources:
 | Senses | Darkvision 60 ft.; Passive Perception 8 |
 | Languages | Understands Common and Giant but can’t speak |
 | Immunities | Poison; Exhaustion, Poisoned |
+| Habitat | Underdark, Urban, Planar (Shadowfell) |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

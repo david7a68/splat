@@ -7,6 +7,7 @@ splat_name: Priest
 splat_origin: dnd2024:reference/creature/priest
 splat_sources:
 - SRD 5.2.1, pp. 316, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 248, Habitat
 ---
 
 # Priest
@@ -28,6 +29,7 @@ splat_sources:
 | Senses | Passive Perception 15 |
 | Languages | Common plus one other language |
 | Gear | Chain Shirt, Holy Symbol, Mace |
+| Habitat | Any |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

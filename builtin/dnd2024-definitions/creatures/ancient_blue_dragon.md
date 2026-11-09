@@ -7,6 +7,7 @@ splat_name: Ancient Blue Dragon
 splat_origin: dnd2024:reference/creature/ancient_blue_dragon
 splat_sources:
 - SRD 5.2.1, pp. 267, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 50, Habitat
 ---
 
 # Ancient Blue Dragon
@@ -28,6 +29,7 @@ splat_sources:
 | Senses | Blindsight 60 ft., Darkvision 120 ft.; Passive Perception 27 |
 | Languages | Common, Draconic |
 | Immunities | Lightning |
+| Habitat | Coastal, Desert |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

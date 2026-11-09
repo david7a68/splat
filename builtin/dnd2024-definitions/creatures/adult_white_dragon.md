@@ -7,6 +7,7 @@ splat_name: Adult White Dragon
 splat_origin: dnd2024:reference/creature/adult_white_dragon
 splat_sources:
 - SRD 5.2.1, pp. 340, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 329, Habitat
 ---
 
 # Adult White Dragon
@@ -28,6 +29,7 @@ splat_sources:
 | Senses | Blindsight 60 ft., Darkvision 120 ft.; Passive Perception 21 |
 | Languages | Common, Draconic |
 | Immunities | Cold |
+| Habitat | Arctic |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

@@ -7,6 +7,7 @@ splat_name: Pegasus
 splat_origin: dnd2024:reference/creature/pegasus
 splat_sources:
 - SRD 5.2.1, pp. 313, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 235, Habitat
 ---
 
 # Pegasus
@@ -27,6 +28,7 @@ splat_sources:
 | Skills | Perception +6 |
 | Senses | Passive Perception 16 |
 | Languages | Understands Celestial, Common, Elvish, and Sylvan but can’t speak |
+| Habitat | Forest, Grassland, Hill, Planar (Upper Planes) |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

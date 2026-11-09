@@ -7,6 +7,7 @@ splat_name: Gladiator
 splat_origin: dnd2024:reference/creature/gladiator
 splat_sources:
 - SRD 5.2.1, pp. 289, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 139, Habitat
 ---
 
 # Gladiator
@@ -28,6 +29,7 @@ splat_sources:
 | Senses | Passive Perception 11 |
 | Languages | Common |
 | Gear | Shield, Spears (3), Studded Leather Armor |
+| Habitat | Any |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

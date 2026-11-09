@@ -7,6 +7,7 @@ splat_name: Ice Devil
 splat_origin: dnd2024:reference/creature/ice_devil
 splat_sources:
 - SRD 5.2.1, pp. 300, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 176, Habitat
 ---
 
 # Ice Devil
@@ -28,6 +29,7 @@ splat_sources:
 | Senses | Blindsight 120 ft.; Passive Perception 17 |
 | Languages | Infernal; telepathy 120 ft. |
 | Immunities | Cold, Fire, Poison; Poisoned |
+| Habitat | Planar (Nine Hells) |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

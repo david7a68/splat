@@ -7,6 +7,7 @@ splat_name: Guard
 splat_origin: dnd2024:reference/creature/guard
 splat_sources:
 - SRD 5.2.1, pp. 296, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 162, Habitat
 ---
 
 # Guard
@@ -28,6 +29,7 @@ splat_sources:
 | Senses | Passive Perception 12 |
 | Languages | Common |
 | Gear | Chain Shirt, Shield, Spear |
+| Habitat | Any |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

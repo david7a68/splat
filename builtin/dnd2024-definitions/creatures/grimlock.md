@@ -7,6 +7,7 @@ splat_name: Grimlock
 splat_origin: dnd2024:reference/creature/grimlock
 splat_sources:
 - SRD 5.2.1, pp. 296, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 160, Habitat
 ---
 
 # Grimlock
@@ -27,6 +28,7 @@ splat_sources:
 | Skills | Athletics +5, Perception +3, Stealth +5 |
 | Senses | Blindsight 30 ft.; Passive Perception 13 |
 | Languages | None |
+| Habitat | Underdark |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

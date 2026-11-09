@@ -7,6 +7,7 @@ splat_name: Water Elemental
 splat_origin: dnd2024:reference/creature/water_elemental
 splat_sources:
 - SRD 5.2.1, pp. 337, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 322, Habitat
 ---
 
 # Water Elemental
@@ -28,6 +29,7 @@ splat_sources:
 | Languages | Primordial (Aquan) |
 | Resistances | Acid, Fire |
 | Immunities | Poison; Exhaustion, Grappled, Paralyzed, Petrified, Poisoned, Prone, Restrained, Unconscious |
+| Habitat | Coastal, Swamp, Underwater, Planar (Elemental Plane of Water) |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

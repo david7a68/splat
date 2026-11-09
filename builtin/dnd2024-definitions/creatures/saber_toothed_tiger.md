@@ -7,6 +7,7 @@ splat_name: Saber-Toothed Tiger
 splat_origin: dnd2024:reference/creature/saber_toothed_tiger
 splat_sources:
 - SRD 5.2.1, pp. 360, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 369, Habitat
 ---
 
 # Saber-Toothed Tiger
@@ -27,6 +28,7 @@ splat_sources:
 | Skills | Perception +5, Stealth +7 |
 | Senses | Darkvision 60 ft.; Passive Perception 15 |
 | Languages | None |
+| Habitat | Arctic, Hill, Mountain |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

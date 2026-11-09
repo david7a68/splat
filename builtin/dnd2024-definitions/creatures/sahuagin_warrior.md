@@ -7,6 +7,7 @@ splat_name: Sahuagin Warrior
 splat_origin: dnd2024:reference/creature/sahuagin_warrior
 splat_sources:
 - SRD 5.2.1, pp. 321, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 264, Habitat
 ---
 
 # Sahuagin Warrior
@@ -28,6 +29,7 @@ splat_sources:
 | Senses | Darkvision 120 ft.; Passive Perception 15 |
 | Languages | Sahuagin |
 | Resistances | Acid, Cold |
+| Habitat | Coastal, Underwater |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

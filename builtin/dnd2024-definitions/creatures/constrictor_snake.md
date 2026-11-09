@@ -7,6 +7,7 @@ splat_name: Constrictor Snake
 splat_origin: dnd2024:reference/creature/constrictor_snake
 splat_sources:
 - SRD 5.2.1, pp. 346, 347, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 351, Habitat
 ---
 
 # Constrictor Snake
@@ -27,6 +28,7 @@ splat_sources:
 | Skills | Perception +2, Stealth +4 |
 | Senses | Blindsight 10 ft.; Passive Perception 12 |
 | Languages | None |
+| Habitat | Desert, Forest, Swamp, Underwater |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

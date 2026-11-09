@@ -7,6 +7,7 @@ splat_name: Ankheg
 splat_origin: dnd2024:reference/creature/ankheg
 splat_sources:
 - SRD 5.2.1, pp. 259, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 18, Habitat
 ---
 
 # Ankheg
@@ -26,6 +27,7 @@ splat_sources:
 | Challenge | 2 (XP 450; PB +2) |
 | Senses | Darkvision 60 ft., Tremorsense 60 ft.; Passive Perception 11 |
 | Languages | None |
+| Habitat | Forest, Grassland |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

@@ -131,7 +131,6 @@ fn show_with_density(ui: &mut egui::Ui, markdown: &str, dense: bool) {
     let mut strong = 0_usize;
     let mut italic = false;
     let mut struck = false;
-    let mut quotes = 0_usize;
     let mut lists: Vec<Option<u64>> = Vec::new();
     let mut table: Option<Vec<Vec<String>>> = None;
     let mut figures: Vec<std::path::PathBuf> = Vec::new();
@@ -391,8 +390,24 @@ fn show_with_density(ui: &mut egui::Ui, markdown: &str, dense: bool) {
             Event::End(TagEnd::Emphasis) => italic = false,
             Event::Start(Tag::Strikethrough) => struck = true,
             Event::End(TagEnd::Strikethrough) => struck = false,
-            Event::Start(Tag::BlockQuote(_)) => quotes += 1,
-            Event::End(TagEnd::BlockQuote(_)) => quotes = quotes.saturating_sub(1),
+            Event::Start(Tag::BlockQuote(_)) => {
+                flush(ui, &mut job, &mut target);
+                target.quotes.push(ui.cursor().top());
+            }
+            Event::End(TagEnd::BlockQuote(_)) => {
+                draw_figures(ui, &mut figures, &job);
+                flush(ui, &mut job, &mut target);
+                if let Some(top) = target.quotes.pop() {
+                    let x = ui.max_rect().left()
+                        + QUOTE_INDENT * target.quotes.len() as f32
+                        + QUOTE_BAR_WIDTH / 2.0;
+                    ui.painter().vline(
+                        x,
+                        top..=target.quote_bottom.max(top),
+                        egui::Stroke::new(QUOTE_BAR_WIDTH, colors().rule),
+                    );
+                }
+            }
             Event::Start(Tag::List(start)) => lists.push(start),
             Event::End(TagEnd::List(_)) => {
                 lists.pop();
@@ -471,7 +486,7 @@ fn show_with_density(ui: &mut egui::Ui, markdown: &str, dense: bool) {
                     } else {
                         Type::ProseStrong
                     }
-                } else if (italic || quotes > 0) && !dense {
+                } else if (italic || !target.quotes.is_empty()) && !dense {
                     Type::ProseItalic
                 } else {
                     prose
@@ -883,10 +898,18 @@ fn display_field_value(value: &str) -> String {
     }
 }
 
-/// What the words waiting to be drawn link to.
+/// Each level of quote moves its words this far right. Its bar is in that gap.
+const QUOTE_INDENT: f32 = design::L;
+const QUOTE_BAR_WIDTH: f32 = 2.0;
+
+/// What the words waiting to be drawn link to, and the quotes they are in.
 #[derive(Default)]
 struct Targets {
     links: Vec<(std::ops::Range<usize>, LinkTarget)>,
+    /// The top of each open quote, outermost first.
+    quotes: Vec<f32>,
+    /// The bottom of the last words drawn in a quote, where its bar stops.
+    quote_bottom: f32,
 }
 
 enum LinkTarget {
@@ -983,12 +1006,27 @@ fn flush(ui: &mut egui::Ui, job: &mut LayoutJob, target: &mut Targets) {
         return;
     }
     let links = std::mem::take(&mut target.links);
-    if !links.is_empty() {
-        draw_with_links(ui, std::mem::take(job), links);
-        ui.add_space(design::S);
-        return;
+    let job = std::mem::take(job);
+    let draw = |ui: &mut egui::Ui| {
+        if links.is_empty() {
+            ui.add(egui::Label::new(job).wrap());
+        } else {
+            draw_with_links(ui, job, links);
+        }
+    };
+    if target.quotes.is_empty() {
+        draw(ui);
+    } else {
+        let rect = ui
+            .horizontal_top(|ui| {
+                ui.spacing_mut().item_spacing.x = 0.0;
+                ui.add_space(QUOTE_INDENT * target.quotes.len() as f32);
+                ui.vertical(draw);
+            })
+            .response
+            .rect;
+        target.quote_bottom = rect.bottom();
     }
-    ui.add(egui::Label::new(std::mem::take(job)).wrap());
     ui.add_space(design::S);
 }
 
@@ -1278,6 +1316,53 @@ mod tests {
         assert_eq!(name.color, colors().accent);
         assert_eq!(format_of(&galleys, "Read ").color, colors().text);
         assert_eq!(format_of(&galleys, "the rules").color, colors().accent);
+    }
+
+    #[test]
+    fn quotes_are_indented_beside_a_bar() {
+        let context = egui::Context::default();
+        design::theme::install(&context);
+        let output = context.run(egui::RawInput::default(), |ctx| {
+            egui::CentralPanel::default().show(ctx, |ui| {
+                show(ui, "Before\n\n> Outer\n>\n> > Inner\n\nAfter\n");
+            });
+        });
+        let text = |words: &str| {
+            output
+                .shapes
+                .iter()
+                .find_map(|shape| match &shape.shape {
+                    egui::Shape::Text(text) if text.galley.job.text == words => {
+                        Some(text.galley.rect.translate(text.pos.to_vec2()))
+                    }
+                    _ => None,
+                })
+                .unwrap_or_else(|| panic!("{words} was not drawn"))
+        };
+        let (before, outer, inner, after) =
+            (text("Before"), text("Outer"), text("Inner"), text("After"));
+        assert!((outer.left() - before.left() - QUOTE_INDENT).abs() < 1.0);
+        assert!((inner.left() - before.left() - 2.0 * QUOTE_INDENT).abs() < 1.0);
+        assert!((after.left() - before.left()).abs() < 1.0);
+        let bars: Vec<_> = output
+            .shapes
+            .iter()
+            .filter_map(|shape| match &shape.shape {
+                egui::Shape::LineSegment { points, stroke }
+                    if stroke.color == colors().rule && points[0].x == points[1].x =>
+                {
+                    Some(egui::Rect::from_two_pos(points[0], points[1]))
+                }
+                _ => None,
+            })
+            .collect();
+        assert_eq!(bars.len(), 2, "one bar for each quote");
+        for (bar, words) in bars.iter().zip([inner, outer]) {
+            assert!(bar.left() < words.left());
+            assert!(bar.top() <= words.top() && bar.bottom() >= words.bottom());
+            assert!(bar.bottom() < after.top());
+        }
+        assert!(bars[1].top() <= outer.top() && bars[1].bottom() >= inner.bottom());
     }
 
     #[test]

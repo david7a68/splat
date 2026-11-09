@@ -7,6 +7,7 @@ splat_name: Drider
 splat_origin: dnd2024:reference/creature/drider
 splat_sources:
 - SRD 5.2.1, pp. 281, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 105, Habitat
 ---
 
 # Drider
@@ -27,6 +28,7 @@ splat_sources:
 | Skills | Perception +6, Stealth +10 |
 | Senses | Darkvision 120 ft.; Passive Perception 16 |
 | Languages | Elvish, Undercommon |
+| Habitat | Forest, Underdark |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

@@ -7,6 +7,7 @@ splat_name: Allosaurus
 splat_origin: dnd2024:reference/creature/allosaurus
 splat_sources:
 - SRD 5.2.1, pp. 344, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 348, Habitat
 ---
 
 # Allosaurus
@@ -27,6 +28,7 @@ splat_sources:
 | Skills | Perception +5 |
 | Senses | Passive Perception 15 |
 | Languages | None |
+| Habitat | Grassland |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

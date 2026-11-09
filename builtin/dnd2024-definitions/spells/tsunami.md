@@ -23,6 +23,8 @@ splat_sources:
 | Range |  |
 | Components | V, S |
 | Duration | Concentration, up to 6 rounds |
+| Ritual | No |
+| Concentration | Yes |
 
 
 ## Source text

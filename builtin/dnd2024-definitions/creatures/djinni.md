@@ -7,6 +7,7 @@ splat_name: Djinni
 splat_origin: dnd2024:reference/creature/djinni
 splat_sources:
 - SRD 5.2.1, pp. 280, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 99, Habitat
 ---
 
 # Djinni
@@ -27,6 +28,7 @@ splat_sources:
 | Senses | Darkvision 120 ft.; Passive Perception 13 |
 | Languages | Primordial (Auran) |
 | Immunities | Lightning, Thunder |
+| Habitat | Coastal, Planar (Elemental Plane of Air) |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

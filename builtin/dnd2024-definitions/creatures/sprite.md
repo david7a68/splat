@@ -7,6 +7,7 @@ splat_name: Sprite
 splat_origin: dnd2024:reference/creature/sprite
 splat_sources:
 - SRD 5.2.1, pp. 329, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 298, Habitat
 ---
 
 # Sprite
@@ -27,6 +28,7 @@ splat_sources:
 | Skills | Perception +3, Stealth +8 |
 | Senses | Passive Perception 13 |
 | Languages | Common, Elvish, Sylvan |
+| Habitat | Forest, Planar (Feywild) |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

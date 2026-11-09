@@ -7,6 +7,7 @@ splat_name: Vampire
 splat_origin: dnd2024:reference/creature/vampire
 splat_sources:
 - SRD 5.2.1, pp. 335, 336, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 317, Habitat
 ---
 
 # Vampire
@@ -28,6 +29,7 @@ splat_sources:
 | Senses | Darkvision 120 ft.; Passive Perception 17 |
 | Languages | Common plus two other languages |
 | Resistances | Necrotic |
+| Habitat | Underdark, Urban |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

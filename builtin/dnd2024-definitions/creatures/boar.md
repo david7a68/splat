@@ -7,6 +7,7 @@ splat_name: Boar
 splat_origin: dnd2024:reference/creature/boar
 splat_sources:
 - SRD 5.2.1, pp. 346, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 350, Habitat
 ---
 
 # Boar
@@ -26,6 +27,7 @@ splat_sources:
 | Challenge | 1/4 (XP 50; PB +2) |
 | Senses | Passive Perception 9 |
 | Languages | None |
+| Habitat | Forest, Grassland, Hill |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

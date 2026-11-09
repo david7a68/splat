@@ -7,6 +7,7 @@ splat_name: Elephant
 splat_origin: dnd2024:reference/creature/elephant
 splat_sources:
 - SRD 5.2.1, pp. 348, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 353, Habitat
 ---
 
 # Elephant
@@ -26,6 +27,7 @@ splat_sources:
 | Challenge | 4 (XP 1,100; PB +2) |
 | Senses | Passive Perception 10 |
 | Languages | None |
+| Habitat | Grassland |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |
