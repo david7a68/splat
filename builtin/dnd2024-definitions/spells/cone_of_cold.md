@@ -23,6 +23,8 @@ splat_sources:
 | Range |  |
 | Components | V, S, M (a small crystal or glass cone) |
 | Duration | Instantaneous |
+| Ritual | No |
+| Concentration | No |
 
 
 ## Source text

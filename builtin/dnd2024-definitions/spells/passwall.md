@@ -23,6 +23,8 @@ splat_sources:
 | Range | 30 feet |
 | Components | V, S, M (a pinch of sesame seeds) |
 | Duration | 1 hour |
+| Ritual | No |
+| Concentration | No |
 
 
 ## Source text

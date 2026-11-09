@@ -23,6 +23,8 @@ splat_sources:
 | Range | 150 feet |
 | Components | V, S, M (a miniature umbrella) |
 | Duration | Concentration, up to 1 minute |
+| Ritual | No |
+| Concentration | Yes |
 
 
 ## Source text

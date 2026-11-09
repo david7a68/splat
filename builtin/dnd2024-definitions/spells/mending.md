@@ -23,6 +23,8 @@ splat_sources:
 | Range |  |
 | Components | V, S, M (two lodestones) |
 | Duration | Instantaneous |
+| Ritual | No |
+| Concentration | No |
 
 
 ## Source text

@@ -23,6 +23,8 @@ splat_sources:
 | Range | 300 feet |
 | Components | V, S, M (a miniature crystal sphere) |
 | Duration | Instantaneous |
+| Ritual | No |
+| Concentration | No |
 
 
 ## Source text

@@ -23,6 +23,8 @@ splat_sources:
 | Range | 120 feet |
 | Components | V, S, M (a shard of glass) |
 | Duration | Concentration, up to 10 minutes |
+| Ritual | No |
+| Concentration | Yes |
 
 
 ## Source text

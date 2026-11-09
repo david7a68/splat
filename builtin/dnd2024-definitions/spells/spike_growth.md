@@ -23,6 +23,8 @@ splat_sources:
 | Range | 150 feet |
 | Components | V, S, M (seven thorns) |
 | Duration | Concentration, up to 10 minutes |
+| Ritual | No |
+| Concentration | Yes |
 
 
 ## Source text

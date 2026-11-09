@@ -23,6 +23,8 @@ splat_sources:
 | Range |  |
 | Components | V, S, M (a gem, crystal, or reliquary worth 500+ GP) |
 | Duration | Until dispelled |
+| Ritual | No |
+| Concentration | No |
 
 
 ## Source text

@@ -23,6 +23,8 @@ splat_sources:
 | Range | 60 feet |
 | Components | V, S, M (a pinch of sulfur) |
 | Duration | Instantaneous |
+| Ritual | No |
+| Concentration | No |
 
 
 ## Source text

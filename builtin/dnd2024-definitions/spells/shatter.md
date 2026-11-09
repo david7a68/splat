@@ -23,6 +23,8 @@ splat_sources:
 | Range | 60 feet |
 | Components | V, S, M (a chip of mica) |
 | Duration | Instantaneous |
+| Ritual | No |
+| Concentration | No |
 
 
 ## Source text

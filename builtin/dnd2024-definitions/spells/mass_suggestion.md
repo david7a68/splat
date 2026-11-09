@@ -23,6 +23,8 @@ splat_sources:
 | Range | 60 feet |
 | Components | V, M (a snake’s tongue) |
 | Duration | 24 hours |
+| Ritual | No |
+| Concentration | No |
 
 
 ## Source text

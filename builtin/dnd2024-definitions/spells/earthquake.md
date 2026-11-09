@@ -23,6 +23,8 @@ splat_sources:
 | Range | 500 feet |
 | Components | V, S, M (a fractured rock) |
 | Duration | Concentration, up to 1 minute |
+| Ritual | No |
+| Concentration | Yes |
 
 
 ## Source text
