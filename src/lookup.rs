@@ -99,6 +99,8 @@ pub struct Item {
     builtin: bool,
     from_sheet: bool,
     source: Source,
+    /// Duplicate World results keep their paths so the DM can choose between equal names.
+    duplicate_identity: bool,
     /// For notes and world entries, whose words can also be searched.
     lower_body: String,
 }
@@ -194,7 +196,12 @@ impl Item {
         } else {
             Some(self.owner.as_str())
         };
-        presentation::list_subtitle(&self.subtitle, source)
+        let subtitle = if self.duplicate_identity {
+            format!("{} · {}", self.subtitle, self.entry.path)
+        } else {
+            self.subtitle.clone()
+        };
+        presentation::list_subtitle(&subtitle, source)
     }
 
     fn file_keys(&self) -> [String; 2] {
@@ -224,6 +231,7 @@ fn note_items(
         builtin: false,
         from_sheet: false,
         source,
+        duplicate_identity: false,
         lower_body,
         entry,
     };
@@ -309,52 +317,54 @@ impl ContentIndex {
             .values()
             .chain(catalogue.duplicate_world.iter())
             .filter(|e| !["package", "campaign", "reference"].contains(&e.entry.kind.as_str()))
-            .map(|e| Item {
-                lower: e.entry.name.to_lowercase(),
-                subtitle: if catalogue
+            .map(|e| {
+                let duplicate_identity = catalogue
                     .duplicate_world
                     .iter()
-                    .any(|other| other.entry.id == e.entry.id)
-                {
-                    format!(
-                        "{} · {} Duplicate identity · {}",
-                        presentation::subtitle(&e.entry),
-                        icons::WARN,
-                        e.entry.path
-                    )
-                } else {
-                    presentation::subtitle(&e.entry)
-                },
-                owner: if from_sheet(&e.entry) {
-                    FROM_SHEET.to_owned()
-                } else {
-                    owner_name(e.owner, e.private)
-                },
-                private: e.private,
-                section: presentation::Section::for_entry(&e.entry),
-                builtin: Some(e.owner) == builtin,
-                from_sheet: from_sheet(&e.entry),
-                source: Source::Entry,
-                // Another name finds a world entry as its words do.
-                lower_body: if e.entry.kind == "world" {
-                    format!("{} {}", world::aliases(&e.entry).join(" "), e.entry.body)
-                        .to_lowercase()
-                } else {
-                    String::new()
-                },
-                entry: {
-                    let mut entry = e.entry.clone();
-                    if e.private
-                        && entry.kind == "world"
-                        && catalogue
-                            .duplicate_world
-                            .iter()
-                            .any(|other| other.entry.path == entry.path)
-                    {
-                        entry.id = world::note_id(&entry.path);
-                    }
-                    entry
-                },
+                    .any(|other| other.entry.id == e.entry.id);
+                Item {
+                    duplicate_identity,
+                    lower: e.entry.name.to_lowercase(),
+                    subtitle: if duplicate_identity {
+                        format!(
+                            "{} · {} Duplicate identity",
+                            presentation::subtitle(&e.entry),
+                            icons::WARN
+                        )
+                    } else {
+                        presentation::subtitle(&e.entry)
+                    },
+                    owner: if from_sheet(&e.entry) {
+                        FROM_SHEET.to_owned()
+                    } else {
+                        owner_name(e.owner, e.private)
+                    },
+                    private: e.private,
+                    section: presentation::Section::for_entry(&e.entry),
+                    builtin: Some(e.owner) == builtin,
+                    from_sheet: from_sheet(&e.entry),
+                    source: Source::Entry,
+                    // Another name finds a world entry as its words do.
+                    lower_body: if e.entry.kind == "world" {
+                        format!("{} {}", world::aliases(&e.entry).join(" "), e.entry.body)
+                            .to_lowercase()
+                    } else {
+                        String::new()
+                    },
+                    entry: {
+                        let mut entry = e.entry.clone();
+                        if e.private
+                            && entry.kind == "world"
+                            && catalogue
+                                .duplicate_world
+                                .iter()
+                                .any(|other| other.entry.path == entry.path)
+                        {
+                            entry.id = world::note_id(&entry.path);
+                        }
+                        entry
+                    },
+                }
             })
             .collect();
         let files_seen = content_fingerprint(modules, campaign);
@@ -1562,7 +1572,7 @@ impl Lookup {
         let matches = self.matches.as_ref().unwrap().1.clone();
         if before != self.query && !query.is_empty() {
             // Open the best match and keep the other answers in view.
-            self.results_open = true;
+            self.results_open = matches.len() != 1;
             match matches.first() {
                 Some(Hit::Entry(top)) => {
                     let (position, heading) = index.target_of(*top);
@@ -1944,7 +1954,8 @@ pub(crate) fn generated_card(
             Type::Small
                 .rich(
                     ui,
-                    "Built-in names. Mark a table npc-name in any note to use your own.",
+                    "Built-in names. To use your own, put <!-- splat:rolls key=npc-name dice=1d6 --> \
+                     on the line above a table of names in any note.",
                 )
                 .color(colors().muted),
         );
@@ -2131,6 +2142,17 @@ mod tests {
         let (dir, campaign) = campaign_with(&[("Rook.md", &before), ("Rook copy.md", &before)]);
         let index = ContentIndex::load(&[], Some(&campaign)).unwrap();
         assert_eq!(index.duplicate_world.len(), 2);
+        for item in index.items.iter().filter(|item| item.entry.name == "Rook") {
+            assert_eq!(
+                item.subtitle,
+                format!("NPC · {} Duplicate identity", icons::WARN)
+            );
+            assert!(!item.subtitle.contains(&item.entry.path));
+            assert!(
+                item.result_detail().contains(&item.entry.path),
+                "Duplicate search results still need their paths to tell them apart"
+            );
+        }
         assert_eq!(
             index.world_groups("").values().map(Vec::len).sum::<usize>(),
             2
