@@ -2,6 +2,7 @@
 //! Obsidian can read and edit them too. A note's frontmatter avoids the `splat_` prefix on
 //! purpose: the catalogue treats any such note as a Library entry.
 pub mod page;
+mod slash;
 
 use crate::{
     content_workspace::{CampaignDocument, patch_fields},
