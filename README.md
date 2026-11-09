@@ -636,7 +636,7 @@ it. With one encounter, only runs of that encounter offer it, and the Encounters
 closed **Groups** section. Open it to see one heading for each encounter, with groups for any encounter first and groups whose encounter was deleted last. Saved group rows have **Edit** and **⋯ → Remove…**, with **Undo remove group** after removal.
 
 The encounter editor has a frame for each of its own groups, with its name, side, members and notes.
-The frame’s **⋯ → Remove** makes a saved group available for any encounter on the next save. **Undo remove group** restores its owner before that save.
+The frame’s **⋯ → Make available to any encounter** makes a saved group available for any encounter on the next save. **Undo move** restores its owner before that save. **Move to…** lists named encounters only.
 **New group for this encounter** starts one there, before or after the encounter is saved. **Add to**,
 above the search, chooses whether the search adds to the roster or to a group. **Save encounter**
 saves the encounter and its groups together, and writes nothing if any of them cannot be saved. See [the schema](docs/design/campaign-schema.md#encounter-groups).
@@ -682,7 +682,7 @@ fight, and the card shows the change. A creature you make up stays in this run, 
 Below that, the panel lists this encounter's own groups, then the groups tonight's plan links, then
 the other groups for any encounter, with their members and total XP. Drag a group's
 name onto the initiative list, or press its **Add** button. Type a total beside it to use that for every
-member, as players give theirs. Otherwise the campaign's rule decides: one shared roll with the first
+member, as players give theirs. An invalid total stays in the field and blocks Add and drop; clear it to roll. Groups with missing, unread or invalid members keep their usable members available. The panel says how many can join and keeps each excluded member's reason and repair link. When the field is blank, the campaign's rule decides: one shared roll with the first
 member's bonus (identical NPCs, or the encounter's initiative groups), a roll for each member
 (individually), or the initiative its side already has (one group per side). This works in setup and in
 combat, and the same group can be added again. Each member is a new participant at full HP, with its
@@ -698,9 +698,9 @@ change it.
 The combat log records changes. **Undo** names the last action and restores up to 100
 prior actions, including turn changes, dice rolls, and manual endings in the current session.
 **End encounter** records a manual ending and your outcome. Runs save automatically
-after changes; **Close run** asks once, then returns to the page the run began on. A setup closed with nothing done leaves no saved run. The app reopens an open
+after changes. **Close run** returns at once to the page the run began on when the run is saved and nothing is unsent. Otherwise it asks for a choice. A setup closed with nothing done leaves no saved run. The app reopens an open
 run after a restart, on the current turn, and turns its sync back on. **In progress** on Encounters has **Resume** for an interrupted run,
-with **Start another fight** and **Delete the saved run** in the row’s **⋯** menu. Deletion has one step of undo.
+with **Start another fight** and **Delete the saved run** in the row’s **⋯** menu. Saved times use relative time for today and yesterday, then a short date. Deletion has one step of undo.
 An encounter with an unfinished run appears only in **In progress** and returns to **Ready to run** when it ends.
 **Keep in Ready during a run** also keeps its Ready row, with **Start fight** blocked and a reason.
 Empty list sections show one muted line and hide the zero count.

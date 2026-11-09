@@ -2273,18 +2273,8 @@ pub mod prep_to_table {
         );
         d.begin_task();
 
-        d.click("Close run");
-        let asked = d.has("Keep running");
-        d.press(Key::Escape);
-        d.observe(
-            "Setup close",
-            asked && !d.has("Keep running") && d.has("Close run"),
-            "Escape backs out of the close prompt in Setup",
-        );
-        d.begin_task();
-
         d.click(ROLL_NPCS);
-        d.state("npcs-rolled", Sizes::Default);
+        d.state("npcs-rolled", Sizes::All);
         d.goal("roll NPC initiative");
 
         let mut row_moved = false;
@@ -2628,7 +2618,7 @@ pub mod run_sync_conflict {
         "Oren Thistlewick",
         "Sable Harrowgate",
     ];
-    const ROW_SYNC_WORDS: [&str; 2] = ["First read", "Synced"];
+    const ROW_SYNC_WORDS: [&str; 2] = ["Reading sheet…", "Synced"];
     const DISMISS_NOTICE: &str = "Dismiss this message";
     const SYNC_PARTY: &str = "Sync party";
     const STOP_SYNC: &str = "Stop party sync";
@@ -3510,12 +3500,14 @@ pub mod run_restart {
         );
         d.click(BACK_TO_RUN);
         d.begin_task();
-        // The prompt shares the footer's narrow row, and must keep every word.
         d.click("Close run");
-        d.state("close-run-prompt", Sizes::Default);
-        d.click("Keep running");
-        d.begin_task();
-        close_run(d);
+        let closed = !d.app_mut().encounters.has_run();
+        d.observe(
+            "T12.1",
+            closed,
+            "The saved run closes with one click in its footer",
+        );
+        d.state("run-closed-in-one-step", Sizes::All);
         go_library(d);
         d.restart();
         let no_open_run = !d.app_mut().encounters.has_run();
@@ -3736,7 +3728,7 @@ pub mod run_sync_states {
     ];
     /// The first read shows after `Sync party`, and "off" is a row with no word at all.
     const FIRST_READ: (&str, SyncState, &str) =
-        ("Sable Harrowgate", SyncState::FirstRead, "First read");
+        ("Sable Harrowgate", SyncState::FirstRead, "Reading sheet…");
     const UNSYNCED_ROW: &str = "Cinder Wolf 1";
     const DISMISS: &str = "Dismiss this message";
     const TWO_LINES: &str =
@@ -3829,7 +3821,22 @@ pub mod run_sync_states {
                 && d.has(USE_REMOTE),
             "With a conflict, Close is blocked in the ended view, whose row and controls show it",
         );
-        d.state("ended-with-conflict", Sizes::Default);
+        d.state("ended-with-conflict", Sizes::All);
+        for size in [SMALL, LARGE] {
+            let (row_edge, undo_edge) = d.at_size(size, |d| {
+                (
+                    roster_places(d).first().map(|(_, rect)| rect.right()),
+                    d.place_of("Undo: end encounter").map(|rect| rect.right()),
+                )
+            });
+            d.observe(
+                "Ended header alignment",
+                row_edge
+                    .zip(undo_edge)
+                    .is_some_and(|(row, undo)| (row - undo).abs() <= 1.0),
+                format!("At {size:?}, Undo ends at {undo_edge:?} and the roster at {row_edge:?}"),
+            );
+        }
         // A pair of choices is never cut: both are in view, at the minimum window too.
         let both = |d: &Driver<'_>| {
             let nodes = d.nodes();
@@ -4076,7 +4083,7 @@ pub mod signed_in {
     const RAIL_STOPPED: &str = "Sync stopped";
     const SYNC_TOGGLE: &str = "Sync this sheet with D&D Beyond";
     const STOPPED: &str = "Combat sync stopped";
-    const FIRST_READ: &str = "First read";
+    const FIRST_READ: &str = "Reading sheet…";
     const SYNC_PARTY: &str = "Sync party";
     const STOP_SYNC: &str = "Stop party sync";
     const LINK_TAB: &str = "Link and folder";
@@ -4330,7 +4337,7 @@ pub mod nav_table {
     const LINKED_TITLE: &str = "Bard Subclass";
     const SYNC_PARTY: &str = "Sync party";
     const STOP_SYNC: &str = "Stop party sync";
-    const FIRST_READ: &str = "First read";
+    const FIRST_READ: &str = "Reading sheet…";
     const ACTIVE: &str = "Active campaign: The Emberfall Marches";
     const BACK_TO_RUN: &str = "Back to run";
     const ENCOUNTER: &str = "Shrine of Cinders";
@@ -5597,7 +5604,7 @@ pub mod session_notes {
         d.click("Close run");
         if d.has("Close and lose changes") {
             d.click("Close and lose changes");
-        } else {
+        } else if d.has("Close now") {
             d.click("Close now");
         }
         run_saved_encounter(d, "Shrine of Cinders");
@@ -5726,7 +5733,15 @@ pub mod session_recording {
         d.settle();
         d.expect("Hearing sound");
         d.expect_same("Only the small sound-health label changes from Waiting to Hearing sound.");
-        d.state("recording-hearing", Sizes::AllAndHiDpi);
+        d.state_prepared("recording-hearing", Sizes::AllAndHiDpi, |d| {
+            d.app_mut()
+                .sessions
+                .simulate_recorder_health(Health::Hearing);
+        });
+        // Capturing several sizes can outlast the five-second sound indicator.
+        d.app_mut()
+            .sessions
+            .simulate_recorder_health(Health::Hearing);
         d.click_starting("Recordings");
         d.expect(&format!("{} Recording", crate::design::icons::RECORD));
         d.expect("0:00 recorded · Hearing sound");
@@ -6365,23 +6380,38 @@ pub mod encounter_groups {
         );
         d.observe(
             "T13.1",
-            d.visible_text("XP 250 + unknown")
+            d.visible_text("XP 50 + unknown")
                 && d.has_containing("Member 1, Unknown creature: not in this campaign's packages")
                 && d.visible_text("1\u{a0}×\u{a0}Unknown\u{a0}creature"),
             "A broken member has a readable name in both its summary and its fault",
         );
         d.observe(
             "T13.1",
-            d.is_disabled(&add_group(GROUP_LOST)),
-            "A group that cannot be added has no working Add button",
+            !d.is_disabled(&add_group(GROUP_LOST)),
+            "A group with one valid member has a working Add button",
         );
         d.observe(
             "T13.1",
-            d.visible_text("3 members · XP 250 + unknown")
+            d.visible_text("1 of 3 members can join")
                 && d.has_containing("not in this campaign's packages")
                 && d.has_containing("Member 2, Cinder Wolf:"),
             "A group counts a creature it cannot find, and gives every reason it cannot be added",
         );
+        d.begin_task();
+        d.type_into(TOTAL_FOR_RIVALS, "-");
+        d.expect("Enter a whole number, or clear the field to roll.");
+        assert!(d.is_disabled(&add_group(GROUP_RIVALS)));
+        d.state("invalid-arrival-total", Sizes::All);
+        d.clear_text_in(TOTAL_FOR_RIVALS);
+        let before = roster_places(d).len();
+        d.click(&add_group(GROUP_LOST));
+        d.observe(
+            "AT2",
+            roster_places(d).len() == before + 1,
+            "The valid member joins while the two unavailable members stay out",
+        );
+        d.state("available-member-added", Sizes::All);
+        d.click_containing("Undo: add Lost Patrol");
         d.begin_task();
         d.click(&add_group(GROUP_GOBLINS));
         d.expect(FIRST_GOBLIN);
@@ -6728,12 +6758,14 @@ pub mod encounter_owned_groups {
         d.begin_task();
         d.click_first(&format!("More actions for {NEW_NAME}"));
         d.click_containing("Move to…");
-        d.expect("Any encounter");
+        d.expect(RUN_ARENA);
+        assert!(!d.has("Any encounter"));
         d.state("move-encounter-group-menu", Sizes::All);
-        d.click("Any encounter");
-        d.expect("Undo remove group");
+        d.click("Make available to any encounter");
+        d.expect("Undo move");
+        d.expect(&format!("{NEW_NAME} moves to any encounter when you save."));
         d.state("saved-group-removed", Sizes::All);
-        d.click("Undo remove group");
+        d.click("Undo move");
         d.expect(&format!("Group name: {NEW_NAME}"));
         d.begin_task();
         d.click("Back to encounters");

@@ -62,13 +62,11 @@ pub(crate) fn toggle(
     name: &str,
     density: Density,
 ) -> egui::Response {
-    let button = egui::Button::new(Type::Body.rich(ui, format!("{icon} {label}")).color(
-        if selected {
-            colors().text
-        } else {
-            colors().muted
-        },
-    ))
+    let button = egui::Button::new(
+        Type::Body
+            .rich(ui, format!("{icon} {label}"))
+            .color(colors().text),
+    )
     .selected(selected)
     .min_size(vec2(0.0, density.control()));
     let button = if selected {
@@ -79,6 +77,18 @@ pub(crate) fn toggle(
     let response = ui.add(button);
     design::named(ui, &response, name);
     response
+}
+
+/// Blank means roll; invalid text must never silently request a roll.
+fn arrival_total(text: &str) -> Result<Option<i64>, &'static str> {
+    let text = text.trim();
+    if text.is_empty() {
+        Ok(None)
+    } else {
+        text.parse()
+            .map(Some)
+            .map_err(|_| "Enter a whole number, or clear the field to roll.")
+    }
 }
 
 /// What sync needs from the DM, on the line above the roster.
@@ -108,7 +118,7 @@ pub(super) fn sync_status(state: SyncState) -> Status<'static> {
         },
         SyncState::FirstRead => Status {
             icon: icons::BUSY,
-            word: "First read",
+            word: "Reading sheet…",
             color: s.first_read,
         },
         SyncState::Matching => Status {
@@ -2162,7 +2172,9 @@ impl Run {
                     }
                 });
             }
-            self.closing |= closing;
+            if closing {
+                closed = self.request_close();
+            }
             self.ending |= ending;
             self.focus_outcome |= ending;
             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
@@ -2397,6 +2409,15 @@ impl Run {
             vec!["Everything since the last save.".to_owned()]
         } else {
             changes
+        }
+    }
+
+    fn request_close(&mut self) -> bool {
+        if self.strip().not_saved || !self.stranded_names().is_empty() {
+            self.closing = true;
+            false
+        } else {
+            self.close_run()
         }
     }
 
@@ -2972,7 +2993,11 @@ impl Run {
             group.notes.trim(),
             self.initiative.grouping.arrival_rule()
         ));
-        grip.dnd_set_drag_payload(GroupDrag(group.id));
+        if group.problem.is_none()
+            && arrival_total(self.group_totals.get(&group.id).map_or("", String::as_str)).is_ok()
+        {
+            grip.dnd_set_drag_payload(GroupDrag(group.id));
+        }
         if grip.dragged() {
             ui.ctx().set_cursor_icon(egui::CursorIcon::Grabbing);
             if let Some(pointer) = ui.input(|i| i.pointer.latest_pos()) {
@@ -3090,16 +3115,21 @@ impl Run {
             ui.ctx().accesskit_node_builder(response.id, |node| {
                 node.set_description("Blank rolls initiative")
             });
-            let total = text.parse::<i64>().ok();
+            let parsed = arrival_total(text);
+            let total = parsed.as_ref().ok().copied().flatten();
             let enter = response.lost_focus() && ui.input(|i| i.key_pressed(Key::Enter));
             let leader = group.leader();
             let may_roll = !leader
                 .as_ref()
                 .is_some_and(|leader| self.joins_side(&leader.side));
-            let blocked = group.problem.as_deref().or((total.is_none()
-                && may_roll
-                && leader.is_some_and(|leader| leader.initiative_bonus.is_none()))
-            .then_some("The first member has no initiative bonus. Type a total."));
+            let blocked = group
+                .problem
+                .as_deref()
+                .or(parsed.as_ref().err().copied())
+                .or((total.is_none()
+                    && may_roll
+                    && leader.is_some_and(|leader| leader.initiative_bonus.is_none()))
+                .then_some("The first member has no initiative bonus. Type a total."));
             add = Action::secondary(&add_word)
                 .density(Density::Read)
                 .name(&format!("Add {name} to the initiative list"))
@@ -3108,6 +3138,18 @@ impl Run {
                 .clicked()
                 || (enter && blocked.is_none());
         });
+        if let Err(reason) =
+            arrival_total(self.group_totals.get(&group.id).map_or("", String::as_str))
+        {
+            ui.add(
+                egui::Label::new(
+                    Type::Small
+                        .rich(ui, format!("{} {reason}", icons::WARN))
+                        .color(c.result.warning),
+                )
+                .wrap(),
+            );
+        }
         let warnings = group.warnings.join("\n");
         if let Some(problem) = group
             .problem
@@ -3175,10 +3217,13 @@ impl Run {
         else {
             return;
         };
-        let total = self
-            .group_totals
-            .get(&id)
-            .and_then(|text| text.parse::<i64>().ok());
+        let total = match arrival_total(self.group_totals.get(&id).map_or("", String::as_str)) {
+            Ok(total) => total,
+            Err(reason) => {
+                self.error = Some(reason.into());
+                return;
+            }
+        };
         self.run_command(Command::AddGroup(group, total));
         if self.error.is_none() {
             self.group_totals.remove(&id);
@@ -3946,7 +3991,9 @@ impl Run {
                                 .fold(f32::NEG_INFINITY, f32::max);
                             let x = fields[0].left() - design::XS;
                             let stroke = egui::Stroke::new(design::HAIRLINE_WIDTH, colors().muted);
-                            ui.painter().vline(x, top..=bottom, stroke);
+                            for field in fields {
+                                ui.painter().vline(x, field.y_range(), stroke);
+                            }
                             ui.painter().hline(x..=x + design::XS, top, stroke);
                             ui.painter().hline(x..=x + design::XS, bottom, stroke);
                         }
@@ -3977,7 +4024,7 @@ impl Run {
                 .show(ui)
                 .clicked()
                 {
-                    self.closing = true;
+                    closed = self.request_close();
                 }
                 ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                     self.save_status(ui)
@@ -4487,95 +4534,9 @@ impl Run {
             Phase::Ended { outcome } => outcome.clone(),
             _ => String::new(),
         };
-        ui.allocate_ui_with_layout(
-            vec2(ui.available_width(), 60.0),
-            Layout::right_to_left(Align::Center),
-            |ui| {
-                ui.set_min_height(60.0);
-                let close_reason = self.close_block().map(|_| {
-                    let conflicts = self.conflict_count();
-                    let pending = self
-                        .syncs
-                        .values()
-                        .filter(|sync| {
-                            sync.unconfirmed()
-                                && sync.state() != SyncState::Conflict
-                                && !sync.stranded()
-                        })
-                        .count();
-                    let mut parts = Vec::new();
-                    if conflicts > 0 {
-                        parts.push(design::count(conflicts, "conflict", "conflicts"));
-                    }
-                    if pending > 0 {
-                        parts.push(design::count(pending, "pending change", "pending changes"));
-                    }
-                    format!("Settle {} first.", parts.join(" and "))
-                });
-                let close_width = close_reason.as_ref().map_or_else(
-                    || {
-                        Action::primary("Close run")
-                            .density(Density::Glance)
-                            .natural_width(ui)
-                    },
-                    |reason| {
-                        design::number_width(ui, reason, &Type::Small.font(ui))
-                            .min(ui.available_width() / 2.0)
-                    },
-                );
-                ui.allocate_ui_with_layout(
-                    vec2(close_width, 0.0),
-                    Layout::top_down(Align::RIGHT),
-                    |ui| {
-                        if Action::primary(if self.close_block().is_some() {
-                            "Close after sync"
-                        } else {
-                            "Close run"
-                        })
-                        .name("Close run")
-                        .density(Density::Glance)
-                        .blocked(self.close_block())
-                        .show(ui)
-                        .clicked()
-                        {
-                            if self.strip().not_saved || !self.stranded_names().is_empty() {
-                                self.closing = true;
-                            } else {
-                                closed = self.close_run();
-                            }
-                        }
-                        design::blocked_reason(ui, close_reason.as_deref());
-                    },
-                );
-                if !self.history.is_empty() {
-                    let label = self.undo_label();
-                    if self
-                        .undo_action(&label)
-                        .density(Density::Glance)
-                        .show(ui)
-                        .clicked()
-                    {
-                        self.undo();
-                        self.return_focus = self.lookup_open;
-                    }
-                } else {
-                    ui.label(
-                        Type::Small
-                            .rich(ui, "Reopened, so the ending cannot be undone.")
-                            .color(c.muted),
-                    );
-                }
-                self.save_status(ui);
-                ui.with_layout(Layout::top_down(Align::LEFT), |ui| {
-                    ui.spacing_mut().item_spacing.y = 0.0;
-                    self.run_title(ui, &self.state_words(false));
-                    ui.label(
-                        Type::Small
-                            .rich(ui, format!("Outcome: {outcome}"))
-                            .color(c.muted),
-                    );
-                });
-            },
+        let (header_rect, _) = ui.allocate_exact_size(
+            vec2(ui.available_width(), design::L * 4.0),
+            egui::Sense::hover(),
         );
         design::rule(ui);
         self.error_line(ui);
@@ -4617,6 +4578,7 @@ impl Run {
                     }
                 });
         }
+        let mut roster_right = ui.available_rect_before_wrap().left();
         egui::CentralPanel::default()
             // The panel's drag handle lies on this edge, so the rows stop short of it.
             .frame(egui::Frame::new().inner_margin(egui::Margin {
@@ -4636,6 +4598,7 @@ impl Run {
                     .show(ui, |ui| {
                         ui.spacing_mut().item_spacing.y = 0.0;
                         ui.set_max_width(ui.available_width().min(scale.max_width));
+                        roster_right = ui.available_rect_before_wrap().right();
                         for index in &self.state.order {
                             let p = &self.state.participants[*index];
                             let sync = self.row_sync_word(*index);
@@ -4656,6 +4619,103 @@ impl Run {
                         }
                     });
             });
+        let mut header_ui = ui.new_child(
+            egui::UiBuilder::new()
+                .id_salt("ended_header")
+                .max_rect(header_rect),
+        );
+        header_ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+            ui.set_min_height(60.0);
+            let close_reason = self.close_block().map(|_| {
+                let conflicts = self.conflict_count();
+                let pending = self
+                    .syncs
+                    .values()
+                    .filter(|sync| {
+                        sync.unconfirmed()
+                            && sync.state() != SyncState::Conflict
+                            && !sync.stranded()
+                    })
+                    .count();
+                let mut parts = Vec::new();
+                if conflicts > 0 {
+                    parts.push(design::count(conflicts, "conflict", "conflicts"));
+                }
+                if pending > 0 {
+                    parts.push(design::count(pending, "pending change", "pending changes"));
+                }
+                format!("Settle {} first.", parts.join(" and "))
+            });
+            let close_width = close_reason.as_ref().map_or_else(
+                || {
+                    Action::primary("Close run")
+                        .density(Density::Glance)
+                        .natural_width(ui)
+                },
+                |reason| {
+                    design::number_width(ui, reason, &Type::Small.font(ui))
+                        .min(ui.available_width() / 2.0)
+                },
+            );
+            ui.allocate_ui_with_layout(
+                vec2(
+                    close_width,
+                    Density::Glance.control()
+                        + if close_reason.is_some() {
+                            Type::Small.line() + ui.spacing().item_spacing.y
+                        } else {
+                            0.0
+                        },
+                ),
+                Layout::top_down(Align::RIGHT),
+                |ui| {
+                    if Action::primary(if self.close_block().is_some() {
+                        "Close after sync"
+                    } else {
+                        "Close run"
+                    })
+                    .name("Close run")
+                    .density(Density::Glance)
+                    .blocked(self.close_block())
+                    .show(ui)
+                    .clicked()
+                    {
+                        closed = self.request_close();
+                    }
+                    design::blocked_reason(ui, close_reason.as_deref());
+                },
+            );
+            ui.add_space((ui.available_rect_before_wrap().right() - roster_right).max(0.0));
+            if !self.history.is_empty() {
+                let label = self.undo_label();
+                if self
+                    .undo_action(&label)
+                    .density(Density::Glance)
+                    .show(ui)
+                    .clicked()
+                {
+                    self.undo();
+                    self.return_focus = self.lookup_open;
+                }
+            } else {
+                ui.label(
+                    Type::Small
+                        .rich(ui, "Reopened, so the ending cannot be undone.")
+                        .color(c.muted),
+                );
+            }
+            self.save_status(ui);
+            ui.with_layout(Layout::top_down(Align::LEFT), |ui| {
+                ui.spacing_mut().item_spacing.y = 0.0;
+                self.run_title(ui, &self.state_words(false));
+                ui.label(
+                    Type::Small
+                        .rich(ui, format!("Outcome: {outcome}"))
+                        .color(c.muted),
+                );
+            });
+        });
+
         closed
     }
 }
@@ -5281,7 +5341,20 @@ impl RowLayout {
         };
         let name_left = initiative_right + gap + scale.name * 0.7 + picture + PICTURE_GAP;
         let hp_width = scale.hp * 1.9 + scale.hp_max * 2.0 + 4.0;
-        let state_width = (scale.mark * 8.5).clamp(84.0, 118.0);
+        let state_font = Type::Heading.sized(ui, scale.mark.max(12.0));
+        let state_width = [
+            SyncState::FirstRead,
+            SyncState::ReadOnly,
+            SyncState::Pending,
+            SyncState::Stopped,
+        ]
+        .into_iter()
+        .map(|state| {
+            let status = sync_status(state);
+            design::number_width(ui, &format!("{} {}", status.icon, status.word), &state_font)
+                + design::S
+        })
+        .fold((scale.mark * 8.5).clamp(84.0, 118.0), f32::max);
         let temp_width = scale.stat * 2.6 + 12.0;
         let ac_width = scale.stat * 1.5 + 22.0;
         let numbers = name_left + ac_width + temp_width + hp_width + design::S;
@@ -5367,8 +5440,12 @@ impl RowLayout {
             condition_spans.push((
                 "Run conditions".into(),
                 add(
-                    &design::count(p.conditions.len() - condition_count, "more", "more")
-                        .replace(' ', "\u{a0}"),
+                    &if inline_state && sync == Some(SyncState::FirstRead) {
+                        format!("+{}", p.conditions.len() - condition_count)
+                    } else {
+                        design::count(p.conditions.len() - condition_count, "more", "more")
+                            .replace(' ', "\u{a0}")
+                    },
                     c.participant.condition,
                 ),
             ));
@@ -5422,6 +5499,18 @@ impl RowLayout {
                     ..Default::default()
                 },
             );
+        }
+        if let Some(span) = &initiative_span {
+            let start = job
+                .text
+                .char_indices()
+                .nth(span.start)
+                .map_or(job.text.len(), |(at, _)| at);
+            for section in &mut job.sections {
+                if section.byte_range.start == start {
+                    section.format.underline = Stroke::new(design::HAIRLINE_WIDTH, c.accent);
+                }
+            }
         }
         let mut conditions = job.clone();
         if let Some(start) = bonus_start {
@@ -5872,7 +5961,14 @@ fn paint_row(
         let status = sync_status(sync);
         // In the state column, under Bloodied, so the two are read together.
         painter.text(
-            pos2(hp_right + design::S, second_y + second_height / 2.0),
+            pos2(
+                hp_right + design::S,
+                if hp_word(p).is_some() {
+                    second_y + second_height / 2.0
+                } else {
+                    line_y
+                },
+            ),
             Align2::LEFT_CENTER,
             format!("{} {}", status.icon, status.word),
             state_font,
@@ -6285,6 +6381,108 @@ mod tests {
                 }
             });
         });
+    }
+
+    #[test]
+    fn iter_1_b_reading_sheet_fits_beside_a_condition_and_overflow_count() {
+        let mut participant = super::super::tests::run().state.participants[0].clone();
+        participant.side = "party".into();
+        participant.hp = Some(10);
+        participant.max_hp = Some(41);
+        participant.conditions = vec!["Poisoned".into(), "Restrained".into()];
+        participant.initiative = Some(14);
+        let ctx = egui::Context::default();
+        design::theme::install(&ctx);
+        let _ = ctx.run(egui::RawInput::default(), |ctx| {
+            egui::CentralPanel::default().show(ctx, |ui| {
+                for (scale, width) in [
+                    (design::RUN_COMPACT, 442.40625),
+                    (design::RUN_REGULAR, 596.0),
+                    (design::RUN_LARGE, 760.0),
+                ] {
+                    let layout = RowLayout::new(
+                        ui,
+                        width,
+                        &participant,
+                        Some(SyncState::FirstRead),
+                        scale,
+                        RowFit::Summary,
+                        0.0,
+                    );
+                    let line = layout.second_line.as_ref().unwrap();
+                    if layout.inline_state {
+                        assert!(
+                            line.text()
+                                .replace('\u{a0}', " ")
+                                .contains("Reading sheet…")
+                        );
+                        assert!(line.text().contains("+1"));
+                        assert!(
+                            layout
+                                .condition_spans
+                                .iter()
+                                .any(|(name, _)| name == "Run conditions")
+                        );
+                    } else {
+                        let status = sync_status(SyncState::FirstRead);
+                        let state_width = design::number_width(
+                            ui,
+                            &format!("{} {}", status.icon, status.word),
+                            &Type::Heading.sized(ui, scale.mark),
+                        );
+                        assert!(layout.hp_right + design::S + state_width <= width);
+                    }
+                    assert!(line.text().contains("Poisoned"));
+                    assert_eq!(line.rows.len(), 1, "{}: {}", scale.row, line.text());
+                }
+            });
+        });
+    }
+
+    #[test]
+    fn iter_1_b_saved_footer_closes_in_one_step() {
+        use egui_kittest::kittest::Queryable;
+        let run = std::rc::Rc::new(std::cell::RefCell::new(super::super::tests::run()));
+        let directory = tempfile::tempdir().unwrap();
+        run.borrow_mut()
+            .configure_storage(Uuid::new_v4(), directory.path(), Default::default())
+            .unwrap();
+        let closed = std::rc::Rc::new(std::cell::Cell::new(false));
+        let shown = run.clone();
+        let result = closed.clone();
+        let mut harness = egui_kittest::Harness::new(move |ctx| {
+            egui::CentralPanel::default().show(ctx, |ui| {
+                if shown.borrow_mut().live_footer(ui) {
+                    result.set(true);
+                }
+            });
+        });
+        design::theme::install(&harness.ctx);
+        harness.run_steps(2);
+        harness.get_by_label("Close run").click();
+        harness.run_steps(2);
+        assert!(closed.get());
+        assert!(!run.borrow().closing);
+    }
+
+    #[test]
+    fn iter_1_b_unsaved_close_still_asks_and_keeps_the_run() {
+        let mut run = super::super::tests::run();
+        run.disk_conflict = true;
+        assert!(!run.request_close());
+        assert!(run.closing);
+        assert!(!run.confirm_close);
+    }
+
+    #[test]
+    fn iter_1_b_arrival_total_accepts_blank_and_signed_whole_numbers() {
+        for text in ["", "  "] {
+            assert_eq!(arrival_total(text), Ok(None));
+        }
+        for number in [i64::MIN, -1, 0, 13, i64::MAX] {
+            assert_eq!(arrival_total(&number.to_string()), Ok(Some(number)));
+        }
+        assert!(arrival_total("1.5").is_err());
     }
 
     #[test]
