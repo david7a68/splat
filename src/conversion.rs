@@ -58,12 +58,24 @@ pub fn unresolved(entry: &Entry, catalogue: &[Entry]) -> usize {
     fn visit(value: &serde_yaml_ng::Value, catalogue: &[Entry]) -> usize {
         match value {
             serde_yaml_ng::Value::Mapping(map) => {
-                let missing = map
-                    .get("key")
-                    .or_else(|| map.get("id"))
-                    .and_then(serde_yaml_ng::Value::as_str)
-                    .filter(|raw| content::resource_key(raw) || uuid::Uuid::parse_str(raw).is_ok())
-                    .is_some_and(|raw| content::formats::resolve_readable(raw, catalogue).is_err());
+                // A reference holds only `id`, `key` or `link`, as `content::required_references`
+                // reads it. A mapping with other fields, such as a contract or an action step,
+                // declares its own `id` or `key`; it does not point to another entry.
+                let reference = map.keys().all(|k| {
+                    k.as_str()
+                        .is_some_and(|k| ["id", "key", "link"].contains(&k))
+                });
+                let missing = reference
+                    && map
+                        .get("key")
+                        .or_else(|| map.get("id"))
+                        .and_then(serde_yaml_ng::Value::as_str)
+                        .filter(|raw| {
+                            content::resource_key(raw) || uuid::Uuid::parse_str(raw).is_ok()
+                        })
+                        .is_some_and(|raw| {
+                            content::formats::resolve_readable(raw, catalogue).is_err()
+                        });
                 usize::from(missing) + map.values().map(|v| visit(v, catalogue)).sum::<usize>()
             }
             serde_yaml_ng::Value::Sequence(values) => {
@@ -341,6 +353,21 @@ mod tests {
         let group = content::legacy::parse("Group.md", &file.before).unwrap();
         assert_eq!(unresolved(&group, &catalogue), 0);
         assert_eq!(unresolved(&group, &[]), 1);
+    }
+
+    #[test]
+    fn declared_contracts_are_not_unresolved_references() {
+        let text = "---\nsplat_schema: 2\nsplat_id: 00000000-0000-0000-0000-000000000002\nsplat_kind: item\nsplat_name: Mess Kit\nsplat_requires_mechanics: [dndbeyond:rules/mess_kit_2014]\nsplat_contracts: [{id: dndbeyond:rules/mess_kit_2014, inputs: {}, outputs: [], events: [], capabilities: [declarative_rule_parameters]}]\n---\n# Mess Kit\n";
+        let entry = Entry::parse("Mess Kit.md", text).unwrap();
+        assert_eq!(unresolved(&entry, &[]), 0);
+    }
+
+    #[test]
+    fn action_step_keys_are_not_unresolved_references() {
+        let text = "---\nsplat_schema: 2\nsplat_id: 00000000-0000-0000-0000-000000000003\nsplat_kind: item\nsplat_name: Rope\nsplat_actions: {tie: {name: Tie, steps: [{key: custom:steps/tie, operation: dnd2024:attack}], source: {id: 00000000-0000-0000-0000-000000000004}}}\n---\n# Rope\n";
+        let entry = Entry::parse("Rope.md", text).unwrap();
+        // The step names itself; only the source points to a missing entry.
+        assert_eq!(unresolved(&entry, &[]), 1);
     }
 
     #[test]
