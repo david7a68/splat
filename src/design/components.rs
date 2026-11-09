@@ -1613,7 +1613,7 @@ pub fn message_with_action(ui: &mut Ui, tone: Tone, text: &str, action: &str) ->
         message(ui, tone, text);
         ui.horizontal(|ui| {
             ui.add_space((inset - gap).max(0.0));
-            pressed = button.line_start().show(ui).clicked();
+            pressed = button.show(ui).clicked();
         });
     } else {
         ui.horizontal_top(|ui| {

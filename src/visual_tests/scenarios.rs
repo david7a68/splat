@@ -3198,7 +3198,7 @@ pub mod gallery {
         d.expect("Spell · Level 3 · D&D 2024");
         d.state("messages", Sizes::AllAndHiDpi);
         let edges = (
-            d.painted_left("Use the saved HP"),
+            d.place_of("Use the saved HP").map(|rect| rect.left()),
             d.painted_left("Party HP is full after the long rest."),
         );
         d.observe(
@@ -3207,12 +3207,12 @@ pub mod gallery {
                 .0
                 .zip(edges.1)
                 .is_some_and(|(action, message)| (action - message).abs() < 1.0),
-            format!("A quiet action aligns with its message text: {edges:?}"),
+            format!("The bordered action starts at its message text: {edges:?}"),
         );
         d.observe(
             "U6",
             !d.visible_passage("Second use of widget ID"),
-            "A line-start action registers its click target once",
+            "The message action registers its click target once",
         );
         d.goal("see every part of the design system");
         d.click("Markdown");
