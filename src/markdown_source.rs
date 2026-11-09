@@ -1,7 +1,7 @@
 //! Markdown source, styled where it is typed, in the Reader's faces. Only the look changes:
 //! every character stays, markup included, so the file holds exactly what was typed.
 use crate::design::{self, Type, colors};
-use crate::markdown_view::{LinkTarget, NOTE_LINK};
+use crate::markdown_view::LinkTarget;
 use eframe::egui::{
     self, Stroke, TextBuffer, TextFormat,
     text::LayoutJob,
@@ -159,9 +159,11 @@ fn looks(text: &str) -> Runs {
     Arc::new(runs)
 }
 
+type Links = Arc<Vec<(Range<usize>, LinkTarget)>>;
+
 /// Where each link that can be followed is in a text, markup included, and where it goes.
-fn links(text: &str) -> Vec<(Range<usize>, LinkTarget)> {
-    Parser::new_ext(text, OPTIONS)
+fn links(text: &str) -> Links {
+    let found = Parser::new_ext(text, OPTIONS)
         .into_offset_iter()
         .filter_map(|(event, range)| {
             let Event::Start(Tag::Link {
@@ -174,23 +176,28 @@ fn links(text: &str) -> Vec<(Range<usize>, LinkTarget)> {
             };
             let target = if matches!(link_type, LinkType::WikiLink { .. }) {
                 LinkTarget::Note(dest_url.into_string())
-            } else if let Some(note) = dest_url.strip_prefix(NOTE_LINK) {
-                LinkTarget::Note(note.to_owned())
-            } else if dest_url.starts_with("https://") || dest_url.starts_with("http://") {
-                LinkTarget::Url(dest_url.into_string())
             } else {
-                return None;
+                LinkTarget::from_destination(&dest_url)?
             };
             Some((range, target))
         })
-        .collect()
+        .collect();
+    Arc::new(found)
 }
 
-/// A text's looks, where each section heading ends, in characters, and its links.
+#[derive(Default)]
+struct Linker;
+
+impl ComputerMut<&str, Links> for Linker {
+    fn compute(&mut self, text: &str) -> Links {
+        links(text)
+    }
+}
+
+/// A text's looks, and where each section heading ends, in characters.
 struct Styled {
     runs: Runs,
     section_ends: Vec<usize>,
-    links: Vec<(Range<usize>, LinkTarget)>,
 }
 
 #[derive(Default)]
@@ -210,11 +217,7 @@ impl ComputerMut<&str, Arc<Styled>> for Styler {
             })
             .map(|(_, (range, _))| text[..range.end].chars().count())
             .collect();
-        Arc::new(Styled {
-            runs,
-            section_ends,
-            links: links(text),
-        })
+        Arc::new(Styled { runs, section_ends })
     }
 }
 
@@ -342,38 +345,63 @@ fn link_at(
         .position(|glyph| glyph.pos.x <= x && x < glyph.pos.x + glyph.advance_width)?;
     let text = &galley.job.text;
     let byte = text.char_indices().nth(at)?.0;
-    styled_text(ui, text)
-        .links
+    // Only a pointer over the text asks, so the links are found again only when it is there.
+    let links = ui.ctx().memory_mut(|memory| {
+        memory
+            .caches
+            .cache::<FrameCache<Links, Linker>>()
+            .get(text.as_str())
+    });
+    links
         .iter()
         .find(|(range, _)| range.contains(&byte))
         .map(|(_, target)| target.clone())
 }
 
-/// Ctrl+click on a link in the text follows it, as a click does in the Reader. A plain click
-/// only places the caret. `from` is the note being edited.
-pub fn follow_links(
+/// True for a note link that names nothing in the campaign. With no index, it cannot be known.
+fn names_nothing(ui: &egui::Ui, note: &str, from: Option<uuid::Uuid>) -> bool {
+    ui.ctx()
+        .data(|data| {
+            data.get_temp::<Arc<crate::lookup::ContentIndex>>(egui::Id::new("reader_link_index"))
+        })
+        .is_some_and(|index| matches!(index.resolve_link(note, from), crate::world::Go::Missing(_)))
+}
+
+/// With Ctrl held, a link in the text can be pressed, as in the Reader. A plain click only
+/// places the caret. A web link opens here. A note link goes back to the caller, which knows
+/// where its notes open. `from` is the note being edited.
+pub fn pressed_note_link(
     ui: &egui::Ui,
     output: &egui::text_edit::TextEditOutput,
     from: Option<uuid::Uuid>,
-) {
+) -> Option<String> {
     let response = &output.response;
-    let Some(pointer) = response.hover_pos() else {
-        return;
-    };
-    let Some(target) = link_at(ui, output, pointer) else {
-        return;
-    };
-    if ui.input(|input| input.modifiers.command) {
-        ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
-        if response.clicked() {
-            crate::markdown_view::follow(ui.ctx(), &target, from);
-        }
+    // Ctrl+click is a right click on a Mac. There, Cmd is the key.
+    if !response.sense.senses_click() || !ui.input(|input| input.modifiers.command) {
+        return None;
     }
-    let hint = match &target {
-        LinkTarget::Url(url) => format!("{url}\nCtrl+click to open"),
-        _ => "Ctrl+click to open".to_owned(),
-    };
-    response.clone().on_hover_text(hint);
+    let target = link_at(ui, output, response.hover_pos()?)?;
+    if let LinkTarget::Note(note) = &target
+        && names_nothing(ui, note, from)
+    {
+        response.clone().on_hover_text("Not found in this campaign");
+        return None;
+    }
+    ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
+    if let LinkTarget::Url(url) = &target {
+        response.clone().on_hover_text(url);
+    }
+    if !response.clicked() {
+        return None;
+    }
+    match target {
+        LinkTarget::Note(note) => Some(note),
+        LinkTarget::Url(url) => {
+            ui.ctx().open_url(egui::OpenUrl::new_tab(url));
+            None
+        }
+        LinkTarget::Missing | LinkTarget::Lookup(_) => None,
+    }
 }
 
 #[cfg(test)]
@@ -539,8 +567,8 @@ mod tests {
         let text = "See [[Hobb|the miller]], [site](https://example.com) and [here](notes.md).\n\
                     ![[map.png]] `[[Not]]`\n";
         let found: Vec<_> = links(text)
-            .into_iter()
-            .map(|(range, target)| (&text[range], target))
+            .iter()
+            .map(|(range, target)| (&text[range.clone()], target.clone()))
             .collect();
         assert_eq!(
             found,
@@ -560,6 +588,7 @@ mod tests {
         design::theme::install(&context);
         let mut body = text.to_owned();
         let pointer = std::cell::Cell::new(egui::Pos2::ZERO);
+        let noted = std::cell::Cell::new(None);
         let mut draw = |ctx: &egui::Context, find: bool| {
             egui::CentralPanel::default().show(ctx, |ui| {
                 let mut layouter = layouter;
@@ -568,7 +597,9 @@ mod tests {
                     .layouter(&mut layouter)
                     .desired_width(1000.0)
                     .show(ui);
-                follow_links(ui, &output, None);
+                if let Some(note) = pressed_note_link(ui, &output, None) {
+                    noted.set(Some(note));
+                }
                 if find {
                     let at = text[..text.find(words).unwrap()].chars().count();
                     let cursor = |at| {
@@ -614,7 +645,7 @@ mod tests {
                 }
             }
         }
-        (crate::markdown_view::take_note_link(&context), urls)
+        (noted.take(), urls)
     }
 
     #[test]

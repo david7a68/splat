@@ -4684,6 +4684,7 @@ impl Library {
             }
         }
         let mut open_link = None;
+        let mut pressed_link = None;
         let mut copy_dependency = None;
         let mut undo_dependency = false;
         if self.source && self.disk_change.is_none() {
@@ -4712,7 +4713,7 @@ impl Library {
                                 .min_size(egui::vec2(0.0, visible_height))
                                 .interactive(editable)
                                 .show(ui);
-                            crate::markdown_source::follow_links(
+                            pressed_link = crate::markdown_source::pressed_note_link(
                                 ui,
                                 &output,
                                 note.entry.as_ref().map(|entry| entry.id),
@@ -4908,7 +4909,8 @@ impl Library {
             self.reload_note_from_disk(i);
             return;
         }
-        if let Some(target) = crate::markdown_view::take_note_link(ui.ctx())
+        if let Some(target) =
+            pressed_link.or_else(|| crate::markdown_view::take_note_link(ui.ctx()))
             && let Some(index) = ui.ctx().data(|data| {
                 data.get_temp::<std::sync::Arc<crate::lookup::ContentIndex>>(egui::Id::new(
                     "reader_link_index",

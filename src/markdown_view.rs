@@ -204,12 +204,8 @@ fn show_with_density(ui: &mut egui::Ui, markdown: &str, dense: bool) {
                     link = Some((job.text.len(), LinkTarget::Missing));
                     continue;
                 }
-                if let Some(note) = dest_url.strip_prefix(NOTE_LINK) {
-                    link = Some((job.text.len(), LinkTarget::Note(note.to_owned())));
-                    continue;
-                }
-                if dest_url.starts_with("https://") || dest_url.starts_with("http://") {
-                    link = Some((job.text.len(), LinkTarget::Url(dest_url.into_string())));
+                if let Some(destination) = LinkTarget::from_destination(&dest_url) {
+                    link = Some((job.text.len(), destination));
                 }
             }
             Event::End(TagEnd::Link) => {
@@ -920,6 +916,19 @@ pub(crate) enum LinkTarget {
     Url(String),
 }
 
+impl LinkTarget {
+    /// Where a Markdown link's destination goes, if it can be followed.
+    pub(crate) fn from_destination(destination: &str) -> Option<Self> {
+        if let Some(note) = destination.strip_prefix(NOTE_LINK) {
+            Some(Self::Note(note.to_owned()))
+        } else if destination.starts_with("https://") || destination.starts_with("http://") {
+            Some(Self::Url(destination.to_owned()))
+        } else {
+            None
+        }
+    }
+}
+
 /// A paragraph stays one paragraph, and only its links can be pressed.
 fn draw_with_links(
     ui: &mut egui::Ui,
@@ -986,27 +995,19 @@ fn draw_with_links(
             response.clone().on_hover_text(url);
         }
         if response.clicked() {
-            let from = ui
-                .ctx()
-                .data(|data| data.get_temp::<uuid::Uuid>(egui::Id::new("reader_document")));
-            follow(ui.ctx(), destination, from);
+            match destination {
+                LinkTarget::Missing => {}
+                LinkTarget::Note(note) => ui.ctx().data_mut(|data| {
+                    let from = data.get_temp::<uuid::Uuid>(egui::Id::new("reader_document"));
+                    data.insert_temp(egui::Id::new("clicked_reader_document"), from);
+                    data.insert_temp(clicked_id(), note.clone());
+                }),
+                LinkTarget::Lookup(words) => ui.ctx().data_mut(|data| {
+                    data.insert_temp(egui::Id::new("markdown_clicked_lookup"), words.clone());
+                }),
+                LinkTarget::Url(url) => ui.ctx().open_url(egui::OpenUrl::new_tab(url)),
+            }
         }
-    }
-}
-
-/// Go where a link points. `from` is the note the link is in, for links that name a heading or
-/// a note with a common name.
-pub(crate) fn follow(ctx: &egui::Context, destination: &LinkTarget, from: Option<uuid::Uuid>) {
-    match destination {
-        LinkTarget::Missing => {}
-        LinkTarget::Note(note) => ctx.data_mut(|data| {
-            data.insert_temp(egui::Id::new("clicked_reader_document"), from);
-            data.insert_temp(clicked_id(), note.clone());
-        }),
-        LinkTarget::Lookup(words) => ctx.data_mut(|data| {
-            data.insert_temp(egui::Id::new("markdown_clicked_lookup"), words.clone());
-        }),
-        LinkTarget::Url(url) => ctx.open_url(egui::OpenUrl::new_tab(url)),
     }
 }
 
