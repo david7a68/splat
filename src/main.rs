@@ -1979,6 +1979,10 @@ impl Splat {
 
 impl eframe::App for Splat {
     fn raw_input_hook(&mut self, _: &egui::Context, raw_input: &mut egui::RawInput) {
+        // eframe calls this before the first `update`, where `start` restores the rest.
+        if !self.started {
+            self.touchpad_speed = self.ui_store.load().touchpad_speed;
+        }
         self.touchpad_speed.apply(&mut raw_input.events);
     }
 

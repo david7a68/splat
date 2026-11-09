@@ -40,6 +40,9 @@ impl TouchpadSpeed {
 
     /// Touchpads report scrolling in points and mouse wheels in lines, so only points change.
     /// With the zoom modifier held, a scroll zooms, and zoom keeps its own speed.
+    ///
+    /// winit does not say what sent a scroll in points. On-button scrolling (a TrackPoint, or
+    /// a mouse moved with a button held) also arrives in points, so it gets the same factor.
     pub fn apply(self, events: &mut [egui::Event]) {
         let factor = self.factor();
         for event in events {
@@ -57,15 +60,16 @@ impl TouchpadSpeed {
     }
 }
 
-/// A speed this version does not know reads as the default, so the rest of the file still opens.
+/// Any value this version does not know, of any type, reads as the default, so the rest of
+/// the file still opens.
 impl<'de> Deserialize<'de> for TouchpadSpeed {
     fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        let name = String::deserialize(deserializer)?;
-        Ok(match name.as_str() {
-            "One" => Self::One,
-            "Two" => Self::Two,
-            "Eight" => Self::Eight,
-            "Twelve" => Self::Twelve,
+        let value = serde_json::Value::deserialize(deserializer)?;
+        Ok(match value.as_str() {
+            Some("One") => Self::One,
+            Some("Two") => Self::Two,
+            Some("Eight") => Self::Eight,
+            Some("Twelve") => Self::Twelve,
             _ => Self::Four,
         })
     }
@@ -110,12 +114,36 @@ mod tests {
         assert_eq!(delta(&events[0]), -80.0);
     }
 
+    /// eframe asks for this before the first frame, where the rest of the saved state returns.
+    #[test]
+    fn the_saved_speed_applies_from_the_first_scroll() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("ui-state.json");
+        std::fs::write(&path, r#"{"touchpad_speed":"Twelve"}"#).unwrap();
+        let mut app = crate::Splat {
+            ui_store: crate::ui_state::Store::at(path),
+            ..Default::default()
+        };
+        let mut input = egui::RawInput {
+            events: vec![wheel(
+                egui::MouseWheelUnit::Point,
+                -1.0,
+                egui::Modifiers::NONE,
+            )],
+            ..Default::default()
+        };
+        eframe::App::raw_input_hook(&mut app, &egui::Context::default(), &mut input);
+        assert_eq!(delta(&input.events[0]), -12.0);
+    }
+
     #[test]
     fn the_default_is_four_and_an_unknown_speed_reads_as_it() {
         assert_eq!(TouchpadSpeed::default(), TouchpadSpeed::Four);
         assert_eq!(TouchpadSpeed::Four.factor(), 4.0);
-        let read: TouchpadSpeed = serde_json::from_str(r#""Twenty""#).unwrap();
-        assert_eq!(read, TouchpadSpeed::Four);
+        for unknown in [r#""Twenty""#, "4", "null", "{}", "[1]"] {
+            let read: TouchpadSpeed = serde_json::from_str(unknown).unwrap();
+            assert_eq!(read, TouchpadSpeed::Four, "{unknown}");
+        }
         let saved = serde_json::to_string(&TouchpadSpeed::Twelve).unwrap();
         assert_eq!(
             serde_json::from_str::<TouchpadSpeed>(&saved).unwrap(),

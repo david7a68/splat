@@ -163,6 +163,11 @@ mod tests {
             Store::at(path.clone()).load().page.as_deref(),
             Some("Party")
         );
+        // A speed of the wrong type costs only the speed.
+        fs::write(&path, r#"{"page":"Party","touchpad_speed":4}"#).unwrap();
+        let read = Store::at(path.clone()).load();
+        assert_eq!(read.page.as_deref(), Some("Party"));
+        assert_eq!(read.touchpad_speed, crate::touchpad::TouchpadSpeed::Four);
         fs::write(&path, "not json").unwrap();
         assert_eq!(Store::at(path).load(), UiState::default());
     }
