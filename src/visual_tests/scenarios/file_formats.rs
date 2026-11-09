@@ -130,7 +130,17 @@ pub fn run(d: &mut Driver<'_>) {
                 && d.visible_text("NPCs/Rook.md changed on disk after the preview. Open Convert files again to convert it.")
         },
     );
+    d.expect("Convert files…");
+    assert!(!d.has("Engine support"));
+    assert!(!d.has("Source and identifiers"));
     d.state("converted-with-skipped-file-and-one-undo", Sizes::All);
+    d.click_beside_exact(
+        "NPCs/Rook.md changed on disk after the preview. Open Convert files again to convert it.",
+        "Convert files…",
+    );
+    d.expect("File to convert");
+    d.state("skipped-file-conversion-reopened", Sizes::All);
+    d.click("Cancel");
     d.click("Undo convert");
     d.expect("Conversion undone.");
     d.observe_both(
