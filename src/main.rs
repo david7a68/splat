@@ -2204,7 +2204,10 @@ impl eframe::App for Splat {
                 } else {
                     None
                 };
-                if self.file_conversion.show_conversion(ui, blocked) {
+                if self
+                    .file_conversion
+                    .show_conversion(ui, blocked, &self.campaigns)
+                {
                     self.lookup.refresh();
                     self.lookup.files_changed = true;
                     self.timeline.reload();
