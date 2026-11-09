@@ -137,12 +137,16 @@ that the audio is not sent again. With a partial transcript, it names the remain
 audio parts. Recording silence has no elapsed time in its status word. The Session
 page shows the recorded time in the detail; the rail keeps it on hover. On Recordings,
 the live row owns the sound state, recorded time and input help.
-Session folder is read-only while a run is open. Campaign forms keep their fields,
-Browse and save actions on one right edge. A dirty details form offers Discard and
-Undo discard. Missing speech-key links focus that key in Settings.
+Session folder is read-only while a run is open. Campaign forms keep sentence-case field labels, their fields,
+Browse and save actions on one right edge. The session folder uses its heading
+as its visible label and keeps its save action on the field’s right edge. A dirty details form offers Discard and
+Undo discard. Missing speech-key links focus that key in Settings. The speech service turns
+recordings into text; **Transcript and summary** chooses the service that checks
+those words and writes the summary. Custom speech services show their API requirement.
 Timeline and the Session plan use the same fight state words. An open fight's Timeline round links
 back to the run and does not say **Paused**. Processing says **Processing**, with
-the full step on hover. Long rest starts the next new fight at full from both Session
+the full step on hover. Completed jobs say **Processed** in the rail. Warned jobs
+keep their warning icon and full words on hover. Note conflicts say **Notes changed**. Long rest starts the next new fight at full from both Session
 and Timeline. Both pages show the ruling and let you turn it off or on, with Undo.
 Both pages name only saved, unfinished fights past Setup as keeping their saved HP.
 
@@ -375,7 +379,7 @@ Read leaves out headings with nothing under them and shows note links in place. 
 A fight resumed under a later session also counts as part of that session. During a session, a new run starts each player from where the fights so far left them, and setup says so. A player who
 missed the last fight stands where an earlier one left them. If a fight's run cannot be read, setup says that too. **Use the sheets'
 HP** goes back to the sheets, as one step of undo. Adding **Long rest** records your ruling that the next fight
-starts everyone at full HP. One **Undo** removes the rest and that ruling. Open the rest and choose **Not at full** to keep the rest without the ruling. Party shows the same HP, and says where it came from. A starting HP written in the encounter
+starts everyone at full HP. One **Undo** removes the rest and that ruling. Open the rest and choose **Mark not at full** to keep the rest without the ruling. Party shows the same HP, and says where it came from. A starting HP written in the encounter
 wins over both. With sync on, a first read still takes the sheet's value for HP from a fight. Full HP from a rest is your ruling, so a sheet that differs is a conflict to settle. Conditions do
 not carry over.
 

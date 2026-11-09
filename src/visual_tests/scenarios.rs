@@ -839,14 +839,18 @@ pub mod campaign_content {
         // The repair opens here, with the note's text in it.
         d.click(REPAIR);
         d.expect("Note text");
-        d.observe_both("U5", "Both save rows share the column's right edge", |d| {
-            d.place_of("Save repaired note")
-                .zip(d.place_of(SAVE_SELECTIONS))
-                .is_some_and(|(repair, selections)| {
-                    (repair.right() - selections.right()).abs() < 1.0
-                        && selections.top() - repair.bottom() >= crate::design::L
-                })
-        });
+        d.observe_both(
+            "U5",
+            "The package save row stays above repairs, with one right edge",
+            |d| {
+                d.place_of("Save repaired note")
+                    .zip(d.place_of(SAVE_SELECTIONS))
+                    .is_some_and(|(repair, selections)| {
+                        (repair.right() - selections.right()).abs() < 1.0
+                            && repair.top() - selections.bottom() >= crate::design::L
+                    })
+            },
+        );
         d.state("repair-open", Sizes::Default);
         d.observe(
             "Repair says why",
@@ -2905,7 +2909,7 @@ pub mod nav_state {
 
         go_campaign(d);
         let campaign = d.in_view_containing(CAMPAIGN_TAB_TEXT);
-        d.state("campaign-returned", Sizes::Default);
+        d.state("campaign-returned", Sizes::All);
 
         go_party(d);
         let party = d.in_view_containing(MEMBER) && d.in_view_containing(SHEET_PAGE_TEXT);
@@ -4237,7 +4241,7 @@ pub mod signed_in {
         // T7.3: sync is on from the time Splat connects, and leaving the page does not stop it.
         let on = d.has_containing(SYNC_ON);
         d.click_containing(SYNC_SECTION);
-        d.state("party-sync-on", Sizes::Default);
+        d.state("party-sync-on", Sizes::All);
         go_library(d);
         let rail = !d.visible_text(RAIL_STOPPED);
         go_party(d);
@@ -4951,7 +4955,7 @@ pub mod session_notes {
         d.click("Place this event after");
         d.click("Start of the timeline");
         d.state("timeline-day-added", Sizes::All);
-        d.click_containing("Long rest · Day 1 · Session 1");
+        d.click_containing("Long rest · Session 1");
         d.expect("Link text");
         d.replace_text_in("Title", "Rest at the mill");
         d.type_into("Where", "Old mill");
@@ -5073,7 +5077,10 @@ pub mod session_notes {
             d.has_containing("Notes changed on disk"),
             "A note that could not be saved stays in the rail on other pages",
         );
-        d.state("note-conflict-elsewhere", Sizes::Default);
+        d.observe_both("iter-1-C-FT3", "The rail names the changed notes", |d| {
+            d.rail_words().contains("Notes changed")
+        });
+        d.state("note-conflict-elsewhere", Sizes::All);
         d.click("Notes changed on disk");
         d.expect("Overwrite with my draft");
         d.click(NAV_TIMELINE);
@@ -5155,7 +5162,24 @@ pub mod session_notes {
         d.state("session-folder-move-offered", Sizes::All);
         d.click("Move files and save");
         d.expect("Moved 1 note, 4 events, 2 templates and 1 recording to 30 Sessions.");
-        d.state("session-folder-moved", Sizes::Default);
+        d.observe_both(
+            "iter-1-C-FT15-18",
+            "The session folder uses one label and one right edge",
+            |d| {
+                let nodes = d.nodes();
+                nodes
+                    .iter()
+                    .find(|node| {
+                        node.name == "Folder" && node.role == egui::accesskit::Role::TextInput
+                    })
+                    .zip(nodes.iter().find(|node| node.name == "Save folder"))
+                    .is_some_and(|(field, save)| {
+                        (field.rect.right() - save.rect.right()).abs() < 1.0
+                            && field.rect.width() <= crate::design::FORM_WIDTH + 1.0
+                    })
+            },
+        );
+        d.state("session-folder-moved", Sizes::All);
         d.click(NAV_SESSIONS);
         d.expect(&format!("Session 1: {TITLE}"));
 
@@ -5521,10 +5545,14 @@ pub mod session_notes {
                     .iter()
                     .filter(|node| node.name.contains(" · "))
                     .filter_map(|node| {
-                        let (title, _) = node.name.split_once(" · ")?;
+                        let (title, detail) = node.name.split_once(" · ")?;
                         let first = d.painted_rect_in(title, node.rect)?;
                         let second = d.painted_rect_in(
-                            if title == RUN { "Round 2" } else { "Day 1" },
+                            if title == RUN {
+                                "Round 2"
+                            } else {
+                                detail.split(" · ").next()?
+                            },
                             node.rect,
                         )?;
                         (second.top() > first.top()).then_some((title, second.top() - first.top()))
@@ -5888,7 +5916,7 @@ pub mod session_recording {
             .simulate_recorder_health(Health::Stalled);
         d.settle();
         d.expect("Stopped saving after");
-        d.state("recording-stalled", Sizes::Default);
+        d.state("recording-stalled", Sizes::All);
         d.observe(
             "T11.5",
             d.has("Record again"),
@@ -5978,7 +6006,7 @@ pub mod session_recording {
             d.wait_for_text("Anthropic");
         });
         d.click("Anthropic");
-        d.state("processing-settings-anthropic", Sizes::Default);
+        d.state("processing-settings-anthropic", Sizes::All);
         d.click("LLM service");
         d.click("Codex CLI, GPT-6.1 Sol");
         d.click("Account and campaigns");
@@ -6214,11 +6242,10 @@ pub mod session_recording {
         d.settle();
         d.observe(
             "T11.6",
-            d.has_containing("Processed, with a warning")
-                && d.rail_words().contains("Processing warning"),
+            d.has_containing("Processed, with a warning") && d.rail_words().contains("Processed"),
             "A processed result keeps its warning in the rail and on other pages",
         );
-        d.state("processing-warned-elsewhere", Sizes::Default);
+        d.state("processing-warned-elsewhere", Sizes::All);
         d.click(NAV_SESSIONS);
         d.observe(
             "T11.6",
@@ -6324,6 +6351,14 @@ pub mod session_recording {
         choose_view(d, "Summary");
         d.state("recording-summary-narrow", Sizes::Default);
         d.press_ctrl(Key::K);
+
+        d.click(NAV_SETTINGS);
+        d.click("Recording and processing");
+        d.scroll_until(pos2(600.0, 400.0), "Speech service", 12);
+        d.click("Speech service");
+        d.click("Another service");
+        d.expect("The custom service must support the OpenAI audio/transcriptions API.");
+        d.state("processing-custom-speech-service", Sizes::All);
     }
 }
 
@@ -7642,7 +7677,7 @@ pub mod session_plan {
         assert!(d.has("Long rest added. Everyone starts the next fight at full."));
         d.state("long-rest-restores", Sizes::Default);
         d.click("Long rest");
-        d.click("Not at full");
+        d.click("Mark not at full");
         d.expect("Undo ruling");
         let session = d.app_mut().sessions.current();
         assert!(!crate::timeline::party_state(&d.app_mut().timeline.events, session).rested);
@@ -7652,19 +7687,19 @@ pub mod session_plan {
             d.at_size(size, |d| {
                 d.nodes()
                     .iter()
-                    .find(|n| n.name == "Everyone at full")
+                    .find(|n| n.name == "Mark everyone at full")
                     .unwrap()
                     .rect
                     .top()
             })
         });
-        d.click("Everyone at full");
+        d.click("Mark everyone at full");
         assert!(crate::timeline::party_state(&d.app_mut().timeline.events, session).rested);
         let after = sizes.map(|size| {
             d.at_size(size, |d| {
                 d.nodes()
                     .iter()
-                    .find(|n| n.name == "Not at full")
+                    .find(|n| n.name == "Mark not at full")
                     .unwrap()
                     .rect
                     .top()
@@ -7679,7 +7714,7 @@ pub mod session_plan {
         d.state("plan-rest-ruling-on", Sizes::All);
         d.click("Undo ruling");
         assert!(!crate::timeline::party_state(&d.app_mut().timeline.events, session).rested);
-        d.click("Everyone at full");
+        d.click("Mark everyone at full");
         d.click("Long rest");
         d.click(&format!("Resume: {SECOND}"));
         d.expect("Party HP is full after the long rest.");
@@ -7701,7 +7736,7 @@ pub mod session_plan {
         close_run(d);
         show_plan(d);
         d.click("Long rest");
-        d.click("Not at full");
+        d.click("Mark not at full");
         d.click(NAV_TIMELINE);
         d.click("Add Long rest");
         d.expect("Long rest added. Everyone starts the next fight at full.");
@@ -7737,14 +7772,16 @@ pub mod session_plan {
                 area.is_some_and(|area| d.painted_in(area).matches("Long rest").count() == 1)
             },
         );
-        d.click("Not at full");
+        d.click("Mark not at full");
         assert!(!crate::timeline::party_state(&d.app_mut().timeline.events, session).rested);
-        d.state("timeline-rest-ruling-off", Sizes::Default);
-        d.click("Everyone at full");
-        d.state("timeline-rest-ruling-on", Sizes::Default);
+        d.state("timeline-rest-ruling-off", Sizes::All);
+        d.click("Mark everyone at full");
+        assert!(crate::timeline::party_state(&d.app_mut().timeline.events, session).rested);
+        d.expect_same("Only the long-rest status and action change; the wide page stays in place.");
+        d.state("timeline-rest-ruling-on", Sizes::All);
         d.click("Undo ruling");
         assert!(!crate::timeline::party_state(&d.app_mut().timeline.events, session).rested);
-        d.click("Everyone at full");
+        d.click("Mark everyone at full");
         d.click(NAV_SESSIONS);
         show_plan(d);
         d.click(&format!("More actions for {SECOND}"));

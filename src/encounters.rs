@@ -4132,7 +4132,7 @@ impl Encounters {
         ui.scope_builder(egui::UiBuilder::new().max_rect(egui::Rect::from_min_size(
             ui.cursor().min, egui::vec2(ui.available_width().min(design::FORM_WIDTH), ui.available_height()))), |ui| {
         design::locked(ui, closed_while, |ui| {
-            design::text_field(
+            design::small_text_field(
                 ui,
                 "Run folder",
                 &mut snapshot.options.folder,
@@ -4145,7 +4145,7 @@ impl Encounters {
             if !rule_flags.is_empty() {
                 crate::world::file_actions(ui, &active, "Campaign.md");
             }
-            design::field(ui, "Roll NPC initiative", None, None, |ui| {
+            design::small_field(ui, "Roll NPC initiative", None, None, |ui| {
                 let combo = egui::ComboBox::from_id_salt("campaign_initiative")
                     .icon(design::combo_icon)
                     .width(ui.available_width().min(320.0))

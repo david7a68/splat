@@ -162,9 +162,9 @@ pub fn rest_ruling(ui: &mut egui::Ui, event: &Event, undo: bool) -> Option<RestR
         if design::link(
             ui,
             if event.restores {
-                "Not at full"
+                "Mark not at full"
             } else {
-                "Everyone at full"
+                "Mark everyone at full"
             },
         )
         .clicked()
@@ -432,8 +432,13 @@ impl TimelinePage {
         let open = event.run.is_some() && event.run == self.open_run;
         let summary = super::played_fight_summary(event, open);
         let mut detail = event.summary_with_result(session, &summary);
-        // Filters and scrolling hide the Day rows, so each row says its own.
-        if event.kind != Kind::Day && day > 0 {
+        // Repeat the day only when a filter or search can hide its heading.
+        if event.kind != Kind::Day
+            && day > 0
+            && (self.filter != Filter::All
+                || !self.search.trim().is_empty()
+                || self.session.is_some())
+        {
             detail = if detail.is_empty() {
                 format!("Day {day}")
             } else {
@@ -1357,6 +1362,73 @@ fn header_kind(event: &Event) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn iter1_c_day_appears_only_when_filters_hide_day_headings() {
+        use egui_kittest::kittest::Queryable;
+        for filtered in [false, true] {
+            let mut book = Book::default();
+            book.add(Kind::ShortRest, None);
+            let event = book.events.remove(0);
+            let detail = event.summary_with_result(None, "");
+            let expected_detail = if filtered {
+                if detail.is_empty() {
+                    "Day 1".into()
+                } else {
+                    format!("Day 1 · {detail}")
+                }
+            } else {
+                detail
+            };
+            let expected = if expected_detail.is_empty() {
+                event.label(1)
+            } else {
+                format!("{} · {expected_detail}", event.label(1))
+            };
+            let mut harness = egui_kittest::Harness::builder().build(move |ctx| {
+                egui::CentralPanel::default().show(ctx, |ui| {
+                    let mut page = TimelinePage::default();
+                    if filtered {
+                        page.filter = Filter::Rests;
+                    }
+                    page.row(ui, &event, 1, None, false);
+                });
+            });
+            design::theme::install(&harness.ctx);
+            harness.run_steps(2);
+            harness.get_by_label(&expected);
+        }
+    }
+
+    #[test]
+    fn iter1_c_rest_ruling_actions_name_the_change_and_keep_undo() {
+        use egui_kittest::kittest::Queryable;
+        let mut book = Book::default();
+        book.add(Kind::LongRest, None);
+        book.events[0].restores = true;
+        let event_id = book.events[0].id.clone();
+        let mut harness = egui_kittest::Harness::builder().build_state(
+            move |ctx, book: &mut Book| {
+                egui::CentralPanel::default().show(ctx, |ui| {
+                    if let Some(action) = rest_ruling(ui, &book.events[0], true) {
+                        action.apply(book, &event_id);
+                    }
+                });
+            },
+            book,
+        );
+        design::theme::install(&harness.ctx);
+        harness.run_steps(2);
+        harness.get_by_label("Mark not at full").click();
+        harness.run_steps(2);
+        assert!(!harness.state().events[0].restores);
+        harness.get_by_label("Mark everyone at full").click();
+        harness.run_steps(2);
+        assert!(harness.state().events[0].restores);
+        harness.get_by_label("Undo ruling").click();
+        harness.run_steps(2);
+        assert!(!harness.state().events[0].restores);
+    }
 
     #[test]
     fn an_untitled_rest_names_its_kind_once_in_the_header() {
