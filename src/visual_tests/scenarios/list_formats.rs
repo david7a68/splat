@@ -75,6 +75,23 @@ pub fn run(d: &mut Driver<'_>) {
     d.expect("Imaginary initiative");
     d.expect("Combat initiative choice");
     d.expect("Splat uses the D&D default");
+    d.observe_both(
+        "iter-1-C-FD4-13",
+        "The save row stays above the campaign warning and its repair actions",
+        |d| {
+            let nodes = d.nodes();
+            nodes
+                .iter()
+                .find(|node| node.name == "Save selections")
+                .zip(
+                    nodes
+                        .iter()
+                        .find(|node| node.name == "Choose in Rules and runs"),
+                )
+                .is_some_and(|(save, repair)| save.rect.bottom() < repair.rect.top())
+                && d.has("2 content issues to repair")
+        },
+    );
     d.state("campaign-flagged-rule-choice", Sizes::All);
     assert_eq!(fs::read_to_string(&manifest).unwrap(), flagged);
     d.click("Choose in Rules and runs");

@@ -817,13 +817,14 @@ impl Campaigns {
         ui.horizontal(|ui| {
             design::group_heading(ui, "Campaigns", self.data.campaigns.len());
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                if Action::quiet("Reload from disk")
-                    .blocked(blocked)
-                    .icon(icons::REFRESH)
-                    .density(Density::Read)
-                    .hint("Reload campaign settings from disk")
-                    .show(ui)
-                    .clicked()
+                if (!self.data.campaigns.is_empty() || !self.writable)
+                    && Action::quiet("Reload from disk")
+                        .blocked(blocked)
+                        .icon(icons::REFRESH)
+                        .density(Density::Read)
+                        .hint("Reload campaign settings from disk")
+                        .show(ui)
+                        .clicked()
                 {
                     self.reload();
                 }

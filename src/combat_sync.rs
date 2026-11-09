@@ -1065,10 +1065,10 @@ impl CombatSync {
             if let Some(error) = &self.error {
                 ui.colored_label(crate::design::colors().result.error, error);
             }
-            ui.weak("Enable to read the live sheet. Edits made here will then update D&D Beyond.");
+            ui.label(crate::design::Type::Small.rich(ui, "Enable to read the live sheet. Edits made here will then update D&D Beyond.").color(crate::design::colors().muted));
             return;
         }
-        ui.weak("HP, death saves, conditions, spell slots, and supported limited uses · checks every 15 seconds");
+        ui.label(crate::design::Type::Small.rich(ui, "HP, death saves, conditions, spell slots, and supported limited uses · checks every 15 seconds").color(crate::design::colors().muted));
         if self.busy() {
             ui.horizontal(|ui| {
                 crate::design::spinner(ui);
