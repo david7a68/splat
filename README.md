@@ -161,7 +161,7 @@ open a chooser, including an NPC's **In** link in World and Lookup.
 
 With no campaigns, the switcher says **No campaign** and offers **Add campaign…**.
 New entry and Copy entry use **Destination** and show a short path, with the full path
-on hover. Sharing required campaign entries lists the copies before **Share both**.
+on hover. Sharing required campaign entries lists the copies before **Copy both**.
 
 The `gallery` scenario captures every design token and component, including page headers, blocked reasons, full rows with menus, save rows, discard recovery, the Add strip, paused runs and message actions. Each scroll capture adds a section to the evidence. The `missing-glyph` check rejects painted characters missing from the app fonts. The
 `clipped` check also catches text partly covered by a later opaque pane. `src/design/lint.rs` fails on raw
@@ -508,9 +508,10 @@ sidebar. Sections use subject metadata as well as entry kinds, so spell referenc
 appear with spells. Other entries includes package notes and invalid notes for repair.
 Search covers all sections by name, path, or section; clear it to return to the
 selected section. Entries share stat cards, headings, and compact detail rows.
-Structured details, engine support, and source identifiers remain expandable;
-Markdown source and local editing remain available. Engine support is separate
-from structural validity.
+Structured details and source identifiers remain expandable. **What Splat applies**
+sits inside **Source and identifiers**, separate from structural validity. Unreadable
+files omit these sections. Markdown source and local editing remain available in a
+fixed frame; its text scrolls inside the frame.
 
 The built-in reader reflows printed PDF lines into paragraphs and keeps page
 references under **Source and identifiers**. Raw definitions stay under collapsed
@@ -558,7 +559,7 @@ Use **Copy to…** on a library or campaign entry to make an independent copy in
 registered package or campaign. Review the destination, name, retained dependencies,
 and Markdown before **Create copy**. Copies get a new UUID, lose the original resource
 key, and retain source attribution and optional origin identity. Existing references
-are not rewritten. When an entry needs a campaign entry, **Share both** copies both into the package and reconnects the new references. The app checks source, dependency,
+are not rewritten. When an entry needs a campaign entry, **Copy both** copies both into the package and reconnects the new references. The app checks source, dependency,
 and destination changes before writing. Saving can create new subfolders.
 
 Clean destinations refresh after copying, and an open encounter draft sees the copy at once. **Campaign → Campaign entries** provides a
@@ -817,7 +818,7 @@ Settings imports a D&D Beyond campaign directly below its row and suggests a new
 
 Library shows **Back** with **Alt+Left** whenever an earlier entry is available. Both ordinary and wiki links open in place. The draft and disk comparison opens at the first changed line, with two context lines above it; a missing line says **No line**. Lookup has **Clear** beside search. An NPC read beside a run shows linked **Fights as** and **In** values. New packages start beside the last registered package. **Folder** accepts a new folder or suggests an existing one.
 
-The visual suite includes `npc-in-lookup`, `package-rename` and `package-about`. `share-to-package` checks the new references after **Share both**, and Library navigation checks the dependency copy action and its Undo.
+The visual suite includes `npc-in-lookup`, `package-rename` and `package-about`. `share-to-package` checks the new references after **Copy both**, and Library navigation checks the dependency copy action and its Undo.
 
 On window focus, Splat checks campaign notes and every registered package for disk changes. Library, Lookup and encounter search reload changed content. A changed draft opens the disk comparison. A package's About page counts its used entries and offers **Use every entry** with Undo. Removing an unavailable package also offers Undo and keeps links to the encounters that need its creatures.
 
@@ -883,3 +884,7 @@ outside tags and prose.
 
 Bad rows stay in the file and have a line warning. Saves keep other prose and properties.
 Run files stay JSON. Turn on Obsidian Sync's **other file types** option to sync them.
+
+Skipped conversions offer **Convert files…** beside the skipped file. Reopening the preview
+keeps **Undo convert** until you apply the next conversion. Duplicate-file repair names
+the file that becomes a separate entry and offers **Undo separate entry** beside its result.

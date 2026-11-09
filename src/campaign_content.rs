@@ -131,7 +131,7 @@ pub(crate) fn repair_problem(path: &str, text: &str) -> (Option<String>, Option<
             let thing = if *ch == '[' { "list" } else { "mapping" };
             return (
                 Some(format!(
-                    "line {line} opens a {thing} with {ch} that never closes"
+                    "Line {line} opens a {thing} with {ch} that never closes."
                 )),
                 Some(*line),
             );
@@ -140,7 +140,7 @@ pub(crate) fn repair_problem(path: &str, text: &str) -> (Option<String>, Option<
             let line = location.line() + 1;
             return (
                 Some(format!(
-                    "Check the YAML on line {line}. Use a name, a colon and its value"
+                    "Check the YAML on line {line}. Use a name, a colon and its value."
                 )),
                 Some(line),
             );
@@ -481,6 +481,7 @@ impl CampaignContent {
             ui,
             self.run_open
                 .then_some("Close the run before converting files."),
+            campaigns,
         ) {
             self.reload(ui.ctx(), campaigns, active.clone());
         }
@@ -1292,16 +1293,20 @@ impl CampaignContent {
                     let users = selection.campaign_users(catalogue);
                     for (at, (id, name)) in users.iter().enumerate() {
                         if at > 0 {
-                            ui.label(Type::Small.rich(ui, "and").color(c.muted));
+                            ui.label("and");
                         }
                         if design::link(ui, name).clicked() {
                             self.open_lookup = Some(*id);
                         }
                     }
                     if !users.is_empty() {
-                        ui.label(Type::Small.rich(ui, "use its creatures.").color(c.muted));
+                        ui.label("use its creatures.");
                     }
                 });
+                let relocated = known
+                    .as_ref()
+                    .filter(|known| !known.path.is_dir())
+                    .and_then(|known| relocated_package(known, campaigns.modules()));
                 if let Some(known) = &known {
                     ui.label(
                         Type::Small
@@ -1322,32 +1327,37 @@ impl CampaignContent {
                             Err(error) => self.error = Some(error),
                         }
                     }
-                    if !known.path.is_dir()
-                        && let Some(module) = relocated_package(known, campaigns.modules())
-                    {
+                    if let Some(module) = &relocated {
                         let message =
                             format!("{} is now in {}/.", module.name, folder_words(&module.path));
-                        if design::message_with_action(ui, Tone::Info, &message, "Use this folder")
-                            && manifest_locked.is_none()
+                        design::message(ui, Tone::Info, &message);
+                        if Action::secondary("Use this folder")
+                            .blocked(manifest_locked)
+                            .show(ui)
+                            .clicked()
                         {
                             self.recovered = Some((module.clone(), registered.clone()));
-                            self.found_package = Some(module);
+                            self.found_package = Some(module.clone());
                         }
                     }
                 }
                 ui.horizontal_wrapped(|ui| {
-                    if Action::secondary("Find the folder…")
-                        .blocked_if(
-                            document.selections != self.saved_selections
-                                || self
-                                    .repairs
-                                    .iter()
-                                    .any(|(_, baseline, draft)| baseline != draft),
-                            "Save or discard changes before finding the folder.",
-                        )
-                        .density(Density::Read)
-                        .show(ui)
-                        .clicked()
+                    if (if relocated.is_some() {
+                        Action::quiet("Find the folder…")
+                    } else {
+                        Action::secondary("Find the folder…")
+                    })
+                    .blocked_if(
+                        document.selections != self.saved_selections
+                            || self
+                                .repairs
+                                .iter()
+                                .any(|(_, baseline, draft)| baseline != draft),
+                        "Save or discard changes before finding the folder.",
+                    )
+                    .density(Density::Read)
+                    .show(ui)
+                    .clicked()
                         && let Some(folder) = crate::hermetic::pick_folder_from(
                             known.as_ref().and_then(|module| module.path.parent()),
                         )
@@ -1914,7 +1924,7 @@ mod tests {
         assert_eq!(line, Some(3));
         assert_eq!(
             problem.as_deref(),
-            Some("line 3 opens a list with [ that never closes")
+            Some("Line 3 opens a list with [ that never closes.")
         );
     }
 
