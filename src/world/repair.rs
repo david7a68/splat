@@ -82,6 +82,7 @@ impl Repair {
                 self.baseline = text.clone();
                 self.draft = text;
                 self.discarded = None;
+                // A newer file ends the reload's Undo, so Undo never hides that change.
                 self.reloaded = None;
                 self.error = None;
             }
@@ -119,7 +120,12 @@ impl Repair {
                     }
                     design::DiskConflictChoice::Overwrite => {
                         // An unfinished repair stays editable; only valid text can be written.
-                        return problem.is_none() && self.save(campaign);
+                        if problem.is_some() {
+                            self.error =
+                                Some("Not saved: fix the problem above, then save.".into());
+                            return false;
+                        }
+                        return self.save(campaign);
                     }
                 }
             }
@@ -129,7 +135,7 @@ impl Repair {
             && design::undo_message(
                 ui,
                 design::Tone::Info,
-                "Reloaded from disk. Your previous draft is kept until the next edit.",
+                "Reloaded from disk. Your previous draft is kept until you edit or the file changes again.",
                 "Undo reload",
             )
         {

@@ -914,7 +914,7 @@ Disk conflicts use `disk_conflict_choices`: “This entry changed on disk. Your 
 
 Comparisons put `Under the heading “Recovery”` beside the differing-line count, with the actual heading name. The line wraps as needed. Changed participants use the neutral muted token with their pencil; damaged HP uses the text token with its part-filled bar. Both stay distinct from warning and conflict tokens in the colour-distance test.
 
-Duplicate World readers keep their path on the file line only. Search results keep the path to tell duplicate names apart. Generated NPCs link `How to mark a table` to the README’s Table marks rule beside the instructions for custom names.
+Duplicate World readers keep their path on the file line only. Search results keep the path to tell duplicate names apart. Generated NPCs show the table marker for custom names in the app, with no link out.
 
 ## Library and files, design score iteration 1
 

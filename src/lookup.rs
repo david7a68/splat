@@ -1911,15 +1911,11 @@ pub(crate) fn generated_card(
             Type::Small
                 .rich(
                     ui,
-                    "Built-in names. To use your own names, add a table marked npc-name to any note.",
+                    "Built-in names. To use your own, put <!-- splat:rolls key=npc-name dice=1d6 --> \
+                     on the line above a table of names in any note.",
                 )
                 .color(colors().muted),
         );
-        if design::link(ui, "How to mark a table").clicked() {
-            ui.ctx().open_url(egui::OpenUrl::new_tab(
-                "https://github.com/david7a68/splat#table-marks",
-            ));
-        }
     }
     for source in sources {
         let (kind, path) = source.split_once(": ").unwrap_or(("npc-name", source));

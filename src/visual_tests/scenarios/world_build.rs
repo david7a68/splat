@@ -138,6 +138,14 @@ pub fn broken(d: &mut Driver<'_>) {
         d.current_page() == "World" && d.has("Note text"),
         "Lookup opens the broken file on World",
     );
+    d.replace_editor_text(&fixed);
+    d.click("Save repaired note");
+    d.settle();
+    d.observe(
+        "W5",
+        !d.has("1 note cannot be read") && fs::read_to_string(&path).unwrap() == fixed,
+        "Save repaired note writes the repair and removes the warning",
+    );
 }
 
 pub fn places(d: &mut Driver<'_>) {
