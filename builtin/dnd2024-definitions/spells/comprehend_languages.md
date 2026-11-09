@@ -23,6 +23,8 @@ splat_sources:
 | Range |  |
 | Components | V, S, M (a pinch of soot and salt) |
 | Duration | 1 hour |
+| Ritual | Yes |
+| Concentration | No |
 
 
 ## Source text

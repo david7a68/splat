@@ -7,6 +7,7 @@ splat_name: Cockatrice
 splat_origin: dnd2024:reference/creature/cockatrice
 splat_sources:
 - SRD 5.2.1, pp. 275, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 75, Habitat
 ---
 
 # Cockatrice
@@ -27,6 +28,7 @@ splat_sources:
 | Senses | Darkvision 60 ft.; Passive Perception 11 |
 | Languages | None |
 | Immunities | Petrified |
+| Habitat | Grassland |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

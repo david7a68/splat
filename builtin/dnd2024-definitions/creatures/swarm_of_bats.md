@@ -7,6 +7,7 @@ splat_name: Swarm of Bats
 splat_origin: dnd2024:reference/creature/swarm_of_bats
 splat_sources:
 - SRD 5.2.1, pp. 361, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 370, Habitat
 ---
 
 # Swarm of Bats
@@ -28,6 +29,7 @@ splat_sources:
 | Languages | None |
 | Resistances | Bludgeoning, Piercing, Slashing |
 | Immunities | Charmed, Frightened, Grappled, Paralyzed, Petrified, Prone, Restrained, Stunned |
+| Habitat | Forest, Mountain, Underdark, Urban |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

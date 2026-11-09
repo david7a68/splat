@@ -125,13 +125,15 @@ pub fn resume_run(d: &mut Driver<'_>, name: &str) {
     d.expect(&format!("{RUN_HEADING}{name}"));
 }
 
-/// Close the run. It takes a second, inline step, far from Next turn.
+/// Close the run. Ask again only when saved work or unsent changes need a choice.
 pub fn close_run(d: &mut Driver<'_>) {
     if !d.has(CLOSE_RUN) && d.has("Close menu") {
         d.click("Close menu");
     }
     d.click(CLOSE_RUN);
-    d.click(CLOSE_NOW);
+    if d.has(CLOSE_NOW) {
+        d.click(CLOSE_NOW);
+    }
 }
 
 pub fn open_saved_encounter(d: &mut Driver<'_>, name: &str) {

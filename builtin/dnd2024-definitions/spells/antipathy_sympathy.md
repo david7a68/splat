@@ -23,6 +23,8 @@ splat_sources:
 | Range | 60 feet |
 | Components | V, S, M (a mix of vinegar and honey) |
 | Duration | 10 days |
+| Ritual | No |
+| Concentration | No |
 
 
 ## Source text

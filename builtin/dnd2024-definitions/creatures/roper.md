@@ -7,6 +7,7 @@ splat_name: Roper
 splat_origin: dnd2024:reference/creature/roper
 splat_sources:
 - SRD 5.2.1, pp. 320, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 262, Habitat
 ---
 
 # Roper
@@ -27,6 +28,7 @@ splat_sources:
 | Skills | Perception +6, Stealth +5 |
 | Senses | Darkvision 60 ft.; Passive Perception 16 |
 | Languages | None |
+| Habitat | Underdark |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

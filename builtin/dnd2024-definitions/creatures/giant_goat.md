@@ -7,6 +7,7 @@ splat_name: Giant Goat
 splat_origin: dnd2024:reference/creature/giant_goat
 splat_sources:
 - SRD 5.2.1, pp. 351, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 357, Habitat
 ---
 
 # Giant Goat
@@ -27,6 +28,7 @@ splat_sources:
 | Skills | Perception +3 |
 | Senses | Darkvision 60 ft.; Passive Perception 13 |
 | Languages | None |
+| Habitat | Grassland, Hill, Mountain |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

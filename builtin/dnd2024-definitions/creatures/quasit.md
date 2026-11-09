@@ -7,6 +7,7 @@ splat_name: Quasit
 splat_origin: dnd2024:reference/creature/quasit
 splat_sources:
 - SRD 5.2.1, pp. 317, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 252, Habitat
 ---
 
 # Quasit
@@ -29,6 +30,7 @@ splat_sources:
 | Languages | Abyssal, Common |
 | Resistances | Cold, Fire, Lightning |
 | Immunities | Poison; Poisoned |
+| Habitat | Planar (Abyss) |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

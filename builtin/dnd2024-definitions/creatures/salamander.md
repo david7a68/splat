@@ -7,6 +7,7 @@ splat_name: Salamander
 splat_origin: dnd2024:reference/creature/salamander
 splat_sources:
 - SRD 5.2.1, pp. 321, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 267, Habitat
 ---
 
 # Salamander
@@ -28,6 +29,7 @@ splat_sources:
 | Languages | Primordial (Ignan) |
 | Immunities | Fire |
 | Vulnerabilities | Cold |
+| Habitat | Underdark, Planar (Elemental Plane of Fire) |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

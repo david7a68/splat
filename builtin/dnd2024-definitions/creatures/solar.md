@@ -7,6 +7,7 @@ splat_name: Solar
 splat_origin: dnd2024:reference/creature/solar
 splat_sources:
 - SRD 5.2.1, pp. 326, 327, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 288, Habitat
 ---
 
 # Solar
@@ -28,6 +29,7 @@ splat_sources:
 | Senses | Truesight 120 ft.; Passive Perception 24 |
 | Languages | All; telepathy 120 ft. |
 | Immunities | Poison, Radiant; Charmed, Exhaustion, Frightened, Poisoned |
+| Habitat | Planar (Upper Planes) |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

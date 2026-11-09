@@ -7,6 +7,7 @@ splat_name: Wraith
 splat_origin: dnd2024:reference/creature/wraith
 splat_sources:
 - SRD 5.2.1, pp. 342, 343, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 336, Habitat
 ---
 
 # Wraith
@@ -28,6 +29,7 @@ splat_sources:
 | Languages | Common plus two other languages |
 | Resistances | Acid, Bludgeoning, Cold, Fire, Piercing, Slashing |
 | Immunities | Necrotic, Poison; Charmed, Exhaustion, Grappled, Paralyzed, Petrified, Poisoned, Prone, Restrained, Unconscious |
+| Habitat | Underdark, Planar (Shadowfell) |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

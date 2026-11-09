@@ -7,6 +7,7 @@ splat_name: Giant Wolf Spider
 splat_origin: dnd2024:reference/creature/giant_wolf_spider
 splat_sources:
 - SRD 5.2.1, pp. 355, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 362, Habitat
 ---
 
 # Giant Wolf Spider
@@ -27,6 +28,7 @@ splat_sources:
 | Skills | Perception +3, Stealth +7 |
 | Senses | Blindsight 10 ft., Darkvision 60 ft.; Passive Perception 13 |
 | Languages | None |
+| Habitat | Coastal, Desert, Forest, Grassland, Hill |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

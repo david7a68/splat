@@ -7,6 +7,7 @@ splat_name: Giant Spider
 splat_origin: dnd2024:reference/creature/giant_spider
 splat_sources:
 - SRD 5.2.1, pp. 353, 354, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 359, Habitat
 ---
 
 # Giant Spider
@@ -27,6 +28,7 @@ splat_sources:
 | Skills | Perception +4, Stealth +7 |
 | Senses | Darkvision 60 ft.; Passive Perception 14 |
 | Languages | None |
+| Habitat | Desert, Forest, Swamp, Underdark, Urban |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

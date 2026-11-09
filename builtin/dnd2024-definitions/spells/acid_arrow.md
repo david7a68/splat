@@ -23,6 +23,8 @@ splat_sources:
 | Range | 90 feet |
 | Components | V, S, M (powdered rhubarb leaf) |
 | Duration | Instantaneous |
+| Ritual | No |
+| Concentration | No |
 
 
 ## Source text

@@ -7,6 +7,7 @@ splat_name: Druid
 splat_origin: dnd2024:reference/creature/druid
 splat_sources:
 - SRD 5.2.1, pp. 282, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 106, Habitat
 ---
 
 # Druid
@@ -28,6 +29,7 @@ splat_sources:
 | Senses | Passive Perception 15 |
 | Languages | Common, Druidic, Sylvan |
 | Gear | Studded Leather Armor |
+| Habitat | Any |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

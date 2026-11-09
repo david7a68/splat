@@ -7,6 +7,7 @@ splat_name: Assassin
 splat_origin: dnd2024:reference/creature/assassin
 splat_sources:
 - SRD 5.2.1, pp. 260, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 22, Habitat
 ---
 
 # Assassin
@@ -29,6 +30,7 @@ splat_sources:
 | Languages | Common, Thieves’ Cant |
 | Gear | Light Crossbow, Shortsword, Studded Leather Armor |
 | Resistances | Poison |
+| Habitat | Any |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

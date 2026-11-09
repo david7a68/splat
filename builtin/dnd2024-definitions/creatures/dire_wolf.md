@@ -7,6 +7,7 @@ splat_name: Dire Wolf
 splat_origin: dnd2024:reference/creature/dire_wolf
 splat_sources:
 - SRD 5.2.1, pp. 347, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 352, Habitat
 ---
 
 # Dire Wolf
@@ -27,6 +28,7 @@ splat_sources:
 | Skills | Perception +5, Stealth +4 |
 | Senses | Darkvision 60 ft.; Passive Perception 15 |
 | Languages | None |
+| Habitat | Forest, Hill |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

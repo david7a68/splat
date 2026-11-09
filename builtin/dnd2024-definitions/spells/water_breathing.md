@@ -23,6 +23,8 @@ splat_sources:
 | Range | 30 feet |
 | Components | V, S, M (a short reed) |
 | Duration | 24 hours |
+| Ritual | Yes |
+| Concentration | No |
 
 
 ## Source text

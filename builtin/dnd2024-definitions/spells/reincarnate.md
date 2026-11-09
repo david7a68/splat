@@ -23,6 +23,8 @@ splat_sources:
 | Range |  |
 | Components | V, S, M (rare oils worth 1,000+ GP, which the spell consumes) |
 | Duration | Instantaneous |
+| Ritual | No |
+| Concentration | No |
 
 
 ## Source text

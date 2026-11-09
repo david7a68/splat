@@ -3529,6 +3529,15 @@ pub fn state_words(round: u64, paused: bool, ended: bool) -> String {
     }
 }
 
+/// Recent saves use the same age words as sheets. Older saves use a short UTC date.
+pub(crate) fn saved_time(at: u64, now: u64) -> String {
+    if now / 86_400 <= at / 86_400 + 1 {
+        crate::party::fetch_age(now.saturating_sub(at))
+    } else {
+        calendar_date(at)
+    }
+}
+
 /// A UTC date and time, so two runs saved on one day can be told apart.
 pub fn calendar_time(seconds: u64) -> String {
     format!(
@@ -7109,6 +7118,42 @@ mod tests {
             "{name}"
         );
     }
+    #[test]
+    fn iter_1_b_saved_times_use_age_for_recent_calendar_days() {
+        let now = 10 * 86_400 + 3_600;
+        assert_eq!(saved_time(now, now), "just now");
+        assert_eq!(saved_time(now - 120, now), "2 min ago");
+        assert_eq!(saved_time(now - 7_200, now), "2 h ago");
+        assert_eq!(saved_time(now - 86_400, now), "1 day ago");
+        assert_eq!(saved_time(now - 90_001, now), calendar_date(now - 90_001));
+        assert_eq!(
+            saved_time(now - 3 * 86_400, now),
+            calendar_date(now - 3 * 86_400)
+        );
+    }
+
+    #[test]
+    fn iter_1_b_invalid_arrival_totals_keep_text_and_run_unchanged() {
+        for text in ["-", "--2", "9223372036854775808"] {
+            let mut run = run();
+            begin(&mut run);
+            let wave = guard_group("Wave", 1);
+            let id = wave.id;
+            run.groups = Some(Arc::new(vec![wave]));
+            run.group_totals.insert(id, text.into());
+            let count = run.state.participants.len();
+            let history = run.history.len();
+            run.add_group_from_panel(id);
+            assert_eq!(run.state.participants.len(), count, "{text}");
+            assert_eq!(run.history.len(), history);
+            assert_eq!(run.group_totals.get(&id).unwrap(), text);
+            assert_eq!(
+                run.error.as_deref(),
+                Some("Enter a whole number, or clear the field to roll.")
+            );
+        }
+    }
+
     #[test]
     fn a_drop_uses_the_total_typed_beside_the_group_and_a_failure_keeps_it() {
         let mut run = run();

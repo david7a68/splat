@@ -7,6 +7,7 @@ splat_name: Young Copper Dragon
 splat_origin: dnd2024:reference/creature/young_copper_dragon
 splat_sources:
 - SRD 5.2.1, pp. 276, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 78, Habitat
 ---
 
 # Young Copper Dragon
@@ -28,6 +29,7 @@ splat_sources:
 | Senses | Blindsight 30 ft., Darkvision 120 ft.; Passive Perception 17 |
 | Languages | Common, Draconic |
 | Immunities | Acid |
+| Habitat | Hill |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

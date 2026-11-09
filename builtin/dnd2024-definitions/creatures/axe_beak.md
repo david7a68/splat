@@ -7,6 +7,7 @@ splat_name: Axe Beak
 splat_origin: dnd2024:reference/creature/axe_beak
 splat_sources:
 - SRD 5.2.1, pp. 260, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 24, Habitat
 ---
 
 # Axe Beak
@@ -26,6 +27,7 @@ splat_sources:
 | Challenge | 1/4 (XP 50; PB +2) |
 | Senses | Passive Perception 10 |
 | Languages | None |
+| Habitat | Arctic, Grassland, Hill |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

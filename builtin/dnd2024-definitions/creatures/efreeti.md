@@ -7,6 +7,7 @@ splat_name: Efreeti
 splat_origin: dnd2024:reference/creature/efreeti
 splat_sources:
 - SRD 5.2.1, pp. 283, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 109, Habitat
 ---
 
 # Efreeti
@@ -27,6 +28,7 @@ splat_sources:
 | Senses | Darkvision 120 ft.; Passive Perception 12 |
 | Languages | Primordial (Ignan) |
 | Immunities | Fire |
+| Habitat | Desert, Planar (Elemental Plane of Fire) |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

@@ -23,6 +23,8 @@ splat_sources:
 | Range | 60 feet |
 | Components | V, M (bat fur and a piece of coal) |
 | Duration | Concentration, up to 10 minutes |
+| Ritual | No |
+| Concentration | Yes |
 
 
 ## Source text

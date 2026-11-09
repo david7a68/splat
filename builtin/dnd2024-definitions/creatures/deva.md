@@ -7,6 +7,7 @@ splat_name: Deva
 splat_origin: dnd2024:reference/creature/deva
 splat_sources:
 - SRD 5.2.1, pp. 279, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 97, Habitat
 ---
 
 # Deva
@@ -29,6 +30,7 @@ splat_sources:
 | Languages | All; telepathy 120 ft. |
 | Resistances | Radiant |
 | Immunities | Charmed, Exhaustion, Frightened |
+| Habitat | Planar (Upper Planes) |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

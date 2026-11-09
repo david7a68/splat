@@ -23,6 +23,8 @@ splat_sources:
 | Range |  |
 | Components | V, S, M (a hummingbird feather) |
 | Duration | 8 hours |
+| Ritual | No |
+| Concentration | No |
 
 
 ## Source text

@@ -7,6 +7,7 @@ splat_name: Frog
 splat_origin: dnd2024:reference/creature/frog
 splat_sources:
 - SRD 5.2.1, pp. 348, 349, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 354, Habitat
 ---
 
 # Frog
@@ -27,6 +28,7 @@ splat_sources:
 | Skills | Perception +1, Stealth +3 |
 | Senses | Darkvision 30 ft.; Passive Perception 11 |
 | Languages | None |
+| Habitat | Forest, Swamp |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

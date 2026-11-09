@@ -7,6 +7,7 @@ splat_name: Fire Giant
 splat_origin: dnd2024:reference/creature/fire_giant
 splat_sources:
 - SRD 5.2.1, pp. 285, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 119, Habitat
 ---
 
 # Fire Giant
@@ -28,6 +29,7 @@ splat_sources:
 | Senses | Passive Perception 16 |
 | Languages | Giant |
 | Immunities | Fire |
+| Habitat | Mountain, Underdark |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

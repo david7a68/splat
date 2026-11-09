@@ -7,6 +7,7 @@ splat_name: Owl
 splat_origin: dnd2024:reference/creature/owl
 splat_sources:
 - SRD 5.2.1, pp. 358, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 366, Habitat
 ---
 
 # Owl
@@ -27,6 +28,7 @@ splat_sources:
 | Skills | Perception +5, Stealth +5 |
 | Senses | Darkvision 120 ft.; Passive Perception 15 |
 | Languages | None |
+| Habitat | Arctic, Forest, Hill |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

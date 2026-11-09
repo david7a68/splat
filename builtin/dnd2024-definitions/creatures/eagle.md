@@ -7,6 +7,7 @@ splat_name: Eagle
 splat_origin: dnd2024:reference/creature/eagle
 splat_sources:
 - SRD 5.2.1, pp. 348, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 353, Habitat
 ---
 
 # Eagle
@@ -27,6 +28,7 @@ splat_sources:
 | Skills | Perception +6 |
 | Senses | Passive Perception 16 |
 | Languages | None |
+| Habitat | Coastal, Grassland, Hill, Mountain |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

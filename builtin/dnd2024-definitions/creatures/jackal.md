@@ -7,6 +7,7 @@ splat_name: Jackal
 splat_origin: dnd2024:reference/creature/jackal
 splat_sources:
 - SRD 5.2.1, pp. 356, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 364, Habitat
 ---
 
 # Jackal
@@ -27,6 +28,7 @@ splat_sources:
 | Skills | Perception +5, Stealth +4 |
 | Senses | Darkvision 90 ft.; Passive Perception 15 |
 | Languages | None |
+| Habitat | Desert, Grassland |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

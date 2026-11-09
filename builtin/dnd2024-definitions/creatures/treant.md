@@ -7,6 +7,7 @@ splat_name: Treant
 splat_origin: dnd2024:reference/creature/treant
 splat_sources:
 - SRD 5.2.1, pp. 333, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 308, Habitat
 ---
 
 # Treant
@@ -28,6 +29,7 @@ splat_sources:
 | Languages | Common, Druidic, Elvish, Sylvan |
 | Resistances | Bludgeoning, Piercing |
 | Vulnerabilities | Fire |
+| Habitat | Forest |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

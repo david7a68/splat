@@ -7,6 +7,7 @@ splat_name: Ancient Green Dragon
 splat_origin: dnd2024:reference/creature/ancient_green_dragon
 splat_sources:
 - SRD 5.2.1, pp. 294, 295, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 154, Habitat
 ---
 
 # Ancient Green Dragon
@@ -28,6 +29,7 @@ splat_sources:
 | Senses | Blindsight 60 ft., Darkvision 120 ft.; Passive Perception 27 |
 | Languages | Common, Draconic |
 | Immunities | Poison; Poisoned |
+| Habitat | Forest |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

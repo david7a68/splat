@@ -7,6 +7,7 @@ splat_name: Panther
 splat_origin: dnd2024:reference/creature/panther
 splat_sources:
 - SRD 5.2.1, pp. 358, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 366, Habitat
 ---
 
 # Panther
@@ -27,6 +28,7 @@ splat_sources:
 | Skills | Perception +4, Stealth +7 |
 | Senses | Darkvision 60 ft.; Passive Perception 14 |
 | Languages | None |
+| Habitat | Forest, Grassland, Hill |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

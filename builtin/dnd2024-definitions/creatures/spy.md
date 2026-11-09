@@ -7,6 +7,7 @@ splat_name: Spy
 splat_origin: dnd2024:reference/creature/spy
 splat_sources:
 - SRD 5.2.1, pp. 329, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 295, Habitat
 ---
 
 # Spy
@@ -28,6 +29,7 @@ splat_sources:
 | Senses | Passive Perception 16 |
 | Languages | Common plus one other language |
 | Gear | Hand Crossbow, Shortsword, Thieves’ Tools |
+| Habitat | Any |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

@@ -7,6 +7,7 @@ splat_name: Blink Dog
 splat_origin: dnd2024:reference/creature/blink_dog
 splat_sources:
 - SRD 5.2.1, pp. 266, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 46, Habitat
 ---
 
 # Blink Dog
@@ -27,6 +28,7 @@ splat_sources:
 | Skills | Perception +5, Stealth +5 |
 | Senses | Darkvision 60 ft.; Passive Perception 15 |
 | Languages | Blink Dog; understands Elvish and Sylvan but can’t speak them |
+| Habitat | Forest, Planar (Feywild) |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

@@ -7,6 +7,7 @@ splat_name: Werewolf
 splat_origin: dnd2024:reference/creature/werewolf
 splat_sources:
 - SRD 5.2.1, pp. 339, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 327, Habitat
 ---
 
 # Werewolf
@@ -28,6 +29,7 @@ splat_sources:
 | Senses | Darkvision 60 ft.; Passive Perception 14 |
 | Languages | Common (can’t speak in wolf form) |
 | Gear | Longbow |
+| Habitat | Forest, Hill |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

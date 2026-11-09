@@ -7,6 +7,7 @@ splat_name: Troll
 splat_origin: dnd2024:reference/creature/troll
 splat_sources:
 - SRD 5.2.1, pp. 333, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 310, Habitat
 ---
 
 # Troll
@@ -27,6 +28,7 @@ splat_sources:
 | Skills | Perception +5 |
 | Senses | Darkvision 60 ft.; Passive Perception 15 |
 | Languages | Giant |
+| Habitat | Arctic, Forest, Hill, Mountain, Swamp, Underdark |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

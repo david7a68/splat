@@ -7,6 +7,7 @@ splat_name: Homunculus
 splat_origin: dnd2024:reference/creature/homunculus
 splat_sources:
 - SRD 5.2.1, pp. 299, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 172, Habitat
 ---
 
 # Homunculus
@@ -27,6 +28,7 @@ splat_sources:
 | Senses | Darkvision 60 ft.; Passive Perception 10 |
 | Languages | Understands Common plus one other language but can’t speak |
 | Immunities | Poison; Charmed, Poisoned |
+| Habitat | Any |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

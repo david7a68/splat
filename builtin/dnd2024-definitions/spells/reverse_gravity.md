@@ -23,6 +23,8 @@ splat_sources:
 | Range | 100 feet |
 | Components | V, S, M (a lodestone and iron filings) |
 | Duration | Concentration, up to 1 minute |
+| Ritual | No |
+| Concentration | Yes |
 
 
 ## Source text

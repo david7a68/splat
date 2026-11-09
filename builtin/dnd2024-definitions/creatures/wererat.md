@@ -7,6 +7,7 @@ splat_name: Wererat
 splat_origin: dnd2024:reference/creature/wererat
 splat_sources:
 - SRD 5.2.1, pp. 338, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 325, Habitat
 ---
 
 # Wererat
@@ -28,6 +29,7 @@ splat_sources:
 | Senses | Darkvision 60 ft.; Passive Perception 14 |
 | Languages | Common (can’t speak in rat form) |
 | Gear | Hand Crossbow |
+| Habitat | Forest, Urban |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

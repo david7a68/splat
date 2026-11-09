@@ -23,6 +23,8 @@ splat_sources:
 | Range | 10 feet |
 | Components | V, S, M (salt and powdered silver worth 100+ GP, which the spell consumes) |
 | Duration | 1 hour |
+| Ritual | No |
+| Concentration | No |
 
 
 ## Source text

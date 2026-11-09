@@ -7,6 +7,7 @@ splat_name: Hawk
 splat_origin: dnd2024:reference/creature/hawk
 splat_sources:
 - SRD 5.2.1, pp. 355, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 362, Habitat
 ---
 
 # Hawk
@@ -27,6 +28,7 @@ splat_sources:
 | Skills | Perception +6 |
 | Senses | Passive Perception 16 |
 | Languages | None |
+| Habitat | Arctic, Coastal, Forest, Grassland, Hill, Mountain |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

@@ -52,7 +52,7 @@ const BASELINE_PATH: &str = "src/visual_tests/baseline.json";
 
 type Script = fn(&mut Driver<'_>);
 
-const SCENARIOS: [(&str, Seed, Script); 68] = [
+const SCENARIOS: [(&str, Seed, Script); 69] = [
     ("file-formats", Seed::Formats, scenarios::file_formats::run),
     ("stat-formats", Seed::Formats, scenarios::stat_formats::run),
     ("data-integrity", Seed::Campaign, scenarios::integrity::run),
@@ -75,6 +75,11 @@ const SCENARIOS: [(&str, Seed, Script); 68] = [
         "library-browse",
         Seed::Empty,
         scenarios::library_browse::run,
+    ),
+    (
+        "creature-filter",
+        Seed::Empty,
+        scenarios::creature_filter::run,
     ),
     (
         "library-author",

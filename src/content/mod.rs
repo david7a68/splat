@@ -25,6 +25,7 @@ pub mod art;
 pub mod builtin;
 pub mod character;
 pub mod contracts;
+pub mod creature_filter;
 pub mod definitions;
 pub mod encounter_group;
 pub mod overrides;
