@@ -6763,8 +6763,12 @@ pub mod encounter_owned_groups {
         d.state("move-encounter-group-menu", Sizes::All);
         d.click("Make available to any encounter");
         d.expect("Undo move");
-        d.expect(&format!("{NEW_NAME} moves to any encounter when you save."));
-        d.state("saved-group-removed", Sizes::All);
+        let notice = format!("{NEW_NAME} moves to any encounter when you save.");
+        d.expect(&notice);
+        d.state_prepared("saved-group-removed", Sizes::All, |d| {
+            d.scroll_until(egui::pos2(400.0, 400.0), "Undo move", 20);
+            assert!(d.in_view_containing(&notice));
+        });
         d.click("Undo move");
         d.expect(&format!("Group name: {NEW_NAME}"));
         d.begin_task();
