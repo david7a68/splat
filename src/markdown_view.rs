@@ -1,9 +1,9 @@
 //! Read-only Markdown presentation. Content cannot execute UI actions, but it can say which note
 //! a link names, and a roll table can ask for a roll. Whoever drew it decides what happens next.
 use crate::design::{self, Type, colors};
+use eframe::egui::util::cache::{ComputerMut, FrameCache};
 use eframe::egui::{self, text::LayoutJob};
 use pulldown_cmark::{Event, Options, Parser, Tag, TagEnd};
-use eframe::egui::util::cache::{ComputerMut, FrameCache};
 use std::{borrow::Cow, sync::Arc};
 
 /// A link to a note, as `world::with_links` writes one.
@@ -1343,7 +1343,10 @@ mod tests {
                 seen.push(linked_markdown(ctx, index, note, None));
             });
         }
-        assert!(Arc::ptr_eq(&seen[0], &seen[1]), "the same note, frame after frame");
+        assert!(
+            Arc::ptr_eq(&seen[0], &seen[1]),
+            "the same note, frame after frame"
+        );
         assert!(!Arc::ptr_eq(&seen[1], &seen[2]), "a changed note");
         assert!(!Arc::ptr_eq(&seen[2], &seen[3]), "a reloaded index");
         assert_eq!(&*seen[2], &*seen[3]);
