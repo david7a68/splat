@@ -1873,14 +1873,14 @@ impl Sessions {
         }
         if self.job_warned() {
             return Some(Status {
-                word: "Processing warning",
+                word: "Processed",
                 ..processed_warning()
             });
         }
         if self.job_done() {
             return Some(Status {
                 icon: icons::SUCCESS,
-                word: "Processing done",
+                word: "Processed",
                 color: c.result.success,
             });
         }
@@ -4523,7 +4523,13 @@ impl Sessions {
         let mut record_again = false;
         ui.horizontal_wrapped(|ui| {
             if stalled {
-                record_again = Action::secondary("Record again").show(ui).clicked();
+                record_again = (if self.run_open {
+                    Action::secondary("Record again")
+                } else {
+                    Action::primary("Record again")
+                })
+                .show(ui)
+                .clicked();
             }
             if !live
                 && !job_here
@@ -5951,17 +5957,25 @@ impl Sessions {
         let Some(campaign) = self.campaign.clone() else {
             return;
         };
+        ui.set_max_width(ui.available_width().min(design::FORM_WIDTH));
         ui.add_space(design::XS);
         design::group_heading(ui, "Session folder", 0);
-        let response = ui.add_enabled_ui(locked.is_none(), |ui| design::small_text_field(
-            ui,
-            "Folder",
-            &mut self.folder_text,
-            Some(
-                "Inside the campaign folder, unless the path is absolute. A name such as 30 Sessions is fine.",
-            ),
-            self.folder_error.as_deref(),
-        )).inner;
+        let response = ui
+            .add_enabled_ui(locked.is_none(), |ui| {
+                let response = ui.add(
+                    egui::TextEdit::singleline(&mut self.folder_text)
+                        .desired_width(ui.available_width() - 2.0 * design::S)
+                        .min_size(egui::vec2(0.0, Density::Read.control()))
+                        .margin(egui::vec2(design::S, design::XS)),
+                );
+                design::named(ui, &response, "Folder");
+                response
+            })
+            .inner;
+        ui.label(Type::Small.rich(ui, "Inside the campaign folder, unless the path is absolute. A name such as 30 Sessions is fine.").color(c.muted));
+        if let Some(error) = &self.folder_error {
+            design::message(ui, Tone::Error, error);
+        }
         if let Some(reason) = locked {
             ui.ctx()
                 .accesskit_node_builder(response.id, |node| node.set_description(reason));
@@ -6319,6 +6333,18 @@ impl Sessions {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn iter1_c_completed_processing_uses_processed_in_the_rail() {
+        let mut page = Sessions::default();
+        page.job_done = true;
+        assert_eq!(page.rail_recording_status().unwrap().word, "Processed");
+        page.job_warned = true;
+        let status = page.rail_recording_status().unwrap();
+        assert_eq!(status.word, "Processed");
+        assert_eq!(status.icon, icons::WARN);
+        assert_eq!(status.color, colors().result.warning);
+    }
 
     #[test]
     fn integrity_d9_identity_undo_stays_with_its_campaign() {
