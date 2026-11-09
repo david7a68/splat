@@ -2846,7 +2846,7 @@ pub mod nav_state {
 
         go_campaign(d);
         let campaign = d.in_view_containing(CAMPAIGN_TAB_TEXT);
-        d.state("campaign-returned", Sizes::Default);
+        d.state("campaign-returned", Sizes::All);
 
         go_party(d);
         let party = d.in_view_containing(MEMBER) && d.in_view_containing(SHEET_PAGE_TEXT);
@@ -4156,7 +4156,7 @@ pub mod signed_in {
         // T7.3: sync is on from the time Splat connects, and leaving the page does not stop it.
         let on = d.has_containing(SYNC_ON);
         d.click_containing(SYNC_SECTION);
-        d.state("party-sync-on", Sizes::Default);
+        d.state("party-sync-on", Sizes::All);
         go_library(d);
         let rail = !d.visible_text(RAIL_STOPPED);
         go_party(d);
@@ -5090,6 +5090,7 @@ pub mod session_notes {
                     .zip(nodes.iter().find(|node| node.name == "Save folder"))
                     .is_some_and(|(field, save)| {
                         (field.rect.right() - save.rect.right()).abs() < 1.0
+                            && field.rect.width() <= crate::design::FORM_WIDTH + 1.0
                     })
             },
         );
@@ -6151,7 +6152,7 @@ pub mod session_recording {
             d.has_containing("Processed, with a warning") && d.rail_words().contains("Processed"),
             "A processed result keeps its warning in the rail and on other pages",
         );
-        d.state("processing-warned-elsewhere", Sizes::Default);
+        d.state("processing-warned-elsewhere", Sizes::All);
         d.click(NAV_SESSIONS);
         d.observe(
             "T11.6",
@@ -7659,9 +7660,9 @@ pub mod session_plan {
         );
         d.click("Mark not at full");
         assert!(!crate::timeline::party_state(&d.app_mut().timeline.events, session).rested);
-        d.state("timeline-rest-ruling-off", Sizes::Default);
+        d.state("timeline-rest-ruling-off", Sizes::All);
         d.click("Mark everyone at full");
-        d.state("timeline-rest-ruling-on", Sizes::Default);
+        d.state("timeline-rest-ruling-on", Sizes::All);
         d.click("Undo ruling");
         assert!(!crate::timeline::party_state(&d.app_mut().timeline.events, session).rested);
         d.click("Mark everyone at full");

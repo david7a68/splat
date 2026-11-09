@@ -5953,6 +5953,20 @@ impl Sessions {
     }
 
     pub fn folder_view(&mut self, ui: &mut egui::Ui, book: &Book, locked: Option<&str>) {
+        // Earlier sections can have a wider minimum rect. Give this form its own column.
+        let rect = egui::Rect::from_min_size(
+            ui.cursor().min,
+            egui::vec2(
+                ui.available_width().min(design::FORM_WIDTH),
+                ui.available_height(),
+            ),
+        );
+        ui.scope_builder(egui::UiBuilder::new().max_rect(rect), |ui| {
+            self.folder_form(ui, book, locked);
+        });
+    }
+
+    fn folder_form(&mut self, ui: &mut egui::Ui, book: &Book, locked: Option<&str>) {
         let c = colors();
         let Some(campaign) = self.campaign.clone() else {
             return;
@@ -6336,8 +6350,10 @@ mod tests {
 
     #[test]
     fn iter1_c_completed_processing_uses_processed_in_the_rail() {
-        let mut page = Sessions::default();
-        page.job_done = true;
+        let mut page = Sessions {
+            job_done: true,
+            ..Default::default()
+        };
         assert_eq!(page.rail_recording_status().unwrap().word, "Processed");
         page.job_warned = true;
         let status = page.rail_recording_status().unwrap();

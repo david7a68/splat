@@ -126,7 +126,8 @@ fn connection_help(ui: &mut egui::Ui) {
             ui.ctx()
                 .data_mut(|data| data.insert_temp(egui::Id::new("open_account_settings"), true));
         }
-        for word in " to update this link.".split_inclusive(' ') {
+        ui.add_space(crate::design::XS);
+        for word in "to update this link.".split_inclusive(' ') {
             ui.label(
                 crate::design::Type::Small
                     .rich(ui, word)

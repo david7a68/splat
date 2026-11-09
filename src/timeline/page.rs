@@ -1406,8 +1406,7 @@ mod tests {
         let mut book = Book::default();
         book.add(Kind::LongRest, None);
         book.events[0].restores = true;
-        let id = book.events[0].id.clone();
-        let event_id = id.clone();
+        let event_id = book.events[0].id.clone();
         let mut harness = egui_kittest::Harness::builder().build_state(
             move |ctx, book: &mut Book| {
                 egui::CentralPanel::default().show(ctx, |ui| {
