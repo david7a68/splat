@@ -388,6 +388,13 @@ moves nothing, and the row says so. A fight does not move the clock. The list in
 writes the body from it. An encounter run adds its own event when combat begins. New events and runs go to the newest
 session unless you choose another on the Timeline page. **Notes** (Ctrl+J) opens that session's note beside any page.
 
+Type `/` at the start of a line or a word in a session note to open its commands. Type more letters to narrow them, and
+use the arrows and Enter, or click. With only the `/` typed, Enter still starts a new line. **Generate NPC** rolls an NPC
+as in Lookup, and **Save NPC** (or Enter) writes it to `NPCs/`. **Search** finds an entry, a world note or a heading, as
+Lookup does. Each puts a link such as `[[Verori]]` where the `/` was. Escape in the list closes it and keeps what you
+typed. Escape after you choose a command goes back to the note without a link. A slash inside a word, as in `and/or`,
+stays a slash.
+
 A planned fight with a saved run offers **Resume**, as the primary action for the first waiting fight when no run is open. A run before combat says **Setup**; a closed unfinished run adds **Paused**. Its menu holds **Start a new run** and **Delete the saved run**, with undo for deletion. Every planned fight also has **Remove from tonight**: it removes one link from the plan and offers **Undo remove** below the row. The open fight has a status link in the plan; the run strip keeps **Back to run**. A played fight shows its result and shared run state once, such as **Held the bridge · Ended · Round 1**. It opens a grid of final party HP with first names, then **Log**, **Whole run** and **Timeline** links. Plan summaries use the width below the row action. Removing a planned group keeps its message and Undo in that row’s place.
 
 Session and Timeline use the same quiet **Add** strip: **Fight**, **Group** (plan only), **Day**, **Long rest**, **Short rest**, **Travel**, **Major event**. A new plan event stays closed and uses its kind as its title. Open its row for **Title** and **Notes**, or follow **Timeline** for **How long** and **Where**. A new event on Timeline opens with **Title** focused. On Timeline, **Adds to** chooses the session. The detail column opens only when an event is selected. Its title, save state, **Copy link** and row menu stay above the fields as they scroll. **Place after** sets the event order. Opening Timeline or changing a filter resets the detail fields to the top. A Day shows its start time only.

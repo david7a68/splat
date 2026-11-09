@@ -1832,6 +1832,10 @@ impl Splat {
         if let Some(id) = self.campaign_content.open_lookup.take() {
             self.lookup.open_id(id);
         }
+        if std::mem::take(&mut self.sessions.wants_content_refresh) {
+            self.lookup.refresh();
+            self.lookup.files_changed = true;
+        }
         if let Some(name) = self.sessions.wants_lookup.take() {
             self.notes_give_way();
             if !self.lookup.open_name(&name) {

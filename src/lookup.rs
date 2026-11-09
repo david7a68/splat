@@ -186,7 +186,7 @@ impl Item {
         self.builtin
     }
 
-    fn result_detail(&self) -> String {
+    pub(crate) fn result_detail(&self) -> String {
         let source = if self.private {
             Some("Campaign")
         } else if self.builtin {
@@ -675,6 +675,43 @@ impl ContentIndex {
         }
     }
 
+    /// The wiki link that a note can use for a search result. A bare name is best, as
+    /// Obsidian also reads it, when it names the file and nothing else. Otherwise the link
+    /// names the item exactly and shows its name: the DM's own by path, a book's by key.
+    /// A heading that a link cannot name, such as `Room #3`, links to its note. Of two
+    /// headings with the same words, a link finds the first, in Obsidian too.
+    pub(crate) fn link_to(&self, position: usize) -> String {
+        let (at, heading) = self.target_of(position);
+        let heading = heading.filter(|heading| !heading.contains(['#', '|', '[', ']', '^']));
+        let item = &self.items[at];
+        let finds = |target: &str| matches!(self.resolve_link(target, None), Go::Item(found, _) if found == at);
+        let section = heading
+            .as_deref()
+            .map_or_else(String::new, |heading| format!("#{heading}"));
+        let name = item.entry.name.trim();
+        let path = item.entry.path.split('#').next().unwrap_or_default();
+        let path = path.strip_suffix(".md").unwrap_or(path);
+        let stem = path.rsplit('/').next().unwrap_or(path);
+        if !name.contains(['|', '#', '[', ']']) && stem.eq_ignore_ascii_case(name) && finds(name) {
+            return format!("[[{name}{section}]]");
+        }
+        let key = item.entry.key.as_deref().filter(|key| finds(key));
+        let path = Some(path).filter(|path| !path.is_empty() && finds(path));
+        let target = if item.private || item.is_note() {
+            path.or(key)
+        } else {
+            key.or(path)
+        }
+        .map_or_else(|| item.entry.id.to_string(), str::to_owned);
+        let shown: String = heading
+            .as_deref()
+            .unwrap_or(name)
+            .chars()
+            .filter(|c| !matches!(c, '|' | '[' | ']'))
+            .collect();
+        format!("[[{target}{section}|{shown}]]")
+    }
+
     /// Prepare wiki links in any reader, retaining exactly the note's display words.
     pub(crate) fn broken_link_count(&self, body: &str, from: Uuid) -> usize {
         let visible = body
@@ -717,6 +754,12 @@ impl ContentIndex {
                         .is_none_or(|usable| usable.contains(&item.entry.id))
             })
             .collect()
+    }
+
+    /// A campaign file has this name, in any folder. Obsidian then may not know which a
+    /// bare link means.
+    pub(crate) fn has_file_named(&self, stem: &str) -> bool {
+        self.files.contains_key(&stem.to_lowercase())
     }
 
     /// Which load of the index this is. See `generation` on the struct.
@@ -952,7 +995,7 @@ impl ContentIndex {
 
     /// Best first: exact name, then a prefix, then a word, then anywhere in the name. A note's
     /// words come last.
-    fn search(&self, query: &str) -> Vec<usize> {
+    pub(crate) fn search(&self, query: &str) -> Vec<usize> {
         let mut found: Vec<(u8, Origin, usize)> = self
             .items
             .iter()
@@ -2603,5 +2646,46 @@ mod tests {
         assert!(shared > 0, "Some names must lead to more than one item");
         assert!(index.named("campaign rule").is_empty());
         assert!(index.named("door").is_empty());
+    }
+
+    #[test]
+    fn a_result_links_by_name_when_that_finds_it_and_exactly_when_not() {
+        let (_dir, campaign) = campaign_with(&[
+            (
+                "Powers/Verori.md",
+                "# Verori\n\n## Culture\n\n## Fire | Ice\n",
+            ),
+            ("A/Twin.md", "One\n"),
+            ("B/Twin.md", "Two\n"),
+        ]);
+        let index = ContentIndex::load(&[], Some(&campaign)).unwrap();
+        let link = |query: &str| index.link_to(index.search(query)[0]);
+        assert_eq!(link("verori"), "[[Verori]]");
+        assert_eq!(link("culture"), "[[Verori#Culture]]");
+        // A link cannot name this heading, so it names the note.
+        assert_eq!(
+            index.items[index.search("fire | ice")[0]].entry.name,
+            "Fire | Ice"
+        );
+        assert_eq!(link("fire | ice"), "[[Verori]]");
+        let twin = index.position(world::note_id("A/Twin.md")).unwrap();
+        assert_eq!(index.link_to(twin), "[[A/Twin|Twin]]");
+        // Every result's link leads back to it, a book's too.
+        for query in [
+            "verori", "culture", "room", "twin", "fireball", "wolf", "goblin",
+        ] {
+            for position in index.search(query).into_iter().take(5) {
+                let link = index.link_to(position);
+                let target = link.trim_start_matches("[[").trim_end_matches("]]");
+                let (want, heading) = index.target_of(position);
+                let heading = heading.filter(|heading| !heading.contains('|'));
+                match index.resolve_link(target, None) {
+                    Go::Item(at, found) => {
+                        assert_eq!((at, found), (want, heading), "{link}");
+                    }
+                    _ => panic!("{link} does not lead to its result"),
+                }
+            }
+        }
     }
 }
