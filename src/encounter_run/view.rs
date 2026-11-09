@@ -2788,7 +2788,7 @@ impl Run {
                                 &font,
                                 ui.available_width() - design::S * 2.0,
                             );
-                            if Action::quiet(&shown)
+                            if Action::secondary(&shown)
                                 .line_start()
                                 .name(&full)
                                 .hint(&full)

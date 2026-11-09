@@ -3581,8 +3581,7 @@ impl Library {
         self.message = None;
     }
 
-    /// In a wide window, the reader and its margin sit together in the pane, with the scroll
-    /// bar beside them rather than across an empty band.
+    /// Keep the reader at the pane's left edge, with its scroll bar beside its measure.
     fn editor(&mut self, ui: &mut egui::Ui, subtitle: &str, campaigns: &Campaigns) {
         let spare = ui.available_width() - view::WIDE_READER;
         if spare <= 0.0 || self.disk_change.is_some() {
@@ -3590,7 +3589,6 @@ impl Library {
             return;
         }
         ui.horizontal_top(|ui| {
-            ui.add_space(spare / 2.0);
             let size = egui::vec2(view::WIDE_READER, ui.available_height());
             ui.allocate_ui_with_layout(size, egui::Layout::top_down(egui::Align::Min), |ui| {
                 ui.set_max_width(view::WIDE_READER);

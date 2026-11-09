@@ -437,7 +437,9 @@ to two notes asks which one, and a link to nothing offers to create it. Each not
 
 Every World note offers **Edit in Obsidian** and **Show file**. A file that cannot be read stays in the
 **Cannot be read** group. Open it to repair its text here, or follow **Edit in Obsidian**. Lookup's warning
-also opens the file in World. A repair draft stays in memory when you read another note.
+also opens the file in World. A repair draft stays in memory when you read another note. If its file changes, choose **Overwrite with my draft** or red **Reload and lose my draft**. Reload keeps the old draft for **Undo reload** until the next edit.
+
+### Table marks
 
 A one-line marker above a table makes it rollable. The first column is a number or a range, such as `2–5`, and the rows
 must cover what the dice can roll. A bad table says so, and the rest of the note still reads.
@@ -803,7 +805,7 @@ sources and limits are recorded in [the research notes](docs/research/dndbeyond-
 
 Recording failures and stops remain on each recording’s row after you dismiss a banner. A stopped recording links to the microphone input in Settings. **Continue processing** resumes kept work. An active job hides the old cancellation or failure reason. The result viewer keeps its back link, date and Add to notes on one line. View choices sit below them, as a segmented control or a dropdown when space is short. The rail’s recording status opens the recording in one click.
 
-Lookup keeps up to five results above the reader and marks the open one. New NPC and New location include the proposed name, and appear only when no exact match exists. A copy keeps the original name by default and offers Edit the copy after saving. Wide reader tables keep their first column and header in view. World rolls mark their matched row.
+Lookup keeps up to five results above the reader and marks the open one. When the only result is open, its result list closes. New NPC and New location include the proposed name, and appear only when no exact match exists. A copy keeps the original name by default and offers Edit the copy after saving. Wide reader tables keep their first column and header in view. World rolls mark their matched row.
 
 Campaign repair shows invalid notes in place. The campaign-wide Needed by your entries list opens entries in Lookup. A session note conflict shows your draft and the disk text side by side, with changed lines marked.
 

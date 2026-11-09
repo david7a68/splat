@@ -306,10 +306,9 @@ impl ContentIndex {
                     .any(|other| other.entry.id == e.entry.id)
                 {
                     format!(
-                        "{} · {} Duplicate identity · {}",
+                        "{} · {} Duplicate identity",
                         presentation::subtitle(&e.entry),
-                        icons::WARN,
-                        e.entry.path
+                        icons::WARN
                     )
                 } else {
                     presentation::subtitle(&e.entry)
@@ -1494,7 +1493,7 @@ impl Lookup {
         let matches = self.matches.as_ref().unwrap().1.clone();
         if before != self.query && !query.is_empty() {
             // Open the best match and keep the other answers in view.
-            self.results_open = true;
+            self.results_open = matches.len() != 1;
             match matches.first() {
                 Some(Hit::Entry(top)) => {
                     let (position, heading) = index.target_of(*top);
@@ -1876,10 +1875,15 @@ pub(crate) fn generated_card(
             Type::Small
                 .rich(
                     ui,
-                    "Built-in names. Mark a table npc-name in any note to use your own.",
+                    "Built-in names. To use your own names, add a table marked npc-name to any note.",
                 )
                 .color(colors().muted),
         );
+        if design::link(ui, "How to mark a table").clicked() {
+            ui.ctx().open_url(egui::OpenUrl::new_tab(
+                "https://github.com/david7a68/splat#table-marks",
+            ));
+        }
     }
     for source in sources {
         let (kind, path) = source.split_once(": ").unwrap_or(("npc-name", source));
@@ -2063,6 +2067,13 @@ mod tests {
         let (dir, campaign) = campaign_with(&[("Rook.md", &before), ("Rook copy.md", &before)]);
         let index = ContentIndex::load(&[], Some(&campaign)).unwrap();
         assert_eq!(index.duplicate_world.len(), 2);
+        for item in index.items.iter().filter(|item| item.entry.name == "Rook") {
+            assert_eq!(
+                item.subtitle,
+                format!("NPC · {} Duplicate identity", icons::WARN)
+            );
+            assert!(!item.subtitle.contains(&item.entry.path));
+        }
         assert_eq!(
             index.world_groups("").values().map(Vec::len).sum::<usize>(),
             2

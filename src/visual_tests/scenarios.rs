@@ -89,6 +89,17 @@ pub mod library_browse {
 
         search_library(d, "fireball");
         d.click_starting(SPELL_ROW);
+        let reader_at_left = |d: &Driver<'_>| {
+            d.painted_left("Fireball").is_some_and(|left| {
+                (left - d.column_edge("library_entries") - crate::design::L).abs() < 2.0
+            })
+        };
+        let large_anchor = d.at_size(LARGE, reader_at_left);
+        d.observe_both(
+            "iter-1-A-reader-anchor",
+            "The Library reader starts beside the list at all three window sizes",
+            |d| large_anchor && reader_at_left(d),
+        );
         d.state("spell", Sizes::All);
         d.goal("open a spell");
 

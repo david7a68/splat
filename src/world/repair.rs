@@ -41,6 +41,7 @@ pub(super) struct Repair {
     baseline: String,
     draft: String,
     discarded: Option<String>,
+    reloaded: Option<String>,
     error: Option<String>,
     disk: Option<String>,
 }
@@ -54,6 +55,7 @@ impl Repair {
             baseline: text.clone(),
             draft: text,
             discarded: None,
+            reloaded: None,
             error: None,
             disk: None,
         })
@@ -80,6 +82,7 @@ impl Repair {
                 self.baseline = text.clone();
                 self.draft = text;
                 self.discarded = None;
+                self.reloaded = None;
                 self.error = None;
             }
         }
@@ -102,35 +105,35 @@ impl Repair {
             return false;
         }
         if let Some(disk) = self.disk.clone() {
-            design::message(
-                ui,
-                design::Tone::Warning,
-                "This note changed on disk. Choose which text to keep.",
-            );
-            let mut reloaded = false;
-            ui.horizontal(|ui| {
-                if design::Action::secondary("Use disk version")
-                    .show(ui)
-                    .clicked()
-                {
-                    self.draft = disk.clone();
-                    reloaded = true;
-                }
-                if design::Action::secondary("Keep my draft")
-                    .show(ui)
-                    .clicked()
-                {
-                    reloaded = true;
-                }
-            });
+            let choice = design::disk_conflict_choices(ui);
             design::grouped_draft_comparison(ui, &self.draft, &disk, &self.path, true);
-            if reloaded {
+            if let Some(choice) = choice {
                 self.baseline = disk;
                 self.disk = None;
                 self.error = None;
                 self.discarded = None;
+                match choice {
+                    design::DiskConflictChoice::Reload => {
+                        self.reloaded =
+                            Some(std::mem::replace(&mut self.draft, self.baseline.clone()));
+                    }
+                    design::DiskConflictChoice::Overwrite => {
+                        // An unfinished repair stays editable; only valid text can be written.
+                        return problem.is_none() && self.save(campaign);
+                    }
+                }
             }
             return false;
+        }
+        if self.reloaded.is_some()
+            && design::undo_message(
+                ui,
+                design::Tone::Info,
+                "Reloaded from disk. Your previous draft is kept until the next edit.",
+                "Undo reload",
+            )
+        {
+            self.draft = self.reloaded.take().unwrap();
         }
         if let Some(problem) = &problem {
             design::message(ui, design::Tone::Error, problem);
@@ -138,7 +141,11 @@ impl Repair {
         if let Some(error) = &self.error {
             design::message(ui, design::Tone::Error, error);
         }
+        let before = self.draft.clone();
         editor(ui, &self.path, &mut self.draft, line);
+        if self.draft != before {
+            self.reloaded = None;
+        }
         let mut saved = false;
         ui.horizontal(|ui| {
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
@@ -154,29 +161,7 @@ impl Repair {
                     || (reason.is_none()
                         && ui.input_mut(|i| i.consume_key(egui::Modifiers::COMMAND, egui::Key::S)))
                 {
-                    let result =
-                        splat::content::Entry::parse(&self.path, &self.draft).and_then(|entry| {
-                            if entry.kind == "package"
-                                || (entry.kind == "campaign" && entry.id != campaign.id)
-                            {
-                                return Err(
-                                    "Keep campaign ownership consistent with settings.".into()
-                                );
-                            }
-                            write_note(
-                                &campaign.path,
-                                &self.path,
-                                Some(&self.baseline),
-                                &self.draft,
-                            )
-                        });
-                    match result {
-                        Ok(_) => {
-                            self.baseline = self.draft.clone();
-                            saved = true;
-                        }
-                        Err(error) => self.error = Some(error),
-                    }
+                    saved = self.save(campaign);
                 }
                 ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
                     if self.draft != self.baseline
@@ -223,5 +208,30 @@ impl Repair {
             design::blocked_reason(ui, Some(crate::encounters::draft_switch_reason()));
         }
         saved
+    }
+
+    fn save(&mut self, campaign: &Campaign) -> bool {
+        let result = splat::content::Entry::parse(&self.path, &self.draft).and_then(|entry| {
+            if entry.kind == "package" || (entry.kind == "campaign" && entry.id != campaign.id) {
+                return Err("Keep campaign ownership consistent with settings.".into());
+            }
+            write_note(
+                &campaign.path,
+                &self.path,
+                Some(&self.baseline),
+                &self.draft,
+            )
+        });
+        match result {
+            Ok(_) => {
+                self.baseline = self.draft.clone();
+                self.reloaded = None;
+                true
+            }
+            Err(error) => {
+                self.error = Some(error);
+                false
+            }
+        }
     }
 }
