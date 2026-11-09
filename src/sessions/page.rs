@@ -3023,6 +3023,7 @@ impl Sessions {
                         .min_size(egui::vec2(0.0, visible_height + heading_offset))
                         .show(ui);
                     crate::markdown_source::paint_section_rules(ui, &output);
+                    crate::markdown_source::follow_links(ui, &output, None);
                     let place = super::slash::Place {
                         session: self.selected,
                         campaign: self.campaign.as_ref(),
@@ -5948,6 +5949,7 @@ impl Sessions {
                         .min_size(egui::vec2(0.0, ui.available_height()))
                         .show(ui);
                     crate::markdown_source::paint_section_rules(ui, &output);
+                    crate::markdown_source::follow_links(ui, &output, None);
                     let response = output.response;
                     design::named(ui, &response, "Template text");
                     if response.changed() {

@@ -4703,16 +4703,21 @@ impl Library {
                         .max_height(visible_height)
                         .auto_shrink([false, false])
                         .show(ui, |ui| {
-                            let response = ui.add(
-                                egui::TextEdit::multiline(&mut self.draft)
-                                    .id_salt(("library_markdown", note.owner.id(), &note.path))
-                                    .font(egui::TextStyle::Monospace)
-                                    .frame(false)
-                                    .margin(egui::Vec2::ZERO)
-                                    .desired_width(ui.available_width())
-                                    .min_size(egui::vec2(0.0, visible_height))
-                                    .interactive(editable),
+                            let output = egui::TextEdit::multiline(&mut self.draft)
+                                .id_salt(("library_markdown", note.owner.id(), &note.path))
+                                .font(egui::TextStyle::Monospace)
+                                .frame(false)
+                                .margin(egui::Vec2::ZERO)
+                                .desired_width(ui.available_width())
+                                .min_size(egui::vec2(0.0, visible_height))
+                                .interactive(editable)
+                                .show(ui);
+                            crate::markdown_source::follow_links(
+                                ui,
+                                &output,
+                                note.entry.as_ref().map(|entry| entry.id),
                             );
+                            let response = output.response;
                             design::named(ui, &response, "Markdown editor");
                             if std::mem::take(&mut self.focus_markdown) {
                                 response.request_focus();

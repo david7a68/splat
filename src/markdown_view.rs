@@ -912,7 +912,8 @@ struct Targets {
     quote_bottom: f32,
 }
 
-enum LinkTarget {
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) enum LinkTarget {
     Missing,
     Note(String),
     Lookup(String),
@@ -985,19 +986,27 @@ fn draw_with_links(
             response.clone().on_hover_text(url);
         }
         if response.clicked() {
-            match destination {
-                LinkTarget::Missing => {}
-                LinkTarget::Note(note) => ui.ctx().data_mut(|data| {
-                    let from = data.get_temp::<uuid::Uuid>(egui::Id::new("reader_document"));
-                    data.insert_temp(egui::Id::new("clicked_reader_document"), from);
-                    data.insert_temp(clicked_id(), note.clone());
-                }),
-                LinkTarget::Lookup(words) => ui.ctx().data_mut(|data| {
-                    data.insert_temp(egui::Id::new("markdown_clicked_lookup"), words.clone());
-                }),
-                LinkTarget::Url(url) => ui.ctx().open_url(egui::OpenUrl::new_tab(url)),
-            }
+            let from = ui
+                .ctx()
+                .data(|data| data.get_temp::<uuid::Uuid>(egui::Id::new("reader_document")));
+            follow(ui.ctx(), destination, from);
         }
+    }
+}
+
+/// Go where a link points. `from` is the note the link is in, for links that name a heading or
+/// a note with a common name.
+pub(crate) fn follow(ctx: &egui::Context, destination: &LinkTarget, from: Option<uuid::Uuid>) {
+    match destination {
+        LinkTarget::Missing => {}
+        LinkTarget::Note(note) => ctx.data_mut(|data| {
+            data.insert_temp(egui::Id::new("clicked_reader_document"), from);
+            data.insert_temp(clicked_id(), note.clone());
+        }),
+        LinkTarget::Lookup(words) => ctx.data_mut(|data| {
+            data.insert_temp(egui::Id::new("markdown_clicked_lookup"), words.clone());
+        }),
+        LinkTarget::Url(url) => ctx.open_url(egui::OpenUrl::new_tab(url)),
     }
 }
 
