@@ -3643,7 +3643,12 @@ pub mod run_edge_states {
             "Close says what it will lose, in place of \"The run stays saved\"",
         );
         d.state("close-while-not-saved", Sizes::Default);
-        d.click("Keep running");
+        d.press(Key::Escape);
+        d.observe(
+            "Changed on disk",
+            !d.has("Keep running") && !d.has("Close and lose changes") && d.has(KEEP_RUN),
+            "Escape backs out of the close prompt and keeps the run",
+        );
         // Keep this run: the file becomes this run, and later turns save by themselves.
         d.click(KEEP_RUN);
         let saved = std::fs::read_to_string(&path).expect("read the run");

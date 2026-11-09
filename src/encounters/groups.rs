@@ -664,7 +664,15 @@ pub(super) fn load(
             }
             let problem = members.is_empty().then(|| {
                 let mut problems = warnings.clone();
-                problems.push("No members can join. Edit group to fix them.".into());
+                // Edit cannot fix a group whose only fault is the old layout; Convert files can.
+                problems.push(
+                    if warnings.iter().any(|word| !word.contains("uses the old layout.")) {
+                        "No members can join. Edit group to fix them."
+                    } else {
+                        "No members can join."
+                    }
+                    .into(),
+                );
                 problems.join("\n")
             });
             Some(Arc::new(RunGroup {

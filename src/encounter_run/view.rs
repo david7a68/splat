@@ -2413,7 +2413,10 @@ impl Run {
     }
 
     fn request_close(&mut self) -> bool {
-        if self.strip().not_saved || !self.stranded_names().is_empty() {
+        if self.strip().not_saved
+            || !self.stranded_names().is_empty()
+            || !self.unsent_only_here_names().is_empty()
+        {
             self.closing = true;
             false
         } else {
@@ -6469,6 +6472,16 @@ mod tests {
     fn iter_1_b_unsaved_close_still_asks_and_keeps_the_run() {
         let mut run = super::super::tests::run();
         run.disk_conflict = true;
+        assert!(!run.request_close());
+        assert!(run.closing);
+        assert!(!run.confirm_close);
+
+        // Spell slots kept only here are lost on close, so the close asks first.
+        let mut run = super::super::tests::run();
+        let mut sync = crate::combat_sync::CombatSync::default();
+        sync.note_while_stopped("spells", serde_json::json!({"1": 1}));
+        run.syncs.insert(0, sync);
+        assert!(!run.unsent_only_here_names().is_empty());
         assert!(!run.request_close());
         assert!(run.closing);
         assert!(!run.confirm_close);
