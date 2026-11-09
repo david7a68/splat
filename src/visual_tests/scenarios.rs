@@ -7662,6 +7662,7 @@ pub mod session_plan {
         assert!(!crate::timeline::party_state(&d.app_mut().timeline.events, session).rested);
         d.state("timeline-rest-ruling-off", Sizes::All);
         d.click("Mark everyone at full");
+        d.expect_same("Only the long-rest status and action change; the wide page stays in place.");
         d.state("timeline-rest-ruling-on", Sizes::All);
         d.click("Undo ruling");
         assert!(!crate::timeline::party_state(&d.app_mut().timeline.events, session).rested);
