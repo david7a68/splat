@@ -69,9 +69,10 @@ impl TouchpadSpeed {
                 continue;
             }
             let delta = *delta * factor;
-            let parts = (delta.length() / LARGEST_STEP)
-                .ceil()
-                .clamp(1.0, MOST_PARTS);
+            // With Shift or Alt held, egui first turns a diagonal step into a straight one
+            // of x + y, and then measures it.
+            let size = delta.length().max((delta.x + delta.y).abs());
+            let parts = (size / LARGEST_STEP).ceil().clamp(1.0, MOST_PARTS);
             for _ in 0..parts as usize {
                 let mut part = event.clone();
                 if let egui::Event::MouseWheel { delta: step, .. } = &mut part {
@@ -171,26 +172,36 @@ mod tests {
     #[test]
     fn a_faster_scroll_moves_in_the_frame_it_arrives() {
         let ctx = egui::Context::default();
-        for speed in [TouchpadSpeed::Four, TouchpadSpeed::Twelve] {
-            let mut events = vec![wheel(
-                egui::MouseWheelUnit::Point,
-                -5.0,
-                egui::Modifiers::NONE,
-            )];
-            speed.apply(&mut events);
-            let mut moved = 0.0;
-            let _ = ctx.run(
-                egui::RawInput {
-                    events,
-                    ..Default::default()
-                },
-                |ctx| moved = ctx.input(|input| input.smooth_scroll_delta.y),
-            );
-            let wanted = -5.0 * speed.factor();
-            assert!(
-                (moved - wanted).abs() < 1e-3,
-                "{speed:?}: moved {moved} of {wanted}"
-            );
+        let down = egui::vec2(0.0, -5.0);
+        let diagonal = egui::vec2(2.5, 2.5);
+        // Shift scrolls sideways and Alt only up and down: egui adds x and y for both.
+        for (delta, modifiers, wanted) in [
+            (down, egui::Modifiers::NONE, down),
+            (diagonal, egui::Modifiers::SHIFT, egui::vec2(5.0, 0.0)),
+            (diagonal, egui::Modifiers::ALT, egui::vec2(0.0, 5.0)),
+        ] {
+            for speed in [TouchpadSpeed::Four, TouchpadSpeed::Twelve] {
+                let mut events = vec![egui::Event::MouseWheel {
+                    unit: egui::MouseWheelUnit::Point,
+                    delta,
+                    modifiers,
+                }];
+                speed.apply(&mut events);
+                let mut moved = egui::Vec2::ZERO;
+                let _ = ctx.run(
+                    egui::RawInput {
+                        events,
+                        modifiers,
+                        ..Default::default()
+                    },
+                    |ctx| moved = ctx.input(|input| input.smooth_scroll_delta),
+                );
+                let wanted = wanted * speed.factor();
+                assert!(
+                    (moved - wanted).length() < 1e-3,
+                    "{speed:?} {modifiers:?}: moved {moved:?} of {wanted:?}"
+                );
+            }
         }
     }
 
