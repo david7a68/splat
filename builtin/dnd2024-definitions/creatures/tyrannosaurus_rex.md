@@ -7,6 +7,7 @@ splat_name: Tyrannosaurus Rex
 splat_origin: dnd2024:reference/creature/tyrannosaurus_rex
 splat_sources:
 - SRD 5.2.1, pp. 363, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 372, Habitat
 ---
 
 # Tyrannosaurus Rex
@@ -27,6 +28,7 @@ splat_sources:
 | Skills | Perception +4 |
 | Senses | Passive Perception 14 |
 | Languages | None |
+| Habitat | Grassland |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

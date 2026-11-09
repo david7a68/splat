@@ -23,6 +23,8 @@ splat_sources:
 | Range |  |
 | Components | V, S, M (diamond dust worth 100+ GP, which the spell consumes) |
 | Duration | Concentration, up to 1 hour |
+| Ritual | No |
+| Concentration | Yes |
 
 
 ## Source text

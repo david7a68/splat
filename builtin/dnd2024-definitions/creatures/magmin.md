@@ -7,6 +7,7 @@ splat_name: Magmin
 splat_origin: dnd2024:reference/creature/magmin
 splat_sources:
 - SRD 5.2.1, pp. 305, 306, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 200, Habitat
 ---
 
 # Magmin
@@ -27,6 +28,7 @@ splat_sources:
 | Senses | Darkvision 60 ft.; Passive Perception 10 |
 | Languages | Primordial (Ignan) |
 | Immunities | Fire |
+| Habitat | Planar (Elemental Plane of Fire) |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

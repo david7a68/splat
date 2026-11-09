@@ -287,7 +287,7 @@ pub(super) fn in_progress_list(
                 |at| {
                     format!(
                         "Saved {}",
-                        crate::party::fetch_age(crate::hermetic::now().saturating_sub(at))
+                        crate::encounter_run::saved_time(at, crate::hermetic::now())
                     )
                 },
             )
@@ -298,7 +298,7 @@ pub(super) fn in_progress_list(
                     format!(
                         "{} · Saved {}",
                         run.label.trim_end_matches('.'),
-                        crate::encounter_run::calendar_time(at)
+                        crate::encounter_run::saved_time(at, crate::hermetic::now())
                     )
                 },
             )
@@ -546,7 +546,7 @@ pub(super) fn history_list(
                     let run = past.run;
                     let date = run
                         .saved_at
-                        .map(crate::encounter_run::calendar_time)
+                        .map(|at| crate::encounter_run::saved_time(at, crate::hermetic::now()))
                         .unwrap_or_else(|| "Date unknown".to_owned());
                     let state = run_state_word(run, false);
                     let outcome = run

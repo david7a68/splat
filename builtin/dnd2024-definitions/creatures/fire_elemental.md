@@ -7,6 +7,7 @@ splat_name: Fire Elemental
 splat_origin: dnd2024:reference/creature/fire_elemental
 splat_sources:
 - SRD 5.2.1, pp. 284, 285, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 118, Habitat
 ---
 
 # Fire Elemental
@@ -28,6 +29,7 @@ splat_sources:
 | Languages | Primordial (Ignan) |
 | Resistances | Bludgeoning, Piercing, Slashing |
 | Immunities | Fire, Poison; Exhaustion, Grappled, Paralyzed, Petrified, Poisoned, Prone, Restrained, Unconscious |
+| Habitat | Desert, Planar (Elemental Plane of Fire) |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

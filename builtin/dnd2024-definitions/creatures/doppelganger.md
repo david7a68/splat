@@ -7,6 +7,7 @@ splat_name: Doppelganger
 splat_origin: dnd2024:reference/creature/doppelganger
 splat_sources:
 - SRD 5.2.1, pp. 280, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 100, Habitat
 ---
 
 # Doppelganger
@@ -28,6 +29,7 @@ splat_sources:
 | Senses | Darkvision 60 ft.; Passive Perception 11 |
 | Languages | Common plus three other languages |
 | Immunities | Charmed |
+| Habitat | Underdark, Urban |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

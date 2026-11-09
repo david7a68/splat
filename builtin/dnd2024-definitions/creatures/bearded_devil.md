@@ -7,6 +7,7 @@ splat_name: Bearded Devil
 splat_origin: dnd2024:reference/creature/bearded_devil
 splat_sources:
 - SRD 5.2.1, pp. 262, 263, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 33, Habitat
 ---
 
 # Bearded Devil
@@ -28,6 +29,7 @@ splat_sources:
 | Languages | Infernal; telepathy 120 ft. |
 | Resistances | Cold |
 | Immunities | Fire, Poison; Frightened, Poisoned |
+| Habitat | Planar (Nine Hells) |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

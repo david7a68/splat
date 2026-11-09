@@ -577,7 +577,7 @@ pub(super) fn load(
                 Err(_) => return None,
             };
             let mut members = Vec::new();
-            let mut problems = Vec::new();
+            let mut warnings = Vec::new();
             let mut unavailable = 0_u64;
             let mut unavailable_members = Vec::new();
             let (mut xp, mut xp_unknown) = (0_u64, Vec::new());
@@ -596,7 +596,7 @@ pub(super) fn load(
                         .and_then(Value::as_str);
                     let name = missing_member_name(member.overrides.name.as_deref(), link);
                     let fault_name = &name;
-                    problems.push(if let Some(note) = catalogue.old_layout_ref(&member.creature).and_then(|id| catalogue.unreadable.get(&id)) {
+                    warnings.push(if let Some(note) = catalogue.old_layout_ref(&member.creature).and_then(|id| catalogue.unreadable.get(&id)) {
                         note.word.clone()
                     } else { format!(
                         "{what}, {fault_name}: not in this campaign's packages. Campaign → Packages."
@@ -607,23 +607,30 @@ pub(super) fn load(
                 };
                 let entry = &catalogue.entries[&id].entry;
                 let resolved = member.overrides.resolve_for(entry, &group.side);
+                let shown = member.overrides.name.as_deref().unwrap_or(&entry.name);
+                let member_name = if shown == entry.name { shown.to_owned() } else { format!("{shown} (as {})", entry.name) };
                 let issue = if creature.linked {
-                    Some(format!("{what}: {} has a D&D Beyond sheet.", entry.name))
+                    Some(format!("{what}: {member_name} has a D&D Beyond sheet."))
                 } else {
                     match &resolved {
                         Err(error) => Some(format!(
                             "{what}, {}: {}",
-                            entry.name,
+                            member_name,
                             override_error(error)
                         )),
                         Ok(resolved) if resolved.max_hp.is_none() => Some(format!(
                             "{what}: {} has no maximum HP. Set it with this member’s Edit button.",
-                            entry.name
+                            member_name
                         )),
                         Ok(_) => None,
                     }
                 };
-                problems.extend(issue);
+                if let Some(issue) = issue {
+                    warnings.push(issue);
+                    unavailable = unavailable.saturating_add(member.count);
+                    unavailable_members.push((index, member.count, member_name));
+                    continue;
+                }
                 match creature_xp(entry) {
                     Some(each) => xp = u64::saturating_add(xp, each.saturating_mul(member.count)),
                     None => xp_unknown.push(entry.name.clone()),
@@ -634,7 +641,6 @@ pub(super) fn load(
                     overrides: member.overrides.clone(),
                 });
             }
-            let mut warnings = Vec::new();
             for member in unread {
                 let reference = member.creature.clone().and_then(|value| serde_yaml_ng::from_value::<EntryRef>(value).ok());
                 if let Some(note) = reference.as_ref().and_then(|reference| catalogue.unreadable_ref(reference)).filter(|note| note.old_layout) {
@@ -649,13 +655,26 @@ pub(super) fn load(
                     .and_then(|reference| catalogue.resolve_ref(&reference).ok())
                     .and_then(|id| catalogue.entries.get(&id))
                     .map_or_else(|| missing_member_name(None, Some(&member.label)), |entry| entry.entry.name.clone());
-                warnings.push(format!("{name} needs fixing"));
+                let shown = if member.name.is_empty() { &name } else { &member.name };
+                let fault_name = if shown == &name { shown.to_owned() } else { format!("{shown} (as {name})") };
+                warnings.push(format!("{fault_name} needs fixing (line {})", member.flag.line));
                 let count = member.count.unwrap_or(1);
                 unavailable = unavailable.saturating_add(count);
-                let shown = if member.name.is_empty() { &name } else { &member.name };
                 unavailable_members.push((member.before, count, format!("{shown} (not read)")));
             }
-            if members.is_empty() && warnings.iter().any(|word| !word.contains("uses the old layout.")) { problems.push("No members can join. Edit group to fix them.".into()); }
+            let problem = members.is_empty().then(|| {
+                let mut problems = warnings.clone();
+                // Edit cannot fix a group whose only fault is the old layout; Convert files can.
+                problems.push(
+                    if warnings.iter().any(|word| !word.contains("uses the old layout.")) {
+                        "No members can join. Edit group to fix them."
+                    } else {
+                        "No members can join."
+                    }
+                    .into(),
+                );
+                problems.join("\n")
+            });
             Some(Arc::new(RunGroup {
                 id: e.entry.id,
                 path: e.entry.path.clone(),
@@ -676,7 +695,7 @@ pub(super) fn load(
                 unavailable,
                 unavailable_members,
                 warnings,
-                problem: (!problems.is_empty()).then(|| problems.join("\n")),
+                problem,
             }))
         })
         .collect();
@@ -1009,9 +1028,6 @@ pub(super) fn of_encounter(
                         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                             super::row_menu(ui, &group.name.clone(), |ui| {
                                 ui.menu_button("Move to…", |ui| {
-                                    if super::menu_action(ui, ANY_ENCOUNTER, None) {
-                                        discard = Some((index, false));
-                                    }
                                     for (id, name) in
                                         snapshot.encounter_choices().filter(|(id, _)| *id != this.0)
                                     {
@@ -1086,13 +1102,16 @@ pub(super) fn of_encounter(
     }
     if let Some((_, removed, delete)) = removed_group.as_ref() {
         let words = if *delete {
-            "Group deleted. Save deletes its file."
-        } else if removed.baseline.is_some() {
-            "Group removed. Save makes it available for any encounter."
+            "Group deleted. Save deletes its file.".to_owned()
         } else {
-            "New group removed."
+            format!("{} moves to any encounter when you save.", removed.name)
         };
-        if design::undo_message(ui, Tone::Info, words, "Undo remove group") {
+        let undo = if *delete {
+            "Undo remove group"
+        } else {
+            "Undo move"
+        };
+        if design::undo_message(ui, Tone::Info, &words, undo) {
             let (index, removed, delete) = removed_group.take().expect("a removed group");
             if delete {
                 deleted_groups.retain(|group| group.path != removed.path);
@@ -2914,7 +2933,7 @@ mod tests {
         let active = campaign(dir.path());
         let scout = creature(dir.path(), "Scout");
         let source = format!(
-            "---\nsplat_schema: 2\nsplat_id: {}\nsplat_kind: encounter_group\nsplat_name: Broken row\nsplat_side: enemies\n---\n\n## Members\n\n| Count | Creature | Name | Changes | Note |\n| --- | --- | --- | --- | --- |\n| 7 | [[Scout]] | | HP lots | Keep this row |\n| 2 | [[Scout]] | | | |\n",
+            "---\nsplat_schema: 2\nsplat_id: {}\nsplat_kind: encounter_group\nsplat_name: Broken row\nsplat_side: enemies\n---\n\n## Members\n\n| Count | Creature | Name | Changes | Note |\n| --- | --- | --- | --- | --- |\n| 7 | [[Scout]] | Lookout | HP lots | Keep this row |\n| 2 | [[Scout]] | | | |\n",
             Uuid::new_v4()
         );
         fs::write(dir.path().join("Broken row.md"), &source).unwrap();
@@ -2937,7 +2956,11 @@ mod tests {
             "all named members remain visible"
         );
         assert!(group.summary().contains("2 of 9 members can join"));
-        assert!(group.summary().contains("Scout needs fixing"));
+        assert!(
+            group
+                .summary()
+                .contains("Lookout (as Scout) needs fixing (line 13)")
+        );
         assert_eq!(group.xp_label(), "XP 100 + unknown");
         let draft = GroupDraft::open(dir.path(), "Broken row.md").unwrap();
         let unread =
@@ -3063,6 +3086,28 @@ mod tests {
         let error = draft.save(&campaign, &[]).unwrap_err();
         assert!(error.contains("unknown override level"), "{error}");
         assert!(!dir.path().join(&draft.path).exists());
+    }
+
+    #[test]
+    fn iter_1_b_available_members_join_a_partly_unavailable_group() {
+        let dir = tempfile::tempdir().unwrap();
+        let campaign = campaign(dir.path());
+        let scout = creature(dir.path(), "Scout");
+        let source = format!(
+            "---\nsplat_schema: 2\nsplat_id: {}\nsplat_kind: encounter_group\nsplat_name: Patrol\nsplat_side: enemies\n---\n\n## Members\n\n| Count | Creature | Name | Changes | Note |\n| --- | --- | --- | --- | --- |\n| 1 | [[Scout]] | | | |\n| 1 | [[Missing]] | Lookout | | |\n| 1 | [[Scout]] | Weak scout | HP -100 | |\n",
+            Uuid::new_v4()
+        );
+        fs::write(dir.path().join("Patrol.md"), source).unwrap();
+        let snapshot = Snapshot::load(&campaign, &[]).unwrap();
+        let group = &snapshot.groups[0];
+        assert!(group.problem.is_none(), "{:?}", group.problem);
+        assert_eq!(group.members.len(), 1);
+        assert_eq!(group.members[0].entry.id, scout);
+        assert_eq!(group.count_label(), "1 of 3 members can join");
+        assert_eq!(group.unavailable, 2);
+        assert_eq!(group.warnings.len(), 2);
+        assert!(group.summary().contains("Lookout"));
+        assert!(group.summary().contains("Weak scout"));
     }
 
     #[test]

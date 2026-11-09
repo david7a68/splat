@@ -7,6 +7,7 @@ splat_name: Archelon
 splat_origin: dnd2024:reference/creature/archelon
 splat_sources:
 - SRD 5.2.1, pp. 344, 345, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 349, Habitat
 ---
 
 # Archelon
@@ -27,6 +28,7 @@ splat_sources:
 | Skills | Stealth +5 |
 | Senses | Passive Perception 12 |
 | Languages | None |
+| Habitat | Underwater |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

@@ -7,6 +7,7 @@ splat_name: Azer Sentinel
 splat_origin: dnd2024:reference/creature/azer_sentinel
 splat_sources:
 - SRD 5.2.1, pp. 261, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 25, Habitat
 ---
 
 # Azer Sentinel
@@ -27,6 +28,7 @@ splat_sources:
 | Senses | Passive Perception 11 |
 | Languages | Primordial (Ignan) |
 | Immunities | Fire, Poison; Poisoned |
+| Habitat | Mountain, Planar (Elemental Plane of Fire) |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

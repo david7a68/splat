@@ -7,6 +7,7 @@ splat_name: Remorhaz
 splat_origin: dnd2024:reference/creature/remorhaz
 splat_sources:
 - SRD 5.2.1, pp. 319, 320, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 258, Habitat
 ---
 
 # Remorhaz
@@ -27,6 +28,7 @@ splat_sources:
 | Senses | Darkvision 60 ft., Tremorsense 60 ft.; Passive Perception 10 |
 | Languages | None |
 | Immunities | Cold, Fire |
+| Habitat | Arctic |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

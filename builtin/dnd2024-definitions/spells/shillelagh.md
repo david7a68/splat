@@ -23,6 +23,8 @@ splat_sources:
 | Range |  |
 | Components | V, S, M (mistletoe) |
 | Duration | 1 minute |
+| Ritual | No |
+| Concentration | No |
 
 
 ## Source text

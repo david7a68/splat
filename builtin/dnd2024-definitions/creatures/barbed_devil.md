@@ -7,6 +7,7 @@ splat_name: Barbed Devil
 splat_origin: dnd2024:reference/creature/barbed_devil
 splat_sources:
 - SRD 5.2.1, pp. 262, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 30, Habitat
 ---
 
 # Barbed Devil
@@ -29,6 +30,7 @@ splat_sources:
 | Languages | Infernal; telepathy 120 ft. |
 | Resistances | Cold |
 | Immunities | Fire, Poison; Poisoned |
+| Habitat | Planar (Nine Hells) |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

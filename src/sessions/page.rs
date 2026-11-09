@@ -317,6 +317,10 @@ pub struct Sessions {
     pub wants_saved_run: Option<PathBuf>,
     /// A name in a note's link to read in Lookup.
     pub wants_lookup: Option<String>,
+    /// The `/` menu in the note, and what its command has open.
+    slash: super::slash::Slash,
+    /// A command wrote a file, so Lookup must read the campaign again.
+    pub wants_content_refresh: bool,
 }
 
 struct MovedRun {
@@ -2989,6 +2993,12 @@ impl Sessions {
             ))
             .corner_radius(design::RADIUS_CONTROL)
             .inner_margin(design::S);
+        self.slash.take_keys(ui, self.note_editor_id);
+        let index = ui.ctx().data(|data| {
+            data.get_temp::<std::sync::Arc<crate::lookup::ContentIndex>>(egui::Id::new(
+                "reader_link_index",
+            ))
+        });
         frame.show(ui, |ui| {
             let visible_height = ui.available_height().max(design::XL);
             let mut scroll =
@@ -3013,6 +3023,21 @@ impl Sessions {
                         .min_size(egui::vec2(0.0, visible_height + heading_offset))
                         .show(ui);
                     crate::markdown_source::paint_section_rules(ui, &output);
+                    let place = super::slash::Place {
+                        session: self.selected,
+                        campaign: self.campaign.as_ref(),
+                        index: index.as_deref(),
+                        run_open: self.run_open,
+                    };
+                    let done = self.slash.show(ui, &output, &mut draft.body, &place);
+                    self.wants_content_refresh |= done.created;
+                    if done.edited {
+                        draft.edited();
+                        if let Some(session) = self.selected {
+                            self.mentions
+                                .insert(session, timeline::referenced_ids(&draft.body));
+                        }
+                    }
                     if in_panel && let Some(at) = draft.body.find("## What happened") {
                         // Even a short note must scroll its repeated heading out of the panel.
                         let heading = draft.body[..at].chars().count();

@@ -7,6 +7,7 @@ splat_name: Mage
 splat_origin: dnd2024:reference/creature/mage
 splat_sources:
 - SRD 5.2.1, pp. 305, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 199, Habitat
 ---
 
 # Mage
@@ -28,6 +29,7 @@ splat_sources:
 | Senses | Passive Perception 14 |
 | Languages | Common plus three other languages |
 | Gear | Wand |
+| Habitat | Any |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

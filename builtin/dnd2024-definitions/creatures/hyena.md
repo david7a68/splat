@@ -7,6 +7,7 @@ splat_name: Hyena
 splat_origin: dnd2024:reference/creature/hyena
 splat_sources:
 - SRD 5.2.1, pp. 356, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 363, Habitat
 ---
 
 # Hyena
@@ -27,6 +28,7 @@ splat_sources:
 | Skills | Perception +3 |
 | Senses | Darkvision 60 ft.; Passive Perception 13 |
 | Languages | None |
+| Habitat | Desert, Forest, Grassland, Hill |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

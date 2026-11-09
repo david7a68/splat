@@ -23,6 +23,8 @@ splat_sources:
 | Range |  |
 | Components | V, S, M (a set of divination tools—such as cards or runes—worth 100+ GP) |
 | Duration | Concentration, up to 1 day |
+| Ritual | No |
+| Concentration | Yes |
 
 
 ## Source text

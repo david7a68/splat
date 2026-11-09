@@ -7,6 +7,7 @@ splat_name: Swarm of Ravens
 splat_origin: dnd2024:reference/creature/swarm_of_ravens
 splat_sources:
 - SRD 5.2.1, pp. 362, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 371, Habitat
 ---
 
 # Swarm of Ravens
@@ -29,6 +30,7 @@ splat_sources:
 | Languages | None |
 | Resistances | Bludgeoning, Piercing, Slashing |
 | Immunities | Charmed, Frightened, Grappled, Paralyzed, Petrified, Prone, Restrained, Stunned |
+| Habitat | Hill, Swamp, Urban |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

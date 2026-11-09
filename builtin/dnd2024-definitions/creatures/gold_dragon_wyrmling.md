@@ -7,6 +7,7 @@ splat_name: Gold Dragon Wyrmling
 splat_origin: dnd2024:reference/creature/gold_dragon_wyrmling
 splat_sources:
 - SRD 5.2.1, pp. 290, 291, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 144, Habitat
 ---
 
 # Gold Dragon Wyrmling
@@ -28,6 +29,7 @@ splat_sources:
 | Senses | Blindsight 10 ft., Darkvision 60 ft.; Passive Perception 14 |
 | Languages | Draconic |
 | Immunities | Fire |
+| Habitat | Forest, Grassland |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

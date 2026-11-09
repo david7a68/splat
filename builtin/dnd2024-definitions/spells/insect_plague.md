@@ -23,6 +23,8 @@ splat_sources:
 | Range | 300 feet |
 | Components | V, S, M (a locust) |
 | Duration | Concentration, up to 10 minutes |
+| Ritual | No |
+| Concentration | Yes |
 
 
 ## Source text

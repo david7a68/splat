@@ -7,6 +7,7 @@ splat_name: Warhorse
 splat_origin: dnd2024:reference/creature/warhorse
 splat_sources:
 - SRD 5.2.1, pp. 364, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 373, Habitat
 ---
 
 # Warhorse
@@ -26,6 +27,7 @@ splat_sources:
 | Challenge | 1/2 (XP 100; PB +2) |
 | Senses | Passive Perception 11 |
 | Languages | None |
+| Habitat | Urban |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

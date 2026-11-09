@@ -7,6 +7,7 @@ splat_name: Commoner
 splat_origin: dnd2024:reference/creature/commoner
 splat_sources:
 - SRD 5.2.1, pp. 275, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 77, Habitat
 ---
 
 # Commoner
@@ -27,6 +28,7 @@ splat_sources:
 | Senses | Passive Perception 10 |
 | Languages | Common |
 | Gear | Club |
+| Habitat | Any |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

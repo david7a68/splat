@@ -7,6 +7,7 @@ splat_name: Giant Owl
 splat_origin: dnd2024:reference/creature/giant_owl
 splat_sources:
 - SRD 5.2.1, pp. 352, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 358, Habitat
 ---
 
 # Giant Owl
@@ -28,6 +29,7 @@ splat_sources:
 | Senses | Darkvision 120 ft.; Passive Perception 16 |
 | Languages | Celestial; understands Common, Elvish, and Sylvan but can’t speak them |
 | Resistances | Necrotic, Radiant |
+| Habitat | Arctic, Forest, Hill |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

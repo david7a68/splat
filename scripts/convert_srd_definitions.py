@@ -24,6 +24,8 @@ from mapped_tables import plan as table_plan
 
 OUTPUT = Path('builtin/dnd2024-definitions')
 CONTRACTS = Path('scripts/srd_inputs/contracts.yaml')
+HABITATS = Path('scripts/srd_inputs/habitats.yaml')
+MONSTER_MANUAL = 'Monster Manual (2024)'
 SCHOOLS = 'Abjuration Conjuration Divination Enchantment Evocation Illusion Necromancy Transmutation'.split()
 CLASSES = 'Barbarian Bard Cleric Druid Fighter Monk Paladin Ranger Rogue Sorcerer Warlock Wizard'.split()
 
@@ -356,6 +358,8 @@ def generate(lines, require_complete=True):
     registry = []
     missing = []
     contracts=yaml.load(CONTRACTS.read_text(),Loader=yaml.SafeLoader)
+    # The SRD prints no habitat. Every creature has a reviewed value or an explicit null.
+    habitats=yaml.load(HABITATS.read_text(),Loader=yaml.SafeLoader)
     proof={}
     for path in sorted(MANUAL.rglob('*.md')):
         meta,_=load_note(path)
@@ -389,6 +393,12 @@ def generate(lines, require_complete=True):
         except ValueError as error:
             fields={'splat_'+kind:{}};errors.append(str(error))
         fields.update(source.get('fields',{}))
+        habitat=None
+        if kind=='creature':
+            if key not in habitats:raise ValueError('Habitat not reviewed: '+key)
+            habitat=habitats[key]
+            # Before the contracts, so a reviewed contract's closed shape includes it.
+            if habitat:fields['splat_creature']={**fields['splat_creature'],'habitat_text':habitat['habitat']}
         status='partial';required=[]
         if key in contracts:
             spec=contracts[key]
@@ -424,8 +434,10 @@ def generate(lines, require_complete=True):
         if source.get('parent_name'):conversion['parent_name']=source['parent_name']
         for field in ['line_span','line_spans']:
             if field in source:conversion[field]=source[field]
+        cited=[{'title':'SRD 5.2.1','locator':'pp. '+', '.join(map(str,source['pages'])),'url':'https://www.dndbeyond.com/srd'}]
+        if habitat:cited.append({'title':MONSTER_MANUAL,'locator':f"p. {habitat['page']}, Habitat"})
         front={'splat_schema':1,'splat_id':ident,'splat_kind':kind,'splat_key':key,'splat_name':name,
-               'splat_origin':{'key':origin},'splat_sources':[{'title':'SRD 5.2.1','locator':'pp. '+', '.join(map(str,source['pages'])),'url':'https://www.dndbeyond.com/srd'}],
+               'splat_origin':{'key':origin},'splat_sources':cited,
                **fields}
         if key in readings:
             reviewed = readings[key]
@@ -444,6 +456,8 @@ def generate(lines, require_complete=True):
             body+='\n\n'+table['body'].split('\n\n',1)[1].strip()
         outputs[path]=render_note(front, body, names, path)
         records.append({'key':key,'id':ident,'path':path,'source':origin,**conversion,'sha256':digest(outputs[path].encode())})
+    if habitats.keys() - keys:
+        raise ValueError('Habitats name unknown definitions: '+', '.join(sorted(habitats.keys() - keys)))
     if readings.keys() - keys:
         raise ValueError('Reading summaries name unknown definitions: '+', '.join(sorted(readings.keys() - keys)))
     extra = researched.keys() - keys

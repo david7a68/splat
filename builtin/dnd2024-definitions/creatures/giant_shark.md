@@ -7,6 +7,7 @@ splat_name: Giant Shark
 splat_origin: dnd2024:reference/creature/giant_shark
 splat_sources:
 - SRD 5.2.1, pp. 353, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 359, Habitat
 ---
 
 # Giant Shark
@@ -27,6 +28,7 @@ splat_sources:
 | Skills | Perception +3 |
 | Senses | Blindsight 60 ft.; Passive Perception 13 |
 | Languages | None |
+| Habitat | Underwater |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

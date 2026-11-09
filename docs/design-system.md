@@ -145,6 +145,8 @@ entries, then character sheet copies. File paths shorten before their file actio
 the full path stays on hover. All save rows call their discard action `Discard`. A clean
 Library editor shows `No changes` in the left status slot.
 
+Creature search results keep the name tight to its stats, with an S gap between results. The CR column fits `CR 1/8` plus an M gap.
+
 Creature vitals come from the Stat block table and appear once in the reader. The editor warns
 when a prose AC or HP line disagrees and offers `Use <value>` with Undo. Missing creature
 replacements use the shared search row, with CR, HP, AC and `Use`. Replace all matching
@@ -366,8 +368,7 @@ Member changes stay on one line, such as `Changed · 2 to add by hand`, until op
 An empty group frame has one muted line and no zero count or duplicate search summary.
 The Groups list has one level of headings: For any encounter, each encounter, then Encounter deleted.
 Its rows keep Edit and a menu with Remove, which has Undo. A planned group has Remove from tonight and Undo remove. An isolated plan link is deleted; links inside sentences keep their words.
-A summary of members stays below the search when it has members. Removing an encounter’s group makes
-it available for any encounter on Save, with Undo until that save.
+A summary of members stays below the search when it has members. Moving an encounter’s group to any encounter says `<name> moves to any encounter when you save.`, with `Undo move` until that save. `Move to…` lists named encounters only. `Make available to any encounter` is the one direct action for removing that restriction.
 
 A saved Setup resumed after a restoring long rest starts party HP at full. Its
 notice says `Party HP is full after the long rest.` and offers `Use the saved HP`
@@ -378,14 +379,15 @@ New templates say `Starts with the title line only.` below the name field.
 
 The roster is the screen. Every row has fixed columns: initiative, side mark, name, AC,
 temporary HP, HP with its bar, then a state column for `Bloodied`, `0 HP` and the sync
-word. Conditions take one second line before the HP column. Measure them without change bonuses;
+word. A lone sync state sits beside the HP number; line two holds a second state only. Sheet loading says `Reading sheet…`. Conditions take one second line before the HP column. Measure them without change bonuses;
 shorten bonuses first, remeasure, then drop the bonus before `more` if needed.
 Measure the sync word before folding conditions into a count. Keep the first condition,
-and keep multiword sync states together.
+and keep multiword sync states together. Beside `Reading sheet…` in a narrow row, the condition count can use `+1`; it keeps the same link to Conditions.
 At the narrowest width, mandatory state words can use the empty left part of the
 HP bar's slot. The bar stays under HP and keeps at least XL of length.
 Long local effects show four words and `more`. Undo names the effect with those four
 words and an ellipsis; hover and accessibility keep its full text.
+`No initiative` has the same underline as other row links.
 The count opens their full text in `Conditions`. When a window has no room for the state column, as at 960x640 beside
 the panel, those words open the second line instead, so that a name is never cut.
 
@@ -412,7 +414,7 @@ the panel, those words open the second line instead, so that a name is never cut
   sync notices, then the next name. Silence and the short sync state stay together when
   space is short. Connect to sync gives up its link before either state gives up its word.
 - **Dock:** a fixed place above the footer. `Amount`, `Damage`, `Heal`, `Temp HP`, then the
-  selected name, `Conditions`, `Conc` and `Absent`. Enter applies damage.
+  selected name, `Conditions`, `Conc` and `Absent`. Off toggles use text colour; disabled controls stay muted. Enter applies damage.
 - **Overflow:** when rows still cannot fit, a clipped list ends above a separate page-filled band with a hairline. The band says how many are above
   and below, with any `Conflict`, `0 HP` and `Bloodied` among them. A row cut by the edge
   counts as out of view. Each turn scrolls to show the current row and the next.
@@ -442,17 +444,16 @@ the panel, those words open the second line instead, so that a name is never cut
   keep `Add` and say which round they joined. No step asks for confirmation, because Undo
   names the addition.
 
-Setup keeps fixed initiative, Roll, Absent and menu columns. All controls share the name line, centred with the initiative field. Empty Roll slots keep player totals aligned. Only tied rows have Tie and two fixed arrow slots below the total. Other rows fit their two text lines and Scan padding, with RUN_REGULAR as the minimum height. The header always reports ties. Undo stays at the top right in setup and live play. The blocked Begin combat reason sits directly below that button. Setup's row menu opens Correct for that participant.
+Setup keeps fixed initiative, Roll, Absent and menu columns. All controls share the name line, centred with the initiative field. Empty Roll slots keep player totals aligned. Only tied rows have Tie and two fixed arrow slots below the total. Other rows fit their two text lines and Scan padding, with RUN_REGULAR as the minimum height. Shared-roll bracket segments stay beside initiative fields and stop before each detail line. The header always reports ties. Undo stays at the top right in setup and live play. The blocked Begin combat reason sits directly below that button. Setup's row menu opens Correct for that participant.
 
 Death-save counts and actions occupy one line below the panel tabs at zero HP. Clicking a count edits it; Correct has no duplicate fields. Correct initiative and DM notes show a short reason beside a blocked commit action.
 
-Arrivals uses group headings and one muted line for an empty group section. New group opens Encounters. A broken group's initiative field and Add action are both blocked, and Campaign → Packages opens repair. A setup arrival says Added before combat. Add names include the count when more than one creature will join.
+Arrivals uses group headings and one muted line for an empty group section. New group opens Encounters. A group excludes missing, unread and invalid members from its addable set. It shows `1 of 3 members can join` and `Add 1`, with each excluded member's reason and repair link. Only a group with no valid members blocks its initiative field and Add action. An invalid Total keeps the text, says `Enter a whole number, or clear the field to roll.`, and blocks Add and drop. Campaign → Packages opens repair. A setup arrival says Added before combat. Add names include the count when more than one creature will join.
 
-Recovery copies use a UTC save-time suffix and preserve the other file. The run closed last owns primary Resume. Saved rows show the last change, mark the preserved file Changed elsewhere, and keep an empty Edit slot when no encounter exists. Run state words come from one function: Setup, Setup · Paused, Round 2, Round 2 · Paused, Ended · Round 2.
+Recovery copies use a UTC save-time suffix and preserve the other file. The run closed last owns primary Resume. Saved rows use relative time for today and yesterday, then a short UTC date. They show the last change, mark the preserved file Changed elsewhere, and keep an empty Edit slot when no encounter exists. Run state words come from one function: Setup, Setup · Paused, Round 2, Round 2 · Paused, Ended · Round 2.
 
 A disconnected run keeps Connect to sync on its header only. The footer's blocked Sync party uses the same cause as hover text. End encounter… shortens to End…; Keys keeps its word beside Lookup, Notes and a wide run panel.
-An ended run puts its short conflict and pending-change count directly below the
-blocked Close after sync button.
+An ended run puts its short conflict and pending-change count directly below the blocked Close after sync button at the panel's right edge. Saved and Undo end at the roster's right edge. Footer and strip Close run close at once when the run is saved and nothing is unsent. Otherwise they ask for a choice.
 
 The app-close dialog uses Keep running for a run, Keep recording for audio, and Keep processing for a job. Recording and processing titles name the unfinished session. A sync conflict names the character and offers Review conflict. Stop and close is secondary when saved work is kept; an action is red only when it loses work.
 
@@ -892,7 +893,7 @@ Edit and a row menu with Remove member, aligned with the other member actions.
 Edit opens the normal change form with the readable values, the unread text, its
 reason, and an example. Done keeps the name and note. Remove offers Undo.
 Groups, Arrivals and the plan say how many members can join and name the creature
-that needs fixing. Readable members can still join. Unknown member XP adds
+that needs fixing. The warning uses the member's shown name, its base creature when different, and its source line. Readable members can still join. Unknown member XP adds
 `+ unknown` to the total. Changed member summaries also name the base creature.
 Encounter search names hidden duplicate notes and offers file-specific identity
 repair with Undo. Source comparisons use the monospace face.

@@ -7,6 +7,7 @@ splat_name: Ghast
 splat_origin: dnd2024:reference/creature/ghast
 splat_sources:
 - SRD 5.2.1, pp. 287, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 130, Habitat
 ---
 
 # Ghast
@@ -28,6 +29,7 @@ splat_sources:
 | Languages | Common |
 | Resistances | Necrotic |
 | Immunities | Poison; Charmed, Exhaustion, Poisoned |
+| Habitat | Swamp, Underdark, Urban |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

@@ -7,6 +7,7 @@ splat_name: Darkmantle
 splat_origin: dnd2024:reference/creature/darkmantle
 splat_sources:
 - SRD 5.2.1, pp. 278, 279, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 90, Habitat
 ---
 
 # Darkmantle
@@ -27,6 +28,7 @@ splat_sources:
 | Skills | Stealth +3 |
 | Senses | Blindsight 60 ft.; Passive Perception 10 |
 | Languages | None |
+| Habitat | Underdark |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

@@ -7,6 +7,7 @@ splat_name: Giant Venomous Snake
 splat_origin: dnd2024:reference/creature/giant_venomous_snake
 splat_sources:
 - SRD 5.2.1, pp. 354, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 361, Habitat
 ---
 
 # Giant Venomous Snake
@@ -27,6 +28,7 @@ splat_sources:
 | Skills | Perception +2 |
 | Senses | Blindsight 10 ft.; Passive Perception 12 |
 | Languages | None |
+| Habitat | Coastal, Desert, Forest, Grassland, Hill, Swamp |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

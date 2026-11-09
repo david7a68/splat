@@ -7,6 +7,7 @@ splat_name: Archmage
 splat_origin: dnd2024:reference/creature/archmage
 splat_sources:
 - SRD 5.2.1, pp. 305, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 199, Habitat
 ---
 
 # Archmage
@@ -31,6 +32,7 @@ splat_sources:
 | Languages | Common plus five other languages |
 | Gear | Wand |
 | Immunities | Psychic; Charmed (with Mind Blank) |
+| Habitat | Any |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

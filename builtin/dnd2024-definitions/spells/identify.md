@@ -23,6 +23,8 @@ splat_sources:
 | Range |  |
 | Components | V, S, M (a pearl worth 100+ GP) |
 | Duration | Instantaneous |
+| Ritual | Yes |
+| Concentration | No |
 
 
 ## Source text

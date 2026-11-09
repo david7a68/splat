@@ -7,6 +7,7 @@ splat_name: Troll Limb
 splat_origin: dnd2024:reference/creature/troll_limb
 splat_sources:
 - SRD 5.2.1, pp. 333, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 310, Habitat
 ---
 
 # Troll Limb
@@ -26,6 +27,7 @@ splat_sources:
 | Challenge | 1/2 (XP 100; PB +2) |
 | Senses | Darkvision 60 ft.; Passive Perception 9 |
 | Languages | None |
+| Habitat | Arctic, Forest, Hill, Mountain, Swamp, Underdark |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

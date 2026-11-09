@@ -7,6 +7,7 @@ splat_name: Young White Dragon
 splat_origin: dnd2024:reference/creature/young_white_dragon
 splat_sources:
 - SRD 5.2.1, pp. 340, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 328, Habitat
 ---
 
 # Young White Dragon
@@ -28,6 +29,7 @@ splat_sources:
 | Senses | Blindsight 30 ft., Darkvision 120 ft.; Passive Perception 16 |
 | Languages | Common, Draconic |
 | Immunities | Cold |
+| Habitat | Arctic |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

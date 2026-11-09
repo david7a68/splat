@@ -7,6 +7,7 @@ splat_name: Giant Lizard
 splat_origin: dnd2024:reference/creature/giant_lizard
 splat_sources:
 - SRD 5.2.1, pp. 352, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 358, Habitat
 ---
 
 # Giant Lizard
@@ -26,6 +27,7 @@ splat_sources:
 | Challenge | 1/4 (XP 50; PB +2) |
 | Senses | Darkvision 60 ft.; Passive Perception 10 |
 | Languages | None |
+| Habitat | Coastal, Desert, Forest, Swamp, Underdark |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

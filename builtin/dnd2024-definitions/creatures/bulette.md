@@ -7,6 +7,7 @@ splat_name: Bulette
 splat_origin: dnd2024:reference/creature/bulette
 splat_sources:
 - SRD 5.2.1, pp. 272, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 63, Habitat
 ---
 
 # Bulette
@@ -27,6 +28,7 @@ splat_sources:
 | Skills | Perception +6 |
 | Senses | Darkvision 60 ft., Tremorsense 120 ft.; Passive Perception 16 |
 | Languages | None |
+| Habitat | Grassland, Hill, Mountain |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

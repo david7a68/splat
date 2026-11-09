@@ -7,6 +7,7 @@ splat_name: Minotaur of Baphomet
 splat_origin: dnd2024:reference/creature/minotaur_of_baphomet
 splat_sources:
 - SRD 5.2.1, pp. 309, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 215, Habitat
 ---
 
 # Minotaur of Baphomet
@@ -27,6 +28,7 @@ splat_sources:
 | Skills | Perception +7, Survival +7 |
 | Senses | Darkvision 60 ft.; Passive Perception 17 |
 | Languages | Abyssal |
+| Habitat | Underdark |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

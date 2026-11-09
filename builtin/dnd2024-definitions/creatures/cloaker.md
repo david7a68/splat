@@ -7,6 +7,7 @@ splat_name: Cloaker
 splat_origin: dnd2024:reference/creature/cloaker
 splat_sources:
 - SRD 5.2.1, pp. 274, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 73, Habitat
 ---
 
 # Cloaker
@@ -28,6 +29,7 @@ splat_sources:
 | Senses | Darkvision 120 ft.; Passive Perception 12 |
 | Languages | Deep Speech, Undercommon |
 | Immunities | Frightened |
+| Habitat | Underdark |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

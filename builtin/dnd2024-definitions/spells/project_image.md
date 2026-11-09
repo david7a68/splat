@@ -23,6 +23,8 @@ splat_sources:
 | Range |  |
 | Components | V, S, M (a statuette of yourself worth 5+ GP) |
 | Duration | Concentration, up to 1 day |
+| Ritual | No |
+| Concentration | Yes |
 
 
 ## Source text

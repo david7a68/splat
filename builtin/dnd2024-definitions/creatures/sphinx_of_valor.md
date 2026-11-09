@@ -7,6 +7,7 @@ splat_name: Sphinx of Valor
 splat_origin: dnd2024:reference/creature/sphinx_of_valor
 splat_sources:
 - SRD 5.2.1, pp. 328, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 294, Habitat
 ---
 
 # Sphinx of Valor
@@ -29,6 +30,7 @@ splat_sources:
 | Languages | Celestial, Common |
 | Resistances | Necrotic, Radiant |
 | Immunities | Psychic; Charmed, Frightened |
+| Habitat | Desert, Planar (Upper Planes) |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

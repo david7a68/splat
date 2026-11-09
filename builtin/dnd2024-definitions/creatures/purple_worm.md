@@ -7,6 +7,7 @@ splat_name: Purple Worm
 splat_origin: dnd2024:reference/creature/purple_worm
 splat_sources:
 - SRD 5.2.1, pp. 316, 317, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 250, Habitat
 ---
 
 # Purple Worm
@@ -26,6 +27,7 @@ splat_sources:
 | Challenge | 15 (XP 13,000; PB +5) |
 | Senses | Blindsight 30 ft., Tremorsense 60 ft.; Passive Perception 9 |
 | Languages | None |
+| Habitat | Desert, Underdark |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

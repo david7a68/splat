@@ -7,6 +7,7 @@ splat_name: Merfolk Skirmisher
 splat_origin: dnd2024:reference/creature/merfolk_skirmisher
 splat_sources:
 - SRD 5.2.1, pp. 308, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 209, Habitat
 ---
 
 # Merfolk Skirmisher
@@ -26,6 +27,7 @@ splat_sources:
 | Challenge | 1/8 (XP 25; PB +2) |
 | Senses | Passive Perception 12 |
 | Languages | Common, Primordial (Aquan) |
+| Habitat | Coastal, Underwater |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

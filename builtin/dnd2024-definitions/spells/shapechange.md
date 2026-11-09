@@ -23,6 +23,8 @@ splat_sources:
 | Range |  |
 | Components | V, S, M (a jade circlet worth 1,500+ GP) |
 | Duration | Concentration, up to 1 hour |
+| Ritual | No |
+| Concentration | Yes |
 
 
 ## Source text

@@ -23,6 +23,8 @@ splat_sources:
 | Range | 120 feet |
 | Components | V, S, M (a thin sheet of lead) |
 | Duration | 24 hours |
+| Ritual | No |
+| Concentration | No |
 
 
 ## Source text

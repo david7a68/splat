@@ -23,6 +23,8 @@ splat_sources:
 | Range | 120 feet |
 | Components | S, M (a pinch of confetti) |
 | Duration | Concentration, up to 1 minute |
+| Ritual | No |
+| Concentration | Yes |
 
 
 ## Source text

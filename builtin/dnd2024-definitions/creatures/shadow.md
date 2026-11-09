@@ -7,6 +7,7 @@ splat_name: Shadow
 splat_origin: dnd2024:reference/creature/shadow
 splat_sources:
 - SRD 5.2.1, pp. 322, 323, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 272, Habitat
 ---
 
 # Shadow
@@ -30,6 +31,7 @@ splat_sources:
 | Resistances | Acid, Cold, Fire, Lightning, Thunder |
 | Immunities | Necrotic, Poison; Exhaustion, Frightened, Grappled, Paralyzed, Petrified, Poisoned, Prone, Restrained, Unconscious |
 | Vulnerabilities | Radiant |
+| Habitat | Underdark, Urban, Planar (Shadowfell) |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

@@ -23,6 +23,8 @@ splat_sources:
 | Range | 10 feet |
 | Components | V, S, M (burning incense worth 10+ GP, which the spell consumes) |
 | Duration | Instantaneous |
+| Ritual | Yes |
+| Concentration | No |
 
 
 ## Source text

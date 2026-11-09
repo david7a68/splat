@@ -7,6 +7,7 @@ splat_name: Bat
 splat_origin: dnd2024:reference/creature/bat
 splat_sources:
 - SRD 5.2.1, pp. 345, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 349, Habitat
 ---
 
 # Bat
@@ -26,6 +27,7 @@ splat_sources:
 | Challenge | 0 (XP 10; PB +2) |
 | Senses | Blindsight 60 ft.; Passive Perception 11 |
 | Languages | None |
+| Habitat | Forest, Mountain, Underdark, Urban |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

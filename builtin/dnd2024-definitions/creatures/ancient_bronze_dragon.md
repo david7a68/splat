@@ -7,6 +7,7 @@ splat_name: Ancient Bronze Dragon
 splat_origin: dnd2024:reference/creature/ancient_bronze_dragon
 splat_sources:
 - SRD 5.2.1, pp. 271, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 60, Habitat
 ---
 
 # Ancient Bronze Dragon
@@ -28,6 +29,7 @@ splat_sources:
 | Senses | Blindsight 60 ft., Darkvision 120 ft.; Passive Perception 27 |
 | Languages | Common, Draconic |
 | Immunities | Lightning |
+| Habitat | Coastal |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

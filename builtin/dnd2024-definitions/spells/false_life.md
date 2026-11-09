@@ -23,6 +23,8 @@ splat_sources:
 | Range |  |
 | Components | V, S, M (a drop of alcohol) |
 | Duration | Instantaneous |
+| Ritual | No |
+| Concentration | No |
 
 
 ## Source text

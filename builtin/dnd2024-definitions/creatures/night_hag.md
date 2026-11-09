@@ -7,6 +7,7 @@ splat_name: Night Hag
 splat_origin: dnd2024:reference/creature/night_hag
 splat_sources:
 - SRD 5.2.1, pp. 311, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 225, Habitat
 ---
 
 # Night Hag
@@ -29,6 +30,7 @@ splat_sources:
 | Languages | Abyssal, Common, Infernal, Primordial |
 | Resistances | Cold, Fire |
 | Immunities | Charmed |
+| Habitat | Planar (Lower Planes) |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

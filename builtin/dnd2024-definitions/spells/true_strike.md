@@ -23,6 +23,8 @@ splat_sources:
 | Range |  |
 | Components | S, M (a weapon with which you have proficiency and that is worth 1+ CP) |
 | Duration | Instantaneous |
+| Ritual | No |
+| Concentration | No |
 
 
 ## Source text

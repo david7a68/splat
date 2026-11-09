@@ -1,0 +1,1001 @@
+# Habitat lines from the 2024 Monster Manual for SRD 5.2.1 creatures.
+# The SRD does not print a habitat, so convert_srd_definitions.py adds this
+# reviewed value as the Habitat row and cites the Monster Manual page.
+# Values follow the book: terrain names, then Planar (named planes).
+# null: the stat block is embedded in a spell or feature and has no habitat.
+dnd2024:creatures/aboleth:
+  habitat: Underdark, Underwater
+  page: 12
+dnd2024:creatures/adult_black_dragon:
+  habitat: Swamp
+  page: 39
+dnd2024:creatures/adult_blue_dragon:
+  habitat: Coastal, Desert
+  page: 49
+dnd2024:creatures/adult_brass_dragon:
+  habitat: Desert
+  page: 55
+dnd2024:creatures/adult_bronze_dragon:
+  habitat: Coastal
+  page: 59
+dnd2024:creatures/adult_copper_dragon:
+  habitat: Hill
+  page: 79
+dnd2024:creatures/adult_gold_dragon:
+  habitat: Forest, Grassland
+  page: 145
+dnd2024:creatures/adult_green_dragon:
+  habitat: Forest
+  page: 153
+dnd2024:creatures/adult_red_dragon:
+  habitat: Hill, Mountain
+  page: 255
+dnd2024:creatures/adult_silver_dragon:
+  habitat: Mountain, Urban
+  page: 279
+dnd2024:creatures/adult_white_dragon:
+  habitat: Arctic
+  page: 329
+dnd2024:creatures/air_elemental:
+  habitat: Desert, Mountain, Planar (Elemental Plane of Air)
+  page: 13
+dnd2024:creatures/allosaurus:
+  habitat: Grassland
+  page: 348
+dnd2024:creatures/ancient_black_dragon:
+  habitat: Swamp
+  page: 40
+dnd2024:creatures/ancient_blue_dragon:
+  habitat: Coastal, Desert
+  page: 50
+dnd2024:creatures/ancient_brass_dragon:
+  habitat: Desert
+  page: 56
+dnd2024:creatures/ancient_bronze_dragon:
+  habitat: Coastal
+  page: 60
+dnd2024:creatures/ancient_copper_dragon:
+  habitat: Hill
+  page: 80
+dnd2024:creatures/ancient_gold_dragon:
+  habitat: Forest, Grassland
+  page: 146
+dnd2024:creatures/ancient_green_dragon:
+  habitat: Forest
+  page: 154
+dnd2024:creatures/ancient_red_dragon:
+  habitat: Hill, Mountain
+  page: 256
+dnd2024:creatures/ancient_silver_dragon:
+  habitat: Mountain, Urban
+  page: 280
+dnd2024:creatures/ancient_white_dragon:
+  habitat: Arctic
+  page: 330
+dnd2024:creatures/animated_armor:
+  habitat: Urban
+  page: 16
+dnd2024:creatures/animated_flying_sword:
+  habitat: Urban
+  page: 17
+dnd2024:creatures/animated_object: null
+dnd2024:creatures/animated_rug_of_smothering:
+  habitat: Urban
+  page: 17
+dnd2024:creatures/ankheg:
+  habitat: Forest, Grassland
+  page: 18
+dnd2024:creatures/ankylosaurus:
+  habitat: Grassland
+  page: 348
+dnd2024:creatures/ape:
+  habitat: Forest
+  page: 348
+dnd2024:creatures/archelon:
+  habitat: Underwater
+  page: 349
+dnd2024:creatures/archmage:
+  habitat: Any
+  page: 199
+dnd2024:creatures/assassin:
+  habitat: Any
+  page: 22
+dnd2024:creatures/avatar_of_death: null
+dnd2024:creatures/awakened_shrub:
+  habitat: Forest
+  page: 23
+dnd2024:creatures/awakened_tree:
+  habitat: Forest
+  page: 23
+dnd2024:creatures/axe_beak:
+  habitat: Arctic, Grassland, Hill
+  page: 24
+dnd2024:creatures/azer_sentinel:
+  habitat: Mountain, Planar (Elemental Plane of Fire)
+  page: 25
+dnd2024:creatures/baboon:
+  habitat: Forest, Hill
+  page: 349
+dnd2024:creatures/badger:
+  habitat: Forest
+  page: 349
+dnd2024:creatures/balor:
+  habitat: Planar (Abyss)
+  page: 26
+dnd2024:creatures/bandit:
+  habitat: Any
+  page: 27
+dnd2024:creatures/bandit_captain:
+  habitat: Any
+  page: 27
+dnd2024:creatures/barbed_devil:
+  habitat: Planar (Nine Hells)
+  page: 30
+dnd2024:creatures/basilisk:
+  habitat: Mountain, Underdark
+  page: 32
+dnd2024:creatures/bat:
+  habitat: Forest, Mountain, Underdark, Urban
+  page: 349
+dnd2024:creatures/bearded_devil:
+  habitat: Planar (Nine Hells)
+  page: 33
+dnd2024:creatures/behir:
+  habitat: Underdark
+  page: 34
+dnd2024:creatures/berserker:
+  habitat: Any
+  page: 37
+dnd2024:creatures/black_bear:
+  habitat: Forest
+  page: 349
+dnd2024:creatures/black_dragon_wyrmling:
+  habitat: Swamp
+  page: 38
+dnd2024:creatures/black_pudding:
+  habitat: Underdark
+  page: 42
+dnd2024:creatures/blink_dog:
+  habitat: Forest, Planar (Feywild)
+  page: 46
+dnd2024:creatures/blood_hawk:
+  habitat: Arctic, Coastal, Forest, Grassland, Hill, Mountain
+  page: 350
+dnd2024:creatures/blue_dragon_wyrmling:
+  habitat: Coastal, Desert
+  page: 48
+dnd2024:creatures/boar:
+  habitat: Forest, Grassland, Hill
+  page: 350
+dnd2024:creatures/bone_devil:
+  habitat: Planar (Nine Hells)
+  page: 52
+dnd2024:creatures/brass_dragon_wyrmling:
+  habitat: Desert
+  page: 54
+dnd2024:creatures/bronze_dragon_wyrmling:
+  habitat: Coastal
+  page: 58
+dnd2024:creatures/brown_bear:
+  habitat: Arctic, Forest, Hill
+  page: 350
+dnd2024:creatures/bugbear_stalker:
+  habitat: Forest, Grassland, Underdark, Planar (Feywild)
+  page: 62
+dnd2024:creatures/bugbear_warrior:
+  habitat: Forest, Grassland, Underdark, Planar (Feywild)
+  page: 62
+dnd2024:creatures/bulette:
+  habitat: Grassland, Hill, Mountain
+  page: 63
+dnd2024:creatures/camel:
+  habitat: Desert
+  page: 351
+dnd2024:creatures/cat:
+  habitat: Desert, Forest, Grassland, Urban
+  page: 351
+dnd2024:creatures/centaur_trooper:
+  habitat: Forest, Grassland, Planar (Feywild)
+  page: 67
+dnd2024:creatures/chain_devil:
+  habitat: Planar (Nine Hells)
+  page: 68
+dnd2024:creatures/chimera:
+  habitat: Grassland, Hill, Mountain
+  page: 70
+dnd2024:creatures/chuul:
+  habitat: Coastal, Swamp, Underdark
+  page: 71
+dnd2024:creatures/clay_golem:
+  habitat: Urban
+  page: 72
+dnd2024:creatures/cloaker:
+  habitat: Underdark
+  page: 73
+dnd2024:creatures/cloud_giant:
+  habitat: Mountain
+  page: 74
+dnd2024:creatures/cockatrice:
+  habitat: Grassland
+  page: 75
+dnd2024:creatures/commoner:
+  habitat: Any
+  page: 77
+dnd2024:creatures/constrictor_snake:
+  habitat: Desert, Forest, Swamp, Underwater
+  page: 351
+dnd2024:creatures/copper_dragon_wyrmling:
+  habitat: Hill
+  page: 78
+dnd2024:creatures/couatl:
+  habitat: Desert, Forest, Grassland, Urban
+  page: 82
+dnd2024:creatures/crab:
+  habitat: Coastal, Underwater
+  page: 351
+dnd2024:creatures/crocodile:
+  habitat: Coastal, Swamp, Urban
+  page: 352
+dnd2024:creatures/cultist:
+  habitat: Any
+  page: 84
+dnd2024:creatures/cultist_fanatic:
+  habitat: Any
+  page: 85
+dnd2024:creatures/darkmantle:
+  habitat: Underdark
+  page: 90
+dnd2024:creatures/death_dog:
+  habitat: Desert
+  page: 91
+dnd2024:creatures/deer:
+  habitat: Forest, Grassland
+  page: 352
+dnd2024:creatures/deva:
+  habitat: Planar (Upper Planes)
+  page: 97
+dnd2024:creatures/dire_wolf:
+  habitat: Forest, Hill
+  page: 352
+dnd2024:creatures/djinni:
+  habitat: Coastal, Planar (Elemental Plane of Air)
+  page: 99
+dnd2024:creatures/doppelganger:
+  habitat: Underdark, Urban
+  page: 100
+dnd2024:creatures/draconic_spirit: null
+dnd2024:creatures/draft_horse:
+  habitat: Urban
+  page: 352
+dnd2024:creatures/dragon_turtle:
+  habitat: Coastal, Underwater
+  page: 103
+dnd2024:creatures/dretch:
+  habitat: Planar (Abyss)
+  page: 103
+dnd2024:creatures/drider:
+  habitat: Forest, Underdark
+  page: 105
+dnd2024:creatures/druid:
+  habitat: Any
+  page: 106
+dnd2024:creatures/dryad:
+  habitat: Forest
+  page: 107
+dnd2024:creatures/dust_mephit:
+  habitat: Planar (Elemental Planes)
+  page: 206
+dnd2024:creatures/eagle:
+  habitat: Coastal, Grassland, Hill, Mountain
+  page: 353
+dnd2024:creatures/earth_elemental:
+  habitat: Mountain, Underdark, Planar (Elemental Plane of Earth)
+  page: 108
+dnd2024:creatures/efreeti:
+  habitat: Desert, Planar (Elemental Plane of Fire)
+  page: 109
+dnd2024:creatures/elephant:
+  habitat: Grassland
+  page: 353
+dnd2024:creatures/elk:
+  habitat: Forest, Grassland, Hill
+  page: 353
+dnd2024:creatures/erinyes:
+  habitat: Planar (Nine Hells)
+  page: 114
+dnd2024:creatures/ettercap:
+  habitat: Forest
+  page: 115
+dnd2024:creatures/ettin:
+  habitat: Hill, Mountain, Underdark
+  page: 116
+dnd2024:creatures/fire_elemental:
+  habitat: Desert, Planar (Elemental Plane of Fire)
+  page: 118
+dnd2024:creatures/fire_giant:
+  habitat: Mountain, Underdark
+  page: 119
+dnd2024:creatures/flesh_golem:
+  habitat: Any
+  page: 121
+dnd2024:creatures/flying_snake:
+  habitat: Desert, Forest, Grassland
+  page: 353
+dnd2024:creatures/frog:
+  habitat: Forest, Swamp
+  page: 354
+dnd2024:creatures/frost_giant:
+  habitat: Arctic, Mountain
+  page: 124
+dnd2024:creatures/gargoyle:
+  habitat: Underdark, Urban
+  page: 128
+dnd2024:creatures/gelatinous_cube:
+  habitat: Underdark
+  page: 129
+dnd2024:creatures/ghast:
+  habitat: Swamp, Underdark, Urban
+  page: 130
+dnd2024:creatures/ghost:
+  habitat: Underdark, Urban
+  page: 131
+dnd2024:creatures/ghoul:
+  habitat: Swamp, Underdark, Urban
+  page: 132
+dnd2024:creatures/giant_ape:
+  habitat: Forest
+  page: 354
+dnd2024:creatures/giant_badger:
+  habitat: Forest
+  page: 354
+dnd2024:creatures/giant_bat:
+  habitat: Forest, Mountain, Underdark
+  page: 355
+dnd2024:creatures/giant_boar:
+  habitat: Forest, Grassland, Hill
+  page: 355
+dnd2024:creatures/giant_centipede:
+  habitat: Underdark, Urban
+  page: 355
+dnd2024:creatures/giant_constrictor_snake:
+  habitat: Desert, Forest, Swamp, Underwater
+  page: 355
+dnd2024:creatures/giant_crab:
+  habitat: Coastal, Underwater
+  page: 356
+dnd2024:creatures/giant_crocodile:
+  habitat: Coastal, Swamp
+  page: 356
+dnd2024:creatures/giant_eagle:
+  habitat: Coastal, Grassland, Hill, Mountain
+  page: 356
+dnd2024:creatures/giant_elk:
+  habitat: Forest, Grassland, Hill
+  page: 356
+dnd2024:creatures/giant_fire_beetle:
+  habitat: Underdark
+  page: 357
+dnd2024:creatures/giant_fly: null
+dnd2024:creatures/giant_frog:
+  habitat: Forest, Swamp
+  page: 357
+dnd2024:creatures/giant_goat:
+  habitat: Grassland, Hill, Mountain
+  page: 357
+dnd2024:creatures/giant_hyena:
+  habitat: Desert, Forest, Grassland, Hill
+  page: 357
+dnd2024:creatures/giant_insect: null
+dnd2024:creatures/giant_lizard:
+  habitat: Coastal, Desert, Forest, Swamp, Underdark
+  page: 358
+dnd2024:creatures/giant_octopus:
+  habitat: Underwater
+  page: 358
+dnd2024:creatures/giant_owl:
+  habitat: Arctic, Forest, Hill
+  page: 358
+dnd2024:creatures/giant_rat:
+  habitat: Forest, Swamp, Underdark, Urban
+  page: 358
+dnd2024:creatures/giant_scorpion:
+  habitat: Desert
+  page: 359
+dnd2024:creatures/giant_seahorse:
+  habitat: Underwater
+  page: 359
+dnd2024:creatures/giant_shark:
+  habitat: Underwater
+  page: 359
+dnd2024:creatures/giant_spider:
+  habitat: Desert, Forest, Swamp, Underdark, Urban
+  page: 359
+dnd2024:creatures/giant_toad:
+  habitat: Coastal, Forest, Swamp, Underdark
+  page: 360
+dnd2024:creatures/giant_venomous_snake:
+  habitat: Coastal, Desert, Forest, Grassland, Hill, Swamp
+  page: 361
+dnd2024:creatures/giant_vulture:
+  habitat: Desert, Grassland, Hill
+  page: 361
+dnd2024:creatures/giant_wasp:
+  habitat: Forest, Grassland, Urban
+  page: 361
+dnd2024:creatures/giant_weasel:
+  habitat: Forest, Grassland, Hill
+  page: 361
+dnd2024:creatures/giant_wolf_spider:
+  habitat: Coastal, Desert, Forest, Grassland, Hill
+  page: 362
+dnd2024:creatures/gibbering_mouther:
+  habitat: Underdark
+  page: 133
+dnd2024:creatures/glabrezu:
+  habitat: Planar (Abyss)
+  page: 138
+dnd2024:creatures/gladiator:
+  habitat: Any
+  page: 139
+dnd2024:creatures/gnoll_warrior:
+  habitat: Desert, Forest, Grassland, Hill
+  page: 140
+dnd2024:creatures/goat:
+  habitat: Grassland, Hill, Mountain, Urban
+  page: 362
+dnd2024:creatures/goblin_boss:
+  habitat: Forest, Grassland, Hill, Underdark, Planar (Acheron, Feywild)
+  page: 143
+dnd2024:creatures/goblin_minion:
+  habitat: Forest, Grassland, Hill, Underdark, Planar (Acheron, Feywild)
+  page: 142
+dnd2024:creatures/goblin_warrior:
+  habitat: Forest, Grassland, Hill, Underdark, Planar (Acheron, Feywild)
+  page: 142
+dnd2024:creatures/gold_dragon_wyrmling:
+  habitat: Forest, Grassland
+  page: 144
+dnd2024:creatures/gorgon:
+  habitat: Forest, Grassland, Hill
+  page: 148
+dnd2024:creatures/gray_ooze:
+  habitat: Underdark
+  page: 151
+dnd2024:creatures/green_dragon_wyrmling:
+  habitat: Forest
+  page: 152
+dnd2024:creatures/green_hag:
+  habitat: Forest, Hill, Swamp
+  page: 156
+dnd2024:creatures/grick:
+  habitat: Forest, Underdark
+  page: 158
+dnd2024:creatures/griffon:
+  habitat: Arctic, Coastal, Grassland, Hill, Mountain
+  page: 159
+dnd2024:creatures/grimlock:
+  habitat: Underdark
+  page: 160
+dnd2024:creatures/guard:
+  habitat: Any
+  page: 162
+dnd2024:creatures/guard_captain:
+  habitat: Any
+  page: 162
+dnd2024:creatures/guardian_naga:
+  habitat: Desert, Forest, Planar (Upper Planes)
+  page: 161
+dnd2024:creatures/half_dragon:
+  habitat: Any
+  page: 163
+dnd2024:creatures/harpy:
+  habitat: Coastal, Forest, Hill, Mountain
+  page: 164
+dnd2024:creatures/hawk:
+  habitat: Arctic, Coastal, Forest, Grassland, Hill, Mountain
+  page: 362
+dnd2024:creatures/hell_hound:
+  habitat: Mountain, Underdark, Planar (Lower Planes)
+  page: 165
+dnd2024:creatures/hezrou:
+  habitat: Planar (Abyss)
+  page: 167
+dnd2024:creatures/hill_giant:
+  habitat: Hill
+  page: 168
+dnd2024:creatures/hippogriff:
+  habitat: Grassland, Hill, Mountain
+  page: 169
+dnd2024:creatures/hippopotamus:
+  habitat: Forest, Grassland, Swamp
+  page: 362
+dnd2024:creatures/hobgoblin_captain:
+  habitat: Desert, Forest, Grassland, Hill, Mountain, Underdark, Planar (Acheron)
+  page: 171
+dnd2024:creatures/hobgoblin_warrior:
+  habitat: Desert, Forest, Grassland, Hill, Mountain, Underdark, Planar (Acheron)
+  page: 170
+dnd2024:creatures/homunculus:
+  habitat: Any
+  page: 172
+dnd2024:creatures/horned_devil:
+  habitat: Planar (Nine Hells)
+  page: 174
+dnd2024:creatures/hunter_shark:
+  habitat: Underwater
+  page: 363
+dnd2024:creatures/hydra:
+  habitat: Coastal, Swamp
+  page: 175
+dnd2024:creatures/hyena:
+  habitat: Desert, Forest, Grassland, Hill
+  page: 363
+dnd2024:creatures/ice_devil:
+  habitat: Planar (Nine Hells)
+  page: 176
+dnd2024:creatures/ice_mephit:
+  habitat: Planar (Elemental Planes)
+  page: 206
+dnd2024:creatures/imp:
+  habitat: Any
+  page: 177
+dnd2024:creatures/incubus:
+  habitat: Urban, Planar (Lower Planes)
+  page: 178
+dnd2024:creatures/invisible_stalker:
+  habitat: Urban
+  page: 180
+dnd2024:creatures/iron_golem:
+  habitat: Any
+  page: 181
+dnd2024:creatures/jackal:
+  habitat: Desert, Grassland
+  page: 364
+dnd2024:creatures/killer_whale:
+  habitat: Underwater
+  page: 364
+dnd2024:creatures/knight:
+  habitat: Any
+  page: 184
+dnd2024:creatures/kobold_warrior:
+  habitat: Arctic, Coastal, Desert, Forest, Hill, Mountain, Swamp, Underdark, Urban
+  page: 185
+dnd2024:creatures/kraken:
+  habitat: Underwater
+  page: 187
+dnd2024:creatures/lamia:
+  habitat: Desert
+  page: 192
+dnd2024:creatures/lemure:
+  habitat: Planar (Nine Hells)
+  page: 194
+dnd2024:creatures/lich:
+  habitat: Any
+  page: 196
+dnd2024:creatures/lion:
+  habitat: Desert, Grassland, Hill, Mountain
+  page: 364
+dnd2024:creatures/lizard:
+  habitat: Coastal, Desert, Forest, Swamp, Underdark
+  page: 364
+dnd2024:creatures/mage:
+  habitat: Any
+  page: 199
+dnd2024:creatures/magma_mephit:
+  habitat: Planar (Elemental Planes)
+  page: 207
+dnd2024:creatures/magmin:
+  habitat: Planar (Elemental Plane of Fire)
+  page: 200
+dnd2024:creatures/mammoth:
+  habitat: Arctic
+  page: 365
+dnd2024:creatures/manticore:
+  habitat: Arctic, Coastal, Grassland, Hill, Mountain
+  page: 202
+dnd2024:creatures/marilith:
+  habitat: Planar (Abyss)
+  page: 204
+dnd2024:creatures/mastiff:
+  habitat: Forest, Hill, Urban
+  page: 365
+dnd2024:creatures/medusa:
+  habitat: Desert
+  page: 205
+dnd2024:creatures/merfolk_skirmisher:
+  habitat: Coastal, Underwater
+  page: 209
+dnd2024:creatures/merrow:
+  habitat: Coastal, Underwater
+  page: 210
+dnd2024:creatures/mimic:
+  habitat: Underdark, Urban
+  page: 212
+dnd2024:creatures/minotaur_of_baphomet:
+  habitat: Underdark
+  page: 215
+dnd2024:creatures/minotaur_skeleton:
+  habitat: Underdark, Urban, Planar (Shadowfell)
+  page: 283
+dnd2024:creatures/mule:
+  habitat: Desert, Hill, Urban
+  page: 365
+dnd2024:creatures/mummy:
+  habitat: Desert, Swamp
+  page: 219
+dnd2024:creatures/mummy_lord:
+  habitat: Desert, Swamp
+  page: 221
+dnd2024:creatures/nalfeshnee:
+  habitat: Planar (Abyss)
+  page: 224
+dnd2024:creatures/night_hag:
+  habitat: Planar (Lower Planes)
+  page: 225
+dnd2024:creatures/nightmare:
+  habitat: Planar (Lower Planes)
+  page: 226
+dnd2024:creatures/noble:
+  habitat: Any
+  page: 227
+dnd2024:creatures/ochre_jelly:
+  habitat: Underdark
+  page: 230
+dnd2024:creatures/octopus:
+  habitat: Underwater
+  page: 365
+dnd2024:creatures/ogre:
+  habitat: Arctic, Desert, Forest, Grassland, Hill, Mountain, Swamp, Underdark
+  page: 231
+dnd2024:creatures/ogre_zombie:
+  habitat: Underdark, Urban, Planar (Shadowfell)
+  page: 346
+dnd2024:creatures/oni:
+  habitat: Forest, Urban
+  page: 232
+dnd2024:creatures/otherworldly_steed: null
+dnd2024:creatures/otyugh:
+  habitat: Underdark
+  page: 233
+dnd2024:creatures/owl:
+  habitat: Arctic, Forest, Hill
+  page: 366
+dnd2024:creatures/owlbear:
+  habitat: Forest
+  page: 234
+dnd2024:creatures/panther:
+  habitat: Forest, Grassland, Hill
+  page: 366
+dnd2024:creatures/pegasus:
+  habitat: Forest, Grassland, Hill, Planar (Upper Planes)
+  page: 235
+dnd2024:creatures/phase_spider:
+  habitat: Desert, Forest, Grassland, Hill, Underdark, Urban, Planar (Ethereal Plane)
+  page: 239
+dnd2024:creatures/piranha:
+  habitat: Underwater
+  page: 366
+dnd2024:creatures/pirate:
+  habitat: Any
+  page: 241
+dnd2024:creatures/pirate_captain:
+  habitat: Any
+  page: 242
+dnd2024:creatures/pit_fiend:
+  habitat: Planar (Nine Hells)
+  page: 243
+dnd2024:creatures/planetar:
+  habitat: Planar (Upper Planes)
+  page: 245
+dnd2024:creatures/plesiosaurus:
+  habitat: Arctic, Underwater
+  page: 366
+dnd2024:creatures/polar_bear:
+  habitat: Arctic
+  page: 367
+dnd2024:creatures/pony:
+  habitat: Grassland, Urban
+  page: 367
+dnd2024:creatures/priest:
+  habitat: Any
+  page: 248
+dnd2024:creatures/priest_acolyte:
+  habitat: Any
+  page: 247
+dnd2024:creatures/pseudodragon:
+  habitat: Coastal, Desert, Forest, Hill, Mountain, Urban
+  page: 249
+dnd2024:creatures/pteranodon:
+  habitat: Coastal, Grassland, Mountain
+  page: 367
+dnd2024:creatures/purple_worm:
+  habitat: Desert, Underdark
+  page: 250
+dnd2024:creatures/quasit:
+  habitat: Planar (Abyss)
+  page: 252
+dnd2024:creatures/rakshasa:
+  habitat: Urban, Planar (Nine Hells)
+  page: 253
+dnd2024:creatures/rat:
+  habitat: Forest, Swamp, Underdark, Urban
+  page: 367
+dnd2024:creatures/raven:
+  habitat: Hill, Swamp, Urban
+  page: 368
+dnd2024:creatures/red_dragon_wyrmling:
+  habitat: Hill, Mountain
+  page: 254
+dnd2024:creatures/reef_shark:
+  habitat: Underwater
+  page: 368
+dnd2024:creatures/remorhaz:
+  habitat: Arctic
+  page: 258
+dnd2024:creatures/rhinoceros:
+  habitat: Grassland
+  page: 368
+dnd2024:creatures/riding_horse:
+  habitat: Grassland, Urban
+  page: 368
+dnd2024:creatures/roc:
+  habitat: Arctic, Coastal, Desert, Hill, Mountain
+  page: 261
+dnd2024:creatures/roper:
+  habitat: Underdark
+  page: 262
+dnd2024:creatures/rust_monster:
+  habitat: Underdark
+  page: 263
+dnd2024:creatures/saber_toothed_tiger:
+  habitat: Arctic, Hill, Mountain
+  page: 369
+dnd2024:creatures/sahuagin_warrior:
+  habitat: Coastal, Underwater
+  page: 264
+dnd2024:creatures/salamander:
+  habitat: Underdark, Planar (Elemental Plane of Fire)
+  page: 267
+dnd2024:creatures/satyr:
+  habitat: Forest, Planar (Feywild)
+  page: 268
+dnd2024:creatures/scorpion:
+  habitat: Desert
+  page: 369
+dnd2024:creatures/scout:
+  habitat: Any
+  page: 270
+dnd2024:creatures/sea_hag:
+  habitat: Coastal, Underwater
+  page: 271
+dnd2024:creatures/seahorse:
+  habitat: Underwater
+  page: 369
+dnd2024:creatures/shadow:
+  habitat: Underdark, Urban, Planar (Shadowfell)
+  page: 272
+dnd2024:creatures/shambling_mound:
+  habitat: Forest, Swamp
+  page: 276
+dnd2024:creatures/shield_guardian:
+  habitat: Urban
+  page: 277
+dnd2024:creatures/shrieker_fungus:
+  habitat: Underdark
+  page: 125
+dnd2024:creatures/silver_dragon_wyrmling:
+  habitat: Mountain, Urban
+  page: 278
+dnd2024:creatures/skeleton:
+  habitat: Underdark, Urban, Planar (Shadowfell)
+  page: 282
+dnd2024:creatures/solar:
+  habitat: Planar (Upper Planes)
+  page: 288
+dnd2024:creatures/specter:
+  habitat: Underdark, Urban
+  page: 290
+dnd2024:creatures/sphinx_of_lore:
+  habitat: Desert, Planar (Upper Planes)
+  page: 293
+dnd2024:creatures/sphinx_of_valor:
+  habitat: Desert, Planar (Upper Planes)
+  page: 294
+dnd2024:creatures/sphinx_of_wonder:
+  habitat: Desert, Planar (Upper Planes)
+  page: 291
+dnd2024:creatures/spider:
+  habitat: Desert, Forest, Swamp, Underdark, Urban
+  page: 369
+dnd2024:creatures/spirit_naga:
+  habitat: Underdark, Planar (Lower Planes)
+  page: 297
+dnd2024:creatures/sprite:
+  habitat: Forest, Planar (Feywild)
+  page: 298
+dnd2024:creatures/spy:
+  habitat: Any
+  page: 295
+dnd2024:creatures/steam_mephit:
+  habitat: Planar (Elemental Planes)
+  page: 208
+dnd2024:creatures/stirge:
+  habitat: Desert, Forest, Grassland, Hill, Mountain, Swamp, Underdark, Urban
+  page: 299
+dnd2024:creatures/stone_giant:
+  habitat: Mountain, Underdark
+  page: 300
+dnd2024:creatures/stone_golem:
+  habitat: Any
+  page: 301
+dnd2024:creatures/storm_giant:
+  habitat: Coastal, Underwater
+  page: 302
+dnd2024:creatures/succubus:
+  habitat: Urban, Planar (Lower Planes)
+  page: 303
+dnd2024:creatures/swarm_of_bats:
+  habitat: Forest, Mountain, Underdark, Urban
+  page: 370
+dnd2024:creatures/swarm_of_crawling_claws:
+  habitat: Any
+  page: 83
+dnd2024:creatures/swarm_of_insects:
+  habitat: Desert, Forest, Grassland, Hill, Swamp, Underdark, Urban
+  page: 370
+dnd2024:creatures/swarm_of_piranhas:
+  habitat: Underwater
+  page: 370
+dnd2024:creatures/swarm_of_rats:
+  habitat: Forest, Swamp, Underdark, Urban
+  page: 370
+dnd2024:creatures/swarm_of_ravens:
+  habitat: Hill, Swamp, Urban
+  page: 371
+dnd2024:creatures/swarm_of_venomous_snakes:
+  habitat: Coastal, Desert, Forest, Grassland, Hill, Swamp
+  page: 371
+dnd2024:creatures/tarrasque:
+  habitat: Urban
+  page: 305
+dnd2024:creatures/tiger:
+  habitat: Forest, Grassland
+  page: 371
+dnd2024:creatures/tough:
+  habitat: Any
+  page: 307
+dnd2024:creatures/tough_boss:
+  habitat: Any
+  page: 307
+dnd2024:creatures/treant:
+  habitat: Forest
+  page: 308
+dnd2024:creatures/triceratops:
+  habitat: Grassland
+  page: 372
+dnd2024:creatures/troll:
+  habitat: Arctic, Forest, Hill, Mountain, Swamp, Underdark
+  page: 310
+dnd2024:creatures/troll_limb:
+  habitat: Arctic, Forest, Hill, Mountain, Swamp, Underdark
+  page: 310
+dnd2024:creatures/tyrannosaurus_rex:
+  habitat: Grassland
+  page: 372
+dnd2024:creatures/unicorn:
+  habitat: Forest, Planar (Feywild)
+  page: 313
+dnd2024:creatures/vampire:
+  habitat: Underdark, Urban
+  page: 317
+dnd2024:creatures/vampire_familiar:
+  habitat: Underdark, Urban
+  page: 314
+dnd2024:creatures/vampire_spawn:
+  habitat: Underdark, Urban
+  page: 315
+dnd2024:creatures/venomous_snake:
+  habitat: Coastal, Desert, Forest, Grassland, Hill, Swamp
+  page: 372
+dnd2024:creatures/violet_fungus:
+  habitat: Underdark
+  page: 126
+dnd2024:creatures/vrock:
+  habitat: Planar (Abyss)
+  page: 319
+dnd2024:creatures/vulture:
+  habitat: Desert, Grassland, Hill
+  page: 372
+dnd2024:creatures/warhorse:
+  habitat: Urban
+  page: 373
+dnd2024:creatures/warhorse_skeleton:
+  habitat: Underdark, Urban, Planar (Shadowfell)
+  page: 282
+dnd2024:creatures/warrior_infantry:
+  habitat: Any
+  page: 320
+dnd2024:creatures/warrior_veteran:
+  habitat: Any
+  page: 320
+dnd2024:creatures/water_elemental:
+  habitat: Coastal, Swamp, Underwater, Planar (Elemental Plane of Water)
+  page: 322
+dnd2024:creatures/weasel:
+  habitat: Forest, Grassland, Hill
+  page: 372
+dnd2024:creatures/werebear:
+  habitat: Arctic, Forest, Hill
+  page: 324
+dnd2024:creatures/wereboar:
+  habitat: Forest, Grassland, Hill
+  page: 325
+dnd2024:creatures/wererat:
+  habitat: Forest, Urban
+  page: 325
+dnd2024:creatures/weretiger:
+  habitat: Desert, Forest, Grassland
+  page: 326
+dnd2024:creatures/werewolf:
+  habitat: Forest, Hill
+  page: 327
+dnd2024:creatures/white_dragon_wyrmling:
+  habitat: Arctic
+  page: 328
+dnd2024:creatures/wight:
+  habitat: Desert, Swamp, Underdark, Urban, Planar (Shadowfell)
+  page: 332
+dnd2024:creatures/will_o_wisp:
+  habitat: Forest, Swamp, Urban
+  page: 333
+dnd2024:creatures/winter_wolf:
+  habitat: Arctic
+  page: 334
+dnd2024:creatures/wolf:
+  habitat: Forest, Grassland, Hill
+  page: 373
+dnd2024:creatures/worg:
+  habitat: Forest, Grassland, Hill, Planar (Feywild)
+  page: 335
+dnd2024:creatures/wraith:
+  habitat: Underdark, Planar (Shadowfell)
+  page: 336
+dnd2024:creatures/wyvern:
+  habitat: Hill, Mountain
+  page: 337
+dnd2024:creatures/xorn:
+  habitat: Underdark, Planar (Elemental Plane of Earth)
+  page: 338
+dnd2024:creatures/young_black_dragon:
+  habitat: Swamp
+  page: 38
+dnd2024:creatures/young_blue_dragon:
+  habitat: Coastal, Desert
+  page: 48
+dnd2024:creatures/young_brass_dragon:
+  habitat: Desert
+  page: 54
+dnd2024:creatures/young_bronze_dragon:
+  habitat: Coastal
+  page: 58
+dnd2024:creatures/young_copper_dragon:
+  habitat: Hill
+  page: 78
+dnd2024:creatures/young_gold_dragon:
+  habitat: Forest, Grassland
+  page: 144
+dnd2024:creatures/young_green_dragon:
+  habitat: Forest
+  page: 152
+dnd2024:creatures/young_red_dragon:
+  habitat: Hill, Mountain
+  page: 254
+dnd2024:creatures/young_silver_dragon:
+  habitat: Mountain, Urban
+  page: 278
+dnd2024:creatures/young_white_dragon:
+  habitat: Arctic
+  page: 328
+dnd2024:creatures/zombie:
+  habitat: Underdark, Urban, Planar (Shadowfell)
+  page: 346

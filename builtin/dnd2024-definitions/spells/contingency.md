@@ -23,6 +23,8 @@ splat_sources:
 | Range |  |
 | Components | V, S, M (a gem-encrusted statuette of yourself worth 1,500+ GP) |
 | Duration | 10 days |
+| Ritual | No |
+| Concentration | No |
 
 
 ## Source text

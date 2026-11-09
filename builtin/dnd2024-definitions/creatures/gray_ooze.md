@@ -7,6 +7,7 @@ splat_name: Gray Ooze
 splat_origin: dnd2024:reference/creature/gray_ooze
 splat_sources:
 - SRD 5.2.1, pp. 293, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 151, Habitat
 ---
 
 # Gray Ooze
@@ -29,6 +30,7 @@ splat_sources:
 | Languages | None |
 | Resistances | Acid, Cold, Fire |
 | Immunities | Blinded, Charmed, Deafened, Exhaustion, Frightened, Grappled, Prone, Restrained |
+| Habitat | Underdark |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

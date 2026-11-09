@@ -7,6 +7,7 @@ splat_name: Draft Horse
 splat_origin: dnd2024:reference/creature/draft_horse
 splat_sources:
 - SRD 5.2.1, pp. 347, 348, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 352, Habitat
 ---
 
 # Draft Horse
@@ -26,6 +27,7 @@ splat_sources:
 | Challenge | 1/4 (XP 50; PB +2) |
 | Senses | Passive Perception 10 |
 | Languages | None |
+| Habitat | Urban |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

@@ -7,6 +7,7 @@ splat_name: Vampire Spawn
 splat_origin: dnd2024:reference/creature/vampire_spawn
 splat_sources:
 - SRD 5.2.1, pp. 334, 335, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 315, Habitat
 ---
 
 # Vampire Spawn
@@ -28,6 +29,7 @@ splat_sources:
 | Senses | Darkvision 60 ft.; Passive Perception 13 |
 | Languages | Common plus one other language |
 | Resistances | Necrotic |
+| Habitat | Underdark, Urban |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

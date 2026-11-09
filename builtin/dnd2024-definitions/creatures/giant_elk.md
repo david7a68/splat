@@ -7,6 +7,7 @@ splat_name: Giant Elk
 splat_origin: dnd2024:reference/creature/giant_elk
 splat_sources:
 - SRD 5.2.1, pp. 351, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 356, Habitat
 ---
 
 # Giant Elk
@@ -28,6 +29,7 @@ splat_sources:
 | Senses | Darkvision 90 ft.; Passive Perception 14 |
 | Languages | Celestial; understands Common, Elvish, and Sylvan but can’t speak them |
 | Resistances | Necrotic, Radiant |
+| Habitat | Forest, Grassland, Hill |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

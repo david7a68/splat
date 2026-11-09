@@ -23,6 +23,8 @@ splat_sources:
 | Range | 60 feet |
 | Components | V, M (a small feather or piece of down) |
 | Duration | 1 minute |
+| Ritual | No |
+| Concentration | No |
 
 
 ## Source text

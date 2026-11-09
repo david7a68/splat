@@ -7,6 +7,7 @@ splat_name: Hunter Shark
 splat_origin: dnd2024:reference/creature/hunter_shark
 splat_sources:
 - SRD 5.2.1, pp. 356, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 363, Habitat
 ---
 
 # Hunter Shark
@@ -27,6 +28,7 @@ splat_sources:
 | Skills | Perception +2 |
 | Senses | Blindsight 60 ft.; Passive Perception 12 |
 | Languages | None |
+| Habitat | Underwater |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

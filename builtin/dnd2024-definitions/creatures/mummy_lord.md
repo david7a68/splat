@@ -7,6 +7,7 @@ splat_name: Mummy Lord
 splat_origin: dnd2024:reference/creature/mummy_lord
 splat_sources:
 - SRD 5.2.1, pp. 309, 310, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 221, Habitat
 ---
 
 # Mummy Lord
@@ -29,6 +30,7 @@ splat_sources:
 | Languages | Common plus three other languages |
 | Immunities | Necrotic, Poison; Charmed, Exhaustion, Frightened, Paralyzed, Poisoned |
 | Vulnerabilities | Fire |
+| Habitat | Desert, Swamp |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

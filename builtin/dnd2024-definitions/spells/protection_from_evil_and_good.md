@@ -23,6 +23,8 @@ splat_sources:
 | Range |  |
 | Components | V, S, M (a flask of Holy Water worth 25+ GP, which the spell consumes) |
 | Duration | Concentration up to 10 minutes |
+| Ritual | No |
+| Concentration | Yes |
 
 
 ## Source text

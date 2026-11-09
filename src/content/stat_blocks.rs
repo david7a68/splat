@@ -24,6 +24,8 @@ const DETAILS: &[(&str, &str)] = &[
     ("Resistances", "resistances_text"),
     ("Immunities", "immunities_text"),
     ("Vulnerabilities", "vulnerabilities_text"),
+    // The 2024 Monster Manual prints this under the stat block; the SRD does not.
+    ("Habitat", "habitat_text"),
 ];
 const CREATURE_ROWS: &[&str] = &[
     "Size",

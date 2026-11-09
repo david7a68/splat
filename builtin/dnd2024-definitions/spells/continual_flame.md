@@ -23,6 +23,8 @@ splat_sources:
 | Range |  |
 | Components | V, S, M (ruby dust worth 50+ GP, which the spell consumes) |
 | Duration | Until dispelled |
+| Ritual | No |
+| Concentration | No |
 
 
 ## Source text

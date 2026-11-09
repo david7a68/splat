@@ -7,6 +7,7 @@ splat_name: Centaur Trooper
 splat_origin: dnd2024:reference/creature/centaur_trooper
 splat_sources:
 - SRD 5.2.1, pp. 272, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 67, Habitat
 ---
 
 # Centaur Trooper
@@ -28,6 +29,7 @@ splat_sources:
 | Senses | Passive Perception 13 |
 | Languages | Elvish, Sylvan |
 | Gear | Breastplate, Longbow, Pike |
+| Habitat | Forest, Grassland, Planar (Feywild) |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |
