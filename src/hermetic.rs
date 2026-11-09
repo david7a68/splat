@@ -87,8 +87,49 @@ pub fn local_stamp() -> String {
     format!("{} {:02}-{:02}", today(), time.tm_hour, time.tm_min)
 }
 
+/// This computer's lasting identity and its name, for `sheet_writer`. The identity lives in the
+/// user's config folder, outside the vault, so each computer keeps its own.
+#[cfg(not(test))]
+pub fn device() -> (Uuid, String) {
+    static DEVICE: std::sync::OnceLock<(Uuid, String)> = std::sync::OnceLock::new();
+    DEVICE
+        .get_or_init(|| {
+            let file = directories::ProjectDirs::from("", "", "splat")
+                .map(|dirs| dirs.config_dir().join("device-id"));
+            let saved = file
+                .as_ref()
+                .and_then(|file| std::fs::read_to_string(file).ok())
+                .and_then(|text| text.trim().parse().ok());
+            let id = saved.unwrap_or_else(|| {
+                let id = Uuid::new_v4();
+                if let Some(file) = &file {
+                    let _ = file
+                        .parent()
+                        .map(std::fs::create_dir_all)
+                        .transpose()
+                        .and_then(|_| std::fs::write(file, id.to_string()));
+                }
+                id
+            });
+            let mut buffer = [0u8; 256];
+            // SAFETY: the buffer is valid for its length, and the call writes inside it.
+            let ok = unsafe { libc::gethostname(buffer.as_mut_ptr().cast(), buffer.len()) } == 0;
+            let name = ok
+                .then(|| {
+                    let end = buffer.iter().position(|&b| b == 0).unwrap_or(buffer.len());
+                    String::from_utf8_lossy(&buffer[..end]).trim().to_owned()
+                })
+                .filter(|name| !name.is_empty())
+                .unwrap_or_else(|| "another computer".to_owned());
+            (id, name)
+        })
+        .clone()
+}
+
 #[cfg(test)]
-pub use closed::{character_cache, file_time, local_stamp, new_uuid, now, pick_folder, today};
+pub use closed::{
+    character_cache, device, file_time, local_stamp, new_uuid, now, pick_folder, today,
+};
 
 #[cfg(test)]
 pub mod closed {
@@ -153,6 +194,11 @@ pub mod closed {
 
     pub fn local_stamp() -> String {
         format!("{} 19-00", today())
+    }
+
+    /// One fixed computer, so a test never reads the user's config folder.
+    pub fn device() -> (Uuid, String) {
+        (Uuid::from_u128(0x5e17), "This computer".to_owned())
     }
 
     /// The fixed clock, for a file too: a real one would change every capture of its date.

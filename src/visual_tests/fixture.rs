@@ -863,6 +863,11 @@ fn write_history(campaign: &Campaign, module: &Path) -> Result<(), String> {
     Ok(())
 }
 
+/// One party member's sheet, for a test that needs a sheet and not a whole campaign.
+pub(crate) fn sample_sheet() -> EntitySnapshot {
+    HEROES[0].snapshot().expect("The first hero makes a sheet")
+}
+
 /// The cached sheets a player sees without a connection, and their campaign copies.
 fn party(
     campaign_path: &Path,

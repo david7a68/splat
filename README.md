@@ -245,6 +245,14 @@ titles have no property. Obsidian's core Templates plugin also fills `{{date}}`
 and `{{title}}`. For run JSON files to sync through Obsidian Sync, enable
 **other file types**.
 
+With Splat open on two computers that share a vault, only one computer saves the
+D&D Beyond sheets from automatic reads. If both saved a sheet at once, Obsidian Sync
+would merge the two saves and repeat their lines. `Characters/D&D Beyond/Sheet writer.md`
+names that computer; Splat renews it while it runs, and another computer takes over
+10 minutes after it stops. The other computers read the sheets and show
+**Sheets save on <computer>** on Party. **Refresh party** and force reads save on any
+computer. The computer's identity is in Splat's config folder, outside the vault.
+
 Code lives in `~/Projects/splat`. The vault link is
 `~/Documents/vault/D20 D&D/00-09 System/09 Tools/splat`.
 Campaign data remains in the vault. A read-only content verifier and the complete

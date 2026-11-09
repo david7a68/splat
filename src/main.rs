@@ -31,6 +31,7 @@ mod recording;
 mod roll_table;
 mod sessions;
 mod settings;
+mod sheet_writer;
 mod timeline;
 mod ui_state;
 #[cfg(test)]

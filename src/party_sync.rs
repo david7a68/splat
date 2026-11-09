@@ -285,6 +285,7 @@ enum Event {
     Sheet(String, Box<Result<EntitySnapshot, Failure>>),
     CampaignCopy(String, Result<Vec<PathBuf>, CampaignCopyError>),
     Stored(Stored, Result<(), String>),
+    Writer(crate::sheet_writer::Turn),
 }
 /// What a local storage warning is about. The next success for the same thing clears it.
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
@@ -313,6 +314,11 @@ fn save_campaign_copy(
             .save_campaign_copy_to(path, &destinations)
             .map(|_| Vec::new())
     }
+}
+/// Whether this computer saves the sheets from automatic reads. See `sheet_writer`.
+fn writer_turn(path: &std::path::Path) -> crate::sheet_writer::Turn {
+    let (device, name) = crate::hermetic::device();
+    crate::sheet_writer::take(path, device, &name, crate::hermetic::now())
 }
 #[derive(Default)]
 pub struct Reader {
@@ -355,6 +361,10 @@ pub struct Reader {
     last_roster: Option<Instant>,
     backoff: u32,
     cache_loaded: bool,
+    /// The computer that saves the sheets from automatic reads, when it is not this one.
+    pub writer_elsewhere: Option<String>,
+    /// The DM asked for the next read, so it saves on this computer too.
+    by_hand: bool,
 }
 impl Drop for Reader {
     fn drop(&mut self) {
@@ -410,7 +420,12 @@ impl Reader {
         thread::spawn(move || {
             let result = crate::hermetic::character_cache()
                 .and_then(|c| c.load_all(scope.local, &scope.remote));
-            if let Ok(records) = &result {
+            let turn = writer_turn(&scope.path);
+            let mine = turn == crate::sheet_writer::Turn::Mine;
+            let _ = tx.send(Event::Writer(turn));
+            if let Ok(records) = &result
+                && mine
+            {
                 for record in records {
                     if let Ok(active) = gate.lock() {
                         if !*active {
@@ -552,6 +567,7 @@ impl Reader {
         let full = full || selected.is_none();
         let changed = self.take_changed();
         let force = std::mem::take(&mut self.force);
+        let by_hand = std::mem::take(&mut self.by_hand);
         self.forcing = force.clone();
         let (tx, rx) = mpsc::channel();
         self.pending = Some(rx);
@@ -564,6 +580,9 @@ impl Reader {
         let failures = self.portrait_failures.clone();
         thread::spawn(move || {
             let run = || -> Result<(), Failure> {
+                let turn = writer_turn(&scope.path);
+                let mine = by_hand || turn == crate::sheet_writer::Turn::Mine;
+                let _ = tx.send(Event::Writer(turn));
                 let client = client()?;
                 let members = if full {
                     let members = roster(&get(
@@ -622,9 +641,11 @@ impl Reader {
                                 .and_then(|c| c.save(scope.local, record))
                                 .map(|_| ());
                             let _ = tx.send(Event::Stored(Stored::Sheet(id.clone()), saved));
-                            let saved =
-                                save_campaign_copy(record, &scope.path, force.contains(&id));
-                            let _ = tx.send(Event::CampaignCopy(id.clone(), saved));
+                            let forced = force.contains(&id);
+                            if mine || forced {
+                                let saved = save_campaign_copy(record, &scope.path, forced);
+                                let _ = tx.send(Event::CampaignCopy(id.clone(), saved));
+                            }
                         }
                     }
                     if let Ok(record) = &result
@@ -740,6 +761,12 @@ impl Reader {
                 },
                 Ok(Event::CampaignCopy(id, result)) => self.campaign_copy_saved(id, result),
                 Ok(Event::Stored(what, result)) => self.stored(what, result),
+                Ok(Event::Writer(turn)) => {
+                    self.writer_elsewhere = match turn {
+                        crate::sheet_writer::Turn::Mine => None,
+                        crate::sheet_writer::Turn::Elsewhere(name) => Some(name),
+                    };
+                }
                 Err(mpsc::TryRecvError::Empty) => break,
                 Err(mpsc::TryRecvError::Disconnected) => {
                     self.pending = None;
@@ -761,8 +788,18 @@ impl Reader {
             }
         }
     }
+    /// The DM asked to read the party now. This read saves the sheets on this computer, even when
+    /// another computer saves the automatic reads.
+    pub fn refresh_by_hand(&mut self, session: Session, ctx: &egui::Context) {
+        self.by_hand = true;
+        self.refresh(session, ctx, true);
+    }
     /// Saves a sheet that came from elsewhere, such as combat sync, and records the result.
+    /// Combat sync reads on its own, so only the computer that saves the sheets saves it.
     pub fn save_campaign_copy(&mut self, id: &str, record: &EntitySnapshot) {
+        if self.writer_elsewhere.is_some() {
+            return;
+        }
         if let Some(path) = self.campaign_path() {
             let saved = save_campaign_copy(record, path, false);
             self.campaign_copy_saved(id.to_owned(), saved);
@@ -895,6 +932,44 @@ mod tests {
             tx.send(Event::Stored(Stored::Roster, Err("late".into())))
                 .is_err()
         );
+    }
+    #[test]
+    fn only_the_computer_with_the_turn_saves_automatic_reads() {
+        let campaign = tempfile::tempdir().unwrap();
+        let mut reader = Reader::default();
+        reader.scope = Some(Scope {
+            epoch: 1,
+            local: Uuid::new_v4(),
+            remote: "12".into(),
+            path: campaign.path().into(),
+            connected: true,
+        });
+        // Another computer holds the turn, and it has not run out.
+        crate::sheet_writer::take(
+            campaign.path(),
+            Uuid::from_u128(7),
+            "Desk",
+            crate::hermetic::now(),
+        );
+        let turn = writer_turn(campaign.path());
+        assert_eq!(turn, crate::sheet_writer::Turn::Elsewhere("Desk".into()));
+        reader.writer_elsewhere = Some("Desk".into());
+        let record = crate::visual_tests::fixture::sample_sheet();
+        let id = record.source.character_id.clone();
+        reader.save_campaign_copy(&id, &record);
+        let saved = |root: &std::path::Path| {
+            std::fs::read_dir(root.join("Characters/D&D Beyond"))
+                .unwrap()
+                .flatten()
+                .filter(|e| e.path().extension().is_some_and(|x| x == "md"))
+                .filter(|e| !e.path().ends_with(crate::sheet_writer::FILE))
+                .count()
+        };
+        assert_eq!(saved(campaign.path()), 0);
+        // With the turn, the same save writes the sheet.
+        reader.writer_elsewhere = None;
+        reader.save_campaign_copy(&id, &record);
+        assert_eq!(saved(campaign.path()), 1);
     }
     #[test]
     fn a_change_to_any_member_is_read_twice_whichever_is_selected() {

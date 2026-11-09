@@ -991,7 +991,11 @@ pub mod party {
         let note = std::fs::read_dir(&copies)
             .expect("list character copies")
             .map(|file| file.expect("read character copy").path())
-            .find(|path| path.is_file() && path.extension().is_some_and(|x| x == "md"))
+            .find(|path| {
+                path.is_file()
+                    && path.extension().is_some_and(|x| x == "md")
+                    && !path.ends_with(crate::sheet_writer::FILE)
+            })
             .expect("a character copy");
         std::fs::write(&note, EDITED_NOTE).expect("edit the copy on disk");
         switch_campaign(d, CAMPAIGN);
