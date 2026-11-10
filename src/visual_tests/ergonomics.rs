@@ -170,12 +170,15 @@ fn scroll_bar(node: &AccessKitNode<'_>, rect: egui::Rect, surfaces: &[egui::Rect
         })
 }
 
-/// A column's drag handle, which egui adds to the panel: unnamed, with no role, thin, as
-/// tall as a column, and only draggable. A control the app draws has a role and a name.
+/// Egui column handles remain thin chrome. Splat names them as splitters and adds
+/// keyboard control and visible focus. Ordinary controls cannot use this exception.
 fn column_handle(node: &AccessKitNode<'_>, rect: egui::Rect) -> bool {
     const AS_TALL_AS_A_COLUMN: f32 = 100.0;
-    node.role() == Role::Unknown
-        && node.label().is_none()
+    node.role() == Role::Splitter
+        && node
+            .label()
+            .is_some_and(|label| label.starts_with("Resize ") && label.ends_with(" column"))
+        && supports(node, Action::Focus)
         && !supports(node, Action::Click)
         && rect.width() <= CHROME_THICKNESS
         && rect.height() >= AS_TALL_AS_A_COLUMN

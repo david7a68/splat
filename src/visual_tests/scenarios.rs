@@ -1571,6 +1571,7 @@ pub mod settings {
                 (button.left() - reason.right() - crate::design::S).abs() < 1.0
             },
         );
+        d.state("cookie-placeholder", Sizes::All);
         d.type_into(COOKIE_FIELD, SYNTHETIC_COOKIE);
         d.wait_for_text("Remember my D&D Beyond sign-in on this computer");
         d.observe_both("iter-13-U2", "Connect ends at the cookie field edge", |d| {
@@ -3585,6 +3586,23 @@ pub mod column_resize {
         d.set_base(DEFAULT);
         the_session_fills_its_column(d);
         the_session_tabs_fill_their_column(d);
+
+        // Keyboard proof follows the existing task-cost checks.
+        d.click(NAV_LIBRARY);
+        d.harness_focus_nothing();
+        assert!(d.tab_to("Resize Library entries column"));
+        d.press(Key::Home);
+        d.state_prepared("keyboard-column-handle", Sizes::All, |d| {
+            assert!(d.tab_to("Resize Library entries column"));
+        });
+        let edge = entries_edge(d);
+        d.press(Key::ArrowRight);
+        assert!(near(entries_edge(d), edge + crate::design::L));
+        d.state_prepared("keyboard-column-width", Sizes::All, |d| {
+            assert!(d.tab_to("Resize Library entries column"));
+        });
+        d.press(Key::Home);
+        assert!(near(entries_edge(d), edge));
     }
 }
 
@@ -8157,7 +8175,7 @@ pub mod package_to_table {
         d.begin_task();
         d.type_text("Copper Coast");
         d.expect("Use in this campaign");
-        d.state("create-package-location", Sizes::Default);
+        d.state("create-package-location", Sizes::All);
         d.click("Create package");
         d.expect("Copper Coast");
         d.type_text("Copper Drake");

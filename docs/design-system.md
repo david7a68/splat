@@ -135,8 +135,10 @@ scrolling still moves down the note. The ergonomics check permits side clipping
 only where a real horizontal scroll bar can reveal the text; it still rejects
 clipping in ordinary readers and text cut to an ellipsis.
 
-A column's drag handle is the same kind of chrome: 10 px wide and as tall as the column.
-Tab steps over it too. It has no keyboard control. A column keeps a usable width without a drag.
+A column's drag handle stays egui chrome: 10 px wide and as tall as the column.
+Tab gives it focus, shown by an accent line. Left and Right move the edge by `L`.
+Home restores the natural width, which follows the window again. The chosen width
+is saved after a drag or a key press. Each handle has an accessible name and key help.
 
 ## Widgets
 
@@ -224,7 +226,7 @@ tooltips, and separators. Text cursors do not blink, because motion draws the ey
 | Buttons | `Action::primary / secondary / quiet / destructive` | `.blocked(reason)` disables and adds a hover reason and accessible description. For one blocked control, put `blocked_reason` directly beside it in visible `Small` text, then an `L` gap before the next action. `.key("N")` shows the key beside the word |
 | Split button | `split_action` | An `Action` that does the default, and a caret that opens a menu of the other ways |
 | Field | `field`, `small_field` | Sentence-case muted `Small` label, control, help, error; names the control for accessibility |
-| Text fields | `text_field`, `text_input`, `number_field`, `search_field`, `named` | Always have an accessible name and a 26 px target. Numbers align left, so the caret never lies on a digit |
+| Text fields | `text_field`, `text_input`, `number_field`, `search_field`, `named` | Always have an accessible name and a 26 px target. Numbers align left, so the caret never lies on a digit. Placeholders use faint `Body` text |
 | Dialog | `dialog`, `dialog_actions` | An `egui::Modal`, for the brief's modal tasks only. One action line: red action at the left; keep and commit actions at the right |
 | Section | `section`, `quiet_section`, `section_icon`, `combo_icon` | Collapsing, with Phosphor arrows. `quiet_section` is for technical details at a page's end |
 | Table row | `table_row` | Fixed cell widths and a hairline, for Markdown tables and sheets. No stripes, because a row's height follows its text |
@@ -271,11 +273,16 @@ control still has an accessible name and a tooltip.
 
 ## Keeping a draft
 
+Conversion and draft comparisons align unchanged lines before drawing. Blank rows
+mark actual additions and deletions. Highlights and line counts use these aligned
+rows. Adjacent changed rows form one group. `Next difference` moves to the start
+of the next group, wraps to the first, and stays hidden for one group.
+
 `Discard` is one press and one step of undo, not a dialog: `Draft discarded` with `Undo
 discard` stays until the next edit. It stands apart from `Save`, and it shows only when
 there is something to discard. A session note changed on disk shows the draft and disk text side by side in the Write view’s styled source face. Text wraps at word boundaries. A selected surface and a line mark identify differing lines. The choices stay above the comparison, which uses the whole session body while the plan is hidden. A file that changed on disk stops saving and asks: the run
 offers `Replace the file with this run` and `Save as a new run`, and a Library note offers `Overwrite with my
-draft` and the separate red `Reload and lose my draft`. Library uses the same side-by-side comparison, with `N lines differ` and `Next difference` only for two or more differing lines. Both comparisons open with the first difference and two lines of context in view. A missing line says `No line`. Neither choice has an accent fill. One message says: “This note changed on disk. Your draft is safe until you choose.” Library calls the item an entry in this message. These messages cannot be dismissed.
+draft` and the separate red `Reload and lose my draft`. Library uses the same side-by-side comparison, with `N lines differ` and `Next difference` only for two or more separate change groups. Both comparisons open with the first difference and two lines of context in view. An actual addition or deletion leaves a blank, hatched row, named `No line` for accessibility. Neither choice has an accent fill. One message says: “This note changed on disk. Your draft is safe until you choose.” Library calls the item an entry in this message. These messages cannot be dismissed.
 
 ## The Reader
 
@@ -906,7 +913,6 @@ the same typed name show each file name on the second line.
 
 ## Content audit, iteration 18
 
-Adjacent comparison lines form one change. Next difference appears only for separate changes.
 Keeping a draft in the close dialog restores its editor focus and cursor.
 Package copy registration names the copy and whether the campaign uses it. Its use checkbox starts off when the original is already used. Use the copy's entries keeps roster names, counts and changes, with one Undo.
 Duplicate repairs name the folder when filenames match. A folder batch repair has one guarded Undo.
