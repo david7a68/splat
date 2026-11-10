@@ -492,8 +492,12 @@ pub(crate) struct Loaded {
     facets: std::sync::OnceLock<Vec<Option<Facets>>>,
     /// Listed entries with a broken link, found against this link index. A new index, an edited
     /// note (`invalidate`) or a reload (a new `Loaded`) finds them again.
-    broken_links:
-        std::sync::Mutex<Option<(std::sync::Arc<crate::lookup::ContentIndex>, Vec<usize>)>>,
+    broken_links: std::sync::Mutex<
+        Option<(
+            std::sync::Arc<crate::lookup::ContentIndex>,
+            Vec<(usize, usize)>,
+        )>,
+    >,
 }
 impl Loaded {
     fn facets(&self) -> &[Option<Facets>] {
@@ -504,9 +508,13 @@ impl Loaded {
                 .collect()
         })
     }
-    /// The listed entries whose rows say `broken link`: campaign and package entries, not
-    /// manifests. Scanning every body is the work the cache keeps out of each frame.
-    fn broken_link_notes(&self, index: &std::sync::Arc<crate::lookup::ContentIndex>) -> Vec<usize> {
+    /// The listed entries whose rows say `broken link`, as (note position, broken link count):
+    /// campaign and package entries, not manifests. Scanning every body is the work the cache
+    /// keeps out of each frame, the header menu included.
+    fn broken_link_notes(
+        &self,
+        index: &std::sync::Arc<crate::lookup::ContentIndex>,
+    ) -> Vec<(usize, usize)> {
         let mut cache = self
             .broken_links
             .lock()
@@ -516,17 +524,16 @@ impl Loaded {
         {
             return notes.clone();
         }
-        let notes: Vec<usize> = self
+        let notes: Vec<(usize, usize)> = self
             .notes
             .iter()
             .enumerate()
             .filter(|(_, note)| note.owner != Owner::Builtin && !note.is_manifest())
-            .filter(|(_, note)| {
-                note.entry
-                    .as_ref()
-                    .is_some_and(|entry| index.broken_link_count(&entry.body, entry.id) > 0)
+            .filter_map(|(at, note)| {
+                let entry = note.entry.as_ref()?;
+                let count = index.broken_link_count(&entry.body, entry.id);
+                (count > 0).then_some((at, count))
             })
-            .map(|(at, _)| at)
             .collect();
         *cache = Some((index.clone(), notes.clone()));
         notes
@@ -1502,8 +1509,6 @@ pub(crate) fn load_all(modules: &[Module], campaign: Option<&Campaign>) -> Resul
     Ok(all)
 }
 
-/// Undo discard offers words only to the note they came from. Two owners can each have a
-/// note at the same path.
 /// The height `design::draft_discarded` takes at this width: one line beside Undo discard, or the
 /// message with Undo discard on the line below.
 fn discarded_height(ui: &egui::Ui, name: &str, width: f32) -> f32 {
@@ -1531,6 +1536,8 @@ fn discarded_height(ui: &egui::Ui, name: &str, width: f32) -> f32 {
     lines + ui.spacing().item_spacing.y + Density::Read.control()
 }
 
+/// Undo discard offers words only to the note they came from. Two owners can each have a
+/// note at the same path.
 fn discard_is_for(discarded: Option<&(Option<Uuid>, String, String)>, note: &Note) -> bool {
     discarded.is_some_and(|(owner, path, _)| *owner == note.owner.id() && *path == note.path)
 }
@@ -2407,7 +2414,7 @@ impl Library {
                             .diagnostics
                             .iter()
                             .map(|message| message.split(": ").next().unwrap_or(message))
-                            .chain(broken.iter().map(|&at| loaded.notes[at].path.as_str()))
+                            .chain(broken.iter().map(|&(at, _)| loaded.notes[at].path.as_str()))
                             .collect::<std::collections::HashSet<_>>()
                             .len(),
                         "file needs fixing",
@@ -2435,14 +2442,9 @@ impl Library {
                                     );
                                 }
                                 // As in World, each entry with a broken link opens from here.
-                                let Some(index) = link_index.as_ref() else {
-                                    return;
-                                };
                                 design::locked(ui, draft_reason, |ui| {
-                                    for &at in &broken {
+                                    for &(at, count) in &broken {
                                         let note = &loaded.notes[at];
-                                        let entry = note.entry.as_ref().unwrap();
-                                        let count = index.broken_link_count(&entry.body, entry.id);
                                         if design::small_link(
                                             ui,
                                             &format!(
@@ -5766,10 +5768,10 @@ mod tests {
         let index = std::sync::Arc::new(
             crate::lookup::ContentIndex::load(std::slice::from_ref(&module), None).unwrap(),
         );
-        let names = |loaded: &Loaded, notes: Vec<usize>| -> Vec<String> {
+        let names = |loaded: &Loaded, notes: Vec<(usize, usize)>| -> Vec<String> {
             notes
                 .into_iter()
-                .map(|at| loaded.notes[at].name().to_owned())
+                .map(|(at, _)| loaded.notes[at].name().to_owned())
                 .collect()
         };
         assert_eq!(
@@ -5782,12 +5784,22 @@ mod tests {
             .iter()
             .position(|n| n.name() == "Fine")
             .unwrap();
-        loaded.notes[fine].entry.as_mut().unwrap().body = "See [[Nowhere]].\n".into();
+        loaded.notes[fine].entry.as_mut().unwrap().body =
+            "See [[Nowhere]] and [[Nor Here]].\n".into();
         assert_eq!(loaded.broken_link_notes(&index).len(), 2);
         loaded.invalidate();
         assert_eq!(
             names(&loaded, loaded.broken_link_notes(&index)),
             ["Both", "Fine", "Linker"]
+        );
+        // The menu reads each count from the cache: two links in Fine, one in each other file.
+        assert_eq!(
+            loaded
+                .broken_link_notes(&index)
+                .iter()
+                .map(|&(_, count)| count)
+                .collect::<Vec<_>>(),
+            [1, 2, 1]
         );
         // A new index finds them again, with the same notes.
         loaded.notes[fine].entry.as_mut().unwrap().body = "See [[Linker]].\n".into();
