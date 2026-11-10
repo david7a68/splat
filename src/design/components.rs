@@ -1841,39 +1841,16 @@ pub fn save_row_state(ui: &mut Ui, state: Status<'_>, dirty: bool, blocked: Opti
     dirty && Action::quiet("Discard").blocked(blocked).show(ui).clicked()
 }
 
-/// Names the discarded draft in an Undo message, as `undo_message` lays it out. Undo's
-/// accessible name also names the draft. Returns true when undo is pressed.
+/// Names the discarded draft in an Undo message. Undo's accessible name also names the draft.
+/// Returns true when undo is pressed.
 pub fn draft_discarded(ui: &mut Ui, name: &str) -> bool {
-    let tone = Tone::Info;
-    let text = format!("{name} draft discarded.");
-    let undo = format!("Undo discard of {name}");
-    let button = Action::quiet("Undo discard")
-        .name(&undo)
-        .icon(icons::UNDO)
-        .density(Density::Read);
-    let button_width = button.natural_width(ui);
-    let icon_width = number_width(ui, tone.parts().0, &Type::Body.font(ui));
-    let inset = S + 1.0 + icon_width + ui.spacing().item_spacing.x * 2.0 - XS;
-    let text_width = number_width(ui, &text, &Type::Body.font(ui)) + inset;
-    let gap = ui.spacing().item_spacing.x;
-    let mut pressed = false;
-    if ui.available_width() < text_width + gap + button_width {
-        message(ui, tone, &text);
-        ui.horizontal(|ui| {
-            ui.add_space((inset - gap).max(0.0));
-            pressed = button.line_start().show(ui).clicked();
-        });
-    } else {
-        ui.horizontal_top(|ui| {
-            let width = (ui.available_width() - button_width - gap).max(0.0);
-            ui.allocate_ui_with_layout(vec2(width, 0.0), Layout::top_down(Align::Min), |ui| {
-                ui.add_space((Density::Read.control() - Type::Body.line()) / 2.0);
-                message(ui, tone, &text)
-            });
-            pressed = button.show(ui).clicked();
-        });
-    }
-    pressed
+    undo_message_named(
+        ui,
+        Tone::Info,
+        &format!("{name} draft discarded."),
+        "Undo discard",
+        Some(&format!("Undo discard of {name}")),
+    )
 }
 
 /// A message with one action beside it. Returns true when the action is used.
@@ -2061,9 +2038,24 @@ pub fn reloaded_draft(ui: &mut Ui) -> bool {
 
 /// A recovery message whose action restores the previous state.
 pub fn undo_message(ui: &mut Ui, tone: Tone, text: &str, action: &str) -> bool {
+    undo_message_named(ui, tone, text, action, None)
+}
+
+/// `undo_message`, with an accessible name for the action when its words are not enough.
+pub fn undo_message_named(
+    ui: &mut Ui,
+    tone: Tone,
+    text: &str,
+    action: &str,
+    name: Option<&str>,
+) -> bool {
     let button = Action::quiet(action)
         .icon(icons::UNDO)
         .density(Density::Read);
+    let button = match name {
+        Some(name) => button.name(name),
+        None => button,
+    };
     let button_width = button.natural_width(ui);
     let icon_width = number_width(ui, tone.parts().0, &Type::Body.font(ui));
     let inset = S + 1.0 + icon_width + ui.spacing().item_spacing.x * 2.0 - XS;

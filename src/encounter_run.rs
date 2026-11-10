@@ -545,6 +545,9 @@ pub(crate) struct Run {
     history: Vec<State>,
     /// What each history step did, for a named Undo.
     history_labels: Vec<String>,
+    /// Beside each label: true when a sheet made the step, not the DM. Only such a step may
+    /// give up its source when Undo is tight.
+    history_from_sheet: Vec<bool>,
     selected: usize,
     /// More targets for one amount, beside the selected row. Never saved.
     also: BTreeSet<usize>,
@@ -857,6 +860,7 @@ impl Run {
             },
             history: Vec::new(),
             history_labels: Vec::new(),
+            history_from_sheet: Vec::new(),
             selected: 0,
             also: BTreeSet::new(),
             halved: BTreeSet::new(),
@@ -974,6 +978,7 @@ impl Run {
         }
         self.history.push(before);
         self.history_labels.push("full HP after long rest".into());
+        self.history_from_sheet.push(false);
         self.state.last_change = Some("full HP after long rest".into());
         self.state
             .log
@@ -1708,6 +1713,7 @@ impl Run {
         if self.history.len() == 100 {
             self.history.remove(0);
             self.history_labels.remove(0);
+            self.history_from_sheet.remove(0);
         }
         self.dm_steps += 1;
         self.notice = None;
@@ -1716,6 +1722,7 @@ impl Run {
             self.panel = Panel::Reference;
         }
         self.history_labels.push(undo_label);
+        self.history_from_sheet.push(false);
         self.notice_summary = None;
         if let Some((index, total, had, acted)) = live_initiative {
             self.notice = Some(Self::initiative_notice(
@@ -1951,6 +1958,7 @@ impl Run {
             self.notice = None;
             self.dm_steps += 1;
             self.history_labels.pop();
+            self.history_from_sheet.pop();
             // What D&D Beyond last confirmed is a fact, not a step that can be taken back.
             let confirmed: Vec<_> = self
                 .state
@@ -2125,6 +2133,10 @@ impl Run {
             // Short, because the ended view's header holds it beside the title.
             Command::Loot(rolls) => loot::describe(rolls),
         }
+    }
+    /// True when a sheet made the newest Undo step.
+    fn undo_from_sheet(&self) -> bool {
+        self.history_from_sheet.last().copied().unwrap_or(false)
     }
     fn undo_label(&self) -> String {
         self.history_labels
@@ -2769,6 +2781,7 @@ impl Run {
     fn reconcile_sync_history(&mut self, before: &State, indices: &[usize], choices: &[usize]) {
         let mut kept = Vec::new();
         let mut labels = Vec::new();
+        let mut from_sheet = Vec::new();
         let mut dropped = Vec::new();
         // A multi-target step is atomic. If it also touched another participant, its
         // older steps cannot safely cross this boundary either. Say which steps were lost.
@@ -2820,9 +2833,11 @@ impl Run {
             }
             kept.push(previous);
             labels.push(self.history_labels[at].clone());
+            from_sheet.push(self.history_from_sheet[at]);
         }
         self.history = kept;
         self.history_labels = labels;
+        self.history_from_sheet = from_sheet;
         if !dropped.is_empty() {
             let line = format!("Sheet update removed undo steps: {}.", dropped.join("; "));
             self.state.log.push(line.clone());
@@ -2856,6 +2871,7 @@ impl Run {
             };
             self.state.last_change = Some(Self::change_with_result(&self.state, &label));
             self.history_labels.push(label);
+            self.history_from_sheet.push(true);
             self.dm_steps += 1;
         }
     }
@@ -3427,6 +3443,7 @@ impl Run {
             dirty: false,
             history: Vec::new(),
             history_labels: Vec::new(),
+            history_from_sheet: Vec::new(),
             also: BTreeSet::new(),
             halved: BTreeSet::new(),
             dm_steps: 0,
@@ -3947,6 +3964,7 @@ impl Run {
         assert_eq!(self.state.phase, Phase::Running);
         self.history.clear();
         self.history_labels.clear();
+        self.history_from_sheet.clear();
         self.reopened = false;
         self.undo_stopped = false;
     }

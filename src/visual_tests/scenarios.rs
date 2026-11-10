@@ -37,8 +37,9 @@ fn undo_keeps_its_word(d: &mut Driver<'_>, action: &str) {
 }
 
 /// iter11-B-FT1: beside a state notice, which stays whole, the run's Undo keeps a shortened
-/// target while one fits. Its accessible name keeps the full action.
-fn undo_keeps_a_target(d: &mut Driver<'_>, notice: &str) {
+/// target while one fits. Its accessible name keeps the full action. A sheet-change notice,
+/// in the header or below the roster, still shows its words and its Log link.
+fn undo_keeps_a_target(d: &mut Driver<'_>, notice: &str, sheet: Option<&str>) {
     let size = d.window_size();
     let undo: Vec<_> = d
         .nodes()
@@ -54,6 +55,25 @@ fn undo_keeps_a_target(d: &mut Driver<'_>, notice: &str) {
         undo.len() == 1 && painted.contains("Undo: ") && d.visible_text(notice),
         format!("At {size:?}, beside a whole {notice:?}, Undo for {action:?} paints {painted:?}"),
     );
+    if let Some(sheet) = sheet {
+        let window = egui::Rect::from_min_size(pos2(0.0, 0.0), egui::vec2(size.0, size.1));
+        let text = d.painted_rect_in(sheet, window);
+        let link = text.and_then(|text| {
+            d.nodes()
+                .into_iter()
+                .filter(|node| node.in_view() && node.name == "Log")
+                .find(|node| {
+                    (node.rect.center().y - text.center().y).abs() <= crate::design::S
+                        && node.rect.left() >= text.right() - 1.0
+                })
+                .map(|node| node.rect)
+        });
+        d.observe(
+            "iter11-B2-sheet",
+            text.is_some() && link.is_some(),
+            format!("At {size:?}, the sheet-change notice paints {sheet:?} at {text:?}, with its Log link at {link:?}"),
+        );
+    }
 }
 
 /// Recovery actions keep the shared Undo icon, inside their own target.
@@ -4202,7 +4222,7 @@ pub mod run_edge_states {
         // The row returns to the long-effect frame; Undo now names the other step.
         d.state_prepared("stop-concentration-undo", Sizes::All, |d| {
             undo_keeps_its_word(d, &format!("Undo: stop concentration for {TARGET}"));
-            undo_keeps_a_target(d, "Sync off for the party");
+            undo_keeps_a_target(d, "Sync off for the party", None);
         });
         d.click("Sheet");
         d.click("Read all conditions");
@@ -4435,7 +4455,7 @@ pub mod run_sync_states {
         d.app_mut().encounters.simulate_sync_state(name, state);
         d.settle();
         d.state_prepared("every-sync-state", Sizes::All, |d| {
-            undo_keeps_a_target(d, "Sync conflict: Brannoch Vale");
+            undo_keeps_a_target(d, "Sync conflict: Brannoch Vale", Some("HP 58 → 54"));
         });
         d.goal("show every sync state");
         d.begin_task();
@@ -4453,7 +4473,7 @@ pub mod run_sync_states {
         );
         d.click_row("Sable Harrowgate");
         d.state_prepared("linked-row-sync-off", Sizes::All, |d| {
-            undo_keeps_a_target(d, "Sync conflict: Brannoch Vale");
+            undo_keeps_a_target(d, "Sync conflict: Brannoch Vale", Some("HP 58 → 54"));
         });
         d.click_row("Cinder Wolf 2");
         d.app_mut()
@@ -5019,8 +5039,32 @@ pub mod signed_in {
             ),
         );
         d.state_prepared("reconnect-conflict", Sizes::Default, |d| {
-            undo_keeps_a_target(d, &format!("Sync conflict: {MEMBER}"));
+            undo_keeps_a_target(d, &format!("Sync conflict: {MEMBER}"), None);
         });
+        // iter11-B2: only a step the sheet made gives up `D&D Beyond`. A DM's own effect with
+        // those words keeps them, or Undo shows its word alone.
+        const DM_EFFECT: &str = "D&D Beyond boon";
+        let dm_undo = format!("Undo: {DM_EFFECT} on {MEMBER}");
+        d.click(CONDITIONS);
+        d.type_into("Other effect", DM_EFFECT);
+        d.click("Add");
+        d.expect(&dm_undo);
+        let painted = d.at_size(SMALL, |d| {
+            d.place_of(&dm_undo)
+                .map_or_else(String::new, |rect| d.painted_in(rect))
+        });
+        d.observe(
+            "iter11-B2-source",
+            painted.contains("Undo")
+                && !painted.contains("Undo: boon")
+                && (painted.contains(DM_EFFECT) || !painted.contains("Undo:")),
+            format!(
+                "At 960x640, beside the conflict, the DM's effect keeps its words: {painted:?}"
+            ),
+        );
+        d.click(&dm_undo);
+        d.expect(&format!("Undo: 3 damage to {MEMBER}"));
+        d.click("Sheet");
         d.begin_task();
 
         // The link cannot change under a run.
@@ -9520,7 +9564,8 @@ pub mod session_plan {
         d.press(Key::Enter);
         let hurt = d.row_hp("Ember Cultist");
         assert!(d.has_containing("Undo: 2 damage to Ember Cultist"));
-        d.type_into("Dice", "1d1+3");
+        // Not T12.4's expression, so the Log line can only come from this roll.
+        d.type_into("Dice", "1d1+5");
         d.press(Key::Enter);
         d.observe(
             "iter11-B-FT2",
@@ -9539,7 +9584,7 @@ pub mod session_plan {
         fight_tab(d, "Log");
         d.observe(
             "iter11-B-FT2",
-            d.visible_text("DM roll 1d1+3"),
+            d.visible_text("DM roll 1d1+5"),
             "The roll stays in the Log after that Undo",
         );
         fight_tab(d, "Stat block");

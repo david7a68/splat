@@ -1063,9 +1063,11 @@ impl Run {
                         .map_or(String::new(), |next| format!("Next: {next}"))
                 };
                 let action_font = Type::Strong.font(ui);
+                let from_sheet = self.undo_from_sheet();
                 let fitted = undo_words(
                     ui,
                     &undo_label,
+                    from_sheet,
                     &self.state.participants,
                     &action_font,
                     f32::INFINITY,
@@ -1088,6 +1090,7 @@ impl Run {
                 let shortest = minimum
                     .strip_prefix("Undo: ")
                     .and_then(|action| action.strip_prefix(SHEET_SOURCE))
+                    .filter(|_| from_sheet)
                     .map_or_else(|| minimum.clone(), |action| format!("Undo: {action}"));
                 let target_reserve = self.undo_action(&shortest).natural_width(ui) + design::XS;
                 let minimum = self.undo_action(&minimum).natural_width(ui)
@@ -1164,6 +1167,7 @@ impl Run {
                         let words = undo_words(
                             ui,
                             &undo_label,
+                            from_sheet,
                             &self.state.participants,
                             &Type::Strong.font(ui),
                             slot - width_of("") - design::XS,
@@ -3149,6 +3153,7 @@ impl Run {
                             let shown = undo_words(
                                 ui,
                                 &full,
+                                false,
                                 &self.state.participants,
                                 &font,
                                 ui.available_width() - design::M * 2.0,
@@ -5619,9 +5624,11 @@ fn close_saved_words(undo: bool, sync: bool) -> String {
 }
 
 /// Cut only the target, keeping action words, amounts and copy numbers.
+/// `from_sheet`: a sheet made this step, so its source can go before its target.
 fn undo_words(
     ui: &egui::Ui,
     label: &str,
+    from_sheet: bool,
     participants: &[Participant],
     font: &egui::FontId,
     width: f32,
@@ -5673,7 +5680,8 @@ fn undo_words(
     let width = width - design::number_width(ui, prefix, font);
     let shown = shortened_action(ui, action, participants, font, width);
     // A sheet's step gives up its source before its target: `HP for Brannoch…`.
-    if (design::number_width(ui, &shown, font) > width || !keeps_names(&shown))
+    if from_sheet
+        && (design::number_width(ui, &shown, font) > width || !keeps_names(&shown))
         && let Some(rest) = action.strip_prefix(SHEET_SOURCE)
     {
         let without = shortened_action(ui, rest, participants, font, width);
@@ -7822,7 +7830,14 @@ mod tests {
                 let font = Type::Strong.font(ui);
                 // One pixel over each form's own width: the parts are measured apart.
                 let words = |label: &str, width: f32| {
-                    undo_words(ui, label, std::slice::from_ref(&p), &font, width + 1.0)
+                    undo_words(
+                        ui,
+                        label,
+                        true,
+                        std::slice::from_ref(&p),
+                        &font,
+                        width + 1.0,
+                    )
                 };
                 let full = format!("Undo: {SHEET_SOURCE}HP for {}", p.name);
                 // Room for all of it: nothing changes.
@@ -7840,6 +7855,21 @@ mod tests {
                 assert_eq!(
                     words(&many, design::number_width(ui, target, &font)),
                     target
+                );
+                // iter11-B2: a DM's effect that starts with the same words keeps them.
+                let effect = format!("Undo: {SHEET_SOURCE}boon on {}", p.name);
+                let tight = design::number_width(ui, "Undo: boon on Brannoch…", &font);
+                let shown = undo_words(
+                    ui,
+                    &effect,
+                    false,
+                    std::slice::from_ref(&p),
+                    &font,
+                    tight + 1.0,
+                );
+                assert!(
+                    shown.starts_with(&format!("Undo: {SHEET_SOURCE}boon on ")),
+                    "{shown}"
                 );
                 // A step from the DM keeps its words, however tight.
                 let damage = format!("Undo: 3 damage to {}", p.name);
@@ -7879,7 +7909,8 @@ mod tests {
                     let full = format!("Undo: {before}{}{after}", p.name);
                     let width =
                         design::number_width(ui, &format!("Undo: {before}Cinder… 3{after}"), &font);
-                    let shown = undo_words(ui, &full, std::slice::from_ref(&p), &font, width);
+                    let shown =
+                        undo_words(ui, &full, false, std::slice::from_ref(&p), &font, width);
                     // iter10-B-FT2: the word Undo stays; the target is shortened.
                     assert!(
                         shown.starts_with(&format!("Undo: {before}")) && shown.ends_with(after),
@@ -7897,7 +7928,7 @@ mod tests {
                     let expected = format!("Undo {verb}: Wreathed in… {direction} Cinder… 3");
                     let width = design::number_width(ui, &expected, &font);
                     assert_eq!(
-                        undo_words(ui, &full, std::slice::from_ref(&p), &font, width),
+                        undo_words(ui, &full, false, std::slice::from_ref(&p), &font, width),
                         expected
                     );
                 }
