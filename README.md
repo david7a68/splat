@@ -72,8 +72,9 @@ devenv shell -- visual-test work --only run-lookup,party
 devenv shell -- audit-gate final
 ```
 
-This also writes to `artifacts/screenshots/iter-0/`: a PNG for each state at 960x640,
-1200x800 and 1920x1080, `ergonomics.json`, `ergonomics.md`,
+This also writes to `artifacts/screenshots/iter-0/`: PNGs at 960x640 and 1200x800,
+with 1920x1080 for width-sensitive layouts and recorded wide proof states. Selected
+states also have a 2x-density capture. The folder holds `ergonomics.json`, `ergonomics.md`,
 `manifest.txt`, and one `video/<scenario>.mp4` per scenario. Rendering uses Mesa's
 software Vulkan driver, so captures repeat between runs. Video needs the host's
 `ffmpeg`. The optional contact sheet needs `montage` and can use several GB of RAM.
@@ -101,9 +102,23 @@ or set `SPLAT_VISUAL_CONTACT_SHEET=1` to make it with a full `visual-test` run.
 - `SPLAT_VISUAL_SCENARIOS=party,settings` runs only those scenarios. `visual-test <label> --only
   party,settings` is the same, and keeps the captures of the label's other scenarios.
 - `SPLAT_VISUAL_VIDEO=0` turns video off for `visual-test`.
+- `Sizes::Standard` captures and checks 960x640 and 1200x800. `StandardAndHiDpi`
+  adds 2x density. Use `All` or `AllAndHiDpi` for readers, forms, lists, panes,
+  action notices and wide proof states where width matters. The older `Default`
+  sets capture both sizes but run 1x ergonomics only at the minimum window.
 - Each capture must differ from every earlier step of its scenario at the same size
-  in at least 0.1% of pixels. Use `d.expect_same("reason")` before an intended return.
-  Captures finish pending note and Timeline saves before they render.
+  in at least 0.1% of pixels. For an intended return, first assert the restored state,
+  then use `d.assert_state_matches("return-name", "earlier-name")`. It runs the
+  earlier state's sizes and checks, and compares every pixel within the existing
+  two-level channel tolerance. It writes a PNG only if the comparison fails.
+  `state_changed_at` saves the sizes that change and compares the others.
+  `state_changed_at_prepared` also retains per-size setup and observations. For example,
+  `Sizes::Small` keeps a narrow tab change when a wide layout already shows both panes.
+  `check_state` retains all checks when another scenario supplies the same image.
+  `state_captured_at` keeps distinct sizes when only some views are shared.
+  Use `d.expect_same("reason")` only for an intended small visual change, after its
+  behaviour assertion. The repeated-capture check still runs on later captures.
+  Captures and frame comparisons finish pending note and Timeline saves first.
 - `audit-gate [label]` runs formatting, Clippy, all tests and all captures. It
   clears scenario filters and baseline-update mode, and enforces the baseline.
   Video and optional contact-sheet settings work as for `visual-test`.

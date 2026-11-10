@@ -906,7 +906,10 @@ pub mod campaign_content {
         d.expect_same(
             "Undo removes only the restored manifest and returns to the same missing-file view.",
         );
-        d.state("campaign-manifest-write-undone", Sizes::All);
+        d.assert_state_matches(
+            "campaign-manifest-write-undone",
+            "missing-campaign-manifest-needs-explicit-write",
+        );
         d.restart();
         go_campaign(d);
         d.wait_for_text("Write a new Campaign.md");
@@ -1361,7 +1364,8 @@ pub mod encounter_run {
 
     pub fn run(d: &mut Driver<'_>) {
         d.expect(READY_TO_RUN);
-        d.state("saved-runs", Sizes::Default);
+        // Image already covered by encounter-build / encounter-list. Keep every size check.
+        d.check_state("saved-runs", Sizes::Default);
         resume_run(d, RUN);
         d.expect(CURRENT_TURN);
         d.app_mut()
@@ -1596,6 +1600,8 @@ pub mod settings {
         d.check_tab_order("settings");
         d.goal("open settings");
 
+        assert!(d.in_view("Connect…"));
+        assert!(!d.in_view(COOKIE_FIELD));
         d.click("Connect…");
         d.observe_both(
             "iter-18-A-blocked",
@@ -1607,9 +1613,9 @@ pub mod settings {
             },
         );
         d.expect(COOKIE_FIELD);
+        assert!(d.in_view(COOKIE_FIELD));
         assert!(!d.has("Connect…"));
-        d.expect_same("The wide layout already shows the cookie form. Connect opens that same form in the narrow layout.");
-        d.state("cookie-placeholder", Sizes::All);
+        d.state_changed_at("cookie-placeholder", "connect-form", Sizes::Small);
         d.type_into(COOKIE_FIELD, SYNTHETIC_COOKIE);
         d.wait_for_text("Remember my D&D Beyond sign-in on this computer");
         d.observe_both("iter-13-U2", "Connect ends at the cookie field edge", |d| {
@@ -1638,7 +1644,8 @@ pub mod settings {
             // Not connected and failed already have their captures, from real attempts.
             match state {
                 Account::Busy => d.state("account-connecting", Sizes::Default),
-                Account::Connected => d.state("account-connected", Sizes::Default),
+                // Also supplies signed-in's shared Settings image at the wide size.
+                Account::Connected => d.state("account-connected", Sizes::All),
                 Account::KeyringWarning => {
                     d.state("account-keyring-warning", Sizes::Default);
                     d.observe_both(
@@ -1703,7 +1710,7 @@ pub mod settings {
         d.click(REMOVE_CAMPAIGN);
         d.click("Remove…");
         d.expect(REMOVE_TITLE);
-        d.state("confirm-remove-campaign", Sizes::All);
+        d.state("confirm-remove-campaign", Sizes::Standard);
         d.press(Key::Escape);
         d.goal("edit a campaign's details");
         d.click(EDIT_DETAILS);
@@ -1850,7 +1857,8 @@ pub mod dialogs {
         d.click("Destination");
         d.state("copy-destination-menu", Sizes::Default);
         d.click(&format!("Campaign · {CAMPAIGN}"));
-        d.state_prepared("copy-renamed", Sizes::All, |d| {
+        // The copy dialog has fixed bounds; its wide layout is captured before typing.
+        d.state_prepared("copy-renamed", Sizes::Standard, |d| {
             if d.field_text("Copy name").as_deref() != Some("Watch Aboleth") {
                 d.replace_text_in("Copy name", "Watch Aboleth");
             }
@@ -1958,7 +1966,8 @@ pub mod empty {
             "The Library works with no campaign, and one next step is stated",
         );
         d.review("T10.1", "first launch shows one next step");
-        d.state("first-launch", Sizes::Default);
+        // Image already covered by library-browse / first-launch. Keep every size check.
+        d.check_state("first-launch", Sizes::Default);
         d.click("Active campaign: No campaign");
         d.expect("Add campaign…");
         d.state("empty-campaign-switcher", Sizes::Default);
@@ -2341,7 +2350,7 @@ pub mod run_absent_player {
             "Combat can begin with a player absent, and with no initiative for them",
         );
         d.click(BEGIN);
-        d.state("began-without-them", Sizes::All);
+        d.state("began-without-them", Sizes::Standard);
         let first = current_participant(d);
         d.observe(
             "Absent player",
@@ -2438,7 +2447,7 @@ pub mod prep_to_table {
         d.click(&format!("Absent: {player}"));
         let marked = d.has(&format!("Absent: {player}"));
         let after = inits(d);
-        d.state("absent-at-start", Sizes::All);
+        d.state("absent-at-start", Sizes::Standard);
         d.observe(
             "Absent player",
             d.visible_text("6 need initiative"),
@@ -2592,7 +2601,7 @@ pub mod prep_to_table {
         d.click(BEGIN);
         d.expect(ROUND);
         d.expect(CURRENT_TURN);
-        d.state("first-turn", Sizes::All);
+        d.state("first-turn", Sizes::Standard);
         d.observe(
             "P1",
             current_participant(d).as_deref() == Some(first.as_str()),
@@ -2608,7 +2617,8 @@ pub mod run_resume {
     const INTERRUPTED: &str = "Cinder Wolf 2";
 
     pub fn run(d: &mut Driver<'_>) {
-        d.state("cold-start", Sizes::Default);
+        // Image already covered by encounter-build / encounter-list. Keep every size check.
+        d.check_state("cold-start", Sizes::Default);
         resume_run_from_cold_start(d);
         d.expect(CURRENT_TURN);
         d.state("resumed", Sizes::All);
@@ -3052,8 +3062,9 @@ pub mod nav_state {
 
         go_library(d);
         let library = d.has_containing(SEARCH_RESULTS) && d.in_view(CREATURE);
+        assert!(library);
         d.expect_same("Library keeps its search and reader when returning from another page.");
-        d.state("library-returned", Sizes::Default);
+        d.assert_state_matches("library-returned", "library-set-up");
 
         go_campaign(d);
         let campaign = d.in_view_containing(CAMPAIGN_TAB_TEXT);
@@ -3061,13 +3072,15 @@ pub mod nav_state {
 
         go_party(d);
         let party = d.in_view_containing(MEMBER) && d.in_view_containing(SHEET_PAGE_TEXT);
+        assert!(party);
         d.expect_same("Party keeps the selected member and sheet page on return.");
-        d.state("party-returned", Sizes::Default);
+        d.assert_state_matches("party-returned", "party-set-up");
 
         go_encounters(d);
         let encounters = d.in_view_containing(ROSTER_TEXT);
+        assert!(encounters);
         d.expect_same("Encounters keeps its open editor on return.");
-        d.state("encounters-returned", Sizes::Default);
+        d.assert_state_matches("encounters-returned", "encounters-set-up");
         d.goal("return to every page");
         d.observe(
             "G2",
@@ -3121,7 +3134,8 @@ pub mod party_from_run {
 
     pub fn run(d: &mut Driver<'_>) {
         resume_run_from_cold_start(d);
-        d.state("in-the-run", Sizes::Default);
+        // Image already covered by run-resume / resumed. Keep every size check.
+        d.check_state("in-the-run", Sizes::Default);
         d.goal("resume the run");
 
         d.click_row(MEMBER);
@@ -3170,8 +3184,10 @@ pub mod party_from_run {
 
         // The hardest rows: 0 HP, absent, and many conditions. Words, not only colour.
         d.click_row(MEMBER);
+        assert!(participant_is_selected(d, MEMBER));
+        d.expect(SHEET_ONLY_TEXT);
         d.expect_same("Returning to Kestrel restores the same sheet beside the unchanged run.");
-        d.state("sheet-returned-to-kestrel", Sizes::Default);
+        d.assert_state_matches("sheet-returned-to-kestrel", "sheet-beside-run");
         let correct_y = d.place_of("Correct").map(|rect| rect.min.y);
         d.type_text(ZERO_DAMAGE);
         d.press(Key::Enter);
@@ -3420,7 +3436,7 @@ pub mod gallery {
     pub fn run(d: &mut Driver<'_>) {
         d.app_mut().gallery = true;
         d.settle();
-        d.state("tokens", Sizes::AllAndHiDpi);
+        d.state("tokens", Sizes::StandardAndHiDpi);
         d.click(COMPONENTS);
         d.state("components", Sizes::AllAndHiDpi);
         d.check_tab_order("gallery, components");
@@ -3526,7 +3542,7 @@ pub mod gallery {
             "Temporary HP shows with its mark, as it does in the run and on Party",
         );
         d.scroll_until(pos2(600.0, 300.0), "Nothing here yet", 30);
-        d.state("empty-state", Sizes::All);
+        d.state("empty-state", Sizes::Standard);
     }
 }
 
@@ -4090,7 +4106,7 @@ pub mod run_edge_states {
         d.expect_same(
             "A second disk conflict opens the same close recovery choices for the new file.",
         );
-        d.state("save-new-run-before-close", Sizes::All);
+        d.state("save-new-run-before-close", Sizes::Standard);
         d.click("Save as a new run and close");
         let closed = !d.app_mut().encounters.has_run();
         d.observe(
@@ -4469,7 +4485,7 @@ pub mod run_roster_conflict {
         for _ in 0..20 {
             d.click(NEXT_TURN);
         }
-        d.state("after-full-round", Sizes::All);
+        d.state("after-full-round", Sizes::Standard);
     }
 }
 
@@ -4555,7 +4571,8 @@ pub mod signed_in {
             d.visible_text(RAIL_CONNECTED) && d.rail_words().contains(RAIL_CONNECTED),
             "With a session, the page and the rail both say Connected",
         );
-        d.state("settings-connected", Sizes::All);
+        // Settings / account-connected supplies the larger views. Keep this compact view.
+        d.state_captured_at("settings-connected", Sizes::All, Sizes::Small);
         d.click(REMOTE);
         d.expect(REMOTE_NAME);
         d.state_prepared("remote-campaign-list", Sizes::Default, |d| {
@@ -4700,8 +4717,13 @@ pub mod signed_in {
         );
         d.scroll_up_at(pos2(800.0, 250.0), 8);
         d.expect("Close the run to change campaigns.");
+        assert!(d.in_view("Close the run to change campaigns."));
         d.expect_same("At 1200x800 the campaign lock reason already fits. Scrolling changes only the 960x640 view.");
-        d.state("campaigns-locked-during-run", Sizes::Default);
+        d.state_changed_at(
+            "campaigns-locked-during-run",
+            "sign-in-from-run",
+            Sizes::Small,
+        );
         d.click(BACK_TO_RUN);
         d.click(CLOSE_RUN);
         d.observe(
@@ -5264,14 +5286,16 @@ pub mod session_notes {
         d.state("session-read", Sizes::All);
 
         // A rest, on the session's own page, with no step away from it.
+        assert!(d.in_view("Write"), "The narrow view starts on the note");
         show_plan(d);
         d.wait_for_text("Nothing planned yet.");
         d.expect("Use Add to plan a fight, a group, or an event.");
         assert!(d.has("Add a group"));
-        d.expect_same(
-            "The narrow view opens Plan; the wide view keeps the empty plan beside the note.",
+        assert!(
+            !d.in_view("Write"),
+            "Plan replaces the note in the narrow view"
         );
-        d.state_prepared("empty-plan-add-at-top", Sizes::All, |d| {
+        d.state_changed_at_prepared("empty-plan-add-at-top", "session-read", Sizes::Small, |d| {
             let names = [
                 "Add a fight",
                 "Add a group",
@@ -6838,11 +6862,11 @@ pub mod session_recording {
 
         d.click_containing("More actions for 2026-01-01");
         d.expect("Delete recording:");
-        d.state("recording-row-menu", Sizes::All);
+        d.state("recording-row-menu", Sizes::Standard);
         d.click_containing("Delete recording:");
         d.expect("Keep the recording");
         assert_eq!(d.focused_name().as_deref(), Some("Keep the recording"));
-        d.state("recording-delete", Sizes::All);
+        d.state("recording-delete", Sizes::Standard);
         d.click("Delete recording");
         d.expect("Recording deleted.");
         let warned_after_delete = d.app_mut().sessions.job_warned();
@@ -7016,7 +7040,7 @@ pub mod encounter_groups {
             "Done closes the form and returns to its member",
         );
         d.expect_same("Done closes the changes form and restores the unchanged group editor.");
-        d.state("group-changes-done", Sizes::Default);
+        d.assert_state_matches("group-changes-done", "group-editor");
         d.click("Back to encounters");
 
         // A group that cannot be added says why, in the editor, and its change says why.
@@ -7077,7 +7101,7 @@ pub mod encounter_groups {
             |d| d.has(CHANGES) && !d.has("Removed Rival Captain."),
         );
         d.expect_same("Undo restores the complete group editor with the changed member.");
-        d.state("group-member-restored", Sizes::All);
+        d.assert_state_matches("group-member-restored", "group-editor");
         d.click("Back to encounters");
 
         // Repair is a separate workflow; it does not change the build goal's cost.
@@ -8695,7 +8719,7 @@ pub mod session_plan {
         d.expect("6. Werewolf");
         d.begin_task();
         d.click_first("More actions for Werewolf");
-        d.state("roster-row-menu", Sizes::All);
+        d.state("roster-row-menu", Sizes::Standard);
         d.click("Make it yours");
         d.expect("6. Werewolf copy");
         d.state("make-it-yours", Sizes::All);
@@ -9021,7 +9045,10 @@ pub mod remove_package_in_use {
         d.click("Undo package removal");
         d.wait_for_text("Find the folder…");
         d.expect_same("Undo restores the missing-package choice shown before removal.");
-        d.state("package-removal-undone", Sizes::All);
+        d.assert_state_matches(
+            "package-removal-undone",
+            "campaign-keeps-missing-package-choice",
+        );
         d.click("Remove from this campaign");
         let campaign = d.app_mut().campaigns.active_campaign().unwrap();
         let document = crate::content_workspace::CampaignDocument::load(&campaign).unwrap();
