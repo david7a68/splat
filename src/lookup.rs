@@ -267,8 +267,9 @@ impl Item {
         } else {
             Some(self.owner.as_str())
         };
+        // The file is what tells two duplicate rows apart, so it comes first and is cut last.
         let subtitle = if self.duplicate_identity {
-            format!("{} · {}", self.subtitle, self.entry.path)
+            format!("{} · {}", self.entry.path, self.subtitle)
         } else {
             self.subtitle.clone()
         };
