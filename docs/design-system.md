@@ -505,7 +505,7 @@ the text with one form: Status, Stat block, In and Part of as labelled fields, t
 without the title line. Save changes is primary unless a live run owns Next turn; then it is secondary. Unsaved follows it, then an `L` gap and quiet Cancel. One save
 writes every change with one Undo. A disk change uses the shared conflict choices.
 
-Task marks at the start of a list item show an empty box for `[ ]` and a checked box for `[x]`, with the accessible names `Open question` and `Answered`. Stored Markdown stays unchanged. Other brackets stay as text.
+Task marks at the start of a list item show an empty box for `[ ]` and a checked box for `[x]`, with the accessible names `Open` and `Done`. Stored Markdown stays unchanged. Other brackets stay as text.
 
 Broken notes stay under Cannot be read. Each row's second line states the cause, and the group uses the same gap as folder headings. They use the Campaign repair source editor. Keep drafts in memory and
 warn before app close or a campaign switch. The unreadable count in the header opens the first broken

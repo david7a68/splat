@@ -440,14 +440,39 @@ fn show_with_density(ui: &mut egui::Ui, markdown: &str, dense: bool) {
             Event::TaskListMarker(done) => {
                 // The marker follows Item's indentation and bullet, before any prose or links.
                 let indent = "  ".repeat(lists.len().saturating_sub(1));
-                job = LayoutJob::default();
+                // A bulleted item trades its bullet for the box; a numbered item keeps its number
+                // and the box follows it.
+                let bulleted = matches!(lists.last(), Some(None));
+                let lead = if bulleted {
+                    job = LayoutJob::default();
+                    indent.clone()
+                } else {
+                    std::mem::take(&mut job.text).clone()
+                };
+                if !bulleted {
+                    job = LayoutJob::default();
+                    job.append(
+                        &lead,
+                        0.0,
+                        egui::TextFormat {
+                            font_id: prose.font(ui),
+                            line_height: Some(prose.line()),
+                            color: colors().muted,
+                            ..Default::default()
+                        },
+                    );
+                }
                 let icon = if done {
                     egui_phosphor::regular::CHECK_SQUARE
                 } else {
                     egui_phosphor::regular::SQUARE
                 };
                 job.append(
-                    &format!("{indent}{icon} "),
+                    &if bulleted {
+                        format!("{indent}{icon} ")
+                    } else {
+                        format!("{icon} ")
+                    },
                     0.0,
                     egui::TextFormat {
                         font_id: prose.font(ui),
@@ -458,7 +483,7 @@ fn show_with_density(ui: &mut egui::Ui, markdown: &str, dense: bool) {
                 );
                 target.task = Some((
                     done,
-                    design::number_width(ui, &indent, &prose.font(ui)),
+                    design::number_width(ui, &lead, &prose.font(ui)),
                     prose,
                 ));
             }
@@ -1111,7 +1136,7 @@ fn flush(ui: &mut egui::Ui, job: &mut LayoutJob, target: &mut Targets) {
                 egui::WidgetInfo::labeled(
                     egui::WidgetType::Label,
                     true,
-                    if done { "Answered" } else { "Open question" },
+                    if done { "Done" } else { "Open" },
                 )
             });
         }
@@ -1139,7 +1164,6 @@ mod tests {
     #[test]
     fn task_markers_replace_only_leading_list_syntax() {
         let markdown = "- [ ] Can a ring be sold?\n- [x] Decided.\n- Keep [ ] and [x] in this line.\n\n[ ] A paragraph, not a task.\n\n`[x] Code stays text.`\n";
-        let unchanged = markdown.to_owned();
         let text = painted(markdown)
             .iter()
             .map(|galley| galley.job.text.as_str())
@@ -1169,7 +1193,22 @@ mod tests {
                 "FD-2-literal: missing {literal:?} in {text}"
             );
         }
-        assert_eq!(markdown, unchanged);
+        // A numbered task keeps its number; the box follows it.
+        let numbered = painted("1. [ ] Ask the duke\n2. [x] Pay the toll\n")
+            .iter()
+            .map(|galley| galley.job.text.clone())
+            .collect::<Vec<_>>()
+            .join("\n");
+        assert!(
+            numbered.contains(&format!(
+                "1. {} Ask the duke",
+                egui_phosphor::regular::SQUARE
+            )) && numbered.contains(&format!(
+                "2. {} Pay the toll",
+                egui_phosphor::regular::CHECK_SQUARE
+            )),
+            "FD-2-numbered: {numbered}"
+        );
         assert_eq!(
             click_words("- [ ] [Read the note](splat-note:Rook)", "Read the note")
                 .0

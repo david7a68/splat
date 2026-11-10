@@ -370,8 +370,8 @@ pub fn facts(d: &mut Driver<'_>) {
     );
     for size in [SMALL, DEFAULT, LARGE] {
         let markers = d.at_size(size, |d| {
-            d.expect("Open question");
-            d.expect("Answered");
+            d.expect("Open");
+            d.expect("Done");
             d.visible_text(egui_phosphor::regular::SQUARE)
                 && d.visible_text(egui_phosphor::regular::CHECK_SQUARE)
                 && !d.visible_text("[ ] Can")
