@@ -5417,20 +5417,13 @@ impl Sessions {
             }
         }
         for copy in &note.also {
-            design::message(
+            let filename = copy.file_name().unwrap_or_default().to_string_lossy();
+            if design::message_with_action(
                 ui,
                 Tone::Warning,
-                &format!(
-                    "Another file claims this session: {}. Splat edits {}. Give the copy a new identity to keep both sessions.",
-                    copy.file_name().unwrap_or_default().to_string_lossy(),
-                    note.path.file_name().unwrap_or_default().to_string_lossy()
-                ),
-            );
-            if Action::secondary("New identity")
-                .name(&format!("New identity: {}", copy.display()))
-                .show(ui)
-                .clicked()
-            {
+                crate::world::DUPLICATE_ENTRY,
+                &crate::world::separate_entry_action(&filename),
+            ) {
                 match super::new_identity(copy) {
                     Ok(undo) => {
                         self.identity_undo = Some(undo);
@@ -5440,13 +5433,21 @@ impl Sessions {
                 }
             }
         }
-        if self.identity_undo.is_some() && Action::quiet("Undo new identity").show(ui).clicked() {
-            match self.identity_undo.as_ref().unwrap().undo() {
-                Ok(()) => {
-                    self.identity_undo = None;
-                    self.refresh();
+        if let Some(undo) = &self.identity_undo {
+            let filename = undo.path.file_name().unwrap_or_default().to_string_lossy();
+            if design::undo_message(
+                ui,
+                Tone::Success,
+                &crate::world::separate_entry_result(&filename),
+                crate::world::SEPARATE_ENTRY_UNDO,
+            ) {
+                match undo.undo() {
+                    Ok(()) => {
+                        self.identity_undo = None;
+                        self.refresh();
+                    }
+                    Err(error) => self.notice = Some((Tone::Error, error)),
                 }
-                Err(error) => self.notice = Some((Tone::Error, error)),
             }
         }
         let today = self.today();

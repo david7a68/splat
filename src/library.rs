@@ -161,6 +161,32 @@ fn section_row(ui: &mut egui::Ui, label: &str, count: usize, selected: bool) -> 
     )
 }
 
+fn about_row(ui: &mut egui::Ui, label: &str, selected: bool) -> egui::Response {
+    let color = if selected {
+        colors().text
+    } else {
+        colors().muted
+    };
+    let font = if selected { Type::Strong } else { Type::Body };
+    let galley = ui.painter().layout(
+        label.to_owned(),
+        font.font(ui),
+        color,
+        (ui.available_width() - design::S * 2.0).max(design::XXL),
+    );
+    let height = (galley.size().y + design::XS * 2.0).max(Density::Read.row());
+    design::row(ui, height, selected, label, |ui, rect| {
+        ui.painter().galley(
+            egui::pos2(
+                rect.left() + design::S,
+                rect.center().y - galley.size().y / 2.0,
+            ),
+            galley,
+            color,
+        );
+    })
+}
+
 /// What the catalogue shows. The default is what the active campaign can use.
 #[derive(Clone, Copy, Debug, Default, Hash, PartialEq)]
 enum Scope {
@@ -583,7 +609,7 @@ impl Loaded {
                     .as_ref()
                     .is_some_and(|entry| self.duplicate_ids().contains(&entry.id))
                 {
-                    format!("{} Duplicate identity · {line}", icons::WARN)
+                    format!("{} Same entry in two files · {line}", icons::WARN)
                 } else {
                     line
                 };
@@ -2324,6 +2350,10 @@ impl Library {
         };
         // Each scope has its own counts. Search and sections stay within the scope.
         let scope = self.scope;
+        let about_open = self.selected.is_some_and(|at| {
+            loaded.notes[at].is_manifest()
+                && matches!(scope, Scope::Package(id) if loaded.notes[at].owner.id() == Some(id))
+        });
         if self
             .scope_counts
             .as_ref()
@@ -2432,7 +2462,7 @@ impl Library {
                             .iter()
                             .enumerate()
                             .find(|(_, n)| n.owner.id() == Some(package) && n.is_manifest())
-                        && design::link(ui, &note.about_label()).clicked()
+                        && about_row(ui, &note.about_label(), about_open).clicked()
                         && !dirty
                     {
                         self.selected = Some(index);
@@ -2495,7 +2525,8 @@ impl Library {
                                                 ui,
                                                 label,
                                                 count,
-                                                self.section == section
+                                                !about_open
+                                                    && self.section == section
                                                     && self.unreadable_kind == Some(kind)
                                                     && !searching,
                                             )
@@ -2509,10 +2540,15 @@ impl Library {
                                         }
                                         continue;
                                     }
-                                    let selected = self.section == section && !searching;
+                                    let selected =
+                                        self.section == section && !searching && !about_open;
                                     let label = section.label();
                                     let response = section_row(ui, label, count, selected);
                                     if response.clicked() {
+                                        if about_open && !dirty {
+                                            self.selected = None;
+                                            self.draft.clear();
+                                        }
                                         self.section = section;
                                         self.unreadable_kind = None;
                                         self.search.clear();
@@ -2638,14 +2674,14 @@ impl Library {
                         });
                         let combo = egui::ComboBox::from_id_salt("library_section")
                             .icon(design::combo_icon).width(half).truncate()
-                            .selected_text(match self.section { Section::All => "All", Section::Characters => "Characters", _ => self.section.label() })
+                            .selected_text(match self.section { _ if about_open => "About", Section::All => "All", Section::Characters => "Characters", _ => self.section.label() })
                             .show_ui(ui, |ui| {
                                 for &(_, sections) in Section::GROUPS {
                                     for &section in sections {
                                         if count_of(section, &counts) == 0 { continue; }
-                                        let response = ui.selectable_label(self.section == section, section.label());
+                                        let response = ui.selectable_label(self.section == section && !about_open, section.label());
                                         design::named(ui, &response, &format!("Library section: {}", section.label()));
-                                        if response.clicked() { self.section = section; self.search.clear(); }
+                                        if response.clicked() { if about_open && !dirty { self.selected = None; self.draft.clear(); } self.section = section; self.search.clear(); }
                                     }
                                 }
                             });
@@ -2653,7 +2689,7 @@ impl Library {
                     });
                     if let Scope::Package(package) = scope
                         && let Some((index, note)) = loaded.notes.iter().enumerate().find(|(_, n)| n.owner.id() == Some(package) && n.is_manifest())
-                        && design::link(ui, &note.about_label()).clicked() && !dirty
+                        && about_row(ui, &note.about_label(), about_open).clicked() && !dirty
                     { self.selected = Some(index); self.draft = note.text.clone(); self.source = false; }
                 }
                 ui.horizontal(|ui| {
@@ -2856,15 +2892,19 @@ impl Library {
             let selected = match scope {
                 Scope::Uses => "Can use".to_owned(),
                 Scope::Builtin => "D&D 2024".to_owned(),
-                Scope::Campaign => "Own entries".to_owned(),
+                Scope::Campaign => "Campaign entries".to_owned(),
                 _ => label(scope),
             };
             let budget = width - design::XXL - design::L;
-            let fitted = scope_label(ui, &selected, budget);
+            let fitted = if matches!(scope, Scope::Package(_)) {
+                scope_label(ui, &selected, budget)
+            } else {
+                selected
+            };
             let combo = egui::ComboBox::from_id_salt("library_scope")
                 .icon(design::combo_icon)
                 .width(width)
-                .truncate()
+                .wrap()
                 .selected_text(Type::Strong.rich(ui, fitted))
                 .show_ui(ui, |ui| {
                     ui.set_min_width(260.0);
@@ -3060,15 +3100,25 @@ impl Library {
                         self.path = path.display().to_string();
                     }
                 });
+                if self.copied_package.as_ref().is_some_and(|copy| {
+                    Path::new(self.path.trim()).canonicalize().ok().as_ref() != Some(&copy.path)
+                }) {
+                    self.copied_package = None;
+                    self.copy_name_open = false;
+                }
+                let add_reason = locked
+                    .or(self
+                        .copied_package
+                        .is_some()
+                        .then_some("This folder is a copy."))
+                    .or(self
+                        .path
+                        .trim()
+                        .is_empty()
+                        .then_some("Choose a folder first."));
                 ui.horizontal(|ui| {
                     if Action::secondary("Add folder")
-                        .blocked(
-                            locked.or(self
-                                .path
-                                .trim()
-                                .is_empty()
-                                .then_some("Choose a folder first.")),
-                        )
+                        .blocked(add_reason)
                         .show(ui)
                         .clicked()
                     {
@@ -3096,13 +3146,7 @@ impl Library {
                             Err(error) => self.error = Some(error),
                         }
                     }
-                    design::blocked_reason(
-                        ui,
-                        self.path
-                            .trim()
-                            .is_empty()
-                            .then_some("Choose a folder first."),
-                    );
+                    design::blocked_reason(ui, add_reason);
                     ui.add_space(design::L);
                 });
 
@@ -3116,14 +3160,7 @@ impl Library {
                             .iter()
                             .find(|m| m.id == copy.id)
                             .map_or(copy.name.as_str(), |m| m.name.as_str());
-                        design::message(
-                            ui,
-                            Tone::Warning,
-                            &format!("This folder is a copy of {name}."),
-                        );
-                        design::quiet_section(ui, "Technical details", |ui| {
-                            ui.label(copy.id.to_string());
-                        });
+                        let warning = format!("This folder is a copy of {name}.");
                         if self.copy_name_open {
                             design::text_field(
                                 ui,
@@ -3150,25 +3187,42 @@ impl Library {
                         let reason = locked
                             .or((self.copy_name_open && self.copy_name.trim().is_empty())
                                 .then_some("Type a name first."));
-                        ui.horizontal_wrapped(|ui| {
-                            if Action::quiet(&label).blocked(reason).show(ui).clicked() {
-                                if self.copy_name_open {
-                                    if let Err(error) = self.register_copy(campaigns) {
-                                        self.error = Some(error);
-                                    }
-                                } else {
-                                    self.copy_not_used = campaigns
-                                        .active_campaign()
-                                        .and_then(|campaign| CampaignDocument::load(&campaign).ok())
-                                        .is_some_and(|document| {
-                                            document.selections.iter().any(|selection| {
-                                                selection.package.id == Some(copy.id)
-                                            })
-                                        });
-                                    self.copy_name_open = true;
+                        let register = if self.copy_name_open {
+                            ui.horizontal_wrapped(|ui| {
+                                let clicked =
+                                    Action::secondary(&label).blocked(reason).show(ui).clicked();
+                                design::blocked_reason(ui, reason);
+                                clicked
+                            })
+                            .inner
+                        } else {
+                            design::locked(ui, reason, |ui| {
+                                design::message_with_action(ui, Tone::Warning, &warning, &label)
+                            })
+                        };
+                        if self.copy_name_open {
+                            design::message(ui, Tone::Warning, &warning);
+                        }
+                        if register {
+                            if self.copy_name_open {
+                                if let Err(error) = self.register_copy(campaigns) {
+                                    self.error = Some(error);
                                 }
+                            } else {
+                                self.copy_not_used = campaigns
+                                    .active_campaign()
+                                    .and_then(|campaign| CampaignDocument::load(&campaign).ok())
+                                    .is_some_and(|document| {
+                                        document
+                                            .selections
+                                            .iter()
+                                            .any(|selection| selection.package.id == Some(copy.id))
+                                    });
+                                self.copy_name_open = true;
                             }
-                            design::blocked_reason(ui, reason);
+                        }
+                        design::quiet_section(ui, "Technical details", |ui| {
+                            ui.label(copy.id.to_string());
                         });
                     }
                 }
@@ -4321,11 +4375,7 @@ impl Library {
             );
         }
         if !duplicate_indices.is_empty() {
-            design::message(
-                ui,
-                Tone::Warning,
-                "These two files claim to be the same entry. Choose which one becomes a separate entry.",
-            );
+            design::message(ui, Tone::Warning, crate::world::DUPLICATE_ENTRY);
             let loaded = self.loaded.as_ref().unwrap();
             let users: Vec<_> = loaded
                 .notes
@@ -4355,7 +4405,9 @@ impl Library {
                 } else {
                     filename.into_owned()
                 };
-                if Action::quiet(&format!("Make {filename} a separate entry"))
+                let action = crate::world::separate_entry_action(&filename);
+                if Action::secondary(&action)
+                    .hint(&action)
                     .blocked(draft_reason)
                     .show(ui)
                     .clicked()
@@ -4391,7 +4443,7 @@ impl Library {
                 let owner = &loaded.notes[at].owner;
                 if shown.insert(owner.id())
                     && let Some(paths) = loaded.duplicate_folder_paths(owner)
-                    && Action::quiet(&format!(
+                    && Action::secondary(&format!(
                         "Make all {} files in {}/ separate entries",
                         paths.len(),
                         owner.folder()
@@ -4419,8 +4471,8 @@ impl Library {
                 undo_identity = design::undo_message(
                     ui,
                     Tone::Success,
-                    &format!("{filename} is now a separate entry."),
-                    "Undo separate entry",
+                    &crate::world::separate_entry_result(&filename),
+                    crate::world::SEPARATE_ENTRY_UNDO,
                 );
             });
         }
@@ -5316,6 +5368,107 @@ mod tests {
     }
 
     #[test]
+    fn iter2_d_copied_folder_blocks_add_until_the_path_changes() {
+        use egui_kittest::kittest::{NodeT, Queryable};
+        let folder = tempfile::tempdir().unwrap();
+        let other = tempfile::tempdir().unwrap();
+        let library = Library {
+            path: folder.path().display().to_string(),
+            copied_package: Some(Module {
+                id: Uuid::new_v4(),
+                name: "Copied package".into(),
+                path: folder.path().canonicalize().unwrap(),
+            }),
+            ..Default::default()
+        };
+        let mut campaigns = Campaigns::default();
+        let mut harness = egui_kittest::Harness::new_ui_state(
+            move |ui, library| library.package_form(ui, &mut campaigns),
+            library,
+        );
+        design::theme::install(&harness.ctx);
+        harness.run_steps(2);
+        assert!(
+            harness
+                .get_by_label("Add folder")
+                .accesskit_node()
+                .is_disabled()
+        );
+        harness.get_by_label("Package folder").focus();
+        harness.key_press_modifiers(egui::Modifiers::CTRL, egui::Key::A);
+        harness
+            .get_by_label("Package folder")
+            .type_text(&other.path().display().to_string());
+        harness.run_steps(2);
+        assert!(
+            !harness
+                .get_by_label("Add folder")
+                .accesskit_node()
+                .is_disabled()
+        );
+        assert!(harness.state().copied_package.is_none());
+    }
+
+    #[test]
+    fn iter2_d_about_selects_its_own_navigation_row() {
+        use egui_kittest::kittest::{NodeT, Queryable};
+        let mut library = navigation_library();
+        let owner = library.loaded.as_ref().unwrap().notes[0].owner.clone();
+        let package = owner.id().unwrap();
+        let text = note_text("First", "package", Some("first"));
+        library.loaded.as_mut().unwrap().notes[0] = Note {
+            path: "Package.md".into(),
+            entry: Some(Entry::parse("Package.md", &text).unwrap()),
+            text,
+            error: None,
+            owner,
+        };
+        library.loaded.as_mut().unwrap().notes[1].owner =
+            library.loaded.as_ref().unwrap().notes[0].owner.clone();
+        library.scope = Scope::Package(package);
+        let mut campaigns = Campaigns::default();
+        let mut harness = egui_kittest::Harness::new_ui_state(
+            move |ui, library| library.show(ui, &mut campaigns),
+            library,
+        );
+        harness.set_size(egui::vec2(1920.0, 1080.0));
+        design::theme::install(&harness.ctx);
+        harness.run_steps(2);
+        harness.get_by_label("About First").click();
+        harness.run_steps(2);
+        assert_eq!(
+            harness
+                .get_by_label("About First")
+                .accesskit_node()
+                .toggled(),
+            Some(egui::accesskit::Toggled::True)
+        );
+        assert_eq!(
+            harness
+                .get_by_label("All entries   1")
+                .accesskit_node()
+                .toggled(),
+            Some(egui::accesskit::Toggled::False)
+        );
+        harness.get_by_label("All entries   1").click();
+        harness.run_steps(2);
+        assert_eq!(
+            harness
+                .get_by_label("About First")
+                .accesskit_node()
+                .toggled(),
+            Some(egui::accesskit::Toggled::False)
+        );
+        assert_eq!(
+            harness
+                .get_by_label("All entries   1")
+                .accesskit_node()
+                .toggled(),
+            Some(egui::accesskit::Toggled::True)
+        );
+    }
+
+    #[test]
     fn i19_w9_header_counts_only_editable_old_files_and_hides_at_zero() {
         for size in [egui::vec2(960.0, 640.0), egui::vec2(1200.0, 800.0)] {
             let mut library = navigation_library();
@@ -5622,7 +5775,7 @@ mod tests {
         assert_eq!(wolves.len(), 2);
         for (at, _) in wolves {
             assert_eq!(loaded.duplicates(at).len(), 1);
-            assert!(loaded.build_subtitles()[at].contains("Duplicate identity"));
+            assert!(loaded.build_subtitles()[at].contains("Same entry in two files"));
         }
     }
 
@@ -5963,7 +6116,7 @@ mod tests {
                 let response = entry_row(
                     ui,
                     "Cinder Wolf",
-                    "Duplicate identity · Creature · CR 1 · Ashen Marches · ashen-marches-copy/",
+                    "Same entry in two files · Creature · CR 1 · Ashen Marches · ashen-marches-copy/",
                     false,
                 );
                 assert_eq!(response.rect.height(), ENTRY_ROW_HEIGHT);

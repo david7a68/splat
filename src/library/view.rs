@@ -131,7 +131,7 @@ fn spell_links(
                         .color(colors().muted),
                 )
                 .on_hover_text(
-                    "This spell is missing or has a duplicate identity in this package.",
+                    "This spell cannot be found, or two files claim to be the same entry in this package.",
                 );
             }
         }
