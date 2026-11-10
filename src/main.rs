@@ -424,6 +424,7 @@ impl Splat {
         } else if self.sessions.busy_with_edit() || self.timeline.not_saved() {
             Some("Resolve the unsaved session file to change campaigns.")
         } else if self.world_page.dirty()
+            || self.any_unsaved_edits()
             || self.campaign_content.dirty()
             || self.encounters.dirty()
             || self.library.campaign_draft()
@@ -432,6 +433,11 @@ impl Splat {
         } else {
             None
         }
+    }
+
+    /// A World entry form with changes, in World or Lookup.
+    fn any_unsaved_edits(&self) -> bool {
+        self.world_page.reader.has_unsaved_edits() || self.lookup.reader.has_unsaved_edits()
     }
 
     /// Everything closing the app would lose, by name, with the page where it can be kept.
@@ -458,6 +464,17 @@ impl Splat {
                 "A World note repair has unsaved changes.".into(),
                 Page::World,
             ));
+        }
+        for (reader, page) in [
+            (&self.world_page.reader, Page::World),
+            (&self.lookup.reader, self.page),
+        ] {
+            for (_, name) in reader.unsaved_edits() {
+                items.push((
+                    format!("Edits to \u{201c}{name}\u{201d} are not saved."),
+                    page,
+                ));
+            }
         }
         let name = self.encounters.draft_name().unwrap_or_default();
         if self.encounters.encounter_dirty() {
@@ -678,6 +695,10 @@ impl Splat {
             // The first thing named is where the DM goes, if anything needs them there.
             if items.len() != background {
                 self.page = items[0].1;
+            }
+            // Lookup is a panel, not a page, so it opens beside the page on its draft.
+            if let Some((id, _)) = self.lookup.reader.unsaved_edits().first() {
+                self.lookup.open_id(*id);
             }
             ctx.data_mut(|data| data.insert_temp(egui::Id::new("resume_draft_focus"), self.page));
             ctx.request_repaint();
@@ -2014,6 +2035,7 @@ impl eframe::App for Splat {
             self.timeline.save();
             if (self.library.dirty()
                 || self.world_page.dirty()
+                || self.any_unsaved_edits()
                 || self.campaign_content.dirty()
                 || self.encounters.unsaved()
                 || self.encounters.pending_sync()
@@ -2144,6 +2166,7 @@ impl eframe::App for Splat {
             }
             // A dialog takes Escape first, and a form elsewhere has nothing to do with it.
             if self.lookup.open
+                && !self.lookup.reader.takes_escape()
                 && ctx.memory(|memory| memory.top_modal_layer()).is_none()
                 && !egui::Popup::is_any_open(ctx)
                 && !(self.page == Page::Library && self.library.form_open())

@@ -43,6 +43,36 @@ The typed `splat_character` extension contains:
 - `campaign_options`: inactive, unselected, active, or unknown Dark Bargain,
   Character Thread, and Runestone selections. Active choices have source IDs
   and references to the converted benefits and costs.
+- `background`: the background's name, `custom` when the player wrote it, its
+  source key, printed description, `feats` it grants, and `feature`, a key in
+  `features` for a background feature that is not a feat (2014 backgrounds). The
+  background's proficiencies, choices, feats and spells come in with the rest of
+  the sheet, so they are not repeated here.
+- `details`: player, alignment, faith, lifestyle, gender, age, height, weight,
+  eyes, hair, skin, and experience points when the sheet has some.
+- `characteristics`: personality traits, ideals, bonds, flaws and appearance.
+- `story`: the sheet's notes: backstory, allies, enemies, organizations,
+  personal possessions, other holdings and other notes.
+- `coins`: cp, sp, ep, gp and pp.
+- `companions`: the sheet's Extras, such as a familiar, mount or Wild Shape form.
+  Each has a name, creature, group, active flag, description, the stat block's
+  printed AC and HP, and the damage and temporary HP the sheet records. The stat
+  block is not converted, so a companion is not an encounter participant.
+- `custom_items`: items the player wrote on the sheet, with quantity, weight,
+  cost, description and notes. They have no item definition, so they have no
+  inventory placement.
+
+Custom actions become `features` entries (`custom_action_ID`) with their gaps.
+Empty fields are left out. These parts come from the private cache's character
+v5 record, so an old cache gains them on its next publication with no new read.
+Alignment, lifestyle and creature group names use the IDs from D&D Beyond's
+`api/config/json`; an ID that Splat cannot name is a gap, and the source value
+stays in the cache. Sheet text in the Markdown body is escaped: each line's
+first ASCII punctuation mark gets a backslash, leading spaces go, and `<!--`
+becomes `&lt;!--`. So no sheet text can start a heading, code fence, HTML block,
+quote, list or table, or hide or end the generated part. One-line values such
+as names and gap reasons also lose their line breaks. The frontmatter keeps the
+text exactly as written.
 
 A weapon attack with sufficient data also produces `splat_actions` with normal
 activation, targets, rolls and attack steps. Its source-matched rule bindings specify

@@ -67,7 +67,8 @@ A **world note** is any Markdown file in the campaign folder with no `splat_` fi
 for another role: a session note (`session_id`), `Timeline.md`, `Trackers.md`, a session template, a file
 under `Recordings`, or anything in a folder whose name starts with a dot. The test is the file's role and
 not its folder, because a session folder can be `.`. A world note is not an entry. Its path is its
-identity. Splat only reads it, and Obsidian stays its editor.
+identity. Splat only reads it, and Obsidian stays its editor. A world entry also has Edit, in World and Lookup,
+for its status, stat block, place and the text under its title.
 
 Today `read_directory` skips these notes (`src/content/mod.rs:880-886`), so Lookup cannot find "Reliability"
 or "Verori".
