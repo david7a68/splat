@@ -204,7 +204,7 @@ const KEYS: [(&str, &str); 12] = [
     ("Up, Down", "Select another row"),
     ("A", "Focus the amount"),
     ("C", "Conditions"),
-    ("Ctrl+G", "Arrivals"),
+    ("Ctrl+G", "Add to fight"),
     ("Ctrl+K", "Open or close Lookup. Escape also closes it"),
     ("Ctrl+J", "Open or close Notes. Escape also closes them"),
 ];
