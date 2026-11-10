@@ -350,7 +350,7 @@ impl TimelinePage {
         sessions: &[SessionLink],
         current: Option<Uuid>,
     ) {
-        ui.label(Type::Small.rich(ui, "Adds to:").color(colors().muted));
+        ui.label(Type::Small.rich(ui, "Adds to").color(colors().muted));
         let label = current
             .and_then(|id| sessions.iter().find(|session| session.id == id))
             .map_or("No session", |session| short_session(&session.label));
