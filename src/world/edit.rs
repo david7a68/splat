@@ -12,11 +12,12 @@ use crate::{
 };
 use eframe::egui;
 use serde_yaml_ng::Value;
-use splat::content::{Entry, Fields as EntryFields};
+use splat::content::{Entry, Fields as EntryFields, layout::Flag};
 use std::fs;
 use uuid::Uuid;
 
 const SAVED: &str = "Changes saved.";
+const UNREAD_GROUPS: &str = "Part of could not be read. Repair it first.";
 
 /// Only the DM's own world entries change here. A shared identity must be fixed first.
 pub(super) fn editable(item: &Item, index: &ContentIndex) -> bool {
@@ -72,6 +73,7 @@ struct Fields {
     creature: Option<Value>,
     place: Option<Value>,
     groups: Vec<Value>,
+    groups_unread: bool,
     text: String,
 }
 
@@ -96,6 +98,17 @@ impl Fields {
             creature: set("creature"),
             place: set("in"),
             groups: super::part_of(entry).into_iter().cloned().collect(),
+            // A rejected list is absent from the model. Match its flag by the source key,
+            // so the form cannot mistake unread values for an empty list.
+            groups_unread: entry.flags.iter().any(|flag| {
+                file.lines()
+                    .nth(flag.line.saturating_sub(1))
+                    .and_then(|line| line.split_once(':'))
+                    .is_some_and(|(key, _)| {
+                        serde_yaml_ng::from_str::<String>(key)
+                            .is_ok_and(|key| key == "splat_part_of")
+                    })
+            }),
             text: split_text(file, &entry.name)
                 .map_or(file, |(_, text)| text)
                 .to_owned(),
@@ -125,7 +138,7 @@ pub(super) struct EditDraft {
     name: String,
     path: String,
     /// The entry as the index read it, so a draft without changes can follow the file.
-    seen: (EntryFields, String),
+    seen: (EntryFields, String, Vec<Flag>),
     /// The whole file when editing began, or when the DM last chose between versions.
     baseline: String,
     start: Fields,
@@ -153,7 +166,11 @@ impl EditDraft {
         Ok(Self {
             name: entry.name.clone(),
             path: entry.path.clone(),
-            seen: (entry.fields.clone(), entry.body.clone()),
+            seen: (
+                entry.fields.clone(),
+                entry.body.clone(),
+                entry.flags.clone(),
+            ),
             baseline,
             now: start.clone(),
             start,
@@ -167,9 +184,12 @@ impl EditDraft {
         changed.status || changed.creature || changed.place || changed.groups || changed.text
     }
 
-    /// The index read the entry again since the form saw it. The same front matter shares
-    /// one allocation, so the usual answer costs no comparison.
+    /// The index read the entry again since the form saw it. Shared fields avoid a front
+    /// matter comparison. Flags also change when repair removes an unread property.
     fn index_moved(&mut self, entry: &Entry) -> bool {
+        if self.seen.2 != entry.flags {
+            return true;
+        }
         if std::ptr::eq::<serde_yaml_ng::Mapping>(&*self.seen.0, &*entry.fields)
             && self.seen.1 == entry.body
         {
@@ -198,6 +218,9 @@ impl EditDraft {
             return Ok(None);
         }
         let changed = self.now.changed(&self.start);
+        if changed.groups && self.start.groups_unread {
+            return Err(UNREAD_GROUPS.into());
+        }
         let mut after = disk.clone();
         if changed.status {
             after = super::fields::patch(&after, "status", self.now.status.trim().into())?;
@@ -417,7 +440,7 @@ impl Reader {
         }
     }
 
-    /// Undo for a Cancel that dropped changes, while the DM reads that entry again.
+    /// Undo for a Discard that dropped changes, while the DM reads that entry again.
     pub(super) fn discarded_notice(&mut self, ui: &mut egui::Ui, id: Uuid) {
         if let Some((at, draft)) = &self.discarded
             && *at == id
@@ -447,7 +470,11 @@ impl Reader {
                 Ok(fresh) => draft = fresh,
                 Err(error) => {
                     // Try again when the index next changes, not on every frame.
-                    draft.seen = (item.entry.fields.clone(), item.entry.body.clone());
+                    draft.seen = (
+                        item.entry.fields.clone(),
+                        item.entry.body.clone(),
+                        item.entry.flags.clone(),
+                    );
                     self.error = Some(error);
                 }
             }
@@ -507,7 +534,16 @@ impl Reader {
                 *slot = Some(chosen).filter(|value| !value.is_null());
             }
         }
-        design::field(ui, "Part of", None, None, |ui| {
+        let groups_error = draft.start.groups_unread.then_some(UNREAD_GROUPS);
+        if groups_error.is_some()
+            && self
+                .picker
+                .as_ref()
+                .is_some_and(|picker| picker.key == "part_of")
+        {
+            self.picker = None;
+        }
+        design::field(ui, "Part of", None, groups_error, |ui| {
             ui.horizontal_wrapped(|ui| {
                 let names: Vec<_> = draft
                     .now
@@ -519,7 +555,9 @@ impl Reader {
                     Type::Body
                         .rich(
                             ui,
-                            if names.is_empty() {
+                            if groups_error.is_some() {
+                                "not read".into()
+                            } else if names.is_empty() {
                                 "not set".into()
                             } else {
                                 names.join(", ")
@@ -530,6 +568,7 @@ impl Reader {
                 if Action::quiet("Change")
                     .density(Density::Read)
                     .name("Change Part of")
+                    .blocked(groups_error)
                     .show(ui)
                     .clicked()
                 {
@@ -554,21 +593,48 @@ impl Reader {
             let font = style::prose_type(ui).font(ui);
             let height = (ui.available_height() - Density::Read.control() - design::L - design::S)
                 .max(style::prose_type(ui).line() * 2.0);
-            egui::ScrollArea::vertical()
-                .id_salt(("world_edit_text_scroll", id))
-                .max_height(height)
-                .auto_shrink([false, true])
-                .show(ui, |ui| {
-                    ui.add(
-                        egui::TextEdit::multiline(&mut draft.now.text)
-                            .id(egui::Id::new(("world_edit_text", id)))
-                            .font(font)
-                            .desired_width(ui.available_width() - 2.0 * design::S)
-                            .desired_rows(8)
-                            .margin(egui::vec2(design::S, design::S)),
+            ui.scope(|ui| {
+                ui.set_max_width(ui.available_width().min(design::FORM_WIDTH));
+                // One field frame includes the editor and its standard scrollbar.
+                let frame = egui::Frame::new()
+                    .fill(colors().well)
+                    .stroke(egui::Stroke::new(
+                        design::HAIRLINE_WIDTH,
+                        colors().field_border,
+                    ))
+                    .corner_radius(design::RADIUS_CONTROL)
+                    .inner_margin(egui::Margin::same(design::S as i8))
+                    .show(ui, |ui| {
+                        egui::ScrollArea::vertical()
+                            .id_salt(("world_edit_text_scroll", id))
+                            .max_height(height - 2.0 * (design::S + design::HAIRLINE_WIDTH))
+                            .auto_shrink([false, true])
+                            .show(ui, |ui| {
+                                ui.add(
+                                    egui::TextEdit::multiline(&mut draft.now.text)
+                                        .id(egui::Id::new(("world_edit_text", id)))
+                                        .font(font)
+                                        .desired_width(ui.available_width())
+                                        .desired_rows(8)
+                                        .frame(false)
+                                        .margin(egui::Vec2::ZERO),
+                                )
+                            })
+                            .inner
+                    });
+                frame.response.widget_info(|| {
+                    egui::WidgetInfo::labeled(
+                        egui::WidgetType::Other,
+                        ui.is_enabled(),
+                        "Text field",
                     )
-                })
-                .inner
+                });
+                if frame.inner.has_focus() {
+                    design::focus_ring(ui, frame.response.rect);
+                }
+                frame.inner
+            })
+            .inner
         });
         design::named(ui, &text, "Text");
         focused |= text.has_focus();
@@ -585,35 +651,41 @@ impl Reader {
                 && ui.input_mut(|i| i.consume_key(egui::Modifiers::COMMAND, egui::Key::S)));
         let mut cancel = false;
         ui.add_space(design::S);
-        ui.horizontal_wrapped(|ui| {
-            // Save is primary unless a run in live play owns Next turn on this screen.
-            save |= (if self.live {
-                Action::secondary("Save changes")
-            } else {
-                Action::primary("Save changes")
-            })
-            .density(Density::Read)
-            .key("Ctrl+S")
-            .blocked(reason)
-            .show(ui)
-            .clicked();
-            if dirty {
-                design::status(
-                    ui,
-                    design::Status {
-                        icon: design::icons::DRAFT,
-                        word: "Unsaved",
-                        color: colors().document.unsaved,
-                    },
-                );
-            }
-            ui.add_space(design::L);
-            cancel = Action::quiet("Cancel")
+        ui.horizontal(|ui| {
+            ui.set_max_width(ui.available_width().min(design::FORM_WIDTH));
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                // Save is primary unless a live run owns Next turn on this screen.
+                save |= (if self.live {
+                    Action::secondary("Save changes")
+                } else {
+                    Action::primary("Save changes")
+                })
                 .density(Density::Read)
+                .key("Ctrl+S")
+                .blocked(reason)
                 .show(ui)
                 .clicked();
+                ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
+                    let state = if dirty {
+                        design::Status {
+                            icon: design::icons::DRAFT,
+                            word: "Unsaved",
+                            color: colors().document.unsaved,
+                        }
+                    } else {
+                        design::Status {
+                            icon: design::icons::OK,
+                            word: "No changes",
+                            color: colors().muted,
+                        }
+                    };
+                    // A clean form can also be closed without writing.
+                    cancel = design::save_row_state(ui, state, true, None);
+                });
+            });
         });
         if cancel {
+            self.error = None;
             self.picker = None;
             self.form_focused = false;
             if draft.dirty() {
@@ -660,6 +732,180 @@ mod tests {
             "# Patrol\nAt midnight.\n"
         );
         assert_eq!(split_text("---\na: 1\n---", "Rook").unwrap().1, "");
+    }
+
+    #[test]
+    fn iter8_fd5_object_groups_are_rejected_by_the_note_reader() {
+        let file = format!(
+            "---\nsplat_schema: 2\nsplat_id: {}\nsplat_kind: world\nsplat_name: Rook\nsplat_type: npc\nsplat_part_of:\n- '[[Zarel|the Archdevil]]'\n- {{id: {}, link: '[[Lost Guild|the lost]]'}}\n---\n",
+            Uuid::new_v4(),
+            Uuid::new_v4()
+        );
+        let entry = Entry::parse("NPCs/Rook.md", &file).unwrap();
+        assert!(
+            entry
+                .flags
+                .iter()
+                .any(|flag| flag.message.contains("Part of")
+                    && flag.message.contains("Use a list of names or links")),
+            "FD-5-object-input: an object group is explicitly flagged"
+        );
+        assert!(
+            super::super::part_of(&entry).is_empty(),
+            "FD-5-object-input: rejected values never reach stored_value"
+        );
+    }
+
+    #[test]
+    fn iter8_fd5_adding_a_group_keeps_untouched_stored_values() {
+        let dir = tempfile::tempdir().unwrap();
+        let campaign = Campaign {
+            id: Uuid::new_v4(),
+            name: "Sample".into(),
+            path: dir.path().into(),
+            dndbeyond_campaign_id: None,
+            dndbeyond_campaign_name: None,
+        };
+        super::super::create_entry(&campaign, "Zarel", "npc").unwrap();
+        super::super::create_entry(&campaign, "Arena Guild", "faction").unwrap();
+        let id = super::super::create_entry(&campaign, "Rook", "npc").unwrap();
+        let path = dir.path().join("NPCs/Rook.md");
+        let missing = Uuid::new_v4();
+        let file = format!(
+            "---\nsplat_schema: 2\nsplat_id: {id}\nsplat_kind: world\nsplat_name: Rook\nsplat_type: npc\nsplat_part_of:\n- '[[Zarel|the Archdevil]]'\n- '[[Lost Guild|the lost]] %% splat id={missing} %%'\n---\n\n# Rook\n\nKeeps the gate.\n"
+        );
+        fs::write(&path, &file).unwrap();
+        let index = ContentIndex::load(&[], Some(&campaign)).unwrap();
+        let entry = &index.items[index.position(id).unwrap()].entry;
+        let before: Vec<_> = super::super::part_of(entry).into_iter().cloned().collect();
+        assert_eq!(
+            before.len(),
+            2,
+            "FD-5-fixture: both original groups must be read"
+        );
+        assert_eq!(before[0].as_str(), Some("[[Zarel|the Archdevil]]"));
+        assert_eq!(
+            before[1].as_str(),
+            Some(format!("[[Lost Guild|the lost]] %% splat id={missing} %%").as_str())
+        );
+        let mut draft = EditDraft::open(&campaign, entry).unwrap();
+        draft
+            .now
+            .groups
+            .push(Value::String("[[Arena Guild]]".into()));
+        let change = draft.save(&campaign, &index, None).unwrap().unwrap();
+        let after = fs::read_to_string(&path).unwrap();
+        let saved = Entry::parse("NPCs/Rook.md", &after).unwrap();
+        for (position, value) in before.iter().enumerate() {
+            assert_eq!(
+                serde_yaml_ng::to_string(super::super::part_of(&saved)[position])
+                    .unwrap()
+                    .as_bytes(),
+                serde_yaml_ng::to_string(value).unwrap().as_bytes(),
+                "FD-5-untouched-{position}: stored group values must be identical"
+            );
+        }
+        assert_eq!(super::super::part_of(&saved).len(), 3);
+        change.undo(&campaign).unwrap();
+        assert_eq!(fs::read_to_string(&path).unwrap(), file);
+    }
+
+    fn unread_group_note() -> (tempfile::TempDir, Campaign, ContentIndex, Uuid, String) {
+        let dir = tempfile::tempdir().unwrap();
+        let campaign = Campaign {
+            id: Uuid::new_v4(),
+            name: "Sample".into(),
+            path: dir.path().into(),
+            dndbeyond_campaign_id: None,
+            dndbeyond_campaign_name: None,
+        };
+        let id = super::super::create_entry(&campaign, "Rook", "npc").unwrap();
+        super::super::create_entry(&campaign, "Arena Guild", "faction").unwrap();
+        let file = format!(
+            "---\nsplat_schema: 2\nsplat_id: {id}\nsplat_kind: world\nsplat_name: Rook\nsplat_type: npc\nsplat_part_of: # Keep these exact bytes.\n- '[[Zarel|the Archdevil]]'\n- {{id: {}, link: '[[Lost Guild|the lost]]'}}\nsplat_status: alive\n---\n\n# Rook\n\nKeeps the gate.\n",
+            Uuid::new_v4()
+        );
+        fs::write(dir.path().join("NPCs/Rook.md"), &file).unwrap();
+        let index = ContentIndex::load(&[], Some(&campaign)).unwrap();
+        (dir, campaign, index, id, file)
+    }
+
+    #[test]
+    fn iter8_d2_unread_object_groups_cannot_be_replaced_by_edit() {
+        let (dir, campaign, index, id, file) = unread_group_note();
+        let item = &index.items[index.position(id).unwrap()];
+        assert!(editable(item, &index));
+        assert!(super::super::part_of(&item.entry).is_empty());
+        let mut draft = EditDraft::open(&campaign, &item.entry).unwrap();
+        draft.now.groups.push("[[Arena Guild]]".into());
+        draft.now.status = "missing".into();
+        let result = draft.save(&campaign, &index, None);
+        let saved = fs::read_to_string(dir.path().join("NPCs/Rook.md")).unwrap();
+        assert_eq!(
+            saved, file,
+            "D2-object-save: refused save must preserve the whole file"
+        );
+        assert_eq!(
+            result.err().as_deref(),
+            Some("Part of could not be read. Repair it first.")
+        );
+    }
+
+    #[test]
+    fn iter8_d2_other_edits_keep_unread_group_bytes() {
+        let (dir, campaign, index, id, file) = unread_group_note();
+        let item = &index.items[index.position(id).unwrap()];
+        let mut draft = EditDraft::open(&campaign, &item.entry).unwrap();
+        draft.now.status = "missing".into();
+        draft.now.text = "Left the gate.\n".into();
+        let change = draft.save(&campaign, &index, None).unwrap().unwrap();
+        let saved = fs::read_to_string(dir.path().join("NPCs/Rook.md")).unwrap();
+        let group_bytes = |text: &str| {
+            text.split_once("splat_part_of:")
+                .unwrap()
+                .1
+                .split_once("splat_status:")
+                .unwrap()
+                .0
+                .to_owned()
+        };
+        assert_eq!(
+            group_bytes(&saved),
+            group_bytes(&file),
+            "D2-other-save: unread groups must stay byte-identical"
+        );
+        let parsed = Entry::parse("NPCs/Rook.md", &saved).unwrap();
+        assert_eq!(status(&parsed), "missing");
+        assert!(saved.ends_with("Left the gate.\n"));
+        change.undo(&campaign).unwrap();
+        assert_eq!(
+            fs::read_to_string(dir.path().join("NPCs/Rook.md")).unwrap(),
+            file
+        );
+    }
+
+    #[test]
+    fn iter8_d2_clean_edit_notices_repair_when_another_field_is_still_unread() {
+        let (dir, campaign, _, _, file) = unread_group_note();
+        // Two rejected lists: repairing Part of must work while Aliases is still unread.
+        let file = file.replace("splat_part_of:", "aliases: [Rook, 17]\nsplat_part_of:");
+        let path = dir.path().join("NPCs/Rook.md");
+        fs::write(&path, &file).unwrap();
+        let entry = Entry::parse("NPCs/Rook.md", &file).unwrap();
+        assert_eq!(entry.flags.len(), 2);
+        let mut draft = EditDraft::open(&campaign, &entry).unwrap();
+        let start = file.find("splat_part_of:").unwrap();
+        let end = file.find("splat_status:").unwrap();
+        let repaired_file = format!("{}{}", &file[..start], &file[end..]);
+        fs::write(&path, &repaired_file).unwrap();
+        let repaired = Entry::parse("NPCs/Rook.md", &repaired_file).unwrap();
+        assert_eq!(repaired.flags.len(), 1);
+        assert_eq!(*entry.fields, *repaired.fields);
+        assert!(!draft.dirty());
+        assert!(
+            draft.index_moved(&repaired),
+            "D2-repair-refresh: changed read flags must refresh a clean form even when parsed fields are unchanged"
+        );
     }
 
     #[test]

@@ -492,7 +492,7 @@ readable body says `Nothing written yet.` only. The file line keeps the one `Edi
 
 Set values show labelled rows: Stat block, In, Part of and Status. An NPC also shows its empty Stat block row. A full NPC reader's kind line shows NPC and its owner; Status stays in its own row. A compact reader keeps status on the kind line because it has no Status row. Use a fixed label column, aligned
 values and a 32 px pitch. Change uses one column at the widest visible value in the block plus an `L`
-gap, capped at the value measure. Values wrap within their column, with Change on the first line. Read mode hides empty relationship and status values. An NPC keeps its empty Stat block row and Change action, so assigning its first stat block still takes three interactions from the reader. This row says `not set`. Edit on the title line opens all fields, including empty ones. A typed page with no set values shows its prose directly, except for this NPC Stat block row. Missing links retain names and keep `Not found` on one line. Broken links have a
+gap, capped at the value measure. Values wrap within their column, with Change on the first line. Read mode hides empty relationship and status values. An NPC keeps its empty Stat block row and Change action, so assigning its first stat block still takes three interactions from the reader. This row says `not set`. Edit on the title line opens all fields, including empty ones. A typed page with no set values shows its prose directly, except for this NPC Stat block row. Missing links retain names and keep `Not found` on one line. Empty or whitespace-only place and stat block values are unset and give no warning. Broken links have a
 warning icon, list warning and count in the header. Table faults use the same list warning and header
 repair link. Unread values name field, bad value, source line and repair. Folder groups use normal-case
 paths after type groups.
@@ -508,10 +508,19 @@ Lookup.
 
 A campaign world entry has a quiet Edit action, with a pencil icon and the word Edit, on its title line in Lookup and World. Edit replaces the rows and
 the text with one form: Status, Stat block, In and Part of as labelled fields, then Text in the reader's prose type,
-without the title line. Save changes is primary unless a live run owns Next turn; then it is secondary. Unsaved follows it, then an `L` gap and quiet Cancel. One save
-writes every change with one Undo. A disk change uses the shared conflict choices.
+without the title line. The Text field ends at the same `FORM_WIDTH` edge as Status. One frame holds
+the editor and its scrollbar, so scrolling does not shorten the field. The shared save row
+keeps the state and quiet Discard at the left, and Save changes at that right edge. Save changes is primary
+unless a live run owns Next turn; then it is secondary. Discard closes the form and offers Undo discard.
+The rail shows World draft while an edit is unsaved. If a repair is also unsaved, it shows World repair draft once.
+One save writes every change with one Undo. A disk change uses the shared conflict choices.
+If Part of could not be read, block its Change action with `Part of could not be read. Repair it first.`
+Other fields stay editable. Saving them keeps the stored Part of bytes unchanged.
 
 Task marks at the start of a list item show an empty box for `[ ]` and a checked box for `[x]`, with the accessible names `Open` and `Done`. Stored Markdown stays unchanged. Other brackets stay as text.
+
+A note row has selected fill only while its reader is open. Open questions, Problems, creation and repair
+keep the remembered note without selected fill.
 
 Broken notes stay under Cannot be read. Each row's second line states the cause, and the group uses the same gap as folder headings. They use the Campaign repair source editor. Keep drafts in memory and
 warn before app close or a campaign switch. The unreadable count in the header opens the first broken

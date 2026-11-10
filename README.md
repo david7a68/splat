@@ -626,9 +626,12 @@ Choose by name, or create a location from that picker. Each change edits only th
 The rest of the file, including comments and spacing, stays as it was. `in: "[[Ashfall Keep]]"` also works,
 including a location's aliases. A place loop stays in the list and shows a warning.
 The **Edit** action beside a campaign entry's name, in World or Lookup, opens one form with **Status**, **Stat block**,
-**In**, **Part of** and the entry's text, without its title line. This form includes empty fields. **Save changes** (Ctrl+S) writes them together and offers
+**In**, **Part of** and the entry's text, without its title line. This form includes empty fields. If **Part of** could not be read, its **Change** action is blocked
+with **Part of could not be read. Repair it first.** Other fields stay editable, and saving them keeps the stored group text unchanged. **Save changes** (Ctrl+S) writes them together and offers
 **Undo changes**. During a live fight, **Save changes** uses a secondary border so **Next turn** stays the primary action.
-**Cancel** writes nothing and offers **Undo discard**. If the note changed on disk, Splat writes
+The form keeps its state and quiet **Discard** at the left, with **Save changes** at the right edge of both text fields.
+**Discard** writes nothing and offers **Undo discard**. The rail shows **World draft** for an unsaved edit,
+or **World repair draft** once if a repair is also unsaved. If the note changed on disk, Splat writes
 nothing until you choose. **Overwrite with my draft** saves only the values you changed over the disk version.
 **Reload and lose my draft** loads the disk version and offers **Undo reload**. A form with changes stays while you
 read other entries, and Splat asks before it closes or changes campaign.

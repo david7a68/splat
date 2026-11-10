@@ -589,13 +589,13 @@ pub fn create_entry(campaign: &Campaign, name: &str, kind: &str) -> Result<Uuid,
 /// A new NPC from the generator, with its attributes as the note's text.
 pub(crate) fn broken_links(item: &Item, index: &ContentIndex) -> Vec<&'static str> {
     let mut problems = Vec::new();
-    if world_field(&item.entry, "in").is_some_and(|value| !value.is_null())
+    if reader_field(&item.entry, "in").is_some()
         && index.place_of(item.entry.id).is_none()
         && index.place_choices(item.entry.id).is_empty()
     {
         problems.push("Place not found");
     }
-    if world_field(&item.entry, "creature").is_some_and(|value| !value.is_null())
+    if reader_field(&item.entry, "creature").is_some()
         && index.world_target(&item.entry, "creature").is_none()
     {
         problems.push("Stat block not found");
@@ -1130,7 +1130,7 @@ pub struct Reader {
     status_drafts: HashMap<Uuid, String>,
     /// Edit forms by entry. A form with changes stays while the DM reads other entries.
     edits: HashMap<Uuid, edit::EditDraft>,
-    /// What Cancel dropped, until the DM undoes it or edits again.
+    /// What Discard dropped, until the DM undoes it or edits again.
     discarded: Option<(Uuid, edit::EditDraft)>,
     /// A field of the form had the keyboard when it last drew.
     form_focused: bool,
@@ -2261,7 +2261,7 @@ impl Reader {
                         icon: design::icons::WARN,
                         word: &format!(
                             "Stat block: {} · Not found",
-                            world_field(&item.entry, "creature")
+                            reader_field(&item.entry, "creature")
                                 .map(|v| link_name(v, "Stat block"))
                                 .unwrap_or_else(|| "Stat block".into())
                         ),
@@ -2308,7 +2308,7 @@ impl Reader {
             }
             if index.place_of(item.entry.id).is_none()
                 && index.place_choices(item.entry.id).is_empty()
-                && let Some(place) = world_field(&item.entry, "in").and_then(Value::as_str)
+                && let Some(place) = reader_field(&item.entry, "in").and_then(Value::as_str)
             {
                 ui.label(
                     Type::Small
@@ -2616,6 +2616,98 @@ fn add_form(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn iter8_optional_links_warn_only_when_set_and_unresolved() {
+        for (value, expected) in [
+            ("null", false),
+            ("''", false),
+            ("'  '", false),
+            ("'[[Nowhere]]'", true),
+        ] {
+            for (key, warning) in [
+                ("in", "Place not found"),
+                ("creature", "Stat block not found"),
+            ] {
+                let dir = tempfile::tempdir().unwrap();
+                let campaign = sample_campaign(dir.path());
+                let id = create_entry(&campaign, "Rook", "npc").unwrap();
+                let path = dir.path().join("NPCs/Rook.md");
+                let field = if key == "creature" {
+                    "splat_stat_block"
+                } else {
+                    "splat_in"
+                };
+                let file = fs::read_to_string(&path).unwrap().replacen(
+                    "---\n",
+                    &format!("---\n{field}: {value}\n"),
+                    1,
+                );
+                fs::write(path, file).unwrap();
+                let index = ContentIndex::load(&[], Some(&campaign)).unwrap();
+                let item = &index.items[index.position(id).unwrap()];
+                assert_eq!(
+                    broken_links(item, &index).contains(&warning),
+                    expected,
+                    "FD-1-{key}-{value}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn iter8_d2_compact_reader_warns_only_for_nonempty_unresolved_links() {
+        let mut actual = Vec::new();
+        let mut expected = Vec::new();
+        for key in ["splat_in", "splat_stat_block"] {
+            for (value, warning) in [("''", false), ("'  '", false), ("'[[Nowhere]]'", true)] {
+                let dir = tempfile::tempdir().unwrap();
+                let campaign = sample_campaign(dir.path());
+                let id = create_entry(&campaign, "Rook", "npc").unwrap();
+                let path = dir.path().join("NPCs/Rook.md");
+                let file = fs::read_to_string(&path).unwrap().replacen(
+                    "---\n",
+                    &format!("---\n{key}: {value}\n"),
+                    1,
+                );
+                fs::write(path, file).unwrap();
+                let index = ContentIndex::load(&[], Some(&campaign)).unwrap();
+                let item = &index.items[index.position(id).unwrap()];
+                let mut reader = Reader {
+                    compact: true,
+                    sides: Some(Vec::new()),
+                    ..Default::default()
+                };
+                let ctx = egui::Context::default();
+                crate::design::theme::install(&ctx);
+                ctx.enable_accesskit();
+                let output = ctx.run(Default::default(), |ctx| {
+                    egui::CentralPanel::default().show(ctx, |ui| {
+                        reader.entry_controls(ui, item, &index, Some(&campaign));
+                    });
+                });
+                let nodes = output.platform_output.accesskit_update.unwrap().nodes;
+                let labels: Vec<_> = nodes
+                    .iter()
+                    .filter_map(|(_, node)| node.label().or_else(|| node.value()))
+                    .collect();
+                assert!(
+                    labels.contains(&"Add to fight"),
+                    "D2-compact-fixture: compact reader controls must render"
+                );
+                actual.push((
+                    key,
+                    value,
+                    labels.iter().any(|label| label.contains("Not found")),
+                ));
+                expected.push((key, value, warning));
+            }
+        }
+        assert_eq!(
+            actual, expected,
+            "D2-compact: empty optional links have no warning; unresolved links keep it"
+        );
+    }
 
     #[test]
     fn i19_h1_world_notice_names_the_change_and_undo() {

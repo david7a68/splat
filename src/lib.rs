@@ -1169,7 +1169,14 @@ impl Splat {
         let mut statuses = vec![account];
         for (dirty, word) in [
             (self.library.dirty(), "Library draft"),
-            (self.world_page.dirty(), "World repair draft"),
+            (
+                self.world_page.dirty() || self.any_unsaved_edits(),
+                if self.world_page.dirty() {
+                    "World repair draft"
+                } else {
+                    "World draft"
+                },
+            ),
             (
                 self.encounters.encounter_dirty(),
                 self.encounters.draft_word(),
