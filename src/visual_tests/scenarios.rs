@@ -3641,6 +3641,22 @@ pub mod column_resize {
                 .contains("Draft stays across the breakpoint. Still typing.")
         );
         d.state("draft-survives-note-breakpoint", Sizes::Default);
+        // Once focus moves from the note to a plan control, narrowing shows the plan.
+        d.set_base(LARGE);
+        assert!(
+            d.tab_to("Add a fight"),
+            "A plan control takes focus beside the note"
+        );
+        d.set_base(SMALL);
+        let shown = d.in_view("Add a fight");
+        let focused = d.focused_name();
+        d.observe(
+            "iter-5-C-focus-follows-plan",
+            shown,
+            format!(
+                "After focus moves to the plan, the narrow page shows the plan (focus: {focused:?})"
+            ),
+        );
     }
 
     pub fn run(d: &mut Driver<'_>) {

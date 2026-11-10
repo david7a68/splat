@@ -3133,8 +3133,15 @@ impl Sessions {
                             let response = output.response;
                             design::named(ui, &response, "Note text");
                             self.note_had_focus = response.has_focus();
+                            // Narrowing keeps whichever side the DM last worked in: the note
+                            // while it has focus, the plan once focus moves to a plan field.
                             if !in_panel && response.has_focus() {
                                 self.tab = Tab::Note;
+                            } else if !in_panel
+                                && self.tab == Tab::Note
+                                && ui.memory(|memory| memory.focused().is_some())
+                            {
+                                self.tab = Tab::Plan;
                             }
                             self.note_editor_id = Some(response.id);
                             // A click chooses the place, so what is typed goes exactly there.
