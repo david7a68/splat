@@ -117,9 +117,13 @@ fn checked<T>(
                     })
                 })
                 .map_or(table.header[0].line, |r| r[0].line);
-            let fix = match message.as_str() {
-                "needs a number first" => "Use a number first.".to_owned(),
-                message => format!(
+            let fix = match (name, message.as_str()) {
+                // Hit Points often holds a note after the number, so the hint shows that shape.
+                ("Hit Points", "needs a number first") => {
+                    "Start with a number, such as 22 (4d8 + 4).".to_owned()
+                }
+                (_, "needs a number first") => "Use a number first.".to_owned(),
+                (_, message) => format!(
                     "Use {}.",
                     message
                         .strip_prefix("needs ")

@@ -1612,7 +1612,36 @@ pub fn package_manifest_broken(d: &mut Driver<'_>) {
     search_library(d, "Cinder Wolf");
     d.click_starting("Cinder Wolf · ");
     d.expect("22 (4d8 + 4)");
-    d.state("manifest-invalid-library-keeps-entries", Sizes::All);
+    let warned_about = format!("{} About Ashen Marches", design::icons::WARN);
+    d.state_prepared("manifest-invalid-library-keeps-entries", Sizes::All, |d| {
+        let size = d.window_size();
+        let about = d
+            .place_of(&warned_about)
+            .expect("The warning About row keeps its full accessible name");
+        // FD5: one line, the same height as the About row without a warning.
+        d.observe(
+            "iter-12-E-FD5",
+            about.height() <= design::Density::Read.row() + 0.5,
+            format!("The warning About row stays one line at {size:?}: {about:?}"),
+        );
+        // Must stay true: the warning icon is still painted at the start of the row.
+        d.observe(
+            "iter-12-E-FD5-icon",
+            d.painted_in(about)
+                .starts_with(&format!("{} About Ashen", design::icons::WARN)),
+            format!("The About row still shows its warning icon at {size:?}"),
+        );
+        // At 1200x800 the name does not fit beside the icon, so it shortens and hover gives it whole.
+        if size == DEFAULT {
+            let shortened = !d.visible_text(&warned_about);
+            let hover = d.painted_tooltip_shows("About Ashen", &warned_about);
+            d.observe(
+                "iter-12-E-FD5-hover",
+                shortened && hover,
+                "The shortened About row shows the full package name on hover",
+            );
+        }
+    });
     go_campaign(d);
     d.click("Reload from disk");
     d.expect("Package.md cannot be read (line 4)");
