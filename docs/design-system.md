@@ -853,8 +853,12 @@ narrower than its target sits in the middle of it, so the words on each side kee
 hit`). Attribute-table rows are 24 px so their Mod and Save links are full targets; numbers stay right-aligned.
 The physical and mental halves have an `XL` gutter, and a creature with no saving throw has no Save column. A
 Skills row with links drops its label to the links' line. A click rolls, Shift+click rolls with advantage,
-Ctrl+click with disadvantage, and right-click opens a menu of plain quiet items with the same choices and
-critical damage. Each result opens beside its link, below it, or above it when there is no room: the roller and
+Ctrl+click with disadvantage. Right-click opens a menu: what it rolls in muted Small (`Bite attack · 1d20 + 4`),
+then plain quiet items with their click as a key hint (Click, Shift+click, Ctrl+click), critical damage for damage,
+and, after a rule, an attack's `Roll damage` and `Roll critical damage`. A last section has a `Bonus` field, such
+as `1d4` for Bless or `-2`, added to whichever item is picked; Enter rolls the first item. A bad bonus blocks the
+items and says `Use dice or a number, such as 1d4 or -2.` in warning colour. Each menu starts with no bonus. The
+bonus is its own part in the result, `1d4 bonus 3`. Each result opens beside its link, below it, or above it when there is no room: the roller and
 feature in muted Small, the total and its words in Heading, then each die in Small with a dropped die struck
 through. It follows its link when the page moves, and when it opens above a link it ends clear of the link's
 whole line, so the link stays free for its next roll. `Natural 20` and `Natural 1` appear in words, with an icon,

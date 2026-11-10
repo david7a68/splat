@@ -107,8 +107,16 @@ impl Run {
             return Ok(self.call_shown(ask.at));
         }
         let change = self.change(roller, &ask.link);
-        let rolled =
-            self.record(|random| rolls::roll(&who, &ask.link, ask.mode, change, random))?;
+        let rolled = self.record(|random| {
+            rolls::roll_with(
+                &who,
+                &ask.link,
+                ask.mode,
+                change,
+                ask.extra.as_deref(),
+                random,
+            )
+        })?;
         Ok(Some(self.after_roll(roller, rolled, ask.at)))
     }
 
@@ -527,6 +535,7 @@ mod tests {
             at: egui::Pos2::ZERO,
             roller,
             entry: "Guard".into(),
+            extra: None,
         }
     }
 

@@ -27,6 +27,8 @@ pub(crate) struct Ask {
     pub roller: Option<usize>,
     /// The entry or character the link is in.
     pub entry: String,
+    /// A situational bonus from the menu, such as `1d4` for Bless or `-2`.
+    pub extra: Option<String>,
 }
 
 fn ask_id() -> Id {
@@ -37,6 +39,9 @@ fn roller_id() -> Id {
 }
 fn entry_id() -> Id {
     Id::new("roll_entry")
+}
+fn bonus_id() -> Id {
+    Id::new("roll_menu_bonus")
 }
 fn menu_id() -> Id {
     Id::new("roll_menu")
@@ -86,6 +91,7 @@ fn ask(ui: &egui::Ui, link: &RollLink, mode: Mode, at: Pos2) -> Ask {
         at,
         roller,
         entry,
+        extra: None,
     }
 }
 
@@ -161,7 +167,11 @@ pub(crate) fn press(ui: &egui::Ui, response: &egui::Response, link: &RollLink) {
     }
     if response.secondary_clicked() {
         let asked = ask(ui, link, Mode::Normal, at);
-        ui.ctx().data_mut(|data| data.insert_temp(menu_id(), asked));
+        ui.ctx().data_mut(|data| {
+            data.insert_temp(menu_id(), asked);
+            // Each menu starts with no bonus, so one creature's Bless never rolls for another.
+            data.remove::<String>(bonus_id());
+        });
         return;
     }
     response.clone().on_hover_text(hint(link));
@@ -294,57 +304,179 @@ fn place(ctx: &egui::Context, id: Id, at: Pos2) -> Pos2 {
 }
 
 /// The right-click menu of the last dice link, until the DM picks a way to roll.
+/// What a menu rolls, at its head: `Bite · 1d20 + 4`.
+fn menu_title(link: &RollLink) -> String {
+    match link {
+        RollLink::D20 {
+            what, bonus, label, ..
+        } => {
+            let name = match what {
+                D20::Attack => format!("{label} attack"),
+                _ => d20_words(*what, label),
+            };
+            format!("{name} · 1d20 {}", signed_spaced(*bonus))
+        }
+        RollLink::Damage { label, parts } => format!("{label} · {}", parts_text(parts)),
+        RollLink::Dice { label, dice } if label.is_empty() => dice.clone(),
+        RollLink::Dice { label, dice } => format!("{label} · {dice}"),
+        RollLink::SaveDc {
+            label, ability, dc, ..
+        } => format!("{label} · DC {dc} {ability} save"),
+    }
+}
+
+/// The right-click menu of the last dice link: what it rolls, each way to roll it with its
+/// click, an attack's damage, and a bonus for the roll that is picked.
 pub(crate) fn show_menu(ctx: &egui::Context) {
     let Some(asked) = ctx.data(|data| data.get_temp::<Ask>(menu_id())) else {
         return;
     };
     let close = |ctx: &egui::Context| {
-        ctx.data_mut(|data| data.remove::<Ask>(menu_id()));
+        ctx.data_mut(|data| {
+            data.remove::<Ask>(menu_id());
+            data.remove::<String>(bonus_id());
+        });
     };
-    let modes: &[(&str, Mode)] = match &asked.link {
-        RollLink::D20 { .. } => &[
-            ("Roll", Mode::Normal),
-            ("Roll with advantage", Mode::Advantage),
-            ("Roll with disadvantage", Mode::Disadvantage),
+    let mut typed = ctx
+        .data(|data| data.get_temp::<String>(bonus_id()))
+        .unwrap_or_default();
+    let bonus = bonus_dice(&typed);
+    // Each choice: words, its click, and the roll it asks for.
+    let mut choices: Vec<(&str, &str, RollLink, Mode)> = match &asked.link {
+        RollLink::D20 { .. } => vec![
+            ("Roll", "Click", asked.link.clone(), Mode::Normal),
+            (
+                "Roll with advantage",
+                "Shift+click",
+                asked.link.clone(),
+                Mode::Advantage,
+            ),
+            (
+                "Roll with disadvantage",
+                "Ctrl+click",
+                asked.link.clone(),
+                Mode::Disadvantage,
+            ),
         ],
-        RollLink::Damage { .. } => &[
-            ("Roll", Mode::Normal),
-            ("Roll critical damage", Mode::Critical),
+        RollLink::Damage { .. } => vec![
+            ("Roll", "Click", asked.link.clone(), Mode::Normal),
+            (
+                "Roll critical damage",
+                "",
+                asked.link.clone(),
+                Mode::Critical,
+            ),
         ],
-        RollLink::Dice { .. } | RollLink::SaveDc { .. } => &[("Roll", Mode::Normal)],
+        RollLink::Dice { .. } => vec![("Roll", "Click", asked.link.clone(), Mode::Normal)],
+        RollLink::SaveDc { .. } => {
+            vec![(
+                "Call for the save",
+                "Click",
+                asked.link.clone(),
+                Mode::Normal,
+            )]
+        }
     };
+    // An attack's damage, without its attack: an automatic hit, or a roll again.
+    let damage = match &asked.link {
+        RollLink::D20 {
+            what: D20::Attack,
+            label,
+            damage,
+            ..
+        } if !damage.is_empty() => Some(RollLink::Damage {
+            label: label.clone(),
+            parts: damage.clone(),
+        }),
+        _ => None,
+    };
+    let first_damage = choices.len();
+    if let Some(damage) = damage {
+        choices.push(("Roll damage", "", damage.clone(), Mode::Normal));
+        choices.push(("Roll critical damage", "", damage, Mode::Critical));
+    }
+    let takes_bonus = !matches!(asked.link, RollLink::SaveDc { .. });
     let response = egui::Area::new(menu_id())
         .order(egui::Order::Foreground)
         .fixed_pos(place(ctx, menu_id(), asked.at))
         .show(ctx, |ui| {
             egui::Frame::menu(ui.style()).show(ui, |ui| {
-                ui.set_min_width(180.0);
+                ui.set_min_width(240.0);
+                ui.spacing_mut().item_spacing.y = 0.0;
+                ui.label(
+                    Type::Small
+                        .rich(ui, menu_title(&asked.link))
+                        .color(colors().muted),
+                );
+                ui.add_space(design::XS);
+                let blocked = bonus.as_ref().err().copied();
                 let mut picked = None;
-                for (word, mode) in modes {
-                    let word = if matches!(asked.link, RollLink::SaveDc { .. }) {
-                        "Call for the save"
-                    } else {
-                        word
-                    };
-                    if design::Action::quiet(word)
-                        .density(design::Density::Read)
-                        .show(ui)
-                        .clicked()
-                    {
-                        picked = Some(*mode);
+                for (at, (word, click, link, mode)) in choices.iter().enumerate() {
+                    if at == first_damage && at > 0 {
+                        ui.add_space(design::XS);
+                        design::rule(ui);
+                        ui.add_space(design::XS);
                     }
+                    let action = design::Action::quiet(word).density(design::Density::Read);
+                    let action = if click.is_empty() {
+                        action
+                    } else {
+                        action.key(click)
+                    };
+                    if action.blocked(blocked).show(ui).clicked() && blocked.is_none() {
+                        picked = Some((link.clone(), *mode));
+                    }
+                }
+                if takes_bonus {
+                    ui.add_space(design::XS);
+                    design::rule(ui);
+                    ui.add_space(design::XS);
+                    ui.horizontal(|ui| {
+                        ui.spacing_mut().item_spacing.x = design::S;
+                        ui.label(Type::Body.rich(ui, "Bonus").color(colors().text));
+                        let field = design::text_input(ui, "Bonus", &mut typed, "1d4", 72.0);
+                        // Enter rolls the first choice with the bonus.
+                        if field.lost_focus()
+                            && ui.input(|i| i.key_pressed(egui::Key::Enter))
+                            && blocked.is_none()
+                        {
+                            picked = choices
+                                .first()
+                                .map(|(_, _, link, mode)| (link.clone(), *mode));
+                        }
+                    });
+                    let words =
+                        blocked.unwrap_or("Adds to the roll you pick, such as 1d4 for Bless.");
+                    ui.add(
+                        egui::Label::new(Type::Small.rich(ui, words).color(if blocked.is_some() {
+                            colors().result.warning
+                        } else {
+                            colors().muted
+                        }))
+                        .wrap(),
+                    );
                 }
                 picked
             })
         });
-    let escape = ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Escape));
-    if let Some(mode) = response.inner.inner {
-        ctx.data_mut(|data| data.insert_temp(ask_id(), Ask { mode, ..asked }));
+    ctx.data_mut(|data| data.insert_temp(bonus_id(), typed));
+    if let Some((link, mode)) = response.inner.inner {
+        let extra = bonus.ok().flatten();
+        ctx.data_mut(|data| {
+            data.insert_temp(
+                ask_id(),
+                Ask {
+                    link,
+                    mode,
+                    extra,
+                    ..asked
+                },
+            );
+        });
         close(ctx);
-    } else if escape
-        || (ctx.input(|i| i.pointer.any_pressed())
-            && !response.response.contains_pointer()
-            && ctx.input(|i| !i.pointer.secondary_pressed()))
+    } else if ctx.input(|i| i.pointer.any_pressed())
+        && !response.response.contains_pointer()
+        && ctx.input(|i| !i.pointer.secondary_pressed())
     {
         close(ctx);
     }
@@ -559,6 +691,30 @@ pub(crate) fn roll(
     change: i64,
     random: &mut Random,
 ) -> Result<Rolled, String> {
+    roll_with(who, link, mode, change, None, random)
+}
+
+/// A situational bonus as dice: `1d4`, `+1d4`, `-2`. Spaces and book minus signs are fine.
+pub(crate) fn bonus_dice(text: &str) -> Result<Option<String>, &'static str> {
+    let plain = splat::content::dice_text::plain_dice(text);
+    let plain = plain.strip_prefix('+').unwrap_or(&plain).to_owned();
+    if plain.is_empty() {
+        return Ok(None);
+    }
+    Dice::parse(&plain)
+        .map(|_| Some(plain))
+        .map_err(|_| "Use dice or a number, such as 1d4 or -2.")
+}
+
+/// `roll` with a situational bonus added to the total, as its own part.
+pub(crate) fn roll_with(
+    who: &str,
+    link: &RollLink,
+    mode: Mode,
+    change: i64,
+    extra: Option<&str>,
+    random: &mut Random,
+) -> Result<Rolled, String> {
     let mut pieces = Vec::new();
     let mut by_kind = Vec::new();
     let (expression, flat, total, natural, changed_from) = match link {
@@ -618,6 +774,25 @@ pub(crate) fn roll(
         }
         RollLink::SaveDc { .. } => return Err("A save DC is not rolled.".into()),
     };
+    let (mut expression, mut total) = (expression, total);
+    if let Some(extra) = extra {
+        let rolled = Dice::parse(extra)?.roll(random, false)?;
+        total += rolled.total;
+        let shown = extra.strip_prefix('-').map_or_else(
+            || format!(" + {extra}"),
+            |minus| format!(" \u{2212} {minus}"),
+        );
+        expression.push_str(&shown);
+        if !rolled.dice.is_empty() {
+            pieces.push(Piece {
+                label: format!("{extra} bonus"),
+                faces: faces(&rolled),
+            });
+        }
+        if !by_kind.is_empty() {
+            by_kind.push((rolled.total, None));
+        }
+    }
     Ok(Rolled {
         who: who.to_owned(),
         link: link.clone(),
@@ -659,7 +834,14 @@ pub(crate) fn preview(ctx: &egui::Context, ask: &Ask) -> Result<Rolled, String> 
                 .map_or(1, |since| since.as_nanos() as u64);
             Random::seeded(seed)
         });
-    let rolled = roll(&ask.entry, &ask.link, ask.mode, 0, &mut random);
+    let rolled = roll_with(
+        &ask.entry,
+        &ask.link,
+        ask.mode,
+        0,
+        ask.extra.as_deref(),
+        &mut random,
+    );
     ctx.data_mut(|data| data.insert_temp(preview_id(), random));
     rolled
 }
@@ -937,6 +1119,44 @@ mod tests {
         assert_eq!(rolled.total, 1 + 2 + 4 + 3 + 4);
         assert_eq!(rolled.headline(), "14 damage: 7 piercing, 7 fire");
         assert!(rolled.feature_damage());
+    }
+
+    #[test]
+    fn a_bonus_is_its_own_part_and_bad_words_are_refused() {
+        assert_eq!(bonus_dice(" +1d4 "), Ok(Some("1d4".into())));
+        assert_eq!(bonus_dice("\u{2212}2"), Ok(Some("-2".into())));
+        assert_eq!(bonus_dice(""), Ok(None));
+        assert!(bonus_dice("bless").is_err());
+        let rolled = roll_with(
+            "Guard",
+            &attack(),
+            Mode::Normal,
+            0,
+            Some("1d4"),
+            &mut Random::controlled([10, 3]),
+        )
+        .unwrap();
+        assert_eq!(rolled.total, 17);
+        assert_eq!(
+            rolled.natural,
+            Some(10),
+            "the bonus die is never the natural d20"
+        );
+        assert!(
+            rolled.line().contains("1d20 + 4 + 1d4"),
+            "{}",
+            rolled.line()
+        );
+        let flat = roll_with(
+            "Guard",
+            &attack(),
+            Mode::Normal,
+            0,
+            Some("-2"),
+            &mut Random::controlled([10]),
+        )
+        .unwrap();
+        assert_eq!(flat.total, 12);
     }
 
     #[test]
