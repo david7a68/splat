@@ -147,8 +147,9 @@ pub(super) struct EditDraft {
     now: Fields,
     /// The file on disk, with its values, when it changed under the draft.
     disk: Option<(String, Option<Fields>)>,
-    /// The draft before Reload, until the DM edits again.
-    reloaded: Option<Fields>,
+    /// The draft before Reload, with the values it started from (`start`, then `now`), until the
+    /// DM edits again. The start lets a later Overwrite count only the DM's own changes.
+    reloaded: Option<(Fields, Fields)>,
     /// Overwrite kept the note's unread groups in place of the draft's group change.
     groups_refused: bool,
 }
@@ -498,7 +499,8 @@ impl EditDraft {
         if let Some(theirs) = theirs {
             match choice {
                 design::DiskConflictChoice::Reload => {
-                    self.reloaded = Some(std::mem::replace(&mut self.now, theirs.clone()));
+                    let previous = std::mem::replace(&mut self.now, theirs.clone());
+                    self.reloaded = Some((self.start.clone(), previous));
                 }
                 design::DiskConflictChoice::Overwrite => {
                     // Only what the DM changed overwrites. The disk version supplies the rest.
@@ -656,7 +658,9 @@ impl Reader {
                 // The file changed again after Reload. The DM's held draft comes back and the
                 // choice shows again, so it is not lost to a version the DM has not seen.
                 Ok(fresh) if draft.reloaded.is_some() => {
-                    if let Some(previous) = draft.reloaded.take() {
+                    if let Some((start, previous)) = draft.reloaded.take() {
+                        // Its own start too, so changes on disk do not count as the DM's.
+                        draft.start = start;
                         draft.now = previous;
                     }
                     let theirs = Fields::read(&draft.path, &fresh.baseline);
@@ -686,7 +690,7 @@ impl Reader {
         };
         if draft.reloaded.is_some()
             && design::reloaded_draft(ui)
-            && let Some(previous) = draft.reloaded.take()
+            && let Some((_, previous)) = draft.reloaded.take()
         {
             draft.now = previous;
         }

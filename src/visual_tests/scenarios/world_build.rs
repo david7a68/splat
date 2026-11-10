@@ -3789,6 +3789,58 @@ pub fn part_of_safety(d: &mut Driver<'_>) {
         gone.as_bytes(),
         "iter-13-D-FD2-second-overwrite-undo: Undo restores gone"
     );
+    // iter-13-D-FD2-second-overwrite-outside: disk1 also changes another field. Overwrite at the
+    // second choice changes only what the DM changed; disk2 keeps the rest.
+    let status_line = "splat_status: alive\n";
+    let paragraph = "\nA paragraph from Obsidian.\n";
+    for (case, base, outside) in [
+        (
+            "in",
+            readable.replace(
+                status_line,
+                &format!("splat_in: '[[Old Gate]]'\n{status_line}"),
+            ),
+            readable.replace(
+                status_line,
+                &format!("splat_in: '[[New Gate]]'\n{status_line}"),
+            ),
+        ),
+        ("text", readable.clone(), format!("{readable}{paragraph}")),
+    ] {
+        let disk1 = outside.replace(status_line, "splat_status: away\n");
+        let disk2 = outside.replace(status_line, "splat_status: gone\n");
+        let expected = outside.replace(status_line, "splat_status: ready\n");
+        assert!(
+            base != outside && disk1 != outside && disk2 != outside && expected != outside,
+            "fixture {case}: each version differs"
+        );
+        fs::write(&path, &base).unwrap();
+        reload(d);
+        d.click("Edit Safe Rook");
+        d.replace_text_in("Status", "ready");
+        fs::write(&path, &disk1).unwrap();
+        d.click("Save changes");
+        d.expect(conflict);
+        d.settle();
+        fs::write(&path, &disk2).unwrap();
+        d.click("Reload and lose my draft");
+        d.settle();
+        d.expect(conflict);
+        d.click("Overwrite with my draft");
+        d.settle();
+        assert_eq!(
+            String::from_utf8(fs::read(&path).unwrap()).unwrap(),
+            expected,
+            "iter-13-D-FD2-second-overwrite-{case}: only the DM's status goes over disk2"
+        );
+        d.expect("Undo changes");
+        d.click("Undo changes");
+        assert_eq!(
+            fs::read(&path).unwrap(),
+            disk2.as_bytes(),
+            "iter-13-D-FD2-second-overwrite-{case}-undo: Undo restores disk2"
+        );
+    }
 
     // Compact Read has no group Change. Use its real Edit → Change → Save route.
     fs::write(&path, &readable).unwrap();
