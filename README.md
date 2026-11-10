@@ -871,7 +871,10 @@ inside the campaign, and accepts another relative folder or an absolute path.
 Saved JSON files contain the run state, combat log, initiative rule, random state,
 and frozen creature definitions. Saves use atomic replacement and detect external
 edits. If the file changed, saving stops until you choose **Replace the file with this run** or **Save as a new
-run**. Recovery copies use their save time in the name, such as `Bridge Ambush · saved 21:14` (UTC). **Resume** is primary on the run closed last. Each saved row shows its last change, and a file preserved after a disk conflict says **Changed elsewhere**. Other failed saves keep the current run in memory and show an error. Undo history
+run**. Recovery copies keep the encounter name. Their detail starts with **Copy 1**, **Copy 2**, and so on.
+**Resume** is primary on the run closed last. Each saved row shows its last change. A file preserved after a disk
+conflict says **Changed on disk**, after its copy number if it has one. Other failed saves keep the current run
+in memory and show an error. Undo history
 is kept for the current session only. Changing the folder does not move old runs.
 
 The same settings select how the campaign rolls NPC initiative: in groups of
