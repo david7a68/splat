@@ -91,18 +91,8 @@ fn number(raw: &str, signed: bool) -> Result<i64, String> {
 }
 fn read(table: &Table, names: &[&str], flags: &mut Vec<Flag>) -> Option<String> {
     // Treat aliases as the same row, so the first occurrence always wins.
-    let mut table = table.clone();
-    for row in &mut table.rows {
-        if let Some(cell) = row.first_mut()
-            && names
-                .iter()
-                .any(|name| layout::label(&cell.value) == layout::label(name))
-        {
-            cell.value = names[0].into();
-        }
-    }
     table
-        .read(names[0], 1, flags, |v| Ok(v.replace("\\|", "|")))
+        .read_any(names, 1, flags, |v| Ok(v.replace("\\|", "|")))
         .filter(|v| !v.is_empty())
 }
 fn checked<T>(
@@ -169,6 +159,14 @@ fn numeric(fields: &Mapping, key: &str) -> Option<i64> {
 /// Remove obsolete marked data blocks and the headings they leave empty.
 /// Used before the legacy marker reader too, so stale YAML cannot mask table data.
 pub fn without_legacy(text: &str, kind: &str) -> String {
+    // Only a marker naming one of these roots changes the text. Most notes have none,
+    // and two full Markdown parses would find nothing.
+    if !roots(kind).iter().any(|root| {
+        text.contains(format!("path={root} ").as_str())
+            || text.contains(format!("path={root}/").as_str())
+    }) {
+        return text.to_owned();
+    }
     let mut ranges = Vec::new();
     let mut pending = None;
     let mut heading = None;
@@ -451,13 +449,17 @@ pub fn read_tables(kind: &str, source: &str, fields: &mut Mapping, flags: &mut V
 }
 
 fn metadata<'a>(source: &'a str, kind: &str, key: &str) -> Vec<&'a str> {
+    let prefix = format!("%% splat {key}=");
+    // Most notes have no metadata. Finding the section needs a full Markdown parse.
+    if !source.contains(&prefix) {
+        return Vec::new();
+    }
     let Some(section) = Document::new(source)
         .section_at_level(section(kind), Some(pulldown_cmark::HeadingLevel::H2))
     else {
         return Vec::new();
     };
     let range = section.range();
-    let prefix = format!("%% splat {key}=");
     Parser::new(&source[range.clone()])
         .into_offset_iter()
         .filter_map(|(event, span)| {
@@ -652,6 +654,7 @@ pub(crate) fn complete_challenge_fields(fields: &mut Mapping) {
 }
 
 fn creature(table: &Table, source: &str, fields: &mut Mapping, flags: &mut Vec<Flag>) {
+    let shapes = metadata(source, "creature", "shape");
     let mut creature = Mapping::new();
     let mut stats = Mapping::new();
     for (name, key, _) in IDENTITY {
@@ -692,7 +695,7 @@ fn creature(table: &Table, source: &str, fields: &mut Mapping, flags: &mut Vec<F
             }
             continue;
         }
-        if metadata(source, "creature", "shape").iter().any(|s| {
+        if shapes.iter().any(|s| {
             s.split(',').any(|s| {
                 (key == "max_hp" && s == "hp_text") || (key == "armor_class" && s == "ac_text")
             })
@@ -716,13 +719,13 @@ fn creature(table: &Table, source: &str, fields: &mut Mapping, flags: &mut Vec<F
     let raw = read(table, &["Speed"], flags);
     if let Some(raw) = checked(raw, "Speed", table, flags, |s| {
         let (n, tail) = speed(s)?;
-        if metadata(source, "creature", "shape")
+        if shapes
             .iter()
             .any(|s| s.split(',').any(|s| s == "speed_text"))
         {
             return Ok(s.to_owned());
         }
-        let n = if metadata(source, "creature", "shape")
+        let n = if shapes
             .iter()
             .any(|s| s.split(',').any(|s| s == "speed_max"))
         {
@@ -748,7 +751,7 @@ fn creature(table: &Table, source: &str, fields: &mut Mapping, flags: &mut Vec<F
             .unwrap()
             .insert("unit".into(), "ft".into());
         Ok(
-            if metadata(source, "creature", "shape")
+            if shapes
                 .iter()
                 .any(|s| s.split(',').any(|s| s == "speed_max"))
             {
@@ -1726,7 +1729,7 @@ pub fn patch(text: &str, changes: &[(&str, Option<Value>)]) -> Result<String, St
                     t.rows.iter().filter_map(|r| r.first()).find(|cell| {
                         [full, short.as_str()]
                             .iter()
-                            .any(|name| layout::label(&cell.value) == layout::label(name))
+                            .any(|name| layout::same_label(&cell.value, name))
                     })
                 })
                 .map_or(short.as_str(), |cell| cell.value.as_str());
@@ -1831,7 +1834,7 @@ fn set_cell(
             .find(|cell| {
                 std::iter::once(name)
                     .chain(aliases.iter().copied())
-                    .any(|name| layout::label(&cell.value) == layout::label(name))
+                    .any(|name| layout::same_label(&cell.value, name))
             })
         {
             actual_name = cell.value.clone();
@@ -1876,7 +1879,7 @@ fn set_cell(
         let rank = |name: &str| {
             order
                 .iter()
-                .position(|n| layout::label(n) == layout::label(name))
+                .position(|n| layout::same_label(n, name))
                 .unwrap_or(order.len())
         };
         let next = table
@@ -1951,7 +1954,7 @@ pub fn invalid_vital(entry: &Entry, key: &str) -> Option<String> {
         row.first().is_some_and(|cell| {
             names
                 .iter()
-                .any(|name| layout::label(name) == layout::label(&cell.value))
+                .any(|name| layout::same_label(name, &cell.value))
         })
     })?;
     row.get(1)
@@ -2044,9 +2047,9 @@ pub fn reading_body(entry: &Entry, body: &str) -> String {
                 .chain(extra_rows.iter())
                 .chain(["HP", "AC", "CR"].iter())
                 .chain(DETAILS.iter().map(|(name, _)| name))
-                .any(|n| layout::label(n) == layout::label(name))
+                .any(|n| layout::same_label(n, name))
                     || ABILITIES.iter().any(|(short, key)| {
-                        layout::label(name) == layout::label(short) || layout::label(name) == *key
+                        layout::same_label(name, short) || layout::label(name) == *key
                     })
             };
             let start = body[..table.header[0].range.start]
