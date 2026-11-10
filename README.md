@@ -110,7 +110,7 @@ A group editor stays beside the note when both fit at their width limits. Smalle
 A paused fight on the plan offers Resume even when it came from a timeline event.
 The Add strip stays directly below Tonight, above messages and plan rows. Fight,
 Group and Long rest stay visible. When all actions do not fit on one line, More holds
-Day, Short rest, Travel and Major event. The visible row can wrap if needed. Timeline
+Day, Short rest, Travel and Major event. The menu uses a compact `⋯⌄` button named `More Add actions`; hover text names its actions. The strip stays on one line. Timeline
 uses the same width rule. An empty note has one inline Write link. The note file keeps its Markdown and prose. Campaign dependency issues name the entry
 that needs repair and keep raw references in Technical details.
 
@@ -126,7 +126,7 @@ provides `Edit in Obsidian` and `Show file`.
 Conversion and draft comparisons align unchanged lines. Their highlights and counts
 show actual changes. **Next difference** moves between separate change groups and
 stays hidden when there is only one group.
-Long conversion previews give the source panes about 60% of the window height and show whole rows.
+Long conversion previews give the source panes about 60% of the window height and show whole aligned rows, with space reserved for the horizontal scroll bar.
 
 Registering a copied package keeps its warning above the name form. **Cancel** closes the form without
 writing and keeps the typed name and use choice. Help below **Use in this campaign** follows its check.
@@ -420,7 +420,7 @@ comes back to the page the run began on. A row opens in place: a fight shows its
 title, length, place and notes. A paused fight on the plan offers Resume even when it came from a timeline event.
 The Add strip stays directly below Tonight, above messages and plan rows. Fight,
 Group and Long rest stay visible. When all actions do not fit on one line, More holds
-Day, Short rest, Travel and Major event. The visible row can wrap if needed. Timeline
+Day, Short rest, Travel and Major event. The menu uses a compact `⋯⌄` button named `More Add actions`; hover text names its actions. The strip stays on one line. Timeline
 uses the same width rule. At the top, **Last time** links to the previous session and shows the first line of its recap. The title and date share one line. A **Playing** status marks the session being played.
 In a narrow window, the plan and the note have a tab each. **Read** and **Write** turn the note between its two forms, and
 Read leaves out headings with nothing under them and shows note links in place. **Templates** opens from the page header; **← Sessions** returns to the notes.

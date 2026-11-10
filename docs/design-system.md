@@ -160,7 +160,7 @@ eye during long sessions.
 | Group heading | `group_heading` | `Label` capitals and muted, nonzero count; no rule; serif headings belong to readers and stat blocks |
 | Submenu | `menu_submenu` | Match quiet Read actions: `S` horizontal padding, Strong type and Read height |
 | Row menu | `row_menu` | Quiet `⋯` at the right, named `More actions for <name>`; holds Remove and Delete |
-| Add strip | `hanging_add_strip` | `Add` in its own Label column; one line of quiet icon-and-word buttons. Show all seven actions when they fit. Otherwise keep Fight, Group (plan only) and Long rest visible; put Day, Short rest, Travel and Major event in one `More` menu. Let this row wrap only when those visible controls cannot fit |
+| Add strip | `hanging_add_strip` | `Add` in its own Label column; one line of quiet icon-and-word buttons. Show all seven actions when they fit. Otherwise keep Fight, Group (plan only) and Long rest visible; put Day, Short rest, Travel and Major event in one compact `⋯⌄` menu named `More Add actions`; hover text names its actions. Keep the strip on one line |
 | Message | `message`, `message_with_action`, `Tone` | Inline icon and bar; cap the notice at `LIST_MEASURE`; actions follow text after an `L` gap or wrap below, aligned with the text; measure the whole action with padding; move it below and align it with the text if it cannot fit; actions without icons use a secondary border |
 | Side panel | `side_panel_width`, `panel_header` | One width rule for Lookup, Notes and the run; separate participant and fight tabs |
 | Column | `Column::left / right / panel` | Rail, page lists and panels; inner-edge drag handle; natural width until dragged or moved with keys, then saved width across restarts; preserve page room and `RUN_LIST_KEEPS`; adjacent content reaches the column edge, with text measured inside it |
@@ -387,8 +387,8 @@ old-layout links with the reason on hover.
 Convert files groups files and its picker by owner. Initially only the campaign is checked. Generated
 packages start unchecked but can be selected; warn that their converter overwrites these files on its
 next run. Counts include checked owners only. The modal shows before and after text, counts by kind in
-words and skipped files. Omit the kinds line when it has no text. Short previews fit content; long
-previews give the source panes about 60% of window height, ending on whole rows. Headings sit above
+words and skipped files. Omit the kinds line when it has no text. Short previews fit aligned rows, including missing-line hatching; long
+previews give the source panes about 60% of window height, ending on whole rows above the reserved horizontal scroll bar. Headings sit above
 that space. Leave room for the action line at small window sizes. Source lines do not wrap. Mark changes from aligned rows,
 scroll both panes together and open at the first difference. Use the same change-group navigation as
 draft comparisons. Encounter and group conflict comparisons use disk layout and include outside
@@ -791,8 +791,7 @@ align with the name and use Timeline form parts. A caret and accessible expanded
 hairline follows details after `S`. New events stay closed with kind as title. Open rows show Title and Notes;
 duration and place stay on Timeline. The Add strip stays directly below Tonight (or This session), above
 messages and scrolling rows. Fight, Group and Long rest stay visible. If all seven actions do not fit on one line,
-More holds Day, Short rest, Travel and Major event. If the visible controls and More cannot fit, that one row
-may wrap at the first action's left edge. Long rest stays one click away (T11.2). Timeline uses the same width rule.
+a compact `⋯⌄` button, named `More Add actions`, holds Day, Short rest, Travel and Major event. Its hover text names those actions. Keep the strip on one line at all three supported window sizes. Long rest stays one click away (T11.2). Timeline uses the same width rule.
 It stays in place when messages or rows change. Empty plans use empty_state
 below the strip. Add-strip messages stay below Add. In notes ends at the button
 text's inner edge.
