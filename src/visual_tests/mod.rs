@@ -32,6 +32,8 @@ pub(crate) mod fixture;
 mod isolation;
 mod repeated_captures;
 mod scenarios;
+#[cfg(target_os = "linux")]
+mod settle_probe;
 mod slots;
 mod steps;
 mod video;

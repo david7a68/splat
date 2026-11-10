@@ -96,6 +96,10 @@ or set `SPLAT_VISUAL_CONTACT_SHEET=1` to make it with a full `visual-test` run.
   and async timeouts still stop that scenario. The terminal and `ergonomics.md` show
   all measured baseline changes, even when another failure ends the test. Targeted
   runs keep the normal 180-second painted-text wait; diagnosis uses five seconds.
+- If a settle wait reaches 180 seconds in the isolated Linux suite child, it prints
+  the scenario diagnostic and exits with status 101. The parent fails and releases
+  its suite slot without waiting for scenario cleanup or thread joins. Captures from
+  that failed run are incomplete. Outside the isolated child, the check still panics.
 - `SPLAT_VISUAL_TIMINGS=1` prints world-lock wait, fixture setup, app/font/renderer
   setup, settling, PNG rendering and PNG encoding/writing times. Per-scenario times
   overlap because the scenarios run in parallel; do not add them as wall time.
