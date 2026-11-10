@@ -57,6 +57,9 @@ pub struct UiState {
     /// The widths the DM dragged columns to, by column.
     #[serde(default)]
     pub column_widths: BTreeMap<String, f32>,
+    /// How far a touchpad scroll moves content on this computer.
+    #[serde(default)]
+    pub touchpad_speed: crate::touchpad::TouchpadSpeed,
 }
 
 #[derive(Default)]
@@ -150,6 +153,7 @@ mod tests {
                 synced: vec!["actor_hero_1".into()],
             }),
             column_widths: BTreeMap::from([("navigation".to_owned(), 240.0)]),
+            touchpad_speed: crate::touchpad::TouchpadSpeed::Twelve,
         };
         store.save(&state);
         assert_eq!(Store::at(path.clone()).load(), state);
@@ -159,6 +163,11 @@ mod tests {
             Store::at(path.clone()).load().page.as_deref(),
             Some("Party")
         );
+        // A speed of the wrong type costs only the speed.
+        fs::write(&path, r#"{"page":"Party","touchpad_speed":4}"#).unwrap();
+        let read = Store::at(path.clone()).load();
+        assert_eq!(read.page.as_deref(), Some("Party"));
+        assert_eq!(read.touchpad_speed, crate::touchpad::TouchpadSpeed::Four);
         fs::write(&path, "not json").unwrap();
         assert_eq!(Store::at(path).load(), UiState::default());
     }

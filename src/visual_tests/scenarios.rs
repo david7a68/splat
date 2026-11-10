@@ -1731,6 +1731,20 @@ pub mod settings {
         );
         d.expect("Party");
         d.state("sync-stopped-recovery", Sizes::Default);
+
+        go_settings(d);
+        d.click("Touchpad");
+        d.expect("Scrolling speed");
+        d.expect("Mouse wheels keep their speed.");
+        d.state("touchpad-settings", Sizes::Default);
+        d.click("8×");
+        let chosen = d.app_mut().touchpad_speed == crate::touchpad::TouchpadSpeed::Eight;
+        d.observe(
+            "touchpad-speed",
+            chosen,
+            "Choosing a touchpad speed changes how far a touchpad scroll moves",
+        );
+        d.click("Account and campaigns");
     }
 }
 
