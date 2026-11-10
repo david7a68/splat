@@ -36,6 +36,7 @@ pub mod layout;
 pub mod legacy;
 pub mod list_formats;
 mod markdown;
+pub use markdown::{body_text, inline_text};
 mod shared;
 pub mod stat_blocks;
 pub use shared::validate_with_builtin;

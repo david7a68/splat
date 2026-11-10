@@ -11,10 +11,10 @@ pub struct ContentNote {
     /// The D&D Beyond definitions it holds, as `feature:ID`, `action:ID`, `item:KEY` or `spell:ID`.
     pub sources: Vec<String>,
 }
-fn prose(value: &Value) -> String {
+pub(super) fn prose(value: &Value) -> String {
     super::description_text(string(value))
 }
-fn activation(value: &Value) -> Option<String> {
+pub(super) fn activation(value: &Value) -> Option<String> {
     match value["activationType"].as_u64()? {
         1 => Some("action"),
         3 => Some("bonus_action"),
@@ -320,6 +320,7 @@ impl EntitySnapshot {
                 }
             }
         }
+        self.profile().apply(&mut sheet, &mut gaps);
         for (pool, definition) in &self.definition.splat_resources {
             if definition.kind.as_deref() == Some("spell_slot") {
                 fields["splat_resources"][pool]["recovery"] =
@@ -331,13 +332,7 @@ impl EntitySnapshot {
         }
         let mut actions = json!({});
         for attack in &self.character.attacks {
-            let base = named_key("attack", attack);
-            let mut k = base.clone();
-            let mut occurrence = 1;
-            while sheet.attacks.contains_key(&k) {
-                occurrence += 1;
-                k = format!("{base}_{occurrence}");
-            }
+            let k = unique(&sheet.attacks, named_key("attack", attack));
             let damage = &attack["damage"]["value"];
             sheet.attacks.insert(
                 k.clone(),
@@ -594,6 +589,23 @@ impl EntitySnapshot {
                 "No"
             }
         ));
+        let summary = [
+            sheet
+                .background
+                .as_ref()
+                .map(|b| format!("Background: {}", crate::content::inline_text(&b.name))),
+            sheet
+                .details
+                .alignment
+                .as_ref()
+                .map(|a| format!("Alignment: {a}")),
+        ]
+        .into_iter()
+        .flatten()
+        .collect::<Vec<_>>();
+        if !summary.is_empty() {
+            body.push_str(&format!("{}.\n\n", summary.join(" · ")));
+        }
         body.push_str("| Ability | Score | Modifier | Save |\n| --- | --- | --- | --- |\n");
         for ability in ABILITIES {
             body.push_str(&format!(
@@ -730,25 +742,23 @@ impl EntitySnapshot {
             }
             body.push('\n');
         }
+        body.push_str(&super::profile::equipment_markdown(&sheet));
         body.push_str("\n## Features\n\n");
         for feature in sheet.features.values() {
             body.push_str(&format!(
                 "### {}\n\n{}\n\n",
-                feature.name, feature.description
+                crate::content::inline_text(&feature.name),
+                crate::content::body_text(&feature.description)
             ));
         }
-        body.push_str("## Import gaps\n\n");
-        let coverage: Import =
-            serde_json::from_value(fields["splat_import"].clone()).map_err(|e| e.to_string())?;
-        for g in coverage.gaps {
-            body.push_str(&format!("- {}\n", g.reason));
-        }
+        body.push_str(&super::profile::markdown(&sheet));
         notes.push(ContentNote {
             sources: Vec::new(),
             relative_path: character_filename(&self.definition.splat_name),
             markdown: note(fields, &body)?,
         });
-        super::rules::complete(self, &mut notes)?;
+        // The conversion status follows this body.
+        super::rules::complete(self, &mut notes, &body)?;
         let entries = notes
             .iter()
             .map(|n| Entry::parse(&n.relative_path, &n.markdown))

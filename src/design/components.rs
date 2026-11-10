@@ -1667,6 +1667,16 @@ pub fn disk_conflict_choices(ui: &mut Ui) -> Option<DiskConflictChoice> {
     choice
 }
 
+/// After Reload and lose my draft: the old draft can still come back. True when it should.
+pub fn reloaded_draft(ui: &mut Ui) -> bool {
+    undo_message(
+        ui,
+        Tone::Info,
+        "Reloaded from disk. Your previous draft is kept until you edit or the file changes again.",
+        "Undo reload",
+    )
+}
+
 /// A recovery message whose action restores the previous state.
 pub fn undo_message(ui: &mut Ui, tone: Tone, text: &str, action: &str) -> bool {
     let button = Action::quiet(action)
