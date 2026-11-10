@@ -295,6 +295,8 @@ pub enum Stored {
     Sheet(String),
     CampaignCopy(String),
     Portrait(String),
+    /// The note that says which computer saves the sheets. See `sheet_writer`.
+    Writer,
 }
 fn save_campaign_copy(
     record: &EntitySnapshot,
@@ -319,6 +321,14 @@ fn save_campaign_copy(
 fn writer_turn(path: &std::path::Path) -> crate::sheet_writer::Turn {
     let (device, name) = crate::hermetic::device();
     crate::sheet_writer::take(path, device, &name, crate::hermetic::now())
+}
+/// A save that failed gives up this computer's turn, so that a computer that can save takes
+/// over. A note with local edits is not a failure: the DM decides about it.
+fn release_after(path: &std::path::Path, saved: &Result<Vec<PathBuf>, CampaignCopyError>) {
+    if matches!(saved, Err(CampaignCopyError::Failed(_))) {
+        let (device, _) = crate::hermetic::device();
+        crate::sheet_writer::release(path, device, crate::hermetic::now());
+    }
 }
 #[derive(Default)]
 pub struct Reader {
@@ -431,9 +441,11 @@ impl Reader {
                         if !*active {
                             break;
                         }
+                        let saved = save_campaign_copy(record, &scope.path, false);
+                        release_after(&scope.path, &saved);
                         let _ = tx.send(Event::CampaignCopy(
                             record.source.character_id.clone(),
-                            save_campaign_copy(record, &scope.path, false),
+                            saved,
                         ));
                     }
                 }
@@ -542,6 +554,9 @@ impl Reader {
             && (self.refresh_requested || (!self.stream_open && self.on_page) || safety_due)
     }
     pub fn refresh(&mut self, session: Session, ctx: &egui::Context, full: bool) {
+        // A request by hand counts for this call only. If the call cannot read now, a later
+        // automatic read must not inherit it.
+        let by_hand = std::mem::take(&mut self.by_hand);
         // Test builds have no route to D&D Beyond. A signed-in test keeps its saved sheets.
         if cfg!(test) {
             self.refresh_requested = false;
@@ -567,7 +582,6 @@ impl Reader {
         let full = full || selected.is_none();
         let changed = self.take_changed();
         let force = std::mem::take(&mut self.force);
-        let by_hand = std::mem::take(&mut self.by_hand);
         self.forcing = force.clone();
         let (tx, rx) = mpsc::channel();
         self.pending = Some(rx);
@@ -644,6 +658,9 @@ impl Reader {
                             let forced = force.contains(&id);
                             if mine || forced {
                                 let saved = save_campaign_copy(record, &scope.path, forced);
+                                if !by_hand && !forced {
+                                    release_after(&scope.path, &saved);
+                                }
                                 let _ = tx.send(Event::CampaignCopy(id.clone(), saved));
                             }
                         }
@@ -715,7 +732,7 @@ impl Reader {
                         Stored::Sheet(id) | Stored::CampaignCopy(id) | Stored::Portrait(id) => {
                             members.iter().any(|m| &m.id == id)
                         }
-                        Stored::SavedSheets | Stored::Roster => true,
+                        Stored::SavedSheets | Stored::Roster | Stored::Writer => true,
                     });
                     if !members
                         .iter()
@@ -761,12 +778,7 @@ impl Reader {
                 },
                 Ok(Event::CampaignCopy(id, result)) => self.campaign_copy_saved(id, result),
                 Ok(Event::Stored(what, result)) => self.stored(what, result),
-                Ok(Event::Writer(turn)) => {
-                    self.writer_elsewhere = match turn {
-                        crate::sheet_writer::Turn::Mine => None,
-                        crate::sheet_writer::Turn::Elsewhere(name) => Some(name),
-                    };
-                }
+                Ok(Event::Writer(turn)) => self.note_turn(turn),
                 Err(mpsc::TryRecvError::Empty) => break,
                 Err(mpsc::TryRecvError::Disconnected) => {
                     self.pending = None;
@@ -797,12 +809,29 @@ impl Reader {
     /// Saves a sheet that came from elsewhere, such as combat sync, and records the result.
     /// Combat sync reads on its own, so only the computer that saves the sheets saves it.
     pub fn save_campaign_copy(&mut self, id: &str, record: &EntitySnapshot) {
-        if self.writer_elsewhere.is_some() {
+        let Some(path) = self.campaign_path().map(std::path::Path::to_path_buf) else {
             return;
-        }
-        if let Some(path) = self.campaign_path() {
-            let saved = save_campaign_copy(record, path, false);
+        };
+        // Ask the note now: an answer from an earlier read can be out of date.
+        let turn = writer_turn(&path);
+        let mine = turn == crate::sheet_writer::Turn::Mine;
+        self.note_turn(turn);
+        if mine {
+            let saved = save_campaign_copy(record, &path, false);
+            release_after(&path, &saved);
             self.campaign_copy_saved(id.to_owned(), saved);
+        }
+    }
+    /// Shows who saves the sheets, and a warning when the note stops every automatic save.
+    fn note_turn(&mut self, turn: crate::sheet_writer::Turn) {
+        use crate::sheet_writer::Turn;
+        self.writer_elsewhere = match &turn {
+            Turn::Elsewhere(name) => Some(name.clone()),
+            Turn::Mine | Turn::Settling | Turn::Unavailable(_) => None,
+        };
+        match turn {
+            Turn::Unavailable(message) => self.stored(Stored::Writer, Err(message)),
+            _ => self.stored(Stored::Writer, Ok(())),
         }
     }
     /// A saved note clears its character's warnings, so moving a note aside clears them too.
@@ -944,32 +973,47 @@ mod tests {
             path: campaign.path().into(),
             connected: true,
         });
-        // Another computer holds the turn, and it has not run out.
-        crate::sheet_writer::take(
-            campaign.path(),
-            Uuid::from_u128(7),
-            "Desk",
-            crate::hermetic::now(),
-        );
-        let turn = writer_turn(campaign.path());
-        assert_eq!(turn, crate::sheet_writer::Turn::Elsewhere("Desk".into()));
-        reader.writer_elsewhere = Some("Desk".into());
+        let saved = |root: &std::path::Path| {
+            std::fs::read_dir(root.join("Characters/D&D Beyond")).map_or(0, |files| {
+                files
+                    .flatten()
+                    .filter(|e| e.path().extension().is_some_and(|x| x == "md"))
+                    .count()
+            })
+        };
         let record = crate::visual_tests::fixture::sample_sheet();
         let id = record.source.character_id.clone();
-        reader.save_campaign_copy(&id, &record);
-        let saved = |root: &std::path::Path| {
-            std::fs::read_dir(root.join("Characters/D&D Beyond"))
-                .unwrap()
-                .flatten()
-                .filter(|e| e.path().extension().is_some_and(|x| x == "md"))
-                .filter(|e| !e.path().ends_with(crate::sheet_writer::FILE))
-                .count()
+        let now = crate::hermetic::now();
+        let turn = |device: u128, name: &str| crate::sheet_writer::Holder {
+            device: Uuid::from_u128(device),
+            name: name.into(),
+            since: now - 120,
+            until: now + 300,
         };
-        assert_eq!(saved(campaign.path()), 0);
-        // With the turn, the same save writes the sheet.
+        // Another computer holds the turn. An out-of-date answer that says this computer
+        // saves does not count: the save asks the note.
+        crate::sheet_writer::hold(campaign.path(), &turn(7, "Desk"));
         reader.writer_elsewhere = None;
         reader.save_campaign_copy(&id, &record);
+        assert_eq!(saved(campaign.path()), 0);
+        assert_eq!(reader.writer_elsewhere.as_deref(), Some("Desk"));
+        // With the turn, the same save writes the sheet.
+        let (device, _) = crate::hermetic::device();
+        crate::sheet_writer::hold(campaign.path(), &turn(device.as_u128(), "This computer"));
+        reader.save_campaign_copy(&id, &record);
         assert_eq!(saved(campaign.path()), 1);
+        assert_eq!(reader.writer_elsewhere, None);
+    }
+    #[test]
+    fn a_request_by_hand_counts_only_for_the_read_it_asked_for() {
+        let mut reader = Reader::default();
+        reader.by_hand = true;
+        // No campaign, so this read cannot start. The request must not wait for a later
+        // automatic read.
+        let hour = Duration::from_secs(60 * 60);
+        let session = crate::auth::Session::for_test(hour, hour);
+        reader.refresh(session, &egui::Context::default(), true);
+        assert!(!reader.by_hand);
     }
     #[test]
     fn a_change_to_any_member_is_read_twice_whichever_is_selected() {
