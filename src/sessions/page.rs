@@ -253,6 +253,8 @@ pub struct Sessions {
     job_done: bool,
     /// The latest result stays after its completion notice is acknowledged.
     processed_session: Option<Uuid>,
+    /// The recording that result came from, so deleting it clears the result.
+    processed_recording: Option<PathBuf>,
     /// The latest result has something the DM must look at.
     job_warned: bool,
     alerts: Vec<Alert>,
@@ -1402,6 +1404,7 @@ impl Sessions {
         match result {
             Ok(None) => {
                 self.processed_session = Some(session);
+                self.processed_recording = failed_recording.clone();
                 self.job_done = true;
                 self.job_warned = false;
                 self.notice = Some((
@@ -1413,6 +1416,7 @@ impl Sessions {
             }
             Ok(Some(warning)) => {
                 self.processed_session = Some(session);
+                self.processed_recording = failed_recording.clone();
                 self.job_done = true;
                 self.job_warned = true;
                 // The recording's row has the words, for as long as the result stands.
@@ -1489,6 +1493,7 @@ impl Sessions {
             .map(|(_, session)| session);
         self.alerts.clear();
         self.processed_session = None;
+        self.processed_recording = None;
         self.job_done = false;
         self.job_warned = false;
         self.deleted_template = None;
@@ -2128,6 +2133,7 @@ impl Sessions {
         match Recorder::start(tool, settings.input(), path) {
             Ok(recorder) => {
                 self.processed_session = None;
+                self.processed_recording = None;
                 self.job_done = false;
                 self.job_warned = false;
                 self.notice = None;
@@ -2208,6 +2214,7 @@ impl Sessions {
         self.notice_session = None;
         let _ = fs::remove_file(recording.with_extension("state.txt"));
         self.processed_session = None;
+        self.processed_recording = None;
         self.job_done = false;
         self.job_warned = false;
         self.alerts
@@ -5338,6 +5345,13 @@ impl Sessions {
             ctx.data_mut(|data| data.remove::<bool>(focus_id));
             self.reading = None;
             self.notice_session = None;
+            // A deleted recording takes its result with it, so the rail stops saying Processed.
+            if self.processed_recording.as_deref() == Some(path.as_path()) {
+                self.processed_session = None;
+                self.processed_recording = None;
+                self.job_done = false;
+                self.job_warned = false;
+            }
             self.notice = Some(match delete_recording(&path) {
                 Ok(()) => (Tone::Success, "Recording deleted.".to_owned()),
                 Err(error) => (Tone::Error, format!("Not deleted. {error}")),
@@ -5629,15 +5643,20 @@ impl Sessions {
                 ui.horizontal_top(|ui| {
                     ui.spacing_mut().item_spacing.x = design::L;
                     page_column(ui, plan_width, height, |ui| {
-                        self.plan_pane(ui, book, plan);
+                        fixed_scope(ui, "session_plan_pane", |ui| self.plan_pane(ui, book, plan));
                     });
                     page_column(ui, note_width, height, |ui| {
-                        self.note_pane(ui, book, plan, beside)
+                        fixed_scope(ui, "session_note_pane", |ui| {
+                            self.note_pane(ui, book, plan, beside)
+                        })
                     });
                 });
             }
-            Tab::Plan => self.plan_pane(ui, book, plan),
-            Tab::Note => self.note_pane(ui, book, plan, beside),
+            // The same ids in both layouts: crossing the width keeps typed text, focus and scroll.
+            Tab::Plan => fixed_scope(ui, "session_plan_pane", |ui| self.plan_pane(ui, book, plan)),
+            Tab::Note => fixed_scope(ui, "session_note_pane", |ui| {
+                self.note_pane(ui, book, plan, beside)
+            }),
             Tab::Recordings => {
                 self.recordings_tab(ui, settings, book);
             }
@@ -6424,6 +6443,7 @@ impl Sessions {
         self.notice = None;
         self.notice_session = None;
         self.processed_session = None;
+        self.processed_recording = None;
         self.job_done = false;
         self.job_warned = false;
         let session = self.selected.expect("an open session");
@@ -6997,4 +7017,10 @@ mod tests {
         assert!(rendered.contains(&format!("[Old name](<splat-note:Timeline#^{id}>)")));
         assert!(source.contains("|Old name]]"));
     }
+}
+
+/// Draw a pane under a fixed id, so its widgets keep their state when the layout around it changes.
+fn fixed_scope<R>(ui: &mut egui::Ui, id: &str, add: impl FnOnce(&mut egui::Ui) -> R) -> R {
+    ui.scope_builder(egui::UiBuilder::new().id(egui::Id::new(id)), add)
+        .inner
 }

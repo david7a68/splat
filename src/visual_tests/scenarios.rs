@@ -6483,6 +6483,12 @@ pub mod session_recording {
         d.state("recording-delete", Sizes::All);
         d.click("Delete recording");
         d.expect("Recording deleted.");
+        let warned_after_delete = d.app_mut().sessions.job_warned();
+        d.observe(
+            "iter-4-C-ST1-deleted",
+            !d.rail_words().contains("Processed") && !warned_after_delete,
+            "Deleting the processed recording takes Processed out of the rail",
+        );
 
         // A recorder that ends by itself says so, wherever the DM is.
         d.click("Record this session");
