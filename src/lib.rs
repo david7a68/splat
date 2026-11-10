@@ -451,6 +451,7 @@ impl Splat {
         } else if self.sessions.busy_with_edit() || self.timeline.not_saved() {
             Some("Resolve the unsaved session file to change campaigns.")
         } else if self.world_page.dirty()
+            || self.world_page.has_generated()
             || self.any_unsaved_edits()
             || self.campaign_content.dirty()
             || self.encounters.dirty()
@@ -489,6 +490,12 @@ impl Splat {
         if self.world_page.dirty() {
             items.push((
                 "A World note repair has unsaved changes.".into(),
+                Page::World,
+            ));
+        }
+        if let Some(name) = self.world_page.held_npc() {
+            items.push((
+                format!("The generated NPC \u{201c}{name}\u{201d} is not saved."),
                 Page::World,
             ));
         }
@@ -1048,7 +1055,14 @@ impl Splat {
     /// One status line in the rail. Some lead to where the DM can act on them.
     /// The account line also shows a spinner while the party is read.
     fn rail_status(&mut self, ui: &mut egui::Ui, state: Status<'static>, account: bool) {
+        let held = self.world_page.held_npc().map(|name| {
+            format!(
+                "{}: {name}. Show its card on World.",
+                world::page::UNSAVED_NPC
+            )
+        });
         let full = match state.word {
+            world::page::UNSAVED_NPC => held.as_deref().unwrap_or(state.word),
             "Signed out" => "Signed out of D&D Beyond",
             "Sync stopped" => {
                 "Party sync stopped when D&D Beyond disconnected. Connect, then turn sync on in Party."
@@ -1070,6 +1084,17 @@ impl Splat {
             let response = design::status_link(ui, state);
             if response.clicked() {
                 self.page = Page::Sessions;
+            }
+            {
+                let rect = response.rect;
+                (response, rect)
+            }
+        } else if state.word == world::page::UNSAVED_NPC {
+            // The held NPC's card is on World, wherever the DM is now.
+            let response = design::status_link(ui, state);
+            if response.clicked() {
+                self.world_page.open_held();
+                self.page = Page::World;
             }
             {
                 let rect = response.rect;
@@ -1245,6 +1270,8 @@ impl Splat {
                     "World draft"
                 },
             ),
+            // A held NPC locks the campaign switcher, so the rail names it like other drafts.
+            (self.world_page.has_generated(), world::page::UNSAVED_NPC),
             (
                 self.encounters.encounter_dirty(),
                 self.encounters.draft_word(),
@@ -1833,9 +1860,14 @@ impl Splat {
                                     blocked,
                                 );
                                 design::locked(ui, blocked, |ui| {
-                                    self.campaigns.show_form_if_editing(ui);
+                                    let details_open = self.campaigns.show_form_if_editing(ui);
                                     design::rule(ui);
-                                    self.sessions.folder_view(ui, &self.timeline, blocked);
+                                    self.sessions.folder_view(
+                                        ui,
+                                        &self.timeline,
+                                        blocked,
+                                        details_open,
+                                    );
                                 });
                             });
                     }
@@ -2251,6 +2283,7 @@ impl eframe::App for Splat {
             self.timeline.save();
             if (self.library.dirty()
                 || self.world_page.dirty()
+                || self.world_page.has_generated()
                 || self.any_unsaved_edits()
                 || self.campaign_content.dirty()
                 || self.encounters.unsaved()

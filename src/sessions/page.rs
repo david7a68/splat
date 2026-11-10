@@ -1,12 +1,12 @@
 //! The Sessions page: notes, templates and recordings, one campaign at a time. The
 //! recorder and the processing job live here, and keep going while the DM uses other pages.
 use super::{
-    DEFAULT_FOLDER, Draft, DraftState, NewNote, Note, Recording, Template, body_of, create_note,
-    create_template, delete_recording, each_linked_name, folder_setting, fresh_line_in_note,
-    insert_in_note, insert_in_plan, linked_names, list_notes, list_recordings, list_templates,
-    nested_in_note, new_recording_path, parts_of, plain_links, recording_title, rename_links,
-    rename_links_in_file, save_folder, section_text, unreadable_notes, update_details,
-    without_empty_sections, without_own_heading,
+    DEFAULT_FOLDER, Draft, DraftState, Dropped, NewNote, Note, Recording, Template, body_of,
+    create_note, create_template, delete_recording, each_linked_name, folder_setting,
+    fresh_line_in_note, insert_in_note, insert_in_plan, linked_names, list_notes, list_recordings,
+    list_templates, nested_in_note, new_recording_path, parts_of, plain_links, recording_title,
+    rename_links, rename_links_in_file, save_folder, section_text, unreadable_notes,
+    update_details, without_empty_sections, without_own_heading,
 };
 use crate::{
     credentials::{self, KeySlot},
@@ -36,6 +36,7 @@ use std::{
 };
 use uuid::Uuid;
 
+const MOVE_FILES: &str = "Move files and save";
 const UNDO_ADD_FOR: Duration = Duration::from_secs(30);
 const SAVED_WORD_FOR: Duration = Duration::from_secs(8);
 const LIST_WIDTH: f32 = 216.0;
@@ -1460,27 +1461,29 @@ impl Sessions {
             .show(ctx, |ui| {
                 if let Some(words) = &stalled {
                     let session = self.live.as_ref().map(|live| live.session);
-                    design::message(ui, Tone::Error, words);
-                    ui.horizontal(|ui| {
-                        if (if primary_owner == Some(usize::MAX) {
-                            Action::primary("Record again")
-                        } else {
-                            Action::secondary("Record again")
-                        })
-                        .show(ui)
-                        .clicked()
-                        {
-                            record_again = session;
-                        }
-                        let here = self.on_page && self.selected == session;
-                        if !here && Action::quiet("Open the session").show(ui).clicked() {
-                            open = session;
-                        }
-                        ui.add_space(design::L);
-                        stop = Action::quiet("Stop recording")
-                            .name("Stop recording")
+                    // The choices start at the message text, as every message's choices do.
+                    design::message_with_actions(ui, Tone::Error, words, |ui| {
+                        ui.horizontal_wrapped(|ui| {
+                            if (if primary_owner == Some(usize::MAX) {
+                                Action::primary("Record again")
+                            } else {
+                                Action::secondary("Record again")
+                            })
                             .show(ui)
-                            .clicked();
+                            .clicked()
+                            {
+                                record_again = session;
+                            }
+                            let here = self.on_page && self.selected == session;
+                            if !here && Action::quiet("Open the session").show(ui).clicked() {
+                                open = session;
+                            }
+                            ui.add_space(design::L - ui.spacing().item_spacing.x);
+                            stop = Action::quiet("Stop recording")
+                                .name("Stop recording")
+                                .show(ui)
+                                .clicked();
+                        });
                     });
                 }
                 let mut dismiss = None;
@@ -1496,65 +1499,88 @@ impl Sessions {
                     } else {
                         alert.words.clone()
                     };
-                    let shown = design::message(ui, Tone::Error, &words);
-                    if let Some(said) = &alert.said {
-                        shown.on_hover_text(said);
-                    }
-                    ui.horizontal_wrapped(|ui| {
-                        if missing_input
-                            && (if banner_primary {
-                                Action::primary("Choose an input")
-                            } else {
-                                Action::secondary("Choose an input")
-                            })
-                            .show(ui)
-                            .clicked()
-                        {
-                            self.wants_recording_input = true;
-                        }
-                        if let Some(path) = &alert.retry
-                            && (if banner_primary {
-                                Action::primary("Continue processing")
-                            } else {
-                                Action::secondary("Continue processing")
-                            })
-                            .blocked(if !path.exists() {
-                                Some("Audio removed. Restore the WAV file to process it.")
-                            } else if self.job.is_some() || self.live.is_some() {
-                                Some("Stop recording or wait for processing to finish.")
-                            } else {
-                                None
-                            })
-                            .show(ui)
-                            .clicked()
-                        {
-                            retry = Some((alert.session, path.clone()));
-                        }
-                        if alert.can_record
-                            && self.live.is_none()
-                            && (if missing_input {
-                                Action::quiet("Record again")
-                            } else if banner_primary {
-                                Action::primary("Record again")
-                            } else {
-                                Action::secondary("Record again")
-                            })
-                            .show(ui)
-                            .clicked()
-                        {
-                            record_again = Some(alert.session);
-                        }
-                        let here = self.on_page
-                            && self.selected == Some(alert.session)
-                            && self.tab == Tab::Recordings;
-                        if !here && Action::quiet("Open the session").show(ui).clicked() {
-                            open = Some(alert.session);
-                        }
-                        ui.add_space(design::L);
-                        if Action::quiet("Dismiss this error").show(ui).clicked() {
-                            dismiss = Some(index);
-                        }
+                    // The choices start at the message text, and wrap there too. The words keep
+                    // their hover: what the recorder itself said.
+                    let top = ui.cursor().min;
+                    let mut words_end = top.y;
+                    design::message_with_actions(ui, Tone::Error, &words, |ui| {
+                        words_end = ui.min_rect().top() - ui.spacing().item_spacing.y;
+                        ui.horizontal_wrapped(|ui| {
+                            let mut drawn = false;
+                            if missing_input
+                                && (if banner_primary {
+                                    Action::primary("Choose an input")
+                                } else {
+                                    Action::secondary("Choose an input")
+                                })
+                                .show(ui)
+                                .clicked()
+                            {
+                                self.wants_recording_input = true;
+                            }
+                            drawn |= missing_input;
+                            if let Some(path) = &alert.retry
+                                && (if banner_primary {
+                                    Action::primary("Continue processing")
+                                } else {
+                                    Action::secondary("Continue processing")
+                                })
+                                .blocked(if !path.exists() {
+                                    Some("Audio removed. Restore the WAV file to process it.")
+                                } else if self.job.is_some() || self.live.is_some() {
+                                    Some("Stop recording or wait for processing to finish.")
+                                } else {
+                                    None
+                                })
+                                .show(ui)
+                                .clicked()
+                            {
+                                retry = Some((alert.session, path.clone()));
+                            }
+                            drawn |= alert.retry.is_some();
+                            if alert.can_record
+                                && self.live.is_none()
+                                && (if missing_input {
+                                    Action::quiet("Record again")
+                                } else if banner_primary {
+                                    Action::primary("Record again")
+                                } else {
+                                    Action::secondary("Record again")
+                                })
+                                .show(ui)
+                                .clicked()
+                            {
+                                record_again = Some(alert.session);
+                            }
+                            drawn |= alert.can_record && self.live.is_none();
+                            let here = self.on_page
+                                && self.selected == Some(alert.session)
+                                && self.tab == Tab::Recordings;
+                            if !here && Action::quiet("Open the session").show(ui).clicked() {
+                                open = Some(alert.session);
+                            }
+                            drawn |= !here;
+                            // The `L` gap separates Dismiss from a choice before it. Alone, it
+                            // starts at the message text like any first choice.
+                            if drawn {
+                                ui.add_space(design::L - ui.spacing().item_spacing.x);
+                            }
+                            if Action::quiet("Dismiss this error").show(ui).clicked() {
+                                dismiss = Some(index);
+                            }
+                        });
                     });
+                    if let Some(said) = &alert.said {
+                        let width = ui.available_width().min(design::LIST_MEASURE);
+                        let words_rect =
+                            egui::Rect::from_min_max(top, egui::pos2(top.x + width, words_end));
+                        ui.interact(
+                            words_rect,
+                            ui.id().with(("alert_said", index)),
+                            egui::Sense::hover(),
+                        )
+                        .on_hover_text(said);
+                    }
                 }
                 if let Some(index) = dismiss {
                     self.alerts.remove(index);
@@ -2748,43 +2774,43 @@ impl Sessions {
                     .as_ref()
                     .map_or_else(String::new, |words| format!(" {words}"))
             };
-            design::message(
-                ui,
-                if other.is_empty() {
-                    Tone::Info
-                } else {
-                    Tone::Warning
-                },
-                &format!(
-                    "Record {label}.{other} Tell everyone at the table first. The audio stays in the campaign folder until you select Process."
-                ),
+            let words = format!(
+                "Record {label}.{other} Tell everyone at the table first. The audio stays in the campaign folder until you select Process."
             );
-            ui.horizontal(|ui| {
-                if dated.is_some()
-                    && self.selected == self.current()
-                    && Action::secondary("Play this one").show(ui).clicked()
-                {
-                    self.play_this_one();
-                }
-                if (if self.run_open {
-                    Action::secondary("Start recording")
-                } else {
-                    Action::primary("Start recording")
-                })
-                .show(ui)
-                .clicked()
-                {
-                    self.confirm_record = false;
-                    if let Some(session) = self.selected
-                        && let Err(error) = self.start_recording(settings, session)
+            let tone = if other.is_empty() {
+                Tone::Info
+            } else {
+                Tone::Warning
+            };
+            // The choices start at the message text.
+            design::message_with_actions(ui, tone, &words, |ui| {
+                ui.horizontal_wrapped(|ui| {
+                    if dated.is_some()
+                        && self.selected == self.current()
+                        && Action::secondary("Play this one").show(ui).clicked()
                     {
-                        self.notice_session = None;
-                        self.notice = Some((Tone::Error, error));
+                        self.play_this_one();
                     }
-                }
-                if Action::quiet("Not now").show(ui).clicked() {
-                    self.confirm_record = false;
-                }
+                    if (if self.run_open {
+                        Action::secondary("Start recording")
+                    } else {
+                        Action::primary("Start recording")
+                    })
+                    .show(ui)
+                    .clicked()
+                    {
+                        self.confirm_record = false;
+                        if let Some(session) = self.selected
+                            && let Err(error) = self.start_recording(settings, session)
+                        {
+                            self.notice_session = None;
+                            self.notice = Some((Tone::Error, error));
+                        }
+                    }
+                    if Action::quiet("Not now").show(ui).clicked() {
+                        self.confirm_record = false;
+                    }
+                });
             });
         }
     }
@@ -2828,69 +2854,82 @@ impl Sessions {
     }
 
     fn draft_problem(ui: &mut egui::Ui, draft: &mut Draft) {
-        if draft.dropped.is_some()
-            && design::undo_message(ui, Tone::Info, "Draft dropped.", "Undo reload")
-        {
-            draft.undo_reload();
+        // Each way of losing the draft keeps its own name: Undo names what the DM did.
+        let undo = match draft.dropped {
+            Some(Dropped::Reloaded(_)) => design::reloaded_draft(ui),
+            Some(Dropped::Discarded(_)) => {
+                design::undo_message(ui, Tone::Info, "Draft discarded.", "Undo discard")
+            }
+            None => false,
+        };
+        if undo {
+            draft.undo_dropped();
         }
+        // Every choice below starts at its message's text. The red choice keeps an `L` gap.
         match draft.state.clone() {
             DraftState::Conflict => {
-                design::message(
+                design::message_with_actions(
                     ui,
                     Tone::Warning,
                     "This note changed on disk. Your draft is safe until you choose. Other sessions open after that.",
+                    |ui| {
+                        ui.horizontal_wrapped(|ui| {
+                            if Action::secondary("Overwrite with my draft")
+                                .show(ui)
+                                .clicked()
+                            {
+                                draft.overwrite();
+                            }
+                            ui.add_space(design::L - ui.spacing().item_spacing.x);
+                            if Action::destructive("Reload and lose my draft")
+                                .show(ui)
+                                .clicked()
+                                && draft.reload_keeping_undo().is_err()
+                            {
+                                draft.state = DraftState::Missing;
+                            }
+                        });
+                    },
                 );
-                ui.horizontal_wrapped(|ui| {
-                    if Action::secondary("Overwrite with my draft")
-                        .show(ui)
-                        .clicked()
-                    {
-                        draft.overwrite();
-                    }
-                    ui.add_space(design::L);
-                    if Action::destructive("Reload and lose my draft")
-                        .show(ui)
-                        .clicked()
-                        && draft.reload_keeping_undo().is_err()
-                    {
-                        draft.state = DraftState::Missing;
-                    }
-                });
             }
             DraftState::Missing => {
-                design::message(
+                design::message_with_actions(
                     ui,
                     Tone::Warning,
-                    "This file is gone from the folder. Your draft is still here. Choose where to save it, or let this draft go.",
+                    "This file is gone from the folder. Your draft is still here. Choose where to save it, or discard it.",
+                    |ui| {
+                        ui.horizontal_wrapped(|ui| {
+                            ui.spacing_mut().item_spacing.y = design::M;
+                            if let Some(path) = &draft.moved_to {
+                                let label = format!(
+                                    "Save my draft to {}",
+                                    path.strip_prefix(&draft.search_folder)
+                                        .unwrap_or(path)
+                                        .display()
+                                );
+                                if Action::secondary(&label).show(ui).clicked() {
+                                    draft.save_moved();
+                                }
+                            }
+                            if Action::secondary("Save my draft as a new file")
+                                .show(ui)
+                                .clicked()
+                            {
+                                draft.save_again();
+                            }
+                            ui.add_space(design::L - ui.spacing().item_spacing.x);
+                            if Action::destructive("Discard").show(ui).clicked() {
+                                draft.discard();
+                            }
+                        });
+                    },
                 );
-                ui.horizontal_wrapped(|ui| {
-                    ui.spacing_mut().item_spacing.y = design::M;
-                    if let Some(path) = &draft.moved_to {
-                        let label = format!(
-                            "Save my draft to {}",
-                            path.strip_prefix(&draft.search_folder)
-                                .unwrap_or(path)
-                                .display()
-                        );
-                        if Action::secondary(&label).show(ui).clicked() {
-                            draft.save_moved();
-                        }
-                    }
-                    if Action::secondary("Save my draft as a new file")
-                        .show(ui)
-                        .clicked()
-                    {
-                        draft.save_again();
-                    }
-                    ui.add_space(design::L);
-                    if Action::destructive("Let it go").show(ui).clicked() {
-                        draft.let_it_go();
-                    }
-                });
             }
             DraftState::Failed(error) => {
-                design::message(ui, Tone::Error, &error);
-                if Action::secondary("Try to save again").show(ui).clicked() {
+                let again = design::message_with_actions(ui, Tone::Error, &error, |ui| {
+                    Action::secondary("Try to save again").show(ui).clicked()
+                });
+                if again {
                     draft.save();
                 }
             }
@@ -3667,8 +3706,9 @@ impl Sessions {
                 design::rule(ui);
                 if close { self.notes_open = false; return; }
                 if self.selected.is_none() {
-                    design::message(ui, Tone::Info, "No session yet.");
-                    if Action::primary("New session").show(ui).clicked() {
+                    if design::message_with_actions(ui, Tone::Info, "No session yet.", |ui| {
+                        Action::primary("New session").show(ui).clicked()
+                    }) {
                         self.start_new_session();
                     }
                     return;
@@ -3690,16 +3730,18 @@ impl Sessions {
                 if let Some(note) = note
                     && let Some(words) = dated_before_today(note, &today)
                 {
-                        design::message(ui, Tone::Warning, &words);
-                        ui.horizontal(|ui| {
-                            play = Action::secondary("Play it tonight")
-                                .density(Density::Read)
-                                .show(ui)
-                                .clicked();
-                            start = Action::quiet("New session")
-                                .density(Density::Read)
-                                .show(ui)
-                                .clicked();
+                        // The choices start at the warning's text.
+                        design::message_with_actions(ui, Tone::Warning, &words, |ui| {
+                            ui.horizontal_wrapped(|ui| {
+                                play = Action::secondary("Play it tonight")
+                                    .density(Density::Read)
+                                    .show(ui)
+                                    .clicked();
+                                start = Action::quiet("New session")
+                                    .density(Density::Read)
+                                    .show(ui)
+                                    .clicked();
+                            });
                         });
                 }
                 if play {
@@ -5056,7 +5098,8 @@ impl Sessions {
                 shown.on_hover_text(recorder_said(said));
             }
         }
-        if let Some(warning) = recording.warning.as_ref().filter(|_| !live && !processing) {
+        let warning_shown = !live && !processing;
+        if let Some(warning) = recording.warning.as_ref().filter(|_| warning_shown) {
             ui.add(egui::Label::new(Type::Small.rich(ui, warning).color(c.muted)).wrap());
         }
         let job_here = self
@@ -5082,8 +5125,14 @@ impl Sessions {
                     {
                         open = Some(made);
                     }
-                    if made == Made::Transcript && recording.check_missing() {
-                        ui.label(Type::Small.rich(ui, "No check ran").color(c.muted));
+                    // While processing hides the warning line, the old results still need
+                    // their reason, in the same words. Never both at once.
+                    if made == Made::Transcript && !warning_shown && recording.check_missing() {
+                        ui.label(
+                            Type::Small
+                                .rich(ui, processing::NO_CHECK_LABEL)
+                                .color(c.muted),
+                        );
                     }
                 }
             });
@@ -5091,7 +5140,16 @@ impl Sessions {
         let mut process = false;
         let mut stop = false;
         let mut record_again = false;
-        ui.horizontal_wrapped(|ui| {
+        // An empty row would still take a line's height, and push the marked events away
+        // from this recording's links. Draw the row only when it holds something.
+        let has_actions = stalled
+            || live
+            || job_here
+            || !recording.summary
+            || stored
+                .as_ref()
+                .is_some_and(|words| words.starts_with("Stopped by itself:"));
+        let mut actions = |ui: &mut egui::Ui| {
             if stalled {
                 record_again = (if self.run_open || !primary {
                     Action::secondary("Record again")
@@ -5250,7 +5308,10 @@ impl Sessions {
                 process = pressed && !recording.summary;
                 ui.add_space(design::L);
             }
-        });
+        };
+        if has_actions {
+            ui.horizontal_wrapped(|ui| actions(ui));
+        }
         if destination_here {
             ui.scope(|ui| {
                 ui.set_max_width(ui.available_width().min(design::READER_MEASURE));
@@ -5269,22 +5330,21 @@ impl Sessions {
             // Not now and Replace the results stay together below the message.
             ui.scope(|ui| {
                 ui.set_max_width(ui.available_width().min(design::READER_MEASURE));
-                design::message(
-                    ui,
-                    Tone::Info,
-                    &format!(
-                        "This sends the raw transcript, this session's name, notes and events to {} twice. The audio is not sent again. It replaces the summary, the clean transcript and what the check changed. Events you added stay on the timeline.",
-                        processing_llm(settings)
-                    ),
+                let words = format!(
+                    "This sends the raw transcript, this session's name, notes and events to {} twice. The audio is not sent again. It replaces the summary, the clean transcript and what the check changed. Events you added stay on the timeline.",
+                    processing_llm(settings)
                 );
-                ui.horizontal(|ui| {
-                    if Action::secondary("Not now").show(ui).clicked() {
-                        self.confirm_again = None;
-                    }
-                    ui.add_space(design::L);
-                    process = Action::destructive("Replace the results")
-                        .show(ui)
-                        .clicked();
+                // The choices start at the message text; the red one keeps an `L` gap.
+                design::message_with_actions(ui, Tone::Info, &words, |ui| {
+                    ui.horizontal_wrapped(|ui| {
+                        if Action::secondary("Not now").show(ui).clicked() {
+                            self.confirm_again = None;
+                        }
+                        ui.add_space(design::L - ui.spacing().item_spacing.x);
+                        process = Action::destructive("Replace the results")
+                            .show(ui)
+                            .clicked();
+                    });
                 });
             });
         }
@@ -5363,7 +5423,8 @@ impl Sessions {
         }
         let c = colors();
         let session = self.selected;
-        ui.add_space(design::L);
+        // One `L` gap between the recording's last line and the events heading.
+        ui.add_space(design::L - ui.spacing().item_spacing.y);
         design::group_heading(
             ui,
             "Events marked in this recording",
@@ -6667,7 +6728,14 @@ impl Sessions {
         }
     }
 
-    pub fn folder_view(&mut self, ui: &mut egui::Ui, book: &Book, locked: Option<&str>) {
+    /// `details_open`: the campaign details form, with its own primary save, is in view above.
+    pub fn folder_view(
+        &mut self,
+        ui: &mut egui::Ui,
+        book: &Book,
+        locked: Option<&str>,
+        details_open: bool,
+    ) {
         // Earlier sections can have a wider minimum rect. Give this form its own column.
         let rect = egui::Rect::from_min_size(
             ui.cursor().min,
@@ -6677,11 +6745,17 @@ impl Sessions {
             ),
         );
         ui.scope_builder(egui::UiBuilder::new().max_rect(rect), |ui| {
-            self.folder_form(ui, book, locked);
+            self.folder_form(ui, book, locked, details_open);
         });
     }
 
-    fn folder_form(&mut self, ui: &mut egui::Ui, book: &Book, locked: Option<&str>) {
+    fn folder_form(
+        &mut self,
+        ui: &mut egui::Ui,
+        book: &Book,
+        locked: Option<&str>,
+        details_open: bool,
+    ) {
         let c = colors();
         let Some(campaign) = self.campaign.clone() else {
             return;
@@ -6839,10 +6913,16 @@ impl Sessions {
                 }
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     if has_files {
-                        move_files = Action::secondary("Move files and save")
-                            .blocked(blocked)
-                            .show(ui)
-                            .clicked();
+                        // One primary in view: the open details form owns its own save.
+                        // While a run is open, `reserve_primary` keeps Next turn the only one.
+                        move_files = (if details_open {
+                            Action::secondary(MOVE_FILES)
+                        } else {
+                            Action::primary(MOVE_FILES)
+                        })
+                        .blocked(blocked)
+                        .show(ui)
+                        .clicked();
                         Action::quiet("Save without moving")
                             .blocked(blocked)
                             .show(ui)

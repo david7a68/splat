@@ -669,6 +669,12 @@ pub(crate) const SETUP_HEADING: &str = "## Setup (DM reference)";
 const DISK_CONFLICT: &str = "This run changed on disk, perhaps from another copy of Splat or a sync tool. Your run is safe in memory, and saving has stopped until you choose.";
 const MAX_FROM_SHEET: &str =
     "Maximum HP comes from the D&D Beyond sheet while sync is on. Stop sync to change it here.";
+/// The Undo step a long rest makes when it fills a saved Setup's HP.
+const REST_STEP: &str = "full HP after long rest";
+/// The Undo step that puts back the HP a Setup had before the rest.
+const SAVED_HP_STEP: &str = "use the saved HP";
+/// The result of `Use the saved HP`, until the next step.
+pub(crate) const SAVED_HP_USED: &str = "Party HP set to the saved values.";
 pub(crate) const NOBODY_PRESENT: &str =
     "No participants are present. Mark one present or end the encounter.";
 const CLOSE_BLOCKED: &str =
@@ -979,9 +985,9 @@ impl Run {
             }
         }
         self.history.push(before);
-        self.history_labels.push("full HP after long rest".into());
+        self.history_labels.push(REST_STEP.into());
         self.history_from_sheet.push(false);
-        self.state.last_change = Some("full HP after long rest".into());
+        self.state.last_change = Some(REST_STEP.into());
         self.state
             .log
             .push("Party HP is full after the long rest.".into());
@@ -994,12 +1000,53 @@ impl Run {
         self.rest_order = order;
         self.dirty = true;
     }
+    /// The newest Undo step's name, if there is one.
+    fn last_step(&self) -> Option<&str> {
+        self.history_labels.last().map(String::as_str)
+    }
+    /// True while the long rest's full HP is the newest step on a saved Setup.
+    fn rest_filled_saved_hp(&self) -> bool {
+        self.carried
+            .as_ref()
+            .is_some_and(|carried| carried.saved && !carried.sheets.is_empty())
+            && self.last_step() == Some(REST_STEP)
+    }
+    /// True while `Use the saved HP` is the newest step, so its result and Undo still apply.
+    fn saved_hp_used(&self) -> bool {
+        self.carried.as_ref().is_some_and(|carried| carried.saved)
+            && self.last_step() == Some(SAVED_HP_STEP)
+    }
+    /// Put back the HP the Setup had before the rest, as one named step that Undo takes back.
+    /// The full HP stays in history, so the DM can return to it.
+    fn use_saved_hp(&mut self) -> Result<(), String> {
+        if !self.rest_filled_saved_hp() {
+            return Err("The long rest's HP is no longer the newest change.".into());
+        }
+        let mut commands = Vec::new();
+        for (index, hp, temp) in self.carried.iter().flat_map(|carried| &carried.sheets) {
+            let p = self
+                .state
+                .participants
+                .get(*index)
+                .ok_or("A hero with saved HP is no longer in this run.")?;
+            commands.push(Command::Health(*index, *hp, p.max_hp));
+            commands.push(Command::TempHp(*index, *temp));
+        }
+        let start = self.state.log.len();
+        self.apply(Command::Several(commands))?;
+        // One summary names the step before each hero's line. Undo takes the whole state back,
+        // so the summary goes with it, like the long rest's own line.
+        self.state.log.insert(start, SAVED_HP_USED.into());
+        if let Some(label) = self.history_labels.last_mut() {
+            *label = SAVED_HP_STEP.into();
+        }
+        self.state.last_change = Some(SAVED_HP_STEP.into());
+        Ok(())
+    }
     /// The carried values that still differ from the sheets, as one step back to the sheets.
     fn back_to_sheets(&self) -> Option<(String, Command)> {
         let carried = self.carried.as_ref()?;
-        if carried.saved
-            && self.history_labels.last().map(String::as_str) != Some("full HP after long rest")
-        {
+        if carried.saved && self.last_step() != Some(REST_STEP) {
             return None;
         }
         let mut commands = Vec::new();
@@ -6439,6 +6486,96 @@ mod tests {
         setup.remember_rest(3);
         setup.rest_saved_setup(3);
         assert_eq!(setup.state.participants[0].hp, Some(3));
+    }
+    #[test]
+    fn use_the_saved_hp_is_its_own_step_and_undo_gives_back_the_full_hp() {
+        let folder = tempfile::tempdir().unwrap();
+        let mut setup = run();
+        linked(&mut setup, 0, "42");
+        linked(&mut setup, 1, "43");
+        setup.state.participants[0].hp = Some(3);
+        setup.state.participants[0].temporary_hp = 2;
+        setup.state.participants[1].hp = Some(5);
+        setup.state.participants[1].temporary_hp = 0;
+        // Slot 2 is not a hero: the rest does not touch it, and neither does the saved HP.
+        setup.state.participants[2].hp = Some(1);
+        let campaign = stored(&mut setup, folder.path());
+        let mut run = close_and_reopen(&mut setup, campaign);
+        let max = run.state.participants[0].max_hp;
+        let hp = |run: &Run| {
+            run.state
+                .participants
+                .iter()
+                .map(|p| (p.hp, p.temporary_hp))
+                .collect::<Vec<_>>()
+        };
+        let other = hp(&run)[2];
+        let saved = vec![(Some(3), 2), (Some(5), 0), other];
+        let full = vec![(max, 0), (max, 0), other];
+        run.rest_saved_setup(1);
+        assert_eq!(hp(&run), full);
+        assert!(run.rest_filled_saved_hp() && !run.saved_hp_used());
+
+        let before = run.state.log.len();
+        run.use_saved_hp().unwrap();
+        assert_eq!(
+            hp(&run),
+            saved,
+            "Use the saved HP puts back every hero's HP"
+        );
+        assert_eq!(
+            run.state
+                .log
+                .iter()
+                .filter(|line| *line == SAVED_HP_USED)
+                .count(),
+            1,
+            "The Log names the step once"
+        );
+        assert_eq!(
+            run.state.log[before], SAVED_HP_USED,
+            "before each hero's line"
+        );
+        // A named step, so the rest's full HP is still one Undo away.
+        assert_eq!(run.history.len(), 2);
+        assert_eq!(run.undo_label(), "Undo: use the saved HP");
+        assert!(run.saved_hp_used() && !run.rest_filled_saved_hp());
+        assert!(run.back_to_sheets().is_none());
+        assert!(run.use_saved_hp().is_err(), "the press cannot repeat");
+
+        run.undo();
+        assert_eq!(hp(&run), full, "Undo gives back the full HP");
+        assert!(!run.state.log.iter().any(|line| line == SAVED_HP_USED));
+        assert_eq!(run.undo_label(), "Undo: full HP after long rest");
+        assert!(run.rest_filled_saved_hp() && !run.saved_hp_used());
+        run.undo();
+        assert_eq!(
+            hp(&run),
+            saved,
+            "Undo of the rest still restores the saved HP"
+        );
+        assert!(!run.rest_filled_saved_hp() && !run.saved_hp_used());
+
+        // The result lasts until the next step.
+        let mut again = close_and_reopen(&mut run, campaign);
+        again.rest_saved_setup(2);
+        again.use_saved_hp().unwrap();
+        again
+            .apply(Command::Initiative(0, Some(12)))
+            .expect("a later step");
+        assert!(!again.saved_hp_used());
+
+        // With no hero, the rest has nothing to put back and offers nothing.
+        let mut monsters = run_with_rest_and_no_hero(folder.path());
+        assert!(!monsters.rest_filled_saved_hp());
+        assert!(monsters.use_saved_hp().is_err());
+    }
+    fn run_with_rest_and_no_hero(dir: &std::path::Path) -> Run {
+        let mut setup = run();
+        let campaign = stored(&mut setup, dir);
+        let mut run = close_and_reopen(&mut setup, campaign);
+        run.rest_saved_setup(1);
+        run
     }
 
     #[test]

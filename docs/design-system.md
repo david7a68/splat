@@ -172,10 +172,10 @@ eye during long sessions.
 | Submenu | `menu_submenu` | Match quiet Read actions: `S` horizontal padding, Strong type and Read height |
 | Row menu | `row_menu` | Quiet `⋯` at the right, named `More actions for <name>`; holds Remove and Delete |
 | Add strip | `hanging_add_strip` | `Add` in its own Label column; one line of quiet icon-and-word buttons. Show all seven actions when they fit. Otherwise keep Fight, Group (plan only) and Long rest visible; put Day, Short rest, Travel and Major event in one compact `⋯⌄` menu named `More Add actions`; hover text names its actions. Keep the strip on one line |
-| Message | `message`, `small_message`, `message_with_action`, `Tone` | Inline icon and bar; `message`, `message_with_action` and `undo_message` start the words `XS` after the icon whatever the caller's spacing; cap the notice at `LIST_MEASURE`; actions follow text after an `L` gap or wrap below, aligned with the text; measure the whole action with padding; move it below and align it with the text if it cannot fit; actions without icons use a secondary border |
+| Message | `message`, `small_message`, `message_with_action`, `Tone` | Inline icon and bar; `message`, `message_with_action` and `undo_message` start the words `XS` after the icon whatever the caller's spacing; cap the notice at `LIST_MEASURE`; actions follow text after an `L` gap or wrap below, aligned with the text; measure the whole action with padding; move it below and align it with the text if it cannot fit; actions without icons use a secondary border. `message_with_actions` puts several choices below the words: the first starts at the text edge, wrapped lines start there too, and a red or dismissing choice keeps exactly `L` from the one before it (subtract the row's item spacing) |
 | Side panel | `side_panel_width`, `panel_header` | One width rule for Lookup, Notes and the run; separate participant and fight tabs |
 | Column | `Column::left / right / panel` | Rail, page lists and panels; inner-edge drag handle; natural width until dragged or moved with keys, then saved width across restarts; preserve page room and `RUN_LIST_KEEPS`; adjacent content reaches the column edge, with text measured inside it |
-| Link | `link` | Real `Link` role, at least 24 px high. A word narrower than 24 px takes its width from the link's own minimum size, never from spaces in the text: the word starts at the text edge and the underline covers only the word |
+| Link | `link` | Real `Link` role, at least 24 px high. A word narrower than 24 px reserves 24 px of layout width from the link's own minimum size, never from spaces in the text: the word starts at the text edge, the underline covers only the word, and the next item starts after the whole target, so two short links side by side never share a press area |
 | Number | `number`, `number_width` | Right-aligned digits |
 | Count | `count` | `1 entry`, `2,108 entries`; zero gives no text; empty unit words give only the formatted number |
 
@@ -203,6 +203,8 @@ settings keep their full save actions on a second line at the right edge, so nei
 
 A quiet action at the start of a line uses `line_start`: align its text with the line above and extend
 its target into the gutter. This also applies to an icon-bearing quiet message action below its message.
+A pane that can hold such an action at its text edge keeps a gutter at least `L` wide, so the target never
+reaches a column splitter. The World page's centre has an `L` left gutter for this.
 Other message actions use a secondary border. Undo messages use `undo_message`: a quiet action and undo
 icon on the message line, or below when needed. On reload, a result whose Undo would rewrite files checks
 those files. If one no longer holds what the action wrote, the result and its Undo go away. A result that also
@@ -261,7 +263,10 @@ Back before More. Lookup keeps its Back hint. Both use Alt+Left, and Alt+Right f
 
 Library omits `Library / <kind>` above the title. Its kind line does not repeat the package name. Owner status
 and `Use in this campaign` stay on the wrapping file line in Read and Edit Markdown, so Back does not move the
-title. During a draft, Back opens the earlier entry in Lookup. Show file is on that line; vault entries also
+title. The file line is one Read row (28 px) for every owner: built-in, campaign and package About. Its status, path,
+links and quiet actions centre in that row, so the title stays at one height when the DM goes from one owner to
+another. When the line is too narrow and the path goes to a second row, that row is also one Read row. During a
+draft, Back opens the earlier entry in Lookup. Show file is on that line; vault entries also
 have Edit in Obsidian. An unreadable entry keeps `Cannot be read` on its owner line, in place of `Used here`.
 Below its title, show only the kind when known and the specific error with its file line.
 Offer bordered `Fix in Edit Markdown` below an unreadable entry's error, at the text edge.
@@ -273,6 +278,11 @@ new one.” Library omits the creation offer without a campaign or package desti
 Ordinary bold and bold italic keep the prose colour and emphasis. A bold phrase links to Lookup only when
 it resolves to one entry. Explicit Markdown and wiki links stay interactive.
 Reader links use accent text and an underline. Library links open in place; other readers open them in Lookup.
+Each link in a paragraph is its own control: Tab reaches the links in reading order, a focus ring shows on that
+link only, and Enter or Space follows it. Its accessible name is its words and where it goes (`the bell keeper
+(opens Oskar)`); a missing link is not a Tab stop. The paragraph keeps its layout and wrapping, and each link's
+press target stays inside the paragraph. Short links grow toward 24 px where the paragraph has room, and two
+grown targets split the space between them. Focus stays on the link when the layout around it changes.
 Every reader resolves `[[Name]]`, `[[Name#Heading]]` and `[[Name|text]]` against World notes and entries the
 campaign can use. Duplicate names open a chooser. Missing names keep their words, a dotted underline and `Not
 found in this campaign` on hover. Broken campaign and package links also have a warning icon before the dotted
@@ -379,9 +389,13 @@ was deleted.
 
 Lookup shows up to five one-line results and selects the open result. A sole open result closes the list. Rows
 use Scan height, Body names, then Small muted type and level. Campaign entries add Campaign; source appears
-only when different from the campaign's main source. Shorten metadata only; hover and accessibility keep the
-whole row. Results never scroll sideways. Clicking a result or scrolling into its reader closes the list. Show
-all offers the remaining results. Clear sits beside nonempty search only. Back, Open in Library and the close
+only when different from the campaign's main source. Shorten metadata only, by whole parts; hover and accessibility
+keep the whole row. The kind and other parts before a fault go first, then parts after it. The file, which tells
+duplicate rows apart, stays whole while the fault shortens to whole words and then to its warning mark; only then is
+the file cut. No cut is inside a word, and a cut ends with `…`, never on a separator. Results never scroll sideways.
+Clicking a result or scrolling into its reader closes the list. `Show all N` is quiet and lists every match in place,
+in Lookup and in Arrivals: a scroll list at most eight rows tall that follows Tab and the arrow keys. New words
+return to five. Clear sits beside nonempty search only. Back, Open in Library and the close
 icon share the title line. Creation actions follow results with the proposed name, only without an exact
 match. Generate NPC appears only for empty search.
 
@@ -420,7 +434,9 @@ or folder choice states which file or folder an encounter will keep or use, in `
 `XS` gap below its own action. Library, World and Lookup draw the choices and these lines through
 `message_with_actions`, so they start at the message text edge, not at the warning bar. The Library reader
 draws the warning and its choices after the title, inside its scroll area, so they scroll with the entry;
-Edit Markdown keeps them above the editor.
+Edit Markdown keeps them above the editor. A file's warnings share this one place: the first-heading
+warning and its `Use <name>` action come directly above the duplicate warning, so no warning moves the
+title. `Undo heading change` takes the same place as a `line_start` quiet action.
 An `L` gap separates choices. Name the folder when filenames match. Making an entry separate also sets
 its name and matching first heading to its file stem. Other actions name encounters whose source will
 change; results explaining which entry an encounter will use are Small muted text below the action.
@@ -517,8 +533,10 @@ and permits a folder in an Obsidian vault. Disconnected campaign-link help opens
 Its state says Not connected · showing the name saved on this computer.
 
 A session-folder change counts notes, events, templates and recordings left behind. Offer Move files and save
-or Save without moving. Refuse collisions and copy every owned file before changing the manifest. A run-folder
-change counts saved files left behind. Move runs and save stages all files without replacement, saves
+or Save without moving. Move files and save is primary when no other primary is in view; it is secondary while a
+run is open or the campaign details form is open. Refuse collisions and copy every owned file before changing the manifest. A run-folder
+change counts saved files left behind. Move runs and save is primary when no other primary is in view; it
+shows only while no run is open. It stages all files without replacement, saves
 settings, then removes unchanged originals. Save without moving leaves files in the old folder. Block
 run-settings saves while a run is open. Folder changes name hidden unfinished runs and their states. A move
 result gives counts and destination without another Saved label. A moved run has confirmation and Undo move
@@ -538,6 +556,18 @@ names share one left edge and a wrapped summary stays right of the dates. The co
 the width; a longer date wraps in it, with its first line on the name's line. A row without a date keeps the
 column empty. Lookup's `Use your own names` never replaces an unsaved NPC on the World page. World opens on its own card,
 which says `Lookup keeps <name>. Save or discard this NPC to move it here.` while Lookup holds that NPC.
+An unsaved generated NPC on the World page is a held draft. Only Save NPC and Discard end it. Every other path keeps
+it: Problems, Open questions, another note, a repair, New, a reveal from another page and Lookup's link. While another
+view is open, one row above that view says `Unsaved NPC: <name> · Show`, so the view stays usable. Show, Generate NPC
+and Lookup's link open its card again; Reroll on the card replaces it. Discard says `<name> draft discarded.` with
+`Undo discard`, which brings back the same NPC until another view opens. Closing the app or changing the campaign
+asks about the NPC as it does for other drafts. The rail shows `Unsaved NPC` with the draft icon while the NPC is held;
+it is a link that opens the NPC's card on World from any page.
+
+A World result is one message form in one place: `message` (or the shared Undo message) below the file line, where
+`<file> is now a separate note.` sits, so the title never moves. `Note repaired.` is a success message there, and
+`<name> draft discarded.` sits there below the open note's file line. In an edit form, which has no file line, a result
+sits below the title. With no note open, it sits below the empty state's words.
 
 Set values show labelled rows: Stat block, In, Part of and Status. An NPC also shows its empty Stat block row. A full NPC reader's kind line shows NPC and its owner; Status stays in its own row. A compact reader keeps status on the kind line because it has no Status row. A compact reader has no file line either: while a duplicate-note repair message shows, its kind line drops the fault and names the open file instead (`NPC · Campaign · NPCs/Rook Ambry copy.md`). The result rows keep the fault. Use a fixed label column, aligned
 values and a 32 px pitch. Change uses one column at the widest visible value in the block plus an `L`
@@ -552,7 +582,8 @@ says `2 links need fixing`. Table faults use the
 same list warning and header repair link. Unread values name field, bad value, source line and repair, in
 the form `<Field> "<text on that line>" not read (line N). <How to write it>.` When the shape is not
 obvious, the repair gives an example: Hit Points says `Start with a number, such as 22 (4d8 + 4).` Every unread-value warning
-sits in one place: below the file line, above the value rows. Folder groups use normal-case paths after
+sits in one place: below the file line, above the value rows. It wraps at the reader measure in Read and at
+`FORM_WIDTH` in Edit, so it keeps the right edge of the rows and fields. Folder groups use normal-case paths after
 type groups. The empty Status field in Edit shows the faint placeholder `A short word, such as alive.`
 
 Change pickers focus search. Place choices start at the value column beside In, with one file link and a
@@ -564,7 +595,7 @@ stored names offer `Rename the note to <file name>`, with a guarded update and U
 future path below the name. A compact NPC reader puts Fights as and In on one read-only line; both open
 Lookup.
 
-A campaign world entry has a quiet Edit action, with a pencil icon and the word Edit, on its title line in Lookup and World. Edit replaces the rows and
+A campaign world entry has a quiet Edit action, with a pencil icon and the word Edit, on its title line in Lookup and World. Its icon sits one `L` after the measured title at every title width, so a kind line wider than a short title does not push it away; a title with art keeps Edit after the art. Edit replaces the rows and
 the text with one form: Status, Stat block, In and Part of as labelled fields, then Text in the reader's prose type,
 without the title line. The Text field ends at the same `FORM_WIDTH` edge as Status. One frame holds
 the editor and its scrollbar, so scrolling does not shorten the field. The shared save row
@@ -596,6 +627,8 @@ path) is the same group, and a group both sides have keeps the note's spelling o
 single note compares by its link target; plain text compares as written.
 Edit shows `not set` for null, empty and whitespace-only optional links. Saving other fields keeps their
 source text. World calls each file a note in related-note headings, Problems and conflict messages.
+`Also linked from` and the page links under `From other notes` name a copy of the note, or another note with the same
+name, by its path (`NPCs/Rook Ambry copy.md`), as search rows do.
 Each duplicate-note repair has a muted Small consequence below it, including the first repair's retained
 link target. An `L` gap separates the choices, and an `M` gap follows the last consequence.
 
@@ -609,8 +642,12 @@ warn before app close or a campaign switch. The unreadable count in the header o
 note's repair, keeping other repair drafts. A rolled table selects the matching row, marks it with dice and
 states the result below in UI sans. Typed rolls use well fill, a centred placeholder and dice as the column
 heading. Fixed headers cover passing rows with page fill and a hairline. Generator cards name their table
-sources below attributes. Without a names table, the World page's card shows the table marker inside the app,
-with no external link, because the DM prepares there. Lookup's card says `Built-in names.` with a quiet
+sources below attributes. Every card's `Will save <path>` is the path Save NPC writes: the folder that holds most of
+the campaign's NPCs, or `NPCs/` when it has none. Without a names table, the World page's card says `Built-in names. To
+use your own, add a table of names to a note. Paste the marker on the line above the table.` with a quiet `Copy the
+marker` action drawn with `line_start`, so its icon starts at the card's text edge. It copies the exact marker line,
+and then a success message in its place says `Copied. Change 1d6 to the number of names.` until the card shows another
+NPC. No card shows the marker as text. Lookup's card says `Built-in names.` with a quiet
 `Use your own names` link, which moves the same NPC to the World page's card. A session note's card says
 `Built-in names.` only, so the note keeps the keyboard. Table warnings use the words name, look, manner and
 want; hover keeps the marker key.
@@ -1012,8 +1049,9 @@ long-rest row shows an icon and either Everyone at full or Not at full. Open row
 ruling stays in place. Actions say Mark everyone at full
 or Mark not at full; states say Everyone at full or Not at full. Keep one Undo ruling until the next edit.
 Resuming a saved Setup after a restoring rest starts party HP full, says `Party HP is full after the long
-rest.` and offers Use the saved HP as one Undo step. Combat retains saved HP; the rest message names those
-fights.
+rest.` and offers Use the saved HP. Use the saved HP is its own named step, not an Undo: the header then says
+`Undo: use the saved HP`, and the same place says `Party HP set to the saved values.` with Undo, which gives
+back the full HP. Combat retains saved HP; the rest message names those fights.
 
 ### Party bar
 
@@ -1081,8 +1119,9 @@ actions; a flagged day keeps its Day icon and adds a muted `Small` word after th
 use error Timeline not saved. Run updates change only the Result line and never convert Timeline.
 
 Copied sessions say `<first file> and <second file> claim to be the same session.` They offer
-Make <file> a separate session with Undo separate session. Moved drafts
-offer the new path and Let it go. Missing session and run folders offer Choose folder.
+Make <file> a separate session with Undo separate session. Moved or deleted note drafts
+offer the new path, a new file and red `Discard`; Discard says `Draft discarded.` with `Undo discard`. After
+`Reload and lose my draft`, a note says `Reloaded from disk.` with `Undo reload`, as World does. Missing session and run folders offer Choose folder.
 
 ### Notes panel
 
@@ -1178,7 +1217,9 @@ sits an L gap after it. Add and On the timeline align left in that column. Row r
 The viewer has back link and muted date on line one, Add to notes at the right on Summary, and left-aligned
 view choices on line two. Use one segmented control for Summary, Clean transcript, What the check changed and
 Raw transcript; never wrap it. When tight, replace it with one dropdown naming the current view. Generated
-views share a Small draft notice: This draft was written automatically. Check it against your memory. If no check ran, put No check ran beside Raw transcript. Keep row menu
+views share a Small draft notice: This draft was written automatically. Check it against your memory. The row
+states an empty check once: in the warning line, or, while processing again hides that line, as `The check
+returned nothing` beside Raw transcript. Never both. Keep row menu
 beside title and `L` between its actions and events heading.
 
 ## Settings

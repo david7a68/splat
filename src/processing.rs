@@ -343,9 +343,18 @@ pub fn cleaned_path(recording: &Path) -> PathBuf {
     recording.with_extension("cleaned.md")
 }
 
+macro_rules! no_check {
+    () => {
+        "The check returned nothing"
+    };
+}
+
 /// The warning used when the first pass stands without a second-pass transcript.
 pub const NO_CHECK_WARNING: &str =
-    "The check returned nothing, so the clean transcript was not checked.";
+    concat!(no_check!(), ", so the clean transcript was not checked.");
+
+/// The warning's own words, beside Raw transcript while the warning line is hidden.
+pub const NO_CHECK_LABEL: &str = no_check!();
 
 /// What a person must know about the result, beside it, for as long as it stands.
 pub fn warning_path(recording: &Path) -> PathBuf {

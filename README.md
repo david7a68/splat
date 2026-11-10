@@ -171,7 +171,8 @@ uses the same width rule. An empty note has one inline Write link. The note file
 that needs repair and keep raw references in Technical details.
 
 The reader keeps ordinary bold and bold italic as emphasis. A bold phrase opens Lookup
-only when it resolves to an entry. Explicit Markdown and wiki links still work.
+only when it resolves to an entry. Explicit Markdown and wiki links still work. Tab reaches each
+link in a paragraph in turn, and Enter or Space follows it.
 
 Timeline files use `Fight`, `Travel`, `Short rest`, `Long rest` and `Major event`.
 The reader also accepts `Encounter` and `Event`, in any case, with or without a colon.
@@ -238,6 +239,8 @@ keep their warning icon and full words on hover. Note conflicts say **Notes chan
 and Timeline. Every closed long-rest row shows **Everyone at full** or **Not at full**, with an icon.
 Both pages let you turn the ruling off or on, with Undo.
 Both pages name only saved, unfinished fights past Setup as keeping their saved HP.
+A saved Setup resumed after the rest starts at full. **Use the saved HP** puts back its saved HP and
+says **Party HP set to the saved values.**, with **Undo** to go back to full.
 
 Library has **New entry** in its header. Its form opens in the reader column and closes after creation. World has **New ▾** for a plain note, a note with a type, an NPC, a location, or a generated NPC. Type headings use capitals and a count. World folder headings keep normal-case paths. Page headers show state or nonzero counts beside the title, with a rule and an `L` gap below. Counts use thousands separators.
 
@@ -672,10 +675,16 @@ A campaign creature in Library offers **Make NPC note**, which opens its new NPC
 encounter, and Undo removes them. A location lists what is in it, and World shows locations as a tree.
 
 **Generate NPC** in Lookup rolls a name and three attributes: look, manner and want. **Reroll** rolls them all again,
-and nothing is written until **Save NPC**, which creates the note in `NPCs/` and opens it. **Discard** lets it go.
+and nothing is written until **Save NPC**, which creates the note and opens it. The card says where: the folder that
+holds most of the campaign's NPCs, or `NPCs/` when there are none. **Discard** lets it go.
 The card names the campaign tables it uses, or says that it uses built-in lists. Without a names table, Lookup says
 **Built-in names.** and offers **Use your own names**, which opens the same NPC on the World page. The World page's card
-says how to mark a table of names.
+says to add a table of names to a note and paste the marker on the line above the table. **Copy the marker** copies
+the marker line for you; then change `1d6` in it to the number of names.
+
+On the World page, an unsaved NPC stays until you save it or choose **Discard**, and **Undo discard** brings it back.
+While you look at other notes, Problems or a repair, one row above them says **Unsaved NPC: <name> · Show**.
+The rail says **Unsaved NPC** on every page; select it to see the NPC's card on World.
 
 The built-in lists suit no world in particular, so a campaign can replace any of the four. Mark a table with the key
 `npc-name`, `npc-look`, `npc-manner` or `npc-want` in any world note. The first table in path order wins, session notes
@@ -1029,7 +1038,7 @@ sources and limits are recorded in [the research notes](docs/research/dndbeyond-
 
 Recording failures and stops remain on each recording’s row after you dismiss a banner. A stopped recording links to the microphone input in Settings. **Continue processing** resumes kept work. An active job hides the old cancellation or failure reason. The result viewer keeps its back link, date and Add to notes on one line. View choices sit below them, as a segmented control or a dropdown when space is short. The rail’s recording status opens the recording in one click.
 
-Lookup keeps up to five results above the reader and marks the open one. When the only result is open, its result list closes. New NPC and New location include the proposed name, and appear only when no exact match exists. A copy keeps the original name by default and offers Edit the copy after saving. Wide reader tables keep their first column and header in view. World rolls mark their matched row.
+Lookup keeps up to five results above the reader and marks the open one. When the only result is open, its result list closes. With more matches, **Show all** lists every match in place, in a short list that you can scroll, Tab through or walk with the arrow keys. New NPC and New location include the proposed name, and appear only when no exact match exists. A copy keeps the original name by default and offers Edit the copy after saving. Wide reader tables keep their first column and header in view. World rolls mark their matched row.
 
 Campaign repair shows invalid notes in place. The campaign-wide Needed by your entries list opens entries in Lookup. A session note conflict shows your draft and the disk text side by side, with changed lines marked.
 

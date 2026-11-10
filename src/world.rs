@@ -793,6 +793,26 @@ pub(crate) fn common_folder<'a>(
         .map(|(folder, _)| folder.to_owned())
 }
 
+/// The relative path of a new entry with this name in this folder. An empty folder is the
+/// campaign's root.
+fn path_in(folder: &str, name: &str) -> String {
+    let stem = sessions::file_safe(name.trim());
+    if folder.is_empty() {
+        format!("{stem}.md")
+    } else {
+        format!("{folder}/{stem}.md")
+    }
+}
+
+/// Where a new entry of this kind and name will be written, from the campaign's notes as the
+/// index read them. It uses the folder rule of the write, so a card can promise the real path.
+pub(crate) fn new_entry_path(index: Option<&ContentIndex>, name: &str, kind: &str) -> String {
+    let folder = index
+        .and_then(|index| index.type_folder(kind))
+        .unwrap_or_else(|| default_folder(kind));
+    path_in(&folder, name)
+}
+
 /// Where a new entry of this kind is written when the campaign has none yet.
 fn default_folder(kind: &str) -> String {
     match kind {
@@ -864,11 +884,7 @@ fn create_at(
         return Err("Type a name first.".to_owned());
     }
     let folder = folder_for(campaign, kind);
-    let relative = if folder.is_empty() {
-        format!("{stem}.md")
-    } else {
-        format!("{folder}/{stem}.md")
-    };
+    let relative = path_in(&folder, name);
     let path = note_path(&campaign.path, &relative)?;
     if path.exists() {
         return Err(format!("{relative} already exists."));
@@ -1424,6 +1440,30 @@ pub struct Reader {
     /// The session being played and the day, as a Log line begins: `[[Session 1]], Day 1`.
     /// With no session, a change writes no Log line.
     pub log_as: Option<String>,
+    /// The World page's result for this draw. It sits where every World result sits: below the
+    /// file line, so the title never moves.
+    pub page_result: Option<PageResult>,
+    /// The page result's Undo was pressed in the last draw.
+    pub page_result_undo: bool,
+}
+
+/// A result that the World page owns, drawn by the reader in the one place for results.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum PageResult {
+    Repaired,
+    /// A generated NPC that Discard let go, by name, with `Undo discard`.
+    Discarded(String),
+}
+
+/// The one message form for a World result. Returns true when its Undo is pressed.
+pub(crate) fn page_result(ui: &mut egui::Ui, result: &PageResult) -> bool {
+    match result {
+        PageResult::Repaired => {
+            design::message(ui, Tone::Success, "Note repaired.");
+            false
+        }
+        PageResult::Discarded(name) => design::draft_discarded(ui, name),
+    }
 }
 
 impl Reader {
@@ -1548,6 +1588,14 @@ impl Reader {
         go.and_then(|go| self.settle(go))
     }
 
+    fn draw_page_result(&mut self, ui: &mut egui::Ui) {
+        if let Some(result) = self.page_result.take()
+            && page_result(ui, &result)
+        {
+            self.page_result_undo = true;
+        }
+    }
+
     fn draw(
         &mut self,
         ui: &mut egui::Ui,
@@ -1597,21 +1645,44 @@ impl Reader {
             let edit_action = Action::quiet("Edit")
                 .icon(design::icons::EDIT)
                 .density(Density::Read);
-            let room = edit.map_or(0.0, |_| edit_action.natural_width(ui) + design::S);
-            ui.allocate_ui_with_layout(
-                egui::vec2(ui.available_width() - room, 0.0),
-                egui::Layout::top_down(egui::Align::Min),
-                |ui| {
-                    view::title_with_art(ui, &title, &kind_line, Some(&item.entry));
-                },
-            );
-            if let Some(campaign) = edit
-                && edit_action
+            let room = edit.map_or(0.0, |_| edit_action.natural_width(ui) + design::L);
+            let width = ui.available_width() - room;
+            let cell = ui
+                .allocate_ui_with_layout(
+                    egui::vec2(width, 0.0),
+                    egui::Layout::top_down(egui::Align::Min),
+                    |ui| {
+                        view::title_with_art(ui, &title, &kind_line, Some(&item.entry));
+                    },
+                )
+                .response
+                .rect;
+            if let Some(campaign) = edit {
+                // Edit's icon sits one `L` after the measured title, so a kind line wider than
+                // a short title never pushes it away. Its target starts `S` before the icon.
+                // Art beside the title keeps it after the art.
+                if crate::art::entry_art(ui.ctx(), &item.entry).is_none() {
+                    let title_width = ui
+                        .painter()
+                        .layout(
+                            title.clone(),
+                            Type::Display.font(ui),
+                            colors().text,
+                            width.max(design::XXL),
+                        )
+                        .size()
+                        .x;
+                    ui.add_space(
+                        cell.left() + title_width + design::L - design::S - ui.cursor().left(),
+                    );
+                }
+                if edit_action
                     .name(&format!("Edit {}", item.entry.name))
                     .show(ui)
                     .clicked()
-            {
-                self.begin_edit(campaign, item);
+                {
+                    self.begin_edit(campaign, item);
+                }
             }
         });
         self.form_focused = false;
@@ -1649,6 +1720,8 @@ impl Reader {
         if let Some(campaign) = campaign
             && editing
         {
+            // The form has no file line, so the result sits below the title.
+            self.draw_page_result(ui);
             return self.edit_form(ui, item, index, campaign);
         }
 
@@ -1659,23 +1732,26 @@ impl Reader {
         if file_line && let Some(campaign) = campaign {
             file_actions(ui, campaign, &item.entry.path);
         }
-        if let Some(reason) = unread_reason
-            && let Some(campaign) = campaign
-            && (self.error.is_none() || self.group_error)
-        {
-            if file_line {
-                // The file line just above has the one Edit in Obsidian link.
-                design::message(ui, Tone::Warning, &reason);
-            } else {
-                unread_groups_message(ui, campaign, &item.entry.path, &reason);
+        // Unread-value warnings wrap at the reader measure, the right edge of the rows below.
+        design::reader::measure(ui, |ui| {
+            if let Some(reason) = unread_reason
+                && let Some(campaign) = campaign
+                && (self.error.is_none() || self.group_error)
+            {
+                if file_line {
+                    // The file line just above has the one Edit in Obsidian link.
+                    design::message(ui, Tone::Warning, &reason);
+                } else {
+                    unread_groups_message(ui, campaign, &item.entry.path, &reason);
+                }
             }
-        }
-        // Every other value not read sits here too, not below the values.
-        if let Some(fault) = self.group_fault.as_ref().filter(|fault| fault.id == id) {
-            for notice in &fault.notices {
-                design::message(ui, Tone::Warning, notice);
+            // Every other value not read sits here too, not below the values.
+            if let Some(fault) = self.group_fault.as_ref().filter(|fault| fault.id == id) {
+                for notice in &fault.notices {
+                    design::message(ui, Tone::Warning, notice);
+                }
             }
-        }
+        });
         if let Some(campaign) = campaign {
             if item.entry.kind == "world" && !index.duplicate_world.contains_key(&item.entry.path) {
                 let stem = Path::new(&item.entry.path)
@@ -1744,6 +1820,8 @@ impl Reader {
             {
                 self.identity_undo = None;
             }
+            // Every World result sits here, where the separate-note result sits.
+            self.draw_page_result(ui);
             if let Some((_, undo)) = &self.identity_undo
                 && design::undo_message(
                     ui,
@@ -3595,6 +3673,47 @@ mod tests {
         let again = create_generated(&campaign, &npc).unwrap_err();
         assert!(again.contains("already exists"), "{again}");
         assert_eq!(fs::read_to_string(dir.path().join(path)).unwrap(), text);
+    }
+
+    /// AD2: the card's `Will save` path is the path Save NPC writes, for a campaign with no
+    /// NPCs, NPCs in another folder, and NPCs at the campaign's root.
+    #[test]
+    fn iter15_d_ad2_the_card_promises_the_path_the_save_writes() {
+        let npc_at = |path: &str, name: &str| {
+            format!(
+                "---\nsplat_schema: 2\nsplat_id: {}\nsplat_kind: world\nsplat_name: {name}\nsplat_type: npc\n---\n\n# {name}\n",
+                splat::character::stable_id(path)
+            )
+        };
+        for (existing, expected) in [
+            (vec![], "NPCs/Wren Hallam.md"),
+            (
+                vec!["People/Rook.md", "People/Tally.md", "NPCs/Blot.md"],
+                "People/Wren Hallam.md",
+            ),
+            (vec!["Rook.md"], "Wren Hallam.md"),
+        ] {
+            let dir = tempfile::tempdir().unwrap();
+            let campaign = sample_campaign(dir.path());
+            for path in &existing {
+                let file = dir.path().join(path);
+                fs::create_dir_all(file.parent().unwrap()).unwrap();
+                let name = Path::new(path).file_stem().unwrap().to_string_lossy();
+                fs::write(file, npc_at(path, &name)).unwrap();
+            }
+            let index = ContentIndex::load(&[], Some(&campaign)).unwrap();
+            let promised = new_entry_path(Some(&index), "Wren Hallam", "npc");
+            assert_eq!(promised, expected, "AD2-promise: {existing:?}");
+            let npc = crate::npc_generator::Generated {
+                name: "Wren Hallam".into(),
+                attributes: ["Ink".into(), "Bored".into(), "A writ".into()],
+            };
+            create_generated(&campaign, &npc).unwrap();
+            assert!(
+                dir.path().join(&promised).is_file(),
+                "AD2-write: the save wrote the promised {promised} for {existing:?}"
+            );
+        }
     }
     fn sample_campaign(root: &Path) -> Campaign {
         Campaign {

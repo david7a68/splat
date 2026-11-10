@@ -488,6 +488,32 @@ impl<'a> Driver<'a> {
             .any(|shape| contains(&shape.shape, first, color))
     }
 
+    /// A message's tone bar beside one line of its painted words: the bar is as tall as the
+    /// words, ends before them, and starts on their line.
+    pub fn has_tone_bar(&self, words: egui::Rect, color: egui::Color32) -> bool {
+        fn contains(shape: &egui::Shape, words: egui::Rect, color: egui::Color32) -> bool {
+            match shape {
+                egui::Shape::Vec(shapes) => {
+                    shapes.iter().any(|shape| contains(shape, words, color))
+                }
+                egui::Shape::Rect(bar) => {
+                    bar.fill == color
+                        && bar.rect.width() <= crate::design::XS
+                        && bar.rect.right() < words.left()
+                        && words.left() - bar.rect.right() <= crate::design::XXL
+                        && (bar.rect.top() - words.top()).abs() <= 1.0
+                        && bar.rect.bottom() >= words.bottom() - 1.0
+                }
+                _ => false,
+            }
+        }
+        self.harness
+            .output()
+            .shapes
+            .iter()
+            .any(|shape| contains(&shape.shape, words, color))
+    }
+
     pub fn painted_right(&self, words: &str) -> Option<f32> {
         let mut right = None;
         self.each_painted_text(|text, clip| {
@@ -1748,6 +1774,16 @@ impl<'a> Driver<'a> {
     /// Start counting a new task here, without recording the steps before it.
     pub fn begin_task(&mut self) {
         self.last_goal = self.interactions;
+    }
+
+    /// Steps that prove a result and come back to the same place. The task being counted
+    /// keeps its own cost: these steps are not part of it. Only proof steps that end in the
+    /// state they started from go inside; no step of the DM's task may, or its cost hides.
+    pub fn aside<T>(&mut self, steps: impl FnOnce(&mut Self) -> T) -> T {
+        let before = self.interactions;
+        let result = steps(self);
+        self.last_goal += self.interactions - before;
+        result
     }
 
     /// Record how many interactions the user needed to reach a goal, counted

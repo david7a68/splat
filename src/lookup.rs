@@ -21,6 +21,9 @@ use uuid::Uuid;
 use crate::matching::{self, Rank, Typed, names_lower_word};
 
 const RESULT_ROW: f32 = design::XXL;
+/// Result rows before `Show all`, and the most rows its list shows before it scrolls.
+const RESULTS_SHOWN: usize = 5;
+pub(crate) const RESULTS_LISTED: usize = 8;
 const PANEL_MARGIN: f32 = design::M;
 
 pub const SEARCH_NAME: &str = "Search everything";
@@ -1380,6 +1383,10 @@ pub struct Lookup {
     waiting_for: Option<Uuid>,
     focus_search: bool,
     results_open: bool,
+    /// `Show all` lists every match in place. New words return to five.
+    show_all: bool,
+    /// An arrow key moved the highlight, so the list brings that row into view.
+    follow_highlight: bool,
     highlight: usize,
     /// An entry the DM asked to see in the Library.
     pub open_in_library: Option<Entry>,
@@ -1890,6 +1897,7 @@ impl Lookup {
             };
             self.matches = Some((query.clone(), found));
             self.highlight = 0;
+            self.show_all = false;
         }
         let matches = self.matches.as_ref().unwrap().1.clone();
         if before != self.query && !query.is_empty() {
@@ -1939,6 +1947,7 @@ impl Lookup {
                 self.highlight -= 1;
                 chosen = matches.get(self.highlight).copied();
             }
+            self.follow_highlight |= down || up;
         }
         if response.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)) {
             self.results_open = false;
@@ -1953,7 +1962,12 @@ impl Lookup {
                 );
             }
             // The reader stays the larger part of the panel, even at the minimum window.
-            let rows = matches.len().min(5);
+            // `Show all` names every match, in a list that scrolls past eight rows.
+            let rows = if self.show_all {
+                matches.len()
+            } else {
+                matches.len().min(RESULTS_SHOWN)
+            };
             let results: Vec<_> = matches
                 .iter()
                 .take(rows)
@@ -1978,12 +1992,15 @@ impl Lookup {
                 })
                 .collect();
             ui.spacing_mut().item_spacing.y = 0.0;
+            let follow = std::mem::take(&mut self.follow_highlight);
+            // Every row keeps its control, so Tab reaches a match below the list's edge. A row
+            // paints only while it is in view.
             egui::ScrollArea::vertical()
                 .id_salt("lookup_results")
-                .max_height(RESULT_ROW * rows as f32)
+                .max_height(RESULT_ROW * rows.min(RESULTS_LISTED) as f32)
                 .auto_shrink([false, true])
-                .show_rows(ui, RESULT_ROW, rows, |ui, range| {
-                    for row in range {
+                .show(ui, |ui| {
+                    for row in 0..rows {
                         let (title, detail, selected) = &results[row];
                         let full = format!("{title} · {detail}");
                         let response = design::row(ui, RESULT_ROW, *selected, &full, |ui, rect| {
@@ -1992,12 +2009,18 @@ impl Lookup {
                                 Type::Body.font(ui),
                                 colors().text,
                             );
+                            let room = (rect.width() - name.size().x).max(0.0);
+                            let fitted = fitted_detail(ui, detail, room);
                             let tail = design::one_line(
                                 ui,
-                                &format!(" · {detail}"),
+                                &if fitted.is_empty() {
+                                    String::new()
+                                } else {
+                                    format!("{DETAIL_SEPARATOR}{fitted}")
+                                },
                                 Type::Small.font(ui),
                                 colors().muted,
-                                (rect.width() - name.size().x).max(0.0),
+                                room,
                             );
                             let top = rect.center().y - name.size().y / 2.0;
                             ui.painter().galley(
@@ -2018,33 +2041,31 @@ impl Lookup {
                         ui.ctx().accesskit_node_builder(response.id, |node| {
                             node.set_role_description("Lookup result");
                         });
+                        // egui does not scroll to a row that Tab focuses, and arrow keys move
+                        // the highlight from the search field. The list follows both.
+                        // egui's scroll target counts the clip margin as visible, so the row
+                        // asks for that margin too and shows whole.
+                        if response.gained_focus() || (follow && *selected) {
+                            let margin = ui.visuals().clip_rect_margin;
+                            ui.scroll_to_rect(response.rect.expand2(egui::vec2(0.0, margin)), None);
+                        }
                         if response.clicked() {
                             chosen = Some(matches[row]);
                         }
                     }
                 });
             ui.spacing_mut().item_spacing.y = design::XS;
-        }
-        if show_results && matches.len() > 5 {
-            ui.menu_button(
-                format!("Show all {}", design::count(matches.len(), "", "").trim()),
-                |ui| {
-                    egui::ScrollArea::vertical()
-                        .max_height(design::READER_MEASURE)
-                        .show(ui, |ui| {
-                            for hit in matches {
-                                let name = match hit {
-                                    Hit::Entry(at) => &index.items[*at].entry.name,
-                                    Hit::Written(at) => &self.written[*at].title,
-                                };
-                                if design::link(ui, name).clicked() {
-                                    chosen = Some(*hit);
-                                    ui.close();
-                                }
-                            }
-                        });
-                },
-            );
+            // The same quiet action as Arrivals: it lists every match in place.
+            if !self.show_all
+                && matches.len() > RESULTS_SHOWN
+                && Action::quiet(&format!("Show all {}", matches.len()))
+                    .density(Density::Read)
+                    .hint("List every match, without more typing")
+                    .show(ui)
+                    .clicked()
+            {
+                self.show_all = true;
+            }
         }
         if let Some(hit) = chosen {
             if let Some(row) = matches.iter().position(|candidate| *candidate == hit) {
@@ -2119,6 +2140,7 @@ impl Lookup {
                     &self.generator_sources,
                     self.run_open,
                     NamesHelp::Link,
+                    &world::new_entry_path(Some(&*index), &npc.name, "npc"),
                 );
                 reroll = choice.again;
                 if choice.save {
@@ -2272,6 +2294,113 @@ pub struct GeneratedCard {
     pub sources: Vec<String>,
 }
 
+/// The separator between a result row's name and the parts of its detail.
+const DETAIL_SEPARATOR: &str = " · ";
+
+/// A result row's detail, shortened by whole parts to fit `width` after the separator. A fault
+/// part starts with the warning or error mark. The kind and other parts before the fault go
+/// first, from the nearest, then the parts after it. The file, which tells duplicate rows
+/// apart, stays whole while the fault shortens to whole words and then to its mark; only then
+/// is the file cut. No cut is inside a word, and a cut ends with `…`, never on a separator.
+/// With no room for a word, the row shows no detail.
+pub(crate) fn fitted_detail(ui: &egui::Ui, detail: &str, width: f32) -> String {
+    let font = Type::Small.font(ui);
+    // Each candidate is measured whole, with its separator, as the row paints it.
+    let fits =
+        |text: &str| design::number_width(ui, &format!("{DETAIL_SEPARATOR}{text}"), &font) <= width;
+    // The longest whole-word cut of `text` that fits once `around` places it in the row.
+    let whole_words = |text: &str, around: &dyn Fn(&str) -> String| {
+        let mut words: Vec<&str> = text.split_whitespace().collect();
+        while words.pop().is_some() {
+            while words.last().is_some_and(|word| *word == "·") {
+                words.pop();
+            }
+            if words.is_empty() {
+                break;
+            }
+            let cut = format!("{}…", words.join(" "));
+            if fits(&around(&cut)) {
+                return cut;
+            }
+        }
+        String::new()
+    };
+    if detail.is_empty() || fits(detail) {
+        return detail.to_owned();
+    }
+    let parts: Vec<&str> = detail.split(DETAIL_SEPARATOR).collect();
+    let fault = |part: &str| part.starts_with(icons::WARN) || part.starts_with(icons::ERROR);
+    let Some(first_fault) = parts.iter().position(|part| fault(part)) else {
+        return whole_words(detail, &|cut| cut.to_owned());
+    };
+    let last_fault = parts
+        .iter()
+        .rposition(|part| fault(part))
+        .unwrap_or(first_fault);
+    // The order parts leave in: the nearest before the fault (not the file), then the last.
+    let mut order: Vec<usize> = (1..first_fault)
+        .rev()
+        .filter(|&at| !fault(parts[at]))
+        .collect();
+    order.extend(
+        (last_fault + 1..parts.len())
+            .rev()
+            .filter(|&at| !fault(parts[at])),
+    );
+    let mut kept = vec![true; parts.len()];
+    for at in order {
+        kept[at] = false;
+        let shown = parts
+            .iter()
+            .zip(&kept)
+            .filter_map(|(part, keep)| keep.then_some(*part))
+            .collect::<Vec<_>>()
+            .join(DETAIL_SEPARATOR);
+        if fits(&shown) {
+            return shown;
+        }
+    }
+    let faults = parts
+        .iter()
+        .copied()
+        .filter(|part| fault(part))
+        .collect::<Vec<_>>()
+        .join(DETAIL_SEPARATOR);
+    // The fault's warning mark is a whole word, and it stays while any detail shows.
+    let mark = faults
+        .split_whitespace()
+        .next()
+        .unwrap_or_default()
+        .to_owned();
+    let shorten = |faults: &str, around: &dyn Fn(&str) -> String| {
+        let cut = whole_words(faults, around);
+        if cut == format!("{mark}…") {
+            mark.clone()
+        } else {
+            cut
+        }
+    };
+    if fault(parts[0]) {
+        return shorten(&faults, &|cut| cut.to_owned());
+    }
+    // The file tells two duplicate rows apart, so it stays whole while the fault shortens to
+    // whole words. Only when the file and the mark do not fit is the file cut, last.
+    let file = parts[0];
+    let cut = shorten(&faults, &|cut| format!("{file}{DETAIL_SEPARATOR}{cut}"));
+    if !cut.is_empty() {
+        return format!("{file}{DETAIL_SEPARATOR}{cut}");
+    }
+    if fits(&format!("{file}{DETAIL_SEPARATOR}{mark}")) {
+        return format!("{file}{DETAIL_SEPARATOR}{mark}");
+    }
+    let file = whole_words(file, &|cut| format!("{cut}{DETAIL_SEPARATOR}{mark}"));
+    if file.is_empty() {
+        shorten(&faults, &|cut| cut.to_owned())
+    } else {
+        format!("{file}{DETAIL_SEPARATOR}{mark}")
+    }
+}
+
 /// How a generator card says that it uses the built-in names.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum NamesHelp {
@@ -2283,9 +2412,14 @@ pub(crate) enum NamesHelp {
     Plain,
 }
 
-/// The text a World note needs for the generator to use its own names.
-pub(crate) const OWN_NAMES_HELP: &str = "Built-in names. To use your own, put \
-     <!-- splat:rolls key=npc-name dice=1d6 --> on the line above a table of names in any note.";
+/// The World page's words for using the campaign's own names. The marker itself is copied, not
+/// shown, because the DM types it in another program.
+pub(crate) const OWN_NAMES_HELP: &str = "Built-in names. To use your own, add a table of names to a note. Paste the marker on the line above the table.";
+/// The exact line that marks a table of names, for `Copy the marker`.
+pub(crate) const NAMES_MARKER: &str = "<!-- splat:rolls key=npc-name dice=1d6 -->";
+pub(crate) const COPY_MARKER: &str = "Copy the marker";
+/// After the copy: what the DM changes in the pasted line. The dice are the marker's own.
+pub(crate) const MARKER_COPIED: &str = "Copied. Change 1d6 to the number of names.";
 pub(crate) const BUILT_IN_NAMES: &str = "Built-in names.";
 pub(crate) const USE_OWN_NAMES: &str = "Use your own names";
 
@@ -2307,8 +2441,17 @@ pub(crate) fn generated_card(
     problems: &[crate::npc_generator::TableProblem],
     sources: &[String],
     run_open: bool,
+    save_path: &str,
 ) -> (bool, bool, bool) {
-    let choice = generator_card(ui, npc, problems, sources, run_open, NamesHelp::Plain);
+    let choice = generator_card(
+        ui,
+        npc,
+        problems,
+        sources,
+        run_open,
+        NamesHelp::Plain,
+        save_path,
+    );
     (choice.save, choice.again, choice.discard)
 }
 
@@ -2320,6 +2463,7 @@ pub(crate) fn generator_card(
     sources: &[String],
     run_open: bool,
     help: NamesHelp,
+    save_path: &str,
 ) -> CardChoice {
     let mut choice = CardChoice::default();
     design::group_label(ui, "Generated NPC");
@@ -2337,7 +2481,31 @@ pub(crate) fn generator_card(
     if sources.is_empty() && problems.is_empty() {
         match help {
             NamesHelp::Marker => {
-                ui.label(Type::Small.rich(ui, OWN_NAMES_HELP).color(colors().muted));
+                ui.add(
+                    egui::Label::new(Type::Small.rich(ui, OWN_NAMES_HELP).color(colors().muted))
+                        .wrap(),
+                );
+                // The result lasts until the card shows another NPC. It says what to change
+                // in the pasted line, in the one message form.
+                let id = ui.id().with("names_marker_copied");
+                let copied = ui
+                    .data(|data| data.get_temp::<String>(id))
+                    .is_some_and(|name| name == npc.name);
+                if copied {
+                    design::message(ui, Tone::Success, MARKER_COPIED);
+                } else {
+                    // A quiet action that starts a line keeps the card's text edge.
+                    let response = Action::quiet(COPY_MARKER)
+                        .icon(icons::COPY)
+                        .density(Density::Read)
+                        .line_start()
+                        .show(ui)
+                        .on_hover_text(NAMES_MARKER);
+                    if response.clicked() {
+                        ui.ctx().copy_text(NAMES_MARKER.to_owned());
+                        ui.data_mut(|data| data.insert_temp(id, npc.name.clone()));
+                    }
+                }
             }
             NamesHelp::Plain => {
                 ui.label(Type::Small.rich(ui, BUILT_IN_NAMES).color(colors().muted));
@@ -2391,13 +2559,7 @@ pub(crate) fn generator_card(
     });
     ui.label(
         Type::Small
-            .rich(
-                ui,
-                format!(
-                    "Will save NPCs/{}.md",
-                    crate::sessions::file_safe(&npc.name)
-                ),
-            )
+            .rich(ui, format!("Will save {save_path}"))
             .color(colors().muted),
     );
     ui.horizontal_wrapped(|ui| {
@@ -2426,6 +2588,90 @@ pub(crate) fn generator_card(
 mod tests {
     use super::*;
 
+    /// FD6: a result row shortens by whole parts. The kind goes first, then the parts after the
+    /// fault. The file stays whole while the fault shortens to whole words and then to its mark;
+    /// the file is cut last. No cut is inside a word or ends on a separator before `…`.
+    #[test]
+    fn result_detail_shortens_by_whole_parts() {
+        let mut harness = egui_kittest::Harness::new_ui(|ui| {
+            let mark = icons::WARN;
+            let fault = format!("{mark} Same note in two files");
+            let path = "NPCs/Rook Ambry copy.md";
+            let detail = format!("{path} · NPC · {fault} · Campaign");
+            let font = Type::Small.font(ui);
+            let room = |text: &str| design::number_width(ui, &format!(" · {text}"), &font) + 0.5;
+            let fit = |width: f32| fitted_detail(ui, &detail, width);
+            // A cut keeps whole words of `whole` and ends with `…`.
+            let whole_cut = |cut: &str, whole: &str| {
+                cut.strip_suffix('…').is_some_and(|kept| {
+                    whole.starts_with(kept)
+                        && whole[kept.len()..].starts_with(' ')
+                        && !kept.trim_end().ends_with('·')
+                })
+            };
+            // Room for all: nothing changes.
+            assert_eq!(fit(room(&detail)), detail, "whole");
+            // The kind goes first, even when the part after the fault could go instead.
+            let no_kind = format!("{path} · {fault} · Campaign");
+            assert_eq!(fit(room(&no_kind)), no_kind, "kind first");
+            let file_and_fault = format!("{path} · {fault}");
+            assert_eq!(
+                fit(room(&file_and_fault)),
+                file_and_fault,
+                "then after the fault"
+            );
+            // Then the fault shortens to whole words, after the whole file.
+            let cut = fit(room(&file_and_fault) - 1.0);
+            let rest = cut
+                .strip_prefix(&format!("{path} · "))
+                .unwrap_or_else(|| panic!("the file stays whole: {cut:?}"));
+            assert!(
+                whole_cut(rest, &fault),
+                "the fault ends on a whole word: {cut:?}"
+            );
+            // Then to its mark alone, never a lone `…`.
+            let file_and_mark = format!("{path} · {mark}");
+            assert_eq!(fit(room(&file_and_mark)), file_and_mark, "the mark stays");
+            // Only then is the file cut, to whole words, before the mark.
+            let short = fit(room(&file_and_mark) - 1.0);
+            let file = short
+                .strip_suffix(&format!(" · {mark}"))
+                .unwrap_or_else(|| panic!("the mark stays: {short:?}"));
+            assert!(
+                whole_cut(file, path),
+                "the file ends on a whole word: {short:?}"
+            );
+            // No room for a word: no detail, so no lone `…` after a separator.
+            assert_eq!(fit(4.0), "", "no room");
+            assert_eq!(fitted_detail(ui, "", 200.0), "", "empty");
+            // A row that starts with its fault drops what follows, then cuts whole words.
+            let first = format!("{fault} · World note · Campaign");
+            assert_eq!(
+                fitted_detail(ui, &first, room(&fault)),
+                fault,
+                "fault first"
+            );
+            let first_cut = fitted_detail(ui, &first, room(&fault) - 1.0);
+            assert!(whole_cut(&first_cut, &fault), "{first_cut:?}");
+            // A row with no fault ends on a whole word, not on its separator.
+            let plain = "Monster · CR 1/4 · Small humanoid (goblinoid) · SRD 5.1";
+            let plain_cut = fitted_detail(ui, plain, room("Monster · CR 1/4 · Small humanoid"));
+            assert!(whole_cut(&plain_cut, plain), "{plain_cut:?}");
+            // The longest realistic file name still ends on a whole word before the mark.
+            let long = format!(
+                "NPCs/The Venerable Watchkeeper of the Northern Gate copy.md · NPC · {fault}"
+            );
+            let long_cut = fitted_detail(ui, &long, room(&format!("NPCs/The Venerable… · {mark}")));
+            assert_eq!(
+                long_cut,
+                format!("NPCs/The Venerable… · {mark}"),
+                "long file"
+            );
+        });
+        design::theme::install(&harness.ctx);
+        harness.run_steps(1);
+    }
+
     /// The table marker stays on the World page. Lookup links there, and a session note
     /// only says so. A campaign table replaces the words in every place.
     #[test]
@@ -2445,7 +2691,16 @@ mod tests {
             let npc = npc.clone();
             let mut harness = egui_kittest::Harness::new_ui_state(
                 move |ui, pressed: &mut bool| {
-                    *pressed |= generator_card(ui, &npc, &[], &sources, false, help).own_names;
+                    *pressed |= generator_card(
+                        ui,
+                        &npc,
+                        &[],
+                        &sources,
+                        false,
+                        help,
+                        "People/Wren Hallam.md",
+                    )
+                    .own_names;
                 },
                 false,
             );
@@ -2473,6 +2728,40 @@ mod tests {
                 harness.get_by_label(USE_OWN_NAMES).click();
                 harness.run_steps(2);
                 assert!(*harness.state(), "{case}: the link reports its press");
+            }
+            // AD2: every card names the path it was given, which is the path the save writes.
+            assert!(
+                harness
+                    .query_by_label("Will save People/Wren Hallam.md")
+                    .is_some(),
+                "{case}"
+            );
+            // FD3: no card shows the raw marker. Only the World card can copy it.
+            assert!(
+                harness.query_by_label_contains("splat:rolls").is_none(),
+                "iter-15-D-FD3-hidden {case}"
+            );
+            assert_eq!(
+                harness.query_by_label(COPY_MARKER).is_some(),
+                marker,
+                "{case}"
+            );
+            if marker {
+                harness.get_by_label(COPY_MARKER).click();
+                harness.step();
+                let copied = harness.output().platform_output.commands.iter().any(
+                    |command| matches!(command, egui::OutputCommand::CopyText(text) if text == NAMES_MARKER),
+                );
+                assert!(
+                    copied,
+                    "iter-15-D-FD3-copy: the action copies the exact marker"
+                );
+                harness.run_steps(2);
+                assert!(
+                    harness.query_by_label(MARKER_COPIED).is_some()
+                        && harness.query_by_label(COPY_MARKER).is_none(),
+                    "iter-16-D-FD3-copied: the card says the marker was copied and which dice to change"
+                );
             }
         }
     }

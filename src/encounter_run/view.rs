@@ -3,7 +3,7 @@
 //! Rows never move when the selection changes: the entry controls have a fixed dock.
 use super::{
     Command, MAX_FROM_SHEET, NOBODY_PRESENT, Panel, Participant, PartySync, Phase, Run,
-    SHEET_SOURCE, display, mode_label,
+    SAVED_HP_USED, SHEET_SOURCE, display, mode_label,
 };
 use crate::{
     combat_sync::SyncState,
@@ -4485,15 +4485,19 @@ impl Run {
         if let Some(words) = self.carry_missing() {
             design::message(ui, Tone::Warning, &words);
         }
-        let saved_hp = self.carried.as_ref().is_some_and(|carried| carried.saved)
-            && self.history_labels.last().map(String::as_str) == Some("full HP after long rest");
-        if saved_hp {
+        if self.rest_filled_saved_hp() {
             if design::message_with_action(
                 ui,
                 Tone::Info,
                 "Party HP is full after the long rest.",
                 "Use the saved HP",
-            ) {
+            ) && let Err(e) = self.use_saved_hp()
+            {
+                self.error = Some(e);
+            }
+        } else if self.saved_hp_used() {
+            // The same slot, so the DM sees the result where they pressed, and can take it back.
+            if design::message_with_action(ui, Tone::Success, SAVED_HP_USED, "Undo") {
                 self.undo();
             }
         } else if let Some((from, back)) = self.back_to_sheets()

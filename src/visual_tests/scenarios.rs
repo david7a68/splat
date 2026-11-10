@@ -17,12 +17,60 @@ use eframe::egui::{self, Key, Pos2, pos2};
 pub mod file_formats;
 pub mod integrity;
 pub mod list_formats;
+pub mod markdown_links;
 pub mod stat_formats;
 pub mod world_build;
 
 /// The middle of the reading pane and of the entry list, at the minimum window.
 const READER: Pos2 = pos2(720.0, 400.0);
 const ENTRY_LIST: Pos2 = pos2(400.0, 400.0);
+
+/// Message choices start at the message text, never at its bar. `choices` are in order and must
+/// all show. `gap` names the choice that keeps exactly an `L` gap from the one before it (the red
+/// choice, or a quiet dismissal): on a shared line the gap is `L`; on a line of its own it starts at
+/// the text edge, as every wrapped choice does.
+fn check_choices_at_text(
+    d: &mut Driver<'_>,
+    id: &str,
+    words: &str,
+    choices: &[&str],
+    gap: Option<&str>,
+    sizes: &[(f32, f32)],
+) {
+    for &size in sizes {
+        let (passed, detail) = d.at_size(size, |d| {
+            let text = d.painted_rect_in(words, egui::Rect::EVERYTHING);
+            let places: Vec<_> = choices.iter().map(|name| d.place_of(name)).collect();
+            let detail = format!(
+                "Choices {choices:?} start at the text of \"{words}\" at {size:?}: text {text:?}, choices {places:?}"
+            );
+            let (Some(text), Some(places)) = (text, places.into_iter().collect::<Option<Vec<_>>>())
+            else {
+                return (false, detail);
+            };
+            let first = (places[0].left() - text.left()).abs() < 1.0;
+            let below = places
+                .iter()
+                .all(|place| place.left() >= text.left() - 0.5 && place.top() >= text.bottom());
+            let spaced = gap.is_none_or(|gap| {
+                choices
+                    .iter()
+                    .position(|name| *name == gap)
+                    .filter(|at| *at > 0)
+                    .is_some_and(|at| {
+                        let (before, after) = (places[at - 1], places[at]);
+                        if (before.center().y - after.center().y).abs() < 1.0 {
+                            (after.left() - before.right() - crate::design::L).abs() < 1.0
+                        } else {
+                            (after.left() - text.left()).abs() < 1.0
+                        }
+                    })
+            });
+            (first && below && spaced, detail)
+        });
+        d.observe(id, passed, detail);
+    }
+}
 
 /// Where each painted copy of these words starts on screen, after stepping back `back`
 /// characters (to the icon before them). Only copies inside their pane's clip count.
@@ -863,7 +911,8 @@ pub mod library_navigation {
         d.state("dependency-copy-reconnected", Sizes::All);
         d.click("Undo dependency copy");
         d.wait_for_text("Captain Varra is in this campaign only.");
-        d.click("Wiki watch spell");
+        // A link in a paragraph is named by its words and where it goes (iter-16 AD1).
+        d.click("Wiki watch spell (opens Ashfall)");
         d.wait_for_text("Hot ash falls");
         d.observe(
             "C4",
@@ -1995,6 +2044,9 @@ pub mod encounter_run {
             |d| !d.visible_text("Splat data"),
         );
         d.state("lookup-by-keyboard", Sizes::All);
+        // FT1: Lookup's Show all is the quiet action Arrivals uses. It lists every match in
+        // place, and the list follows keyboard focus. These proof steps end where they began.
+        d.aside(|d| lookup_show_all(d, KEYBOARD_LOOKUP));
         d.press(Key::Escape);
         let back = !d.has(SEARCH_LOOKUP);
         let keys = d.goal("run a turn, damage, undo and a lookup by keyboard alone");
@@ -3941,6 +3993,22 @@ pub mod run_folder_defect {
                     })
             },
         );
+        // FT4: with no open run, the move is the one primary action on the whole screen.
+        d.observe_both(
+            "iter-16-B-FT4-primary",
+            "Move runs and save is the only accent-filled control in view",
+            |d| super::session_recording::accent_filled(d) == ["Move runs and save"],
+        );
+        // Must stay true: the other choice on the row stays quiet.
+        d.observe_both(
+            "iter-16-B-FT4-quiet",
+            "Save without moving stays a quiet action",
+            |d| {
+                d.in_view("Save without moving")
+                    && d.control_frame("Save without moving")
+                        .is_some_and(|frame| frame.stroke.width == 0.0)
+            },
+        );
         d.state("run-folder-edited", Sizes::All);
         d.goal("edit the run folder with no draft");
         // A panic ends this app, so the video stops first and nothing follows.
@@ -5176,7 +5244,7 @@ pub mod library_scope {
             d.field_text("Search the Library").as_deref() == Some("fireball"),
             "A scope change keeps the query and selected Fireball",
         );
-        d.state("scope-everything", Sizes::Default);
+        d.state("scope-everything", Sizes::All);
         d.observe(
             "Reader selection",
             d.visible_text("Casting Time"),
@@ -5189,6 +5257,94 @@ pub mod library_scope {
             before == after && after.as_deref() == Some(ACTIVE),
             format!("The active campaign is {after:?} after browsing, as before: {before:?}"),
         );
+        // The file line is one Read row for every owner, so the title does not move
+        // between the built-in Fireball, the campaign Fireball and a package About.
+        assert!(
+            d.visible_text(BUILT_IN) && !d.has("Show file"),
+            "fixture: the built-in Fireball is open"
+        );
+        let built_in = title_offsets(d, "Fireball");
+        d.click_starting("Fireball · Spell · Level 3 · Campaign");
+        d.wait_for_text(CAMPAIGN_OWNER);
+        d.expect("Show file");
+        let campaign = title_offsets(d, "Fireball");
+        file_line_centred(d, &[CAMPAIGN_OWNER], &["Show file"], "campaign Fireball");
+        d.state("campaign-fireball", Sizes::All);
+        d.open_combo_at(LIBRARY_PACKAGE_DROPDOWN);
+        d.click(MODULE);
+        d.click("About Ashen Marches");
+        d.wait_for_text(PACKAGE_OWNER);
+        d.expect("Use every entry");
+        let about = title_offsets(d, MODULE);
+        file_line_centred(
+            d,
+            &[PACKAGE_OWNER],
+            &["Use every entry", "Show file"],
+            "package About",
+        );
+        d.state("package-about-title", Sizes::All);
+        d.observe(
+            "iter-17-E-FD2",
+            built_in.iter().all(Option::is_some)
+                && built_in == campaign
+                && built_in == about,
+            format!(
+                "The reader title is the same distance below Read for every owner (960, 1200, 1920): built-in {built_in:?}, campaign {campaign:?}, package About {about:?}"
+            ),
+        );
+    }
+
+    const BUILT_IN: &str = "Built-in · Read only";
+    const CAMPAIGN_OWNER: &str = "Campaign · Editable";
+    const PACKAGE_OWNER: &str = "Used here · 5 of 6 entries";
+
+    /// The reader title's distance below the Read tab, at each captured size.
+    fn title_offsets(d: &mut Driver<'_>, title: &str) -> Vec<Option<f32>> {
+        [SMALL, DEFAULT, LARGE]
+            .into_iter()
+            .map(|size| {
+                d.at_size(size, |d| {
+                    let read = d.place_of("Read")?;
+                    super::world_build::reader_title(d, title)
+                        .map(|rect| rect.top() - read.bottom())
+                })
+            })
+            .collect()
+    }
+
+    /// Must stay true: the owner words and every control on the file line share one centre
+    /// line, at each captured size.
+    fn file_line_centred(d: &mut Driver<'_>, words: &[&str], controls: &[&str], what: &str) {
+        for size in [SMALL, DEFAULT, LARGE] {
+            let centres = d.at_size(size, |d| {
+                let read = d.place_of("Read")?;
+                let below = egui::Rect::from_min_max(
+                    egui::pos2(read.left() - 1.0, read.bottom()),
+                    egui::pos2(f32::INFINITY, f32::INFINITY),
+                );
+                words
+                    .iter()
+                    .map(|word| d.painted_rect_in(word, below).map(|rect| rect.center().y))
+                    .chain(
+                        controls
+                            .iter()
+                            .map(|name| d.place_of(name).map(|rect| rect.center().y)),
+                    )
+                    .collect::<Option<Vec<f32>>>()
+            });
+            let line = centres.as_ref().map(|centres| {
+                centres.iter().copied().fold(f32::INFINITY, f32::min)
+                    ..=centres.iter().copied().fold(f32::NEG_INFINITY, f32::max)
+            });
+            d.observe(
+                "iter-17-E-FD2-centre",
+                line.as_ref()
+                    .is_some_and(|line| line.end() - line.start() <= 1.0),
+                format!(
+                    "The {what} file line keeps its words and controls on one centre line at {size:?}: {centres:?}"
+                ),
+            );
+        }
     }
 }
 
@@ -6454,9 +6610,32 @@ pub mod session_notes {
             d.has_containing("Written in Obsidian."),
             "A conflict shows the file's words, so the DM chooses knowing both",
         );
+        check_choices_at_text(
+            d,
+            "iter-15-C-FT1-conflict",
+            "This note changed on disk.",
+            &["Overwrite with my draft", "Reload and lose my draft"],
+            Some("Reload and lose my draft"),
+            &[SMALL, DEFAULT, LARGE],
+        );
         d.state("note-conflict", Sizes::All);
         d.click("Record this session");
         d.expect("Start recording");
+        // Two stacked messages share one left edge for their choices: each message's text.
+        for (words, choices, gap) in [
+            (
+                "This note changed on disk.",
+                &["Overwrite with my draft", "Reload and lose my draft"][..],
+                Some("Reload and lose my draft"),
+            ),
+            (
+                "Tell everyone at the table first.",
+                &["Start recording", "Not now"][..],
+                None,
+            ),
+        ] {
+            check_choices_at_text(d, "iter-15-C-FT1-stacked", words, choices, gap, &[DEFAULT]);
+        }
         d.observe(
             "iter-5-S2",
             d.has("Overwrite with my draft"),
@@ -6470,6 +6649,14 @@ pub mod session_notes {
             "iter-5-S2",
             recording_in_conflict,
             "Audio recording starts while the note conflict stays unresolved",
+        );
+        check_choices_at_text(
+            d,
+            "iter-15-C-ST1",
+            "This note changed on disk.",
+            &["Overwrite with my draft", "Reload and lose my draft"],
+            Some("Reload and lose my draft"),
+            &[DEFAULT],
         );
         d.state("note-conflict-recording", Sizes::Default);
         d.click("Stop recording");
@@ -6493,6 +6680,31 @@ pub mod session_notes {
             d.has_containing("My words during the conflict."),
             "Opening the session again keeps the words that could not be saved",
         );
+        // Reload names itself as World does, and Undo reload brings the draft back. A new outside
+        // change then brings the same choices back, so the step below starts where it did.
+        d.aside(|d| {
+            d.click("Reload and lose my draft");
+            d.expect("Undo reload");
+            d.observe(
+                "iter-15-C-FT4-reload",
+                d.visible_text("Reloaded from disk.")
+                    && !d.visible_text("Draft dropped.")
+                    && d.editor_text()
+                        .is_some_and(|text| !text.contains("My words during the conflict.")),
+                "Reload says Reloaded from disk. with Undo reload, and the editor shows the file",
+            );
+            d.click("Undo reload");
+            d.observe(
+                "iter-15-C-FT4-undo-reload",
+                !d.has("Undo reload")
+                    && d.editor_text()
+                        .is_some_and(|text| text.contains("My words during the conflict.")),
+                "Undo reload puts the draft's words back in the editor",
+            );
+            d.app_mut().sessions.simulate_disk_change();
+            d.press_ctrl(Key::S);
+            d.expect("Overwrite with my draft");
+        });
         d.click("Overwrite with my draft");
         d.expect("Notes saved");
 
@@ -6567,7 +6779,45 @@ pub mod session_notes {
         );
         d.replace_text_in("Folder", "30 Sessions");
         d.expect("Save without moving");
-        d.state("session-folder-move-offered", Sizes::All);
+        // FT4 (round 16): with no run and no other form, moving the files is the one primary,
+        // as Move runs and save is on Rules and runs.
+        d.state_prepared("session-folder-move-offered", Sizes::All, |d| {
+            super::session_recording::check_one_primary(d, "Move files and save", "iter-16-C-FT4");
+        });
+        // Must stay true: the open details form owns its own save, so the move is not primary.
+        d.click("Edit details");
+        d.expect("Save details");
+        // The details form's own save is the one primary once its details change.
+        let name = d
+            .field_text("Campaign name")
+            .expect("the campaign name field");
+        d.type_into("Campaign name", " (edited)");
+        super::session_recording::check_one_primary(
+            d,
+            "Save details",
+            "iter-16-C-FT4-details-primary",
+        );
+        d.replace_text_in("Campaign name", &name);
+        d.expect("Cancel");
+        d.scroll_until(pos2(600.0, 400.0), "Move files and save", 20);
+        let frame = d.control_frame("Move files and save");
+        assert!(
+            frame.is_some(),
+            "Move files and save is painted below the details form"
+        );
+        d.observe(
+            "iter-16-C-FT4-details",
+            frame.as_ref().is_some_and(|frame| {
+                let colors = crate::design::colors();
+                frame.fill != colors.accent_fill && frame.fill != colors.accent_hover
+            }),
+            format!(
+                "With the details form open, Move files and save has no accent fill: {frame:?}"
+            ),
+        );
+        d.click("Cancel");
+        d.scroll_up_at(pos2(600.0, 400.0), 20);
+        d.expect("Move files and save");
         d.click("Move files and save");
         d.expect("Moved 1 note, 4 events, 2 templates and 1 recording to 30 Sessions.");
         d.observe_both(
@@ -6924,6 +7174,14 @@ pub mod session_notes {
             d.has_containing("This session is dated 2025-12-25."),
             "The panel warns when the session being played looks like an old one",
         );
+        check_choices_at_text(
+            d,
+            "iter-15-C-ST3",
+            "This session is dated 2025-12-25.",
+            &["Play it tonight", "New session"],
+            None,
+            &[DEFAULT],
+        );
         d.state("run-with-old-note", Sizes::Default);
         d.observe(
             "T11.8",
@@ -7208,6 +7466,22 @@ pub mod session_recording {
     const TITLE: &str = "The Bridge";
     const RECORDING: &str = "19:00";
     const WARNING: &str = "The check returned nothing, so the clean transcript was not checked.";
+    const DISCARD: &str = "Discard";
+
+    /// FT2: one `L` gap between the recording's result links and its marked events heading.
+    fn check_events_gap(d: &mut Driver<'_>, id: &str) {
+        let heading = d.painted_rect_in("EVENTS MARKED IN THIS RECORDING", egui::Rect::EVERYTHING);
+        let links = d.place_of("Raw transcript");
+        let gap = heading
+            .zip(links)
+            .map(|(heading, links)| heading.top() - links.bottom());
+        d.observe(
+            id,
+            // The heading's capitals sit 1 px inside their `L`-spaced line.
+            gap.is_some_and(|gap| (gap - crate::design::L).abs() <= 1.0),
+            format!("The marked events heading sits L below Raw transcript: gap {gap:?}"),
+        );
+    }
 
     fn check_processing_action(d: &mut Driver<'_>, prefix: &str, primary: bool) {
         let actions: Vec<_> = d
@@ -7236,14 +7510,10 @@ pub mod session_recording {
         }
     }
 
-    fn check_one_primary(d: &mut Driver<'_>, expected: &str, id: &str) {
-        assert!(
-            d.in_view(expected),
-            "The expected primary action is visible"
-        );
+    /// Every accent-filled button in view, across the whole window.
+    pub(super) fn accent_filled(d: &Driver<'_>) -> Vec<String> {
         let colors = crate::design::colors();
-        let primary: Vec<_> = d
-            .nodes()
+        d.nodes()
             .into_iter()
             .filter(|node| node.in_view() && node.role == egui::accesskit::Role::Button)
             .filter(|node| {
@@ -7252,7 +7522,15 @@ pub mod session_recording {
                 })
             })
             .map(|node| node.name)
-            .collect();
+            .collect()
+    }
+
+    pub(super) fn check_one_primary(d: &mut Driver<'_>, expected: &str, id: &str) {
+        assert!(
+            d.in_view(expected),
+            "The expected primary action is visible"
+        );
+        let primary = accent_filled(d);
         d.observe(
             id,
             primary == [expected],
@@ -7300,6 +7578,19 @@ pub mod session_recording {
                     .any(|node| node.in_view() && node.name.starts_with("Process:"))
             );
             check_one_primary(d, "Continue processing", "iter-8-C-banner-failed-primary");
+            let size = d.window_size();
+            check_choices_at_text(
+                d,
+                "iter-15-C-FD5",
+                "Processing Session 1: Failed processing failed",
+                &[
+                    "Continue processing",
+                    "Open the session",
+                    "Dismiss this error",
+                ],
+                Some("Dismiss this error"),
+                &[size],
+            );
         });
         let campaign = d.app_mut().campaigns.active_campaign().unwrap();
         let folder = crate::sessions::folder(&campaign).unwrap();
@@ -7417,6 +7708,38 @@ pub mod session_recording {
         assert!(d.in_view("Choose an input"));
         d.click("Choose an input");
         d.expect("Recording input");
+
+        // Dismiss alone: Session 1's recording stopped, another recording runs (so no Record
+        // again), and Session 1's own Recordings tab is open behind its details form (so no Open
+        // the session). Dismiss is then the first choice, at the message text.
+        // A stopped recorder ends its recording. Record again starts Session 1 anew and clears
+        // its old alert; the next stop has an error with no plain words, so no Choose an input.
+        go_library(d);
+        d.click("Record again");
+        d.app_mut()
+            .sessions
+            .simulate_recorder_health(Health::Stopped("stream error 42".to_owned()));
+        d.settle();
+        d.app_mut().sessions.open(second);
+        d.click(NAV_SESSIONS);
+        d.click("Record this session");
+        d.click("Start recording");
+        d.expect("Stop recording");
+        d.app_mut().sessions.open(first);
+        d.settle();
+        d.click_starting("Recordings");
+        d.click("Edit session details");
+        d.expect("Dismiss this error");
+        assert!(!d.has("Open the session") && !d.has("Record again"));
+        let size = d.window_size();
+        check_choices_at_text(
+            d,
+            "iter-15-C-FD5-dismiss-alone",
+            "stream error 42",
+            &["Dismiss this error"],
+            None,
+            &[size],
+        );
     }
 
     fn check_marker_columns(d: &mut Driver<'_>) {
@@ -7678,6 +8001,27 @@ pub mod session_recording {
     }
 
     /// FT-3: a warned result is a status like its siblings, on the row's second line.
+    /// FT3 (round 16): the recording row states an empty check once, in its warning line.
+    fn check_empty_check_once(d: &mut Driver<'_>, id: &str) {
+        let mut said = Vec::new();
+        d.each_painted_text(|text, _| {
+            let words = &text.galley.job.text;
+            if words.contains("returned nothing") || words.contains("returned no result") {
+                said.push(words.clone());
+            }
+        });
+        d.observe(
+            &format!("{id}-warning"),
+            d.visible_text(WARNING),
+            "The warning line still says the check returned nothing",
+        );
+        d.observe(
+            id,
+            said.len() == 1,
+            format!("The empty check is said once on screen: {said:?}"),
+        );
+    }
+
     fn check_warned_row(d: &mut Driver<'_>) {
         let row = d.nodes().into_iter().find(|node| {
             node.in_view()
@@ -7818,6 +8162,14 @@ pub mod session_recording {
         // T11.5: nothing records without a stated step.
         d.click("Record this session");
         d.expect("Start recording");
+        check_choices_at_text(
+            d,
+            "iter-15-C-ST2",
+            "Tell everyone at the table first.",
+            &["Start recording", "Not now"],
+            None,
+            &[DEFAULT],
+        );
         d.state("record-consent", Sizes::Default);
         d.observe(
             "T11.5",
@@ -8239,6 +8591,7 @@ pub mod session_recording {
         );
         d.expect("These events were suggested from the transcript. Only events you add go on the timeline.");
         d.state_prepared("marker-added", Sizes::All, |d| {
+            check_events_gap(d, "iter-15-C-FT2");
             check_marker_columns(d);
             check_clean_row(d, "iter-11-C-FT3-marker");
             let size = d.window_size();
@@ -8368,6 +8721,7 @@ pub mod session_recording {
         d.state_prepared("recording-warned", Sizes::All, |d| {
             check_result_row(d);
             check_warned_row(d);
+            check_empty_check_once(d, "iter-16-C-FT3");
         });
 
         d.click_containing("More actions for 2026-01-01");
@@ -8382,6 +8736,21 @@ pub mod session_recording {
                 }
             });
             let buttons = d.place_of("Not now").zip(d.place_of("Replace the results"));
+            check_choices_at_text(
+                d,
+                "iter-15-C-AT4",
+                "The audio is not sent again",
+                &["Not now", "Replace the results"],
+                Some("Replace the results"),
+                &[DEFAULT],
+            );
+            // AT1: a check that ran and gave nothing back is not a check that never ran.
+            d.observe(
+                "iter-15-C-AT1",
+                d.visible_text(WARNING) && !d.visible_text("No check ran"),
+                "The warned recording says the check returned nothing, not No check ran",
+            );
+            check_empty_check_once(d, "iter-16-C-FT3-confirm");
             d.observe(
                 "iter-11-C-ST1",
                 message.zip(buttons).is_some_and(|(message, (not_now, replace))| {
@@ -8399,9 +8768,40 @@ pub mod session_recording {
         });
         d.click("Not now");
 
+        // FT3 (round 16): processing again hides the warning line, so the label says it once.
+        d.app_mut().sessions.simulate_job(Progress::Asking {
+            pass: crate::processing::Pass::Review,
+            seconds: 4,
+        });
+        d.settle();
+        assert!(
+            d.has_containing("Processing") && !d.visible_text(WARNING),
+            "Processing again hides the warning line"
+        );
+        d.state_prepared("recording-processing-again", Sizes::All, |d| {
+            let mut said = Vec::new();
+            d.each_painted_text(|text, _| {
+                let words = &text.galley.job.text;
+                if words.contains("returned nothing") || words.contains("returned no result") {
+                    said.push(words.clone());
+                }
+            });
+            d.observe(
+                "iter-16-C-FT3-processing",
+                said == [crate::processing::NO_CHECK_LABEL],
+                format!("While processing again, the label alone says the check returned nothing: {said:?}"),
+            );
+        });
+        d.app_mut().sessions.simulate_job_end_warned(WARNING);
+        d.settle();
+        d.expect(WARNING);
+
         d.click_containing("More actions for 2026-01-01");
         d.expect("Delete recording:");
-        d.state("recording-row-menu", Sizes::All);
+        check_events_gap(d, "iter-15-C-FT2-menu");
+        d.state_prepared("recording-row-menu", Sizes::All, |d| {
+            check_empty_check_once(d, "iter-16-C-FT3-menu");
+        });
         d.click_containing("Delete recording:");
         d.expect("Keep the recording");
         assert_eq!(d.focused_name().as_deref(), Some("Keep the recording"));
@@ -8435,6 +8835,15 @@ pub mod session_recording {
             d.has_containing("stopped by itself: the microphone is no longer connected")
                 && !d.visible_text("no such device"),
             "The banner puts the recorder's error in plain words",
+        );
+        let hover = d.painted_tooltip_shows(
+            "stopped by itself: the microphone",
+            "The recorder said: no such device.",
+        );
+        d.observe(
+            "iter-15-C-FD5-hover",
+            hover,
+            "The banner's words keep the recorder's own words on hover",
         );
         d.click(NAV_SESSIONS);
         d.expect("Stopped by itself: the microphone is no longer connected.");
@@ -8503,12 +8912,12 @@ pub mod session_recording {
                     .place_of("Save my draft as a new file")
                     .expect("New-file recovery is present");
                 let drop = d
-                    .place_of("Let it go")
+                    .place_of(DISCARD)
                     .expect("Destructive recovery is present");
                 assert!(
                     d.in_view("Save my draft to Renamed in Obsidian.md")
                         && d.in_view("Save my draft as a new file")
-                        && d.in_view("Let it go")
+                        && d.in_view(DISCARD)
                 );
                 if size == SMALL {
                     (drop.top() - new.top()).abs() <= 1.0
@@ -8521,9 +8930,47 @@ pub mod session_recording {
                         && drop.left() - new.right() >= crate::design::L
                 }
             });
-            d.observe("iter-7-C-FT3", separated, format!("Missing-note safe choices share a line when they fit; Let it go has an L or M gap at {size:?}"));
+            d.observe("iter-7-C-FT3", separated, format!("Missing-note safe choices share a line when they fit; Discard has an L or M gap at {size:?}"));
         }
+        check_choices_at_text(
+            d,
+            "iter-15-C-FT1-gone",
+            "This file is gone from the folder.",
+            &[
+                "Save my draft to Renamed in Obsidian.md",
+                "Save my draft as a new file",
+                DISCARD,
+            ],
+            Some(DISCARD),
+            &[SMALL, DEFAULT, LARGE],
+        );
         d.state("note-file-gone", Sizes::All);
+        // FT4: Discard has one name. Its notice and Undo say discard, not drop or reload. These
+        // steps prove the words and come back to the same choices, so they are not task cost.
+        d.aside(|d| {
+        d.click(DISCARD);
+        d.expect("Undo discard");
+        d.observe(
+            "iter-15-C-FT4",
+            d.visible_text("Draft discarded.")
+                && !d.has("Undo reload")
+                && !d.has_containing("dropped")
+                && d.editor_text()
+                    .is_some_and(|text| !text.contains("Words typed after the rename.")),
+            "Discard says Draft discarded. with Undo discard, and the draft's words leave the editor",
+        );
+        d.state("note-discarded", Sizes::Default);
+        d.click("Undo discard");
+        d.observe(
+            "iter-15-C-FT4-undo",
+            !d.has("Undo discard")
+                && d.editor_text()
+                    .is_some_and(|text| text.contains("Words typed after the rename.")),
+            "Undo discard brings the draft's words back",
+        );
+        d.press_ctrl(Key::S);
+        d.expect("Your draft is still here.");
+        });
         assert!(d.in_view("Save my draft as a new file"));
         d.click("Save my draft as a new file");
         d.expect("Notes saved");
@@ -11068,13 +11515,59 @@ pub mod session_plan {
             "Resume restores a saved Setup after the long rest",
         );
         d.state("resumed-setup-after-long-rest", Sizes::All);
+        const SAVED_HP_SET: &str = crate::encounter_run::SAVED_HP_USED;
+        let notice_top = d
+            .place_of("Party HP is full after the long rest.")
+            .map(|rect| rect.top());
         d.click("Use the saved HP");
         d.observe(
             "iter-7-S1",
             kestrel(d).contains("HP 11/41"),
-            "One Undo restores the saved HP",
+            "Use the saved HP puts back the saved HP",
         );
-        d.state("saved-hp-restored", Sizes::Default);
+        // FT2: the press is its own step, so the full HP stays one Undo away.
+        let result_top = d.place_of(SAVED_HP_SET).map(|rect| rect.top());
+        d.observe(
+            "iter-16-B-FT2-message",
+            notice_top
+                .zip(result_top)
+                .is_some_and(|(notice, result)| (notice - result).abs() < 1.0),
+            format!(
+                "The result replaces the notice in its place: {notice_top:?} then {result_top:?}"
+            ),
+        );
+        d.observe(
+            "iter-16-B-FT2-message-undo",
+            d.in_view("Undo")
+                && d.place_of("Undo")
+                    .zip(d.place_of(SAVED_HP_SET))
+                    .is_some_and(|(undo, words)| {
+                        (undo.center().y - words.center().y).abs() < crate::design::S
+                    }),
+            "The result offers Undo on its own line",
+        );
+        d.observe(
+            "iter-16-B-FT2-header",
+            d.has("Undo: use the saved HP") && !d.has_containing("Nothing to undo"),
+            "The header names the new step, not an empty history",
+        );
+        d.state("saved-hp-restored", Sizes::All);
+        d.click("Undo");
+        d.observe(
+            "iter-16-B-FT2-undo",
+            kestrel(d).contains("HP 41/41"),
+            format!("Undo gives back the full HP: {}", kestrel(d)),
+        );
+        // Must stay true: the rest's own notice and its header step come back with it.
+        d.observe(
+            "iter-16-B-FT2-notice-back",
+            d.has("Use the saved HP")
+                && d.has("Undo: full HP after long rest")
+                && !d.visible_text(SAVED_HP_SET),
+            "After Undo the rest notice and its Undo step are back, and the result is gone",
+        );
+        d.click("Use the saved HP");
+        d.expect(SAVED_HP_SET);
         close_run(d);
         show_plan(d);
         d.click("Long rest");
@@ -11763,4 +12256,161 @@ pub mod run_rolls {
         d.goal_within("T16.7", "preview an attack with advantage by pointer", 1);
         d.state("library-preview-advantage", Sizes::All);
     }
+}
+
+/// Lookup's result rows in view order: buttons named `<title> · <detail>` below the search field.
+fn lookup_results(d: &Driver<'_>) -> Vec<crate::visual_tests::driver::Found> {
+    let Some(field) = d.place_of(SEARCH_LOOKUP) else {
+        return Vec::new();
+    };
+    d.nodes()
+        .into_iter()
+        .filter(|node| {
+            node.role == egui::accesskit::Role::Button
+                && node.name.contains(" · ")
+                && node.rect.left() >= field.left() - 2.0
+                && node.rect.top() >= field.bottom()
+        })
+        .collect()
+}
+
+/// The `Show all N` count, if Lookup or Arrivals offers it.
+fn show_all_count(d: &Driver<'_>) -> Option<usize> {
+    d.nodes().into_iter().find_map(|node| {
+        node.name
+            .strip_prefix("Show all ")
+            .and_then(|count| count.parse::<usize>().ok())
+    })
+}
+
+/// FT1: Lookup's `Show all N` is quiet, lists every match in place in a list of at most eight
+/// rows, and the list follows Tab and the arrow keys. Ends with `words` typed again.
+fn lookup_show_all(d: &mut Driver<'_>, words: &str) {
+    let before = lookup_results(d).len();
+    let count = show_all_count(d);
+    let label = format!("Show all {}", count.unwrap_or_default());
+    let frame = d.control_frame(&label);
+    let quiet = frame
+        .as_ref()
+        .is_none_or(|frame| frame.stroke.width == 0.0 && frame.fill.a() == 0);
+    if count.is_some() {
+        d.click(&label);
+    }
+    let rows = lookup_results(d);
+    d.observe(
+        "iter-16-D-FT1",
+        before == 5
+            && quiet
+            && count.is_some_and(|count| count > before && rows.len() == count)
+            && rows.iter().all(|row| row.fully_in_view())
+            && show_all_count(d).is_none()
+            && d.in_view(SEARCH_LOOKUP),
+        format!(
+            "Quiet {label} (frame {frame:?}) lists every match in place: {before} rows before, {} after, \
+             all in view",
+            rows.len()
+        ),
+    );
+    d.state("lookup-show-all", Sizes::All);
+    // Must stay true: new words return to five, as in Arrivals.
+    d.replace_text_in(SEARCH_LOOKUP, &words[..words.len() - 1]);
+    d.replace_text_in(SEARCH_LOOKUP, words);
+    d.observe(
+        "iter-16-D-FT1-reset",
+        lookup_results(d).len() == 5 && show_all_count(d) == count,
+        "Changed words return Lookup to five results and its Show all",
+    );
+    // A broad search scrolls past eight rows. Tab reaches a row below the edge, and so do the
+    // arrow keys from the search field; the list follows each.
+    d.replace_text_in(SEARCH_LOOKUP, "dragon");
+    let broad = show_all_count(d);
+    if let Some(broad) = broad {
+        d.click(&format!("Show all {broad}"));
+    }
+    let rows = lookup_results(d);
+    // The list's own visible area now: the clip its top row's words are painted in. Opening a
+    // result can move the list, so each check measures it again.
+    let list_clip = |d: &Driver<'_>| {
+        let top = lookup_results(d).into_iter().find(|row| row.in_view())?;
+        let title = top.name.split(" · ").next()?.to_owned();
+        let mut found = None;
+        d.each_painted_text(|text, clip| {
+            if title == text.galley.job.text
+                && top.rect.contains(text.pos + text.galley.size() / 2.0)
+            {
+                found = Some(clip);
+            }
+        });
+        found
+    };
+    let clip = list_clip(d);
+    let inside_of = |clip: Option<egui::Rect>, rect: egui::Rect| {
+        clip.is_some_and(|clip| clip.expand(0.5).contains_rect(rect))
+    };
+    let inside = |rect: egui::Rect| inside_of(clip, rect);
+    let place = |d: &Driver<'_>, row: &Option<crate::visual_tests::driver::Found>| {
+        row.as_ref().and_then(|row| d.place_of(&row.name))
+    };
+    let shown = rows.iter().filter(|row| inside(row.rect)).count();
+    // The whole row shows, not only the part inside egui's clip margin.
+    let whole = |d: &Driver<'_>, row: &Option<crate::visual_tests::driver::Found>| {
+        row.as_ref().is_some_and(|row| {
+            lookup_results(d)
+                .iter()
+                .any(|now| now.name == row.name && now.fully_in_view())
+        })
+    };
+    let ninth = rows.get(8).cloned();
+    let tenth = rows.get(9).cloned();
+    if let Some(ninth) = &ninth {
+        let mut tabs = 0;
+        while d.focused_name().as_deref() != Some(ninth.name.as_str()) && tabs < 40 {
+            d.press(Key::Tab);
+            tabs += 1;
+        }
+    }
+    let reached = place(d, &ninth);
+    let reached_clip = list_clip(d);
+    d.observe(
+        "iter-16-D-FT1-tab",
+        broad.is_some_and(|broad| broad > 9 && rows.len() == broad)
+            && shown == crate::lookup::RESULTS_LISTED
+            && ninth.as_ref().is_some_and(|ninth| !inside(ninth.rect))
+            && ninth
+                .as_ref()
+                .is_some_and(|ninth| d.focused_name().as_deref() == Some(ninth.name.as_str()))
+            && reached.is_some_and(|rect| inside_of(reached_clip, rect))
+            && whole(d, &ninth),
+        format!(
+            "Show all {broad:?}: {} rows named, {shown} inside the list clip {clip:?}; Tab \
+             reaches the ninth ({:?}) and the list scrolls it inside {reached_clip:?}: {reached:?}",
+            rows.len(),
+            ninth.as_ref().map(|row| (&row.name, row.rect)),
+        ),
+    );
+    d.replace_text_in(SEARCH_LOOKUP, "drago");
+    d.replace_text_in(SEARCH_LOOKUP, "dragon");
+    if let Some(broad) = broad {
+        d.click(&format!("Show all {broad}"));
+    }
+    d.type_into(SEARCH_LOOKUP, "");
+    let before = place(d, &tenth);
+    let before_clip = list_clip(d);
+    for _ in 0..9 {
+        d.press(Key::ArrowDown);
+    }
+    let after = place(d, &tenth);
+    let after_clip = list_clip(d);
+    d.observe(
+        "iter-16-D-FT1-arrows",
+        before.is_some_and(|before| !inside_of(before_clip, before))
+            && after.is_some_and(|after| inside_of(after_clip, after))
+            && whole(d, &tenth),
+        format!(
+            "Nine Down presses from the search field bring the tenth row ({:?}) inside the list: \
+             before {before:?} in {before_clip:?}, after {after:?} in {after_clip:?}",
+            tenth.as_ref().map(|row| &row.name)
+        ),
+    );
+    d.replace_text_in(SEARCH_LOOKUP, words);
 }
