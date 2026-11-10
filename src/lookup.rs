@@ -1084,7 +1084,7 @@ pub struct Lookup {
     /// What the generator rolled, until the DM saves it or lets it go.
     generated: Option<crate::npc_generator::Generated>,
     /// Campaign tables the generator could not use.
-    generator_problems: Vec<String>,
+    generator_problems: Vec<crate::npc_generator::TableProblem>,
     generator_sources: Vec<String>,
     pub open_world_repair: Option<String>,
     /// A check of campaign and package files, away from the frame.
@@ -1933,7 +1933,7 @@ impl Lookup {
 pub(crate) fn generated_card(
     ui: &mut egui::Ui,
     npc: &crate::npc_generator::Generated,
-    problems: &[String],
+    problems: &[crate::npc_generator::TableProblem],
     sources: &[String],
     run_open: bool,
 ) -> (bool, bool, bool) {
@@ -1983,12 +1983,10 @@ pub(crate) fn generated_card(
     ui.scope(|ui| {
         ui.set_max_width(ui.available_width().min(design::READER_MEASURE));
         for problem in problems {
-            design::message(ui, Tone::Warning, problem);
-            if let Some((path, _)) = problem.split_once(':')
-                && design::link(ui, &format!("Open {path}")).clicked()
-            {
+            design::message(ui, Tone::Warning, &problem.message).on_hover_text(&problem.marker);
+            if design::link(ui, &format!("Open {}", problem.path)).clicked() {
                 ui.ctx().data_mut(|data| {
-                    data.insert_temp(egui::Id::new("markdown_clicked_note"), path.to_owned())
+                    data.insert_temp(egui::Id::new("markdown_clicked_note"), problem.path.clone())
                 });
             }
         }
