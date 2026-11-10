@@ -137,6 +137,10 @@ status that wraps never moves Lookup, Notes or Settings. Rail statuses (recordin
 sync) fill one slot that grows upward above Lookup, so a status that comes, goes or wraps never moves these
 targets. Tab order still follows reading order.
 
+No rail target moves when a state comes or goes. The Run slot is always the first item: the open run, the
+paused run, or, with no run, a quiet `Run` with `No fight open` on line two that opens Encounters. All three
+are one height, so Encounters, Session and the rest keep their places when a run opens or closes.
+
 ## Widgets
 
 `theme::install` sets one global `egui::Style` for hover, active and disabled states, focus rings, selection,
@@ -171,7 +175,7 @@ eye during long sessions.
 | Message | `message`, `small_message`, `message_with_action`, `Tone` | Inline icon and bar; `message`, `message_with_action` and `undo_message` start the words `XS` after the icon whatever the caller's spacing; cap the notice at `LIST_MEASURE`; actions follow text after an `L` gap or wrap below, aligned with the text; measure the whole action with padding; move it below and align it with the text if it cannot fit; actions without icons use a secondary border |
 | Side panel | `side_panel_width`, `panel_header` | One width rule for Lookup, Notes and the run; separate participant and fight tabs |
 | Column | `Column::left / right / panel` | Rail, page lists and panels; inner-edge drag handle; natural width until dragged or moved with keys, then saved width across restarts; preserve page room and `RUN_LIST_KEEPS`; adjacent content reaches the column edge, with text measured inside it |
-| Link | `link` | Real `Link` role, at least 24 px high |
+| Link | `link` | Real `Link` role, at least 24 px high. A word narrower than 24 px takes its width from the link's own minimum size, never from spaces in the text: the word starts at the text edge and the underline covers only the word |
 | Number | `number`, `number_width` | Right-aligned digits |
 | Count | `count` | `1 entry`, `2,108 entries`; zero gives no text; empty unit words give only the formatted number |
 
@@ -981,7 +985,7 @@ player's first name in `Small` text colour, an `hp_readout` at `Numeral` over `S
 the item's bottom edge, temporary HP with its shield, the run's `Bloodied` or `0 HP` icon, word and colour, then stats in `Small`: a muted label, a space and
 the value, in the Party list's order `AC`, `Per`, `Ins`, `DC`. `DC` is left out for a player with no spell
 save DC. Items sit `M` apart, with no boxes. All items show the same number of stats; when they do not fit,
-the source status gives way first, then the optional stats (`Per`, `Ins`, `DC`) drop from the end, down to
+the optional stats (`Per`, `Ins`, `DC`) drop from the end, down to
 `AC`. Then the portraits go together, and then `AC`: AC answers "does a 17 hit?", and a portrait repeats the
 name beside it. HP and temporary HP always stay. The exception, when first names and HP still do not fit: the
 names shorten to an initial (`B.`), with the full name in hover and the accessible name. If that does not fit,
@@ -990,6 +994,12 @@ accessible name). No item is ever cut off: when even that does not fit, the item
 muted `N more` names the rest, with HP, in hover and its accessible name. `N more` takes keyboard focus, and
 focus shows the same list as hover. Hover shows the full name in `Strong`, then one fact to a muted `Small` line: HP, AC and DC, passive scores, conditions, and the
 source. Hover fill and the 2 px focus ring use `RADIUS_CONTROL`. A click opens the sheet on Party.
+
+The source status (where the numbers come from) is measured by itself, after the items are fitted. It
+stands before Hide the party, `L` after the last item, whenever the room the items leave holds it, at any
+level. When its full words (`After Bridge Ambush`, `Sheets fetched 2 h ago`) do not fit, it shows a short
+form (`This fight`, `Last fight`, `Long rest`, `Sheets`, `No sheets`); hover and the accessible name keep the
+full words. It never takes room from an item, so it never moves one.
 
 Outside a fight the level fits the words in view. While a run is open, the level may drop when the words
 in view need it (a `Bloodied` word, temporary HP), but it never rises again until the run ends, and no
