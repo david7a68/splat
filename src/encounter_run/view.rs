@@ -2206,10 +2206,11 @@ impl Run {
                     let start = exhaustion_level(&p.conditions[at]);
                     // A drag shows its level here and commits one step when it ends, from the
                     // level it started at. A drag that the run no longer matches is dropped.
-                    let drag = self
-                        .exhaustion_drag
-                        .take()
-                        .filter(|drag| (drag.index, drag.at, drag.start) == (index, at, start));
+                    let frame = ui.ctx().cumulative_frame_nr();
+                    let drag = self.exhaustion_drag.take().filter(|drag| {
+                        (drag.index, drag.at, drag.start) == (index, at, start)
+                            && drag.frame + 1 >= frame
+                    });
                     let mut level = drag.map_or(i64::from(start), |drag| drag.level);
                     let stepper = ui.horizontal(|ui| {
                         ui.label(Type::Body.rich(ui, "Exhaustion level").color(colors().text));
@@ -2227,9 +2228,17 @@ impl Run {
                         && ui
                             .input(|i| i.pointer.press_origin())
                             .is_some_and(|origin| stepper.response.rect.contains(origin));
-                    let level = level.clamp(0, EXHAUSTION_MAX);
+                    // A level above the usual top (from a file or a sync) stays until the DM
+                    // changes it.
+                    let level = level.clamp(0, EXHAUSTION_MAX.max(i64::from(start)));
                     if dragging {
-                        self.exhaustion_drag = Some(ExhaustionDrag { index, at, start, level });
+                        self.exhaustion_drag = Some(ExhaustionDrag {
+                            index,
+                            at,
+                            start,
+                            level,
+                            frame,
+                        });
                     } else if (stepper.inner || drag.is_some()) && level != i64::from(start) {
                         command = Some(if level == 0 {
                             Command::RemoveCondition(index, at)
@@ -5243,6 +5252,9 @@ pub(super) struct ExhaustionDrag {
     at: usize,
     start: u8,
     level: i64,
+    /// The frame that last drew this drag. A drag the panel stopped drawing is dropped, so it
+    /// cannot commit later without the DM.
+    frame: u64,
 }
 
 /// One step of undo: the old level goes, and the new one comes.
@@ -8386,14 +8398,61 @@ mod tests {
             run.borrow().state.participants[0].conditions,
             [format!("Exhaustion ({})", (shown + 2).min(6))]
         );
-        // A press then a drag that ends where it began adds nothing.
-        let end = drag_exhaustion(&mut harness, &[4.0, 0.0]);
+        // A drag that goes out and comes back to where it began adds nothing.
+        let level = exhaustion_field(&harness).value();
+        // The level is at the top here, so the drag goes down and back.
+        let end = drag_exhaustion(&mut harness, &[-4.0, -30.0]);
+        assert_ne!(
+            exhaustion_field(&harness).value(),
+            level,
+            "iter10-B-ST1-no-change: the drag must change the shown level partway"
+        );
+        let end = {
+            let back = end + vec2(30.0, 0.0);
+            harness.hover_at(back);
+            harness.run_steps(2);
+            assert_eq!(
+                exhaustion_field(&harness).value(),
+                level,
+                "iter10-B-ST1-back"
+            );
+            back
+        };
         harness.drop_at(end);
         harness.run_steps(2);
         assert_eq!(
             run.borrow().history.len(),
             before + 2,
             "iter10-B-ST1-no-change"
+        );
+    }
+
+    #[test]
+    fn iter10_lead_exhaustion_above_six_and_stale_drag() {
+        use egui_kittest::kittest::Queryable;
+        // A level above 6 (a hand-edited run or a sync) steps down by one, not to 6.
+        let (run, mut harness) = exhaustion_harness("Exhaustion (8)");
+        harness.get_by_label("Decrease Exhaustion level").click();
+        harness.run_steps(2);
+        assert_eq!(
+            run.borrow().state.participants[0].conditions,
+            ["Exhaustion (7)".to_string()],
+            "iter10-lead-above-six"
+        );
+        // A drag that the panel stopped drawing is dropped, not committed later.
+        let steps = run.borrow().history.len();
+        run.borrow_mut().exhaustion_drag = Some(ExhaustionDrag {
+            index: 0,
+            at: 0,
+            start: 7,
+            level: 3,
+            frame: 0,
+        });
+        harness.run_steps(3);
+        assert_eq!(run.borrow().history.len(), steps, "iter10-lead-stale-drag");
+        assert_eq!(
+            run.borrow().state.participants[0].conditions,
+            ["Exhaustion (7)".to_string()]
         );
     }
 

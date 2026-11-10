@@ -4169,8 +4169,8 @@ pub mod run_edge_states {
         d.click("Concentrating");
         d.expect(&format!("Undo: stop concentration for {TARGET}"));
         d.expect_same(
-            "At 960, beside Sync off for the party, Undo shows only its word, so this frame differs \
-             from the long-effect frame only in the row's concentration mark.",
+            "At 960, beside Sync off for the party, Undo shows only its word in both frames, and \
+             stopping concentration returns the row to the long-effect frame.",
         );
         d.state_prepared("stop-concentration-undo", Sizes::All, |d| {
             undo_keeps_its_word(d, &format!("Undo: stop concentration for {TARGET}"));
