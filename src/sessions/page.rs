@@ -529,6 +529,45 @@ fn wrapped_words(ui: &mut egui::Ui, kind: Type, words: impl Into<String>, color:
     ui.add(egui::Label::new(kind.rich(ui, words).color(color)).wrap());
 }
 
+/// A body link whose word starts at the cursor, as the text above it does, and whose underline
+/// covers only the word. The target is the link's own minimum size: at least `XL` square. A
+/// word narrower than that gets the extra width evenly on both sides, inside the gaps, so the
+/// word stays at the text edge and nothing beside it moves (the `line_start` pattern).
+fn word_link(ui: &mut egui::Ui, label: &str) -> egui::Response {
+    let c = colors();
+    let galley = ui
+        .painter()
+        .layout_no_wrap(label.to_owned(), Type::Body.font(ui), c.accent);
+    let (id, word) =
+        ui.allocate_space(egui::vec2(galley.size().x, galley.size().y.max(design::XL)));
+    let target = word.expand2(egui::vec2(
+        ((design::XL - word.width()) / 2.0).max(0.0),
+        0.0,
+    ));
+    let response = ui.interact(target, id, egui::Sense::click());
+    response
+        .widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Link, ui.is_enabled(), label));
+    if ui.is_rect_visible(target) {
+        let top = word.center().y - galley.size().y / 2.0;
+        let color = if response.hovered() {
+            c.focus
+        } else {
+            c.accent
+        };
+        ui.painter().hline(
+            word.x_range(),
+            top + galley.size().y - 1.0,
+            egui::Stroke::new(design::HAIRLINE_WIDTH, color.gamma_multiply(0.6)),
+        );
+        ui.painter()
+            .galley(egui::pos2(word.left(), top), galley, color);
+        if response.has_focus() {
+            design::focus_ring(ui, target);
+        }
+    }
+    response.on_hover_cursor(egui::CursorIcon::PointingHand)
+}
+
 /// Remove an isolated plan line, but keep words embedded in a sentence.
 fn unlink_group(body: &mut String, name: &str) {
     *body = unlink_planned_fight(body, name, 0);
@@ -4790,20 +4829,17 @@ impl Sessions {
                         }
                     });
                 ui.horizontal(|ui| {
-                    // Padding gives this short word a target of at least 24 px.
-                    let log = design::link(ui, " Log ");
-                    log.widget_info(|| {
-                        egui::WidgetInfo::labeled(egui::WidgetType::Link, true, "Log")
-                    });
-                    if log.clicked() {
+                    // Each word starts where the text does; a short word's target is wider
+                    // than the word, never padded with spaces.
+                    if word_link(ui, "Log").clicked() {
                         self.show_fight_log = !self.show_fight_log;
                     }
                     ui.label(Type::Small.rich(ui, "·").color(colors().muted));
-                    if design::link(ui, "Whole run").clicked() {
+                    if word_link(ui, "Whole run").clicked() {
                         self.wants_saved_run = path;
                     }
                     ui.label(Type::Small.rich(ui, "·").color(colors().muted));
-                    if design::link(ui, "Timeline").clicked() {
+                    if word_link(ui, "Timeline").clicked() {
                         self.wants_event = Some(event_id.to_owned());
                     }
                 });

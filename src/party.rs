@@ -226,6 +226,7 @@ impl Party {
             return crate::party_bar::Source {
                 icon: icons::RUN,
                 word: "From the open fight".to_owned(),
+                short: "This fight",
                 color: c.muted,
             };
         }
@@ -241,6 +242,11 @@ impl Party {
                     icons::ENCOUNTERS
                 },
                 word: format!("After {}", carry.from),
+                short: if carry.values.is_empty() {
+                    "Long rest"
+                } else {
+                    "Last fight"
+                },
                 color: c.muted,
             };
         }
@@ -255,12 +261,14 @@ impl Party {
                 crate::party_bar::Source {
                     icon: fresh.icon,
                     word: format!("Sheets fetched {}", record_age(oldest)),
+                    short: "Sheets",
                     color: fresh.color,
                 }
             }
             None => crate::party_bar::Source {
                 icon: icons::WARN,
                 word: "No sheets yet".to_owned(),
+                short: "No sheets",
                 color: c.muted,
             },
         }
