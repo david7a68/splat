@@ -56,7 +56,10 @@ pub fn run(d: &mut Driver<'_>) {
     fs::copy(&note.path, &copy).unwrap();
     d.app_mut().sessions.refresh();
     d.settle();
-    d.expect("These two files claim to be the same entry.");
+    d.expect(&format!(
+        "{} and Session 0.md claim to be the same session.",
+        note.path.file_name().unwrap().to_string_lossy()
+    ));
     d.state("session-copy", Sizes::All);
     d.click("Make Session 0.md a separate entry");
     d.expect("Undo separate entry");

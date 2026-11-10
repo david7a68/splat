@@ -21,7 +21,8 @@ use crate::{
     timeline::{
         self, Book, Kind,
         page::{
-            SessionLink, long_rest_added_message, problems, quick_add, rest_ruling, undo_removed,
+            SessionLink, long_rest_added_message, long_rest_status, problems, quick_add,
+            rest_ruling, undo_removed,
         },
     },
 };
@@ -390,7 +391,7 @@ fn plan_summary(summary: &str) -> String {
 }
 
 /// Keep each summary item and its separator together, including the rest ruling.
-fn plan_event_summary(ui: &mut egui::Ui, summary: &str, restores: bool) {
+fn plan_event_summary(ui: &mut egui::Ui, summary: &str, restores: Option<bool>) {
     let mut job = egui::text::LayoutJob::default();
     let format = egui::TextFormat {
         font_id: Type::Small.font(ui),
@@ -398,17 +399,19 @@ fn plan_event_summary(ui: &mut egui::Ui, summary: &str, restores: bool) {
         ..Default::default()
     };
     job.append(&plan_summary(summary), 0.0, format.clone());
-    if restores {
+    if let Some(restores) = restores {
+        let status = long_rest_status(restores);
         let words = format!(
-            "{}{}\u{a0}Everyone\u{a0}at\u{a0}full",
+            "{}{}\u{a0}{}",
             if summary.is_empty() { "" } else { " ·\u{a0}" },
-            icons::OK
+            status.icon,
+            status.word.replace(' ', "\u{a0}")
         );
         job.append(
             &words,
             0.0,
             egui::TextFormat {
-                color: colors().document.saved,
+                color: status.color,
                 ..format
             },
         );
@@ -3309,17 +3312,24 @@ impl Sessions {
             });
     }
 
-    fn read_tab(&mut self, ui: &mut egui::Ui, book: &Book, plan: &Plan<'_>, beside: bool) {
+    fn note_body(&self) -> String {
         let Some(draft) = &self.draft else {
-            return;
+            return String::new();
         };
         let note = self
             .selected
             .and_then(|id| self.notes.iter().find(|note| note.id == id));
-        let body = note.map_or_else(
+        note.map_or_else(
             || draft.body.clone(),
             |note| without_own_heading(&draft.body, note),
-        );
+        )
+    }
+
+    fn read_tab(&mut self, ui: &mut egui::Ui, book: &Book, plan: &Plan<'_>, beside: bool) {
+        if self.draft.is_none() {
+            return;
+        }
+        let body = self.note_body();
         let compact = compact_plan_for_reading(&body, plan.fights, plan.groups, beside);
         let summary = (!beside && compact != body)
             .then(|| section_text(&compact, "Plan for tonight"))
@@ -3635,57 +3645,6 @@ impl Sessions {
         if problems(ui, book) {
             return;
         }
-        if plan.group_open && self.not_being_played().is_none() {
-            let label = self
-                .notes
-                .iter()
-                .find(|note| Some(note.id) == self.group_session)
-                .map_or_else(|| "another session".to_owned(), Note::label);
-            if design::message_with_action(
-                ui,
-                Tone::Info,
-                &format!("A group is being assembled in the plan of {label}."),
-                "Go to it",
-            ) {
-                self.select(self.group_session);
-            }
-        }
-        if plan.group_discarded && here && design::draft_discarded(ui, &plan.group_discarded_name) {
-            self.wants_group_undo = true;
-        }
-        if let Some(problem) = &self.rename_problem {
-            design::message(ui, Tone::Warning, problem);
-        }
-        let mut added = None;
-        egui::TopBottomPanel::bottom(egui::Id::new(("session_plan_add", session)))
-            .resizable(false)
-            .show_separator_line(false)
-            .frame(egui::Frame::new().inner_margin(egui::Margin {
-                top: design::XS as i8,
-                ..Default::default()
-            }))
-            .show_inside(ui, |ui| {
-                self.plan_messages(ui, book, session, plan);
-                added = quick_add(ui, book, session, &PLAN_KINDS, |ui| {
-                    self.fight_menu(ui, plan);
-                    self.group_menu(ui, plan);
-                });
-                if let Some(id) = &added {
-                    if let Some(event) = book.events.iter_mut().find(|event| event.id == *id) {
-                        event.title = event.kind.word().to_owned();
-                    }
-                    let days = timeline::day_numbers(&book.events);
-                    let index = book.events.iter().position(|event| event.id == *id);
-                    self.added = Some(Added {
-                        id: id.clone(),
-                        label: index.map_or_else(String::new, |at| book.events[at].label(days[at])),
-                        at: Instant::now(),
-                        count: book.events.len(),
-                    });
-                    self.open_event = None;
-                }
-            });
-        let days = timeline::day_numbers(&book.events);
         let body = self
             .draft
             .as_ref()
@@ -3740,6 +3699,47 @@ impl Sessions {
                 + planned.len()
                 + planned_groups.len(),
         );
+        let added = quick_add(ui, book, session, &PLAN_KINDS, |ui| {
+            self.fight_menu(ui, plan);
+            self.group_menu(ui, plan);
+        });
+        if plan.group_open && self.not_being_played().is_none() {
+            let label = self
+                .notes
+                .iter()
+                .find(|note| Some(note.id) == self.group_session)
+                .map_or_else(|| "another session".to_owned(), Note::label);
+            if design::message_with_action(
+                ui,
+                Tone::Info,
+                &format!("A group is being assembled in the plan of {label}."),
+                "Go to it",
+            ) {
+                self.select(self.group_session);
+            }
+        }
+        if plan.group_discarded && here && design::draft_discarded(ui, &plan.group_discarded_name) {
+            self.wants_group_undo = true;
+        }
+        if let Some(problem) = &self.rename_problem {
+            design::message(ui, Tone::Warning, problem);
+        }
+        self.plan_messages(ui, book, session, plan);
+        if let Some(id) = &added {
+            if let Some(event) = book.events.iter_mut().find(|event| event.id == *id) {
+                event.title = event.kind.word().to_owned();
+            }
+            let days = timeline::day_numbers(&book.events);
+            let index = book.events.iter().position(|event| event.id == *id);
+            self.added = Some(Added {
+                id: id.clone(),
+                label: index.map_or_else(String::new, |at| book.events[at].label(days[at])),
+                at: Instant::now(),
+                count: book.events.len(),
+            });
+            self.open_event = None;
+        }
+        let days = timeline::day_numbers(&book.events);
         let mut insert = None;
         let mut remove = None;
         let mut remove_group = None;
@@ -3798,7 +3798,7 @@ impl Sessions {
                                 design::status(ui, Status { icon: icons::RUN,
                                     word: &plan_saved_status(saved), color: c.muted });
                             } else if !(is_open && event.kind == Kind::LongRest) {
-                                plan_event_summary(ui, &summary, event.kind == Kind::LongRest && event.restores);
+                                plan_event_summary(ui, &summary, (event.kind == Kind::LongRest).then_some(event.restores));
                             }
                         }, |ui| {
                             if let Some(saved) = saved {
@@ -3973,7 +3973,7 @@ impl Sessions {
                 undo_group_remove |= self.removed_group_message(ui, session, planned_groups.len());
                 if !any && self.removed_group.is_none() {
                     design::empty_state(ui, icons::SESSIONS, "Nothing planned yet.",
-                        "Use Add below to plan a fight, a group, or an event.", |_| {});
+                        "Use Add to plan a fight, a group, or an event.", |_| {});
                 }
             });
         });
@@ -5458,7 +5458,10 @@ impl Sessions {
             if design::message_with_action(
                 ui,
                 Tone::Warning,
-                crate::world::DUPLICATE_ENTRY,
+                &format!(
+                    "{} and {filename} claim to be the same session.",
+                    note.path.file_name().unwrap_or_default().to_string_lossy()
+                ),
                 &crate::world::separate_entry_action(&filename),
             ) {
                 match super::new_identity(copy) {
@@ -5574,7 +5577,15 @@ impl Sessions {
                 if title_on_own_line {
                     self.session_details_action(ui, &note);
                 }
-                if shown == Tab::Note || (shown == Tab::Plan && beside) {
+                if (shown == Tab::Note || (shown == Tab::Plan && beside))
+                    && (!self.reading_note
+                        || has_written_text(&compact_plan_for_reading(
+                            &self.note_body(),
+                            plan.fights,
+                            plan.groups,
+                            beside,
+                        )))
+                {
                     let (word, icon) = if self.reading_note {
                         ("Write", icons::EDIT)
                     } else {
@@ -6521,6 +6532,22 @@ mod tests {
     }
 
     #[test]
+    fn iter3_c_closed_plan_rest_shows_not_at_full() {
+        use egui_kittest::kittest::Queryable;
+        let mut harness = egui_kittest::Harness::builder().build(|ctx| {
+            egui::CentralPanel::default().show(ctx, |ui| {
+                plan_event_summary(ui, "Old mill", Some(false));
+            });
+        });
+        design::theme::install(&harness.ctx);
+        harness.run_steps(2);
+        harness.get_by_label(&format!(
+            "Old\u{a0}mill ·\u{a0}{}\u{a0}Not\u{a0}at\u{a0}full",
+            icons::LONG_REST
+        ));
+    }
+
+    #[test]
     fn a_rest_ruling_uses_one_line_when_the_summary_fits() {
         let ctx = egui::Context::default();
         design::theme::install(&ctx);
@@ -6528,12 +6555,12 @@ mod tests {
             egui::CentralPanel::default().show(ctx, |ui| {
                 ui.set_width(design::FORM_WIDTH);
                 let plain = ui
-                    .scope(|ui| plan_event_summary(ui, "Long rest · Old mill", false))
+                    .scope(|ui| plan_event_summary(ui, "Long rest · Old mill", None))
                     .response
                     .rect
                     .height();
                 let restored = ui
-                    .scope(|ui| plan_event_summary(ui, "Long rest · Old mill", true))
+                    .scope(|ui| plan_event_summary(ui, "Long rest · Old mill", Some(true)))
                     .response
                     .rect
                     .height();
