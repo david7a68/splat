@@ -17,6 +17,8 @@ use std::fs;
 use uuid::Uuid;
 
 const SAVED: &str = "Changes saved.";
+/// What the form says when it closes with nothing to write.
+pub(crate) const ALREADY_SAVED: &str = "Your changes are already in the note.";
 /// The faint example in an empty Status field: the rule the value must follow.
 pub(crate) const STATUS_HINT: &str = "A short word, such as alive.";
 
@@ -147,6 +149,18 @@ pub(super) struct EditDraft {
     disk: Option<(String, Option<Fields>)>,
     /// The draft before Reload, until the DM edits again.
     reloaded: Option<Fields>,
+    /// Overwrite kept the note's unread groups in place of the draft's group change.
+    groups_refused: bool,
+}
+
+/// What Save did.
+enum Saved {
+    /// The note changed on disk under the draft. The draft waits for the DM to choose.
+    Waiting,
+    /// The note on disk already reads as the draft would write it, so nothing was written. It
+    /// holds that text.
+    Unchanged(String),
+    Written(Change),
 }
 
 /// Where a disk change under the draft stands.
@@ -176,6 +190,7 @@ impl EditDraft {
             start,
             disk: None,
             reloaded: None,
+            groups_refused: false,
         })
     }
 
@@ -209,13 +224,13 @@ impl EditDraft {
         campaign: &Campaign,
         index: &ContentIndex,
         log_as: Option<&str>,
-    ) -> Result<Option<Change>, String> {
+    ) -> Result<Saved, String> {
         let disk = fs::read_to_string(note_path(&campaign.path, &self.path)?)
             .map_err(|e| e.to_string())?;
         if disk != self.baseline {
             let theirs = Fields::read(&self.path, &disk);
             self.disk = Some((disk, theirs));
-            return Ok(None);
+            return Ok(Saved::Waiting);
         }
         let changed = self.now.changed(&self.start);
         if changed.groups
@@ -291,8 +306,13 @@ impl EditDraft {
                 }
             }
         }
+        // For example, Overwrite adds a group that Obsidian added too. A write and an Undo
+        // would change nothing.
+        if after == disk {
+            return Ok(Saved::Unchanged(disk));
+        }
         write_note(&campaign.path, &self.path, Some(&disk), &after)?;
-        Ok(Some(Change {
+        Ok(Saved::Written(Change {
             path: self.path.clone(),
             before: disk,
             after,
@@ -474,6 +494,7 @@ impl EditDraft {
         choice: design::DiskConflictChoice,
         index: &ContentIndex,
     ) -> Conflict {
+        self.groups_refused = false;
         if let Some(theirs) = theirs {
             match choice {
                 design::DiskConflictChoice::Reload => {
@@ -492,6 +513,7 @@ impl EditDraft {
                     if !changed.place {
                         now.place.clone_from(&theirs.place);
                     }
+                    self.groups_refused = changed.groups && theirs.groups_unread.is_some();
                     now.groups = self.start.overwritten_groups(now, &theirs, index);
                     now.groups_unread.clone_from(&theirs.groups_unread);
                     if !changed.text {
@@ -517,6 +539,7 @@ impl Reader {
                 self.edits.insert(item.entry.id, draft);
                 self.discarded = None;
                 self.undo = None;
+                self.kept = None;
                 self.picker = None;
                 self.error = None;
             }
@@ -884,18 +907,41 @@ impl Reader {
         }
         if save {
             match draft.save(campaign, index, self.log_as.as_deref()) {
-                Ok(Some(change)) => {
+                Ok(Saved::Written(change)) => {
                     self.picker = None;
                     self.form_focused = false;
                     self.undo = Some(change);
+                    self.kept = None;
                     return Some(Go::Reload(id));
                 }
-                Ok(None) => {}
+                Ok(Saved::Unchanged(disk)) => {
+                    self.picker = None;
+                    self.form_focused = false;
+                    self.undo = None;
+                    // A refused group change is not in the note. The note's own warning says why.
+                    self.kept = (!draft.groups_refused).then(|| (draft.path.clone(), disk));
+                    return Some(Go::Reload(id));
+                }
+                Ok(Saved::Waiting) => {}
                 Err(error) => self.error = Some(error),
             }
         }
         self.edits.insert(id, draft);
         None
+    }
+}
+
+#[cfg(test)]
+impl Saved {
+    fn change(self) -> Change {
+        match self {
+            Self::Written(change) => change,
+            _ => panic!("Save wrote nothing"),
+        }
+    }
+
+    fn waiting(&self) -> bool {
+        matches!(self, Self::Waiting)
     }
 }
 
@@ -1063,7 +1109,7 @@ mod tests {
             .now
             .groups
             .push(Value::String("[[Arena Guild]]".into()));
-        let change = draft.save(&campaign, &index, None).unwrap().unwrap();
+        let change = draft.save(&campaign, &index, None).unwrap().change();
         let after = fs::read_to_string(&path).unwrap();
         let saved = Entry::parse("NPCs/Rook.md", &after).unwrap();
         for (position, value) in before.iter().enumerate() {
@@ -1331,13 +1377,40 @@ mod tests {
     }
 
     #[test]
+    fn iter12_d_ad2_overwrite_that_only_changes_unread_groups_writes_nothing() {
+        let (dir, campaign, _, id, file) = unread_group_note();
+        // The form opens on a readable note. Obsidian then writes groups the app cannot read.
+        let path = dir.path().join("NPCs/Rook.md");
+        let start = file.find("- {id:").unwrap();
+        let end = file[start..].find('\n').unwrap() + start;
+        fs::write(&path, format!("{}{}", &file[..start], &file[end + 1..])).unwrap();
+        let index = ContentIndex::load(&[], Some(&campaign)).unwrap();
+        let entry = &index.items[index.position(id).unwrap()].entry;
+        let mut draft = EditDraft::open(&campaign, entry).unwrap();
+        draft.now.groups.push("[[Arena Guild]]".into());
+        fs::write(&path, &file).unwrap();
+        assert!(draft.save(&campaign, &index, None).unwrap().waiting());
+        let (disk, theirs) = draft.disk.take().unwrap();
+        draft.resolve(disk, theirs, design::DiskConflictChoice::Overwrite, &index);
+        assert!(
+            draft.groups_refused,
+            "AD2-refused: the form knows the group change did not go in"
+        );
+        assert!(matches!(
+            draft.save(&campaign, &index, None).unwrap(),
+            Saved::Unchanged(text) if text == file
+        ));
+        assert_eq!(fs::read(&path).unwrap(), file.as_bytes(), "AD2-refused-raw");
+    }
+
+    #[test]
     fn iter8_d2_other_edits_keep_unread_group_bytes() {
         let (dir, campaign, index, id, file) = unread_group_note();
         let item = &index.items[index.position(id).unwrap()];
         let mut draft = EditDraft::open(&campaign, &item.entry).unwrap();
         draft.now.status = "missing".into();
         draft.now.text = "Left the gate.\n".into();
-        let change = draft.save(&campaign, &index, None).unwrap().unwrap();
+        let change = draft.save(&campaign, &index, None).unwrap().change();
         let saved = fs::read_to_string(dir.path().join("NPCs/Rook.md")).unwrap();
         let group_bytes = |text: &str| {
             text.split_once("splat_part_of:")
@@ -1453,7 +1526,7 @@ mod tests {
         let disk = outside(&readable);
         assert_ne!(disk, readable, "fixture: Obsidian changes the note");
         fs::write(&path, &disk).unwrap();
-        assert!(draft.save(&campaign, &index, None).unwrap().is_none());
+        assert!(draft.save(&campaign, &index, None).unwrap().waiting());
         let (disk_text, theirs) = draft.disk.take().unwrap();
         assert_eq!(disk_text, disk, "fixture: the outside change is on disk");
         let effects = draft.overwrite_effects(theirs.as_ref().unwrap(), &index);
@@ -1491,7 +1564,7 @@ mod tests {
             )],
             "SD1-preview-add: the choice names the group it adds and the one it keeps"
         );
-        let change = draft.save(&campaign, &index, None).unwrap().unwrap();
+        let change = draft.save(&campaign, &index, None).unwrap().change();
         let stored = stored_value(&index, added.into_inner());
         let added_line = format!(
             "- {}\n",
@@ -1521,7 +1594,7 @@ mod tests {
             )],
             "SD1-preview-remove: the choice names the group it removes and the one it keeps"
         );
-        draft.save(&campaign, &index, None).unwrap().unwrap();
+        draft.save(&campaign, &index, None).unwrap().change();
         assert_eq!(
             fs::read(&path).unwrap(),
             disk.replace(ZAREL, "").as_bytes(),
@@ -1543,7 +1616,7 @@ mod tests {
             [("Part of", "Overwrite removes Zarel.".into())],
             "SD1-preview-respelled: the choice names the respelled group it removes"
         );
-        let change = draft.save(&campaign, &index, None).unwrap().unwrap();
+        let change = draft.save(&campaign, &index, None).unwrap().change();
         let saved = fs::read_to_string(&path).unwrap();
         let entry = Entry::parse("NPCs/Safe Rook.md", &saved).unwrap();
         assert!(
@@ -1571,7 +1644,24 @@ mod tests {
             effects.iter().all(|(_, words)| !words.contains("adds")),
             "SD1-preview-same: the choice does not add a group the note has: {effects:?}"
         );
-        draft.save(&campaign, &index, None).unwrap();
+        // An old time on the file shows whether Save wrote it, even with the same bytes.
+        let old = std::time::SystemTime::UNIX_EPOCH + std::time::Duration::from_secs(1_000_000);
+        fs::File::options()
+            .write(true)
+            .open(&path)
+            .unwrap()
+            .set_modified(old)
+            .unwrap();
+        let saved = draft.save(&campaign, &index, None).unwrap();
+        assert!(
+            matches!(&saved, Saved::Unchanged(text) if *text == disk),
+            "AD2-no-undo: nothing written, no Change"
+        );
+        assert_eq!(
+            fs::metadata(&path).unwrap().modified().unwrap(),
+            old,
+            "AD2-no-write: the note is not written again"
+        );
         assert_eq!(
             fs::read_to_string(&path).unwrap(),
             disk,
@@ -1644,7 +1734,7 @@ mod tests {
         draft.now.groups = vec![Value::String("[[Watch House]]".into())];
         draft.now.text.push_str("\nOwes Nell a favour.\n");
         assert!(draft.dirty());
-        let change = draft.save(&campaign, &index, None).unwrap().unwrap();
+        let change = draft.save(&campaign, &index, None).unwrap().change();
         let after = fs::read_to_string(&path).unwrap();
         let saved = Entry::parse("NPCs/Rook.md", &after).unwrap();
         assert_eq!(saved.id, id);
@@ -1669,12 +1759,12 @@ mod tests {
         let mut draft = EditDraft::open(&campaign, &entry).unwrap();
         draft.now.status = "dead".into();
         fs::write(&path, format!("{after}From Obsidian.\n")).unwrap();
-        assert!(draft.save(&campaign, &index, None).unwrap().is_none());
+        assert!(draft.save(&campaign, &index, None).unwrap().waiting());
         assert!(draft.disk.is_some());
         let invalid = "---\nsplat_schema: 2\nsplat_id: [\n---\n";
         fs::write(&path, invalid).unwrap();
         draft.now.groups.clear();
-        assert!(draft.save(&campaign, &index, None).unwrap().is_none());
+        assert!(draft.save(&campaign, &index, None).unwrap().waiting());
         assert_eq!(
             fs::read_to_string(&path).unwrap(),
             invalid,

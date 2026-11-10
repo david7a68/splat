@@ -698,19 +698,40 @@ pub fn create_entry(campaign: &Campaign, name: &str, kind: &str) -> Result<Uuid,
     create_with_details(campaign, name, kind, "")
 }
 
-/// A new NPC from the generator, with its attributes as the note's text.
-pub(crate) fn broken_links(item: &Item, index: &ContentIndex) -> Vec<&'static str> {
+/// A link on a world note that the DM must fix: its note is missing, or it waits for a choice.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub(crate) enum LinkProblem {
+    PlaceNotFound,
+    /// The place link matches this many notes, and waits for the DM to choose one.
+    PlaceMatches(usize),
+    StatBlockNotFound,
+    GroupNotFound,
+}
+
+impl std::fmt::Display for LinkProblem {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::PlaceNotFound => f.write_str("Place not found"),
+            Self::PlaceMatches(count) => write!(f, "Place has {count} matches"),
+            Self::StatBlockNotFound => f.write_str("Stat block not found"),
+            Self::GroupNotFound => f.write_str("Group not found"),
+        }
+    }
+}
+
+/// The links on this note that need fixing, in the order the reader shows them.
+pub(crate) fn broken_links(item: &Item, index: &ContentIndex) -> Vec<LinkProblem> {
     let mut problems = Vec::new();
-    if reader_field(&item.entry, "in").is_some()
-        && index.place_of(item.entry.id).is_none()
-        && index.place_choices(item.entry.id).is_empty()
-    {
-        problems.push("Place not found");
+    if reader_field(&item.entry, "in").is_some() && index.place_of(item.entry.id).is_none() {
+        problems.push(match index.place_choices(item.entry.id).len() {
+            0 => LinkProblem::PlaceNotFound,
+            count => LinkProblem::PlaceMatches(count),
+        });
     }
     if reader_field(&item.entry, "creature").is_some()
         && index.world_target(&item.entry, "creature").is_none()
     {
-        problems.push("Stat block not found");
+        problems.push(LinkProblem::StatBlockNotFound);
     }
     // The index found each group when it loaded. Its list follows the file's order; a value it
     // did not see (two files with one id) is looked up again.
@@ -724,12 +745,13 @@ pub(crate) fn broken_links(item: &Item, index: &ContentIndex) -> Vec<&'static st
             _ => index.world_value_target(value),
         };
         if target.is_none() {
-            problems.push("Group not found");
+            problems.push(LinkProblem::GroupNotFound);
         }
     }
     problems
 }
 
+/// A new NPC from the generator, with its attributes as the note's text.
 pub fn create_generated(
     campaign: &Campaign,
     npc: &crate::npc_generator::Generated,
@@ -1361,6 +1383,8 @@ pub struct Reader {
     adding: Option<Adding>,
     picker: Option<Picker>,
     undo: Option<Change>,
+    /// The form closed with nothing to write: the note's path and its text, while it reads so.
+    kept: Option<(String, String)>,
     identity_undo: Option<(Uuid, Change)>,
     name_undo: Option<Change>,
     error: Option<String>,
@@ -1460,6 +1484,7 @@ impl Reader {
     ) -> Option<Nav> {
         if self.showing != Some(item.entry.id) {
             self.undo = None;
+            self.kept = None;
             if let Some(previous) = self.showing {
                 self.status_drafts.insert(previous, self.status.clone());
             }
@@ -1487,6 +1512,13 @@ impl Reader {
             })
         }) {
             self.undo = None;
+        }
+        if self.kept.as_ref().is_some_and(|(path, text)| {
+            campaign.is_none_or(|campaign| {
+                fs::read_to_string(campaign.path.join(path)).ok().as_deref() != Some(text)
+            })
+        }) {
+            self.kept = None;
         }
         let heading = if self.heading_document.is_none_or(|id| id == item.entry.id) {
             self.heading_document = None;
@@ -2062,6 +2094,7 @@ impl Reader {
                 self.error = None;
                 self.group_error = false;
                 self.undo = Some(change);
+                self.kept = None;
                 self.picker = None;
                 self.place_choices_open = false;
                 Some(Go::Reload(item.entry.id))
@@ -2370,6 +2403,18 @@ impl Reader {
 
     pub fn clear_notice(&mut self) {
         self.undo = None;
+        self.kept = None;
+    }
+
+    /// The form closed because the note already held every change. Nothing to undo.
+    fn kept_notice(&self, ui: &mut egui::Ui, item: &Item) {
+        if self
+            .kept
+            .as_ref()
+            .is_some_and(|(path, _)| *path == item.entry.path)
+        {
+            design::message(ui, Tone::Info, edit::ALREADY_SAVED);
+        }
     }
 
     fn undo_change(&mut self, campaign: &Campaign, id: Uuid) -> Option<Go> {
@@ -2669,7 +2714,7 @@ impl Reader {
                     }
                 }
             });
-            if broken_links(item, index).contains(&"Stat block not found") {
+            if broken_links(item, index).contains(&LinkProblem::StatBlockNotFound) {
                 design::status(
                     ui,
                     design::Status {
@@ -2715,6 +2760,7 @@ impl Reader {
                     }
                 }
             }
+            self.kept_notice(ui, item);
             if let Some(change) = &self.undo
                 && change.path == item.entry.path
                 && Self::change_notice(ui, &change.word, change.kind)
@@ -2829,6 +2875,9 @@ impl Reader {
                 }
             }
         }
+        if !self.compact {
+            self.kept_notice(ui, item);
+        }
         if !self.compact
             && let Some(change) = &self.undo
             && change.path == item.entry.path
@@ -2916,6 +2965,7 @@ impl Reader {
                         Ok(mut change) => {
                             change.word = format!("Stat block: not set → {}.", stat_block.name);
                             self.undo = Some(change);
+                            self.kept = None;
                         }
                         Err(error) => self.error = Some(error),
                     }
@@ -3059,8 +3109,8 @@ mod tests {
             ("'[[Nowhere]]'", true),
         ] {
             for (key, warning) in [
-                ("in", "Place not found"),
-                ("creature", "Stat block not found"),
+                ("in", LinkProblem::PlaceNotFound),
+                ("creature", LinkProblem::StatBlockNotFound),
             ] {
                 let dir = tempfile::tempdir().unwrap();
                 let campaign = sample_campaign(dir.path());
@@ -3086,6 +3136,45 @@ mod tests {
                 );
             }
         }
+    }
+
+    #[test]
+    fn iter12_d_fd1_a_place_with_two_matches_needs_fixing() {
+        let dir = tempfile::tempdir().unwrap();
+        let campaign = sample_campaign(dir.path());
+        let id = create_entry(&campaign, "Rook", "npc").unwrap();
+        for folder in ["Locations", "Other"] {
+            fs::create_dir_all(dir.path().join(folder)).unwrap();
+            fs::write(
+                dir.path().join(format!("{folder}/Watch House.md")),
+                "# Watch House\n",
+            )
+            .unwrap();
+        }
+        let path = dir.path().join("NPCs/Rook.md");
+        let file = fs::read_to_string(&path).unwrap();
+        for (place, expected) in [
+            ("[[Watch House]]", vec![LinkProblem::PlaceMatches(2)]),
+            // `Always use this one` writes the chosen file's path. The warning goes.
+            ("[[Locations/Watch House]]", vec![]),
+            // Neighbour: a missing place still says not found, not matches.
+            ("[[Nowhere]]", vec![LinkProblem::PlaceNotFound]),
+        ] {
+            fs::write(
+                &path,
+                file.replacen("---\n", &format!("---\nsplat_in: '{place}'\n"), 1),
+            )
+            .unwrap();
+            let index = ContentIndex::load(&[], Some(&campaign)).unwrap();
+            let item = &index.items[index.position(id).unwrap()];
+            assert!(item.entry.flags.is_empty(), "fixture {place} reads");
+            assert_eq!(broken_links(item, &index), expected, "FD1-{place}");
+        }
+        assert_eq!(
+            LinkProblem::PlaceMatches(2).to_string(),
+            "Place has 2 matches",
+            "FD1-words"
+        );
     }
 
     #[test]
@@ -3121,7 +3210,7 @@ mod tests {
             assert_eq!(
                 problems
                     .iter()
-                    .filter(|problem| **problem == "Group not found")
+                    .filter(|problem| **problem == LinkProblem::GroupNotFound)
                     .count(),
                 expected,
                 "FD1-{groups}"
