@@ -681,7 +681,7 @@ impl Campaigns {
             return;
         };
         ui.add_space(design::S);
-        ui.set_max_width(ui.available_width().min(design::FORM_WIDTH + 120.0));
+        ui.set_max_width(ui.available_width().min(design::FORM_WIDTH));
         ui.horizontal(|ui| {
             design::group_label(ui, "Folder");
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {

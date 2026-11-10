@@ -251,7 +251,11 @@ pub struct Sessions {
     notice_session: Option<Uuid>,
     /// A job ended while the DM may be elsewhere.
     job_done: bool,
-    /// It finished with something the DM must look at.
+    /// The latest result stays after its completion notice is acknowledged.
+    processed_session: Option<Uuid>,
+    /// The recording that result came from, so deleting it clears the result.
+    processed_recording: Option<PathBuf>,
+    /// The latest result has something the DM must look at.
     job_warned: bool,
     alerts: Vec<Alert>,
     added: Option<Added>,
@@ -1399,6 +1403,8 @@ impl Sessions {
         self.notice_session = Some(session);
         match result {
             Ok(None) => {
+                self.processed_session = Some(session);
+                self.processed_recording = failed_recording.clone();
                 self.job_done = true;
                 self.job_warned = false;
                 self.notice = Some((
@@ -1409,6 +1415,8 @@ impl Sessions {
                 ));
             }
             Ok(Some(warning)) => {
+                self.processed_session = Some(session);
+                self.processed_recording = failed_recording.clone();
                 self.job_done = true;
                 self.job_warned = true;
                 // The recording's row has the words, for as long as the result stands.
@@ -1484,6 +1492,8 @@ impl Sessions {
             .filter(|(campaign, _)| Some(*campaign) == active.map(|c| c.id))
             .map(|(_, session)| session);
         self.alerts.clear();
+        self.processed_session = None;
+        self.processed_recording = None;
         self.job_done = false;
         self.job_warned = false;
         self.deleted_template = None;
@@ -1706,6 +1716,7 @@ impl Sessions {
             .map(|live| live.session)
             .or_else(|| self.job.as_ref().map(|(_, session)| *session))
             .or_else(|| self.alerts.last().map(|alert| alert.session))
+            .or(self.processed_session)
             .or(self.notice_session)
         {
             self.open(session);
@@ -1921,7 +1932,7 @@ impl Sessions {
                 ..processed_warning()
             });
         }
-        if self.job_done() {
+        if self.processed_session.is_some() {
             return Some(Status {
                 icon: icons::SUCCESS,
                 word: "Processed",
@@ -2121,6 +2132,10 @@ impl Sessions {
         let path = new_recording_path(folder, session);
         match Recorder::start(tool, settings.input(), path) {
             Ok(recorder) => {
+                self.processed_session = None;
+                self.processed_recording = None;
+                self.job_done = false;
+                self.job_warned = false;
                 self.notice = None;
                 self.notice_session = None;
                 // A new recording answers an old failure of this session.
@@ -2198,6 +2213,8 @@ impl Sessions {
         self.notice = None;
         self.notice_session = None;
         let _ = fs::remove_file(recording.with_extension("state.txt"));
+        self.processed_session = None;
+        self.processed_recording = None;
         self.job_done = false;
         self.job_warned = false;
         self.alerts
@@ -2874,7 +2891,7 @@ impl Sessions {
                 ui.add_enabled_ui(!locked, |ui| {
                     for note in &self.notes {
                         let job = self.job.as_ref().map(|(_, session)| *session);
-                        let result = self.notice_session.filter(|_| self.job_done);
+                        let result = self.processed_session;
                         let state = if live == Some(note.id) || job == Some(note.id) {
                             self.rail_recording_status()
                         } else {
@@ -4851,7 +4868,7 @@ impl Sessions {
             Type::Small
                 .rich(
                     ui,
-                    "These are suggestions from the LLM. Only what you add goes on the timeline.",
+                    "These events were suggested from the transcript. Only events you add go on the timeline.",
                 )
                 .color(c.muted),
         );
@@ -5066,7 +5083,7 @@ impl Sessions {
                 Type::Small
                     .rich(
                         ui,
-                        "This is a draft from an LLM. Check it against your own memory.",
+                        "This draft was written automatically. Check it against your memory.",
                     )
                     .color(c.muted),
             );
@@ -5328,6 +5345,13 @@ impl Sessions {
             ctx.data_mut(|data| data.remove::<bool>(focus_id));
             self.reading = None;
             self.notice_session = None;
+            // A deleted recording takes its result with it, so the rail stops saying Processed.
+            if self.processed_recording.as_deref() == Some(path.as_path()) {
+                self.processed_session = None;
+                self.processed_recording = None;
+                self.job_done = false;
+                self.job_warned = false;
+            }
             self.notice = Some(match delete_recording(&path) {
                 Ok(()) => (Tone::Success, "Recording deleted.".to_owned()),
                 Err(error) => (Tone::Error, format!("Not deleted. {error}")),
@@ -5415,9 +5439,8 @@ impl Sessions {
         }
         self.expire_move(book);
         let shown = self.notice_session.is_none() || self.notice_session == self.selected;
-        if shown && self.job_done {
+        if shown && self.job_done() {
             self.job_done = false;
-            self.job_warned = false;
         }
         if let Some((tone, words)) = self.notice.clone().filter(|_| shown) {
             if let Some(session) = self
@@ -5546,7 +5569,12 @@ impl Sessions {
             return;
         }
         let editing_group_here = plan.group_open && self.group_session == self.selected;
-        let beside = ui.available_width() >= PLAN_BESIDE_NOTE_FROM && !editing_group_here;
+        let beside_from = if editing_group_here {
+            design::LIST_MEASURE + design::L + design::READER_MEASURE
+        } else {
+            PLAN_BESIDE_NOTE_FROM
+        };
+        let beside = ui.available_width() >= beside_from;
         // In a wide page, the note is on the plan's tab, so there is no second one to choose.
         let mut shown = if beside && self.tab == Tab::Note {
             Tab::Plan
@@ -5606,20 +5634,33 @@ impl Sessions {
         match shown {
             Tab::Plan if beside => {
                 let height = ui.available_height();
-                let plan_width = (ui.available_width() * 0.4).clamp(PLAN_WIDTH, PLAN_MAX_WIDTH);
+                let plan_width = if editing_group_here {
+                    design::LIST_MEASURE
+                } else {
+                    (ui.available_width() * 0.4).clamp(PLAN_WIDTH, PLAN_MAX_WIDTH)
+                };
                 let note_width = ui.available_width() - plan_width - design::L;
                 ui.horizontal_top(|ui| {
                     ui.spacing_mut().item_spacing.x = design::L;
                     page_column(ui, plan_width, height, |ui| {
-                        self.plan_pane(ui, book, plan);
+                        fixed_scope(ui, editing_group_here, "session_plan_pane", |ui| {
+                            self.plan_pane(ui, book, plan)
+                        });
                     });
                     page_column(ui, note_width, height, |ui| {
-                        self.note_pane(ui, book, plan, beside)
+                        fixed_scope(ui, editing_group_here, "session_note_pane", |ui| {
+                            self.note_pane(ui, book, plan, beside)
+                        })
                     });
                 });
             }
-            Tab::Plan => self.plan_pane(ui, book, plan),
-            Tab::Note => self.note_pane(ui, book, plan, beside),
+            // The same ids in both layouts: crossing the width keeps typed text, focus and scroll.
+            Tab::Plan => fixed_scope(ui, editing_group_here, "session_plan_pane", |ui| {
+                self.plan_pane(ui, book, plan)
+            }),
+            Tab::Note => fixed_scope(ui, editing_group_here, "session_note_pane", |ui| {
+                self.note_pane(ui, book, plan, beside)
+            }),
             Tab::Recordings => {
                 self.recordings_tab(ui, settings, book);
             }
@@ -6405,6 +6446,10 @@ impl Sessions {
     pub fn simulate_job(&mut self, progress: processing::Progress) {
         self.notice = None;
         self.notice_session = None;
+        self.processed_session = None;
+        self.processed_recording = None;
+        self.job_done = false;
+        self.job_warned = false;
         let session = self.selected.expect("an open session");
         let path = self.recordings[0].path.clone();
         if let processing::Progress::Transcribing { part, of } = &progress {
@@ -6443,6 +6488,22 @@ impl Sessions {
     }
 }
 
+/// Draw a pane under a fixed id while `fixed`, so a group draft keeps its typed text, focus and
+/// scroll when the page crosses the side-by-side width. Otherwise the pane keeps its usual ids.
+fn fixed_scope<R>(
+    ui: &mut egui::Ui,
+    fixed: bool,
+    id: &str,
+    add: impl FnOnce(&mut egui::Ui) -> R,
+) -> R {
+    if fixed {
+        ui.scope_builder(egui::UiBuilder::new().id(egui::Id::new(id)), add)
+            .inner
+    } else {
+        add(ui)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -6450,6 +6511,7 @@ mod tests {
     #[test]
     fn iter1_c_completed_processing_uses_processed_in_the_rail() {
         let mut page = Sessions {
+            processed_session: Some(Uuid::new_v4()),
             job_done: true,
             ..Default::default()
         };

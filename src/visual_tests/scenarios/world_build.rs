@@ -531,7 +531,25 @@ pub fn package_rename(d: &mut Driver<'_>) {
     go_campaign(d);
     d.click("Reload from disk");
     d.expect("Find the folder…");
-    d.state("package-folder-moved-on-disk", Sizes::All);
+    d.expect("Ashen Marches moved from modules/ashen-marches/ to modules/watch-package/.");
+    assert!(!d.has_containing("Splat cannot find Ashen Marches"));
+    assert!(!d.has_containing("Ashen Marches is now in"));
+    d.state_prepared("package-folder-moved-on-disk", Sizes::All, |d| {
+        let warning = d.place_of("Ashen Marches moved from modules/ashen-marches/ to modules/watch-package/.");
+        let action = d.place_of("Use this folder");
+        let first = d.place_of("Bridge Ambush");
+        let second = d.place_of("Shrine of Cinders");
+        let and = d.nodes().into_iter().find(|node| node.name == "and");
+        let aligned = warning.zip(action).is_some_and(|(text, action)| {
+            (text.left() - action.left()).abs() < 1.0 && action.top() > text.bottom()
+        });
+        let spaced = first.zip(second).zip(and).is_some_and(|((first, second), and)| {
+            (and.rect.left() - first.right() - (second.left() - and.rect.right())).abs() < 1.0
+                && and.rect.left() - first.right() < crate::design::S
+        });
+        d.observe("iter-4-C-FD1-FD14", aligned && spaced,
+            "One moved-folder warning aligns its recovery action and uses word spaces between affected links");
+    });
     let wrong = d.root.join("modules/wrong-package");
     fs::create_dir(&wrong).unwrap();
     fs::write(

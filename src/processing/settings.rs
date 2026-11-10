@@ -385,7 +385,7 @@ impl ProcessingSettings {
                     .split('/')
                     .next()
                     .filter(|s| !s.is_empty())
-                    .unwrap_or("service")
+                    .unwrap_or("this service")
             }
         }
         let owner = service_name(saved_for);
@@ -394,7 +394,7 @@ impl ProcessingSettings {
             KeySlot::Llm => &self.config.llm_url,
         });
         let warning = format!(
-            "The saved key is for {owner}, so Splat will not send it to {target}. Save a key for this service."
+            "The saved key is for {owner}, so Splat will not send it to {target}. Save a key for it."
         );
         let slot_word = if slot == KeySlot::Speech {
             "speech"
