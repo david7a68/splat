@@ -118,6 +118,11 @@ provides `Edit in Obsidian` and `Show file`.
 Conversion and draft comparisons align unchanged lines. Their highlights and counts
 show actual changes. **Next difference** moves between separate change groups and
 stays hidden when there is only one group.
+Long conversion previews give the source panes about 60% of the window height and show whole rows.
+
+Registering a copied package keeps its warning above the name form. **Cancel** closes the form without
+writing and keeps the typed name and use choice. Help below **Use in this campaign** follows its check.
+World's unreadable-note count opens the first note's repair and keeps other repair drafts.
 
 Converted creature, spell and item files use readable tables. The reader shows
 each set fact once and hides machine lines. A creature's CR supplies missing XP

@@ -71,7 +71,7 @@ enum Stage {
     },
     Npc {
         npc: Option<Generated>,
-        problems: Vec<String>,
+        problems: Vec<npc_generator::TableProblem>,
         sources: Vec<String>,
         error: Option<String>,
         /// The first roll ran, so a failed roll is not tried again each frame.
@@ -532,7 +532,7 @@ fn reading(ui: &mut egui::Ui) {
 fn roll(
     index: &ContentIndex,
     npc: &mut Option<Generated>,
-    problems: &mut Vec<String>,
+    problems: &mut Vec<npc_generator::TableProblem>,
     sources: &mut Vec<String>,
     error: &mut Option<String>,
 ) {

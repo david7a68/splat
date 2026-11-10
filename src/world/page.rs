@@ -28,7 +28,7 @@ pub struct WorldPage {
     kept_repairs: Vec<super::repair::Repair>,
     campaign: Option<Uuid>,
     generated: Option<crate::npc_generator::Generated>,
-    generator_problems: Vec<String>,
+    generator_problems: Vec<crate::npc_generator::TableProblem>,
     generator_sources: Vec<String>,
     error: Option<String>,
     repaired: Option<Uuid>,
@@ -160,8 +160,8 @@ impl WorldPage {
                         }
                     });
                 }
-                if broken > 0 {
-                    design::status(
+                if broken > 0
+                    && design::status_link(
                         ui,
                         design::Status {
                             icon: icons::WARN,
@@ -171,7 +171,12 @@ impl WorldPage {
                             ),
                             color: colors().result.warning,
                         },
-                    );
+                    )
+                    .clicked()
+                    && let Some((path, _)) = index.and_then(|index| index.broken_world.first())
+                {
+                    self.search.clear();
+                    self.open_repair(campaign, path);
                 }
             },
         );

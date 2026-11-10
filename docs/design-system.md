@@ -384,7 +384,8 @@ Convert files groups files and its picker by owner. Initially only the campaign 
 packages start unchecked but can be selected; warn that their converter overwrites these files on its
 next run. Counts include checked owners only. The modal shows before and after text, counts by kind in
 words and skipped files. Omit the kinds line when it has no text. Short previews fit content; long
-previews use about 60% of window height. Source lines do not wrap. Mark changes from aligned rows,
+previews give the source panes about 60% of window height, ending on whole rows. Headings sit above
+that space. Leave room for the action line at small window sizes. Source lines do not wrap. Mark changes from aligned rows,
 scroll both panes together and open at the first difference. Use the same change-group navigation as
 draft comparisons. Encounter and group conflict comparisons use disk layout and include outside
 properties and prose that Overwrite keeps.
@@ -420,7 +421,11 @@ A copied package folder names the original under Add folder and puts its ID in T
 is blocked with `This folder is a copy.` Bordered `Register as a new package` sits on the warning's action
 line, above Technical details. It asks for a name, writes independent package and entry identities, and has
 one Undo for all files. Registration names the copy and whether the campaign uses it. Its use checkbox starts
-off when the original is used. `Use the copy's entries` keeps roster names, counts and changes, with one Undo.
+off when the original is used. Keep the warning above the `Register a copy` Label title and fields.
+Quiet Cancel follows the named Register action after an `L` gap. It closes the form without writing
+and keeps the name and use choice for reopening. When use is off, help says the campaign keeps the
+original and the copy is registered but not used. When on, it says every entry is used, including future
+entries. `Use the copy's entries` keeps roster names, counts and changes, with one Undo.
 
 Unavailable packages keep their last known display name. Older unnamed selections say `A package that is no
 longer on this computer`. Count affected campaign entries when references are known, with Remove from this
@@ -472,7 +477,8 @@ repair link. Unread values name field, bad value, source line and repair. Folder
 paths after type groups.
 
 Change pickers focus search. Place choices start at the value column beside In, with one file link and a
-bordered `Always use this one` action on each row. A saved choice changes only its key and has Undo,
+bordered `Always use this one` action on each row. Actions share one column at the widest file link
+plus an `L` gap. A saved choice changes only its key and has Undo,
 which checks the file before writing. Always use this one saves a path with Undo. Change messages name
 both values and follow Change when they fit, otherwise sit below the whole row block. Different file and
 stored names offer `Rename the note to <file name>`, with a guarded update and Undo. New NPCs show their
@@ -480,11 +486,12 @@ future path below the name. A compact NPC reader puts Fights as and In on one re
 Lookup.
 
 Broken notes stay under Cannot be read and use the Campaign repair source editor. Keep drafts in memory and
-warn before app close or a campaign switch. A rolled table selects the matching row, marks it with dice and
+warn before app close or a campaign switch. The unreadable count in the header opens the first broken
+note's repair, keeping other repair drafts. A rolled table selects the matching row, marks it with dice and
 states the result below in UI sans. Typed rolls use well fill, a centred placeholder and dice as the column
 heading. Fixed headers cover passing rows with page fill and a hairline. Generator cards name their table
 sources below attributes. Generated NPC custom names show the table marker inside the app, with no external
-link.
+link. Table warnings use the words name, look, manner and want; hover keeps the marker key.
 
 ## The encounter ledger and editor
 
