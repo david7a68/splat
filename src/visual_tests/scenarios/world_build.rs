@@ -570,6 +570,49 @@ pub fn facts(d: &mut Driver<'_>) {
             .is_some_and(|(first, second)| first.top() < second.top()),
         "A place shows the events that concern it, oldest first, each with its date",
     );
+    // FD3: the dates share one column, as wide as the widest date plus an `S` gap.
+    for size in [SMALL, DEFAULT, LARGE] {
+        let (column, kept) = d
+            .at_size(size, |d| {
+                let body = d.painted_left("The arena at the capital, where the race starts.")?;
+                let reader = egui::Rect::from_min_max(
+                    egui::pos2(body - 1.0, 0.0),
+                    egui::pos2(f32::INFINITY, f32::INFINITY),
+                );
+                let short = d.painted_rect_in("120 years ago", reader)?;
+                let wide = d.painted_rect_in("90 to 85 years ago", reader)?;
+                let massacre = d.painted_rect_in("The Massacre", reader)?;
+                let revolt = d.painted_rect_in("The Revolt", reader)?;
+                let summary = d.painted_word_rect(
+                    "The miners took the Arena and held it for five years.",
+                    reader,
+                )?;
+                Some((
+                    (massacre.left() - revolt.left()).abs() <= 0.5
+                        && (massacre.left() - wide.right() - design::S).abs() <= 1.0,
+                    // Must stay true: dates start at the text edge, and a summary never sits under
+                    // the date column.
+                    (short.left() - body).abs() <= 1.0
+                        && (wide.left() - body).abs() <= 1.0
+                        && summary.left() >= revolt.left() - 0.5,
+                ))
+            })
+            .unwrap_or_default();
+        d.observe(
+            "iter-14-D-FD3",
+            column,
+            format!(
+                "History names share one left edge after the widest date and an S gap at {size:?}"
+            ),
+        );
+        d.observe(
+            "iter-14-D-FD3-kept",
+            kept,
+            format!(
+                "History dates start at the text edge, and summaries stay right of them at {size:?}"
+            ),
+        );
+    }
     d.state("place-history", Sizes::All);
 
     d.click_containing("Zarel · ");
@@ -1104,6 +1147,66 @@ pub fn generator(d: &mut Driver<'_>) {
         "W9",
         d.has("Close Lookup") && !d.has("New NPC \"Names.md\""),
         "The warning opens its source note in Lookup",
+    );
+
+    // FD5: with no names table, Lookup says so in the DM's words. Its link hands this NPC to
+    // the World page, which keeps the table marker for the DM who prepares.
+    fs::remove_file(root(d).join("Names.md")).unwrap();
+    reload(d);
+    d.click("Close Lookup");
+    d.click("Discard");
+    d.observe(
+        "iter-14-D-FD5-start",
+        !d.has("Save NPC"),
+        "The World page has no generated NPC before Lookup rolls one",
+    );
+    look_up(d, "Tally");
+    d.click("Clear");
+    d.click("Generate NPC");
+    d.expect(crate::lookup::USE_OWN_NAMES);
+    // One label per card. A text run repeats its label's name, so it is not counted.
+    let saves = |d: &Driver<'_>| {
+        d.nodes()
+            .into_iter()
+            .filter(|n| n.role == Role::Label)
+            .filter_map(|n| n.name.strip_prefix("Will save NPCs/").map(str::to_owned))
+            .collect::<Vec<_>>()
+    };
+    let rolled = saves(d);
+    d.observe(
+        "iter-14-D-FD5-lookup",
+        rolled.len() == 1
+            && d.visible_text(crate::lookup::BUILT_IN_NAMES)
+            && !d.visible_text("splat:rolls"),
+        "Lookup's generated NPC says Built-in names. and shows no table marker",
+    );
+    d.state("generator-built-in-names-in-lookup", Sizes::All);
+    d.click(crate::lookup::USE_OWN_NAMES);
+    d.settle();
+    d.observe(
+        "iter-14-D-FD5-world",
+        d.current_page() == "World"
+            && !d.has("Close Lookup")
+            && saves(d) == rolled
+            && d.visible_text("<!-- splat:rolls key=npc-name dice=1d6 -->"),
+        "Use your own names opens the same NPC on the World page, with the table marker",
+    );
+    d.state("generator-own-names-on-world", Sizes::Default);
+    // Must stay true: the NPC moved, so Lookup cannot save it twice, and World still saves it.
+    d.click(NAV_LOOKUP);
+    d.observe(
+        "iter-14-D-FD5-moved",
+        d.has("Close Lookup") && !d.has(crate::lookup::USE_OWN_NAMES) && saves(d) == rolled,
+        "Lookup no longer holds the NPC that moved to World",
+    );
+    d.click("Close Lookup");
+    d.click("Save NPC");
+    d.settle();
+    let file = root(d).join(format!("NPCs/{}", rolled[0]));
+    d.observe(
+        "iter-14-D-FD5-saved",
+        file.exists() && !d.has("Save NPC"),
+        "Save NPC on the World page writes the NPC that Lookup rolled",
     );
 }
 

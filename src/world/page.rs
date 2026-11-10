@@ -139,6 +139,18 @@ impl WorldPage {
         self.error = None;
     }
 
+    /// Lookup's generated NPC, with the full help for using the campaign's own names.
+    pub fn show_generated(&mut self, card: crate::lookup::GeneratedCard) {
+        self.set_campaign(card.campaign);
+        self.view = View::Reader;
+        self.keep_repair();
+        self.new_kind = None;
+        self.error = None;
+        self.generated = Some(card.npc);
+        self.generator_problems = card.problems;
+        self.generator_sources = card.sources;
+    }
+
     pub fn open_repair(&mut self, campaign: &Campaign, path: &str) {
         self.set_campaign(campaign.id);
         self.keep_repair();
@@ -554,20 +566,21 @@ impl WorldPage {
             });
         }
         if let Some(npc) = &self.generated {
-            let (saved, again, discard) = crate::lookup::generated_card(
+            let choice = crate::lookup::generator_card(
                 ui,
                 npc,
                 &self.generator_problems,
                 &self.generator_sources,
                 self.run_open,
+                crate::lookup::NamesHelp::Marker,
             );
-            if saved {
+            if choice.save {
                 made = Some(super::create_generated(campaign, npc));
             }
-            if again {
+            if choice.again {
                 self.begin_new("generate", Some(index));
             }
-            if discard {
+            if choice.discard {
                 self.generated = None;
             }
         }

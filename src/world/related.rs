@@ -31,21 +31,13 @@ pub(crate) fn page_group(item: &Item) -> (u8, String) {
 }
 
 /// A page's name as a link, then what it is, in words that wrap.
-fn page_row(
-    ui: &mut egui::Ui,
-    index: &ContentIndex,
-    position: usize,
-    before: Option<&str>,
-) -> bool {
+fn page_row(ui: &mut egui::Ui, index: &ContentIndex, position: usize) -> bool {
     let item = &index.items[position];
     let detail = match item.summary() {
         "" if item.entry.kind == "world" => type_label(world_type(&item.entry)),
         summary => summary.to_owned(),
     };
     ui.horizontal_wrapped(|ui| {
-        if let Some(before) = before {
-            ui.label(Type::Small.rich(ui, before).color(colors().muted));
-        }
         let clicked = design::link(ui, &item.entry.name).clicked();
         if !detail.is_empty() {
             ui.label(Type::Small.rich(ui, detail).color(colors().muted));
@@ -53,6 +45,52 @@ fn page_row(
         clicked
     })
     .inner
+}
+
+/// History rows put each date in one column, as wide as the widest date plus an `S` gap, so
+/// names and summaries share their left edges. A row without a date keeps the column empty.
+fn history_rows(ui: &mut egui::Ui, index: &ContentIndex, history: &[usize]) -> Option<Go> {
+    let dates: Vec<Option<String>> = history
+        .iter()
+        .map(|&position| date_words(&index.items[position].entry))
+        .collect();
+    let font = Type::Small.font(ui);
+    let column = dates
+        .iter()
+        .flatten()
+        .map(|date| {
+            ui.painter()
+                .layout_no_wrap(date.clone(), font.clone(), colors().muted)
+                .size()
+                .x
+        })
+        .fold(0.0_f32, f32::max);
+    let mut go = None;
+    for (&position, date) in history.iter().zip(&dates) {
+        let clicked = ui
+            .horizontal_top(|ui| {
+                let gap = ui.spacing().item_spacing.x;
+                ui.spacing_mut().item_spacing.x = design::S;
+                let size = egui::vec2(column, ui.spacing().interact_size.y);
+                ui.allocate_ui_with_layout(
+                    size,
+                    egui::Layout::left_to_right(egui::Align::Center),
+                    |ui| {
+                        ui.set_min_size(size);
+                        if let Some(date) = date {
+                            ui.label(Type::Small.rich(ui, date).color(colors().muted));
+                        }
+                    },
+                );
+                ui.spacing_mut().item_spacing.x = gap;
+                page_row(ui, index, position)
+            })
+            .inner;
+        if clicked {
+            go = Some(Go::Item(position, None));
+        }
+    }
+    go
 }
 
 /// One line from another page. Pressing it opens that page at the line's heading.
@@ -174,7 +212,7 @@ pub(super) fn related(ui: &mut egui::Ui, item: &Item, index: &ContentIndex) -> O
         ui.add_space(design::S);
         style::section_heading(ui, "Here");
         for position in here {
-            if page_row(ui, index, position, None) {
+            if page_row(ui, index, position) {
                 go = Some(Go::Item(position, None));
             }
         }
@@ -197,7 +235,7 @@ pub(super) fn related(ui: &mut egui::Ui, item: &Item, index: &ContentIndex) -> O
                 design::group_heading(ui, &title, positions.len());
             }
             for position in positions {
-                if page_row(ui, index, position, None) {
+                if page_row(ui, index, position) {
                     go = Some(Go::Item(position, None));
                 }
             }
@@ -208,11 +246,8 @@ pub(super) fn related(ui: &mut egui::Ui, item: &Item, index: &ContentIndex) -> O
     if !history.is_empty() {
         ui.add_space(design::S);
         style::section_heading(ui, "History");
-        for &position in history {
-            let date = date_words(&index.items[position].entry);
-            if page_row(ui, index, position, date.as_deref()) {
-                go = Some(Go::Item(position, None));
-            }
+        if let Some(to) = history_rows(ui, index, history) {
+            go = Some(to);
         }
     }
     go.or(from_other_pages(ui, item, index, &listed))

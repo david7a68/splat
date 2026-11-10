@@ -1114,6 +1114,11 @@ impl Splat {
             self.lookup.close();
             self.page = Page::World;
         }
+        if let Some(card) = self.lookup.open_world_names.take() {
+            self.world_page.show_generated(card);
+            self.lookup.close();
+            self.page = Page::World;
+        }
         if let Some(id) = ctx
             .data_mut(|data| data.remove_temp::<uuid::Uuid>(egui::Id::new("reveal_encounter_npc")))
             && let Some(campaign) = self.campaigns.active_campaign()
