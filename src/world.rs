@@ -719,6 +719,21 @@ impl std::fmt::Display for LinkProblem {
     }
 }
 
+/// A list row's words for the links that need fixing. One problem names itself. Several are
+/// `broken links` only when every target is missing; a place that waits for a choice is not broken.
+pub(crate) fn link_problem_words(problems: &[LinkProblem]) -> String {
+    match problems {
+        [one] => one.to_string(),
+        many if many
+            .iter()
+            .any(|problem| matches!(problem, LinkProblem::PlaceMatches(_))) =>
+        {
+            design::count(many.len(), "link needs fixing", "links need fixing")
+        }
+        many => design::count(many.len(), "broken link", "broken links"),
+    }
+}
+
 /// The links on this note that need fixing, in the order the reader shows them.
 pub(crate) fn broken_links(item: &Item, index: &ContentIndex) -> Vec<LinkProblem> {
     let mut problems = Vec::new();
@@ -1747,34 +1762,45 @@ impl Reader {
                 }
             }
             if let Some(paths) = index.duplicate_world.get(&item.entry.path) {
-                design::message(ui, Tone::Warning, IdentityNoun::Note.duplicate_warning());
                 let mut paths = paths.clone();
                 let first = crate::content_workspace::duplicate_repair_path(
                     paths.iter().map(|path| campaign.path.join(path)),
                 );
                 paths.sort_by_key(|path| Some(campaign.path.join(path)) != first);
                 let spacing = ui.spacing().item_spacing.y;
-                for (at, path) in paths.iter().enumerate() {
-                    // An `L` gap separates the choices, as in Library.
-                    if at > 0 {
-                        ui.add_space((design::L - spacing).max(0.0));
-                    }
-                    let filename = Path::new(path)
-                        .file_name()
-                        .unwrap_or_default()
-                        .to_string_lossy();
-                    let clicked = separate_entry_button(ui, &filename);
-                    if clicked {
-                        match new_identity(campaign, path) {
-                            Ok((undo, id)) => {
-                                self.identity_undo = Some((campaign.id, undo));
-                                return Some(Go::Reload(id));
+                // The choices and their consequences start at the message text, as in Sessions.
+                let chosen = design::message_with_actions(
+                    ui,
+                    Tone::Warning,
+                    IdentityNoun::Note.duplicate_warning(),
+                    |ui| {
+                        let mut chosen = None;
+                        for (at, path) in paths.iter().enumerate() {
+                            // An `L` gap separates the choices, as in Library.
+                            if at > 0 {
+                                ui.add_space((design::L - spacing).max(0.0));
                             }
-                            Err(error) => self.error = Some(error),
+                            let filename = Path::new(path)
+                                .file_name()
+                                .unwrap_or_default()
+                                .to_string_lossy();
+                            if separate_entry_button(ui, &filename) {
+                                chosen = Some(path);
+                            }
+                            if let Some(consequence) = duplicate_consequence(&paths, at) {
+                                ui.label(Type::Small.rich(ui, consequence).color(colors().muted));
+                            }
                         }
-                    }
-                    if let Some(consequence) = duplicate_consequence(&paths, at) {
-                        ui.label(Type::Small.rich(ui, consequence).color(colors().muted));
+                        chosen
+                    },
+                );
+                if let Some(path) = chosen {
+                    match new_identity(campaign, path) {
+                        Ok((undo, id)) => {
+                            self.identity_undo = Some((campaign.id, undo));
+                            return Some(Go::Reload(id));
+                        }
+                        Err(error) => self.error = Some(error),
                     }
                 }
                 // An `M` gap ends the choices, so the fields below do not read as a consequence.
@@ -3175,6 +3201,57 @@ mod tests {
             "Place has 2 matches",
             "FD1-words"
         );
+    }
+
+    #[test]
+    fn iter13_d_sd2_mixed_link_problems_need_fixing_and_missing_ones_are_broken() {
+        let dir = tempfile::tempdir().unwrap();
+        let campaign = sample_campaign(dir.path());
+        let id = create_entry(&campaign, "Rook", "npc").unwrap();
+        for folder in ["Locations", "Other"] {
+            fs::create_dir_all(dir.path().join(folder)).unwrap();
+            fs::write(
+                dir.path().join(format!("{folder}/Watch House.md")),
+                "# Watch House\n",
+            )
+            .unwrap();
+        }
+        let path = dir.path().join("NPCs/Rook.md");
+        let file = fs::read_to_string(&path).unwrap();
+        for (fields, expected, words) in [
+            // A place with two matches and a missing group: one waits for a choice.
+            (
+                "splat_in: '[[Watch House]]'\nsplat_part_of: ['[[Nowhere]]']\n",
+                vec![LinkProblem::PlaceMatches(2), LinkProblem::GroupNotFound],
+                "2 links need fixing",
+            ),
+            // Two missing targets are broken links.
+            (
+                "splat_in: '[[Nowhere]]'\nsplat_part_of: ['[[Elsewhere]]']\n",
+                vec![LinkProblem::PlaceNotFound, LinkProblem::GroupNotFound],
+                "2 broken links",
+            ),
+            // Neighbour: a single place with two matches names itself.
+            (
+                "splat_in: '[[Watch House]]'\n",
+                vec![LinkProblem::PlaceMatches(2)],
+                "Place has 2 matches",
+            ),
+            // Neighbour: a single missing group names itself.
+            (
+                "splat_part_of: ['[[Nowhere]]']\n",
+                vec![LinkProblem::GroupNotFound],
+                "Group not found",
+            ),
+        ] {
+            fs::write(&path, file.replacen("---\n", &format!("---\n{fields}"), 1)).unwrap();
+            let index = ContentIndex::load(&[], Some(&campaign)).unwrap();
+            let item = &index.items[index.position(id).unwrap()];
+            assert!(item.entry.flags.is_empty(), "fixture {fields} reads");
+            let problems = broken_links(item, &index);
+            assert_eq!(problems, expected, "SD2-problems-{fields}");
+            assert_eq!(link_problem_words(&problems), words, "SD2-words-{fields}");
+        }
     }
 
     #[test]

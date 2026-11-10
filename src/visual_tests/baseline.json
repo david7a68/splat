@@ -63,7 +63,7 @@
       "world-empty-links": 3,
       "world-facts": 9,
       "world-note-deleted": 2,
-      "world-note-duplicated": 4,
+      "world-note-duplicated": 5,
       "world-part-of-safety": 1,
       "world-places": 1
     },
@@ -156,8 +156,8 @@
       "world-empty-links": 21,
       "world-facts": 63,
       "world-note-deleted": 50,
-      "world-note-duplicated": 49,
-      "world-note-moved": 42,
+      "world-note-duplicated": 50,
+      "world-note-moved": 48,
       "world-note-renamed": 30,
       "world-part-of-safety": 50,
       "world-places": 43
