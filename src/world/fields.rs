@@ -13,9 +13,9 @@ pub(super) fn patch(text: &str, key: &str, value: Value) -> Result<String, Strin
     let stored = (!value.as_sequence().is_some_and(Vec::is_empty))
         .then(|| splat::content::formats::flat_reference(&value));
     if key == "part_of"
-        && let Some(line) = unread_groups(&entry, text)
+        && let Some(unread) = unread_groups(&entry, text)
     {
-        return Err(unread_groups_reason(line));
+        return Err(unread.reason);
     }
     let output = if key == "part_of"
         && let Some(groups) = stored.as_ref().and_then(Value::as_sequence)
@@ -41,21 +41,37 @@ pub(super) fn patch(text: &str, key: &str, value: Value) -> Result<String, Strin
     Ok(output)
 }
 
-/// Use the parser's flag at the source key, including rejected object-list values.
-pub(super) fn unread_groups(entry: &splat::content::Entry, file: &str) -> Option<usize> {
+/// A Part of list the note reader could not read: the line of the value it names, and the
+/// reader's own message, which quotes that value and says how to write it.
+#[derive(Clone, Debug, PartialEq)]
+pub(super) struct Unread {
+    pub line: usize,
+    pub reason: String,
+}
+
+/// Use the parser's flag inside the Part of value, including rejected object-list values. A
+/// flag on a list item belongs to the key above its block.
+pub(super) fn unread_groups(entry: &splat::content::Entry, file: &str) -> Option<Unread> {
+    let lines: Vec<&str> = file.lines().collect();
     entry.flags.iter().find_map(|flag| {
-        file.lines()
-            .nth(flag.line.saturating_sub(1))
+        let mut at = flag.line.checked_sub(1)?;
+        while lines
+            .get(at)
+            .is_some_and(|line| line.trim().is_empty() || line.starts_with([' ', '\t', '-', '#']))
+        {
+            at = at.checked_sub(1)?;
+        }
+        lines
+            .get(at)
             .and_then(|line| line.split_once(':'))
             .filter(|(key, _)| {
                 serde_yaml_ng::from_str::<String>(key).is_ok_and(|key| key == "splat_part_of")
             })
-            .map(|_| flag.line)
+            .map(|_| Unread {
+                line: flag.line,
+                reason: flag.message.clone(),
+            })
     })
-}
-
-pub(super) fn unread_groups_reason(line: usize) -> String {
-    format!("Part of could not be read (line {line}). Repair it first.")
 }
 
 /// Retain the source spelling of each kept group, including aliases, quotes and comments.

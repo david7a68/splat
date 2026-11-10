@@ -508,17 +508,20 @@ visible with duplicate warnings. A duplicate NPC still has its existing name-onl
 warning does not imply changed stats. Encounter repair opens World for World notes. A note with no
 readable body says `Nothing written yet.` only. The file line keeps the one `Edit in Obsidian` link.
 
-Set values show labelled rows: Stat block, In, Part of and Status. An NPC also shows its empty Stat block row. A full NPC reader's kind line shows NPC and its owner; Status stays in its own row. A compact reader keeps status on the kind line because it has no Status row. Use a fixed label column, aligned
+Set values show labelled rows: Stat block, In, Part of and Status. An NPC also shows its empty Stat block row. A full NPC reader's kind line shows NPC and its owner; Status stays in its own row. A compact reader keeps status on the kind line because it has no Status row. A compact reader has no file line either: while a duplicate-note repair message shows, its kind line drops the fault and names the open file instead (`NPC · Campaign · NPCs/Rook Ambry copy.md`). The result rows keep the fault. Use a fixed label column, aligned
 values and a 32 px pitch. Change uses one column at the widest visible value in the block plus an `L`
 gap, capped at the value measure. Values wrap within their column, with Change on the first line. Read mode hides empty relationship and status values. An NPC keeps its empty Stat block row and Change action, so assigning its first stat block still takes three interactions from the reader. This row says `not set`. Edit on the title line opens all fields, including empty ones. A typed page with no set values shows its prose directly, except for this NPC Stat block row. Missing links retain names and keep `Not found` on one line. The value column measures each value as it
-is drawn, including a missing group's icon and ` · Not found`. Empty or whitespace-only place and stat block values are unset and give no warning. Broken links have a
-warning icon, list warning and count in the header. Table faults use the same list warning and header
-repair link. Unread values name field, bad value, source line and repair. Folder groups use normal-case
-paths after type groups.
+is drawn, including a missing group's icon and ` · Not found`. Empty or whitespace-only place, stat block and group values, and a Part of key with no value, are unset and give no warning. Broken links have a
+warning icon, list warning and count in the header. A Part of target that is not found is a broken link
+(`Group not found`); the header counts its note once, and the count's menu opens it. Table faults use the
+same list warning and header repair link. Unread values name field, bad value, source line and repair, in
+the form `<Field> "<text on that line>" not read (line N). <How to write it>.` Every unread-value warning
+sits in one place: below the file line, above the value rows. Folder groups use normal-case paths after
+type groups. The empty Status field in Edit shows the faint placeholder `A short word, such as alive.`
 
 Change pickers focus search. Place choices start at the value column beside In, with one file link and a
-bordered `Always use this one` action on each row. Actions share one column at the widest file link
-plus an `L` gap. A saved choice changes only its key and has Undo,
+bordered `Always use this one` action on each row. Change and the choice actions share one column: the
+widest value or file link in the block plus an `L` gap. A saved choice changes only its key and has Undo,
 which checks the file before writing. Always use this one saves a path with Undo. Change messages name
 both values and follow Change when they fit, otherwise sit below the whole row block. Different file and
 stored names offer `Rename the note to <file name>`, with a guarded update and Undo. New NPCs show their
@@ -536,7 +539,9 @@ The rail shows World draft while an edit is unsaved. If a repair is also unsaved
 One save writes every change with one Undo. A disk change uses the shared conflict choices. Below the
 choices, one Small line for each field that differs says what Overwrite does to it, including the groups it
 adds, removes and keeps.
-If Part of could not be read, block its Change action with `Part of could not be read (line N). Repair it first.`
+If Part of could not be read, block its Change action with the unread-value message, for example
+`Part of "{link: '[[Lost Guild]]'}" not read (line 9). Write each group as a link, such as [[Arena Guild]].`
+A list written below its key names its first value that is not text, and that value's line.
 In Edit, a quiet `Edit in Obsidian` link follows the reason. Read shows the reason in the same warning
 tone below the file line, whose link is the one `Edit in Obsidian`; a reader with no file line puts the link
 after the reason. Read shows Part of as `not read`, with Change blocked by the reason. Other fields stay
@@ -545,7 +550,9 @@ Every Part of write checks the current disk parse flag before it changes anythin
 its picker, keeps every disk byte and reads the note again, so its list row and the header count the fault. Adding or removing a readable group keeps the raw text of the
 other groups. Overwrite keeps unread disk groups, saves other draft fields and shows the reason. With a readable disk
 list, Overwrite applies the draft's group additions and removals to that list, so a group added outside
-Splat stays.
+Splat stays. Groups compare by target, not spelling: a link Obsidian respelled (another alias, a folder
+path) is the same group, and a group both sides have keeps the note's spelling on one line. A link to no
+single note compares by its link target; plain text compares as written.
 Edit shows `not set` for null, empty and whitespace-only optional links. Saving other fields keeps their
 source text. World calls each file a note in related-note headings, Problems and conflict messages.
 Each duplicate-note repair has a muted Small consequence below it, including the first repair's retained

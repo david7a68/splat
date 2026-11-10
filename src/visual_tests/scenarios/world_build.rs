@@ -428,6 +428,25 @@ pub fn facts(d: &mut Driver<'_>) {
             .contains("not set")
         },
     );
+    d.observe_both(
+        "iter-11-D-FD4",
+        "The empty Status field shows a faint example of its rule",
+        |d| {
+            d.expect("Status");
+            let field = d
+                .nodes()
+                .into_iter()
+                .filter(|node| node.name == "Status" && node.role == Role::TextInput)
+                .map(|node| node.rect)
+                .collect::<Vec<_>>();
+            // Neighbour: the field stays empty and editable; the example is not a value.
+            field.len() == 1
+                && d.field_text("Status").unwrap_or_default().is_empty()
+                && d.painted_in(field[0])
+                    .contains(crate::world::edit::STATUS_HINT)
+                && !d.is_disabled("Status")
+        },
+    );
     d.state("empty-world-fields-in-edit", Sizes::All);
     let lore_path = root(d).join("Lore/Horn Rings.md");
     let unchanged = fs::read_to_string(&lore_path).unwrap();
@@ -920,10 +939,11 @@ pub fn round_trip(d: &mut Driver<'_>) {
         "---\nsplat_schema: 2\nsplat_id: {id}\nsplat_kind: world\nsplat_name: Unread groups\nsplat_type: npc\n{unread_groups}---\n\n# Unread groups\n\nKeeps the gate.\n"
     );
     fs::write(&unread_path, &before).unwrap();
+    let reason = unread_reason(&unread_groups);
     reload(d);
     d.click_containing("Unread groups · ");
     d.click("Edit Unread groups");
-    d.expect("Part of could not be read (line 7). Repair it first.");
+    d.expect(&reason);
     d.observe_both(
         "iter-8-D2-unread-groups",
         "An unread Part of list blocks only its picker and explains the repair",
@@ -941,7 +961,7 @@ pub fn round_trip(d: &mut Driver<'_>) {
         "iter-9-D-FD4-link",
         "The unread Edit field keeps its source line and quiet Obsidian repair link",
         |d| {
-            d.expect("Part of could not be read (line 7). Repair it first.");
+            d.expect(&reason);
             d.has("Edit in Obsidian")
                 && d.nodes().iter().any(|node| {
                     node.name == "Edit in Obsidian" && node.role == Role::Link && node.in_view()
@@ -963,7 +983,7 @@ pub fn round_trip(d: &mut Driver<'_>) {
     // Removing the unread property leaves the parsed fields unchanged. The open form
     // must still notice its cleared flag and make the group picker available again.
     d.click("Edit Unread groups");
-    d.expect("Part of could not be read (line 7). Repair it first.");
+    d.expect(&reason);
     fs::write(&unread_path, before.replace(&unread_groups, "")).unwrap();
     reload(d);
     d.expect("Change Part of");
@@ -2379,6 +2399,29 @@ pub fn world_note_moved(d: &mut Driver<'_>) {
             (first.left() - second.left()).abs() < 1.0
         },
     );
+    d.observe_both(
+        "iter-11-D-FD7",
+        "Change and each place choice's action share one column",
+        |d| {
+            for name in [
+                "Change In",
+                "Always use Locations/Watch House.md",
+                "Always use Other/Watch House.md",
+            ] {
+                d.expect(name);
+            }
+            let change = d.place_of("Change In").unwrap();
+            ["Locations/Watch House.md", "Other/Watch House.md"]
+                .iter()
+                .all(|path| {
+                    let link = d.place_of(path).unwrap();
+                    let action = d.place_of(&format!("Always use {path}")).unwrap();
+                    // Neighbour: each file keeps at least an L gap before its action.
+                    (action.left() - change.left()).abs() < 1.0
+                        && action.left() >= link.right() + crate::design::L - 1.0
+                })
+        },
+    );
     d.state("duplicate-place-chooser-in-world", Sizes::All);
     d.click("Always use Locations/Watch House.md");
     d.state("place-choice-kept-with-undo", Sizes::All);
@@ -2671,6 +2714,32 @@ pub fn world_note_duplicated(d: &mut Driver<'_>) {
             ),
         );
     }
+    d.observe_both(
+        "iter-11-D-FD3",
+        "The Lookup reader's kind line names its file, not the fault its message names",
+        |d| {
+            let kinds: Vec<_> = d
+                .nodes()
+                .into_iter()
+                .filter(|node| node.in_view() && node.name.starts_with("NPC · "))
+                .map(|node| node.name)
+                .collect();
+            let rows: Vec<_> = d
+                .nodes()
+                .into_iter()
+                .filter(|node| node.name.starts_with("Rook Ambry · NPCs/Rook Ambry"))
+                .collect();
+            // Neighbour: each result row keeps the fault.
+            kinds.contains(&"NPC · Campaign · NPCs/Rook Ambry copy.md".to_owned())
+                && kinds
+                    .iter()
+                    .all(|kind| !kind.contains("Same note in two files"))
+                && rows.len() == 2
+                && rows
+                    .iter()
+                    .all(|row| row.name.contains("Same note in two files"))
+        },
+    );
     d.state("duplicate-world-files-in-lookup", Sizes::All);
     d.press(Key::Escape);
     d.click("Make Rook Ambry copy.md a separate note");
@@ -2986,6 +3055,17 @@ pub fn package_folder_copied(d: &mut Driver<'_>) {
     );
 }
 
+/// What the World reader says about an unread Part of list whose object value is on line 9.
+fn unread_reason(groups: &str) -> String {
+    let value = groups
+        .lines()
+        .find_map(|line| line.strip_prefix("- {id:"))
+        .expect("fixture: an object group");
+    format!(
+        "Part of \"{{id:{value}\" not read (line 9). Write each group as a link, such as [[Arena Guild]]."
+    )
+}
+
 pub fn part_of_safety(d: &mut Driver<'_>) {
     flat_entry(
         d,
@@ -3061,7 +3141,37 @@ pub fn part_of_safety(d: &mut Driver<'_>) {
             format!("A missing group and Not found stay on one line, with one Change column, at {size:?}: {}", whole.1),
         );
     }
+    d.observe_both(
+        "iter-11-D-FD1",
+        "A missing group warns on the list row and counts its note once in the header",
+        |d| {
+            let rows: Vec<_> = d
+                .nodes()
+                .into_iter()
+                .filter(|node| node.name.starts_with("Safe Rook · "))
+                .collect();
+            // Neighbour: the reader's own warning stays whole.
+            !rows.is_empty()
+                && rows
+                    .iter()
+                    .all(|row| row.name.contains("Group not found") && row.in_view())
+                && d.in_view_containing("1 note needs fixing")
+                && d.has_containing("the Archdevil · Not found")
+        },
+    );
     d.state("missing-group-on-one-line", Sizes::All);
+    // From another note, the header count's menu opens the note that needs fixing.
+    d.click_containing("Added Guild · ");
+    d.expect("Edit Added Guild");
+    assert!(!d.has("Edit Safe Rook"), "fixture: another note is open");
+    d.click("1 note needs fixing");
+    d.click("Safe Rook");
+    d.expect("Edit Safe Rook");
+    d.observe(
+        "iter-11-D-FD1-menu",
+        d.in_view("Edit Safe Rook") && !d.has("Edit Added Guild"),
+        "The header count's repair menu opens the note that needs fixing",
+    );
     d.click("Change Part of");
     d.type_into("Find a group", "Added Guild");
     fs::write(&path, &unread).unwrap();
@@ -3072,7 +3182,7 @@ pub fn part_of_safety(d: &mut Driver<'_>) {
         unread.as_bytes(),
         "iter-9-D-SD1-raw: Read picker preserves the reported disk fixture"
     );
-    let reason = "Part of could not be read (line 7). Repair it first.";
+    let reason = &unread_reason(&unread_groups);
     d.expect(reason);
     d.observe_both(
         "iter-9-D-SD1-reader",
@@ -3198,6 +3308,60 @@ pub fn part_of_safety(d: &mut Driver<'_>) {
     );
     d.click("Undo changes");
     assert_eq!(fs::read(&path).unwrap(), outside.as_bytes());
+    // The draft removes A while Obsidian respells it. Overwrite still removes it.
+    let part_of_line = "splat_part_of: # Keep the stored groups.\n";
+    let respelled_line = "- \"[[Zarel]]\" # Respelled in Obsidian.\n";
+    let respelled = readable.replace(zarel, respelled_line);
+    fs::write(&path, &readable).unwrap();
+    reload(d);
+    d.click("Edit Safe Rook");
+    d.click("Change Part of");
+    d.click("Remove the Archdevil");
+    fs::write(&path, &respelled).unwrap();
+    d.click("Save changes");
+    d.expect(conflict);
+    d.observe(
+        "iter-11-D-SD1-preview-respelled",
+        d.in_view("Overwrite removes Zarel."),
+        "Before the choice, the comparison names the respelled group Overwrite removes",
+    );
+    d.click("Overwrite with my draft");
+    d.wait_for_text("Changes saved.");
+    assert_eq!(
+        fs::read(&path).unwrap(),
+        respelled
+            .replace(&format!("{part_of_line}{respelled_line}"), "")
+            .as_bytes(),
+        "iter-11-D-SD1-respelled-raw: Overwrite removes the group Obsidian respelled"
+    );
+    d.click("Undo changes");
+    assert_eq!(fs::read(&path).unwrap(), respelled.as_bytes());
+    // The draft adds B while Obsidian adds B in another spelling: one line, the note's own.
+    let other_line = "- \"[[Factions/Added Guild|Guild]]\" # Added in Obsidian.\n";
+    let other = readable.replace(zarel, &format!("{zarel}{other_line}"));
+    fs::write(&path, &readable).unwrap();
+    reload(d);
+    d.click("Edit Safe Rook");
+    d.click("Change Part of");
+    d.type_into("Find a group", "Added Guild");
+    d.click("Added Guild");
+    fs::write(&path, &other).unwrap();
+    d.click("Save changes");
+    d.expect(conflict);
+    d.observe(
+        "iter-11-D-SD1-preview-same",
+        !d.has_containing("Overwrite adds"),
+        "Before the choice, the comparison does not offer to add a group the note has",
+    );
+    d.click("Overwrite with my draft");
+    d.wait_for_text("Changes saved.");
+    assert_eq!(
+        fs::read(&path).unwrap(),
+        other.as_bytes(),
+        "iter-11-D-SD1-same-raw: one line for the group, in the note's own spelling"
+    );
+    d.click("Undo changes");
+    assert_eq!(fs::read(&path).unwrap(), other.as_bytes());
     fs::write(&path, &readable).unwrap();
     reload(d);
     d.click("Edit Safe Rook");

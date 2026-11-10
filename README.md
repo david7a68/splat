@@ -643,12 +643,14 @@ The rest of the file, including comments and spacing, stays as it was. `in: "[[A
 including a location's aliases. A place loop stays in the list and shows a warning.
 The **Edit** action beside a campaign entry's name, in World or Lookup, opens one form with **Status**, **Stat block**,
 **In**, **Part of** and the entry's text, without its title line. This form includes empty fields. If **Part of** could not be read, its **Change** action is blocked
-with **Part of could not be read. Repair it first.** Other fields stay editable, and saving them keeps the stored group text unchanged. **Save changes** (Ctrl+S) writes them together and offers
+with a message that quotes the value it could not read, gives its line, and says to write each group as a link, such as `[[Arena Guild]]`. Other fields stay editable, and saving them keeps the stored group text unchanged. **Save changes** (Ctrl+S) writes them together and offers
 **Undo changes**. During a live fight, **Save changes** uses a secondary border so **Next turn** stays the primary action.
 The form keeps its state and quiet **Discard** at the left, with **Save changes** at the right edge of both text fields.
 **Discard** writes nothing and offers **Undo discard**. The rail shows **World draft** for an unsaved edit,
 or **World repair draft** once if a repair is also unsaved. If the note changed on disk, Splat writes
 nothing until you choose. **Overwrite with my draft** saves only the values you changed over the disk version.
+For **Part of**, it adds and removes only the groups you changed. A group that Obsidian spelled another way,
+such as `[[Factions/Arena Guild|Guild]]` for `[[Arena Guild]]`, is still the same group.
 **Reload and lose my draft** loads the disk version and offers **Undo reload**. A form with changes stays while you
 read other entries, and Splat asks before it closes or changes campaign.
 A campaign creature in Library offers **Make NPC note**, which opens its new NPC note in World.
