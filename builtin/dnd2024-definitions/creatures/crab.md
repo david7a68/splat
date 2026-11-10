@@ -7,6 +7,7 @@ splat_name: Crab
 splat_origin: dnd2024:reference/creature/crab
 splat_sources:
 - SRD 5.2.1, pp. 347, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 351, Habitat
 ---
 
 # Crab
@@ -27,6 +28,7 @@ splat_sources:
 | Skills | Stealth +2 |
 | Senses | Blindsight 30 ft.; Passive Perception 9 |
 | Languages | None |
+| Habitat | Coastal, Underwater |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

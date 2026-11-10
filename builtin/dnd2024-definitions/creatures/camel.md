@@ -7,6 +7,7 @@ splat_name: Camel
 splat_origin: dnd2024:reference/creature/camel
 splat_sources:
 - SRD 5.2.1, pp. 346, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 351, Habitat
 ---
 
 # Camel
@@ -26,6 +27,7 @@ splat_sources:
 | Challenge | 1/8 (XP 25; PB +2) |
 | Senses | Darkvision 60 ft.; Passive Perception 10 |
 | Languages | None |
+| Habitat | Desert |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

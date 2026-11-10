@@ -7,6 +7,7 @@ splat_name: Pit Fiend
 splat_origin: dnd2024:reference/creature/pit_fiend
 splat_sources:
 - SRD 5.2.1, pp. 314, 315, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 243, Habitat
 ---
 
 # Pit Fiend
@@ -29,6 +30,7 @@ splat_sources:
 | Languages | Infernal; telepathy 120 ft. |
 | Resistances | Cold |
 | Immunities | Fire, Poison; Poisoned |
+| Habitat | Planar (Nine Hells) |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

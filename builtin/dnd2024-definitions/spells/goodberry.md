@@ -23,6 +23,8 @@ splat_sources:
 | Range |  |
 | Components | V, S, M (a sprig of mistletoe) |
 | Duration | 24 hours |
+| Ritual | No |
+| Concentration | No |
 
 
 ## Source text

@@ -7,6 +7,7 @@ splat_name: Pony
 splat_origin: dnd2024:reference/creature/pony
 splat_sources:
 - SRD 5.2.1, pp. 359, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 367, Habitat
 ---
 
 # Pony
@@ -26,6 +27,7 @@ splat_sources:
 | Challenge | 1/8 (XP 25; PB +2) |
 | Senses | Passive Perception 10 |
 | Languages | None |
+| Habitat | Grassland, Urban |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

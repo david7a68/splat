@@ -7,6 +7,7 @@ splat_name: Rust Monster
 splat_origin: dnd2024:reference/creature/rust_monster
 splat_sources:
 - SRD 5.2.1, pp. 320, 321, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 263, Habitat
 ---
 
 # Rust Monster
@@ -26,6 +27,7 @@ splat_sources:
 | Challenge | 1/2 (XP 100; PB +2) |
 | Senses | Darkvision 60 ft.; Passive Perception 11 |
 | Languages | None |
+| Habitat | Underdark |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

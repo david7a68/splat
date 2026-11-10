@@ -7,6 +7,7 @@ splat_name: Black Bear
 splat_origin: dnd2024:reference/creature/black_bear
 splat_sources:
 - SRD 5.2.1, pp. 345, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 349, Habitat
 ---
 
 # Black Bear
@@ -27,6 +28,7 @@ splat_sources:
 | Skills | Perception +5 |
 | Senses | Darkvision 60 ft.; Passive Perception 15 |
 | Languages | None |
+| Habitat | Forest |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

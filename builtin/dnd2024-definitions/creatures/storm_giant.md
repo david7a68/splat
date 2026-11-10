@@ -7,6 +7,7 @@ splat_name: Storm Giant
 splat_origin: dnd2024:reference/creature/storm_giant
 splat_sources:
 - SRD 5.2.1, pp. 330, 331, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 302, Habitat
 ---
 
 # Storm Giant
@@ -29,6 +30,7 @@ splat_sources:
 | Languages | Common, Giant |
 | Resistances | Cold |
 | Immunities | Lightning, Thunder |
+| Habitat | Coastal, Underwater |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

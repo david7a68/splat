@@ -7,6 +7,7 @@ splat_name: Warrior Infantry
 splat_origin: dnd2024:reference/creature/warrior_infantry
 splat_sources:
 - SRD 5.2.1, pp. 336, 337, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 320, Habitat
 ---
 
 # Warrior Infantry
@@ -27,6 +28,7 @@ splat_sources:
 | Senses | Passive Perception 10 |
 | Languages | Common |
 | Gear | Chain Shirt, Spear |
+| Habitat | Any |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

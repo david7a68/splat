@@ -110,6 +110,17 @@ Converted creature, spell and item files use readable tables. The reader shows
 each set fact once and hides machine lines. A creature's CR supplies missing XP
 and PB; mismatches are flagged unless they describe a lair. Printed creature stats
 stay in a folded quote as a record; edit the table above it to change the values.
+A creature's `Habitat` row holds its 2024 Monster Manual habitat, such as
+`Underdark, Underwater`. Built-in creatures get it from
+`scripts/srd_inputs/habitats.yaml`, because the SRD does not print it.
+
+Library's Creatures section, Library search results and the encounter creature
+search have **Filter**. It filters by habitat, type, size, alignment, challenge,
+movement, senses, languages, resistances, immunities and vulnerabilities. Each
+chosen value shows as a chip; click a chip to remove it. Search also finds these
+values: `darkvision`, `habitat:forest`, `type:dragon`, `cr:5-10`, `cr:5+`,
+`immune:fire` or `lang:"deep speech"`. A creature with habitat `Any` is found
+under every habitat.
 
 A live initiative change says `acts next round` when its place has passed. Setup counts
 rows below the visible list, including missing initiatives and ties between independent rolls. Shared rolls do not produce a tie warning. Session note boxes
@@ -126,12 +137,16 @@ that the audio is not sent again. With a partial transcript, it names the remain
 audio parts. Recording silence has no elapsed time in its status word. The Session
 page shows the recorded time in the detail; the rail keeps it on hover. On Recordings,
 the live row owns the sound state, recorded time and input help.
-Session folder is read-only while a run is open. Campaign forms keep their fields,
-Browse and save actions on one right edge. A dirty details form offers Discard and
-Undo discard. Missing speech-key links focus that key in Settings.
+Session folder is read-only while a run is open. Campaign forms keep sentence-case field labels, their fields,
+Browse and save actions on one right edge. The session folder uses its heading
+as its visible label and keeps its save action on the field’s right edge. A dirty details form offers Discard and
+Undo discard. Missing speech-key links focus that key in Settings. The speech service turns
+recordings into text; **Transcript and summary** chooses the service that checks
+those words and writes the summary. Custom speech services show their API requirement.
 Timeline and the Session plan use the same fight state words. An open fight's Timeline round links
 back to the run and does not say **Paused**. Processing says **Processing**, with
-the full step on hover. Long rest starts the next new fight at full from both Session
+the full step on hover. Completed jobs say **Processed** in the rail. Warned jobs
+keep their warning icon and full words on hover. Note conflicts say **Notes changed**. Long rest starts the next new fight at full from both Session
 and Timeline. Both pages show the ruling and let you turn it off or on, with Undo.
 Both pages name only saved, unfinished fights past Setup as keeping their saved HP.
 
@@ -233,6 +248,18 @@ Session plans accept task items such as `- [ ] [[Bridge Ambush]]`. Empty session
 titles have no property. Obsidian's core Templates plugin also fills `{{date}}`
 and `{{title}}`. For run JSON files to sync through Obsidian Sync, enable
 **other file types**.
+
+With Splat open on two computers that share a vault, one computer at a time saves the
+D&D Beyond sheets from automatic reads. If both saved a sheet at once, Obsidian Sync
+would merge the two saves and repeat their lines. `Characters/Sheet writer.md` names
+that computer. A new claim waits one minute before it saves, so that a claim from the
+other computer can arrive through Obsidian Sync first. Splat renews the note while it
+runs, and another computer takes over about 10 minutes after it stops, if the two clocks
+agree. A computer whose saves fail gives up its turn. The other computers read the
+sheets and show **Sheets save on <computer>** on Party. **Refresh party** and force
+reads save on any computer. Splat never replaces a note at that path that is not its
+own; it warns on Party and saves nothing automatically until the note is moved. The
+computer's identity is in Splat's config folder, outside the vault.
 
 Code lives in `~/Projects/splat`. The vault link is
 `~/Documents/vault/D20 D&D/00-09 System/09 Tools/splat`.
@@ -364,7 +391,7 @@ Read leaves out headings with nothing under them and shows note links in place. 
 A fight resumed under a later session also counts as part of that session. During a session, a new run starts each player from where the fights so far left them, and setup says so. A player who
 missed the last fight stands where an earlier one left them. If a fight's run cannot be read, setup says that too. **Use the sheets'
 HP** goes back to the sheets, as one step of undo. Adding **Long rest** records your ruling that the next fight
-starts everyone at full HP. One **Undo** removes the rest and that ruling. Open the rest and choose **Not at full** to keep the rest without the ruling. Party shows the same HP, and says where it came from. A starting HP written in the encounter
+starts everyone at full HP. One **Undo** removes the rest and that ruling. Open the rest and choose **Mark not at full** to keep the rest without the ruling. Party shows the same HP, and says where it came from. A starting HP written in the encounter
 wins over both. With sync on, a first read still takes the sheet's value for HP from a fight. Full HP from a rest is your ruling, so a sheet that differs is a conflict to settle. Conditions do
 not carry over.
 
@@ -376,6 +403,13 @@ and any event adds its length when it reads as a number and a unit, such as `3 d
 moves nothing, and the row says so. A fight does not move the clock. The list in its frontmatter is the record, and Splat
 writes the body from it. An encounter run adds its own event when combat begins. New events and runs go to the newest
 session unless you choose another on the Timeline page. **Notes** (Ctrl+J) opens that session's note beside any page.
+
+Type `/` at the start of a line or a word in a session note to open its commands. Type more letters to narrow them, and
+use the arrows and Enter, or click. With only the `/` typed, Enter still starts a new line. **Generate NPC** rolls an NPC
+as in Lookup, and **Save NPC** (or Enter) writes it to `NPCs/`. **Search** finds an entry, a world note or a heading, as
+Lookup does. Each puts a link such as `[[Verori]]` where the `/` was. Escape in the list closes it and keeps what you
+typed. Escape after you choose a command goes back to the note without a link. A slash inside a word, as in `and/or`,
+stays a slash.
 
 A planned fight with a saved run offers **Resume**, as the primary action for the first waiting fight when no run is open. A run before combat says **Setup**; a closed unfinished run adds **Paused**. Its menu holds **Start a new run** and **Delete the saved run**, with undo for deletion. Every planned fight also has **Remove from tonight**: it removes one link from the plan and offers **Undo remove** below the row. The open fight has a status link in the plan; the run strip keeps **Back to run**. A played fight shows its result and shared run state once, such as **Held the bridge · Ended · Round 1**. It opens a grid of final party HP with first names, then **Log**, **Whole run** and **Timeline** links. Plan summaries use the width below the row action. Removing a planned group keeps its message and Undo in that row’s place.
 
@@ -437,7 +471,9 @@ to two notes asks which one, and a link to nothing offers to create it. Each not
 
 Every World note offers **Edit in Obsidian** and **Show file**. A file that cannot be read stays in the
 **Cannot be read** group. Open it to repair its text here, or follow **Edit in Obsidian**. Lookup's warning
-also opens the file in World. A repair draft stays in memory when you read another note.
+also opens the file in World. A repair draft stays in memory when you read another note. If its file changes, choose **Overwrite with my draft** or red **Reload and lose my draft**. Reload keeps the old draft for **Undo reload** until the next edit.
+
+### Table marks
 
 A one-line marker above a table makes it rollable. The first column is a number or a range, such as `2–5`, and the rows
 must cover what the dice can roll. A bad table says so, and the rest of the note still reads.
@@ -642,7 +678,7 @@ it. With one encounter, only runs of that encounter offer it, and the Encounters
 closed **Groups** section. Open it to see one heading for each encounter, with groups for any encounter first and groups whose encounter was deleted last. Saved group rows have **Edit** and **⋯ → Remove…**, with **Undo remove group** after removal.
 
 The encounter editor has a frame for each of its own groups, with its name, side, members and notes.
-The frame’s **⋯ → Remove** makes a saved group available for any encounter on the next save. **Undo remove group** restores its owner before that save.
+The frame’s **⋯ → Make available to any encounter** makes a saved group available for any encounter on the next save. **Undo move** restores its owner before that save. **Move to…** lists named encounters only.
 **New group for this encounter** starts one there, before or after the encounter is saved. **Add to**,
 above the search, chooses whether the search adds to the roster or to a group. **Save encounter**
 saves the encounter and its groups together, and writes nothing if any of them cannot be saved. See [the schema](docs/design/campaign-schema.md#encounter-groups).
@@ -688,7 +724,7 @@ fight, and the card shows the change. A creature you make up stays in this run, 
 Below that, the panel lists this encounter's own groups, then the groups tonight's plan links, then
 the other groups for any encounter, with their members and total XP. Drag a group's
 name onto the initiative list, or press its **Add** button. Type a total beside it to use that for every
-member, as players give theirs. Otherwise the campaign's rule decides: one shared roll with the first
+member, as players give theirs. An invalid total stays in the field and blocks Add and drop; clear it to roll. Groups with missing, unread or invalid members keep their usable members available. The panel says how many can join and keeps each excluded member's reason and repair link. When the field is blank, the campaign's rule decides: one shared roll with the first
 member's bonus (identical NPCs, or the encounter's initiative groups), a roll for each member
 (individually), or the initiative its side already has (one group per side). This works in setup and in
 combat, and the same group can be added again. Each member is a new participant at full HP, with its
@@ -704,9 +740,9 @@ change it.
 The combat log records changes. **Undo** names the last action and restores up to 100
 prior actions, including turn changes, dice rolls, and manual endings in the current session.
 **End encounter** records a manual ending and your outcome. Runs save automatically
-after changes; **Close run** asks once, then returns to the page the run began on. A setup closed with nothing done leaves no saved run. The app reopens an open
+after changes. **Close run** returns at once to the page the run began on when the run is saved and nothing is unsent. Otherwise it asks for a choice. A setup closed with nothing done leaves no saved run. The app reopens an open
 run after a restart, on the current turn, and turns its sync back on. **In progress** on Encounters has **Resume** for an interrupted run,
-with **Start another fight** and **Delete the saved run** in the row’s **⋯** menu. Deletion has one step of undo.
+with **Start another fight** and **Delete the saved run** in the row’s **⋯** menu. Saved times use relative time for today and yesterday, then a short date. Deletion has one step of undo.
 An encounter with an unfinished run appears only in **In progress** and returns to **Ready to run** when it ends.
 **Keep in Ready during a run** also keeps its Ready row, with **Start fight** blocked and a reason.
 Empty list sections show one muted line and hide the zero count.
@@ -809,7 +845,7 @@ sources and limits are recorded in [the research notes](docs/research/dndbeyond-
 
 Recording failures and stops remain on each recording’s row after you dismiss a banner. A stopped recording links to the microphone input in Settings. **Continue processing** resumes kept work. An active job hides the old cancellation or failure reason. The result viewer keeps its back link, date and Add to notes on one line. View choices sit below them, as a segmented control or a dropdown when space is short. The rail’s recording status opens the recording in one click.
 
-Lookup keeps up to five results above the reader and marks the open one. New NPC and New location include the proposed name, and appear only when no exact match exists. A copy keeps the original name by default and offers Edit the copy after saving. Wide reader tables keep their first column and header in view. World rolls mark their matched row.
+Lookup keeps up to five results above the reader and marks the open one. When the only result is open, its result list closes. New NPC and New location include the proposed name, and appear only when no exact match exists. A copy keeps the original name by default and offers Edit the copy after saving. Wide reader tables keep their first column and header in view. World rolls mark their matched row.
 
 Campaign repair shows invalid notes in place. The campaign-wide Needed by your entries list opens entries in Lookup. A session note conflict shows your draft and the disk text side by side, with changed lines marked.
 

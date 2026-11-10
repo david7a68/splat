@@ -7,6 +7,7 @@ splat_name: Giant Octopus
 splat_origin: dnd2024:reference/creature/giant_octopus
 splat_sources:
 - SRD 5.2.1, pp. 352, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 358, Habitat
 ---
 
 # Giant Octopus
@@ -27,6 +28,7 @@ splat_sources:
 | Skills | Perception +4, Stealth +5 |
 | Senses | Darkvision 60 ft.; Passive Perception 14 |
 | Languages | None |
+| Habitat | Underwater |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

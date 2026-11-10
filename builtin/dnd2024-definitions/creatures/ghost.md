@@ -7,6 +7,7 @@ splat_name: Ghost
 splat_origin: dnd2024:reference/creature/ghost
 splat_sources:
 - SRD 5.2.1, pp. 287, 288, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 131, Habitat
 ---
 
 # Ghost
@@ -28,6 +29,7 @@ splat_sources:
 | Languages | Common plus one other language |
 | Resistances | Acid, Bludgeoning, Cold, Fire, Lightning, Piercing, Slashing, Thunder |
 | Immunities | Necrotic, Poison; Charmed, Exhaustion, Frightened, Grappled, Paralyzed, Petrified, Poisoned, Prone, Restrained |
+| Habitat | Underdark, Urban |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

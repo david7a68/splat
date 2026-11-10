@@ -7,6 +7,7 @@ splat_name: Giant Boar
 splat_origin: dnd2024:reference/creature/giant_boar
 splat_sources:
 - SRD 5.2.1, pp. 349, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 355, Habitat
 ---
 
 # Giant Boar
@@ -26,6 +27,7 @@ splat_sources:
 | Challenge | 2 (XP 450; PB +2) |
 | Senses | Passive Perception 8 |
 | Languages | None |
+| Habitat | Forest, Grassland, Hill |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

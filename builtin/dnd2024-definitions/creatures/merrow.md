@@ -7,6 +7,7 @@ splat_name: Merrow
 splat_origin: dnd2024:reference/creature/merrow
 splat_sources:
 - SRD 5.2.1, pp. 308, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 210, Habitat
 ---
 
 # Merrow
@@ -26,6 +27,7 @@ splat_sources:
 | Challenge | 2 (XP 450; PB +2) |
 | Senses | Darkvision 60 ft.; Passive Perception 10 |
 | Languages | Abyssal, Primordial (Aquan) |
+| Habitat | Coastal, Underwater |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

@@ -7,6 +7,7 @@ splat_name: Pseudodragon
 splat_origin: dnd2024:reference/creature/pseudodragon
 splat_sources:
 - SRD 5.2.1, pp. 316, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 249, Habitat
 ---
 
 # Pseudodragon
@@ -27,6 +28,7 @@ splat_sources:
 | Skills | Perception +5, Stealth +4 |
 | Senses | Blindsight 10 ft., Darkvision 60 ft.; Passive Perception 15 |
 | Languages | Understands Common and Draconic but can’t speak |
+| Habitat | Coastal, Desert, Forest, Hill, Mountain, Urban |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

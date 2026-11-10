@@ -7,6 +7,7 @@ splat_name: Oni
 splat_origin: dnd2024:reference/creature/oni
 splat_sources:
 - SRD 5.2.1, pp. 312, 313, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 232, Habitat
 ---
 
 # Oni
@@ -28,6 +29,7 @@ splat_sources:
 | Senses | Darkvision 60 ft.; Passive Perception 14 |
 | Languages | Common, Giant |
 | Resistances | Cold |
+| Habitat | Forest, Urban |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

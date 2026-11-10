@@ -7,6 +7,7 @@ splat_name: Adult Green Dragon
 splat_origin: dnd2024:reference/creature/adult_green_dragon
 splat_sources:
 - SRD 5.2.1, pp. 294, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 153, Habitat
 ---
 
 # Adult Green Dragon
@@ -28,6 +29,7 @@ splat_sources:
 | Senses | Blindsight 60 ft., Darkvision 120 ft.; Passive Perception 22 |
 | Languages | Common, Draconic |
 | Immunities | Poison; Poisoned |
+| Habitat | Forest |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

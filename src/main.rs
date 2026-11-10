@@ -7,6 +7,7 @@ mod commands;
 mod content_workspace;
 mod conversion;
 mod copy_dialog;
+mod creature_filter;
 mod credentials;
 mod design;
 mod dndbeyond;
@@ -30,7 +31,9 @@ mod recording;
 mod roll_table;
 mod sessions;
 mod settings;
+mod sheet_writer;
 mod timeline;
+mod touchpad;
 mod ui_state;
 #[cfg(test)]
 mod visual_tests;
@@ -79,6 +82,8 @@ struct Splat {
     page: Page,
     campaign_tab: CampaignTab,
     settings_tab: SettingsTab,
+    /// How far a touchpad scroll moves content. It belongs to this computer, not a campaign.
+    touchpad_speed: touchpad::TouchpadSpeed,
     shown_page: Page,
     /// Notes closed for Lookup, and they come back with it closed.
     notes_gave_way: bool,
@@ -122,6 +127,7 @@ impl Default for Splat {
             page: Page::default(),
             campaign_tab: CampaignTab::default(),
             settings_tab: SettingsTab::default(),
+            touchpad_speed: touchpad::TouchpadSpeed::default(),
             shown_page: Page::default(),
             notes_gave_way: false,
             started: false,
@@ -228,6 +234,7 @@ enum SettingsTab {
     #[default]
     Account,
     Recording,
+    Touchpad,
 }
 
 impl Splat {
@@ -237,6 +244,7 @@ impl Splat {
         self.started = true;
         let saved = self.ui_store.load();
         design::restore_column_widths(ctx, saved.column_widths);
+        self.touchpad_speed = saved.touchpad_speed;
         self.sessions.restored_session = saved.playing;
         let active = self.campaigns.active_campaign();
         self.page =
@@ -265,6 +273,7 @@ impl Splat {
         let active = self.campaigns.active_campaign();
         let state = ui_state::UiState {
             column_widths: design::column_widths(ctx),
+            touchpad_speed: self.touchpad_speed,
             // With a run open, the page it began on: Close run goes back there after a restart.
             page: Some(
                 if self.page == Page::Run {
@@ -853,7 +862,7 @@ impl Splat {
                         color,
                     },
                 );
-                let full = if state == "Processing warning" {
+                let full = if state == "Processed" && self.sessions.job_warned() {
                     sessions::page::processed_warning().word.to_owned()
                 } else {
                     self.sessions
@@ -897,7 +906,7 @@ impl Splat {
                 (
                     self.sessions.busy_with_edit(),
                     if self.sessions.notes_changed_on_disk() {
-                        "Changed on disk"
+                        "Notes changed"
                     } else {
                         "Notes not saved"
                     },
@@ -1317,17 +1326,38 @@ impl Splat {
                     &[
                         (SettingsTab::Account, "Account and campaigns"),
                         (SettingsTab::Recording, "Recording and processing"),
+                        (SettingsTab::Touchpad, "Touchpad"),
                     ],
                 );
                 if tab_changed {
                     self.processing.look_again();
                 }
                 design::rule(ui);
+                if self.settings_tab == SettingsTab::Touchpad {
+                    ui.add_space(design::L);
+                    design::group_heading(ui, "Touchpad", 0);
+                    design::small_field(
+                        ui,
+                        "Scrolling speed",
+                        Some("Mouse wheels keep their speed."),
+                        None,
+                        |ui| {
+                            design::segmented(
+                                ui,
+                                &mut self.touchpad_speed,
+                                &touchpad::TouchpadSpeed::ALL,
+                            )
+                        },
+                    );
+                    return;
+                }
                 if self.settings_tab == SettingsTab::Recording {
                     // Line-start quiet actions use the gutter for their hit area.
                     // Keep fields at the usual column edge inside the wider viewport.
                     let mut viewport = ui.available_rect_before_wrap();
                     viewport.min.x -= design::S;
+                    // Keep scrolled text below a clear margin under the tab rule.
+                    viewport.min.y += design::L;
                     let clip = viewport.intersect(ui.clip_rect());
                     ui.scope_builder(egui::UiBuilder::new().max_rect(viewport), |ui| {
                         egui::ScrollArea::vertical()
@@ -1335,7 +1365,6 @@ impl Splat {
                             .auto_shrink([false, false])
                             .show(ui, |ui| {
                                 ui.set_clip_rect(ui.clip_rect().intersect(clip));
-                                ui.add_space(design::L);
                                 let mut fields = ui.available_rect_before_wrap();
                                 fields.min.x += design::S;
                                 ui.scope_builder(egui::UiBuilder::new().max_rect(fields), |ui| {
@@ -1853,6 +1882,10 @@ impl Splat {
         if let Some(id) = self.campaign_content.open_lookup.take() {
             self.lookup.open_id(id);
         }
+        if std::mem::take(&mut self.sessions.wants_content_refresh) {
+            self.lookup.refresh();
+            self.lookup.files_changed = true;
+        }
         if let Some(name) = self.sessions.wants_lookup.take() {
             self.notes_give_way();
             if !self.lookup.open_name(&name) {
@@ -1974,6 +2007,14 @@ impl Splat {
 }
 
 impl eframe::App for Splat {
+    fn raw_input_hook(&mut self, _: &egui::Context, raw_input: &mut egui::RawInput) {
+        // eframe calls this before the first `update`, where `start` restores the rest.
+        if !self.started {
+            self.touchpad_speed = self.ui_store.load().touchpad_speed;
+        }
+        self.touchpad_speed.apply(&mut raw_input.events);
+    }
+
     fn update(&mut self, ctx: &egui::Context, _: &mut eframe::Frame) {
         if !self.started {
             self.start(ctx);

@@ -7,6 +7,7 @@ splat_name: Young Silver Dragon
 splat_origin: dnd2024:reference/creature/young_silver_dragon
 splat_sources:
 - SRD 5.2.1, pp. 324, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 278, Habitat
 ---
 
 # Young Silver Dragon
@@ -28,6 +29,7 @@ splat_sources:
 | Senses | Blindsight 30 ft., Darkvision 120 ft.; Passive Perception 18 |
 | Languages | Common, Draconic |
 | Immunities | Cold |
+| Habitat | Mountain, Urban |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

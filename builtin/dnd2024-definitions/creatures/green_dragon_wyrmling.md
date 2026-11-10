@@ -7,6 +7,7 @@ splat_name: Green Dragon Wyrmling
 splat_origin: dnd2024:reference/creature/green_dragon_wyrmling
 splat_sources:
 - SRD 5.2.1, pp. 293, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 152, Habitat
 ---
 
 # Green Dragon Wyrmling
@@ -28,6 +29,7 @@ splat_sources:
 | Senses | Blindsight 10 ft., Darkvision 60 ft.; Passive Perception 14 |
 | Languages | Draconic |
 | Immunities | Poison; Poisoned |
+| Habitat | Forest |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

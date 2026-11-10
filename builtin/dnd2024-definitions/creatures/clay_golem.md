@@ -7,6 +7,7 @@ splat_name: Clay Golem
 splat_origin: dnd2024:reference/creature/clay_golem
 splat_sources:
 - SRD 5.2.1, pp. 274, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 72, Habitat
 ---
 
 # Clay Golem
@@ -28,6 +29,7 @@ splat_sources:
 | Languages | Common plus one other language |
 | Resistances | Bludgeoning, Piercing, Slashing |
 | Immunities | Acid, Poison, Psychic; Charmed, Exhaustion, Frightened, Paralyzed, Petrified, Poisoned |
+| Habitat | Urban |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

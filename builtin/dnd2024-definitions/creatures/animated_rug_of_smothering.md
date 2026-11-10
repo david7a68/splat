@@ -7,6 +7,7 @@ splat_name: Animated Rug of Smothering
 splat_origin: dnd2024:reference/creature/animated_rug_of_smothering
 splat_sources:
 - SRD 5.2.1, pp. 259, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 17, Habitat
 ---
 
 # Animated Rug of Smothering
@@ -27,6 +28,7 @@ splat_sources:
 | Senses | Blindsight 60 ft.; Passive Perception 6 |
 | Languages | None |
 | Immunities | Poison, Psychic; Charmed, Deafened, Exhaustion, Frightened, Paralyzed, Petrified, Poisoned |
+| Habitat | Urban |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

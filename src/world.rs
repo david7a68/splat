@@ -89,7 +89,11 @@ fn walk(current: &Path, files: &mut Vec<PathBuf>) {
 /// the campaign root, and a DM can keep world notes beside sessions.
 fn role_of(front: Option<&str>, inside_sessions: Option<&Path>) -> Option<Role> {
     let has = |name: &str| front.is_some_and(|front| front.lines().any(|l| l.starts_with(name)));
-    if has("splat_") || has("timeline_version:") || has("trackers_version:") {
+    if has("splat_")
+        || has("timeline_version:")
+        || has("trackers_version:")
+        || has(crate::sheet_writer::KEY)
+    {
         return None;
     }
     if has("session_id:") {
@@ -255,7 +259,7 @@ fn outside_code(body: &str, mut plain: impl FnMut(&str, &mut String)) -> String 
 }
 
 /// Every `[[link]]` in a text, as (is an embed, target, words).
-fn each_link(text: &str) -> Vec<(std::ops::Range<usize>, bool, String, Option<String>)> {
+pub(crate) fn each_link(text: &str) -> Vec<(std::ops::Range<usize>, bool, String, Option<String>)> {
     let mut found = Vec::new();
     let mut from = 0;
     while let Some(start) = text[from..].find("[[").map(|at| at + from) {
@@ -541,6 +545,34 @@ pub fn create_generated(
     create_with_details(campaign, &npc.name, "npc", &npc.details())
 }
 
+/// Where a new entry of this kind is written.
+fn folder_for(kind: &str) -> &'static str {
+    match kind {
+        "location" => "Locations",
+        "npc" => "NPCs",
+        _ => "Notes",
+    }
+}
+
+/// The link to an entry just made by `create_entry` or `create_generated`, before the index
+/// reads it. Its bare name serves when that is the file's name and nothing else has it.
+pub(crate) fn new_entry_link(index: Option<&ContentIndex>, name: &str, kind: &str) -> String {
+    let name = name.trim();
+    let stem = sessions::file_safe(name);
+    let taken = index.is_some_and(|index| {
+        index.has_file_named(&stem) || !matches!(index.resolve_link(name, None), Go::Missing(_))
+    });
+    if stem == name && !taken {
+        format!("[[{name}]]")
+    } else {
+        let shown: String = name
+            .chars()
+            .filter(|c| !matches!(c, '|' | '[' | ']'))
+            .collect();
+        format!("[[{}/{stem}|{shown}]]", folder_for(kind))
+    }
+}
+
 fn create_with_details(
     campaign: &Campaign,
     name: &str,
@@ -552,11 +584,7 @@ fn create_with_details(
     if stem.is_empty() {
         return Err("Type a name first.".to_owned());
     }
-    let folder = match kind {
-        "location" => "Locations",
-        "npc" => "NPCs",
-        _ => "Notes",
-    };
+    let folder = folder_for(kind);
     let relative = format!("{folder}/{stem}.md");
     let path = note_path(&campaign.path, &relative)?;
     if path.exists() {

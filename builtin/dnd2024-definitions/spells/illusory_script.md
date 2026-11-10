@@ -23,6 +23,8 @@ splat_sources:
 | Range |  |
 | Components | S, M (ink worth 10+ GP, which the spell consumes) |
 | Duration | 10 days |
+| Ritual | Yes |
+| Concentration | No |
 
 
 ## Source text

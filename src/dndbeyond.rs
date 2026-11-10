@@ -112,6 +112,31 @@ fn fetch(session: Session) -> Result<Vec<RemoteCampaign>, String> {
     parse(&bytes)
 }
 
+fn connection_help(ui: &mut egui::Ui) {
+    ui.horizontal_wrapped(|ui| {
+        ui.spacing_mut().item_spacing.x = 0.0;
+        for word in "Connect your account in ".split_inclusive(' ') {
+            ui.label(
+                crate::design::Type::Small
+                    .rich(ui, word)
+                    .color(crate::design::colors().muted),
+            );
+        }
+        if crate::design::small_link(ui, "Settings").clicked() {
+            ui.ctx()
+                .data_mut(|data| data.insert_temp(egui::Id::new("open_account_settings"), true));
+        }
+        ui.add_space(crate::design::XS);
+        for word in "to update this link.".split_inclusive(' ') {
+            ui.label(
+                crate::design::Type::Small
+                    .rich(ui, word)
+                    .color(crate::design::colors().muted),
+            );
+        }
+    });
+}
+
 #[derive(Default)]
 pub struct DndBeyond {
     account_epoch: u64,
@@ -327,7 +352,7 @@ impl DndBeyond {
             return;
         };
         if session.is_none() {
-            ui.weak("Connect your account in Settings to update this link.");
+            connection_help(ui);
         }
         if crate::design::Action::secondary("Refresh list")
             .density(crate::design::Density::Read)
@@ -459,6 +484,24 @@ impl DndBeyond {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn iter1_c_offline_link_opens_account_settings() {
+        use egui_kittest::kittest::Queryable;
+        let mut harness = egui_kittest::Harness::builder().build(|ctx| {
+            egui::CentralPanel::default().show(ctx, connection_help);
+        });
+        crate::design::theme::install(&harness.ctx);
+        harness.run_steps(2);
+        harness.get_by_label("Settings").click();
+        harness.run_steps(2);
+        assert!(
+            harness
+                .ctx
+                .data(|data| data.get_temp::<bool>(egui::Id::new("open_account_settings")))
+                .unwrap_or(false)
+        );
+    }
 
     #[test]
     fn visibility_keeps_request_marker_until_setting_leaves_view() {

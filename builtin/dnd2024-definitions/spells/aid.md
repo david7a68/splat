@@ -23,6 +23,8 @@ splat_sources:
 | Range | 30 feet |
 | Components | V, S, M (a strip of white cloth) |
 | Duration | 8 hours |
+| Ritual | No |
+| Concentration | No |
 
 
 ## Source text

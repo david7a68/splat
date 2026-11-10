@@ -7,6 +7,7 @@ splat_name: Weretiger
 splat_origin: dnd2024:reference/creature/weretiger
 splat_sources:
 - SRD 5.2.1, pp. 339, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 326, Habitat
 ---
 
 # Weretiger
@@ -28,6 +29,7 @@ splat_sources:
 | Senses | Darkvision 60 ft.; Passive Perception 15 |
 | Languages | Common (can’t speak in tiger form) |
 | Gear | Longbow |
+| Habitat | Desert, Forest, Grassland |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

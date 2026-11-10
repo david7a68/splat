@@ -7,6 +7,7 @@ splat_name: Young Red Dragon
 splat_origin: dnd2024:reference/creature/young_red_dragon
 splat_sources:
 - SRD 5.2.1, pp. 318, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 254, Habitat
 ---
 
 # Young Red Dragon
@@ -28,6 +29,7 @@ splat_sources:
 | Senses | Blindsight 30 ft., Darkvision 120 ft.; Passive Perception 18 |
 | Languages | Common, Draconic |
 | Immunities | Fire |
+| Habitat | Hill, Mountain |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

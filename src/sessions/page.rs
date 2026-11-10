@@ -317,6 +317,10 @@ pub struct Sessions {
     pub wants_saved_run: Option<PathBuf>,
     /// A name in a note's link to read in Lookup.
     pub wants_lookup: Option<String>,
+    /// The `/` menu in the note, and what its command has open.
+    slash: super::slash::Slash,
+    /// A command wrote a file, so Lookup must read the campaign again.
+    pub wants_content_refresh: bool,
 }
 
 struct MovedRun {
@@ -1873,14 +1877,14 @@ impl Sessions {
         }
         if self.job_warned() {
             return Some(Status {
-                word: "Processing warning",
+                word: "Processed",
                 ..processed_warning()
             });
         }
         if self.job_done() {
             return Some(Status {
                 icon: icons::SUCCESS,
-                word: "Processing done",
+                word: "Processed",
                 color: c.result.success,
             });
         }
@@ -2989,6 +2993,13 @@ impl Sessions {
             ))
             .corner_radius(design::RADIUS_CONTROL)
             .inner_margin(design::S);
+        self.slash.take_keys(ui, self.note_editor_id);
+        let index = ui.ctx().data(|data| {
+            data.get_temp::<std::sync::Arc<crate::lookup::ContentIndex>>(egui::Id::new(
+                "reader_link_index",
+            ))
+        });
+        let mut pressed_link = None;
         frame.show(ui, |ui| {
             let visible_height = ui.available_height().max(design::XL);
             let mut scroll =
@@ -3013,6 +3024,22 @@ impl Sessions {
                         .min_size(egui::vec2(0.0, visible_height + heading_offset))
                         .show(ui);
                     crate::markdown_source::paint_section_rules(ui, &output);
+                    pressed_link = crate::markdown_source::pressed_note_link(ui, &output, None);
+                    let place = super::slash::Place {
+                        session: self.selected,
+                        campaign: self.campaign.as_ref(),
+                        index: index.as_deref(),
+                        run_open: self.run_open,
+                    };
+                    let done = self.slash.show(ui, &output, &mut draft.body, &place);
+                    self.wants_content_refresh |= done.created;
+                    if done.edited {
+                        draft.edited();
+                        if let Some(session) = self.selected {
+                            self.mentions
+                                .insert(session, timeline::referenced_ids(&draft.body));
+                        }
+                    }
                     if in_panel && let Some(at) = draft.body.find("## What happened") {
                         // Even a short note must scroll its repeated heading out of the panel.
                         let heading = draft.body[..at].chars().count();
@@ -3097,6 +3124,9 @@ impl Sessions {
                     }
                 });
         });
+        if let Some(target) = pressed_link {
+            self.open_note_link(target);
+        }
     }
 
     pub fn fresh_focus_in_panel(&mut self) {
@@ -3287,11 +3317,16 @@ impl Sessions {
                 });
             });
         if let Some(target) = markdown_view::take_note_link(ui.ctx()) {
-            if let Some(id) = target.strip_prefix("Timeline#^") {
-                self.wants_event = Some(id.to_owned());
-            } else {
-                self.wants_lookup = Some(target);
-            }
+            self.open_note_link(target);
+        }
+    }
+
+    /// A timeline reference opens its event. Any other note link opens in Lookup.
+    fn open_note_link(&mut self, target: String) {
+        if let Some(id) = target.strip_prefix("Timeline#^") {
+            self.wants_event = Some(id.to_owned());
+        } else {
+            self.wants_lookup = Some(target);
         }
     }
 
@@ -4523,7 +4558,13 @@ impl Sessions {
         let mut record_again = false;
         ui.horizontal_wrapped(|ui| {
             if stalled {
-                record_again = Action::secondary("Record again").show(ui).clicked();
+                record_again = (if self.run_open {
+                    Action::secondary("Record again")
+                } else {
+                    Action::primary("Record again")
+                })
+                .show(ui)
+                .clicked();
             }
             if !live
                 && !job_here
@@ -5909,6 +5950,7 @@ impl Sessions {
             }
             Self::draft_problem(ui, draft);
         }
+        let mut pressed_link = None;
         egui::ScrollArea::vertical()
             .id_salt(("template_editor", &template.name))
             .auto_shrink([false, false])
@@ -5923,6 +5965,7 @@ impl Sessions {
                         .min_size(egui::vec2(0.0, ui.available_height()))
                         .show(ui);
                     crate::markdown_source::paint_section_rules(ui, &output);
+                    pressed_link = crate::markdown_source::pressed_note_link(ui, &output, None);
                     let response = output.response;
                     design::named(ui, &response, "Template text");
                     if response.changed() {
@@ -5944,24 +5987,49 @@ impl Sessions {
                     crate::markdown_source::paint_section_rules(ui, &output);
                 }
             });
+        if let Some(target) = pressed_link {
+            self.open_note_link(target);
+        }
     }
 
     pub fn folder_view(&mut self, ui: &mut egui::Ui, book: &Book, locked: Option<&str>) {
+        // Earlier sections can have a wider minimum rect. Give this form its own column.
+        let rect = egui::Rect::from_min_size(
+            ui.cursor().min,
+            egui::vec2(
+                ui.available_width().min(design::FORM_WIDTH),
+                ui.available_height(),
+            ),
+        );
+        ui.scope_builder(egui::UiBuilder::new().max_rect(rect), |ui| {
+            self.folder_form(ui, book, locked);
+        });
+    }
+
+    fn folder_form(&mut self, ui: &mut egui::Ui, book: &Book, locked: Option<&str>) {
         let c = colors();
         let Some(campaign) = self.campaign.clone() else {
             return;
         };
+        ui.set_max_width(ui.available_width().min(design::FORM_WIDTH));
         ui.add_space(design::XS);
         design::group_heading(ui, "Session folder", 0);
-        let response = ui.add_enabled_ui(locked.is_none(), |ui| design::small_text_field(
-            ui,
-            "Folder",
-            &mut self.folder_text,
-            Some(
-                "Inside the campaign folder, unless the path is absolute. A name such as 30 Sessions is fine.",
-            ),
-            self.folder_error.as_deref(),
-        )).inner;
+        let response = ui
+            .add_enabled_ui(locked.is_none(), |ui| {
+                let response = ui.add(
+                    egui::TextEdit::singleline(&mut self.folder_text)
+                        .desired_width(ui.available_width() - 2.0 * design::S)
+                        .min_size(egui::vec2(0.0, Density::Read.control()))
+                        .margin(egui::vec2(design::S, design::XS)),
+                );
+                design::named(ui, &response, "Folder");
+                response
+            })
+            .inner;
+        ui.label(Type::Small.rich(ui, "Inside the campaign folder, unless the path is absolute. A name such as 30 Sessions is fine.").color(c.muted));
+        if let Some(error) = &self.folder_error {
+            design::message(ui, Tone::Error, error);
+        }
         if let Some(reason) = locked {
             ui.ctx()
                 .accesskit_node_builder(response.id, |node| node.set_description(reason));
@@ -6319,6 +6387,20 @@ impl Sessions {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn iter1_c_completed_processing_uses_processed_in_the_rail() {
+        let mut page = Sessions {
+            job_done: true,
+            ..Default::default()
+        };
+        assert_eq!(page.rail_recording_status().unwrap().word, "Processed");
+        page.job_warned = true;
+        let status = page.rail_recording_status().unwrap();
+        assert_eq!(status.word, "Processed");
+        assert_eq!(status.icon, icons::WARN);
+        assert_eq!(status.color, colors().result.warning);
+    }
 
     #[test]
     fn integrity_d9_identity_undo_stays_with_its_campaign() {

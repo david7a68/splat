@@ -7,6 +7,7 @@ splat_name: Adult Bronze Dragon
 splat_origin: dnd2024:reference/creature/adult_bronze_dragon
 splat_sources:
 - SRD 5.2.1, pp. 270, 271, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 59, Habitat
 ---
 
 # Adult Bronze Dragon
@@ -28,6 +29,7 @@ splat_sources:
 | Senses | Blindsight 60 ft., Darkvision 120 ft.; Passive Perception 22 |
 | Languages | Common, Draconic |
 | Immunities | Lightning |
+| Habitat | Coastal |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

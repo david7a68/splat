@@ -23,6 +23,8 @@ splat_sources:
 | Range |  |
 | Components | V, M (a miniature ziggurat) |
 | Duration | 1 hour |
+| Ritual | No |
+| Concentration | No |
 
 
 ## Source text

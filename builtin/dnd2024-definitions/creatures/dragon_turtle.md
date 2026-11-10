@@ -7,6 +7,7 @@ splat_name: Dragon Turtle
 splat_origin: dnd2024:reference/creature/dragon_turtle
 splat_sources:
 - SRD 5.2.1, pp. 281, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 103, Habitat
 ---
 
 # Dragon Turtle
@@ -27,6 +28,7 @@ splat_sources:
 | Senses | Darkvision 120 ft.; Passive Perception 11 |
 | Languages | Draconic, Primordial (Aquan) |
 | Resistances | Fire |
+| Habitat | Coastal, Underwater |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

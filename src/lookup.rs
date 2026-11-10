@@ -99,6 +99,8 @@ pub struct Item {
     builtin: bool,
     from_sheet: bool,
     source: Source,
+    /// Duplicate World results keep their paths so the DM can choose between equal names.
+    duplicate_identity: bool,
     /// For notes and world entries, whose words can also be searched.
     lower_body: String,
 }
@@ -186,7 +188,7 @@ impl Item {
         self.builtin
     }
 
-    fn result_detail(&self) -> String {
+    pub(crate) fn result_detail(&self) -> String {
         let source = if self.private {
             Some("Campaign")
         } else if self.builtin {
@@ -194,7 +196,12 @@ impl Item {
         } else {
             Some(self.owner.as_str())
         };
-        presentation::list_subtitle(&self.subtitle, source)
+        let subtitle = if self.duplicate_identity {
+            format!("{} · {}", self.subtitle, self.entry.path)
+        } else {
+            self.subtitle.clone()
+        };
+        presentation::list_subtitle(&subtitle, source)
     }
 
     fn file_keys(&self) -> [String; 2] {
@@ -224,6 +231,7 @@ fn note_items(
         builtin: false,
         from_sheet: false,
         source,
+        duplicate_identity: false,
         lower_body,
         entry,
     };
@@ -309,52 +317,54 @@ impl ContentIndex {
             .values()
             .chain(catalogue.duplicate_world.iter())
             .filter(|e| !["package", "campaign", "reference"].contains(&e.entry.kind.as_str()))
-            .map(|e| Item {
-                lower: e.entry.name.to_lowercase(),
-                subtitle: if catalogue
+            .map(|e| {
+                let duplicate_identity = catalogue
                     .duplicate_world
                     .iter()
-                    .any(|other| other.entry.id == e.entry.id)
-                {
-                    format!(
-                        "{} · {} Duplicate identity · {}",
-                        presentation::subtitle(&e.entry),
-                        icons::WARN,
-                        e.entry.path
-                    )
-                } else {
-                    presentation::subtitle(&e.entry)
-                },
-                owner: if from_sheet(&e.entry) {
-                    FROM_SHEET.to_owned()
-                } else {
-                    owner_name(e.owner, e.private)
-                },
-                private: e.private,
-                section: presentation::Section::for_entry(&e.entry),
-                builtin: Some(e.owner) == builtin,
-                from_sheet: from_sheet(&e.entry),
-                source: Source::Entry,
-                // Another name finds a world entry as its words do.
-                lower_body: if e.entry.kind == "world" {
-                    format!("{} {}", world::aliases(&e.entry).join(" "), e.entry.body)
-                        .to_lowercase()
-                } else {
-                    String::new()
-                },
-                entry: {
-                    let mut entry = e.entry.clone();
-                    if e.private
-                        && entry.kind == "world"
-                        && catalogue
-                            .duplicate_world
-                            .iter()
-                            .any(|other| other.entry.path == entry.path)
-                    {
-                        entry.id = world::note_id(&entry.path);
-                    }
-                    entry
-                },
+                    .any(|other| other.entry.id == e.entry.id);
+                Item {
+                    duplicate_identity,
+                    lower: e.entry.name.to_lowercase(),
+                    subtitle: if duplicate_identity {
+                        format!(
+                            "{} · {} Duplicate identity",
+                            presentation::subtitle(&e.entry),
+                            icons::WARN
+                        )
+                    } else {
+                        presentation::subtitle(&e.entry)
+                    },
+                    owner: if from_sheet(&e.entry) {
+                        FROM_SHEET.to_owned()
+                    } else {
+                        owner_name(e.owner, e.private)
+                    },
+                    private: e.private,
+                    section: presentation::Section::for_entry(&e.entry),
+                    builtin: Some(e.owner) == builtin,
+                    from_sheet: from_sheet(&e.entry),
+                    source: Source::Entry,
+                    // Another name finds a world entry as its words do.
+                    lower_body: if e.entry.kind == "world" {
+                        format!("{} {}", world::aliases(&e.entry).join(" "), e.entry.body)
+                            .to_lowercase()
+                    } else {
+                        String::new()
+                    },
+                    entry: {
+                        let mut entry = e.entry.clone();
+                        if e.private
+                            && entry.kind == "world"
+                            && catalogue
+                                .duplicate_world
+                                .iter()
+                                .any(|other| other.entry.path == entry.path)
+                        {
+                            entry.id = world::note_id(&entry.path);
+                        }
+                        entry
+                    },
+                }
             })
             .collect();
         let files_seen = content_fingerprint(modules, campaign);
@@ -675,6 +685,43 @@ impl ContentIndex {
         }
     }
 
+    /// The wiki link that a note can use for a search result. A bare name is best, as
+    /// Obsidian also reads it, when it names the file and nothing else. Otherwise the link
+    /// names the item exactly and shows its name: the DM's own by path, a book's by key.
+    /// A heading that a link cannot name, such as `Room #3`, links to its note. Of two
+    /// headings with the same words, a link finds the first, in Obsidian too.
+    pub(crate) fn link_to(&self, position: usize) -> String {
+        let (at, heading) = self.target_of(position);
+        let heading = heading.filter(|heading| !heading.contains(['#', '|', '[', ']', '^']));
+        let item = &self.items[at];
+        let finds = |target: &str| matches!(self.resolve_link(target, None), Go::Item(found, _) if found == at);
+        let section = heading
+            .as_deref()
+            .map_or_else(String::new, |heading| format!("#{heading}"));
+        let name = item.entry.name.trim();
+        let path = item.entry.path.split('#').next().unwrap_or_default();
+        let path = path.strip_suffix(".md").unwrap_or(path);
+        let stem = path.rsplit('/').next().unwrap_or(path);
+        if !name.contains(['|', '#', '[', ']']) && stem.eq_ignore_ascii_case(name) && finds(name) {
+            return format!("[[{name}{section}]]");
+        }
+        let key = item.entry.key.as_deref().filter(|key| finds(key));
+        let path = Some(path).filter(|path| !path.is_empty() && finds(path));
+        let target = if item.private || item.is_note() {
+            path.or(key)
+        } else {
+            key.or(path)
+        }
+        .map_or_else(|| item.entry.id.to_string(), str::to_owned);
+        let shown: String = heading
+            .as_deref()
+            .unwrap_or(name)
+            .chars()
+            .filter(|c| !matches!(c, '|' | '[' | ']'))
+            .collect();
+        format!("[[{target}{section}|{shown}]]")
+    }
+
     /// Prepare wiki links in any reader, retaining exactly the note's display words.
     pub(crate) fn broken_link_count(&self, body: &str, from: Uuid) -> usize {
         let visible = body
@@ -717,6 +764,12 @@ impl ContentIndex {
                         .is_none_or(|usable| usable.contains(&item.entry.id))
             })
             .collect()
+    }
+
+    /// A campaign file has this name, in any folder. Obsidian then may not know which a
+    /// bare link means.
+    pub(crate) fn has_file_named(&self, stem: &str) -> bool {
+        self.files.contains_key(&stem.to_lowercase())
     }
 
     /// Which load of the index this is. See `generation` on the struct.
@@ -952,7 +1005,7 @@ impl ContentIndex {
 
     /// Best first: exact name, then a prefix, then a word, then anywhere in the name. A note's
     /// words come last.
-    fn search(&self, query: &str) -> Vec<usize> {
+    pub(crate) fn search(&self, query: &str) -> Vec<usize> {
         let mut found: Vec<(u8, Origin, usize)> = self
             .items
             .iter()
@@ -1519,7 +1572,7 @@ impl Lookup {
         let matches = self.matches.as_ref().unwrap().1.clone();
         if before != self.query && !query.is_empty() {
             // Open the best match and keep the other answers in view.
-            self.results_open = true;
+            self.results_open = matches.len() != 1;
             match matches.first() {
                 Some(Hit::Entry(top)) => {
                     let (position, heading) = index.target_of(*top);
@@ -1901,7 +1954,8 @@ pub(crate) fn generated_card(
             Type::Small
                 .rich(
                     ui,
-                    "Built-in names. Mark a table npc-name in any note to use your own.",
+                    "Built-in names. To use your own, put <!-- splat:rolls key=npc-name dice=1d6 --> \
+                     on the line above a table of names in any note.",
                 )
                 .color(colors().muted),
         );
@@ -2088,6 +2142,17 @@ mod tests {
         let (dir, campaign) = campaign_with(&[("Rook.md", &before), ("Rook copy.md", &before)]);
         let index = ContentIndex::load(&[], Some(&campaign)).unwrap();
         assert_eq!(index.duplicate_world.len(), 2);
+        for item in index.items.iter().filter(|item| item.entry.name == "Rook") {
+            assert_eq!(
+                item.subtitle,
+                format!("NPC · {} Duplicate identity", icons::WARN)
+            );
+            assert!(!item.subtitle.contains(&item.entry.path));
+            assert!(
+                item.result_detail().contains(&item.entry.path),
+                "Duplicate search results still need their paths to tell them apart"
+            );
+        }
         assert_eq!(
             index.world_groups("").values().map(Vec::len).sum::<usize>(),
             2
@@ -2603,5 +2668,46 @@ mod tests {
         assert!(shared > 0, "Some names must lead to more than one item");
         assert!(index.named("campaign rule").is_empty());
         assert!(index.named("door").is_empty());
+    }
+
+    #[test]
+    fn a_result_links_by_name_when_that_finds_it_and_exactly_when_not() {
+        let (_dir, campaign) = campaign_with(&[
+            (
+                "Powers/Verori.md",
+                "# Verori\n\n## Culture\n\n## Fire | Ice\n",
+            ),
+            ("A/Twin.md", "One\n"),
+            ("B/Twin.md", "Two\n"),
+        ]);
+        let index = ContentIndex::load(&[], Some(&campaign)).unwrap();
+        let link = |query: &str| index.link_to(index.search(query)[0]);
+        assert_eq!(link("verori"), "[[Verori]]");
+        assert_eq!(link("culture"), "[[Verori#Culture]]");
+        // A link cannot name this heading, so it names the note.
+        assert_eq!(
+            index.items[index.search("fire | ice")[0]].entry.name,
+            "Fire | Ice"
+        );
+        assert_eq!(link("fire | ice"), "[[Verori]]");
+        let twin = index.position(world::note_id("A/Twin.md")).unwrap();
+        assert_eq!(index.link_to(twin), "[[A/Twin|Twin]]");
+        // Every result's link leads back to it, a book's too.
+        for query in [
+            "verori", "culture", "room", "twin", "fireball", "wolf", "goblin",
+        ] {
+            for position in index.search(query).into_iter().take(5) {
+                let link = index.link_to(position);
+                let target = link.trim_start_matches("[[").trim_end_matches("]]");
+                let (want, heading) = index.target_of(position);
+                let heading = heading.filter(|heading| !heading.contains('|'));
+                match index.resolve_link(target, None) {
+                    Go::Item(at, found) => {
+                        assert_eq!((at, found), (want, heading), "{link}");
+                    }
+                    _ => panic!("{link} does not lead to its result"),
+                }
+            }
+        }
     }
 }

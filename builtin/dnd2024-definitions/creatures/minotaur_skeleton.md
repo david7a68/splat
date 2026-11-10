@@ -7,6 +7,7 @@ splat_name: Minotaur Skeleton
 splat_origin: dnd2024:reference/creature/minotaur_skeleton
 splat_sources:
 - SRD 5.2.1, pp. 326, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 283, Habitat
 ---
 
 # Minotaur Skeleton
@@ -28,6 +29,7 @@ splat_sources:
 | Languages | Understands Abyssal but can’t speak |
 | Immunities | Poison; Exhaustion, Poisoned |
 | Vulnerabilities | Bludgeoning |
+| Habitat | Underdark, Urban, Planar (Shadowfell) |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

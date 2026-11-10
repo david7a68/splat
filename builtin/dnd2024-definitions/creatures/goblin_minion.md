@@ -7,6 +7,7 @@ splat_name: Goblin Minion
 splat_origin: dnd2024:reference/creature/goblin_minion
 splat_sources:
 - SRD 5.2.1, pp. 290, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 142, Habitat
 ---
 
 # Goblin Minion
@@ -28,6 +29,7 @@ splat_sources:
 | Senses | Darkvision 60 ft.; Passive Perception 9 |
 | Languages | Common, Goblin |
 | Gear | Daggers (3) |
+| Habitat | Forest, Grassland, Hill, Underdark, Planar (Acheron, Feywild) |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

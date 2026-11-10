@@ -75,6 +75,23 @@ pub fn run(d: &mut Driver<'_>) {
     d.expect("Imaginary initiative");
     d.expect("Combat initiative choice");
     d.expect("Splat uses the D&D default");
+    d.observe_both(
+        "iter-1-C-FD4-13",
+        "The save row stays above the campaign warning and its repair actions",
+        |d| {
+            let nodes = d.nodes();
+            nodes
+                .iter()
+                .find(|node| node.name == "Save selections")
+                .zip(
+                    nodes
+                        .iter()
+                        .find(|node| node.name == "Choose in Rules and runs"),
+                )
+                .is_some_and(|(save, repair)| save.rect.bottom() < repair.rect.top())
+                && d.has("2 content issues to repair")
+        },
+    );
     d.state("campaign-flagged-rule-choice", Sizes::All);
     assert_eq!(fs::read_to_string(&manifest).unwrap(), flagged);
     d.click("Choose in Rules and runs");
@@ -96,7 +113,7 @@ pub fn run(d: &mut Driver<'_>) {
     d.click(NAV_ENCOUNTERS);
     d.click_starting("GROUPS");
     d.expect("2 of 3 members can join");
-    d.expect("Goblin Warrior needs fixing");
+    d.expect("Scout (as Goblin Warrior) needs fixing");
     d.state("flagged-group-in-groups-list", Sizes::All);
     d.click(NAV_SESSIONS);
     new_session(d, "Bridge watch");
@@ -108,7 +125,7 @@ pub fn run(d: &mut Driver<'_>) {
     d.click(NAV_ENCOUNTERS);
     run_saved_encounter(d, "Shrine of Cinders");
     fight_tab(d, "Arrivals");
-    d.expect("Goblin Warrior needs fixing");
+    d.expect("Scout (as Goblin Warrior) needs fixing");
     d.expect("Edit group");
     d.state("flagged-group-in-arrivals", Sizes::All);
     close_run(d);

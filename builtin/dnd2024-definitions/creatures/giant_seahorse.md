@@ -7,6 +7,7 @@ splat_name: Giant Seahorse
 splat_origin: dnd2024:reference/creature/giant_seahorse
 splat_sources:
 - SRD 5.2.1, pp. 353, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 359, Habitat
 ---
 
 # Giant Seahorse
@@ -26,6 +27,7 @@ splat_sources:
 | Challenge | 1/2 (XP 100; PB +2) |
 | Senses | Passive Perception 11 |
 | Languages | None |
+| Habitat | Underwater |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

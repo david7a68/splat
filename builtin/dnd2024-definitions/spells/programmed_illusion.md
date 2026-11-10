@@ -23,6 +23,8 @@ splat_sources:
 | Range | 120 feet |
 | Components | V, S, M (jade dust worth 25+ GP) |
 | Duration | Until dispelled |
+| Ritual | No |
+| Concentration | No |
 
 
 ## Source text

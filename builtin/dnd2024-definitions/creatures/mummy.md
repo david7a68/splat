@@ -7,6 +7,7 @@ splat_name: Mummy
 splat_origin: dnd2024:reference/creature/mummy
 splat_sources:
 - SRD 5.2.1, pp. 309, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 219, Habitat
 ---
 
 # Mummy
@@ -28,6 +29,7 @@ splat_sources:
 | Languages | Common plus two other languages |
 | Immunities | Necrotic, Poison; Charmed, Exhaustion, Frightened, Paralyzed, Poisoned |
 | Vulnerabilities | Fire |
+| Habitat | Desert, Swamp |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

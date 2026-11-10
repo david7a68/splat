@@ -7,6 +7,7 @@ splat_name: Shield Guardian
 splat_origin: dnd2024:reference/creature/shield_guardian
 splat_sources:
 - SRD 5.2.1, pp. 323, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 277, Habitat
 ---
 
 # Shield Guardian
@@ -27,6 +28,7 @@ splat_sources:
 | Senses | Blindsight 10 ft., Darkvision 60 ft.; Passive Perception 10 |
 | Languages | Understands commands given in any language but can’t speak |
 | Immunities | Poison; Charmed, Exhaustion, Frightened, Paralyzed, Petrified, Poisoned |
+| Habitat | Urban |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

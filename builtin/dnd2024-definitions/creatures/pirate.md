@@ -7,6 +7,7 @@ splat_name: Pirate
 splat_origin: dnd2024:reference/creature/pirate
 splat_sources:
 - SRD 5.2.1, pp. 314, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 241, Habitat
 ---
 
 # Pirate
@@ -27,6 +28,7 @@ splat_sources:
 | Senses | Passive Perception 11 |
 | Languages | Common plus one other language |
 | Gear | Daggers (6), Leather Armor |
+| Habitat | Any |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

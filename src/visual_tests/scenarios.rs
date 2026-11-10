@@ -89,6 +89,17 @@ pub mod library_browse {
 
         search_library(d, "fireball");
         d.click_starting(SPELL_ROW);
+        let reader_at_left = |d: &Driver<'_>| {
+            d.painted_left("Fireball").is_some_and(|left| {
+                (left - d.column_edge("library_entries") - crate::design::L).abs() < 2.0
+            })
+        };
+        let large_anchor = d.at_size(LARGE, reader_at_left);
+        d.observe_both(
+            "iter-1-A-reader-anchor",
+            "The Library reader starts beside the list at all three window sizes",
+            |d| large_anchor && reader_at_left(d),
+        );
         d.state("spell", Sizes::All);
         d.goal("open a spell");
 
@@ -155,6 +166,63 @@ pub mod library_browse {
         d.click_containing(NEXT_CREATURE);
         d.expect(NEXT_CREATURE);
         d.goal("return through the list and open another entry");
+    }
+}
+
+/// Find creatures by habitat, type and other facts, with Filter and with search terms.
+pub mod creature_filter {
+    use super::*;
+    const CREATURES_COUNT: &str = "CREATURES 336";
+    const FILTER: &str = "Filter creatures";
+    const UNDERDARK: &str = "Remove filter Habitat: Underdark";
+    const ABERRATION: &str = "Remove filter Type: Aberration";
+    const SEARCH_RESULTS: &str = "SEARCH RESULTS";
+
+    pub fn run(d: &mut Driver<'_>) {
+        d.click("Section");
+        d.click("Library section: Creatures");
+        d.expect(CREATURES_COUNT);
+        d.begin_task();
+
+        d.click(FILTER);
+        // egui names a submenu button with its arrow, `Habitat ⏵`.
+        d.click_starting("Habitat");
+        d.click("Filter Habitat: Underdark");
+        d.click_starting("Type");
+        d.click("Filter Type: Aberration");
+        d.press(Key::Escape);
+        d.expect(UNDERDARK);
+        d.expect(ABERRATION);
+        d.state("underdark-aberrations", Sizes::All);
+        d.goal("find the aberrations of the Underdark");
+        d.observe(
+            "creature filter",
+            d.has_containing("Aboleth") && !d.has_containing("Adult Black Dragon"),
+            "Habitat and Type keep the Aboleth and drop a swamp dragon",
+        );
+
+        d.begin_task();
+        d.click(ABERRATION);
+        d.expect(UNDERDARK);
+        d.observe(
+            "creature filter chip",
+            !d.has(ABERRATION) && d.has_containing("Archmage") && d.has_containing("Basilisk"),
+            "Removing the Type chip keeps the habitat; Archmage (Any) and Basilisk return",
+        );
+        d.click(UNDERDARK);
+        d.expect(CREATURES_COUNT);
+        d.goal("remove the filters");
+
+        d.begin_task();
+        search_library(d, "immune:fire cr:17+");
+        d.expect(SEARCH_RESULTS);
+        d.state("search-terms", Sizes::Default);
+        d.goal("search by immunity and challenge");
+        d.observe(
+            "creature search terms",
+            d.has_containing("Ancient Red Dragon") && !d.has_containing("Aboleth"),
+            "immune:fire cr:17+ finds an ancient red dragon only among fire-immune creatures",
+        );
     }
 }
 
@@ -771,14 +839,18 @@ pub mod campaign_content {
         // The repair opens here, with the note's text in it.
         d.click(REPAIR);
         d.expect("Note text");
-        d.observe_both("U5", "Both save rows share the column's right edge", |d| {
-            d.place_of("Save repaired note")
-                .zip(d.place_of(SAVE_SELECTIONS))
-                .is_some_and(|(repair, selections)| {
-                    (repair.right() - selections.right()).abs() < 1.0
-                        && selections.top() - repair.bottom() >= crate::design::L
-                })
-        });
+        d.observe_both(
+            "U5",
+            "The package save row stays above repairs, with one right edge",
+            |d| {
+                d.place_of("Save repaired note")
+                    .zip(d.place_of(SAVE_SELECTIONS))
+                    .is_some_and(|(repair, selections)| {
+                        (repair.right() - selections.right()).abs() < 1.0
+                            && repair.top() - selections.bottom() >= crate::design::L
+                    })
+            },
+        );
         d.state("repair-open", Sizes::Default);
         d.observe(
             "Repair says why",
@@ -934,7 +1006,11 @@ pub mod party {
         let note = std::fs::read_dir(&copies)
             .expect("list character copies")
             .map(|file| file.expect("read character copy").path())
-            .find(|path| path.is_file() && path.extension().is_some_and(|x| x == "md"))
+            .find(|path| {
+                path.is_file()
+                    && path.extension().is_some_and(|x| x == "md")
+                    && !path.ends_with(crate::sheet_writer::FILE)
+            })
             .expect("a character copy");
         std::fs::write(&note, EDITED_NOTE).expect("edit the copy on disk");
         switch_campaign(d, CAMPAIGN);
@@ -1659,6 +1735,20 @@ pub mod settings {
         );
         d.expect("Party");
         d.state("sync-stopped-recovery", Sizes::Default);
+
+        go_settings(d);
+        d.click("Touchpad");
+        d.expect("Scrolling speed");
+        d.expect("Mouse wheels keep their speed.");
+        d.state("touchpad-settings", Sizes::Default);
+        d.click("8×");
+        let chosen = d.app_mut().touchpad_speed == crate::touchpad::TouchpadSpeed::Eight;
+        d.observe(
+            "touchpad-speed",
+            chosen,
+            "Choosing a touchpad speed changes how far a touchpad scroll moves",
+        );
+        d.click("Account and campaigns");
     }
 }
 
@@ -2278,18 +2368,8 @@ pub mod prep_to_table {
         );
         d.begin_task();
 
-        d.click("Close run");
-        let asked = d.has("Keep running");
-        d.press(Key::Escape);
-        d.observe(
-            "Setup close",
-            asked && !d.has("Keep running") && d.has("Close run"),
-            "Escape backs out of the close prompt in Setup",
-        );
-        d.begin_task();
-
         d.click(ROLL_NPCS);
-        d.state("npcs-rolled", Sizes::Default);
+        d.state("npcs-rolled", Sizes::All);
         d.goal("roll NPC initiative");
 
         let mut row_moved = false;
@@ -2633,7 +2713,7 @@ pub mod run_sync_conflict {
         "Oren Thistlewick",
         "Sable Harrowgate",
     ];
-    const ROW_SYNC_WORDS: [&str; 2] = ["First read", "Synced"];
+    const ROW_SYNC_WORDS: [&str; 2] = ["Reading sheet…", "Synced"];
     const DISMISS_NOTICE: &str = "Dismiss this message";
     const SYNC_PARTY: &str = "Sync party";
     const STOP_SYNC: &str = "Stop party sync";
@@ -2847,7 +2927,7 @@ pub mod nav_state {
 
         go_campaign(d);
         let campaign = d.in_view_containing(CAMPAIGN_TAB_TEXT);
-        d.state("campaign-returned", Sizes::Default);
+        d.state("campaign-returned", Sizes::All);
 
         go_party(d);
         let party = d.in_view_containing(MEMBER) && d.in_view_containing(SHEET_PAGE_TEXT);
@@ -3192,7 +3272,7 @@ pub mod gallery {
         d.expect("Spell · Level 3 · D&D 2024");
         d.state("messages", Sizes::AllAndHiDpi);
         let edges = (
-            d.painted_left("Use the saved HP"),
+            d.place_of("Use the saved HP").map(|rect| rect.left()),
             d.painted_left("Party HP is full after the long rest."),
         );
         d.observe(
@@ -3201,12 +3281,12 @@ pub mod gallery {
                 .0
                 .zip(edges.1)
                 .is_some_and(|(action, message)| (action - message).abs() < 1.0),
-            format!("A quiet action aligns with its message text: {edges:?}"),
+            format!("The bordered action starts at its message text: {edges:?}"),
         );
         d.observe(
             "U6",
             !d.visible_passage("Second use of widget ID"),
-            "A line-start action registers its click target once",
+            "The message action registers its click target once",
         );
         d.goal("see every part of the design system");
         d.click("Markdown");
@@ -3515,12 +3595,14 @@ pub mod run_restart {
         );
         d.click(BACK_TO_RUN);
         d.begin_task();
-        // The prompt shares the footer's narrow row, and must keep every word.
         d.click("Close run");
-        d.state("close-run-prompt", Sizes::Default);
-        d.click("Keep running");
-        d.begin_task();
-        close_run(d);
+        let closed = !d.app_mut().encounters.has_run();
+        d.observe(
+            "T12.1",
+            closed,
+            "The saved run closes with one click in its footer",
+        );
+        d.state("run-closed-in-one-step", Sizes::All);
         go_library(d);
         d.restart();
         let no_open_run = !d.app_mut().encounters.has_run();
@@ -3651,7 +3733,12 @@ pub mod run_edge_states {
             "Close says what it will lose, in place of \"The run stays saved\"",
         );
         d.state("close-while-not-saved", Sizes::Default);
-        d.click("Keep running");
+        d.press(Key::Escape);
+        d.observe(
+            "Changed on disk",
+            !d.has("Keep running") && !d.has("Close and lose changes") && d.has(KEEP_RUN),
+            "Escape backs out of the close prompt and keeps the run",
+        );
         // Keep this run: the file becomes this run, and later turns save by themselves.
         d.click(KEEP_RUN);
         let saved = std::fs::read_to_string(&path).expect("read the run");
@@ -3741,7 +3828,7 @@ pub mod run_sync_states {
     ];
     /// The first read shows after `Sync party`, and "off" is a row with no word at all.
     const FIRST_READ: (&str, SyncState, &str) =
-        ("Sable Harrowgate", SyncState::FirstRead, "First read");
+        ("Sable Harrowgate", SyncState::FirstRead, "Reading sheet…");
     const UNSYNCED_ROW: &str = "Cinder Wolf 1";
     const DISMISS: &str = "Dismiss this message";
     const TWO_LINES: &str =
@@ -3834,7 +3921,22 @@ pub mod run_sync_states {
                 && d.has(USE_REMOTE),
             "With a conflict, Close is blocked in the ended view, whose row and controls show it",
         );
-        d.state("ended-with-conflict", Sizes::Default);
+        d.state("ended-with-conflict", Sizes::All);
+        for size in [SMALL, LARGE] {
+            let (row_edge, undo_edge) = d.at_size(size, |d| {
+                (
+                    roster_places(d).first().map(|(_, rect)| rect.right()),
+                    d.place_of("Undo: end encounter").map(|rect| rect.right()),
+                )
+            });
+            d.observe(
+                "Ended header alignment",
+                row_edge
+                    .zip(undo_edge)
+                    .is_some_and(|(row, undo)| (row - undo).abs() <= 1.0),
+                format!("At {size:?}, Undo ends at {undo_edge:?} and the roster at {row_edge:?}"),
+            );
+        }
         // A pair of choices is never cut: both are in view, at the minimum window too.
         let both = |d: &Driver<'_>| {
             let nodes = d.nodes();
@@ -4081,7 +4183,7 @@ pub mod signed_in {
     const RAIL_STOPPED: &str = "Sync stopped";
     const SYNC_TOGGLE: &str = "Sync this sheet with D&D Beyond";
     const STOPPED: &str = "Combat sync stopped";
-    const FIRST_READ: &str = "First read";
+    const FIRST_READ: &str = "Reading sheet…";
     const SYNC_PARTY: &str = "Sync party";
     const STOP_SYNC: &str = "Stop party sync";
     const LINK_TAB: &str = "Link and folder";
@@ -4157,7 +4259,7 @@ pub mod signed_in {
         // T7.3: sync is on from the time Splat connects, and leaving the page does not stop it.
         let on = d.has_containing(SYNC_ON);
         d.click_containing(SYNC_SECTION);
-        d.state("party-sync-on", Sizes::Default);
+        d.state("party-sync-on", Sizes::All);
         go_library(d);
         let rail = !d.visible_text(RAIL_STOPPED);
         go_party(d);
@@ -4335,7 +4437,7 @@ pub mod nav_table {
     const LINKED_TITLE: &str = "Bard Subclass";
     const SYNC_PARTY: &str = "Sync party";
     const STOP_SYNC: &str = "Stop party sync";
-    const FIRST_READ: &str = "First read";
+    const FIRST_READ: &str = "Reading sheet…";
     const ACTIVE: &str = "Active campaign: The Emberfall Marches";
     const BACK_TO_RUN: &str = "Back to run";
     const ENCOUNTER: &str = "Shrine of Cinders";
@@ -4871,7 +4973,7 @@ pub mod session_notes {
         d.click("Place this event after");
         d.click("Start of the timeline");
         d.state("timeline-day-added", Sizes::All);
-        d.click_containing("Long rest · Day 1 · Session 1");
+        d.click_containing("Long rest · Session 1");
         d.expect("Link text");
         d.replace_text_in("Title", "Rest at the mill");
         d.type_into("Where", "Old mill");
@@ -4889,7 +4991,7 @@ pub mod session_notes {
         // Renaming keeps notes unchanged until the DM accepts the update.
         d.expect("Update 1 link in notes");
         d.expect_same("The rename offer is already in the event detail. Checking it leaves the view unchanged.");
-        d.state("event-link-update-offered", Sizes::Default);
+        d.state("event-link-update-offered", Sizes::All);
         d.click("Update 1 link in notes");
         d.expect("Undo update links");
         d.state("event-links-updated", Sizes::Default);
@@ -4993,7 +5095,10 @@ pub mod session_notes {
             d.has_containing("Notes changed on disk"),
             "A note that could not be saved stays in the rail on other pages",
         );
-        d.state("note-conflict-elsewhere", Sizes::Default);
+        d.observe_both("iter-1-C-FT3", "The rail names the changed notes", |d| {
+            d.rail_words().contains("Notes changed")
+        });
+        d.state("note-conflict-elsewhere", Sizes::All);
         d.click("Notes changed on disk");
         d.expect("Overwrite with my draft");
         d.click(NAV_TIMELINE);
@@ -5075,7 +5180,24 @@ pub mod session_notes {
         d.state("session-folder-move-offered", Sizes::All);
         d.click("Move files and save");
         d.expect("Moved 1 note, 4 events, 2 templates and 1 recording to 30 Sessions.");
-        d.state("session-folder-moved", Sizes::Default);
+        d.observe_both(
+            "iter-1-C-FT15-18",
+            "The session folder uses one label and one right edge",
+            |d| {
+                let nodes = d.nodes();
+                nodes
+                    .iter()
+                    .find(|node| {
+                        node.name == "Folder" && node.role == egui::accesskit::Role::TextInput
+                    })
+                    .zip(nodes.iter().find(|node| node.name == "Save folder"))
+                    .is_some_and(|(field, save)| {
+                        (field.rect.right() - save.rect.right()).abs() < 1.0
+                            && field.rect.width() <= crate::design::FORM_WIDTH + 1.0
+                    })
+            },
+        );
+        d.state("session-folder-moved", Sizes::All);
         d.click(NAV_SESSIONS);
         d.expect(&format!("Session 1: {TITLE}"));
 
@@ -5441,10 +5563,14 @@ pub mod session_notes {
                     .iter()
                     .filter(|node| node.name.contains(" · "))
                     .filter_map(|node| {
-                        let (title, _) = node.name.split_once(" · ")?;
+                        let (title, detail) = node.name.split_once(" · ")?;
                         let first = d.painted_rect_in(title, node.rect)?;
                         let second = d.painted_rect_in(
-                            if title == RUN { "Round 2" } else { "Day 1" },
+                            if title == RUN {
+                                "Round 2"
+                            } else {
+                                detail.split(" · ").next()?
+                            },
                             node.rect,
                         )?;
                         (second.top() > first.top()).then_some((title, second.top() - first.top()))
@@ -5602,7 +5728,7 @@ pub mod session_notes {
         d.click("Close run");
         if d.has("Close and lose changes") {
             d.click("Close and lose changes");
-        } else {
+        } else if d.has("Close now") {
             d.click("Close now");
         }
         run_saved_encounter(d, "Shrine of Cinders");
@@ -5731,7 +5857,15 @@ pub mod session_recording {
         d.settle();
         d.expect("Hearing sound");
         d.expect_same("Only the small sound-health label changes from Waiting to Hearing sound.");
-        d.state("recording-hearing", Sizes::AllAndHiDpi);
+        d.state_prepared("recording-hearing", Sizes::AllAndHiDpi, |d| {
+            d.app_mut()
+                .sessions
+                .simulate_recorder_health(Health::Hearing);
+        });
+        // Capturing several sizes can outlast the five-second sound indicator.
+        d.app_mut()
+            .sessions
+            .simulate_recorder_health(Health::Hearing);
         d.click_starting("Recordings");
         d.expect(&format!("{} Recording", crate::design::icons::RECORD));
         d.expect("0:00 recorded · Hearing sound");
@@ -5800,7 +5934,7 @@ pub mod session_recording {
             .simulate_recorder_health(Health::Stalled);
         d.settle();
         d.expect("Stopped saving after");
-        d.state("recording-stalled", Sizes::Default);
+        d.state("recording-stalled", Sizes::All);
         d.observe(
             "T11.5",
             d.has("Record again"),
@@ -5890,7 +6024,7 @@ pub mod session_recording {
             d.wait_for_text("Anthropic");
         });
         d.click("Anthropic");
-        d.state("processing-settings-anthropic", Sizes::Default);
+        d.state("processing-settings-anthropic", Sizes::All);
         d.click("LLM service");
         d.click("Codex CLI, GPT-6.1 Sol");
         d.click("Account and campaigns");
@@ -6126,11 +6260,10 @@ pub mod session_recording {
         d.settle();
         d.observe(
             "T11.6",
-            d.has_containing("Processed, with a warning")
-                && d.rail_words().contains("Processing warning"),
+            d.has_containing("Processed, with a warning") && d.rail_words().contains("Processed"),
             "A processed result keeps its warning in the rail and on other pages",
         );
-        d.state("processing-warned-elsewhere", Sizes::Default);
+        d.state("processing-warned-elsewhere", Sizes::All);
         d.click(NAV_SESSIONS);
         d.observe(
             "T11.6",
@@ -6236,6 +6369,14 @@ pub mod session_recording {
         choose_view(d, "Summary");
         d.state("recording-summary-narrow", Sizes::Default);
         d.press_ctrl(Key::K);
+
+        d.click(NAV_SETTINGS);
+        d.click("Recording and processing");
+        d.scroll_until(pos2(600.0, 400.0), "Speech service", 12);
+        d.click("Speech service");
+        d.click("Another service");
+        d.expect("The custom service must support the OpenAI audio/transcriptions API.");
+        d.state("processing-custom-speech-service", Sizes::All);
     }
 }
 
@@ -6370,23 +6511,38 @@ pub mod encounter_groups {
         );
         d.observe(
             "T13.1",
-            d.visible_text("XP 250 + unknown")
+            d.visible_text("XP 50 + unknown")
                 && d.has_containing("Member 1, Unknown creature: not in this campaign's packages")
                 && d.visible_text("1\u{a0}×\u{a0}Unknown\u{a0}creature"),
             "A broken member has a readable name in both its summary and its fault",
         );
         d.observe(
             "T13.1",
-            d.is_disabled(&add_group(GROUP_LOST)),
-            "A group that cannot be added has no working Add button",
+            !d.is_disabled(&add_group(GROUP_LOST)),
+            "A group with one valid member has a working Add button",
         );
         d.observe(
             "T13.1",
-            d.visible_text("3 members · XP 250 + unknown")
+            d.visible_text("1 of 3 members can join")
                 && d.has_containing("not in this campaign's packages")
                 && d.has_containing("Member 2, Cinder Wolf:"),
             "A group counts a creature it cannot find, and gives every reason it cannot be added",
         );
+        d.begin_task();
+        d.type_into(TOTAL_FOR_RIVALS, "-");
+        d.expect("Enter a whole number, or clear the field to roll.");
+        assert!(d.is_disabled(&add_group(GROUP_RIVALS)));
+        d.state("invalid-arrival-total", Sizes::All);
+        d.clear_text_in(TOTAL_FOR_RIVALS);
+        let before = roster_places(d).len();
+        d.click(&add_group(GROUP_LOST));
+        d.observe(
+            "AT2",
+            roster_places(d).len() == before + 1,
+            "The valid member joins while the two unavailable members stay out",
+        );
+        d.state("available-member-added", Sizes::All);
+        d.click_containing("Undo: add Lost Patrol");
         d.begin_task();
         d.click(&add_group(GROUP_GOBLINS));
         d.expect(FIRST_GOBLIN);
@@ -6418,7 +6574,7 @@ pub mod encounter_groups {
                 .any(|node| node.name.contains(RIVAL_NAME) && node.name.contains("Initiative 14")),
             "A typed total places the group, with no roll",
         );
-        d.state("group-added-with-a-total", Sizes::Default);
+        d.state("group-added-with-a-total", Sizes::All);
         d.observe(
             "T13.2",
             d.has_containing("Undo: add Rival Team")
@@ -6733,12 +6889,18 @@ pub mod encounter_owned_groups {
         d.begin_task();
         d.click_first(&format!("More actions for {NEW_NAME}"));
         d.click_containing("Move to…");
-        d.expect("Any encounter");
+        d.expect(RUN_ARENA);
+        assert!(!d.has("Any encounter"));
         d.state("move-encounter-group-menu", Sizes::All);
-        d.click("Any encounter");
-        d.expect("Undo remove group");
-        d.state("saved-group-removed", Sizes::All);
-        d.click("Undo remove group");
+        d.click("Make available to any encounter");
+        d.expect("Undo move");
+        let notice = format!("{NEW_NAME} moves to any encounter when you save.");
+        d.expect(&notice);
+        d.state_prepared("saved-group-removed", Sizes::All, |d| {
+            d.scroll_until(egui::pos2(400.0, 400.0), "Undo move", 20);
+            assert!(d.in_view_containing(&notice));
+        });
+        d.click("Undo move");
         d.expect(&format!("Group name: {NEW_NAME}"));
         d.begin_task();
         d.click("Back to encounters");
@@ -7533,7 +7695,7 @@ pub mod session_plan {
         assert!(d.has("Long rest added. Everyone starts the next fight at full."));
         d.state("long-rest-restores", Sizes::Default);
         d.click("Long rest");
-        d.click("Not at full");
+        d.click("Mark not at full");
         d.expect("Undo ruling");
         let session = d.app_mut().sessions.current();
         assert!(!crate::timeline::party_state(&d.app_mut().timeline.events, session).rested);
@@ -7543,19 +7705,19 @@ pub mod session_plan {
             d.at_size(size, |d| {
                 d.nodes()
                     .iter()
-                    .find(|n| n.name == "Everyone at full")
+                    .find(|n| n.name == "Mark everyone at full")
                     .unwrap()
                     .rect
                     .top()
             })
         });
-        d.click("Everyone at full");
+        d.click("Mark everyone at full");
         assert!(crate::timeline::party_state(&d.app_mut().timeline.events, session).rested);
         let after = sizes.map(|size| {
             d.at_size(size, |d| {
                 d.nodes()
                     .iter()
-                    .find(|n| n.name == "Not at full")
+                    .find(|n| n.name == "Mark not at full")
                     .unwrap()
                     .rect
                     .top()
@@ -7570,7 +7732,7 @@ pub mod session_plan {
         d.state("plan-rest-ruling-on", Sizes::All);
         d.click("Undo ruling");
         assert!(!crate::timeline::party_state(&d.app_mut().timeline.events, session).rested);
-        d.click("Everyone at full");
+        d.click("Mark everyone at full");
         d.click("Long rest");
         d.click(&format!("Resume: {SECOND}"));
         d.expect("Party HP is full after the long rest.");
@@ -7592,7 +7754,7 @@ pub mod session_plan {
         close_run(d);
         show_plan(d);
         d.click("Long rest");
-        d.click("Not at full");
+        d.click("Mark not at full");
         d.click(NAV_TIMELINE);
         d.click("Add Long rest");
         d.expect("Long rest added. Everyone starts the next fight at full.");
@@ -7628,14 +7790,16 @@ pub mod session_plan {
                 area.is_some_and(|area| d.painted_in(area).matches("Long rest").count() == 1)
             },
         );
-        d.click("Not at full");
+        d.click("Mark not at full");
         assert!(!crate::timeline::party_state(&d.app_mut().timeline.events, session).rested);
-        d.state("timeline-rest-ruling-off", Sizes::Default);
-        d.click("Everyone at full");
-        d.state("timeline-rest-ruling-on", Sizes::Default);
+        d.state("timeline-rest-ruling-off", Sizes::All);
+        d.click("Mark everyone at full");
+        assert!(crate::timeline::party_state(&d.app_mut().timeline.events, session).rested);
+        d.expect_same("Only the long-rest status and action change; the wide page stays in place.");
+        d.state("timeline-rest-ruling-on", Sizes::All);
         d.click("Undo ruling");
         assert!(!crate::timeline::party_state(&d.app_mut().timeline.events, session).rested);
-        d.click("Everyone at full");
+        d.click("Mark everyone at full");
         d.click(NAV_SESSIONS);
         show_plan(d);
         d.click(&format!("More actions for {SECOND}"));

@@ -23,6 +23,8 @@ splat_sources:
 | Range | 10 feet |
 | Components | V, S, M (one 150+ GP black onyx stone for each corpse) |
 | Duration | Instantaneous |
+| Ritual | No |
+| Concentration | No |
 
 
 ## Source text

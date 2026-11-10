@@ -7,6 +7,7 @@ splat_name: Cat
 splat_origin: dnd2024:reference/creature/cat
 splat_sources:
 - SRD 5.2.1, pp. 346, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 351, Habitat
 ---
 
 # Cat
@@ -27,6 +28,7 @@ splat_sources:
 | Skills | Perception +3, Stealth +4 |
 | Senses | Darkvision 60 ft.; Passive Perception 13 |
 | Languages | None |
+| Habitat | Desert, Forest, Grassland, Urban |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

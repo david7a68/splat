@@ -7,6 +7,7 @@ splat_name: Giant Frog
 splat_origin: dnd2024:reference/creature/giant_frog
 splat_sources:
 - SRD 5.2.1, pp. 351, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 357, Habitat
 ---
 
 # Giant Frog
@@ -27,6 +28,7 @@ splat_sources:
 | Skills | Perception +2, Stealth +4 |
 | Senses | Darkvision 30 ft.; Passive Perception 12 |
 | Languages | None |
+| Habitat | Forest, Swamp |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

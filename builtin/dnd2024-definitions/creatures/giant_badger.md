@@ -7,6 +7,7 @@ splat_name: Giant Badger
 splat_origin: dnd2024:reference/creature/giant_badger
 splat_sources:
 - SRD 5.2.1, pp. 349, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 354, Habitat
 ---
 
 # Giant Badger
@@ -28,6 +29,7 @@ splat_sources:
 | Senses | Darkvision 60 ft.; Passive Perception 13 |
 | Languages | None |
 | Resistances | Poison |
+| Habitat | Forest |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

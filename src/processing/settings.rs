@@ -603,7 +603,7 @@ impl ProcessingSettings {
         design::group_heading(ui, "Speech service", 0);
         ui.label(
             Type::Small
-                .rich(ui, "Writes a transcript from the audio, before the LLM. The Codex CLI cannot take audio, so this is a separate service, with its own key. It must offer the OpenAI audio/transcriptions API.")
+                .rich(ui, "Turns your recording into text. Choose a speech service and enter its API key.")
                 .color(c.muted),
         );
         let current = SPEECH_CHOICES
@@ -636,6 +636,16 @@ impl ProcessingSettings {
             self.config.speech_model = model.to_owned();
             self.persist();
         }
+        if current == OTHER_SERVICE {
+            ui.label(
+                Type::Small
+                    .rich(
+                        ui,
+                        "The custom service must support the OpenAI audio/transcriptions API.",
+                    )
+                    .color(c.muted),
+            );
+        }
         let mut changed = false;
         let response =
             design::small_text_field(ui, "Address", &mut self.config.speech_url, None, None);
@@ -658,7 +668,7 @@ impl ProcessingSettings {
 
     fn llm_section(&mut self, ui: &mut egui::Ui) {
         let c = colors();
-        design::group_heading(ui, "LLM", 0);
+        design::group_heading(ui, "Transcript and summary", 0);
         ui.label(
             Type::Small
                 .rich(
@@ -722,7 +732,7 @@ impl ProcessingSettings {
         }
         if codex {
             let words = if self.codex_found {
-                "Uses your Codex sign-in, in a read-only sandbox. It needs no key here."
+                "Uses your Codex sign-in, in a read-only sandbox. It needs no key here. Codex cannot take audio; the speech service turns it into text first."
             } else {
                 "The codex command was not found on this computer."
             };

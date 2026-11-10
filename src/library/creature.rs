@@ -16,7 +16,7 @@ const ABILITIES: [&str; 6] = [
     "wisdom",
     "charisma",
 ];
-const DETAILS: [(&str, &str); 9] = [
+const DETAILS: [(&str, &str); 10] = [
     ("movement_text", "Speed"),
     ("skills_text", "Skills"),
     ("resistances_text", "Resistances"),
@@ -26,6 +26,7 @@ const DETAILS: [(&str, &str); 9] = [
     ("senses_text", "Senses"),
     ("languages_text", "Languages"),
     ("cr_text", "Challenge"),
+    ("habitat_text", "Habitat"),
 ];
 
 fn field<'a>(entry: &'a Entry, key: &str) -> Option<&'a str> {

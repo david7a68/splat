@@ -7,6 +7,7 @@ splat_name: Goat
 splat_origin: dnd2024:reference/creature/goat
 splat_sources:
 - SRD 5.2.1, pp. 355, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 362, Habitat
 ---
 
 # Goat
@@ -27,6 +28,7 @@ splat_sources:
 | Skills | Perception +2 |
 | Senses | Darkvision 60 ft.; Passive Perception 12 |
 | Languages | None |
+| Habitat | Grassland, Hill, Mountain, Urban |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

@@ -7,6 +7,7 @@ splat_name: Plesiosaurus
 splat_origin: dnd2024:reference/creature/plesiosaurus
 splat_sources:
 - SRD 5.2.1, pp. 358, 359, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 366, Habitat
 ---
 
 # Plesiosaurus
@@ -27,6 +28,7 @@ splat_sources:
 | Skills | Perception +3, Stealth +4 |
 | Senses | Passive Perception 13 |
 | Languages | None |
+| Habitat | Arctic, Underwater |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

@@ -7,6 +7,7 @@ splat_name: Giant Eagle
 splat_origin: dnd2024:reference/creature/giant_eagle
 splat_sources:
 - SRD 5.2.1, pp. 350, 351, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 356, Habitat
 ---
 
 # Giant Eagle
@@ -28,6 +29,7 @@ splat_sources:
 | Senses | Passive Perception 16 |
 | Languages | Celestial; understands Common and Primordial (Auran) but can’t speak them |
 | Resistances | Necrotic, Radiant |
+| Habitat | Coastal, Grassland, Hill, Mountain |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

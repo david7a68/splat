@@ -14,6 +14,7 @@ use serde::{Deserialize, Serialize};
 use serde_yaml_ng::{Mapping, Value};
 use splat::content::{
     self, Entry,
+    creature_filter::{Facets, Filter, Query},
     overrides::{Overrides, Resolved},
 };
 use std::{
@@ -677,11 +678,13 @@ struct Creature {
     linked: bool,
     /// The D&D Beyond character a party copy is of.
     character: Option<String>,
+    /// Habitat, type, size and the other facts that search and the filter use.
+    facets: Option<Facets>,
 }
 const ROSTER_MAX_WIDTH: f32 = 860.0;
 const ADD_PANE: &str = "encounter_add";
 const ADD_PANE_MAX_WIDTH: f32 = 640.0;
-const RESULT_ROW: f32 = 40.0;
+const RESULT_ROW: f32 = design::XL + design::L + design::S;
 /// A result's stats, each in its own place, so that they can be compared down the list. The
 /// first place holds a party copy's word, which has no challenge rating. The package follows
 /// if the row has room for it.
@@ -715,7 +718,12 @@ pub(crate) fn detail_columns(ui: &mut egui::Ui, detail: &str, source: Option<&st
     ui.horizontal(|ui| {
         ui.spacing_mut().item_spacing.x = 0.0;
         for (prefix, widest) in COLUMNS {
-            let width = design::number_width(ui, widest, &Type::Small.font(ui)) + design::S;
+            let gap = if prefix == "CR " {
+                design::M
+            } else {
+                design::S
+            };
+            let width = design::number_width(ui, widest, &Type::Small.font(ui)) + gap;
             let part = parts
                 .iter()
                 .find(|part| part.starts_with(prefix))
@@ -1262,6 +1270,7 @@ impl Snapshot {
                     id: *id,
                     name: e.entry.name.clone(),
                     lower: e.entry.name.to_lowercase(),
+                    facets: Facets::of(&e.entry),
                     detail: creature_detail(&e.entry, party, None),
                     origin: crate::lookup::entry_origin(Some(&e.entry), e.private),
                     source: match (party, e.private) {
@@ -1310,6 +1319,7 @@ impl Snapshot {
                     name: npc.name.clone(),
                     lower: npc.name.to_lowercase(),
                     detail: format!("NPC · as {} · {}", stat.name, stat.detail),
+                    facets: stat.facets.clone(),
                     origin: crate::lookup::entry_origin(Some(npc), entry.private),
                     source: None,
                     party: false,
@@ -2344,13 +2354,16 @@ impl Encounters {
                 .max_height(room)
                 .auto_shrink([false, true])
                 .show(ui, |ui| {
-                    let response = ui.add(
-                        egui::TextEdit::multiline(&mut editor.fields.body)
-                            .font(egui::TextStyle::Monospace)
-                            .desired_width(ui.available_width() - 2.0 * design::S - design::M)
-                            .margin(egui::vec2(design::S, design::S)),
-                    );
-                    design::named(ui, &response, "Creature text");
+                    let output = egui::TextEdit::multiline(&mut editor.fields.body)
+                        .font(egui::TextStyle::Monospace)
+                        .desired_width(ui.available_width() - 2.0 * design::S - design::M)
+                        .margin(egui::vec2(design::S, design::S))
+                        .show(ui);
+                    if let Some(note) = crate::markdown_source::pressed_note_link(ui, &output, None)
+                    {
+                        crate::markdown_view::send_note_link(ui.ctx(), note, None);
+                    }
+                    design::named(ui, &output.response, "Creature text");
                 });
         });
         if save {
@@ -3581,11 +3594,20 @@ impl Encounters {
             ui,
             SEARCH_FIELD,
             search,
-            "Find a creature…",
+            "Find a creature by name or detail…",
             ui.available_width(),
         );
         if std::mem::take(focus_search) {
             design::focus_and_select(ui, response.id, search);
+        }
+        let creatures: Vec<&Creature> = creatures.collect();
+        // The roster and a group share one filter, as the DM looks for the same creatures.
+        let filter_id = egui::Id::new("creature_search_filter");
+        let mut filter: Filter = ui.data(|data| data.get_temp(filter_id)).unwrap_or_default();
+        if crate::creature_filter::filter_bar(ui, &mut filter, || {
+            creatures.iter().filter_map(|c| c.facets.as_ref()).collect()
+        }) {
+            ui.data_mut(|data| data.insert_temp(filter_id, filter.clone()));
         }
         if !summary.is_empty() {
             let shown =
@@ -3594,17 +3616,25 @@ impl Encounters {
                 .on_hover_text(summary);
         }
         let query = search.to_lowercase();
+        let parsed = Query::parse(&query);
         let mut matches: Vec<&Creature> = creatures
+            .into_iter()
             .filter(|c| {
-                c.lower.contains(&query) && (!query.is_empty() || !c.party || !(roster.already)(c))
+                let facets = c.facets.as_ref();
+                (parsed.words.is_empty()
+                    || c.lower.contains(&parsed.words)
+                    || facets.is_some_and(|f| parsed.words_in(&c.name, f)))
+                    && (!parsed.names_facts() || facets.is_some_and(|f| parsed.matches_facts(f)))
+                    && (filter.is_empty() || facets.is_some_and(|f| filter.matches(f)))
+                    && (!query.is_empty() || !c.party || !(roster.already)(c))
             })
             .collect();
         // The plain name first, so "wolf" finds Wolf before Dire Wolf. The sort keeps the
         // list's order inside each rank.
-        if !query.is_empty() {
+        if !parsed.words.is_empty() {
             matches.sort_by_key(|c| {
                 (
-                    crate::lookup::name_rank(&c.name.to_lowercase(), &query).unwrap_or(4),
+                    crate::lookup::name_rank(&c.name.to_lowercase(), &parsed.words).unwrap_or(4),
                     c.origin,
                 )
             });
@@ -3627,7 +3657,7 @@ impl Encounters {
                 ))
             });
             if let Some(index) = index {
-                for (package, entry, name, owner) in index.unused_creatures(&query) {
+                for (package, entry, name, owner) in index.unused_creatures(&parsed.words) {
                     ui.horizontal_wrapped(|ui| {
                         ui.label(
                             Type::Small
@@ -3654,7 +3684,11 @@ impl Encounters {
                 ui,
                 icons::SEARCH,
                 "No creatures match",
-                "Check the spelling, or the packages this campaign uses.",
+                if filter.is_empty() {
+                    "Check the spelling, or the packages this campaign uses."
+                } else {
+                    "Remove a filter, or check the packages this campaign uses."
+                },
                 |_| {},
             );
         }
@@ -3710,14 +3744,16 @@ impl Encounters {
                 ui.checkbox(&mut draft.setup.repeatable, REPEATABLE_OPTION);
                 ui.add_space(design::M);
                 design::group_heading(ui, "Read-aloud and notes", 0);
-                let response = ui.add(
-                    egui::TextEdit::multiline(&mut draft.body)
-                        .hint_text("What you read to the table, then your tactics. The run shows this before the first turn.")
-                        .desired_width(ui.available_width() - 2.0 * design::S - design::M)
-                        .desired_rows(5)
-                        .margin(egui::vec2(design::S, design::S)),
-                );
-                design::named(ui, &response, "Read-aloud and notes");
+                let output = egui::TextEdit::multiline(&mut draft.body)
+                    .hint_text("What you read to the table, then your tactics. The run shows this before the first turn.")
+                    .desired_width(ui.available_width() - 2.0 * design::S - design::M)
+                    .desired_rows(5)
+                    .margin(egui::vec2(design::S, design::S))
+                    .show(ui);
+                if let Some(note) = crate::markdown_source::pressed_note_link(ui, &output, None) {
+                    crate::markdown_view::send_note_link(ui.ctx(), note, None);
+                }
+                design::named(ui, &output.response, "Read-aloud and notes");
                 groups::of_encounter(ui, draft, snapshot, focus_search, expanded)
             })
             .inner
@@ -4101,7 +4137,7 @@ impl Encounters {
         ui.scope_builder(egui::UiBuilder::new().max_rect(egui::Rect::from_min_size(
             ui.cursor().min, egui::vec2(ui.available_width().min(design::FORM_WIDTH), ui.available_height()))), |ui| {
         design::locked(ui, closed_while, |ui| {
-            design::text_field(
+            design::small_text_field(
                 ui,
                 "Run folder",
                 &mut snapshot.options.folder,
@@ -4114,7 +4150,7 @@ impl Encounters {
             if !rule_flags.is_empty() {
                 crate::world::file_actions(ui, &active, "Campaign.md");
             }
-            design::field(ui, "Roll NPC initiative", None, None, |ui| {
+            design::small_field(ui, "Roll NPC initiative", None, None, |ui| {
                 let combo = egui::ComboBox::from_id_salt("campaign_initiative")
                     .icon(design::combo_icon)
                     .width(ui.available_width().min(320.0))

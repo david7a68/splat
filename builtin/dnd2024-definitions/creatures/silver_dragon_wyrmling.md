@@ -7,6 +7,7 @@ splat_name: Silver Dragon Wyrmling
 splat_origin: dnd2024:reference/creature/silver_dragon_wyrmling
 splat_sources:
 - SRD 5.2.1, pp. 324, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 278, Habitat
 ---
 
 # Silver Dragon Wyrmling
@@ -28,6 +29,7 @@ splat_sources:
 | Senses | Blindsight 10 ft., Darkvision 60 ft.; Passive Perception 14 |
 | Languages | Draconic |
 | Immunities | Cold |
+| Habitat | Mountain, Urban |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

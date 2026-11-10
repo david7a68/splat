@@ -7,6 +7,7 @@ splat_name: Stone Giant
 splat_origin: dnd2024:reference/creature/stone_giant
 splat_sources:
 - SRD 5.2.1, pp. 330, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 300, Habitat
 ---
 
 # Stone Giant
@@ -27,6 +28,7 @@ splat_sources:
 | Skills | Athletics +12, Perception +4, Stealth +5 |
 | Senses | Darkvision 60 ft.; Passive Perception 14 |
 | Languages | Giant |
+| Habitat | Mountain, Underdark |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

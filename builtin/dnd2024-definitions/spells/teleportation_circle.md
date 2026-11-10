@@ -23,6 +23,8 @@ splat_sources:
 | Range | 10 feet |
 | Components | V, M (rare inks worth 50+ GP, which the spell consumes) |
 | Duration | 1 round |
+| Ritual | No |
+| Concentration | No |
 
 
 ## Source text

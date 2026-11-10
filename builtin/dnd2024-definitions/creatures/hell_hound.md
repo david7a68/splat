@@ -7,6 +7,7 @@ splat_name: Hell Hound
 splat_origin: dnd2024:reference/creature/hell_hound
 splat_sources:
 - SRD 5.2.1, pp. 297, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 165, Habitat
 ---
 
 # Hell Hound
@@ -28,6 +29,7 @@ splat_sources:
 | Senses | Darkvision 60 ft.; Passive Perception 15 |
 | Languages | Understands Infernal but can’t speak |
 | Immunities | Fire |
+| Habitat | Mountain, Underdark, Planar (Lower Planes) |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

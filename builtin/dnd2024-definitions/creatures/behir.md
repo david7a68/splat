@@ -7,6 +7,7 @@ splat_name: Behir
 splat_origin: dnd2024:reference/creature/behir
 splat_sources:
 - SRD 5.2.1, pp. 263, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 34, Habitat
 ---
 
 # Behir
@@ -28,6 +29,7 @@ splat_sources:
 | Senses | Darkvision 90 ft.; Passive Perception 16 |
 | Languages | Draconic |
 | Immunities | Lightning |
+| Habitat | Underdark |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

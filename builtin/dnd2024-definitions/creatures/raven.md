@@ -7,6 +7,7 @@ splat_name: Raven
 splat_origin: dnd2024:reference/creature/raven
 splat_sources:
 - SRD 5.2.1, pp. 359, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 368, Habitat
 ---
 
 # Raven
@@ -27,6 +28,7 @@ splat_sources:
 | Skills | Perception +3 |
 | Senses | Passive Perception 13 |
 | Languages | None |
+| Habitat | Hill, Swamp, Urban |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

@@ -7,6 +7,7 @@ splat_name: Griffon
 splat_origin: dnd2024:reference/creature/griffon
 splat_sources:
 - SRD 5.2.1, pp. 295, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 159, Habitat
 ---
 
 # Griffon
@@ -27,6 +28,7 @@ splat_sources:
 | Skills | Perception +5 |
 | Senses | Darkvision 60 ft.; Passive Perception 15 |
 | Languages | None |
+| Habitat | Arctic, Coastal, Grassland, Hill, Mountain |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

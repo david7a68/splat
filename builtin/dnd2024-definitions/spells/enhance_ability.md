@@ -23,6 +23,8 @@ splat_sources:
 | Range |  |
 | Components | V, S, M (fur or a feather) |
 | Duration | Concentration, up to 1 hour |
+| Ritual | No |
+| Concentration | Yes |
 
 
 ## Source text

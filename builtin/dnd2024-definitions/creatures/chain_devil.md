@@ -7,6 +7,7 @@ splat_name: Chain Devil
 splat_origin: dnd2024:reference/creature/chain_devil
 splat_sources:
 - SRD 5.2.1, pp. 272, 273, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 68, Habitat
 ---
 
 # Chain Devil
@@ -28,6 +29,7 @@ splat_sources:
 | Languages | Infernal; telepathy 120 ft. |
 | Resistances | Bludgeoning, Cold, Piercing, Slashing |
 | Immunities | Fire, Poison; Poisoned |
+| Habitat | Planar (Nine Hells) |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

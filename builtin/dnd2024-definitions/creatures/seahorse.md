@@ -7,6 +7,7 @@ splat_name: Seahorse
 splat_origin: dnd2024:reference/creature/seahorse
 splat_sources:
 - SRD 5.2.1, pp. 361, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 369, Habitat
 ---
 
 # Seahorse
@@ -27,6 +28,7 @@ splat_sources:
 | Skills | Perception +2, Stealth +5 |
 | Senses | Passive Perception 12 |
 | Languages | None |
+| Habitat | Underwater |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

@@ -7,6 +7,7 @@ splat_name: Aboleth
 splat_origin: dnd2024:reference/creature/aboleth
 splat_sources:
 - SRD 5.2.1, pp. 258, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 12, Habitat
 ---
 
 # Aboleth
@@ -27,6 +28,7 @@ splat_sources:
 | Skills | History +12, Perception +10 |
 | Senses | Darkvision 120 ft.; Passive Perception 20 |
 | Languages | Deep Speech; telepathy 120 ft. |
+| Habitat | Underdark, Underwater |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

@@ -7,6 +7,7 @@ splat_name: Lemure
 splat_origin: dnd2024:reference/creature/lemure
 splat_sources:
 - SRD 5.2.1, pp. 304, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 194, Habitat
 ---
 
 # Lemure
@@ -28,6 +29,7 @@ splat_sources:
 | Languages | Understands Infernal but can’t speak |
 | Resistances | Cold |
 | Immunities | Fire, Poison; Charmed, Frightened, Poisoned |
+| Habitat | Planar (Nine Hells) |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

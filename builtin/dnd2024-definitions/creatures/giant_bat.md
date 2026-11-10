@@ -7,6 +7,7 @@ splat_name: Giant Bat
 splat_origin: dnd2024:reference/creature/giant_bat
 splat_sources:
 - SRD 5.2.1, pp. 349, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 355, Habitat
 ---
 
 # Giant Bat
@@ -26,6 +27,7 @@ splat_sources:
 | Challenge | 1/4 (XP 50; PB +2) |
 | Senses | Blindsight 120 ft.; Passive Perception 11 |
 | Languages | None |
+| Habitat | Forest, Mountain, Underdark |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

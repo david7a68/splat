@@ -7,6 +7,7 @@ splat_name: Tough Boss
 splat_origin: dnd2024:reference/creature/tough_boss
 splat_sources:
 - SRD 5.2.1, pp. 332, https://www.dndbeyond.com/srd
+- Monster Manual (2024), p. 307, Habitat
 ---
 
 # Tough Boss
@@ -27,6 +28,7 @@ splat_sources:
 | Senses | Passive Perception 10 |
 | Languages | Common plus one other language |
 | Gear | Chain Mail, Heavy Crossbow, Warhammer |
+| Habitat | Any |
 
 | Ability | Score | Mod | Save |
 | --- | --- | --- | --- |

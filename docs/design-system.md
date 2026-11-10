@@ -63,7 +63,7 @@ HP and initiative hold their place because the font's digits have one width.
 | `Strong` | UI Medium 14 / 20 | Button, selected item |
 | `Name` | UI SemiBold 15 / 20 | A participant's name on a run row |
 | `Small` | UI Regular 12 / 16 | Second line, help, status |
-| `Label` | UI SemiBold 11 / 14, tracked +0.6, capitals | Field label, column heading |
+| `Label` | UI SemiBold 11 / 14, tracked +0.6, capitals | Column and compact group heading |
 | `Numeral` | UI SemiBold 14 | AC, initiative, outside the run's scale |
 | `NumeralLarge` | UI Bold 18 | Current HP, outside the run's scale |
 | `Round` | UI Bold 18 | The round number in the run header |
@@ -74,7 +74,7 @@ HP and initiative hold their place because the font's digits have one width.
 | `Mono` | Monospace 13 | Markdown source |
 
 **Measure.** Lists of rows with actions use `LIST_MEASURE` (880 px), so actions stay near the names. `READER_MEASURE` is 488 px at `Prose`, about 62 characters on average and
-at most 75 (T6.1). Prose never fills a wide window.
+at most 75 (T6.1). Prose never fills a wide window. Every reader starts at the pane’s left edge, including Library; its text keeps `READER_MEASURE`.
 
 **The run has its own scale.** `RunScale` holds a row height and type sizes, and
 `RunScale::fit(height, width, rows)` takes the largest that fits with no scrolling.
@@ -100,8 +100,8 @@ has a word, an icon, or a shape, and `src/design/tokens.rs` tests the contrast p
 | Accent | `accent accent_fill accent_hover on_accent focus` | Focus also has a 2 px ring |
 | Recording | `recording` | `Recording` with its time and a record icon, in the rail on every page |
 | Turn | `turn.current turn.next` | The word `Turn` and a bar; the word `Next` |
-| HP | `hp.healthy damaged bloodied zero temp unknown track` | Numbers tinted by state, a bar under them, `Bloodied`, a neutral mark with `0 HP` (a skull would be a verdict, and death is the DM's ruling), `+5` with a shield and a strip above the bar, `?` |
-| Participant | `participant.absent concentrating condition changed` | `Absent`, `Conc`, each condition by name, a pencil and `Changed` |
+| HP | `hp.healthy damaged bloodied zero temp unknown track` | Damaged HP uses the text colour and a part-filled bar; other numbers are tinted by state, with a bar under them, `Bloodied`, a neutral mark with `0 HP` (a skull would be a verdict, and death is the DM's ruling), `+5` with a shield and a strip above the bar, `?` |
+| Participant | `participant.absent concentrating condition changed` | `Absent`, `Conc`, each condition by name, a neutral muted pencil and `Changed` |
 | Side | `side.party enemies other` | The side name, with a square, a diamond or a circle. No red and green |
 | Sync | `sync.off first_read matching pending conflict read_only error` | Icon and word in every case |
 | Connection | `connection.connected offline busy` | Icon and word |
@@ -144,6 +144,8 @@ Library, Lookup and encounter search rank equal names the same way: campaign ent
 entries, then character sheet copies. File paths shorten before their file actions wrap;
 the full path stays on hover. All save rows call their discard action `Discard`. A clean
 Library editor shows `No changes` in the left status slot.
+
+Creature search results keep the name tight to its stats, with an S gap between results. The CR column fits `CR 1/8` plus an M gap.
 
 Creature vitals come from the Stat block table and appear once in the reader. The editor warns
 when a prose AC or HP line disagrees and offers `Use <value>` with Undo. Missing creature
@@ -236,7 +238,7 @@ tooltips, and separators. Text cursors do not blink, because motion draws the ey
 | Group heading | `group_heading` | `Type::Label` in capitals and a muted, nonzero count after it. No rule. Serif headings belong to readers and stat blocks |
 | Row menu | `row_menu` | Quiet `⋯` at the right edge, named `More actions for <name>`. Put Remove and Delete here |
 | Add strip | `hanging_add_strip` | `Add` in its own Label column; quiet icon-and-word buttons wrap at the first button's left edge. Fight, Group (plan only), Day, Long rest, Short rest, Travel, Major event |
-| Message | `message`, `message_with_action`, `Tone` | Inline. Measure the full action, including padding. Move it below the text, aligned with the text, when both cannot fit on one line |
+| Message | `message`, `message_with_action`, `Tone` | Inline. An action without an icon uses the secondary border, including when it wraps below the message. Measure the full action, including padding. Move it below the text, aligned with the text, when both cannot fit on one line |
 | Side panel | `side_panel_width`, `panel_header` | One width rule for Lookup, Notes and the run. The run separates participant tabs from fight tabs |
 | Column | `Column::left / right / panel` | Every side column: the rail, a page's list, a panel. A drag handle on its inner edge. Natural width until dragged, then the DM's width, here and after a restart. A drag always leaves the page its room, and the run's roster keeps `RUN_LIST_KEEPS`. What sits beside a column reaches its edge, so no blank band opens between them. Text keeps its measure inside that room |
 | Link | `link` | A real `Link` role, at least 24 px high |
@@ -366,8 +368,7 @@ Member changes stay on one line, such as `Changed · 2 to add by hand`, until op
 An empty group frame has one muted line and no zero count or duplicate search summary.
 The Groups list has one level of headings: For any encounter, each encounter, then Encounter deleted.
 Its rows keep Edit and a menu with Remove, which has Undo. A planned group has Remove from tonight and Undo remove. An isolated plan link is deleted; links inside sentences keep their words.
-A summary of members stays below the search when it has members. Removing an encounter’s group makes
-it available for any encounter on Save, with Undo until that save.
+A summary of members stays below the search when it has members. Moving an encounter’s group to any encounter says `<name> moves to any encounter when you save.`, with `Undo move` until that save. `Move to…` lists named encounters only. `Make available to any encounter` is the one direct action for removing that restriction.
 
 A saved Setup resumed after a restoring long rest starts party HP at full. Its
 notice says `Party HP is full after the long rest.` and offers `Use the saved HP`
@@ -378,14 +379,15 @@ New templates say `Starts with the title line only.` below the name field.
 
 The roster is the screen. Every row has fixed columns: initiative, side mark, name, AC,
 temporary HP, HP with its bar, then a state column for `Bloodied`, `0 HP` and the sync
-word. Conditions take one second line before the HP column. Measure them without change bonuses;
+word. A lone sync state sits beside the HP number; line two holds a second state only. Sheet loading says `Reading sheet…`. Conditions take one second line before the HP column. Measure them without change bonuses;
 shorten bonuses first, remeasure, then drop the bonus before `more` if needed.
 Measure the sync word before folding conditions into a count. Keep the first condition,
-and keep multiword sync states together.
+and keep multiword sync states together. Beside `Reading sheet…` in a narrow row, the condition count can use `+1`; it keeps the same link to Conditions.
 At the narrowest width, mandatory state words can use the empty left part of the
 HP bar's slot. The bar stays under HP and keeps at least XL of length.
 Long local effects show four words and `more`. Undo names the effect with those four
 words and an ellipsis; hover and accessibility keep its full text.
+`No initiative` has the same underline as other row links.
 The count opens their full text in `Conditions`. When a window has no room for the state column, as at 960x640 beside
 the panel, those words open the second line instead, so that a name is never cut.
 
@@ -412,7 +414,7 @@ the panel, those words open the second line instead, so that a name is never cut
   sync notices, then the next name. Silence and the short sync state stay together when
   space is short. Connect to sync gives up its link before either state gives up its word.
 - **Dock:** a fixed place above the footer. `Amount`, `Damage`, `Heal`, `Temp HP`, then the
-  selected name, `Conditions`, `Conc` and `Absent`. Enter applies damage.
+  selected name, `Conditions`, `Conc` and `Absent`. Off toggles use text colour; disabled controls stay muted. Enter applies damage.
 - **Overflow:** when rows still cannot fit, a clipped list ends above a separate page-filled band with a hairline. The band says how many are above
   and below, with any `Conflict`, `0 HP` and `Bloodied` among them. A row cut by the edge
   counts as out of view. Each turn scrolls to show the current row and the next.
@@ -442,17 +444,16 @@ the panel, those words open the second line instead, so that a name is never cut
   keep `Add` and say which round they joined. No step asks for confirmation, because Undo
   names the addition.
 
-Setup keeps fixed initiative, Roll, Absent and menu columns. All controls share the name line, centred with the initiative field. Empty Roll slots keep player totals aligned. Only tied rows have Tie and two fixed arrow slots below the total. Other rows fit their two text lines and Scan padding, with RUN_REGULAR as the minimum height. The header always reports ties. Undo stays at the top right in setup and live play. The blocked Begin combat reason sits directly below that button. Setup's row menu opens Correct for that participant.
+Setup keeps fixed initiative, Roll, Absent and menu columns. All controls share the name line, centred with the initiative field. Empty Roll slots keep player totals aligned. Only tied rows have Tie and two fixed arrow slots below the total. Other rows fit their two text lines and Scan padding, with RUN_REGULAR as the minimum height. Shared-roll bracket segments stay beside initiative fields and stop before each detail line. The header always reports ties. Undo stays at the top right in setup and live play. The blocked Begin combat reason sits directly below that button. Setup's row menu opens Correct for that participant.
 
 Death-save counts and actions occupy one line below the panel tabs at zero HP. Clicking a count edits it; Correct has no duplicate fields. Correct initiative and DM notes show a short reason beside a blocked commit action.
 
-Arrivals uses group headings and one muted line for an empty group section. New group opens Encounters. A broken group's initiative field and Add action are both blocked, and Campaign → Packages opens repair. A setup arrival says Added before combat. Add names include the count when more than one creature will join.
+Arrivals uses group headings and one muted line for an empty group section. New group opens Encounters. A group excludes missing, unread and invalid members from its addable set. It shows `1 of 3 members can join` and `Add 1`, with each excluded member's reason and repair link. Only a group with no valid members blocks its initiative field and Add action. An invalid Total keeps the text, says `Enter a whole number, or clear the field to roll.`, and blocks Add and drop. Campaign → Packages opens repair. A setup arrival says Added before combat. Add names include the count when more than one creature will join.
 
-Recovery copies use a UTC save-time suffix and preserve the other file. The run closed last owns primary Resume. Saved rows show the last change, mark the preserved file Changed elsewhere, and keep an empty Edit slot when no encounter exists. Run state words come from one function: Setup, Setup · Paused, Round 2, Round 2 · Paused, Ended · Round 2.
+Recovery copies use a UTC save-time suffix and preserve the other file. The run closed last owns primary Resume. Saved rows use relative time for today and yesterday, then a short UTC date. They show the last change, mark the preserved file Changed elsewhere, and keep an empty Edit slot when no encounter exists. Run state words come from one function: Setup, Setup · Paused, Round 2, Round 2 · Paused, Ended · Round 2.
 
 A disconnected run keeps Connect to sync on its header only. The footer's blocked Sync party uses the same cause as hover text. End encounter… shortens to End…; Keys keeps its word beside Lookup, Notes and a wide run panel.
-An ended run puts its short conflict and pending-change count directly below the
-blocked Close after sync button.
+An ended run puts its short conflict and pending-change count directly below the blocked Close after sync button at the panel's right edge. Saved and Undo end at the roster's right edge. Footer and strip Close run close at once when the run is saved and nothing is unsent. Otherwise they ask for a choice.
 
 The app-close dialog uses Keep running for a run, Keep recording for audio, and Keep processing for a job. Recording and processing titles name the unfinished session. A sync conflict names the character and offers Review conflict. Stop and close is secondary when saved work is kept; an action is red only when it loses work.
 
@@ -550,7 +551,7 @@ again on the visible recording row; other pages keep the bottom banner.
 
 Each recording keeps its failure or stop reason beside its status, including the last processing step. Dismissing a banner does not remove that row state. While a recording is live or processing, its stored stop or cancellation reason stays hidden. A cancellation says which part stopped and offers Continue processing. Failed and Stopped use the error icon and colour; Cancelled uses warning. A recording stopped by a missing input offers Choose an input before Record again and Process. Silence uses the warning colour on every page. The result viewer uses one segmented control for Summary, Clean transcript, What the check changed, and Raw transcript. Every generated view uses the same Small draft notice. If the check did not run, the row says `No check ran` beside Raw transcript. The row menu stays beside the title, and L space separates its actions from the events heading. The result viewer has its back link and muted date on the first line, with Add to notes at the right on Summary. Its view choices start at the left on a second line. The segmented control never wraps; if the full set does not fit, one dropdown shows the current view name. Tabs and page headers omit zero counts. Templates names its own page and uses Campaign as the owner word.
 
-Lookup shows up to five one-line results with the open result selected. A result shows its name, then muted type and level. Campaign-owned entries add Campaign; a source shows only when it differs from the campaign’s main source. Only the muted part is shortened with an ellipsis. The hover and accessible name keep the full row. Result lists never scroll sideways. A click on a result, or scrolling into its reader, closes the list. `Show all` offers the remaining results. Creation actions follow the results and include the proposed name. They appear only without an exact match; Generate NPC appears only for an empty search.
+Lookup shows up to five one-line results with the open result selected. When its one result is open, the list closes. A result shows its name, then muted type and level. Campaign-owned entries add Campaign; a source shows only when it differs from the campaign’s main source. Only the muted part is shortened with an ellipsis. The hover and accessible name keep the full row. Result lists never scroll sideways. A click on a result, or scrolling into its reader, closes the list. `Show all` offers the remaining results. Creation actions follow the results and include the proposed name. They appear only without an exact match; Generate NPC appears only for an empty search.
 
 A copy starts with the original name selected. Its destination and dependency preview update with the fields. Create copy saves it in one step. Edit the copy selects the result and opens its Markdown editor. An open encounter draft keeps Add to its encounter as the primary completion action. A Library disk conflict uses the full reader width for its single row of choices.
 
@@ -564,9 +565,11 @@ Inline creation forms use a Label title, fields, then a named Create action, its
 
 Settings uses `CAMPAIGNS` and `D&D BEYOND ACCOUNT` group headings in both layouts. In the compact layout while a run is open, the account comes before the locked campaign list. The open account form replaces the status line and its `Connect…` link. The account verb is `Connect`; states include `Not connected` and `Signed out of D&D Beyond`. A keyring warning owns its `Connect again` action. `Disconnect` is quiet and follows the trust text. A quiet action on its own line aligns its word with the text above it; its target can extend into the gutter. The add-campaign form closes after a successful add. Add and edit forms keep Cancel on the left and their commit action at the right edge. Folder help names the files kept there and permits a folder in an Obsidian vault.
 
+The `Touchpad` Settings tab has one `TOUCHPAD` group. `Scrolling speed` is a `segmented` choice of 1×, 2×, 4×, 8× and 12×, default 4×, with the Small help `Mouse wheels keep their speed.` The choice belongs to the computer, so it is saved in `ui-state.json`, not with a campaign.
+
 Settings shows one Connecting status, and Cancel aligns with the column. Connect is primary when a cookie is entered, no campaign form is open and no run owns the primary action. An unchanged campaign form blocks Save details with No changes to save. Settings leaves its header context empty; campaign counts stay on their list heading. The rail wraps Connected · not remembered across two lines; its hover text and accessible name keep the full state. The import form keeps the campaign name in its field and omits the remote identifier, repeated heading and open row's Add action. A warning names the saved key’s service and the chosen service. An API key saved for another service keeps Save key visible with Paste a key first; removing that other key is a separate quiet action.
 
-Recording settings clip at the tab rule, with `L` above each section. Recording, Speech service and LLM use `group_heading`; their field labels use muted Small text through `small_field` and `small_text_field`. Visible field labels are `Service`, `Address`, `Model` and `API key`; accessible names keep the service context. A remove-key button names its slot and service, for example Remove speech key (OpenAI). It sits below the key state at the column’s left edge. A saved key for the chosen service with no replacement typed hides Save key and its empty-field reason.
+Recording settings clip at the tab rule, with `L` above each section. Recording, Speech service and Transcript and summary use `group_heading`; their field labels use muted Small text through `small_field` and `small_text_field`. Visible field labels are `Service`, `Address`, `Model` and `API key`; accessible names keep the service context. A remove-key button names its slot and service, for example Remove speech key (OpenAI). It sits below the key state at the column’s left edge. A saved key for the chosen service with no replacement typed hides Save key and its empty-field reason.
 
 Recording retries say Continue processing. Process again is reserved for replacing existing results; its one info message names the transcript and context sent to the chosen LLM, and says the audio is not sent again. Its confirmation has secondary Not now and red Replace the results. A live row puts Stop recording first, beside Process. A job shows one spinner and one Processing progress line. The session list omits the date while a recording or job runs. Not processed uses the neutral file icon. Transcript marker actions sit beside the marker in the text.
 
@@ -677,7 +680,7 @@ Process again… in its menu above Delete…, with the same inline confirmation.
 Keep the recording is secondary. The consent step hides the header Record action.
 
 A quiet Action that starts a line uses line_start to align its text with the line above;
-its target extends into the gutter. A message action below its message uses the same rule.
+its target extends into the gutter. An icon-bearing quiet message action below its message uses the same rule. Other message actions use the secondary border.
 A draft comparison offers Next difference only when at least two lines differ.
 
 ## Session and preparation audit, iteration 5
@@ -893,7 +896,7 @@ Edit and a row menu with Remove member, aligned with the other member actions.
 Edit opens the normal change form with the readable values, the unread text, its
 reason, and an example. Done keeps the name and note. Remove offers Undo.
 Groups, Arrivals and the plan say how many members can join and name the creature
-that needs fixing. Readable members can still join. Unknown member XP adds
+that needs fixing. The warning uses the member's shown name, its base creature when different, and its source line. Readable members can still join. Unknown member XP adds
 `+ unknown` to the total. Changed member summaries also name the base creature.
 Encounter search names hidden duplicate notes and offers file-specific identity
 repair with Undo. Source comparisons use the monospace face.
@@ -910,6 +913,40 @@ Library puts nonzero file status links in the header, before Packages. Generated
 add to the old-layout count. Flagged stat cells appear in list rows and the file warning count.
 Stat warnings name the field, bad value, line and repair. Magic items use book case and put
 attunement in their identity line. End fences use a folded Splat data callout; empty defaults need no fence.
+
+## Design score, iteration 1: shared design
+
+Disk conflicts use `disk_conflict_choices`: “This entry changed on disk. Your draft is safe until you choose.” Keep the secondary `Overwrite with my draft` first, then red `Reload and lose my draft`. World saves on Overwrite and keeps the replaced draft for one `Undo reload` on its message line until the next edit. If the draft is still invalid, Overwrite returns to its repair editor and leaves the file unchanged.
+
+Comparisons put `Under the heading “Recovery”` beside the differing-line count, with the actual heading name. The line wraps as needed. Changed participants use the neutral muted token with their pencil; damaged HP uses the text token with its part-filled bar. Both stay distinct from warning and conflict tokens in the colour-distance test.
+
+Duplicate World readers keep their path on the file line only. Search results keep the path to tell duplicate names apart. Generated NPCs show the table marker for custom names in the app, with no link out.
+
+## Design score, iteration 1: campaign and session
+
+Form field labels use sentence-case, muted `Small` text on Campaign and Settings.
+`Label` stays for column and compact group headings. Campaign Packages keeps its
+save row directly below the tabs, before every notice. Campaign flags appear once
+in the content issue count. Their warning line includes the file and repair actions.
+With no campaigns, Settings hides Reload from disk unless settings need repair.
+
+The session folder has one heading, no repeated visible Folder label, and keeps
+its accessible field name. Its field and save actions end at `FORM_WIDTH`.
+Timeline omits a row's day under the day heading; search and filtered lists keep it.
+Long-rest actions say Mark everyone at full and Mark not at full. The state words
+stay Everyone at full and Not at full, with one Undo ruling.
+
+Completed processing says Processed in the rail for both clean and warned results.
+A warning keeps its icon and colour; hover text and the accessible name say
+Processed, with a warning. A note conflict says Notes changed in the rail and
+Notes changed on disk on hover. A stalled recording makes Record again primary
+when no open run owns the primary action.
+
+Speech setup first says how to turn a recording into text. API compatibility help
+sits beside a custom service. Codex limits appear only when Codex is selected.
+Recording settings keep an `L` margin below the tabs outside the scrolling content.
+Combat sync help uses muted Small text. Disconnected campaign-link help opens
+Settings from an inline link.
 
 ## Library and files, design score iteration 1
 

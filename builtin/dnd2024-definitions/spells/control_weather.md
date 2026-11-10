@@ -23,6 +23,8 @@ splat_sources:
 | Range |  |
 | Components | V, S, M (burning incense) |
 | Duration | Concentration, up to 8 hours |
+| Ritual | No |
+| Concentration | Yes |
 
 
 ## Source text

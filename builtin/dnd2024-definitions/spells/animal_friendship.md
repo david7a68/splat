@@ -23,6 +23,8 @@ splat_sources:
 | Range | 30 feet |
 | Components | V, S, M (a morsel of food) |
 | Duration | 24 hours |
+| Ritual | No |
+| Concentration | No |
 
 
 ## Source text

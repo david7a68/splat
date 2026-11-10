@@ -57,6 +57,15 @@ pub fn broken(d: &mut Driver<'_>) {
     d.settle();
     assert_eq!(d.editor_text().as_deref(), Some(external));
     d.state("clean-repair-follows-disk", Sizes::All);
+    let unfinished = format!("{external}\nMy unfinished draft.\n");
+    let outside = format!("{external}\nNew words on disk.\n");
+    d.replace_text_in("Note text", &unfinished);
+    fs::write(&path, &outside).unwrap();
+    d.settle();
+    d.click("Overwrite with my draft");
+    assert_eq!(fs::read_to_string(&path).unwrap(), outside);
+    assert_eq!(d.editor_text().as_deref(), Some(unfinished.as_str()));
+    d.state("invalid-conflict-draft-kept-for-repair", Sizes::All);
     let fixed = format!(
         "---\nsplat_schema: 2\nsplat_id: {}\nsplat_kind: world\nsplat_name: Repaired watchkeeper\nsplat_type: npc\n---\n\nThe watchkeeper is back.\n",
         splat::character::stable_id("repaired-watchkeeper")
@@ -64,15 +73,38 @@ pub fn broken(d: &mut Driver<'_>) {
     d.replace_text_in("Note text", &fixed);
     fs::write(&path, format!("{external}\nAnother outside edit.\n")).unwrap();
     d.settle();
-    d.expect("This note changed on disk. Choose which text to keep.");
+    d.expect("This entry changed on disk. Your draft is safe until you choose.");
     d.state("dirty-repair-compares-disk", Sizes::All);
-    d.click("Keep my draft");
+    d.click("Reload and lose my draft");
+    d.expect("Undo reload");
+    assert_eq!(
+        d.editor_text().as_deref(),
+        Some(format!("{external}\nAnother outside edit.\n").as_str())
+    );
+    assert_eq!(
+        fs::read_to_string(&path).unwrap(),
+        format!("{external}\nAnother outside edit.\n")
+    );
+    d.state("repair-reloaded-with-undo", Sizes::All);
+    d.click("Undo reload");
+    assert_eq!(d.editor_text().as_deref(), Some(fixed.as_str()));
+    d.state("repair-reload-undone", Sizes::All);
+    fs::write(&path, format!("{external}\nA later outside edit.\n")).unwrap();
+    d.settle();
+    d.click("Reload and lose my draft");
+    d.replace_text_in("Note text", &fixed);
+    d.observe(
+        "iter-1-A-reload-next-edit",
+        !d.has("Undo reload") && d.editor_text().as_deref() == Some(fixed.as_str()),
+        "A new edit ends Undo reload and keeps the newly typed draft",
+    );
+    d.expect_same("Editing after reload restores the same draft as Undo reload; the recovery control is gone in both states.");
+    d.state("repair-edited-after-reload", Sizes::All);
     d.observe_both(
         "iter-18-A-world-lock",
         "A World repair states the campaign switch lock",
         |d| d.visible_text(crate::encounters::draft_switch_reason()),
     );
-    d.state("broken-note-draft", Sizes::Default);
     d.click("Setting · ");
     d.click_containing("Notes/Broken.md");
     d.observe(
@@ -80,7 +112,10 @@ pub fn broken(d: &mut Driver<'_>) {
         d.editor_text().as_deref() == Some(&fixed),
         "Reading another note keeps the repair draft",
     );
-    d.click("Save repaired note");
+    // A second disk edit lets the DM save the draft in one explicit choice.
+    fs::write(&path, format!("{external}\nOne more outside edit.\n")).unwrap();
+    d.settle();
+    d.click("Overwrite with my draft");
     d.settle();
     d.observe(
         "W5",
@@ -102,6 +137,14 @@ pub fn broken(d: &mut Driver<'_>) {
         "W5",
         d.current_page() == "World" && d.has("Note text"),
         "Lookup opens the broken file on World",
+    );
+    d.replace_editor_text(&fixed);
+    d.click("Save repaired note");
+    d.settle();
+    d.observe(
+        "W5",
+        !d.has("1 note cannot be read") && fs::read_to_string(&path).unwrap() == fixed,
+        "Save repaired note writes the repair and removes the warning",
     );
 }
 
@@ -380,6 +423,11 @@ pub fn npc_in_lookup(d: &mut Driver<'_>) {
     look_up(d, "Rook Ambry");
     d.wait_for_text("Stat block");
     d.expect("Watch House");
+    d.observe_both(
+        "iter-1-A-single-lookup-result",
+        "The one open Lookup result does not repeat its row above the reader",
+        |d| !d.has("Rook Ambry · NPC · Campaign"),
+    );
     d.observe(
         "W2",
         d.in_view(NEXT_TURN) && d.has("Guard") && !d.has("Change Stat block"),
