@@ -105,6 +105,7 @@ or set `SPLAT_VISUAL_CONTACT_SHEET=1` to make it with a full `visual-test` run.
   Video and optional contact-sheet settings work as for `visual-test`.
 
 Session Read view omits plan links already shown beside the note, including group links.
+A group editor stays beside the note when both fit at their width limits. Smaller pages use the Note tab.
 The Add strip stays directly below Tonight, above messages and plan rows. An empty
 note has one inline Write link. The note file keeps its Markdown and prose. Campaign dependency issues name the entry
 that needs repair and keep raw references in Technical details.
@@ -901,7 +902,9 @@ comes first. Keys keeps its word beside each panel. When several unfinished copi
 one encounter exist, the save word and the rail hover identify the open copy.
 
 Recording and processing keep one linked rail slot above the account state. An open
-recording row owns its error or stall message. Other pages show the banner. A live row has
+recording row owns its error or stall message. Other pages show the banner.
+Opening the session clears its unread completion notice. The rail keeps **Processed** and its warning
+until a later recording or processing replaces the result. Generated drafts ask you to check them against your memory. A live row has
 **Stop recording** before **Process**. A processed row keeps **Process again…** in its
 menu above **Delete…**, with confirmation before it replaces results. The Recordings tab
 keeps Stop recording on the row. Its list has a width limit; result readers keep the full pane.
@@ -917,7 +920,8 @@ copy, and has one Undo that restores the files. A run's Sheet uses its live deat
 
 Copy registration has **Use in this campaign**. It starts off when the campaign uses the original. **Use the copy's entries** changes encounter and group sources while keeping their names, counts and changes, with Undo. Duplicate repair actions name the folder when filenames match and can repair a whole copied folder at once.
 
-After **Unregister**, Library offers **Undo unregister**. Campaign keeps the last folder and offers **Register it again**. A missing folder shows its last path and, when there is one matching folder nearby, **Use this folder**. Folder recovery has Undo.
+After **Unregister**, Library offers **Undo unregister**. Campaign keeps the last folder and offers **Register it again**. A missing folder shows its last path. When one matching folder is nearby, one warning names the old and new
+folders and the affected encounters. **Use this folder** comes first on the action line. Folder recovery has Undo.
 
 ## Obsidian file layouts
 
