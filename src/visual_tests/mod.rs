@@ -675,14 +675,8 @@ fn visual_update_chrome() {
         "unknown or empty scenarios"
     );
     let previous = fs::read(BASELINE_PATH).expect("read baseline");
-    let disk: Baseline = serde_json::from_slice(&previous).expect("valid baseline");
-    assert_eq!(
-        disk, observation.known,
-        "Baseline changed since this run; rerun before updating"
-    );
-    let updated = disk.with_chrome_from(&observation.current, &names);
-    let mut text = serde_json::to_string_pretty(&updated).expect("encode baseline");
-    text.push('\n');
+    let text = chrome_refresh(&previous, &observation.known, &observation.current, &names)
+        .unwrap_or_else(|error| panic!("{BASELINE_PATH}: {error}"));
     // An unchanged include_str! input must not trigger a needless test rebuild.
     if previous != text.as_bytes() {
         fs::write(BASELINE_PATH, text).expect("write baseline");
@@ -691,6 +685,105 @@ fn visual_update_chrome() {
         "Applied chrome counts for {}. Run the full merge gates before merging.",
         names.join(", ")
     );
+}
+
+/// The baseline text after a chrome refresh. It changes only chrome counts, and it
+/// refuses a baseline on disk that changed since the run or that allows a fault.
+fn chrome_refresh(
+    previous: &[u8],
+    known: &Baseline,
+    current: &Baseline,
+    names: &[&str],
+) -> Result<String, String> {
+    let disk = Baseline::parse(previous)?;
+    if disk != *known {
+        return Err("Baseline changed since this run; rerun before updating".into());
+    }
+    let updated = disk.with_chrome_from(current, names);
+    updated.refuse_never_allowed()?;
+    let mut text = serde_json::to_string_pretty(&updated).expect("encode baseline");
+    text.push('\n');
+    Ok(text)
+}
+
+/// The baseline text that a full run writes. Failed scenarios, failed goals and faults
+/// that no baseline may allow refuse it.
+fn full_baseline(
+    current: &Baseline,
+    violations: &[ergonomics::Violation],
+    failed: &[String],
+    every_scenario: bool,
+) -> Result<String, String> {
+    if !failed.is_empty() || !every_scenario {
+        return Err(format!(
+            "Update the baseline only from a full, successful run: {failed:?}"
+        ));
+    }
+    // A goal that failed is a bug, not an allowance.
+    let workflow: Vec<_> = violations
+        .iter()
+        .filter(|violation| violation.check == "workflow")
+        .map(|violation| violation.detail.as_str())
+        .collect();
+    if !workflow.is_empty() {
+        return Err(format!(
+            "The baseline may not absorb a failed goal: {workflow:?}"
+        ));
+    }
+    current.refuse_never_allowed()?;
+    let mut text = serde_json::to_string_pretty(current).expect("encode baseline");
+    text.push('\n');
+    Ok(text)
+}
+
+fn mixed_overlap_run() -> Baseline {
+    serde_json::from_value(serde_json::json!({
+        "violations": {
+            "no-overlap/egui-chrome": {"party": 4},
+            ergonomics::APP_VS_CHROME: {"party": 2}
+        },
+        "task_cost": {}
+    }))
+    .unwrap()
+}
+
+/// A chrome refresh cannot carry a mixed overlap into the baseline, and refuses a
+/// baseline on disk that allows one.
+#[test]
+fn a_chrome_refresh_refuses_a_mixed_overlap() {
+    let known = Baseline::default();
+    let previous = serde_json::to_vec(&known).unwrap();
+    let current = mixed_overlap_run();
+    let text = chrome_refresh(&previous, &known, &current, &["party"]).unwrap();
+    let refreshed = Baseline::parse(text.as_bytes()).unwrap();
+    assert_eq!(refreshed.violations["no-overlap/egui-chrome"]["party"], 4);
+    assert!(
+        !refreshed.violations.contains_key(ergonomics::APP_VS_CHROME),
+        "{text}"
+    );
+    let allowed = br#"{"violations": {"no-overlap/app-vs-chrome": {"party": 2}}, "task_cost": {}}"#;
+    let disk: Baseline = serde_json::from_slice(allowed).unwrap();
+    let error = chrome_refresh(allowed, &disk, &current, &["party"])
+        .expect_err("a baseline that allows the fault is refused");
+    assert!(
+        error.contains("no-overlap/app-vs-chrome / party: 2"),
+        "{error}"
+    );
+}
+
+/// The full baseline writer refuses a run with a mixed overlap, and writes one without.
+#[test]
+fn the_full_baseline_writer_refuses_a_mixed_overlap() {
+    let error = full_baseline(&mixed_overlap_run(), &[], &[], true)
+        .expect_err("a mixed overlap is never written");
+    assert!(
+        error.contains("no-overlap/app-vs-chrome / party: 2"),
+        "{error}"
+    );
+    let mut clean = mixed_overlap_run();
+    clean.violations.remove(ergonomics::APP_VS_CHROME);
+    let text = full_baseline(&clean, &[], &[], true).unwrap();
+    assert_eq!(Baseline::parse(text.as_bytes()).unwrap(), clean);
 }
 
 /// Every scenario runs in one test, so the report and baseline see one whole run.
@@ -758,8 +851,13 @@ fn visual_suite() {
     }
     let names: Vec<&str> = scenarios.iter().map(|(name, ..)| *name).collect();
     let current = Baseline::measure(&violations, &costs);
-    let known: Baseline = serde_json::from_str(BASELINE).expect("valid baseline.json");
-    let (regressions, improvements) = known.compare(&current, &names);
+    let known = Baseline::parse(BASELINE.as_bytes())
+        .unwrap_or_else(|error| panic!("{BASELINE_PATH}: {error}"));
+    let ergonomics::Comparison {
+        worse: regressions,
+        better: improvements,
+        unenforced: not_enforced,
+    } = known.compare(&current, &names, ergonomics::REPORT_ONLY);
     let stale: Vec<String> = improvements
         .iter()
         .filter(|line| !line.starts_with("task-cost"))
@@ -782,6 +880,7 @@ fn visual_suite() {
         failed_scenarios: &failed,
         regressions: &regressions,
         improvements: &improvements,
+        not_enforced: &not_enforced,
         violations: &violations,
     };
     fs::write(
@@ -829,6 +928,9 @@ fn visual_suite() {
     for line in &improvements {
         println!("Improved: {line}");
     }
+    for line in &not_enforced {
+        println!("Reported: {line}");
+    }
     let silent = if names.len() == SCENARIOS.len() {
         silent_section8_tests(&passes, &violations, &not_measured, &look_review)
     } else {
@@ -869,22 +971,13 @@ fn visual_suite() {
         }
     }
     if std::env::var_os("SPLAT_VISUAL_UPDATE_BASELINE").is_some() {
-        assert!(
-            failed.is_empty() && names.len() == SCENARIOS.len(),
-            "Update the baseline only from a full, successful run: {failed:?}"
-        );
-        // A goal that failed is a bug, not an allowance.
-        let workflow: Vec<_> = violations
-            .iter()
-            .filter(|violation| violation.check == "workflow")
-            .map(|violation| violation.detail.as_str())
-            .collect();
-        assert!(
-            workflow.is_empty(),
-            "The baseline may not absorb a failed goal: {workflow:?}"
-        );
-        let mut text = serde_json::to_string_pretty(&current).expect("encode baseline");
-        text.push('\n');
+        let text = full_baseline(
+            &current,
+            &violations,
+            &failed,
+            names.len() == SCENARIOS.len(),
+        )
+        .unwrap_or_else(|error| panic!("{error}"));
         fs::write(BASELINE_PATH, text).expect("write baseline");
         println!("Updated {BASELINE_PATH}");
         return;

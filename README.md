@@ -105,6 +105,13 @@ or set `SPLAT_VISUAL_CONTACT_SHEET=1` to make it with a full `visual-test` run.
 
 - `SPLAT_VISUAL_ENFORCE=strict` fails on any violation. `report` never fails on a check.
 - `SPLAT_VISUAL_UPDATE_BASELINE=1` rewrites the baseline after a full run.
+- `no-overlap/app-vs-chrome` counts an app control or text that overlaps a scroll bar or a
+  column splitter. There, egui can give the press to the bar or splitter, so it is an app
+  fault. No baseline may allow it: a baseline that allows it does not load, and the full
+  writer and the chrome refresh refuse it. Fix the clearance. A menu item over its own
+  popup background stays an egui chrome count, because the item takes every press. While
+  the check has known open faults it is in `REPORT_ONLY`: the report and the terminal list
+  it, but it does not fail the run.
 - After reviewing chrome changes, `devenv shell -- visual-baseline-chrome work`
   applies the saved chrome counts from label `work` without running scenarios again.
   This also works after `--only`: it changes only those scenarios' egui chrome counts,
