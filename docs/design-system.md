@@ -885,16 +885,15 @@ Paused snapshots state when they differ from the current file.
 
 ### Rolls
 
-In live play the selected row has an action strip under it, aligned with its name, inside the roster's scroll
-area. It has one fixed height of two `Read` control lines and an `XS` gap, with an `S` gap after it, and the
-roster's fit leaves room for it, so nothing moves when a result arrives. Line one holds secondary chips at `Read`
-density, `Bite +4`, `Ember Burst DC 12`, `Claw 2d6`, in printed order; the chip rolled last is selected, and those
-that do not fit go in a quiet `More` menu. Line two holds the result: each total in Strong, damage by type when
-there is room and its total alone when not (types and dice in hover), `Natural 20` or `Natural 1` in Body on
-attacks and death saves, then Small accent links `adv`, `dis` and `crit` in 24 px targets, or for a save a
-`Full`/`Half` segmented choice, then a muted Small apply hint while it fits whole. With no result it says `Click an
-action to roll it.` and the shortcut words when they fit. A `+` and a 52 px `Bonus` field, placeholder `1d4`, keep
-the right end of line two; a bad bonus replaces the result with a warning-colour line.
+In live play the selected row's action strip is one `Read` control line directly above the dock, at roster width;
+the roster's room leaves it out, so no row moves when the selection or a result changes. Secondary chips at `Read`
+density, `Bite +4`, `Ember Burst DC 12`, `Claw 2d6`, come first in printed order; those that do not fit go in a
+quiet `More` menu. After a roll only the rolled chip stays, selected, and the rest go in `More`; then each total in
+Strong, damage by type when there is room and its total alone when not (types and dice in hover), `Natural 20` or
+`Natural 1` in Body on attacks and death saves, Small accent links `adv`, `dis` and `crit` in 24 px targets, or for
+a save a `Full`/`Half` segmented choice, then a muted Small apply hint while it fits whole. With no result it says
+`Click an action to roll it.` and the shortcut words when they fit. A `+` and a 52 px `Bonus` field, placeholder
+`1d4`, keep the right end; a bad bonus replaces the result with a warning-colour line.
 
 While damage waits, each other present row's HP cell has a hairline frame in the rule colour, inside the row and
 clipped to it, a link in accessibility named `Apply 10 damage to Oren`. Hover fills it with the hover colour and

@@ -119,7 +119,7 @@ roll or other supported interaction. Its behavior comes from structured mechanic
 not from interpreting the surrounding prose.
 
 **Action strip**:
-The line under the selected row in a live run: a chip for each of its actions,
+The line above the dock in a live run: the selected row's chip for each action,
 read from its rules text or its sheet, a bonus field, and the last result. An
 attack rolls its damage with it; a save rolls its damage and every creature's
 save. Outside a run, a reader shows the same line as a preview.
