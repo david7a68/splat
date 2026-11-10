@@ -1059,28 +1059,14 @@ pub(super) fn of_encounter(
                     ui.horizontal(|ui| {
                         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                             super::row_menu(ui, &group.name.clone(), |ui| {
-                                ui.scope(|ui| {
-                                    ui.spacing_mut().button_padding.x = design::S;
-                                    egui::containers::menu::SubMenuButton::from_button(
-                                        egui::Button::new(
-                                            Type::Strong.rich(ui, "Move to…").color(colors().text),
-                                        )
-                                        .frame(false)
-                                        .min_size(egui::vec2(0.0, Density::Read.control()))
-                                        .right_text(
-                                            egui::containers::menu::SubMenuButton::RIGHT_ARROW,
-                                        ),
-                                    )
-                                    .ui(ui, |ui| {
-                                        for (id, name) in snapshot
-                                            .encounter_choices()
-                                            .filter(|(id, _)| *id != this.0)
-                                        {
-                                            if super::menu_action(ui, name, None) {
-                                                group.setup.encounter = Some(EntryRef::id(id));
-                                            }
+                                design::menu_submenu(ui, "Move to…", |ui| {
+                                    for (id, name) in
+                                        snapshot.encounter_choices().filter(|(id, _)| *id != this.0)
+                                    {
+                                        if super::menu_action(ui, name, None) {
+                                            group.setup.encounter = Some(EntryRef::id(id));
                                         }
-                                    });
+                                    }
                                 });
                                 if super::menu_action(ui, "Make available to any encounter", None) {
                                     discard = Some((index, false));

@@ -294,6 +294,9 @@ fn during_the_session(a: &mut Audit<'_, '_>) {
     ));
 
     a.task("The party travels for half a day: record it");
+    if !a.d.has("Add Travel") {
+        a.click(Find, "More Add actions");
+    }
     a.click(Do, "Add Travel");
     a.shot("during-plan");
 
@@ -416,6 +419,9 @@ fn during_the_session(a: &mut Audit<'_, '_>) {
     ));
 
     a.task("Record a short rest");
+    if !a.d.has("Add Short rest") {
+        a.click(Find, "More Add actions");
+    }
     a.click(Do, "Add Short rest");
 
     a.task("Next fight: start it, with the party as it stands");

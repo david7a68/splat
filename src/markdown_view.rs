@@ -24,7 +24,7 @@ pub fn take_note_link(ctx: &egui::Context) -> Option<String> {
     ctx.data_mut(|data| data.remove_temp::<String>(clicked_id()))
 }
 
-/// Plain bold words pressed in the Reader, for Lookup to open or search.
+/// A resolved bold reference pressed in the Reader, for Lookup to open.
 pub fn take_lookup_link(ctx: &egui::Context) -> Option<String> {
     ctx.data_mut(|data| data.remove_temp::<String>(egui::Id::new("markdown_clicked_lookup")))
 }
@@ -144,9 +144,9 @@ fn show_with_density(ui: &mut egui::Ui, markdown: &str, dense: bool) {
     let from = ui
         .ctx()
         .data(|data| data.get_temp::<uuid::Uuid>(egui::Id::new("reader_document")));
-    let linked: Arc<str> = index.map_or_else(
+    let linked: Arc<str> = index.as_ref().map_or_else(
         || markdown.into(),
-        |index| linked_markdown(&ctx, &index, markdown, from),
+        |index| linked_markdown(&ctx, index, markdown, from),
     );
     let source = local_figure_links(&linked, |url| crate::art::link_art(&ctx, url).is_some());
     for (event, range) in Parser::new_ext(
@@ -365,7 +365,14 @@ fn show_with_density(ui: &mut egui::Ui, markdown: &str, dense: bool) {
                     let words = job.text[start..].trim();
                     let table_caption = job.text[..start].trim().is_empty()
                         && source[range.end..].trim_start().starts_with('|');
-                    if !(words.is_empty() || words.ends_with(['.', ':']) || table_caption) {
+                    if !(words.is_empty() || words.ends_with(['.', ':']) || table_caption)
+                        && index.as_ref().is_some_and(|index| {
+                            matches!(
+                                index.resolve_link(words, from),
+                                crate::world::Go::Item(..) | crate::world::Go::Many(_)
+                            )
+                        })
+                    {
                         for section in &mut job.sections {
                             if section.byte_range.start >= start {
                                 section.format.color = colors().accent;
@@ -1190,6 +1197,14 @@ mod tests {
     fn click_words(markdown: &str, words: &str) -> (Option<String>, Option<String>, Vec<String>) {
         let context = egui::Context::default();
         design::theme::install(&context);
+        click_words_in(&context, markdown, words)
+    }
+
+    fn click_words_in(
+        context: &egui::Context,
+        markdown: &str,
+        words: &str,
+    ) -> (Option<String>, Option<String>, Vec<String>) {
         let draw = |ctx: &egui::Context| {
             egui::CentralPanel::default().show(ctx, |ui| show(ui, markdown));
         };
@@ -1234,28 +1249,51 @@ mod tests {
                 }
             }
         }
-        (take_note_link(&context), take_lookup_link(&context), urls)
+        (take_note_link(context), take_lookup_link(context), urls)
     }
 
     #[test]
-    fn plain_bold_names_open_lookup_and_plain_words_do_not() {
-        let markdown = "- **Docket** speaks to **Advocate Ulul**.\n";
+    fn unresolved_bold_and_bold_italic_stay_emphasis() {
+        for (markdown, words) in [
+            ("**Oren** speaks.", "Oren"),
+            ("***nobody*** answers.", "nobody"),
+            ("__Véldo & Sons__ arrive.", "Sons"),
+            ("**Docket __the clerk__ arrives**.", "arrives"),
+        ] {
+            assert_eq!(click_words(markdown, words), (None, None, vec![]));
+            let galleys = painted(markdown);
+            for galley in galleys {
+                for section in &galley.job.sections {
+                    assert_eq!(section.format.color, colors().text);
+                    assert_eq!(section.format.underline, egui::Stroke::NONE);
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn resolved_bold_spell_keeps_one_click_lookup() {
+        let context = egui::Context::default();
+        design::theme::install(&context);
+        let index = Arc::new(crate::lookup::ContentIndex::load(&[], None).unwrap());
+        assert!(matches!(
+            index.resolve_link("Fireball", None),
+            crate::world::Go::Item(..)
+        ));
+        context.data_mut(|data| data.insert_temp(egui::Id::new("reader_link_index"), index));
+        for markdown in ["Cast **Fireball**.", "Cast ***Fireball***."] {
+            assert_eq!(
+                click_words_in(&context, markdown, "Fireball"),
+                (None, Some("Fireball".into()), vec![])
+            );
+        }
         assert_eq!(
-            click_words(markdown, "Docket"),
-            (None, Some("Docket".into()), vec![])
+            click_words_in(&context, "Cast [[Fireball]].", "Fireball"),
+            (Some("Fireball".into()), None, vec![])
         );
         assert_eq!(
-            click_words(markdown, "Advocate Ulul"),
-            (None, Some("Advocate Ulul".into()), vec![])
-        );
-        assert_eq!(click_words(markdown, "speaks"), (None, None, vec![]));
-        assert_eq!(
-            click_words("__Véldo & Sons__ arrive.", "Sons"),
-            (None, Some("Véldo & Sons".into()), vec![])
-        );
-        assert_eq!(
-            click_words("**Docket __the clerk__ arrives**.", "arrives"),
-            (None, Some("Docket the clerk arrives".into()), vec![])
+            click_words_in(&context, "***nobody*** answers.", "nobody"),
+            (None, None, vec![])
         );
     }
 
@@ -1276,10 +1314,7 @@ mod tests {
             (None, None, vec!["https://example.com".into()])
         );
         assert_eq!(click_words(markdown, "reads"), (None, None, vec![]));
-        assert_eq!(
-            click_words(markdown, "Docket"),
-            (None, Some("Docket".into()), vec![])
-        );
+        assert_eq!(click_words(markdown, "Docket"), (None, None, vec![]));
     }
 
     #[test]
@@ -1339,14 +1374,15 @@ mod tests {
     }
 
     #[test]
-    fn bold_lookup_links_keep_their_weight_and_only_links_get_link_color() {
+    fn bold_keeps_its_weight_and_only_explicit_links_get_link_color() {
         let galleys = painted("**Docket** speaks. **Read [the rules](https://example.com)**.");
         let name = format_of(&galleys, "Docket");
         assert_eq!(
             name.font_id.family,
             egui::FontFamily::Name(design::FAMILY_SERIF_SEMIBOLD.into())
         );
-        assert_eq!(name.color, colors().accent);
+        assert_eq!(name.color, colors().text);
+        assert_eq!(name.underline, egui::Stroke::NONE);
         assert_eq!(format_of(&galleys, "Read ").color, colors().text);
         assert_eq!(format_of(&galleys, "the rules").color, colors().accent);
     }

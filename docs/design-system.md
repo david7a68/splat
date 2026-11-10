@@ -158,8 +158,9 @@ eye during long sessions.
 | HP | `hp_bar`, `hp_readout`, `hp_state` | Fixed slots; separate temporary HP |
 | Empty state | `empty_state` | Icon, serif title, purpose and one next step at the top of an empty pane or page, with normal padding |
 | Group heading | `group_heading` | `Label` capitals and muted, nonzero count; no rule; serif headings belong to readers and stat blocks |
+| Submenu | `menu_submenu` | Match quiet Read actions: `S` horizontal padding, Strong type and Read height |
 | Row menu | `row_menu` | Quiet `⋯` at the right, named `More actions for <name>`; holds Remove and Delete |
-| Add strip | `hanging_add_strip` | `Add` in its own Label column; quiet icon-and-word buttons wrap at the first button's left edge: Fight, Group (plan only), Day, Long rest, Short rest, Travel, Major event |
+| Add strip | `hanging_add_strip` | `Add` in its own Label column; one line of quiet icon-and-word buttons. Show all seven actions when they fit. Otherwise keep Fight, Group (plan only) and Long rest visible; put Day, Short rest, Travel and Major event in one `More` menu. Let this row wrap only when those visible controls cannot fit |
 | Message | `message`, `message_with_action`, `Tone` | Inline icon and bar; cap the notice at `LIST_MEASURE`; actions follow text after an `L` gap or wrap below, aligned with the text; measure the whole action with padding; move it below and align it with the text if it cannot fit; actions without icons use a secondary border |
 | Side panel | `side_panel_width`, `panel_header` | One width rule for Lookup, Notes and the run; separate participant and fight tabs |
 | Column | `Column::left / right / panel` | Rail, page lists and panels; inner-edge drag handle; natural width until dragged or moved with keys, then saved width across restarts; preserve page room and `RUN_LIST_KEEPS`; adjacent content reaches the column edge, with text measured inside it |
@@ -242,6 +243,8 @@ have Edit in Obsidian. An unreadable entry shows `Cannot be read` once below its
 out of prose. Empty readers say `No entry open` or `No note open`, then “Choose one from the list, or make a
 new one.” Library omits the creation offer without a campaign or package destination.
 
+Ordinary bold and bold italic keep the prose colour and emphasis. A bold phrase links to Lookup only when
+it resolves to one entry. Explicit Markdown and wiki links stay interactive.
 Reader links use accent text and an underline. Library links open in place; other readers open them in Lookup.
 Every reader resolves `[[Name]]`, `[[Name#Heading]]` and `[[Name|text]]` against World notes and entries the
 campaign can use. Duplicate names open a chooser. Missing names keep their words, a dotted underline and `Not
@@ -429,7 +432,10 @@ package has Undo and keeps links to affected encounters. Unregister keeps the la
 offers Undo unregister; Campaign offers Register it again.
 
 Missing-package recovery searches beside known package folders. A unique match gets bordered secondary Use
-this folder; Find the folder… is then quiet. Use Body text throughout the missing-package sentence. The picker
+this folder; Find the folder… is then quiet. Show one warning naming the old and new folders, followed by
+the affected encounter links with word spaces. Align Use this folder, Find the folder… and Remove from this
+campaign on one action line with the warning text. Technical details follows below. Say Splat cannot find the
+package only when there is no match. Use Body text throughout the missing-package sentence. The picker
 starts beside the old folder and checks identity before restoring registration. Both recovery paths have Undo.
 
 A broken or deleted Package.md leaves its entries available and names the manifest fault. Campaign offers Open
@@ -544,7 +550,8 @@ closed section. Frames use Move to… for ownership; full editors use Belongs to
 
 The group name field ends at `FORM_WIDTH`. Member rows and Group notes end at `LIST_MEASURE`, inside the scroll content and anchored left. Removing any member shows `Removed <name>.` and `Undo remove member` on a result line. Undo restores the full member at its place and keeps other draft edits.
 
-A plan group editor takes the whole notes column; the note stays behind its tab. Plan summaries start directly
+A plan group editor stays beside the note when `LIST_MEASURE`, an `L` gap and `READER_MEASURE` fit.
+Bound the editor at `LIST_MEASURE`, anchored left. Below that width, the note stays behind its tab. Plan summaries start directly
 below name and action, without an extra item gap, and extend to the menu slot. Order summary parts as side,
 member count, XP, Changed, members. Shorten members first, with full text on hover. Member counts and XP use
 one dot-separated line. Members and XP share one heading. Keep a member summary below search when there are
@@ -760,7 +767,10 @@ action on the name line, fixed right-aligned action slot and separate menu slot.
 align with the name and use Timeline form parts. A caret and accessible expanded state mark open rows; a
 hairline follows details after `S`. New events stay closed with kind as title. Open rows show Title and Notes;
 duration and place stay on Timeline. The Add strip stays directly below Tonight (or This session), above
-messages and scrolling rows. It stays in place when messages or rows change. Empty plans use empty_state
+messages and scrolling rows. Fight, Group and Long rest stay visible. If all seven actions do not fit on one line,
+More holds Day, Short rest, Travel and Major event. If the visible controls and More cannot fit, that one row
+may wrap at the first action's left edge. Long rest stays one click away (T11.2). Timeline uses the same width rule.
+It stays in place when messages or rows change. Empty plans use empty_state
 below the strip. Add-strip messages stay below Add. In notes ends at the button
 text's inner edge.
 
@@ -835,7 +845,7 @@ Tab indents inside it and cannot reach Next turn.
 
 Run buttons keep working and return focus to notes after each step, except a field being typed in. Clicking a
 row or Amount takes focus to Amount for one number. Letters there go to notes with preceding digits. Typing
-and pasting with nothing focused still go to notes. Mark LLM words as a draft, make second-pass changes
+and pasting with nothing focused still go to notes. Mark automatically written words as a draft, make second-pass changes
 readable, and offer Add for transcript markers rather than placing them automatically.
 
 ## Party
@@ -889,14 +899,15 @@ again. With a partial transcript, name remaining audio parts and destination.
 Reserve Process again… for replacing results, in the row menu above Delete… with inline confirmation. One info
 message names transcript and context sent to the LLM and says audio is not sent again. Confirmation uses
 secondary Not now and red Replace the results; Keep the recording is secondary. Processing help keeps
-READER_MEASURE. Clean and warned results say Processed in the rail. Warnings retain icon and colour; row,
+READER_MEASURE. Clean and warned results say Processed in the rail until a later recording or processing replaces the result.
+Opening the session acknowledges the completion notice and keeps the result and its warning. Warnings retain icon and colour; row,
 hover and accessible name use Processed, with a warning. On the timeline is a success link for added events
 and transcript markers. Marker actions sit beside text.
 
 The viewer has back link and muted date on line one, Add to notes at the right on Summary, and left-aligned
 view choices on line two. Use one segmented control for Summary, Clean transcript, What the check changed and
 Raw transcript; never wrap it. When tight, replace it with one dropdown naming the current view. Generated
-views share a Small draft notice. If no check ran, put No check ran beside Raw transcript. Keep row menu
+views share a Small draft notice: This draft was written automatically. Check it against your memory. If no check ran, put No check ran beside Raw transcript. Keep row menu
 beside title and `L` between its actions and events heading.
 
 ## Settings

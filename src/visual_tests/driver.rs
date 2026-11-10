@@ -778,6 +778,14 @@ impl<'a> Driver<'a> {
         self.click_rect(rect, &format!("Click: {name}"));
     }
 
+    /// Add an event from the shared strip, opening More only when the strip needs it.
+    pub fn click_add_event(&mut self, name: &str) {
+        if !self.has(name) {
+            self.click("More Add actions");
+        }
+        self.click(name);
+    }
+
     /// Click the one control whose name has this text. Two matches fail the script: a
     /// script that takes the first one can press Undo instead of a row, and not notice.
     pub fn click_containing(&mut self, name: &str) {

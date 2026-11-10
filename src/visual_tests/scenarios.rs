@@ -3378,6 +3378,25 @@ pub mod gallery {
         d.click("Markdown");
         d.state("markdown", Sizes::AllAndHiDpi);
         d.click(COMPONENTS);
+        d.scroll_until(pos2(600.0, 300.0), "Group actions", 30);
+        d.state_prepared("submenu-spacing", Sizes::All, |d| {
+            d.press(Key::Escape);
+            d.click("Group actions");
+            d.expect("Move to…");
+            let edges = (
+                d.painted_left("Move to…"),
+                d.painted_left("Make available to any encounter"),
+            );
+            d.observe(
+                "iter-4-A-FD-13",
+                edges
+                    .0
+                    .zip(edges.1)
+                    .is_some_and(|(a, b)| (a - b).abs() < 1.0),
+                format!("The submenu and quiet menu action share a text edge: {edges:?}"),
+            );
+        });
+        d.press(Key::Escape);
         d.scroll_until(pos2(600.0, 300.0), "More actions for Bridge Ambush", 30);
         d.click("More actions for Bridge Ambush");
         d.state("row-menu", Sizes::Default);
@@ -3512,7 +3531,7 @@ pub mod column_resize {
             format!("Longest line in a wide window: {write} in Write, {read} in Read"),
         );
         d.state("session-read-fills-its-column", Sizes::All);
-        d.click("Add Major event");
+        d.click_add_event("Add Major event");
         d.wait_for_text("Major event added to Session");
         d.wait_for_text("Add to notes");
         let action = d
@@ -5027,13 +5046,22 @@ pub mod session_notes {
             d.wait_for_text("Bridge Ambush");
         });
         d.press(Key::Escape);
+        d.state_prepared("plan-more-add-actions", Sizes::All, |d| {
+            d.press(Key::Escape);
+            // Long rest is a visible button, one click away, before More opens.
+            d.expect(ADD_LONG_REST);
+            d.click("More Add actions");
+            d.expect(ADD_SHORT_REST);
+            d.expect(ADD_LONG_REST);
+        });
+        d.press(Key::Escape);
         d.begin_task();
         d.click(ADD_LONG_REST);
         d.wait_for_text("Long rest added. Everyone starts the next fight at full.");
         d.goal_within("T11.2", "put a long rest on the timeline", 2);
         d.expect("Long rest added. Everyone starts the next fight at full.");
         d.state("session-event-added", Sizes::Default);
-        d.click(ADD_SHORT_REST);
+        d.click_add_event(ADD_SHORT_REST);
         d.observe(
             "T11.2",
             d.has_containing("Short rest added to Session 1."),
@@ -5051,7 +5079,7 @@ pub mod session_notes {
         d.click("More actions for Short rest");
         d.click("Remove this event");
         d.click(NAV_SESSIONS);
-        d.click(ADD_TRAVEL);
+        d.click_add_event(ADD_TRAVEL);
         d.observe(
             "iter-2-S2",
             !d.has("Title"),
@@ -5071,7 +5099,7 @@ pub mod session_notes {
             "A new event starts with its kind as its title",
         );
         d.state("plan-event-title", Sizes::Default);
-        d.click(ADD_EVENT);
+        d.click_add_event(ADD_EVENT);
         d.state("session-events", Sizes::Default);
         d.click("Add to notes: Long rest");
         d.expect("In notes");
@@ -5119,9 +5147,11 @@ pub mod session_notes {
         d.click(NAV_TIMELINE);
         d.expect("Long rest");
         d.expect("Everyone at full");
+        d.expect("Adds to");
+        assert!(!d.has("Adds to:"));
         d.state("timeline-session-events", Sizes::All);
         d.check_tab_order("timeline");
-        d.click(ADD_DAY);
+        d.click_add_event(ADD_DAY);
         d.type_text("Harvest Eve");
         // A day opens what follows it, so move it to the top.
         d.scroll_until(pos2(850.0, 550.0), "Place this event after", 12);
@@ -5362,6 +5392,8 @@ pub mod session_notes {
                     .is_some_and(|(field, save)| {
                         (field.rect.right() - save.rect.right()).abs() < 1.0
                             && field.rect.width() <= crate::design::FORM_WIDTH + 1.0
+                            && d.place_of("Edit details")
+                                .is_some_and(|edit| (field.rect.right() - edit.right()).abs() < 1.0)
                     })
             },
         );
@@ -6360,6 +6392,15 @@ pub mod session_recording {
                     .count()
                     == 1
         });
+        let notice_seen = !d.app_mut().sessions.job_done();
+        d.observe(
+            "iter-4-C-ST1-AT3",
+            d.rail_words().contains("Processed")
+                && !d.rail_words().contains("Recording saved")
+                && notice_seen,
+            "Opening a processed session acknowledges the notice and keeps Processed in the rail",
+        );
+        d.expect("These events were suggested from the transcript. Only events you add go on the timeline.");
         d.state("marker-added", Sizes::All);
         d.observe(
             "T11.7",
@@ -6438,6 +6479,7 @@ pub mod session_recording {
             viewer_layout,
             "Navigation and Add to notes share a line; all four view choices stay on the next line",
         );
+        d.expect("This draft was written automatically. Check it against your memory.");
         d.state("recording-summary", Sizes::All);
         d.click("Back to recordings");
 
@@ -6462,7 +6504,13 @@ pub mod session_recording {
             d.has_containing("Processed, with a warning"),
             "The recording's own row keeps the warning",
         );
-        d.state("recording-warned", Sizes::Default);
+        let rail_warned = d.app_mut().sessions.job_warned();
+        d.observe(
+            "iter-4-C-ST1-AT3-warning",
+            d.rail_words().contains("Processed") && rail_warned,
+            "Opening a warned session keeps the processed warning in the rail",
+        );
+        d.state("recording-warned", Sizes::All);
 
         d.click_containing("More actions for 2026-01-01");
         d.click_containing("Process again:");
@@ -6479,6 +6527,12 @@ pub mod session_recording {
         d.state("recording-delete", Sizes::All);
         d.click("Delete recording");
         d.expect("Recording deleted.");
+        let warned_after_delete = d.app_mut().sessions.job_warned();
+        d.observe(
+            "iter-4-C-ST1-deleted",
+            !d.rail_words().contains("Processed") && !warned_after_delete,
+            "Deleting the processed recording takes Processed out of the rail",
+        );
 
         // A recorder that ends by itself says so, wherever the DM is.
         d.click("Record this session");
@@ -6568,6 +6622,7 @@ pub mod session_recording {
         d.click("Speech service");
         d.click("Another service");
         d.expect("The custom service must support the OpenAI audio/transcriptions API.");
+        d.expect("The saved key is for OpenAI, so Splat will not send it to this service. Save a key for it.");
         d.state("processing-custom-speech-service", Sizes::All);
     }
 }
@@ -7436,7 +7491,23 @@ pub mod session_plan_groups {
         d.click("New group");
         d.expect("Back to the plan");
         d.type_text("Ash Pack");
-        d.state("plan-group-empty", Sizes::All);
+        d.state_prepared("plan-group-empty", Sizes::All, |d| {
+            let layout = if d.has("Plan and notes") {
+                d.place_of("Note text")
+                    .zip(d.place_of("Save group"))
+                    .is_some_and(|(note, save)| {
+                        note.left() > save.right()
+                            && note.width() >= crate::design::READER_MEASURE - crate::design::L
+                    })
+            } else {
+                d.has("Note") && !d.has("Note text")
+            };
+            d.observe(
+                "iter-4-C-AT2",
+                layout,
+                "A wide group editor keeps the note beside it; smaller pages keep the Note tab",
+            );
+        });
         d.observe(
             "T14.6",
             d.has_containing("Session 1: The Crossing"),
