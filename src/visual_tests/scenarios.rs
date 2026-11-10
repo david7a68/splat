@@ -193,6 +193,7 @@ pub mod creature_filter {
         d.press(Key::Escape);
         d.expect(UNDERDARK);
         d.expect(ABERRATION);
+        d.expect("MATCHES 9");
         d.state("underdark-aberrations", Sizes::All);
         d.goal("find the aberrations of the Underdark");
         d.observe(
@@ -247,7 +248,7 @@ pub mod library_author {
     const CHANGED_ON_DISK: &str = "This entry changed on disk";
     const PACKAGE_ACTIONS: &str = "Packages";
     const MANAGE_PACKAGES: &str = "Manage packages…";
-    const MANAGE_TITLE: &str = "MANAGE PACKAGES";
+    const MANAGE_TITLE: &str = "Manage packages";
     const CLOSE_WINDOW: &str = "Close the package form";
     const NEW_ENTRY: &str = "New entry";
     const CREATE_ENTRY: &str = "Create entry";
