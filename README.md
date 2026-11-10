@@ -106,9 +106,14 @@ or set `SPLAT_VISUAL_CONTACT_SHEET=1` to make it with a full `visual-test` run.
 
 Session Read view omits plan links already shown beside the note, including group links.
 A group editor stays beside the note when both fit at their width limits. Smaller pages use the Note tab.
-The Add strip stays directly below Tonight, above messages and plan rows. An empty
-note has one inline Write link. The note file keeps its Markdown and prose. Campaign dependency issues name the entry
+The Add strip stays directly below Tonight, above messages and plan rows. Fight,
+Group and Long rest stay visible. When all actions do not fit on one line, More holds
+Day, Short rest, Travel and Major event. The visible row can wrap if needed. Timeline
+uses the same width rule. An empty note has one inline Write link. The note file keeps its Markdown and prose. Campaign dependency issues name the entry
 that needs repair and keep raw references in Technical details.
+
+The reader keeps ordinary bold and bold italic as emphasis. A bold phrase opens Lookup
+only when it resolves to an entry. Explicit Markdown and wiki links still work.
 
 Timeline files use `Fight`, `Travel`, `Short rest`, `Long rest` and `Major event`.
 The reader also accepts `Encounter` and `Event`, in any case, with or without a colon.
@@ -403,7 +408,10 @@ Copy link and menu on the title line when they fit, and below it when they do no
 still to come. **Fight** adds a saved encounter to the plan, or starts a new one, as a line such as `- [[Bridge Ambush]]`
 under `Plan for tonight` in the note, so the file holds the plan. **Start fight** goes straight to setup, and **Close run**
 comes back to the page the run began on. A row opens in place: a fight shows its final HP and log, and any event has its
-title, length, place and notes. The Add strip stays directly below Tonight, above messages and plan rows. At the top, **Last time** links to the previous session and shows the first line of its recap. The title and date share one line. A **Playing** status marks the session being played.
+title, length, place and notes. The Add strip stays directly below Tonight, above messages and plan rows. Fight,
+Group and Long rest stay visible. When all actions do not fit on one line, More holds
+Day, Short rest, Travel and Major event. The visible row can wrap if needed. Timeline
+uses the same width rule. At the top, **Last time** links to the previous session and shows the first line of its recap. The title and date share one line. A **Playing** status marks the session being played.
 In a narrow window, the plan and the note have a tab each. **Read** and **Write** turn the note between its two forms, and
 Read leaves out headings with nothing under them and shows note links in place. **Templates** opens from the page header; **← Sessions** returns to the notes.
 
