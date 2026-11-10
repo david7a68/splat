@@ -493,8 +493,8 @@ type BrokenLinks = (
 );
 
 /// A file's identity in the Library: its owner and its path in the owner's folder. Two packages
-/// can each have `Rules/Watch.md`; they are two files. A load error has no owner id and uses the
-/// package or campaign name as its path.
+/// can each have `Rules/Watch.md`; they are two files. A load error has its package or campaign
+/// id and an empty path.
 type FileKey = (Option<Uuid>, String);
 
 /// A problem the Library header counts, and the file it belongs to.
@@ -512,11 +512,13 @@ pub(crate) struct Loaded {
     pub(crate) notes: Vec<Note>,
     owners: Vec<Owner>,
     /// Problems that kept content from loading. The notes cannot show these again.
-    load_errors: Vec<String>,
+    /// Each keyed by its package or campaign id, so two packages with one name count twice.
+    load_errors: Vec<(FileKey, String)>,
     diagnostics: Vec<Diagnostic>,
-    /// Paths that more than one note has, such as `Rules/Watch.md` in two packages. Rows that name
-    /// one of these files name its owner too. `invalidate` clears it.
-    shared_paths: std::sync::OnceLock<std::collections::HashSet<String>>,
+    /// Paths that more than one note has, such as `Rules/Watch.md` in two packages, with the
+    /// owner name of each note there. Rows that name one of these files name its owner too.
+    /// `invalidate` clears it.
+    shared_paths: std::sync::OnceLock<std::collections::HashMap<String, Vec<String>>>,
     /// What the active campaign can use: its selections and what they require.
     uses: Option<std::collections::HashSet<Uuid>>,
     subtitles: std::sync::OnceLock<Vec<String>>,
@@ -715,7 +717,7 @@ impl Loaded {
             .notes
             .iter()
             .enumerate()
-            .filter(|(_, note)| shared.contains(&note.path))
+            .filter(|(_, note)| shared.contains_key(&note.path))
             .filter_map(|(at, note)| {
                 let mut entry = note.entry.clone()?;
                 entry.path = format!("{SHARED_PATH_TAG}{at}");
@@ -735,8 +737,8 @@ impl Loaded {
         let mut diagnostics: Vec<Diagnostic> = self
             .load_errors
             .iter()
-            .map(|text| Diagnostic {
-                file: (None, text.split(": ").next().unwrap_or(text).to_owned()),
+            .map(|(file, text)| Diagnostic {
+                file: file.clone(),
                 text: text.clone(),
             })
             .collect();
@@ -792,25 +794,34 @@ impl Loaded {
         self.diagnostics = diagnostics;
     }
 
-    /// Paths that more than one note has. Built once per change of the notes.
-    fn shared_paths(&self) -> &std::collections::HashSet<String> {
+    /// Paths that more than one note has, each with the owner names there. Built once per change
+    /// of the notes.
+    fn shared_paths(&self) -> &std::collections::HashMap<String, Vec<String>> {
         self.shared_paths.get_or_init(|| {
-            let mut seen = std::collections::HashSet::new();
-            self.notes
-                .iter()
-                .filter(|note| !seen.insert(note.path.as_str()))
-                .map(|note| note.path.clone())
-                .collect()
+            let mut owners: std::collections::HashMap<String, Vec<String>> =
+                std::collections::HashMap::new();
+            for note in &self.notes {
+                owners
+                    .entry(note.path.clone())
+                    .or_default()
+                    .push(note.owner.source().to_owned());
+            }
+            owners.retain(|_, names| names.len() > 1);
+            owners
         })
     }
 
     /// The note's file as a menu row names it: its path, after its owner when another owner has
-    /// the same path (`Ashen Marches · Rules/Watch.md`).
+    /// the same path (`Ashen Marches · Rules/Watch.md`). When that other owner has the same name
+    /// too, the row names the folder (`Ashen Marches · ashen-copy/Rules/Watch.md`).
     fn file_label(&self, note: &Note) -> String {
-        if self.shared_paths().contains(&note.path) {
-            format!("{} · {}", note.owner.source(), note.path)
-        } else {
-            note.path.clone()
+        let source = note.owner.source();
+        match self.shared_paths().get(&note.path) {
+            None => note.path.clone(),
+            Some(names) if names.iter().filter(|name| *name == source).count() > 1 => {
+                format!("{source} · {}/{}", note.owner.folder(), note.path)
+            }
+            Some(_) => format!("{source} · {}", note.path),
         }
     }
 
@@ -1562,14 +1573,23 @@ pub(crate) fn load_all(modules: &[Module], campaign: Option<&Campaign>) -> Resul
         .chain(campaign.cloned().map(Owner::Campaign))
         .collect();
     for module in modules {
+        // A load error names its package, and its folder when another package has the same name.
+        let owner = Owner::Package(module.clone());
+        let name = if modules.iter().filter(|m| m.name == module.name).count() > 1 {
+            format!("{} · {}/", module.name, owner.folder())
+        } else {
+            module.name.clone()
+        };
+        let key = (Some(module.id), String::new());
         if let Err(error) = splat::content::art::ArtIndex::default().add_package(&module.path) {
-            all.load_errors.push(format!("{}: {error}", module.name));
+            all.load_errors
+                .push((key.clone(), format!("{name}: {error}")));
         }
         match load(Some(module)) {
             Ok(package) => {
                 all.notes.extend(package.notes);
             }
-            Err(error) => all.load_errors.push(format!("{}: {error}", module.name)),
+            Err(error) => all.load_errors.push((key, format!("{name}: {error}"))),
         }
     }
     if let Some(campaign) = campaign {
@@ -1608,7 +1628,10 @@ pub(crate) fn load_all(modules: &[Module], campaign: Option<&Campaign>) -> Resul
                     });
                 }
             }
-            Err(error) => all.load_errors.push(format!("{}: {error}", campaign.name)),
+            Err(error) => all.load_errors.push((
+                (Some(campaign.id), String::new()),
+                format!("{}: {error}", campaign.name),
+            )),
         }
         // If the selections cannot be read, say so and show everything rather than nothing.
         match CampaignDocument::load(campaign)
@@ -1625,7 +1648,10 @@ pub(crate) fn load_all(modules: &[Module], campaign: Option<&Campaign>) -> Resul
                         .collect(),
                 );
             }
-            Err(error) => all.load_errors.push(format!("{}: {error}", campaign.name)),
+            Err(error) => all.load_errors.push((
+                (Some(campaign.id), String::new()),
+                format!("{}: {error}", campaign.name),
+            )),
         }
     }
     all.notes.sort_by_cached_key(|n| natural_key(n.name()));
@@ -5434,6 +5460,8 @@ impl Library {
             .show(ui, |ui| {
                 if let Some(change) = &mut self.disk_change {
                     if let Some(text) = &change.text {
+                        // The side-by-side comparison is the one state that takes the full width.
+                        ui.set_max_width(editor_width);
                         design::grouped_draft_comparison(ui, &self.draft, text, (&note.path, text), true);
                     } else {
                         design::group_heading(ui, "Your draft", 0);
@@ -6118,6 +6146,61 @@ mod tests {
             },
         );
         assert!(output.shapes.iter().any(|shape| matches!(&shape.shape, egui::Shape::Text(text) if text.galley.job.text.contains("3 files need fixing"))));
+
+        // iter-13-E2 review 1: a second package with the same name and path. Its rows name the
+        // folder, so the two Ashen Marches rows differ; Ember Coast keeps its plain owner row.
+        let copy =
+            create_module(&dir.path().join("ashen-copy"), "Ashen Marches", "ashcopy").unwrap();
+        write(&copy, "Rules/Watch.md", "rule", "", "See [[Gone Page]].\n");
+        let modules = [ashen.clone(), ember.clone(), copy.clone()];
+        let loaded = load_all(&modules, None).unwrap();
+        let index = std::sync::Arc::new(crate::lookup::ContentIndex::load(&modules, None).unwrap());
+        let broken = loaded.broken_link_notes(&index);
+        let mut broken_files: Vec<_> = broken
+            .iter()
+            .map(|&(at, _)| loaded.file_label(&loaded.notes[at]))
+            .collect();
+        broken_files.sort();
+        assert_eq!(
+            broken_files,
+            [
+                "Ashen Marches · ashen-copy/Rules/Watch.md",
+                "Ashen Marches · ashen/Rules/Watch.md",
+                "Both.md",
+                "Ember Coast · Rules/Watch.md"
+            ]
+        );
+        assert_eq!(loaded.files_to_fix(&broken), 4);
+
+        // Two packages with the same name that both fail to load are two problems, and their
+        // messages name the folders.
+        let gone = [
+            create_module(&dir.path().join("lost-one"), "Lost Book", "lostone").unwrap(),
+            create_module(&dir.path().join("lost-two"), "Lost Book", "losttwo").unwrap(),
+        ];
+        for module in &gone {
+            fs::remove_dir_all(&module.path).unwrap();
+        }
+        let loaded = load_all(&gone, None).unwrap();
+        assert_eq!(
+            loaded.files_to_fix(&[]),
+            2,
+            "{:?}",
+            loaded.diagnostic_texts()
+        );
+        let texts = loaded.diagnostic_texts();
+        assert!(
+            texts
+                .iter()
+                .any(|text| text.starts_with("Lost Book · lost-one/: ")),
+            "{texts:?}"
+        );
+        assert!(
+            texts
+                .iter()
+                .any(|text| text.starts_with("Lost Book · lost-two/: ")),
+            "{texts:?}"
+        );
     }
 
     /// iter-13-E-FD1: the About row warns for any problem the header counts in the manifest, such
