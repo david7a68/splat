@@ -36,6 +36,7 @@ fn repair_notice(
     recovery: Option<&(Module, String, bool)>,
     blocked: Option<&str>,
     source: bool,
+    skipped: bool,
 ) -> bool {
     let inset = design::S
         + design::HAIRLINE_WIDTH
@@ -82,6 +83,14 @@ fn repair_notice(
             });
         }
         pressed
+    } else if crate::formats_ui::is_old(problem) && skipped {
+        // FILES SKIPPED names this file with its own `Convert files…`; one button is enough.
+        design::message(
+            ui,
+            Tone::Warning,
+            &crate::formats_ui::old_message(&note.path),
+        );
+        false
     } else if crate::formats_ui::is_old(problem) {
         // Conversion remains the safe repair for an old-layout note.
         crate::formats_ui::old_notice(
@@ -392,14 +401,16 @@ impl Note {
             }
     }
 
-    fn about_label(&self) -> String {
+    /// The About row's words. `flagged` is true when the header counts a problem in this file,
+    /// such as a first heading that differs from the name; an unreadable manifest always warns.
+    fn about_label(&self, flagged: bool) -> String {
         let name = match &self.owner {
             Owner::Package(module) => &module.name,
             _ => self.name(),
         };
         format!(
             "{}About {name}",
-            if self.error.is_some() {
+            if self.error.is_some() || flagged {
                 format!("{} ", icons::WARN)
             } else {
                 String::new()
@@ -481,13 +492,31 @@ type BrokenLinks = (
     Vec<(usize, usize)>,
 );
 
+/// A file's identity in the Library: its owner and its path in the owner's folder. Two packages
+/// can each have `Rules/Watch.md`; they are two files. A load error has no owner id and uses the
+/// package or campaign name as its path.
+type FileKey = (Option<Uuid>, String);
+
+/// A problem the Library header counts, and the file it belongs to.
+pub(crate) struct Diagnostic {
+    file: FileKey,
+    /// The menu line: the file (with its owner when another owner has the same path) and the problem.
+    text: String,
+}
+
+/// Marks a checked entry whose path another owner shares, so its problems go back to its own note.
+const SHARED_PATH_TAG: &str = "\u{0}note:";
+
 #[derive(Default)]
 pub(crate) struct Loaded {
     pub(crate) notes: Vec<Note>,
     owners: Vec<Owner>,
     /// Problems that kept content from loading. The notes cannot show these again.
     load_errors: Vec<String>,
-    diagnostics: Vec<String>,
+    diagnostics: Vec<Diagnostic>,
+    /// Paths that more than one note has, such as `Rules/Watch.md` in two packages. Rows that name
+    /// one of these files name its owner too. `invalidate` clears it.
+    shared_paths: std::sync::OnceLock<std::collections::HashSet<String>>,
     /// What the active campaign can use: its selections and what they require.
     uses: Option<std::collections::HashSet<Uuid>>,
     subtitles: std::sync::OnceLock<Vec<String>>,
@@ -679,26 +708,56 @@ impl Loaded {
     /// Checks all the loaded content as one, so that a reference can resolve to built-in
     /// content or to another package. The check of one package alone cannot see those.
     fn refresh_diagnostics(&mut self) {
+        let shared = self.shared_paths();
+        // The check names a problem by entry path only. An entry whose path another owner shares
+        // is checked under a tag that names its note, so its problems stay with its own file.
+        let tagged: std::collections::HashMap<usize, Entry> = self
+            .notes
+            .iter()
+            .enumerate()
+            .filter(|(_, note)| shared.contains(&note.path))
+            .filter_map(|(at, note)| {
+                let mut entry = note.entry.clone()?;
+                entry.path = format!("{SHARED_PATH_TAG}{at}");
+                Some((at, entry))
+            })
+            .collect();
         let entries: Vec<_> = self
             .notes
             .iter()
-            .filter_map(|n| n.entry.as_ref())
+            .enumerate()
+            .filter_map(|(at, n)| tagged.get(&at).or(n.entry.as_ref()))
             // The SRD pages have no notes in the Library, but entries can refer to them.
             .chain(content::builtin::entries())
             .collect();
         let report = content::validate_all(&entries);
         let checks = report.errors.into_iter().chain(report.warnings);
-        self.diagnostics = self
+        let mut diagnostics: Vec<Diagnostic> = self
             .load_errors
             .iter()
-            .cloned()
-            .chain(checks.map(|d| format!("{}: {}", d.path, d.message)))
-            .chain(
-                self.notes
-                    .iter()
-                    .filter_map(|n| n.error.as_ref().map(|e| format!("{}: {e}", n.path))),
-            )
+            .map(|text| Diagnostic {
+                file: (None, text.split(": ").next().unwrap_or(text).to_owned()),
+                text: text.clone(),
+            })
             .collect();
+        for check in checks {
+            let note = match check.path.strip_prefix(SHARED_PATH_TAG) {
+                Some(at) => at.parse::<usize>().ok().and_then(|at| self.notes.get(at)),
+                None => self.notes.iter().find(|note| note.path == check.path),
+            };
+            diagnostics.push(match note {
+                Some(note) => self.note_problem(note, &check.message),
+                None => Diagnostic {
+                    file: (None, check.path.clone()),
+                    text: format!("{}: {}", check.path, check.message),
+                },
+            });
+        }
+        for note in &self.notes {
+            if let Some(error) = &note.error {
+                diagnostics.push(self.note_problem(note, error));
+            }
+        }
         for note in self
             .notes
             .iter()
@@ -706,27 +765,90 @@ impl Loaded {
         {
             if let Some(entry) = &note.entry {
                 for flag in &entry.flags {
-                    self.diagnostics
-                        .push(format!("{}: {}", note.path, flag.message));
+                    diagnostics.push(self.note_problem(note, &flag.message));
                 }
                 let faults = crate::roll_table::fault_count(&entry.body);
                 if faults > 0 {
-                    self.diagnostics.push(format!(
-                        "{}: {}",
-                        note.path,
-                        design::count(faults, "table fault", "table faults")
-                    ));
+                    diagnostics.push(
+                        self.note_problem(
+                            note,
+                            &design::count(faults, "table fault", "table faults"),
+                        ),
+                    );
                 }
             }
             if let Some(entry) = &note.entry
                 && let Some((old, _)) = presentation::heading_fix(&note.text, entry)
             {
-                self.diagnostics.push(format!(
-                    "{}: The first heading says {old}, but the name is {}.",
-                    note.path, entry.name
+                diagnostics.push(self.note_problem(
+                    note,
+                    &format!(
+                        "The first heading says {old}, but the name is {}.",
+                        entry.name
+                    ),
                 ));
             }
         }
+        self.diagnostics = diagnostics;
+    }
+
+    /// Paths that more than one note has. Built once per change of the notes.
+    fn shared_paths(&self) -> &std::collections::HashSet<String> {
+        self.shared_paths.get_or_init(|| {
+            let mut seen = std::collections::HashSet::new();
+            self.notes
+                .iter()
+                .filter(|note| !seen.insert(note.path.as_str()))
+                .map(|note| note.path.clone())
+                .collect()
+        })
+    }
+
+    /// The note's file as a menu row names it: its path, after its owner when another owner has
+    /// the same path (`Ashen Marches · Rules/Watch.md`).
+    fn file_label(&self, note: &Note) -> String {
+        if self.shared_paths().contains(&note.path) {
+            format!("{} · {}", note.owner.source(), note.path)
+        } else {
+            note.path.clone()
+        }
+    }
+
+    fn file_key(note: &Note) -> FileKey {
+        (note.owner.id(), note.path.clone())
+    }
+
+    fn note_problem(&self, note: &Note, message: &str) -> Diagnostic {
+        Diagnostic {
+            file: Self::file_key(note),
+            text: format!("{}: {message}", self.file_label(note)),
+        }
+    }
+
+    #[cfg(test)]
+    fn diagnostic_texts(&self) -> Vec<&str> {
+        self.diagnostics.iter().map(|d| d.text.as_str()).collect()
+    }
+
+    /// True when the header counts a problem in this note's file.
+    fn has_problem(&self, note: &Note) -> bool {
+        self.diagnostics
+            .iter()
+            .any(|d| d.file.0 == note.owner.id() && d.file.1 == note.path)
+    }
+
+    /// How many files the header counts: each file once, by owner and path, for a problem, a
+    /// broken link or both.
+    fn files_to_fix(&self, broken: &[(usize, usize)]) -> usize {
+        self.diagnostics
+            .iter()
+            .map(|d| (d.file.0, d.file.1.as_str()))
+            .chain(broken.iter().map(|&(at, _)| {
+                let note = &self.notes[at];
+                (note.owner.id(), note.path.as_str())
+            }))
+            .collect::<std::collections::HashSet<_>>()
+            .len()
     }
 
     fn in_scope(&self, note: &Note, scope: Scope) -> bool {
@@ -811,6 +933,7 @@ impl Loaded {
         self.duplicate_ids.take();
         self.duplicates.take();
         self.facets.take();
+        self.shared_paths.take();
     }
     fn build_subtitles(&self) -> Vec<String> {
         let mut subtitles: Vec<_> = self
@@ -2409,15 +2532,8 @@ impl Library {
                 if let Some(loaded) = &self.loaded
                     && (!loaded.diagnostics.is_empty() || !broken.is_empty())
                 {
-                    // A file counts once, for a problem, a broken link, or both.
                     let word = design::count(
-                        loaded
-                            .diagnostics
-                            .iter()
-                            .map(|message| message.split(": ").next().unwrap_or(message))
-                            .chain(broken.iter().map(|&(at, _)| loaded.notes[at].path.as_str()))
-                            .collect::<std::collections::HashSet<_>>()
-                            .len(),
+                        loaded.files_to_fix(&broken),
                         "file needs fixing",
                         "files need fixing",
                     );
@@ -2437,7 +2553,9 @@ impl Library {
                                 for message in &loaded.diagnostics {
                                     ui.add(
                                         egui::Label::new(
-                                            Type::Small.rich(ui, message).color(colors().muted),
+                                            Type::Small
+                                                .rich(ui, &message.text)
+                                                .color(colors().muted),
                                         )
                                         .wrap(),
                                     );
@@ -2450,7 +2568,7 @@ impl Library {
                                             ui,
                                             &format!(
                                                 "{}: {}",
-                                                note.path,
+                                                loaded.file_label(note),
                                                 design::count(count, "broken link", "broken links")
                                             ),
                                         )
@@ -2807,7 +2925,8 @@ impl Library {
                             .iter()
                             .enumerate()
                             .find(|(_, n)| n.owner.id() == Some(package) && n.is_manifest())
-                        && about_row(ui, &note.about_label(), about_open).clicked()
+                        && about_row(ui, &note.about_label(loaded.has_problem(note)), about_open)
+                            .clicked()
                         && !dirty
                     {
                         self.selected = Some(index);
@@ -3065,7 +3184,7 @@ impl Library {
                 if compact
                     && let Scope::Package(package) = scope
                     && let Some((index, note)) = loaded.notes.iter().enumerate().find(|(_, n)| n.owner.id() == Some(package) && n.is_manifest())
-                    && about_row(ui, &note.about_label(), about_open).clicked() && !dirty
+                    && about_row(ui, &note.about_label(loaded.has_problem(note)), about_open).clicked() && !dirty
                 { self.selected = Some(index); self.draft = note.text.clone(); self.section = Section::All; self.unreadable_kind = None; self.source = false; }
                 if self.section == Section::Creatures || searching {
                     let notes = &loaded.notes;
@@ -4421,7 +4540,13 @@ impl Library {
         let mut new_identities = None;
         let mut undo_identities = false;
         let mut undo_identity = false;
-        let editor_width = if conflict {
+        // Only a side-by-side comparison of draft and disk text takes the full width. A deleted
+        // file's lone draft keeps the source editor's measure.
+        let editor_width = if self
+            .disk_change
+            .as_ref()
+            .is_some_and(|change| change.text.is_some())
+        {
             ui.available_width()
         } else {
             ui.available_width().min(EDITOR_MAX_WIDTH)
@@ -4792,148 +4917,153 @@ impl Library {
             );
         }
         if !duplicate_indices.is_empty() {
-            design::message(ui, Tone::Warning, crate::world::DUPLICATE_ENTRY);
-            let loaded = self.loaded.as_ref().unwrap();
-            let users: Vec<_> = loaded
-                .notes
-                .iter()
-                .filter_map(|other| {
-                    let entry = other.entry.as_ref()?;
-                    (entry.kind == "encounter"
-                        && encounter_uses_entry(entry, note.entry.as_ref().unwrap()))
-                    .then(|| entry.name.clone())
-                })
-                .collect();
-            for (position, &at) in duplicate_indices.iter().enumerate() {
-                let target = &loaded.notes[at];
-                let filename = Path::new(&target.path)
-                    .file_name()
-                    .unwrap_or_default()
-                    .to_string_lossy();
-                let same_filename = duplicate_indices.iter().any(|&other| {
-                    other != at
-                        && Path::new(&loaded.notes[other].path).file_name()
-                            == Path::new(&target.path).file_name()
-                });
-                let filename = if same_filename {
-                    format!("{filename} in {}/", target.owner.folder())
-                } else {
-                    filename.into_owned()
-                };
-                if position > 0 {
-                    ui.add_space((design::L - ui.spacing().item_spacing.y).max(0.0));
-                }
-                ui.scope(|ui| {
-                    ui.spacing_mut().item_spacing.y = design::XS;
-                    let action = crate::world::separate_entry_action(&filename);
-                    if Action::secondary(&action)
-                        .hint(&action)
-                        .blocked(draft_reason)
-                        .show(ui)
-                        .clicked()
-                    {
-                        new_identity = Some(at);
+            // The repair choices start at the message text edge, as in World and Lookup.
+            design::message_with_actions(ui, Tone::Warning, crate::world::DUPLICATE_ENTRY, |ui| {
+                let loaded = self.loaded.as_ref().unwrap();
+                let users: Vec<_> = loaded
+                    .notes
+                    .iter()
+                    .filter_map(|other| {
+                        let entry = other.entry.as_ref()?;
+                        (entry.kind == "encounter"
+                            && encounter_uses_entry(entry, note.entry.as_ref().unwrap()))
+                        .then(|| entry.name.clone())
+                    })
+                    .collect();
+                for (position, &at) in duplicate_indices.iter().enumerate() {
+                    let target = &loaded.notes[at];
+                    let filename = Path::new(&target.path)
+                        .file_name()
+                        .unwrap_or_default()
+                        .to_string_lossy();
+                    let same_filename = duplicate_indices.iter().any(|&other| {
+                        other != at
+                            && Path::new(&loaded.notes[other].path).file_name()
+                                == Path::new(&target.path).file_name()
+                    });
+                    let filename = if same_filename {
+                        format!("{filename} in {}/", target.owner.folder())
+                    } else {
+                        filename.into_owned()
+                    };
+                    if position > 0 {
+                        ui.add_space((design::L - ui.spacing().item_spacing.y).max(0.0));
                     }
-                    if !users.is_empty() {
-                        let remaining = duplicate_indices
-                            .iter()
-                            .copied()
-                            .find(|&other| other != at)
-                            .unwrap();
-                        let note = &loaded.notes[remaining];
-                        let remaining = Path::new(&note.path)
-                            .file_name()
-                            .unwrap_or_default()
-                            .to_string_lossy();
-                        let remaining = if same_filename {
-                            format!("{remaining} in {}/", note.owner.folder())
-                        } else {
-                            remaining.into_owned()
-                        };
-                        duplicate_repair_consequence(ui, &users, &remaining, position == 0);
-                    }
-                });
-            }
-            let mut shown = std::collections::HashSet::new();
-            for (position, &at) in duplicate_indices.iter().enumerate() {
-                let owner = &loaded.notes[at].owner;
-                if shown.insert(owner.id())
-                    && let Some(paths) = loaded.duplicate_folder_paths(owner)
-                {
-                    ui.add_space((design::L - ui.spacing().item_spacing.y).max(0.0));
-                    // Encounters outside the batch whose source changes; worked out once per load.
-                    let slot = egui::Id::new((
-                        "duplicate_folder_users",
-                        owner.id(),
-                        std::ptr::from_ref(loaded) as usize,
-                        loaded.notes.len(),
-                        // A reload in place changes some text; this cheap sum notices it.
-                        loaded
-                            .notes
-                            .iter()
-                            .map(|note| note.text.len())
-                            .sum::<usize>(),
-                    ));
-                    let users = ui
-                        .data(|data| data.get_temp::<Vec<String>>(slot))
-                        .unwrap_or_else(|| {
-                            let batch: std::collections::HashSet<&String> = paths.iter().collect();
-                            let targets: Vec<&Entry> = loaded
-                                .notes
-                                .iter()
-                                .filter(|target| {
-                                    target.owner.id() == owner.id() && batch.contains(&target.path)
-                                })
-                                .filter_map(|target| target.entry.as_ref())
-                                .collect();
-                            let mut users: Vec<String> = Vec::new();
-                            for other in &loaded.notes {
-                                // An encounter inside the batch gets the new identities with it.
-                                if other.owner.id() == owner.id() && batch.contains(&other.path) {
-                                    continue;
-                                }
-                                let Some(encounter) = other.entry.as_ref() else {
-                                    continue;
-                                };
-                                if encounter.kind == "encounter"
-                                    && !users.contains(&encounter.name)
-                                    && targets
-                                        .iter()
-                                        .any(|entry| encounter_uses_entry(encounter, entry))
-                                {
-                                    users.push(encounter.name.clone());
-                                }
-                            }
-                            ui.data_mut(|data| data.insert_temp(slot, users.clone()));
-                            users
-                        });
                     ui.scope(|ui| {
                         ui.spacing_mut().item_spacing.y = design::XS;
-                        if Action::secondary(&format!(
-                            "Make all {} files in {}/ separate entries",
-                            paths.len(),
-                            owner.folder()
-                        ))
-                        .blocked(draft_reason)
-                        .show(ui)
-                        .clicked()
+                        let action = crate::world::separate_entry_action(&filename);
+                        if Action::secondary(&action)
+                            .hint(&action)
+                            .blocked(draft_reason)
+                            .show(ui)
+                            .clicked()
                         {
-                            new_identities = Some((owner.root().unwrap().to_path_buf(), paths));
+                            new_identity = Some(at);
                         }
-                        let remaining = duplicate_indices
-                            .iter()
-                            .map(|&other| &loaded.notes[other].owner)
-                            .find(|other| other.id() != owner.id())
-                            .expect("a folder repair has another owner");
-                        duplicate_repair_consequence(
-                            ui,
-                            &users,
-                            &format!("the files in {}/", remaining.folder()),
-                            position == 0,
-                        );
+                        if !users.is_empty() {
+                            let remaining = duplicate_indices
+                                .iter()
+                                .copied()
+                                .find(|&other| other != at)
+                                .unwrap();
+                            let note = &loaded.notes[remaining];
+                            let remaining = Path::new(&note.path)
+                                .file_name()
+                                .unwrap_or_default()
+                                .to_string_lossy();
+                            let remaining = if same_filename {
+                                format!("{remaining} in {}/", note.owner.folder())
+                            } else {
+                                remaining.into_owned()
+                            };
+                            duplicate_repair_consequence(ui, &users, &remaining, position == 0);
+                        }
                     });
                 }
-            }
+                let mut shown = std::collections::HashSet::new();
+                for (position, &at) in duplicate_indices.iter().enumerate() {
+                    let owner = &loaded.notes[at].owner;
+                    if shown.insert(owner.id())
+                        && let Some(paths) = loaded.duplicate_folder_paths(owner)
+                    {
+                        ui.add_space((design::L - ui.spacing().item_spacing.y).max(0.0));
+                        // Encounters outside the batch whose source changes; worked out once per load.
+                        let slot = egui::Id::new((
+                            "duplicate_folder_users",
+                            owner.id(),
+                            std::ptr::from_ref(loaded) as usize,
+                            loaded.notes.len(),
+                            // A reload in place changes some text; this cheap sum notices it.
+                            loaded
+                                .notes
+                                .iter()
+                                .map(|note| note.text.len())
+                                .sum::<usize>(),
+                        ));
+                        let users = ui
+                            .data(|data| data.get_temp::<Vec<String>>(slot))
+                            .unwrap_or_else(|| {
+                                let batch: std::collections::HashSet<&String> =
+                                    paths.iter().collect();
+                                let targets: Vec<&Entry> = loaded
+                                    .notes
+                                    .iter()
+                                    .filter(|target| {
+                                        target.owner.id() == owner.id()
+                                            && batch.contains(&target.path)
+                                    })
+                                    .filter_map(|target| target.entry.as_ref())
+                                    .collect();
+                                let mut users: Vec<String> = Vec::new();
+                                for other in &loaded.notes {
+                                    // An encounter inside the batch gets the new identities with it.
+                                    if other.owner.id() == owner.id() && batch.contains(&other.path)
+                                    {
+                                        continue;
+                                    }
+                                    let Some(encounter) = other.entry.as_ref() else {
+                                        continue;
+                                    };
+                                    if encounter.kind == "encounter"
+                                        && !users.contains(&encounter.name)
+                                        && targets
+                                            .iter()
+                                            .any(|entry| encounter_uses_entry(encounter, entry))
+                                    {
+                                        users.push(encounter.name.clone());
+                                    }
+                                }
+                                ui.data_mut(|data| data.insert_temp(slot, users.clone()));
+                                users
+                            });
+                        ui.scope(|ui| {
+                            ui.spacing_mut().item_spacing.y = design::XS;
+                            if Action::secondary(&format!(
+                                "Make all {} files in {}/ separate entries",
+                                paths.len(),
+                                owner.folder()
+                            ))
+                            .blocked(draft_reason)
+                            .show(ui)
+                            .clicked()
+                            {
+                                new_identities = Some((owner.root().unwrap().to_path_buf(), paths));
+                            }
+                            let remaining = duplicate_indices
+                                .iter()
+                                .map(|&other| &loaded.notes[other].owner)
+                                .find(|other| other.id() != owner.id())
+                                .expect("a folder repair has another owner");
+                            duplicate_repair_consequence(
+                                ui,
+                                &users,
+                                &format!("the files in {}/", remaining.folder()),
+                                position == 0,
+                            );
+                        });
+                    }
+                }
+            });
         }
         if let Some((_, words)) = &self.identities_undo {
             design::locked(ui, draft_reason, |ui| {
@@ -4964,6 +5094,11 @@ impl Library {
                 repair_problem.unwrap_or_else(|| error.clone())
             }
         });
+        // FILES SKIPPED already offers `Convert files…` for this file; the reader keeps one.
+        let skipped_here = note
+            .owner
+            .root()
+            .is_some_and(|root| self.layouts.skips(&root.join(&note.path)));
         let mut repair_pressed = false;
         // Save and Discard are one row, as far apart as the pane allows.
         if save_row && !conflict {
@@ -4998,8 +5133,15 @@ impl Library {
                 });
             });
             if let Some(problem) = &repair_problem {
-                repair_pressed =
-                    repair_notice(ui, problem, note, recovery.as_ref(), draft_reason, true);
+                repair_pressed = repair_notice(
+                    ui,
+                    problem,
+                    note,
+                    recovery.as_ref(),
+                    draft_reason,
+                    true,
+                    skipped_here,
+                );
                 if discard_is_for(self.discarded.as_ref(), note)
                     && self.draft == note.text
                     && design::draft_discarded(ui, note.name())
@@ -5301,7 +5443,7 @@ impl Library {
                             } else if subtitle == "Campaign" { note.section().label().trim_end_matches('s') } else { subtitle };
                             view::title_with_art(ui, title, subtitle, parsed.as_ref().ok());
                             if let Some(problem) = &repair_problem {
-                                repair_pressed = repair_notice(ui, problem, note, recovery.as_ref(), draft_reason, false);
+                                repair_pressed = repair_notice(ui, problem, note, recovery.as_ref(), draft_reason, false, skipped_here);
                             }
                         });
                         open_link = view::show_with_related(
@@ -5722,7 +5864,7 @@ mod tests {
             },
         );
         assert!(output.shapes.iter().any(|shape| matches!(&shape.shape, egui::Shape::Text(text) if text.galley.job.text.contains("3 files need fixing"))));
-        let diagnostics = &library.loaded.as_ref().unwrap().diagnostics;
+        let diagnostics = &library.loaded.as_ref().unwrap().diagnostic_texts();
         assert!(
             diagnostics
                 .iter()
@@ -5835,6 +5977,155 @@ mod tests {
         };
         // Linker, Both (flag and link) and the unreadable file: three, not four.
         assert!(painted("3 files need fixing"));
+    }
+
+    /// iter-13-E-SD1: the header counts files by owner and path. Two packages each with
+    /// `Rules/Watch.md` and a broken link are two files with two rows that name their owners. A
+    /// file with a problem and a broken link still counts once, and a check's problem stays with
+    /// the package whose file has it.
+    #[test]
+    fn iter13_e_files_to_fix_count_by_owner_and_path() {
+        let dir = tempfile::tempdir().unwrap();
+        let ashen = create_module(&dir.path().join("ashen"), "Ashen Marches", "ashen").unwrap();
+        let ember = create_module(&dir.path().join("ember"), "Ember Coast", "ember").unwrap();
+        let write = |module: &Module, path: &str, kind: &str, extra: &str, body: &str| {
+            let full = module.path.join(path);
+            fs::create_dir_all(full.parent().unwrap()).unwrap();
+            fs::write(
+                full,
+                format!(
+                    "---\nsplat_schema: 2\nsplat_id: {}\nsplat_kind: {kind}\nsplat_name: Watch\n{extra}---\n\n{body}",
+                    Uuid::new_v4()
+                ),
+            )
+            .unwrap();
+        };
+        write(&ashen, "Rules/Watch.md", "rule", "", "See [[Gone Page]].\n");
+        // The same path in another package: an item that needs a key no package has.
+        let item = splat::content::formats::convert(
+            "Rules/Watch.md",
+            &format!(
+                "---\nsplat_schema: 1\nsplat_id: {}\nsplat_kind: item\nsplat_key: ember:items/watch\n\
+                 splat_name: Watch\nsplat_item: {{category: gear}}\nsplat_requires:\n  - key: nowhere:items/gone\n---\n\nSee [[Gone Page]].\n",
+                Uuid::new_v4()
+            ),
+        )
+        .expect("schema-2 fixture");
+        fs::create_dir_all(ember.path.join("Rules")).unwrap();
+        fs::write(ember.path.join("Rules/Watch.md"), item).unwrap();
+        // A flag and a broken link in one file: one file to fix.
+        write(
+            &ashen,
+            "Both.md",
+            "creature",
+            "",
+            "## Stat block\n\n| Stat | Value |\n| --- | --- |\n| Hit Points | about twenty |\n\n[[Gone Too]]\n",
+        );
+        let modules = [ashen.clone(), ember.clone()];
+        let loaded = load_all(&modules, None).unwrap();
+        let index = std::sync::Arc::new(crate::lookup::ContentIndex::load(&modules, None).unwrap());
+        let broken = loaded.broken_link_notes(&index);
+        let watch = |module: &Module| {
+            loaded
+                .notes
+                .iter()
+                .find(|n| n.owner.id() == Some(module.id) && n.path == "Rules/Watch.md")
+                .unwrap()
+        };
+        let both = loaded.notes.iter().find(|n| n.path == "Both.md").unwrap();
+        // Both Watch files and Both.md have a broken link.
+        let mut broken_files: Vec<_> = broken
+            .iter()
+            .map(|&(at, _)| loaded.file_label(&loaded.notes[at]))
+            .collect();
+        broken_files.sort();
+        assert_eq!(
+            broken_files,
+            [
+                "Ashen Marches · Rules/Watch.md",
+                "Both.md",
+                "Ember Coast · Rules/Watch.md"
+            ]
+        );
+        // The check's problem goes to Ember Coast's file only, and its row names the owner.
+        let unresolved: Vec<_> = loaded
+            .diagnostics
+            .iter()
+            .filter(|d| d.text.contains("nowhere:items/gone"))
+            .collect();
+        assert_eq!(unresolved.len(), 1, "{:?}", loaded.diagnostic_texts());
+        assert_eq!(
+            unresolved[0].file,
+            (Some(ember.id), "Rules/Watch.md".to_owned())
+        );
+        assert!(
+            unresolved[0]
+                .text
+                .starts_with("Ember Coast · Rules/Watch.md: "),
+            "{}",
+            unresolved[0].text
+        );
+        assert!(loaded.has_problem(watch(&ember)));
+        assert!(!loaded.has_problem(watch(&ashen)));
+        // A path only one note has keeps its plain row.
+        assert!(loaded.has_problem(both));
+        assert!(
+            loaded
+                .diagnostic_texts()
+                .iter()
+                .any(|text| text.starts_with("Both.md: Hit Points"))
+        );
+        // Two Watch files and Both.md: three, not two (by path) and not five (by problem).
+        assert_eq!(loaded.files_to_fix(&broken), 3);
+
+        let mut library = Library {
+            loaded: Some(loaded),
+            ..Default::default()
+        };
+        let ctx = egui::Context::default();
+        ctx.data_mut(|data| data.insert_temp(egui::Id::new("reader_link_index"), index));
+        let output = ctx.run(
+            egui::RawInput {
+                screen_rect: Some(egui::Rect::from_min_size(
+                    egui::Pos2::ZERO,
+                    egui::vec2(1200.0, 800.0),
+                )),
+                ..Default::default()
+            },
+            |ctx| {
+                egui::CentralPanel::default()
+                    .show(ctx, |ui| library.show(ui, &mut Campaigns::default()));
+            },
+        );
+        assert!(output.shapes.iter().any(|shape| matches!(&shape.shape, egui::Shape::Text(text) if text.galley.job.text.contains("3 files need fixing"))));
+    }
+
+    /// iter-13-E-FD1: the About row warns for any problem the header counts in the manifest, such
+    /// as a first heading that differs from the name. A clean manifest has no warning.
+    #[test]
+    fn iter13_e_about_row_warns_for_a_counted_manifest_problem() {
+        let dir = tempfile::tempdir().unwrap();
+        let module = create_module(&dir.path().join("ember"), "Emberfall", "ember").unwrap();
+        let manifest_path = module.path.join("Package.md");
+        let clean = fs::read_to_string(&manifest_path).unwrap();
+        let about = |loaded: &Loaded| {
+            let manifest = loaded.notes.iter().find(|n| n.is_manifest()).unwrap();
+            manifest.about_label(loaded.has_problem(manifest))
+        };
+        let loaded = load_all(std::slice::from_ref(&module), None).unwrap();
+        assert_eq!(loaded.diagnostic_texts(), Vec::<&str>::new());
+        assert_eq!(about(&loaded), "About Emberfall");
+        let heading = clean
+            .lines()
+            .find(|line| line.starts_with("# "))
+            .expect("the manifest has a first heading");
+        fs::write(&manifest_path, clean.replacen(heading, "# Ember Notes", 1)).unwrap();
+        let loaded = load_all(std::slice::from_ref(&module), None).unwrap();
+        let manifest = loaded.notes.iter().find(|n| n.is_manifest()).unwrap();
+        // The header counts it, and the manifest still reads: only the counted problem warns.
+        assert!(manifest.error.is_none());
+        assert_eq!(loaded.files_to_fix(&[]), 1);
+        assert_eq!(about(&loaded), format!("{} About Emberfall", icons::WARN));
     }
 
     /// The reserved slot measures the shared message, on one line and wrapped, so the editor keeps
@@ -8104,7 +8395,7 @@ mod tests {
         let loaded = load_all(std::slice::from_ref(&m), None).unwrap();
         assert!(
             loaded
-                .diagnostics
+                .diagnostic_texts()
                 .iter()
                 .any(|d| d.starts_with("Broken.md"))
         );
@@ -8128,7 +8419,7 @@ mod tests {
             assert!(loaded.notes.iter().any(|note| note.name() == "Wolf"));
             assert!(
                 loaded
-                    .diagnostics
+                    .diagnostic_texts()
                     .iter()
                     .any(|message| message.contains("Package.md"))
             );
@@ -8178,10 +8469,10 @@ mod tests {
             let loaded = load_all(std::slice::from_ref(&module), None).unwrap();
             let manifest = loaded.notes.iter().find(|note| note.is_manifest()).unwrap();
             assert!(manifest.error.is_some());
-            assert!(manifest.about_label().contains(icons::WARN));
+            assert!(manifest.about_label(false).contains(icons::WARN));
             assert!(
                 loaded
-                    .diagnostics
+                    .diagnostic_texts()
                     .iter()
                     .any(|line| line.contains("Package.md"))
             );
@@ -8233,10 +8524,10 @@ mod tests {
             package_needing(temp.path(), "Second", "second", "first:items/own"),
         ];
         let mut loaded = load_all(&modules, None).unwrap();
-        assert_eq!(loaded.diagnostics, Vec::<String>::new());
+        assert_eq!(loaded.diagnostic_texts(), Vec::<&str>::new());
         // A save checks again, and that check must agree with the first.
         loaded.refresh_diagnostics();
-        assert_eq!(loaded.diagnostics, Vec::<String>::new());
+        assert_eq!(loaded.diagnostic_texts(), Vec::<&str>::new());
     }
 
     #[test]
@@ -8244,8 +8535,13 @@ mod tests {
         let temp = tempfile::tempdir().unwrap();
         let module = package_needing(temp.path(), "First", "first", "missing:items/gone");
         let loaded = load_all(&[module], None).unwrap();
-        assert_eq!(loaded.diagnostics.len(), 1, "{:?}", loaded.diagnostics);
-        assert!(loaded.diagnostics[0].contains("missing:items/gone"));
+        assert_eq!(
+            loaded.diagnostic_texts().len(),
+            1,
+            "{:?}",
+            loaded.diagnostic_texts()
+        );
+        assert!(loaded.diagnostic_texts()[0].contains("missing:items/gone"));
     }
 
     #[test]
@@ -8254,8 +8550,18 @@ mod tests {
         let mut module = package_needing(temp.path(), "First", "first", "first:items/own");
         module.path = temp.path().join("deleted");
         let mut loaded = load_all(&[module], None).unwrap();
-        assert_eq!(loaded.diagnostics.len(), 1, "{:?}", loaded.diagnostics);
+        assert_eq!(
+            loaded.diagnostic_texts().len(),
+            1,
+            "{:?}",
+            loaded.diagnostic_texts()
+        );
         loaded.refresh_diagnostics();
-        assert_eq!(loaded.diagnostics.len(), 1, "{:?}", loaded.diagnostics);
+        assert_eq!(
+            loaded.diagnostic_texts().len(),
+            1,
+            "{:?}",
+            loaded.diagnostic_texts()
+        );
     }
 }

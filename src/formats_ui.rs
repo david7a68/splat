@@ -71,6 +71,8 @@ pub struct State {
     selected: usize,
     undo: Vec<Change>,
     skipped: Vec<String>,
+    /// The full path of each skipped file, so a reader can tell that FILES SKIPPED names it.
+    skipped_files: Vec<PathBuf>,
     undone: bool,
     error: Option<String>,
 }
@@ -93,6 +95,7 @@ impl State {
         self.undo.clear();
         self.error = None;
         self.skipped.clear();
+        self.skipped_files.clear();
         self.undone = false;
     }
 
@@ -100,6 +103,12 @@ impl State {
         self.clear();
         self.preview = None;
         self.skipped.clear();
+        self.skipped_files.clear();
+    }
+
+    /// True while the FILES SKIPPED notice shows, names this file and offers `Convert files…`.
+    pub fn skips(&self, file: &std::path::Path) -> bool {
+        self.preview.is_none() && self.skipped_files.iter().any(|skipped| skipped == file)
     }
 
     /// Undo remains available while the converted bytes still match the disk.
@@ -134,6 +143,7 @@ impl State {
                 .map(|m| OwnerPreview::new(m.path.clone(), m.name.clone(), false)),
         );
         self.skipped.clear();
+        self.skipped_files.clear();
         let mut preview = Vec::new();
         let mut seen = std::collections::BTreeSet::new();
         for (owner, group) in self.owners.iter().enumerate() {
@@ -141,11 +151,10 @@ impl State {
             let Ok((entries, errors)) = splat::content::legacy::read_directory(root) else {
                 continue;
             };
-            self.skipped.extend(
-                errors
-                    .into_iter()
-                    .map(|e| skipped_file(&e.path, &e.message)),
-            );
+            for error in errors {
+                self.skipped.push(skipped_file(&error.path, &error.message));
+                self.skipped_files.push(root.join(&error.path));
+            }
             for entry in entries {
                 if !formats::eligible(&entry) || formats::schema(&entry.fields) != Ok(1) {
                     continue;
@@ -182,7 +191,10 @@ impl State {
                 match result {
                     Ok(Some(file)) => preview.push(file),
                     Ok(None) => {}
-                    Err(error) => self.skipped.push(skipped_file(&entry.path, &error)),
+                    Err(error) => {
+                        self.skipped.push(skipped_file(&entry.path, &error));
+                        self.skipped_files.push(root.join(&entry.path));
+                    }
                 }
             }
         }
@@ -211,7 +223,10 @@ impl State {
                         after: file.after,
                     }),
                     Ok(_) => {}
-                    Err(error) => self.skipped.push(skipped_file(&relative, &error)),
+                    Err(error) => {
+                        self.skipped.push(skipped_file(&relative, &error));
+                        self.skipped_files.push(path);
+                    }
                 }
             }
         }
@@ -240,7 +255,10 @@ impl State {
             let result = crate::conversion::publish(&candidate);
             match result {
                 Ok(change) => self.undo.push(change),
-                Err(error) => self.skipped.push(skipped_file(&file.path, &error)),
+                Err(error) => {
+                    self.skipped.push(skipped_file(&file.path, &error));
+                    self.skipped_files.push(file.root.join(&file.path));
+                }
             }
         }
     }
