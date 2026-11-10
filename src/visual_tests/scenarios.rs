@@ -3988,6 +3988,22 @@ pub mod run_folder_defect {
                     })
             },
         );
+        // FT4: with no open run, the move is the one primary action on the whole screen.
+        d.observe_both(
+            "iter-16-B-FT4-primary",
+            "Move runs and save is the only accent-filled control in view",
+            |d| super::session_recording::accent_filled(d) == ["Move runs and save"],
+        );
+        // Must stay true: the other choice on the row stays quiet.
+        d.observe_both(
+            "iter-16-B-FT4-quiet",
+            "Save without moving stays a quiet action",
+            |d| {
+                d.in_view("Save without moving")
+                    && d.control_frame("Save without moving")
+                        .is_some_and(|frame| frame.stroke.width == 0.0)
+            },
+        );
         d.state("run-folder-edited", Sizes::All);
         d.goal("edit the run folder with no draft");
         // A panic ends this app, so the video stops first and nothing follows.
@@ -7401,14 +7417,10 @@ pub mod session_recording {
         }
     }
 
-    pub(super) fn check_one_primary(d: &mut Driver<'_>, expected: &str, id: &str) {
-        assert!(
-            d.in_view(expected),
-            "The expected primary action is visible"
-        );
+    /// Every accent-filled button in view, across the whole window.
+    pub(super) fn accent_filled(d: &Driver<'_>) -> Vec<String> {
         let colors = crate::design::colors();
-        let primary: Vec<_> = d
-            .nodes()
+        d.nodes()
             .into_iter()
             .filter(|node| node.in_view() && node.role == egui::accesskit::Role::Button)
             .filter(|node| {
@@ -7417,7 +7429,15 @@ pub mod session_recording {
                 })
             })
             .map(|node| node.name)
-            .collect();
+            .collect()
+    }
+
+    pub(super) fn check_one_primary(d: &mut Driver<'_>, expected: &str, id: &str) {
+        assert!(
+            d.in_view(expected),
+            "The expected primary action is visible"
+        );
+        let primary = accent_filled(d);
         d.observe(
             id,
             primary == [expected],
@@ -11402,13 +11422,59 @@ pub mod session_plan {
             "Resume restores a saved Setup after the long rest",
         );
         d.state("resumed-setup-after-long-rest", Sizes::All);
+        const SAVED_HP_SET: &str = crate::encounter_run::SAVED_HP_USED;
+        let notice_top = d
+            .place_of("Party HP is full after the long rest.")
+            .map(|rect| rect.top());
         d.click("Use the saved HP");
         d.observe(
             "iter-7-S1",
             kestrel(d).contains("HP 11/41"),
-            "One Undo restores the saved HP",
+            "Use the saved HP puts back the saved HP",
         );
-        d.state("saved-hp-restored", Sizes::Default);
+        // FT2: the press is its own step, so the full HP stays one Undo away.
+        let result_top = d.place_of(SAVED_HP_SET).map(|rect| rect.top());
+        d.observe(
+            "iter-16-B-FT2-message",
+            notice_top
+                .zip(result_top)
+                .is_some_and(|(notice, result)| (notice - result).abs() < 1.0),
+            format!(
+                "The result replaces the notice in its place: {notice_top:?} then {result_top:?}"
+            ),
+        );
+        d.observe(
+            "iter-16-B-FT2-message-undo",
+            d.in_view("Undo")
+                && d.place_of("Undo")
+                    .zip(d.place_of(SAVED_HP_SET))
+                    .is_some_and(|(undo, words)| {
+                        (undo.center().y - words.center().y).abs() < crate::design::S
+                    }),
+            "The result offers Undo on its own line",
+        );
+        d.observe(
+            "iter-16-B-FT2-header",
+            d.has("Undo: use the saved HP") && !d.has_containing("Nothing to undo"),
+            "The header names the new step, not an empty history",
+        );
+        d.state("saved-hp-restored", Sizes::All);
+        d.click("Undo");
+        d.observe(
+            "iter-16-B-FT2-undo",
+            kestrel(d).contains("HP 41/41"),
+            format!("Undo gives back the full HP: {}", kestrel(d)),
+        );
+        // Must stay true: the rest's own notice and its header step come back with it.
+        d.observe(
+            "iter-16-B-FT2-notice-back",
+            d.has("Use the saved HP")
+                && d.has("Undo: full HP after long rest")
+                && !d.visible_text(SAVED_HP_SET),
+            "After Undo the rest notice and its Undo step are back, and the result is gone",
+        );
+        d.click("Use the saved HP");
+        d.expect(SAVED_HP_SET);
         close_run(d);
         show_plan(d);
         d.click("Long rest");
