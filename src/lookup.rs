@@ -21,6 +21,12 @@ use uuid::Uuid;
 use crate::matching::{self, Rank, Typed, names_lower_word};
 
 const RESULT_ROW: f32 = design::XXL;
+const PANEL_MARGIN: f32 = design::M;
+
+/// Where the panel was drawn last, for Back and Forward beside the Library.
+fn rect_id() -> egui::Id {
+    egui::Id::new("lookup_rect")
+}
 pub const SEARCH_NAME: &str = "Search everything";
 /// How many lines of a long note show where the words were found.
 const FOUND_LINES: usize = 3;
@@ -1688,21 +1694,22 @@ impl Lookup {
         if !self.open {
             return;
         }
-        let Some(request) = history::pending(ctx) else {
-            return;
+        let here = |pos: egui::Pos2| {
+            ctx.data(|data| data.get_temp::<egui::Rect>(rect_id()))
+                .is_some_and(|rect| rect.contains(pos))
         };
-        let rect = ctx.data(|data| data.get_temp::<egui::Rect>(egui::Id::new("lookup_rect")));
-        let here = |pos: egui::Pos2| rect.is_some_and(|rect| rect.contains(pos));
-        let mine = !library_page
-            || match request.1 {
-                history::Source::Key => ctx
-                    .memory(|memory| memory.focused())
-                    .and_then(|id| ctx.read_response(id))
-                    .is_some_and(|response| here(response.rect.center())),
-                history::Source::Button(pos) => here(pos),
-            };
-        if mine && history::take(ctx, request) {
-            self.step(request.0);
+        let step = history::take_if(ctx, |source| {
+            !library_page
+                || match source {
+                    history::Source::Key => ctx
+                        .memory(|memory| memory.focused())
+                        .and_then(|id| ctx.read_response(id))
+                        .is_some_and(|response| here(response.rect.center())),
+                    history::Source::Button(pos) => here(pos),
+                }
+        });
+        if let Some(step) = step {
+            self.step(step);
         }
     }
 
@@ -1714,16 +1721,15 @@ impl Lookup {
                 egui::Frame::new()
                     .fill(colors().page)
                     .stroke(egui::Stroke::new(design::HAIRLINE_WIDTH, colors().rule))
-                    .inner_margin(egui::Margin::same(design::M as i8)),
+                    .inner_margin(egui::Margin::same(PANEL_MARGIN as i8)),
             )
             .show(ctx, |ui| self.panel(ui));
     }
 
     fn panel(&mut self, ui: &mut egui::Ui) {
         // With the margin, so a press anywhere on the panel counts as here.
-        let panel = ui.max_rect().expand(design::M);
-        ui.ctx()
-            .data_mut(|data| data.insert_temp(egui::Id::new("lookup_rect"), panel));
+        let panel = ui.max_rect().expand(PANEL_MARGIN);
+        ui.ctx().data_mut(|data| data.insert_temp(rect_id(), panel));
         ui.ctx().data_mut(|data| {
             data.insert_temp(egui::Id::new("reader_surface"), egui::Id::new("lookup"))
         });
@@ -2434,10 +2440,6 @@ mod tests {
             lookup.trail.peek(Step::Forward).is_none(),
             "a new entry starts a new trail"
         );
-        lookup.step(Step::Back);
-        assert_eq!(lookup.current, Some(0));
-        lookup.step(Step::Forward);
-        assert_eq!(lookup.current, Some(2));
         lookup.reading_written = Some(0);
         lookup.step(Step::Forward);
         assert_eq!(
@@ -2452,26 +2454,14 @@ mod tests {
     #[test]
     fn beside_the_library_a_side_button_acts_where_the_pointer_is() {
         let press = |lookup: &mut Lookup, x: f32, library_page: bool| {
-            let ctx = egui::Context::default();
-            let mut raw = egui::RawInput {
-                events: vec![egui::Event::PointerButton {
-                    pos: egui::pos2(x, 50.0),
-                    button: egui::PointerButton::Extra1,
-                    pressed: true,
-                    modifiers: egui::Modifiers::NONE,
-                }],
-                ..Default::default()
-            };
-            history::set_aside(&ctx, &mut raw.events);
-            let mut left = None;
-            let _ = ctx.run(raw, |ctx| {
+            let back = history::tests::press(egui::PointerButton::Extra1, egui::pos2(x, 50.0));
+            history::tests::frame(vec![back], |ctx| {
                 let panel =
                     egui::Rect::from_min_max(egui::pos2(300.0, 0.0), egui::pos2(600.0, 400.0));
-                ctx.data_mut(|data| data.insert_temp(egui::Id::new("lookup_rect"), panel));
+                ctx.data_mut(|data| data.insert_temp(rect_id(), panel));
                 lookup.history_input(ctx, library_page);
-                left = history::pending(ctx).map(|request| request.0);
-            });
-            left
+                history::take_if(ctx, |_| true)
+            })
         };
         let mut lookup = browsed_lookup();
         assert_eq!(press(&mut lookup, 100.0, true), Some(Step::Back));

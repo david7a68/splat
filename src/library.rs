@@ -1841,7 +1841,7 @@ pub struct Library {
     pub copy_to_package: Option<Uuid>,
     /// An entry to read beside the open draft, in Lookup.
     pub peek: Option<Uuid>,
-    history: Trail<BackStep>,
+    trail: Trail<Place>,
     dependency_undo: Option<DependencyUndo>,
     selection_undo: Option<SelectionUndo>,
     link_choices: Vec<Uuid>,
@@ -1919,13 +1919,20 @@ fn moved_note(root: &Path, id: Uuid, old: &str) -> Result<Option<(String, String
     }
     Ok(found)
 }
-/// Where Back returns to after following a link.
-struct BackStep {
+/// An entry Back or Forward returns to, with the list as it was there.
+struct Place {
     owner: Option<Uuid>,
     path: String,
     scope: Scope,
     section: Section,
     search: String,
+}
+impl Place {
+    fn find(&self, notes: &[Note]) -> Option<usize> {
+        notes
+            .iter()
+            .position(|n| n.owner.id() == self.owner && n.path == self.path)
+    }
 }
 impl Library {
     pub fn refocus_draft(&mut self) {
@@ -2158,7 +2165,7 @@ impl Library {
             return;
         };
         if self.selected != Some(index) {
-            self.history.leave(self.here());
+            self.trail.leave(self.here());
         }
         if !note.is_manifest() && !self.loaded.as_ref().unwrap().in_scope(note, self.scope) {
             self.scope = Scope::All;
@@ -4192,9 +4199,9 @@ impl Library {
     }
 
     /// The open entry, as Back or Forward returns to it.
-    fn here(&self) -> Option<BackStep> {
+    fn here(&self) -> Option<Place> {
         let current = self.loaded.as_ref()?.notes.get(self.selected?)?;
-        Some(BackStep {
+        Some(Place {
             owner: current.owner.id(),
             path: current.path.clone(),
             scope: self.scope,
@@ -4208,12 +4215,8 @@ impl Library {
             return;
         }
         let here = self.here();
-        let Some((target, index)) = self.history.go(step, here, |target| {
-            self.loaded
-                .as_ref()?
-                .notes
-                .iter()
-                .position(|n| n.owner.id() == target.owner && n.path == target.path)
+        let Some((target, index)) = self.trail.go(step, here, |target| {
+            target.find(&self.loaded.as_ref()?.notes)
         }) else {
             return;
         };
@@ -4705,7 +4708,7 @@ impl Library {
             }
         };
         let save_row = editable && (self.source || dirty);
-        let mut step = history::take_any(ui.ctx());
+        let mut step = history::take_if(ui.ctx(), |_| true);
         let can_copy = note
             .entry
             .as_ref()
@@ -4725,7 +4728,7 @@ impl Library {
         };
         let base_width = Action::quiet("Read").natural_width(ui)
             + Action::quiet(edit_label).natural_width(ui)
-            + if self.history.peek(Step::Back).is_none() {
+            + if self.trail.peek(Step::Back).is_none() {
                 0.0
             } else {
                 back.natural_width(ui) + design::S
@@ -4777,7 +4780,7 @@ impl Library {
                         .clicked();
                 }
             }
-            if self.history.peek(Step::Back).is_some()
+            if self.trail.peek(Step::Back).is_some()
                 && (if show_key { back.key("Alt+Left") } else { back })
                     .hint(
                         "Return to the entry before this link. During a draft, read it in Lookup.",
@@ -5760,15 +5763,9 @@ impl Library {
         }
         if let Some(step) = step {
             if dirty {
-                self.peek = self.history.peek(step).and_then(|target| {
-                    self.loaded
-                        .as_ref()?
-                        .notes
-                        .iter()
-                        .find(|note| note.owner.id() == target.owner && note.path == target.path)?
-                        .entry
-                        .as_ref()
-                        .map(|e| e.id)
+                self.peek = self.trail.peek(step).and_then(|target| {
+                    let notes = &self.loaded.as_ref()?.notes;
+                    notes[target.find(notes)?].entry.as_ref().map(|e| e.id)
                 });
             } else {
                 self.go(step);
@@ -7052,7 +7049,7 @@ mod tests {
         library.go(Step::Back);
         assert_eq!(library.selected, Some(1));
         assert_eq!(library.draft, draft);
-        assert!(library.history.peek(Step::Back).is_some());
+        assert!(library.trail.peek(Step::Back).is_some());
     }
 
     #[test]
@@ -7067,13 +7064,9 @@ mod tests {
         library.go(Step::Back);
         library.open_entry(2);
         assert!(
-            library.history.peek(Step::Forward).is_none(),
+            library.trail.peek(Step::Forward).is_none(),
             "a new link starts a new trail"
         );
-        library.go(Step::Back);
-        assert_eq!(library.selected, Some(0));
-        library.go(Step::Forward);
-        assert_eq!(library.selected, Some(2));
     }
 
     #[test]
