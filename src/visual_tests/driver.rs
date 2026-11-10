@@ -2133,17 +2133,36 @@ impl<'a> Driver<'a> {
     }
 }
 
+/// Each worker thread keeps one software device for all its scenarios and restarts.
+/// Every app still gets its own egui renderer, so no textures are shared.
 fn software_renderer() -> egui_kittest::wgpu::WgpuTestRenderer {
+    use eframe::{egui_wgpu, wgpu};
     use egui_kittest::wgpu::{WgpuTestRenderer, create_render_state, default_wgpu_setup};
-    let state = create_render_state(default_wgpu_setup());
-    let adapter = state.adapter.get_info();
-    assert_eq!(
-        adapter.device_type,
-        eframe::wgpu::DeviceType::Cpu,
-        "Captures must use a software rasterizer so they repeat between machines. Found {} ({:?}). Use `devenv shell -- visual-test`.",
-        adapter.name,
-        adapter.backend,
-    );
+    thread_local! {
+        static DEVICE: egui_wgpu::RenderState = {
+            let mut setup = default_wgpu_setup();
+            // Only Vulkan has the software rasterizer. Other backends load drivers for nothing.
+            if let egui_wgpu::WgpuSetup::CreateNew(new) = &mut setup {
+                new.instance_descriptor.backends = wgpu::Backends::VULKAN;
+            }
+            let state = create_render_state(setup);
+            let adapter = state.adapter.get_info();
+            assert_eq!(
+                adapter.device_type,
+                wgpu::DeviceType::Cpu,
+                "Captures must use a software rasterizer so they repeat between machines. Found {} ({:?}). Use `devenv shell -- visual-test`.",
+                adapter.name,
+                adapter.backend,
+            );
+            state
+        };
+    }
+    let mut state = DEVICE.with(Clone::clone);
+    state.renderer = std::sync::Arc::new(egui::mutex::RwLock::new(egui_wgpu::Renderer::new(
+        &state.device,
+        state.target_format,
+        egui_wgpu::RendererOptions::PREDICTABLE,
+    )));
     WgpuTestRenderer::from_render_state(state)
 }
 
