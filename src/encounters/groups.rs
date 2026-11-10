@@ -806,38 +806,21 @@ fn list_row(
     {
         ui.data_mut(|data| data.insert_temp(egui::Id::new("open_campaign_packages"), true));
     }
-    if let Some(problem) = group.problem.as_ref().filter(|_| group.warnings.is_empty()) {
-        ui.add_space(-design::S);
-        ui.scope(|ui| {
-            ui.spacing_mut().item_spacing.y = design::XS;
-            let faults = problem
-                .lines()
-                .map(|fault| {
-                    format!(
-                        "{} {}",
-                        icons::WARN,
-                        fault.trim_end_matches(" Campaign → Packages.")
-                    )
-                })
-                .collect::<Vec<_>>()
-                .join("\n");
-            ui.vertical(|ui| {
-                ui.add(
-                    egui::Label::new(
-                        Type::Small
-                            .rich(ui, faults)
-                            .line_height(Some(Type::Small.line()))
-                            .color(colors().result.warning),
-                    )
-                    .wrap(),
-                );
-                if problem.contains("Campaign → Packages") && packages_link(ui) {
-                    ui.data_mut(|data| {
-                        data.insert_temp(egui::Id::new("open_campaign_packages"), true)
-                    });
-                }
-            });
-        });
+    // A group with no member that can join says so after its member faults.
+    if let Some(none) = group
+        .problem
+        .as_deref()
+        .and_then(|problem| problem.lines().last())
+        .filter(|line| line.starts_with("No members can join"))
+    {
+        ui.add(
+            egui::Label::new(
+                Type::Small
+                    .rich(ui, format!("{} {none}", icons::WARN))
+                    .color(colors().result.warning),
+            )
+            .wrap(),
+        );
     }
 }
 
@@ -2161,7 +2144,10 @@ fn group_fields(
         if !draft.setup.members.is_empty() {
             ui.label(
                 Type::Small
-                    .rich(ui, format!("{}{}", " · ", members_heading(draft, snapshot)))
+                    .rich(
+                        ui,
+                        format!("{}{}", " · ", cached_members_heading(ui, draft, snapshot)),
+                    )
                     .color(colors().muted),
             );
         }
@@ -2180,6 +2166,25 @@ fn group_fields(
             .hint_text("When they arrive, what they want. Markdown is fine."),
     );
     design::named(ui, &response, &format!("{NOTES_FIELD} for {}", draft.name));
+}
+
+/// `members_heading` resolves the group against the whole catalogue; do it once per draft text.
+fn cached_members_heading(ui: &egui::Ui, draft: &GroupDraft, snapshot: &Snapshot) -> String {
+    let revision = egui::Id::new((
+        draft.text().ok(),
+        std::ptr::from_ref(snapshot) as usize,
+        snapshot.catalogue.entries.len(),
+    ))
+    .value();
+    let slot = egui::Id::new(("group_members_heading", &draft.path));
+    if let Some((seen, label)) = ui.data(|data| data.get_temp::<(u64, String)>(slot))
+        && seen == revision
+    {
+        return label;
+    }
+    let label = members_heading(draft, snapshot);
+    ui.data_mut(|data| data.insert_temp(slot, (revision, label.clone())));
+    label
 }
 
 /// How many creatures will arrive, and what they are worth, as the list and the panel say it.

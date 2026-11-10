@@ -1423,7 +1423,8 @@ impl Snapshot {
         let run_creatures = Arc::new(
             creatures
                 .iter()
-                .filter(|creature| !creature.linked)
+                // An NPC whose stat block is gone stays out of the live run's Add creature.
+                .filter(|creature| !creature.linked && creature.unavailable.is_none())
                 .map(|creature| {
                     Arc::new(crate::encounter_run::RunCreature {
                         entry: Arc::new(catalogue.run_entry(creature.id)),
@@ -4383,6 +4384,13 @@ mod tests {
         fs::write(dir.path().join("NPCs/Watchkeeper.md"), text).unwrap();
         let snapshot = Snapshot::load(&active, &[]).unwrap();
         assert!(snapshot.creatures.iter().any(|c| c.name == "Watchkeeper"));
+        assert!(
+            !snapshot
+                .run_creatures
+                .iter()
+                .any(|creature| creature.entry.name == "Watchkeeper"),
+            "the live run cannot add an NPC whose stat block is missing"
+        );
         let mut harness = egui_kittest::Harness::new(move |ctx| {
             egui::CentralPanel::default().show(ctx, |ui| {
                 let chosen = Encounters::creature_search(
