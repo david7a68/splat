@@ -118,6 +118,13 @@ struct Item {
     word: Option<Arc<egui::Galley>>,
     full_word: Option<Arc<egui::Galley>>,
     icon_word: Option<Arc<egui::Galley>>,
+    /// Room kept for the widest state the item can take in a fight, so that the bar's level and
+    /// every item's place hold when HP changes: temporary HP with two digits, and the wider of
+    /// `Bloodied` and `0 HP` (its word, or its icon alone). Each includes its gap.
+    temp_room: f32,
+    word_room: f32,
+    full_word_room: f32,
+    icon_word_room: f32,
     /// Each stat as one run of text: its muted label, a space, and its value.
     stats: Vec<Arc<egui::Galley>>,
 }
@@ -127,13 +134,15 @@ impl Item {
         let c = colors();
         let fonts = hp_fonts(ui);
         let small = Type::Small.font(ui);
-        // The same slots as `hp_readout`: the current HP, then the slash and a maximum of three digits.
-        let hp_width = design::number_width(ui, &known(glance.hp), &fonts.current)
-            + design::number_width(
-                ui,
-                &"0".repeat(3.max(known(glance.max_hp).len())),
-                &fonts.max,
-            );
+        // The same slots as `hp_readout`: the current HP, as wide as the maximum so that a drop
+        // from 10 to 9 moves nothing, then the slash and a maximum of three digits.
+        let hp_width = design::number_width(ui, &known(glance.hp), &fonts.current).max(
+            design::number_width(ui, &"0".repeat(known(glance.max_hp).len()), &fonts.current),
+        ) + design::number_width(
+            ui,
+            &"0".repeat(3.max(known(glance.max_hp).len())),
+            &fonts.max,
+        );
         let painter = ui.painter();
         let temp = (glance.temp > 0).then(|| {
             painter.layout_no_wrap(design::temp_hp_text(glance.temp), small.clone(), c.hp.temp)
@@ -144,6 +153,18 @@ impl Item {
         });
         let icon_word = state
             .map(|(icon, _, color)| painter.layout_no_wrap(icon.to_owned(), small.clone(), color));
+        let fight_states = [(Some(0), Some(2)), (Some(1), Some(2))]
+            .map(|(hp, max)| design::hp_word(hp, max).expect("0 HP and Bloodied have words"));
+        let widest = |text: &dyn Fn(&str, &str) -> String| {
+            fight_states
+                .iter()
+                .map(|(icon, word, _)| design::number_width(ui, &text(icon, word), &small))
+                .fold(0.0, f32::max)
+        };
+        let temp_room = design::XS
+            + design::number_width(ui, &design::temp_hp_text(0).replace('0', "00"), &small);
+        let full_word_room = design::S + widest(&|icon, word| format!("{icon} {word}"));
+        let icon_word_room = design::S + widest(&|icon, _| icon.to_owned());
         let first = glance.name.split_whitespace().next().unwrap_or_default();
         let name = (!first.is_empty())
             .then(|| painter.layout_no_wrap(first.to_owned(), small.clone(), c.text));
@@ -175,6 +196,10 @@ impl Item {
             word: word.clone(),
             full_word: word,
             icon_word,
+            temp_room,
+            word_room: full_word_room,
+            full_word_room,
+            icon_word_room,
             stats,
         }
     }
@@ -189,8 +214,16 @@ impl Item {
             }
             + self.name.as_ref().map_or(0.0, |g| g.size().x + design::S)
             + self.hp_width
-            + self.temp.as_ref().map_or(0.0, |g| design::XS + g.size().x)
-            + self.word.as_ref().map_or(0.0, |g| design::S + g.size().x)
+            + self
+                .temp
+                .as_ref()
+                .map_or(0.0, |g| design::XS + g.size().x)
+                .max(self.temp_room)
+            + self
+                .word
+                .as_ref()
+                .map_or(0.0, |g| design::S + g.size().x)
+                .max(self.word_room)
             + self
                 .stats
                 .iter()
@@ -253,10 +286,10 @@ fn set(items: &mut [Item], step: Step) {
             Names::First => item.first.clone(),
             Names::Initial => item.initial.clone(),
         };
-        item.word = if step.state_word {
-            item.full_word.clone()
+        (item.word, item.word_room) = if step.state_word {
+            (item.full_word.clone(), item.full_word_room)
         } else {
-            item.icon_word.clone()
+            (item.icon_word.clone(), item.icon_word_room)
         };
     }
 }
@@ -790,6 +823,38 @@ mod tests {
         }
     }
 
+    /// Round 13 FT1: HP state changes during a fight do not change the bar's level, and no item
+    /// moves. At every width, a party at full HP and the same party with Bloodied, 0 HP, two-digit
+    /// temporary HP and one-digit HP show the same parts, the same number of items, and each item
+    /// starts at the same place.
+    #[test]
+    fn hp_state_changes_keep_the_level_and_every_item_in_place() {
+        let full = party(5, 0, 0);
+        let mut hurt = party(5, 3, 2);
+        hurt[0].hp = Some(0);
+        hurt[1].hp = Some(7);
+        hurt[4].temp = 12;
+        let mut checked = 0;
+        for width in (30..=200).map(|step| step as f32 * 10.0) {
+            let (calm, fight) = (draw(width, &full), draw(width, &hurt));
+            assert!(fight.whole(width), "cut off at {width}: {fight:?}");
+            let level = |at: &Drawn| (at.firsts, at.initials, at.portraits, at.ac, at.per);
+            assert_eq!(level(&calm), level(&fight), "same level at {width}");
+            assert_eq!(calm.spoken, fight.spoken, "same items at {width}");
+            assert_eq!(calm.items.len(), fight.items.len());
+            for (a, b) in calm.items.iter().zip(&fight.items) {
+                assert!(
+                    (a.left() - b.left()).abs() < 0.5,
+                    "an item moved at {width}: {a:?} then {b:?}"
+                );
+            }
+            // The hurt party paints its states, so the check compares two different bars.
+            assert!(fight.spoken < 2 || fight.states > 0, "{fight:?}");
+            checked += usize::from(calm.items.len() > 1);
+        }
+        assert!(checked > 100, "most widths show more than one item");
+    }
+
     /// FT3 and its repair: the optional stats drop first, then the portraits go together, then
     /// AC. Then first names shorten to an initial, then the state word to its icon. No item is
     /// ever cut off: at every width tested, from 300 px to 2000 px, each item lies whole before
@@ -854,8 +919,11 @@ mod tests {
                     "{case}: AC before first names at {width}"
                 );
             }
+            // Each item keeps room for its fight states, so six players need more than 2000 px.
+            let wide = draw(3000.0, &glances);
+            assert!(wide.whole(3000.0), "{case}: {wide:?}");
             assert_eq!(
-                drawn.last().unwrap().1.parts(),
+                wide.parts(),
                 (count, 0, count, count, count, bloodied),
                 "{case}: a wide bar shows everything"
             );

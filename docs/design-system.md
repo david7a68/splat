@@ -956,7 +956,11 @@ surface and the panel's hairline, never `raised`, and one `Read` row of height, 
 player's first name in `Small` text colour, an `hp_readout` at `Numeral` over `Small` with its `hp_bar` along
 the item's bottom edge, temporary HP with its shield, the run's `Bloodied` or `0 HP` icon, word and colour, then stats in `Small`: a muted label, a space and
 the value, in the Party list's order `AC`, `Per`, `Ins`, `DC`. `DC` is left out for a player with no spell
-save DC. Items sit `M` apart, with no boxes. All items show the same number of stats; when they do not fit,
+save DC. Items sit `M` apart, with no boxes. Each item keeps room for the widest state it can take in a fight:
+current HP as wide as its maximum, temporary HP with two digits, and the wider of `Bloodied` and `0 HP` (or its
+icon alone, at the step that drops the word). The level is chosen with that room, so it changes only with the
+window width or the party size, and no item moves when HP changes; the unused room trails the item. All items
+show the same number of stats; when they do not fit,
 the source status gives way first, then the optional stats (`Per`, `Ins`, `DC`) drop from the end, down to
 `AC`. Then the portraits go together, and then `AC`: AC answers "does a 17 hit?", and a portrait repeats the
 name beside it. HP and temporary HP always stay. The exception, when first names and HP still do not fit: the
