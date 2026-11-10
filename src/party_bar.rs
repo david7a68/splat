@@ -206,7 +206,6 @@ impl Item {
 enum Names {
     First,
     Initial,
-    None,
 }
 
 /// One way to draw the bar: how many stats, with or without portraits, which names, and
@@ -222,11 +221,10 @@ struct Step {
 /// From the fullest bar down. The source gives way first, and stays on hover. Then the optional
 /// stats (Per, Ins, DC) drop from the end, down to AC. Then the portraits go together, then AC.
 /// HP and temporary HP always stay. Only when first names and HP do not fit do the names
-/// shorten to an initial (`B.`). If that does not fit, the names go and the portraits come back.
-/// The portraits are wider than initials, so if that does not fit either, initials stay and the
-/// HP state keeps its icon and colour without its word. No item is ever cut off: below the
-/// narrowest of these, the narrowest is drawn. Every item shows the same parts, and hover and
-/// the accessible name keep everything.
+/// shorten to an initial (`B.`). If that does not fit, initials stay and the HP state keeps its
+/// icon and colour without its word. No item is ever cut off: when even that does not fit, the
+/// items that fit show whole and `N more` names the rest. Every item shows the same parts, and
+/// hover and the accessible name keep everything.
 fn steps(most: usize) -> Vec<Step> {
     let step = |shown, portrait, names, state_word| Step {
         shown,
@@ -242,7 +240,6 @@ fn steps(most: usize) -> Vec<Step> {
         step(most.min(1), false, Names::First, true),
         step(0, false, Names::First, true),
         step(0, false, Names::Initial, true),
-        step(0, true, Names::None, true),
         step(0, false, Names::Initial, false),
     ]);
     steps
@@ -255,7 +252,6 @@ fn set(items: &mut [Item], step: Step) {
         item.name = match step.names {
             Names::First => item.first.clone(),
             Names::Initial => item.initial.clone(),
-            Names::None => None,
         };
         item.word = if step.state_word {
             item.full_word.clone()
@@ -326,7 +322,7 @@ pub fn show(ui: &mut egui::Ui, glances: &[Glance], source: &Source) -> Option<Ch
             let count = if hidden == 0 {
                 0.0
             } else {
-                gap + more(hidden).size().x
+                gap + more(hidden).size().x + 2.0 * design::XS
             };
             shown + count <= room
         })
@@ -373,12 +369,31 @@ pub fn show(ui: &mut egui::Ui, glances: &[Glance], source: &Source) -> Option<Ch
     choice
 }
 
-/// The players that do not fit, as a muted count. Hover and the accessible name list each one
-/// with HP.
+/// The players that do not fit, as a muted count. It takes keyboard focus. Hover, focus and the
+/// accessible name list each one with HP.
 fn more_players(ui: &mut egui::Ui, count: Arc<egui::Galley>, hidden: &[Glance]) {
     let c = colors();
-    let (rect, response) = ui.allocate_exact_size(count.size(), egui::Sense::hover());
-    ui.painter().galley(rect.min, count, c.muted);
+    let size = count.size() + vec2(2.0 * design::XS, 0.0);
+    let (rect, response) = ui.allocate_exact_size(
+        vec2(size.x, height()),
+        egui::Sense::focusable_noninteractive(),
+    );
+    ui.painter().galley(
+        egui::pos2(
+            rect.left() + design::XS,
+            rect.center().y - count.size().y / 2.0,
+        ),
+        count,
+        c.muted,
+    );
+    if response.has_focus() {
+        ui.painter().rect_stroke(
+            rect,
+            design::RADIUS_CONTROL,
+            egui::Stroke::new(2.0, c.focus),
+            egui::StrokeKind::Inside,
+        );
+    }
     let hp = |glance: &Glance| glance.facts().into_iter().next().unwrap_or_default();
     response.widget_info(|| {
         egui::WidgetInfo::labeled(
@@ -395,13 +410,18 @@ fn more_players(ui: &mut egui::Ui, count: Arc<egui::Galley>, hidden: &[Glance]) 
             ),
         )
     });
-    response.on_hover_ui(|ui| {
+    let list = |ui: &mut egui::Ui| {
         ui.spacing_mut().item_spacing.y = 0.0;
         for glance in hidden {
             ui.label(Type::Strong.rich(ui, &glance.name).color(c.text));
             ui.label(Type::Small.rich(ui, hp(glance)).color(c.muted));
         }
-    });
+    };
+    if response.has_focus() {
+        response.show_tooltip_ui(list);
+    } else {
+        response.on_hover_ui(list);
+    }
 }
 
 fn paint(ui: &mut egui::Ui, glance: &Glance, item: Item, source: &str) -> egui::Response {
@@ -533,20 +553,29 @@ mod tests {
         per: usize,
         /// Items that paint the word `Bloodied` beside its icon.
         bloodied: usize,
+        /// Items that paint the Bloodied state: its icon alone, or its icon and word.
+        states: usize,
         /// Each item's rect, and the rect of Hide the party at the bar's right edge.
         items: Vec<egui::Rect>,
         close: egui::Rect,
-        /// The accessible name of `N more`, when some players do not fit.
+        /// The accessible name of `N more` and its rect, when some players do not fit.
         more: Option<String>,
+        more_rect: Option<egui::Rect>,
+        /// Painted shapes that reach past their clip rect: what the DM would see cut off.
+        cut: Vec<String>,
     }
 
     impl Drawn {
-        /// Every item lies whole before Hide the party, and Hide the party is in the window.
+        /// Nothing painted reaches past its clip rect (the room box, which ends before the source
+        /// status when it shows). Every item and `N more` lie before Hide the party, and Hide the
+        /// party is in the window.
         fn whole(&self, width: f32) -> bool {
-            self.close.right() <= width
+            self.cut.is_empty()
+                && self.close.right() <= width
                 && self
                     .items
                     .iter()
+                    .chain(&self.more_rect)
                     .all(|item| item.left() >= 0.0 && item.right() <= self.close.left())
         }
 
@@ -595,9 +624,13 @@ mod tests {
                 _ => {}
             }
         }
-        let (mut texts, mut circles) = (Vec::new(), 0);
+        let (mut texts, mut circles, mut cut) = (Vec::new(), 0, Vec::new());
         for clipped in &output.shapes {
             walk(&clipped.shape, &mut texts, &mut circles);
+            let bounds = clipped.shape.visual_bounding_rect();
+            if bounds.is_positive() && !clipped.clip_rect.expand(0.5).contains_rect(bounds) {
+                cut.push(format!("{bounds:?} past {:?}", clipped.clip_rect));
+            }
         }
         let first = |glance: &Glance| glance.name.split_whitespace().next().unwrap().to_owned();
         let painted = |word: String| texts.iter().filter(|text| **text == word).count();
@@ -637,17 +670,123 @@ mod tests {
                 .iter()
                 .filter(|text| text.ends_with(" Bloodied"))
                 .count(),
+            states: texts
+                .iter()
+                .filter(|text| *text == icons::BLOODIED || text.ends_with(" Bloodied"))
+                .count(),
             items,
             more: nodes
                 .iter()
                 .filter_map(|(_, node)| node.label().or_else(|| node.value()))
                 .map(|words| words.to_string())
                 .find(|words| words.contains(" more: ")),
+            more_rect: nodes
+                .iter()
+                .find(|(_, node)| {
+                    node.label()
+                        .or_else(|| node.value())
+                        .is_some_and(|words| words.contains(" more: "))
+                })
+                .map(|(_, node)| rect(node)),
+            cut,
             close: nodes
                 .iter()
                 .find(|(_, node)| node.label() == Some("Hide the party"))
                 .map(|(_, node)| rect(node))
                 .expect("Hide the party"),
+        }
+    }
+
+    /// `N more` is in the tab order. Focus on it shows the same list as hover: each hidden player's
+    /// full name.
+    #[test]
+    fn n_more_takes_keyboard_focus_and_shows_the_hidden_players() {
+        let ctx = egui::Context::default();
+        design::theme::install(&ctx);
+        ctx.enable_accesskit();
+        let glances = party(6, 6, 6);
+        let source = Source {
+            icon: icons::OK,
+            word: "From tonight".to_owned(),
+            color: colors().muted,
+        };
+        let frame = |events: Vec<egui::Event>| {
+            ctx.run(
+                egui::RawInput {
+                    screen_rect: Some(egui::Rect::from_min_size(
+                        egui::Pos2::ZERO,
+                        vec2(500.0, 200.0),
+                    )),
+                    events,
+                    ..Default::default()
+                },
+                |ctx| {
+                    egui::CentralPanel::default().show(ctx, |ui| {
+                        show(ui, &glances, &source);
+                    });
+                },
+            )
+        };
+        let tab = egui::Event::Key {
+            key: egui::Key::Tab,
+            physical_key: None,
+            pressed: true,
+            repeat: false,
+            modifiers: egui::Modifiers::NONE,
+        };
+        let mut output = frame(Vec::new());
+        let words = |output: &egui::FullOutput, id| {
+            output
+                .platform_output
+                .accesskit_update
+                .as_ref()?
+                .nodes
+                .iter()
+                .find(|(node, _)| *node == id)
+                .and_then(|(_, node)| node.label().or_else(|| node.value()))
+                .map(str::to_owned)
+        };
+        // The number of hidden players, when focus is on `N more`.
+        let focused_more = |output: &egui::FullOutput| {
+            output
+                .platform_output
+                .accesskit_update
+                .as_ref()
+                .and_then(|update| words(output, update.focus))
+                .filter(|words| words.contains(" more: "))
+                .and_then(|words| words.split_whitespace().next()?.parse::<usize>().ok())
+        };
+        let more = |output: &egui::FullOutput| focused_more(output).is_some();
+        let mut presses = 0;
+        while !more(&output) && presses < 12 {
+            output = frame(vec![tab.clone()]);
+            presses += 1;
+        }
+        let hidden = focused_more(&output).expect("Tab reaches N more within 12 presses");
+        assert!(hidden > 0 && hidden < NAMES.len(), "{hidden} hidden");
+        // The list shows while focus stays.
+        output = frame(Vec::new());
+        output = if more(&output) {
+            frame(Vec::new())
+        } else {
+            output
+        };
+        let mut texts = Vec::new();
+        fn walk(shape: &egui::Shape, texts: &mut Vec<String>) {
+            match shape {
+                egui::Shape::Vec(shapes) => shapes.iter().for_each(|shape| walk(shape, texts)),
+                egui::Shape::Text(text) => texts.push(text.galley.job.text.clone()),
+                _ => {}
+            }
+        }
+        for clipped in &output.shapes {
+            walk(&clipped.shape, &mut texts);
+        }
+        for name in &NAMES[NAMES.len() - hidden..] {
+            assert!(
+                texts.iter().any(|text| text == name),
+                "focus shows {name}: {texts:?}"
+            );
         }
     }
 
@@ -675,11 +814,20 @@ mod tests {
                         && (hidden.is_empty() && at.more.is_none()
                             || at.more.as_ref().is_some_and(|more| {
                                 more.starts_with(&format!("{} more: ", hidden.len()))
-                                    && hidden.iter().all(|name| more.contains(name.as_str()))
+                                    && hidden
+                                        .iter()
+                                        .all(|name| more.contains(&format!("{name} · HP ")))
                             })),
                     "{case}: {hidden:?} at {width}: {at:?}"
                 );
                 let n = at.spoken;
+                // Each shown player at 11/41 keeps the Bloodied state: its icon, with or without
+                // its word.
+                assert_eq!(
+                    at.states,
+                    bloodied.min(n),
+                    "{case}: the Bloodied state stays at {width}: {at:?}"
+                );
                 let (firsts, initials, portraits, ac, per, _) = at.parts();
                 assert!(
                     [0, n].contains(&firsts)
