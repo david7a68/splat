@@ -426,7 +426,8 @@ fn area_range_is_measured_to_the_origin_and_members_cannot_be_omitted() {
 fn every_embedded_profile_compiles_and_every_creature_action_runs() {
     let entries = builtin::entries().unwrap();
     let disk_count = crate::content::read_directory(
-        &std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("builtin/dnd2024-mechanics"),
+        &std::path::Path::new(concat!(env!("CARGO_MANIFEST_DIR"), "/../.."))
+            .join("builtin/dnd2024-mechanics"),
     )
     .unwrap()
     .0

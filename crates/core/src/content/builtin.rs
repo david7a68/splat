@@ -1,6 +1,6 @@
 //! Embedded, read-only SRD source package and completeness checks.
 use super::{Diagnostic, Entry, Report, validate};
-use include_dir::{Dir, include_dir};
+use include_dir::Dir;
 use rayon::prelude::*;
 use serde::Deserialize;
 use sha2::{Digest, Sha256};
@@ -9,7 +9,6 @@ use std::{
     sync::OnceLock,
 };
 
-static SRD: Dir<'_> = include_dir!("$CARGO_MANIFEST_DIR/builtin/srd-5.2.1");
 pub const SOURCE_URL: &str =
     "https://media.dndbeyond.com/compendium-images/srd/5.2/SRD_CC_v5.2.1.pdf";
 const PDF_HASH: &str = "8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87";
@@ -50,7 +49,7 @@ pub struct Package {
 
 /// The source bytes are embedded, so loading needs no network or working directory.
 pub fn source_file(path: &str) -> Option<&'static [u8]> {
-    SRD.get_file(path).map(|file| file.contents())
+    splat_assets::SRD.get_file(path).map(|file| file.contents())
 }
 
 pub fn load() -> Package {
@@ -63,7 +62,7 @@ pub fn load() -> Package {
         }
     }
     let mut contents = BTreeMap::new();
-    files(&SRD, &mut contents);
+    files(&splat_assets::SRD, &mut contents);
     verify(&contents)
 }
 
@@ -317,7 +316,7 @@ mod tests {
                 collect(subdir, files);
             }
         }
-        collect(&SRD, &mut files);
+        collect(&splat_assets::SRD, &mut files);
         files.insert("source.pdf".into(), b"changed");
         files.insert("pages/001.md".into(), b"changed");
         files.remove("spell/acid_arrow.md");

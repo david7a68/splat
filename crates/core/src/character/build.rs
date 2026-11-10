@@ -1758,7 +1758,7 @@ mod tests {
             events: Vec<String>,
         }
         let registry: Registry = serde_json::from_str(include_str!(
-            "../../builtin/dnd2024-definitions/contracts.json"
+            "../../../../builtin/dnd2024-definitions/contracts.json"
         ))
         .unwrap();
         let mut seen = 0;
