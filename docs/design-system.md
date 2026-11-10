@@ -675,8 +675,11 @@ Overflow clips above a separate page-filled band and hairline. Count rows above 
 by the edge, and their Conflict, 0 HP and Bloodied states. Each turn scrolls current and next rows into view.
 Other pages keep the strip's turn, conflict, secondary Back to run and primary Next turn.
 
-The panel has participant tabs Stat block or Sheet, Conditions, Correct, then `L`, then fight tabs Log, Prep,
-Arrivals. Fight-tab titles name only that tab in setup and live play. Titles stay on one line and retain copy
+The panel has participant tabs Stat block or Sheet, Conditions, Correct, then `L`, then fight tabs Log and
+Prep. Arrivals has no tab: a secondary Add to fight button opens it, selected while Arrivals is open. In live
+play it is `S` left of Next turn, at the same height, as the strip pairs Back to run with Next turn. Below the
+dock's all-words width it is the plus icon alone, as a split action's caret is, so the turn's name keeps its
+room. In setup it is `S` left of Undo, at Undo's height, and Undo shortens first. Ctrl+G also opens it. Fight-tab titles name only that tab in setup and live play. Titles stay on one line and retain copy
 numbers when shortened. When tight, fight tabs share a Fight caret menu with tab underline. Never wrap the tab
 row. Death-save counts and actions occupy one line below tabs at zero HP; clicking a count edits it. Sheet
 shows live death saves once, with correct singular and plural words. Correct has no duplicate fields; HP owns

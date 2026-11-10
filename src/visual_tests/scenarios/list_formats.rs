@@ -170,7 +170,7 @@ pub fn run(d: &mut Driver<'_>) {
     d.state("flagged-group-in-the-plan", Sizes::All);
     d.click(NAV_ENCOUNTERS);
     run_saved_encounter(d, "Shrine of Cinders");
-    fight_tab(d, "Arrivals");
+    open_arrivals(d);
     d.expect("Scout (as Goblin Warrior) needs fixing");
     d.expect("Edit group");
     d.state("flagged-group-in-arrivals", Sizes::All);
