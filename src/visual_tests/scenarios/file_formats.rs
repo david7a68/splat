@@ -182,5 +182,5 @@ pub fn run(d: &mut Driver<'_>) {
     d.click("Packages");
     assert!(d.is_disabled("Convert files…"));
     assert!(d.tooltip_contains("Convert files…", "Close the run before converting files."));
-    d.state("convert-files-blocked-by-run", Sizes::All);
+    d.state("convert-files-blocked-by-run", Sizes::Standard);
 }

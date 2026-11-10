@@ -3850,32 +3850,40 @@ impl Encounters {
         }
         let query = search.to_lowercase();
         let parsed = Query::parse(&query);
-        let mut matches: Vec<&Creature> = creatures
+        let typed = crate::matching::Typed::new(&parsed.words);
+        let mut ranked: Vec<(crate::matching::Rank, &Creature)> = creatures
             .into_iter()
             .filter(|c| {
                 let facets = c.facets.as_ref();
-                (parsed.words.is_empty()
-                    || c.lower.contains(&parsed.words)
-                    || facets.is_some_and(|f| parsed.words_in(&c.name, f)))
-                    && (!parsed.names_facts() || facets.is_some_and(|f| parsed.matches_facts(f)))
+                (!parsed.names_facts() || facets.is_some_and(|f| parsed.matches_facts(f)))
                     && (filter.is_empty() || facets.is_some_and(|f| filter.matches(f)))
                     && (!query.is_empty() || !c.party || !(roster.already)(c))
             })
+            .filter_map(|c| {
+                if parsed.words.is_empty() {
+                    return Some((crate::matching::Rank::typed(0), c));
+                }
+                let facts = c
+                    .facets
+                    .as_ref()
+                    .is_some_and(|f| parsed.words_in(&c.name, f));
+                Some((crate::matching::with_other(typed.name(&c.lower), facts)?, c))
+            })
             .collect();
-        // The plain name first, so "wolf" finds Wolf before Dire Wolf. The sort keeps the
-        // list's order inside each rank.
+        // The plain name first, so "wolf" finds Wolf before Dire Wolf. A fact match comes
+        // after every name match as typed, and a typo in the name comes last. The sort is
+        // stable, so the list's order stays inside each rank.
         if !parsed.words.is_empty() {
-            matches.sort_by_key(|c| {
-                (
-                    crate::lookup::name_rank(&c.name.to_lowercase(), &parsed.words).unwrap_or(4),
-                    c.origin,
-                )
-            });
+            ranked.sort_by_key(|&(rank, c)| (rank, c.origin));
         }
-        // Enter adds the best match, with focus kept for the next name.
+        let as_typed = ranked.iter().take_while(|(rank, _)| !rank.typo).count();
+        let matches: Vec<&Creature> = ranked.into_iter().map(|(_, c)| c).collect();
+        // Enter adds the best match, with focus kept for the next name. A name found only with
+        // a typo is a guess, so Enter does not add it.
         if response.lost_focus()
             && ui.input(|i| i.key_pressed(egui::Key::Enter))
             && !query.is_empty()
+            && as_typed > 0
             && let Some(first) = matches.first()
             && !(roster.already)(first)
             && first.unavailable.is_none()
@@ -3884,7 +3892,14 @@ impl Encounters {
             *focus_search = true;
         }
         let hidden_duplicates = duplicate_creature_results(ui, &query);
-        if matches.is_empty() && !hidden_duplicates {
+        if as_typed == 0 && !matches.is_empty() {
+            ui.label(
+                Type::Small
+                    .rich(ui, crate::matching::CLOSE_NAMES)
+                    .color(colors().muted),
+            );
+        }
+        if as_typed == 0 && !hidden_duplicates {
             let index = ui.ctx().data(|data| {
                 data.get_temp::<Arc<crate::lookup::ContentIndex>>(egui::Id::new(
                     "reader_link_index",
@@ -3914,6 +3929,8 @@ impl Encounters {
                     });
                 }
             }
+        }
+        if matches.is_empty() && !hidden_duplicates {
             design::empty_state_with_body(
                 ui,
                 icons::SEARCH,
