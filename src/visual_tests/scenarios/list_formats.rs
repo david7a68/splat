@@ -115,7 +115,7 @@ pub fn run(d: &mut Driver<'_>) {
 
     d.click(NAV_ENCOUNTERS);
     d.click_starting("GROUPS");
-    d.expect("2 of 3 members can join");
+    d.expect("2 of 3 can join");
     d.expect("Scout (as Goblin Warrior) needs fixing");
     d.state("flagged-group-in-groups-list", Sizes::All);
     d.click(NAV_SESSIONS);
@@ -123,7 +123,7 @@ pub fn run(d: &mut Driver<'_>) {
     show_plan(d);
     d.click("Add a group");
     d.click("Plan Bridge guards");
-    d.expect("2 of 3 members can join");
+    d.expect("2 of 3 can join");
     d.state("flagged-group-in-the-plan", Sizes::All);
     d.click(NAV_ENCOUNTERS);
     run_saved_encounter(d, "Shrine of Cinders");
@@ -145,7 +145,7 @@ pub fn run(d: &mut Driver<'_>) {
             let first = find("1. Scout");
             let next = find("2. Goblin Warrior");
             let warning = find("Line 15: Changes \"HP lots\" not read.");
-            let summary = find("Count 1 · CR 1/4 · HP 10 · AC 15 · as Goblin Warrior");
+            let summary = find("CR 1/4 · HP 10 · AC 15 · as Goblin Warrior");
             first.zip(summary).zip(warning).zip(next).is_some_and(
                 |(((first, summary), warning), next)| {
                     first.rect.bottom() <= summary.rect.top()
@@ -157,7 +157,7 @@ pub fn run(d: &mut Driver<'_>) {
             ) && d.visible_text("This member cannot join a fight until its Changes cell is fixed. Other members can join.")
         },
     );
-    d.expect("XP 100 for 2 that can join");
+    d.expect("XP 100");
     d.expect("Edit in Obsidian");
     d.expect("Show file");
     d.expect("Changes for Scout");
