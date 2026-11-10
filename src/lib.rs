@@ -1839,9 +1839,14 @@ impl Splat {
                                     blocked,
                                 );
                                 design::locked(ui, blocked, |ui| {
-                                    self.campaigns.show_form_if_editing(ui);
+                                    let details_open = self.campaigns.show_form_if_editing(ui);
                                     design::rule(ui);
-                                    self.sessions.folder_view(ui, &self.timeline, blocked);
+                                    self.sessions.folder_view(
+                                        ui,
+                                        &self.timeline,
+                                        blocked,
+                                        details_open,
+                                    );
                                 });
                             });
                     }
