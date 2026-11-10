@@ -758,11 +758,18 @@ impl CampaignContent {
         let old = &self.old_files;
         if !old.is_empty() {
             let message = if old.len() == 1 {
+                // A campaign file shows its path in the campaign; a package file, its name.
                 crate::formats_ui::old_message(
                     &old[0]
                         .strip_prefix(&active.path)
-                        .unwrap_or(&old[0])
-                        .to_string_lossy(),
+                        .map(|path| path.to_string_lossy().into_owned())
+                        .unwrap_or_else(|_| {
+                            old[0]
+                                .file_name()
+                                .unwrap_or_default()
+                                .to_string_lossy()
+                                .into_owned()
+                        }),
                 )
             } else {
                 format!("{} files use the old layout.", old.len())
@@ -773,7 +780,9 @@ impl CampaignContent {
                     .then_some("Close the run before converting files."),
                 |ui| design::message_with_action(ui, Tone::Warning, &message, "Convert files…"),
             ) {
-                self.layouts.scan(campaigns);
+                // Open with every listed file's owner checked, so the defaults convert the
+                // files that block Save too.
+                self.layouts.scan_paths(campaigns, &old.clone());
             }
         }
         for (path, baseline, draft) in &mut self.repairs {
