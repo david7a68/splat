@@ -2561,26 +2561,49 @@ pub mod prep_to_table {
             !row_moved,
             "Rows do not move during initiative entry",
         );
-        d.state("all-initiative-entered", Sizes::Default);
-        for size in [SMALL, DEFAULT] {
+        d.state("all-initiative-entered", Sizes::All);
+        for size in [SMALL, DEFAULT, (1920.0, 1080.0)] {
             let (aligned, compact) = d.at_size(size, |d| {
                 let nodes = d.nodes();
-                let aligned = nodes
+                let fields: Vec<_> = nodes
                     .iter()
                     .filter(|node| node.name.starts_with("Initiative for "))
-                    .all(|field| {
+                    .collect();
+                let rolls: Vec<_> = nodes
+                    .iter()
+                    .filter(|node| node.name.starts_with("Roll for "))
+                    .collect();
+                let aligned = fields.len() == 7
+                    && rolls.len() == 2
+                    && fields
+                        .windows(2)
+                        .all(|pair| (pair[0].rect.left() - pair[1].rect.left()).abs() <= 1.0)
+                    && fields.iter().all(|field| {
                         let name = field.name.trim_start_matches("Initiative for ");
-                        let controls = [
-                            format!("Roll for {name}"),
+                        [
                             format!("Absent: {name}"),
                             format!("More actions for {name}"),
-                        ];
-                        controls.iter().all(|name| {
-                            nodes.iter().filter(|node| node.name == *name).all(|node| {
-                                (node.rect.center().y - field.rect.center().y).abs() <= 1.0
-                                    && node.rect.left() > field.rect.right()
-                            })
+                        ]
+                        .iter()
+                        .all(|name| {
+                            nodes
+                                .iter()
+                                .find(|node| node.name == *name)
+                                .is_some_and(|node| {
+                                    (node.rect.center().y - field.rect.center().y).abs() <= 1.0
+                                        && node.rect.left() >= field.rect.right()
+                                })
                         })
+                    })
+                    && rolls.iter().all(|roll| {
+                        let name = roll.name.trim_start_matches("Roll for ");
+                        fields
+                            .iter()
+                            .find(|field| field.name == format!("Initiative for {name}"))
+                            .is_some_and(|field| {
+                                (roll.rect.center().y - field.rect.center().y).abs() <= 1.0
+                                    && roll.rect.right() <= field.rect.left()
+                            })
                     });
                 let compact = nodes.iter().any(|node| {
                     node.name.starts_with("Brannoch Vale · ")
@@ -2592,7 +2615,7 @@ pub mod prep_to_table {
                 "Setup row controls",
                 aligned && compact,
                 format!(
-                    "At {size:?}, controls share the initiative centre and an untied row fits RUN_REGULAR: aligned {aligned}, compact {compact}"
+                    "At {size:?}, all seven totals align, both Roll controls precede them, Absent and menus follow, and an untied row fits RUN_REGULAR: aligned {aligned}, compact {compact}"
                 ),
             );
         }
