@@ -40,6 +40,11 @@ egui_kittest = { version = "0.33", features = ["wgpu", "eframe"] }
 ab_glyph = "0.2"
 epaint_default_fonts = "0.33"
 
+# Test builds only. jemalloc returns freed memory and scales across the visual
+# suite's workers; it does not build with MSVC.
+[target.'cfg(not(target_env = "msvc"))'.dev-dependencies]
+tikv-jemallocator = "0.7.0"
+
 # Keep clean project builds small; preserve dependency runtime performance.
 [profile.dev]
 debug = "line-tables-only"

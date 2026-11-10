@@ -900,6 +900,19 @@ Resuming a saved Setup after a restoring rest starts party HP full, says `Party 
 rest.` and offers Use the saved HP as one Undo step. Combat retains saved HP; the rest message names those
 fights.
 
+### Party bar
+
+While a session is played, a band of the page above the Session page holds the party. It uses the page
+surface and the panel's hairline, never `raised`, and one `Read` row of height, so nothing below it moves.
+`Party` stands in its own Label column, as `Add` does on the plan's strip. Each item is a 24 px portrait, an
+`hp_readout` at `Numeral` over `Small` with its `hp_bar` along the item's bottom edge, temporary HP with its
+shield, the run's `Bloodied` or `0 HP` icon, word and colour, then stats in `Small`: a muted label, a space and
+the value, in the Party list's order `AC`, `Per`, `Ins`, `DC`. `DC` is left out for a player with no spell
+save DC. Items sit `M` apart, with no boxes. All items show the same number of stats; when they do not fit,
+the source status gives way first, then stats drop from the end. HP and its state word stay. Hover shows the
+name in `Strong`, then one fact to a muted `Small` line: HP, AC and DC, passive scores, conditions, and the
+source. Hover fill and the 2 px focus ring use `RADIUS_CONTROL`. A click opens the sheet on Party.
+
 ### Timeline
 
 Timeline is a story-order ledger: one column, hairline spine, icon and word per kind, no kind colours or

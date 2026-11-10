@@ -16,8 +16,11 @@
 //!   every reached text expectation before failing. Action failures still stop a scenario.
 //! - `SPLAT_VISUAL_DIAGNOSE=1` collects text expectations, then still fails the run.
 //! - `SPLAT_VISUAL_TIMINGS=1` prints stage timings without changing captures.
-//! - `SPLAT_VISUAL_SLOTS` overrides the machine-wide suite limit (default 2).
-//!   Set the same positive count in every worktree; each slot needs full-suite RAM.
+//! - `SPLAT_VISUAL_JOBS` is how many scenarios run at once (default 4). Memory
+//!   grows with it: a full capture run needs about 1.1 GiB at 4 and 1.6 GiB at 8.
+//! - `SPLAT_VISUAL_SLOTS` overrides the machine-wide suite limit. The default
+//!   comes from this computer's cores and RAM. Set the same positive count in
+//!   every worktree; each slot needs full-suite RAM.
 //! - Linux isolates temporary files with a mount namespace when available.
 //!   `SPLAT_VISUAL_ISOLATE=0` retains the shared-world lock for comparison.
 //! - `visual-baseline-chrome <label>` applies eligible saved chrome measurements.
@@ -53,6 +56,8 @@ const BASELINE: &str = include_str!("baseline.json");
 const BASELINE_PATH: &str = "src/visual_tests/baseline.json";
 
 type Script = fn(&mut Driver<'_>);
+
+const DEFAULT_JOBS: usize = 4;
 
 const SCENARIOS: [(&str, Seed, Script); 74] = [
     ("file-formats", Seed::Formats, scenarios::file_formats::run),
@@ -414,7 +419,9 @@ fn run_scenario(
         .iter()
         .position(|(other, ..)| *other == name)
         .expect("listed scenario") as u128;
+    // Workers run several scenarios, so start each from clean thread state.
     crate::hermetic::closed::repeatable_uuids((index + 1) << 64);
+    crate::hermetic::closed::clear_next_folder();
     let started = Instant::now();
     let world = World::build(&root.join(name), &cache, name, seed)
         .unwrap_or_else(|error| panic!("{name}: could not build its world: {error}"));
@@ -429,6 +436,78 @@ fn run_scenario(
         println!("Timing {name}: driver + script = {:?}", started.elapsed());
     }
     outcome
+}
+
+/// How many scenarios run at once. Each live scenario holds a whole app and its
+/// renderer, so this, not the scenario count, sets the suite's memory.
+fn jobs() -> usize {
+    match std::env::var("SPLAT_VISUAL_JOBS") {
+        Ok(value) => value
+            .parse()
+            .ok()
+            .filter(|count| *count > 0)
+            .expect("SPLAT_VISUAL_JOBS must be a positive integer"),
+        Err(_) => DEFAULT_JOBS,
+    }
+}
+
+/// Rust code in test builds uses jemalloc, but Mesa's software renderer still
+/// uses glibc's malloc. glibc gives busy threads their own heap arenas and keeps
+/// the memory they free. It also raises its mmap threshold after a large free,
+/// so large buffers then stay in those arenas. One arena per worker and a fixed
+/// threshold keep that memory small. Before jemalloc, these settings alone took
+/// a four-worker capture run from 2.2 to 0.8 GiB at the same speed.
+/// An arena limit applies only before a process has nine arenas. In the isolated
+/// child that is always so; in the shared fallback it can come too late.
+#[cfg(all(target_os = "linux", target_env = "gnu"))]
+fn limit_allocator(jobs: usize) {
+    // SAFETY: mallopt only changes allocator settings; it is safe on any thread.
+    unsafe {
+        libc::mallopt(
+            libc::M_ARENA_MAX,
+            libc::c_int::try_from(jobs).unwrap_or(libc::c_int::MAX),
+        );
+        libc::mallopt(libc::M_MMAP_THRESHOLD, 1 << 20);
+    }
+}
+
+/// A fixed set of workers takes the scenarios in list order. The results keep
+/// that order, whichever scenario finishes first.
+fn run_scenarios(
+    scenarios: &[(&'static str, Seed, Script)],
+    root: &Path,
+    output: Option<&Path>,
+    record: bool,
+) -> Vec<(&'static str, std::thread::Result<Outcome>)> {
+    let jobs = jobs();
+    #[cfg(all(target_os = "linux", target_env = "gnu"))]
+    limit_allocator(jobs);
+    let next = std::sync::atomic::AtomicUsize::new(0);
+    let results = std::sync::Mutex::new(Vec::from_iter(scenarios.iter().map(|_| None)));
+    std::thread::scope(|scope| {
+        for _ in 0..jobs.min(scenarios.len()) {
+            scope.spawn(|| {
+                loop {
+                    let index = next.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                    let Some(&scenario) = scenarios.get(index) else {
+                        break;
+                    };
+                    // A panic ends only this scenario, as a thread's panic did.
+                    let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                        run_scenario(root, output, record, scenario)
+                    }));
+                    results.lock().unwrap_or_else(|e| e.into_inner())[index] =
+                        Some((scenario.0, outcome));
+                }
+            });
+        }
+    });
+    results
+        .into_inner()
+        .unwrap_or_else(|e| e.into_inner())
+        .into_iter()
+        .map(|result| result.expect("every scenario ran"))
+        .collect()
 }
 
 fn selected() -> Vec<(&'static str, Seed, Script)> {
@@ -619,22 +698,7 @@ fn visual_suite() {
     crate::hermetic::closed::use_cache_root(cache);
     let scenarios = selected();
     let output = capture.then_some(directory.as_path());
-    let outcomes: Vec<(&str, std::thread::Result<Outcome>)> = std::thread::scope(|scope| {
-        let root = &root;
-        let threads: Vec<_> = scenarios
-            .iter()
-            .map(|&scenario| {
-                (
-                    scenario.0,
-                    scope.spawn(move || run_scenario(root, output, record, scenario)),
-                )
-            })
-            .collect();
-        threads
-            .into_iter()
-            .map(|(name, thread)| (name, thread.join()))
-            .collect()
-    });
+    let outcomes = run_scenarios(&scenarios, &root, output, record);
     let mut violations = Vec::new();
     let mut passes = Vec::new();
     let mut costs = Vec::new();
