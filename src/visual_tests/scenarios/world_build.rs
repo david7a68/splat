@@ -2668,8 +2668,9 @@ pub fn world_note_deleted(d: &mut Driver<'_>) {
 }
 
 /// Copying a typed note must keep both files reachable.
-/// Do the duplicate repair choices and consequences start at the warning's text edge?
-fn duplicate_choices_at_text(d: &Driver<'_>) -> (bool, String) {
+/// Do the duplicate repair choices and consequences start at the warning's text edge? Only nodes
+/// that start right of `pane_left` count, so a check of one pane cannot pass on another's copies.
+fn duplicate_choices_at_text(d: &Driver<'_>, pane_left: f32) -> (bool, String) {
     let warning = "These two files claim to be the same note.";
     let parts = [
         "Make Rook Ambry copy.md a separate note",
@@ -2683,12 +2684,14 @@ fn duplicate_choices_at_text(d: &Driver<'_>) -> (bool, String) {
     let nodes = d.nodes();
     let texts: Vec<_> = nodes
         .iter()
-        .filter(|node| node.name == warning && node.in_view())
+        .filter(|node| node.name == warning && node.in_view() && node.rect.left() >= pane_left)
         .map(|node| node.rect)
         .collect();
     let found: Vec<_> = nodes
         .iter()
-        .filter(|node| parts.contains(&node.name.as_str()) && node.in_view())
+        .filter(|node| {
+            parts.contains(&node.name.as_str()) && node.in_view() && node.rect.left() >= pane_left
+        })
         .collect();
     let every_part = parts
         .iter()
@@ -2838,7 +2841,7 @@ pub fn world_note_duplicated(d: &mut Driver<'_>) {
         );
     }
     for size in [SMALL, DEFAULT, LARGE] {
-        let (aligned, detail) = d.at_size(size, duplicate_choices_at_text);
+        let (aligned, detail) = d.at_size(size, |d| duplicate_choices_at_text(d, 0.0));
         d.observe(
             "iter-13-D-FD4-world",
             aligned,
@@ -2914,7 +2917,14 @@ pub fn world_note_duplicated(d: &mut Driver<'_>) {
         },
     );
     for size in [SMALL, DEFAULT, LARGE] {
-        let (aligned, detail) = d.at_size(size, duplicate_choices_at_text);
+        let (aligned, detail) = d.at_size(size, |d| {
+            // Lookup's own copies only: the World pane beside it shows the same message.
+            let pane_left = d
+                .place_of("Resize Lookup column")
+                .map_or(f32::INFINITY, |splitter| splitter.right());
+            let (aligned, detail) = duplicate_choices_at_text(d, pane_left);
+            (aligned, format!("Lookup pane from x {pane_left}; {detail}"))
+        });
         d.observe(
             "iter-13-D-FD4-lookup",
             aligned,
@@ -3698,6 +3708,50 @@ pub fn part_of_safety(d: &mut Driver<'_>) {
         fs::read(&path).unwrap(),
         away.as_bytes(),
         "iter-13-D-FD2-no-write"
+    );
+    // iter-13-D-FD2-second: Obsidian writes again while the choice is open. Reload must not drop
+    // Undo reload for a version the DM has not seen.
+    fs::write(&path, &readable).unwrap();
+    reload(d);
+    d.click("Edit Safe Rook");
+    d.replace_text_in("Status", "ready");
+    fs::write(&path, &away).unwrap();
+    d.click("Save changes");
+    d.expect(conflict);
+    d.settle();
+    let gone = readable.replace("splat_status: alive", "splat_status: gone");
+    fs::write(&path, &gone).unwrap();
+    d.click("Reload and lose my draft");
+    d.settle();
+    d.observe_both(
+        "iter-13-D-FD2-second",
+        "A second outside change after Reload shows the choice again, not a silent reopen",
+        |d| {
+            d.expect(conflict);
+            // Neighbour: the form waits for the choice, so no field shows yet.
+            d.in_view(conflict)
+                && d.in_view("Reload and lose my draft")
+                && d.field_text("Status").is_none()
+        },
+    );
+    d.click("Reload and lose my draft");
+    d.settle();
+    d.observe(
+        "iter-13-D-FD2-second-reload",
+        d.in_view("Undo reload") && d.field_text("Status").as_deref() == Some("gone"),
+        "The second Reload shows the newest file and keeps Undo reload",
+    );
+    d.click("Undo reload");
+    d.observe(
+        "iter-13-D-FD2-second-undone",
+        d.field_text("Status").as_deref() == Some("ready") && !d.has("Undo reload"),
+        "Undo reload restores the DM's own draft, not the version between",
+    );
+    d.click("Discard");
+    assert_eq!(
+        fs::read(&path).unwrap(),
+        gone.as_bytes(),
+        "iter-13-D-FD2-second-no-write"
     );
 
     // Compact Read has no group Change. Use its real Edit → Change → Save route.

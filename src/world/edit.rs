@@ -498,7 +498,11 @@ impl EditDraft {
         if let Some(theirs) = theirs {
             match choice {
                 design::DiskConflictChoice::Reload => {
-                    self.reloaded = Some(std::mem::replace(&mut self.now, theirs.clone()));
+                    let previous = std::mem::replace(&mut self.now, theirs.clone());
+                    // A clean draft that was already reloaded keeps the draft its Undo restores.
+                    if self.reloaded.is_none() || previous != self.start {
+                        self.reloaded = Some(previous);
+                    }
                 }
                 design::DiskConflictChoice::Overwrite => {
                     // Only what the DM changed overwrites. The disk version supplies the rest.
@@ -653,6 +657,13 @@ impl Reader {
                 // The draft already holds this file, as after a save conflict's reload. Keep it,
                 // so `Undo reload` stays until the file changes again.
                 Ok(fresh) if fresh.baseline == draft.baseline => draft.seen = fresh.seen,
+                // The file changed again after Reload. Show the choice again, so `Undo reload`
+                // is not lost to a version the DM has not seen.
+                Ok(fresh) if draft.reloaded.is_some() => {
+                    let theirs = Fields::read(&draft.path, &fresh.baseline);
+                    draft.disk = Some((fresh.baseline, theirs));
+                    draft.seen = fresh.seen;
+                }
                 Ok(fresh) => draft = fresh,
                 Err(error) => {
                     // Try again when the index next changes, not on every frame.
