@@ -1041,6 +1041,12 @@ fn draw_with_links(
         }
     }
     response.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Link, true, text.as_str()));
+    if links
+        .iter()
+        .any(|(_, destination)| matches!(destination, LinkTarget::Roll(_)))
+    {
+        crate::rolls::follow(ui, &response);
+    }
     let Some(pointer) = response.hover_pos() else {
         return response.rect;
     };

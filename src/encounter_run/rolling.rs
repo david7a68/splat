@@ -303,7 +303,7 @@ impl Run {
             let headline = ui.label(Type::Strong.rich(ui, rolled.headline()).color(c.text));
             design::named(ui, &headline, &rolled.line());
             if let Some(armor) = self.armor_words(roller, rolled) {
-                ui.label(Type::Body.rich(ui, armor).color(c.text));
+                ui.label(Type::Body.rich(ui, format!("· {armor}")).color(c.text));
             }
             if let Some(words) = rolled.natural_words() {
                 ui.label(
@@ -312,6 +312,8 @@ impl Run {
                         .color(c.text),
                 );
             }
+            // A wider gap before who rolled, so the target's name never runs into the roller's.
+            ui.add_space(design::S);
             // The dice go first, then the feature; the roller's name stays.
             let name = rolled.name();
             let mut full = format!("{name} · {}", rolled.parts());
@@ -333,6 +335,8 @@ impl Run {
         let mut use_total = false;
         let mut back = None;
         ui.horizontal(|ui| {
+            // The strip keeps two lines with or without actions, so the panel never moves.
+            ui.set_min_height(Density::Read.control());
             ui.spacing_mut().item_spacing.x = design::S;
             if self.call.is_none() || self.panel != Panel::Call {
                 match rolls::actions(ui, rolled, self.use_blocked(roller, rolled)) {
@@ -532,16 +536,31 @@ impl Run {
                         .rich(ui, "Tick each target. Ctrl+click on a row also ticks it.")
                         .color(c.muted),
                 );
-                for &row in &self.state.order {
+                let listed: Vec<usize> = self
+                    .state
+                    .order
+                    .iter()
+                    .copied()
+                    .filter(|&row| Some(row) != call.caster && self.state.participants[row].present)
+                    .collect();
+                // Name, result and Half are columns, so totals and toggles can be read down.
+                let columns = self.call_columns(ui, &call, &listed);
+                for &row in &listed {
                     let p = &self.state.participants[row];
-                    if Some(row) == call.caster || !p.present {
-                        continue;
-                    }
                     let ticked = call.rows.get(&row);
                     let character = character(&p.definition);
                     let bonus = save_bonus(&p.definition, &call.ability);
                     ui.horizontal_wrapped(|ui| {
                         ui.spacing_mut().item_spacing.x = design::S;
+                        let start = ui.cursor().min.x;
+                        let to_column = |ui: &mut egui::Ui, x: Option<f32>| {
+                            if let Some(x) = x {
+                                let gap = start + x - ui.cursor().min.x;
+                                if gap > 0.0 {
+                                    ui.add_space(gap);
+                                }
+                            }
+                        };
                         let mut on = ticked.is_some();
                         if ui.checkbox(&mut on, &p.name).changed() {
                             actions.push(CallStep::Tick(row));
@@ -549,6 +568,7 @@ impl Run {
                         let Some(entry) = ticked else {
                             return;
                         };
+                        to_column(ui, columns.map(|(result, _)| result));
                         if character {
                             let mut typed = entry.typed.clone();
                             let field = design::text_input(
@@ -581,6 +601,7 @@ impl Run {
                                     .color(c.muted),
                             );
                         }
+                        to_column(ui, columns.map(|(_, half)| half));
                         let mut half = entry.half;
                         if ui.checkbox(&mut half, "Half").changed() {
                             actions.push(CallStep::Half(row, half));
@@ -655,20 +676,66 @@ impl Run {
                     None
                 };
                 ui.add_space(design::S);
-                if Action::primary(&word)
-                    .density(Density::Read)
-                    .hint("Put the total in Amount for the ticked targets. Then press Damage.")
-                    .blocked(blocked)
-                    .show(ui)
-                    .clicked()
-                    && let Some(total) = total
-                {
-                    actions.push(CallStep::Use(total));
-                }
+                ui.horizontal_wrapped(|ui| {
+                    ui.spacing_mut().item_spacing.x = design::S;
+                    if Action::primary(&word)
+                        .density(Density::Read)
+                        .hint("Put the total in Amount for the ticked targets. Then press Damage.")
+                        .blocked(blocked)
+                        .show(ui)
+                        .clicked()
+                        && let Some(total) = total
+                    {
+                        actions.push(CallStep::Use(total));
+                    }
+                    design::blocked_reason(ui, blocked);
+                });
             });
         for step in actions {
             self.call_step(step);
         }
+    }
+
+    /// Where a call row's result and its Half toggle start, from the row's left edge, when
+    /// every row fits them on one line. Otherwise rows wrap as they must.
+    fn call_columns(&self, ui: &egui::Ui, call: &Call, listed: &[usize]) -> Option<(f32, f32)> {
+        let width = |text: &str, role: Type| design::number_width(ui, text, &role.font(ui));
+        let tick = ui.spacing().icon_width + ui.spacing().icon_spacing;
+        let names = listed
+            .iter()
+            .map(|&row| width(&self.state.participants[row].name, Type::Body))
+            .fold(0.0, f32::max);
+        let verdict = |total: i64| {
+            let made = if total >= call.dc {
+                "At or above DC"
+            } else {
+                "Below DC"
+            };
+            width(&total.to_string(), Type::Strong) + design::S + width(made, Type::Small)
+        };
+        let results = call
+            .rows
+            .iter()
+            .map(|(&row, entry)| {
+                let p = &self.state.participants[row];
+                let character = character(&p.definition);
+                let field = if character { 52.0 + design::S } else { 0.0 };
+                let shown = match entry.total {
+                    Some(total) => verdict(total),
+                    None if save_bonus(&p.definition, &call.ability).is_some() => {
+                        Action::secondary(if character { "Roll for them" } else { "Roll" })
+                            .density(Density::Read)
+                            .natural_width(ui)
+                    }
+                    None => 0.0,
+                };
+                field + shown
+            })
+            .fold(verdict(call.dc), f32::max);
+        let result = tick + names + design::S;
+        let half = result + results + design::S;
+        let needed = half + tick + width("Half", Type::Body);
+        (needed <= ui.available_width()).then_some((result, half))
     }
 
     fn call_step(&mut self, step: CallStep) {

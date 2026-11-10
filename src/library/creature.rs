@@ -369,41 +369,57 @@ fn changed_speed(ui: &mut egui::Ui, printed: &str, speed: &str) {
 }
 
 /// One ability row of the stat block's attribute table.
-fn ability_row(ui: &mut egui::Ui, entry: &Entry, ability: &str) {
+fn ability_row(ui: &mut egui::Ui, entry: &Entry, ability: &str, saves: bool) {
     let c = colors();
     let modifier = stat(entry, ability).map(|score| (score - 10).div_euclid(2));
     // An absent override does not establish proficiency or a save total.
     let save = stat(entry, &format!("save_{ability}"));
     ui.horizontal(|ui| {
         ui.spacing_mut().item_spacing.x = design::XS;
+        let [label, score, modifier_cell] = ABILITY_CELLS;
         cell(
             ui,
-            30.0,
+            label,
             &ability[..3].to_uppercase(),
             Type::StatLabel,
             c.text,
         );
-        cell(ui, 24.0, &value(entry, ability), Type::Stat, c.text);
+        cell(ui, score, &value(entry, ability), Type::Stat, c.text);
         let name = dice_text::ability(ability).unwrap_or(ability);
         match modifier {
             Some(bonus) => link_cell(
                 ui,
-                26.0,
+                modifier_cell,
                 &design::signed(bonus),
                 &RollLink::d20(D20::Check, bonus, name),
             ),
-            None => cell(ui, 26.0, "—", Type::Stat, c.muted),
+            None => cell(ui, modifier_cell, "—", Type::Stat, c.muted),
         }
         match save {
             Some(bonus) => link_cell(
                 ui,
-                56.0,
+                SAVE_CELL,
                 &format!("Save {}", design::signed(bonus)),
                 &RollLink::d20(D20::Save, bonus, name),
             ),
-            None => cell(ui, 56.0, "", Type::Stat, c.muted),
+            None if saves => cell(ui, SAVE_CELL, "", Type::Stat, c.muted),
+            None => {}
         }
     });
+}
+
+/// The widths of an attribute row's cells: label, score, modifier, then the save.
+const ABILITY_CELLS: [f32; 3] = [30.0, 24.0, 26.0];
+const SAVE_CELL: f32 = 56.0;
+
+/// One half of the attribute table, physical or mental, with or without its Save column.
+fn ability_half_width(saves: bool) -> f32 {
+    let cells: f32 = ABILITY_CELLS.iter().sum::<f32>() + 2.0 * design::XS;
+    if saves {
+        cells + design::XS + SAVE_CELL
+    } else {
+        cells
+    }
 }
 
 /// An attribute row is as tall as a pointer target, as its numbers roll.
@@ -446,6 +462,7 @@ fn link_cell(ui: &mut egui::Ui, width: f32, text: &str, link: &RollLink) {
     response.widget_info(|| {
         egui::WidgetInfo::labeled(egui::WidgetType::Link, true, crate::rolls::hint(link))
     });
+    crate::rolls::follow(ui, &response);
     if response.hovered() || response.clicked() || response.secondary_clicked() {
         crate::rolls::press(ui, &response, link);
     }
@@ -455,13 +472,18 @@ fn link_cell(ui: &mut egui::Ui, width: f32, text: &str, link: &RollLink) {
 fn skills_detail(ui: &mut egui::Ui, text: &str) {
     let mut markdown = String::new();
     let mut at = 0;
-    for (range, name, bonus) in dice_text::skills(text) {
+    let skills = dice_text::skills(text);
+    if skills.is_empty() {
+        reader_style::detail(ui, "Skills", text);
+        return;
+    }
+    for (range, name, bonus) in skills {
         markdown.push_str(&text[at..range.start]);
         markdown.push_str(&RollLink::d20(D20::Skill, bonus, name).markdown(&text[range.clone()]));
         at = range.end;
     }
     markdown.push_str(&text[at..]);
-    reader_style::detail_with(ui, "Skills", |ui| {
+    reader_style::linked_detail(ui, "Skills", |ui| {
         crate::markdown_view::show_compact(ui, &markdown);
     });
 }
@@ -743,8 +765,12 @@ pub(super) fn stat_head(ui: &mut egui::Ui, entry: &Entry, values: Option<&super:
     ui.add_space(design::S);
     vitals(ui, entry, values);
     ui.add_space(design::S);
-    // The rulebook's table: physical abilities beside mental ones.
-    let two_columns = ui.available_width() >= 300.0;
+    // The rulebook's table: physical abilities beside mental ones, with a clear gutter between
+    // them. A creature with no saving throw has no Save column.
+    let saves = ABILITIES
+        .iter()
+        .any(|ability| stat(entry, &format!("save_{ability}")).is_some());
+    let two_columns = ui.available_width() >= 2.0 * ability_half_width(saves) + design::XL;
     let any_ability = ABILITIES
         .iter()
         .any(|ability| stat(entry, ability).is_some());
@@ -756,12 +782,12 @@ pub(super) fn stat_head(ui: &mut egui::Ui, entry: &Entry, values: Option<&super:
         // An authored creature can have no scores. There is nothing to tabulate.
     } else if two_columns {
         ui.horizontal_top(|ui| {
-            ui.spacing_mut().item_spacing.x = design::M;
+            ui.spacing_mut().item_spacing.x = design::XL;
             for column in ABILITIES.chunks(3) {
                 ui.vertical(|ui| {
                     ui.spacing_mut().item_spacing.y = 0.0;
                     for ability in column {
-                        ability_row(ui, entry, ability);
+                        ability_row(ui, entry, ability, saves);
                     }
                 });
             }
@@ -769,7 +795,7 @@ pub(super) fn stat_head(ui: &mut egui::Ui, entry: &Entry, values: Option<&super:
     } else {
         ui.spacing_mut().item_spacing.y = 0.0;
         for ability in ABILITIES {
-            ability_row(ui, entry, ability);
+            ability_row(ui, entry, ability, saves);
         }
     }
     if any_ability {

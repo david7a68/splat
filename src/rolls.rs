@@ -48,6 +48,9 @@ fn shown_id() -> Id {
 fn preview_id() -> Id {
     Id::new("roll_preview_random")
 }
+fn anchor_id() -> Id {
+    Id::new("roll_anchor")
+}
 
 /// The press of this frame, for the run or the preview stream.
 pub(crate) fn take_ask(ctx: &egui::Context) -> Option<Ask> {
@@ -151,6 +154,12 @@ pub(crate) fn press(ui: &egui::Ui, response: &egui::Response, link: &RollLink) {
         .map_or(response.rect.left_bottom(), |pos| {
             egui::pos2(pos.x, response.rect.bottom().min(pos.y + Type::Body.line()))
         });
+    if response.clicked() || response.secondary_clicked() {
+        // The result follows its link when the page moves, as the strip opens above it.
+        let anchor = (response.id, at - response.rect.min);
+        ui.ctx()
+            .data_mut(|data| data.insert_temp(anchor_id(), anchor));
+    }
     if response.secondary_clicked() {
         let asked = ask(ui, link, Mode::Normal, at);
         ui.ctx().data_mut(|data| data.insert_temp(menu_id(), asked));
@@ -173,6 +182,38 @@ pub(crate) fn press(ui: &egui::Ui, response: &egui::Response, link: &RollLink) {
     ui.ctx().data_mut(|data| data.insert_temp(ask_id(), asked));
 }
 
+/// Keep an open result or menu beside the link that `response` draws, where it is now.
+pub(crate) fn follow(ui: &egui::Ui, response: &egui::Response) {
+    let ctx = ui.ctx();
+    let Some((id, offset)) = ctx.data(|data| data.get_temp::<(Id, egui::Vec2)>(anchor_id())) else {
+        return;
+    };
+    if id != response.id {
+        return;
+    }
+    let at = response.rect.min + offset;
+    let mut moved = false;
+    ctx.data_mut(|data| {
+        if let Some(mut shown) = data.get_temp::<Shown>(shown_id())
+            && shown.at != at
+        {
+            shown.at = at;
+            data.insert_temp(shown_id(), shown);
+            moved = true;
+        }
+        if let Some(mut asked) = data.get_temp::<Ask>(menu_id())
+            && asked.at != at
+        {
+            asked.at = at;
+            data.insert_temp(menu_id(), asked);
+            moved = true;
+        }
+    });
+    if moved {
+        ctx.request_repaint();
+    }
+}
+
 /// A dice link outside Markdown: a table cell, a skill, a sheet's bonus.
 pub(crate) fn link(ui: &mut egui::Ui, text: &str, role: Type, link: &RollLink) -> egui::Response {
     let c = colors();
@@ -190,19 +231,21 @@ pub(crate) fn link(ui: &mut egui::Ui, text: &str, role: Type, link: &RollLink) -
     });
     if ui.is_rect_visible(rect) {
         let top = rect.center().y - galley.size().y / 2.0;
+        // A short number sits in the middle of its target, so the words beside it keep even gaps.
+        let left = rect.center().x - galley.size().x / 2.0;
         let color = if response.hovered() {
             c.focus
         } else {
             c.accent
         };
         ui.painter().hline(
-            rect.left()..=rect.left() + galley.size().x,
+            left..=left + galley.size().x,
             top + galley.size().y - 1.0,
             egui::Stroke::new(1.0, color.gamma_multiply(0.6)),
         );
-        ui.painter()
-            .galley(egui::pos2(rect.left(), top), galley, color);
+        ui.painter().galley(egui::pos2(left, top), galley, color);
     }
+    follow(ui, &response);
     if response.hovered() || response.clicked() || response.secondary_clicked() {
         press(ui, &response, link);
     }
@@ -264,7 +307,11 @@ pub(crate) fn show_menu(ctx: &egui::Context) {
                     } else {
                         word
                     };
-                    if design::menu_button(ui, word, false).clicked() {
+                    if design::Action::quiet(word)
+                        .density(design::Density::Read)
+                        .show(ui)
+                        .clicked()
+                    {
                         picked = Some(*mode);
                     }
                 }
@@ -766,6 +813,7 @@ pub(crate) fn actions(
             if clicked && use_blocked.is_none() {
                 action = Some(Action::Use);
             }
+            design::blocked_reason(ui, use_blocked);
         }
     });
     action

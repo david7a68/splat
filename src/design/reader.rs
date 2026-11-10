@@ -62,6 +62,21 @@ pub fn detail(ui: &mut Ui, label: &str, value: &str) {
 
 /// A reference row whose value is drawn by `value`, such as one with dice links.
 pub fn detail_with(ui: &mut Ui, label: &str, value: impl FnOnce(&mut Ui)) {
+    detail_row(ui, label, 0.0, value);
+}
+
+/// A reference row whose value has dice links. A linked line is a control tall, with its text
+/// at the bottom, so the label moves down to share the value's first line.
+pub fn linked_detail(ui: &mut Ui, label: &str, value: impl FnOnce(&mut Ui)) {
+    detail_row(
+        ui,
+        label,
+        (Density::Read.control() - Type::Stat.line()).max(0.0),
+        value,
+    );
+}
+
+fn detail_row(ui: &mut Ui, label: &str, drop: f32, value: impl FnOnce(&mut Ui)) {
     let c = colors();
     let label = human_label(label);
     let font = Type::StatLabel.font(ui);
@@ -74,9 +89,12 @@ pub fn detail_with(ui: &mut Ui, label: &str, value: impl FnOnce(&mut Ui)) {
     }
     ui.horizontal_top(|ui| {
         ui.spacing_mut().item_spacing.x = S;
-        let (rect, _) =
-            ui.allocate_exact_size(vec2(LABEL_WIDTH, Type::Stat.line()), egui::Sense::hover());
-        ui.painter().galley(rect.min, galley, c.text);
+        let (rect, _) = ui.allocate_exact_size(
+            vec2(LABEL_WIDTH, Type::Stat.line() + drop),
+            egui::Sense::hover(),
+        );
+        ui.painter()
+            .galley(rect.min + vec2(0.0, drop), galley, c.text);
         // A long value keeps the reader's measure in this smaller type.
         let room = vec2(ui.available_width().min(DETAIL_MEASURE), 0.0);
         ui.allocate_ui(room, value);
