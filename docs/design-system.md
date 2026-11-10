@@ -233,7 +233,9 @@ the next edit or disk change. A run offers `Replace the file with this run` and 
 
 Session conflicts call the item a note in the warning. Keep Record available because audio uses its own file.
 Show draft and disk text side by side in Write's styled source face. Hide the plan and use the whole session
-body, with choices above the comparison. Library uses its editor's monospace face and line height. Text wraps
+body, with choices above the comparison. Library uses its editor's monospace face and line height. Only a
+side-by-side draft and disk comparison takes the full pane width; when the file is deleted, the lone draft
+keeps the 720 px source editor width. Text wraps
 at word boundaries. Selected fill and a line mark show differences. Open at the first difference with two
 whole context lines above it. Show `N lines differ` and the nearest heading beside that count, such as `Under
 the heading “Recovery”`; let the sentence wrap. Missing rows stay blank with a muted hatch and the accessible name `No
@@ -320,7 +322,8 @@ or without its warning icon: the package name shortens by whole words, so a faul
 selected button say `Campaign entries`. An open package About row uses selected fill with no selected
 category; choosing a category restores it. About is followed by the manifest name. A manifest is never
 counted or listed as an entry, even when unreadable. Keep its warning on About and in the file issue
-count. New packages write `Package.md`. Existing `Module.md` files keep their name. Messages and repair
+count: About shows the warning icon for any problem the header counts in the manifest, such as a first
+heading that differs from the name, not only when the manifest cannot be read. New packages write `Package.md`. Existing `Module.md` files keep their name. Messages and repair
 actions for existing files name the real file. A deleted manifest uses the registered package name
 as its reader title and `<package name> · Manifest deleted` on its owner line. Offer `Show folder`;
 show no file name or `Show file`. Keep the neutral missing-file warning and shared message action.
@@ -333,8 +336,11 @@ text edge below the action. The consequence wraps at the pane's notice measure, 
 and Undo sit in the reader above the tabs, like manifest-write results. Omit the entry breadcrumb and Engine support. Empty package counts have no separator.
 
 Nonzero file status links sit in the page header before Packages and New entry. The amber validation count
-says how many files need fixing: a validation message, a broken link or both count a file once. Its menu
-lists the messages, then a link for each file with broken links (`<path>: N broken links`) that opens it. Unreadable notes use CANNOT BE READ. Rows name
+says how many files need fixing: a validation message, a broken link or both count a file once. A file is
+its owner and its path, so two packages that each have `Rules/Watch.md` count as two files. Its menu
+lists the messages, then a link for each file with broken links (`<path>: N broken links`) that opens it.
+When two owners have the same path, the message and link name the owner first (`Ashen Marches ·
+Rules/Watch.md`). Unreadable notes use CANNOT BE READ. Rows name
 their kind, path and error line; the owner line says Cannot be read. Opening one from a roster selects its
 kind under Cannot be read and opens repair. Repair errors use file line numbers. Edit Markdown opens with
 the caret on the line to fix and scrolls that line into view. Repair reloads campaign use at once. Validation
@@ -401,7 +407,8 @@ Sessions use “session” for their repair and Undo actions. World rows say `Sa
 names the file and keeps `Undo separate entry` on the message line. Folder repairs use `separate
 entries` and `Undo separate entries`, with one guarded Undo for the batch. In Library, each single-file
 or folder choice states which file or folder an encounter will keep or use, in `Small` muted text an
-`XS` gap below its own action.
+`XS` gap below its own action. Library, World and Lookup draw the choices and these lines through
+`message_with_actions`, so they start at the message text edge, not at the warning bar.
 An `L` gap separates choices. Name the folder when filenames match. Making an entry separate also sets
 its name and matching first heading to its file stem. Other actions name encounters whose source will
 change; results explaining which entry an encounter will use are Small muted text below the action.
@@ -425,7 +432,9 @@ draft comparisons. Encounter and group conflict comparisons use disk layout and 
 properties and prose that Overwrite keeps.
 
 Writes check their baseline. Keep skipped files and next steps visible; count changed and skipped files, with
-warning tone for any skip. Each skipped file offers Convert files… beside it. Keep `Undo convert` when
+warning tone for any skip. Each skipped file offers Convert files… beside it. While FILES SKIPPED names
+the open file, its reader keeps the `uses the old layout` sentence without its own Convert files…, so one
+button serves one file. Keep `Undo convert` when
 reopening preview, until another conversion is applied. Headless `splat convert` uses the same checks; `splat
 check` reports schema-2 flags and unreadable files by path and line.
 
