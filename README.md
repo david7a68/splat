@@ -76,6 +76,12 @@ worse count fails the test, and a better one is printed. The tests use temporary
 synthetic data. Test builds have no route to your settings, character cache, keyring or
 D&D Beyond.
 
+Each completed suite writes `ergonomics.json` and `ergonomics.md` to
+`artifacts/screenshots/latest/`, or to `SPLAT_VISUAL_DIR` when set. Each suite clears
+the old reports before starting its scenarios, even without captures.
+If the child exits before reports are written, that folder has no ergonomics report
+for the run.
+
 ```sh
 devenv shell -- visual-test iter-0
 devenv shell -- visual-test work --only run-lookup,party
@@ -103,8 +109,9 @@ or set `SPLAT_VISUAL_CONTACT_SHEET=1` to make it with a full `visual-test` run.
 - Targeted runs collect missing `d.expect(...)` text by default.
   `SPLAT_VISUAL_DIAGNOSE=1` also enables collection for a full run. Missing text
   still fails the suite at the end, even in report mode. Missing controls, failed raw assertions
-  and async timeouts still stop that scenario. The terminal and `ergonomics.md` show
-  all measured baseline changes, even when another failure ends the test. Targeted
+  and async timeouts still stop that scenario. When the scenarios finish, the terminal
+  and `ergonomics.md` show all measured baseline changes, even if a scenario panics.
+  An early child exit has no completed report. Targeted
   runs keep the normal 180-second painted-text wait; diagnosis uses five seconds.
 - If a settle wait reaches 180 seconds in the isolated Linux suite child, it prints
   the scenario diagnostic and exits with status 101. The parent fails and releases
