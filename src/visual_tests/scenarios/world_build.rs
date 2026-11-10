@@ -126,8 +126,14 @@ pub fn broken(d: &mut Driver<'_>) {
             format!("The same unsent draft, focus and visible passage survive resize to {size:?}"),
         );
     }
+    let stale_before = d.has_containing("Not saved.");
     d.click("Discard");
     assert_eq!(d.editor_text().as_deref(), Some(outside.as_str()));
+    d.observe(
+        "iter-5-D-FD9-discard",
+        stale_before && !d.has_containing("Not saved."),
+        "Discard drops the old Not saved message with the draft",
+    );
     d.click("Undo discard of Broken.md");
     assert_eq!(d.editor_text().as_deref(), Some(unfinished.as_str()));
     let fixed = format!(

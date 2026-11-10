@@ -180,6 +180,8 @@ impl Repair {
                     if design::save_row_state(ui, state, dirty, None) {
                         self.discarded = Some(self.draft.clone());
                         self.draft = self.baseline.clone();
+                        // The restored text has its own problem, if any; drop the old message.
+                        self.error = None;
                     }
                     if self.dirty() {
                         design::blocked_reason(ui, Some(crate::encounters::draft_switch_reason()));
@@ -192,6 +194,7 @@ impl Repair {
         {
             self.draft = discarded.clone();
             self.discarded = None;
+            self.error = None;
         }
         saved
     }

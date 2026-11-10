@@ -4516,22 +4516,52 @@ impl Library {
                     && let Some(paths) = loaded.duplicate_folder_paths(owner)
                 {
                     ui.add_space((design::L - ui.spacing().item_spacing.y).max(0.0));
-                    let users: Vec<_> = loaded
-                        .notes
-                        .iter()
-                        .filter_map(|other| {
-                            let encounter = other.entry.as_ref()?;
-                            (encounter.kind == "encounter"
-                                && loaded.notes.iter().any(|target| {
-                                    target.owner.id() == owner.id()
-                                        && paths.contains(&target.path)
-                                        && target.entry.as_ref().is_some_and(|entry| {
-                                            encounter_uses_entry(encounter, entry)
-                                        })
-                                }))
-                            .then(|| encounter.name.clone())
-                        })
-                        .collect();
+                    // Encounters outside the batch whose source changes; worked out once per load.
+                    let slot = egui::Id::new((
+                        "duplicate_folder_users",
+                        owner.id(),
+                        std::ptr::from_ref(loaded) as usize,
+                        loaded.notes.len(),
+                        // A reload in place changes some text; this cheap sum notices it.
+                        loaded
+                            .notes
+                            .iter()
+                            .map(|note| note.text.len())
+                            .sum::<usize>(),
+                    ));
+                    let users = ui
+                        .data(|data| data.get_temp::<Vec<String>>(slot))
+                        .unwrap_or_else(|| {
+                            let batch: std::collections::HashSet<&String> = paths.iter().collect();
+                            let targets: Vec<&Entry> = loaded
+                                .notes
+                                .iter()
+                                .filter(|target| {
+                                    target.owner.id() == owner.id() && batch.contains(&target.path)
+                                })
+                                .filter_map(|target| target.entry.as_ref())
+                                .collect();
+                            let mut users: Vec<String> = Vec::new();
+                            for other in &loaded.notes {
+                                // An encounter inside the batch gets the new identities with it.
+                                if other.owner.id() == owner.id() && batch.contains(&other.path) {
+                                    continue;
+                                }
+                                let Some(encounter) = other.entry.as_ref() else {
+                                    continue;
+                                };
+                                if encounter.kind == "encounter"
+                                    && !users.contains(&encounter.name)
+                                    && targets
+                                        .iter()
+                                        .any(|entry| encounter_uses_entry(encounter, entry))
+                                {
+                                    users.push(encounter.name.clone());
+                                }
+                            }
+                            ui.data_mut(|data| data.insert_temp(slot, users.clone()));
+                            users
+                        });
                     ui.scope(|ui| {
                         ui.spacing_mut().item_spacing.y = design::XS;
                         if Action::secondary(&format!(
