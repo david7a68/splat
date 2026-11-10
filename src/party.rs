@@ -573,7 +573,7 @@ impl Party {
                 .body_returned
                 .is_some()
         };
-        if newer(self.combat.record(), self.reader.sheets.get(id)).is_none() {
+        let Some(record) = newer(self.combat.record(), self.reader.sheets.get(id)) else {
             if sync_open {
                 self.sync_panel(ui);
             }
@@ -585,9 +585,7 @@ impl Party {
                 );
             }
             return;
-        }
-        let record =
-            newer(self.combat.record(), self.reader.sheets.get(id)).expect("checked above");
+        };
         let before = self.page;
         design::segmented(ui, &mut self.page, &SHEET_PAGES);
         if before != self.page {

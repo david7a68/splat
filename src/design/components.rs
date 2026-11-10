@@ -813,10 +813,7 @@ pub fn stepper(
     range: std::ops::RangeInclusive<i64>,
 ) -> bool {
     let before = *value;
-    let (low, high) = (
-        range.start().min(&before).to_owned(),
-        range.end().max(&before).to_owned(),
-    );
+    let (low, high) = ((*range.start()).min(before), (*range.end()).max(before));
     ui.horizontal(|ui| {
         ui.spacing_mut().item_spacing.x = XS / 2.0;
         let down = ui

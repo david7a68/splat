@@ -47,6 +47,8 @@ pub const COINS: [(&str, &str, &str); 5] = [
 ];
 /// The largest maximum HP modifier Splat sends, either way.
 const MAX_HP_BONUS: i64 = 999;
+/// The largest count Splat sends for a coin, an item or a use.
+const MAX_COUNT: i64 = 1_000_000;
 type Groups = BTreeMap<String, Value>;
 /// One class's hit dice, for a short rest.
 #[derive(Clone, Debug, PartialEq)]
@@ -160,6 +162,13 @@ fn integer(v: &Value, field: &str) -> Result<i64, String> {
         .ok_or_else(|| format!("D&D Beyond returned invalid {field}."))
 }
 impl Remote {
+    /// Each named group whose key starts with `prefix`: its key, its name, and its limit.
+    fn named(&self, prefix: &str) -> impl Iterator<Item = (&String, &String, Option<i64>)> {
+        self.labels
+            .iter()
+            .filter(move |(key, _)| key.starts_with(prefix))
+            .map(|(key, name)| (key, name, self.limits.get(key).copied()))
+    }
     fn from_raw(id: u64, max_hp: i64, raw: &Value) -> Result<Self, String> {
         if raw["id"].as_u64() != Some(id) || max_hp <= 0 {
             return Err("Character identity or maximum HP is invalid.".into());
@@ -417,33 +426,30 @@ fn mutations(remote: &Remote, key: &str, target: &Value) -> Result<Vec<Mutation>
         key if key.starts_with("creature/") => "/creature/hp",
         _ => return Err("Unsupported combat field.".into()),
     };
-    if key == "inspiration" {
-        let Some(Value::Bool(inspiration)) = body.get("inspiration").cloned() else {
-            return Err("Inspiration must be on or off.".into());
-        };
+    // Inspiration and the maximum HP modifier each hold one value.
+    let single = match key {
+        "inspiration" => Some(("inspiration", "Inspiration must be on or off.")),
+        "hp_bonus" => Some((
+            "bonusHitPoints",
+            "The maximum HP modifier must be a whole number from −999 to 999.",
+        )),
+        _ => None,
+    };
+    if let Some((field, error)) = single {
+        let value = body
+            .get(field)
+            .filter(|v| match key {
+                "inspiration" => v.is_boolean(),
+                _ => v.as_i64().is_some_and(|n| n.abs() <= MAX_HP_BONUS),
+            })
+            .ok_or(error)?;
         if body.len() != 1 {
             return Err("Combat stat fields do not match the sheet.".into());
         }
         return Ok(vec![Mutation {
             method: Method::PUT,
             route: route.into(),
-            body: json!({"characterId":remote.id,"inspiration":inspiration}),
-            expected: target.clone(),
-        }]);
-    }
-    if key == "hp_bonus" {
-        let bonus = body
-            .get("bonusHitPoints")
-            .and_then(Value::as_i64)
-            .filter(|n| n.abs() <= MAX_HP_BONUS)
-            .ok_or("The maximum HP modifier must be a whole number from −999 to 999.")?;
-        if body.len() != 1 {
-            return Err("Combat stat fields do not match the sheet.".into());
-        }
-        return Ok(vec![Mutation {
-            method: Method::PUT,
-            route: route.into(),
-            body: json!({"characterId":remote.id,"bonusHitPoints":bonus}),
+            body: json!({"characterId": remote.id, field: value}),
             expected: target.clone(),
         }]);
     }
@@ -705,15 +711,12 @@ fn act(
         remote,
         blocked: BTreeMap::new(),
     };
-    if !remote.can_edit {
-        return Ok((
-            outcome(remote),
-            Some(Err(format!(
-                "Splat did not send the {name}. This session cannot edit this character on D&D Beyond."
-            ))),
-        ));
-    }
-    let mutation = match action.mutation(&remote) {
+    let mutation = if remote.can_edit {
+        action.mutation(&remote)
+    } else {
+        Err("This session cannot edit this character on D&D Beyond.".into())
+    };
+    let mutation = match mutation {
         Ok(m) => m,
         Err(e) => {
             return Ok((
@@ -784,6 +787,34 @@ enum RestForm {
         reduce_exhaustion: bool,
     },
 }
+impl RestForm {
+    fn into_action(self) -> SheetAction {
+        match self {
+            Self::Short {
+                hit_dice,
+                reset_max_hp_bonus,
+            } => SheetAction::ShortRest {
+                hit_dice,
+                reset_max_hp_bonus,
+            },
+            Self::Long {
+                reset_max_hp_bonus,
+                reduce_exhaustion,
+            } => SheetAction::LongRest {
+                reset_max_hp_bonus,
+                reduce_exhaustion,
+            },
+        }
+    }
+}
+/// What happened to the last sheet action, as the panel says it.
+#[derive(Clone, Debug, PartialEq)]
+enum ActionNotice {
+    /// D&D Beyond took it. This message goes at the next read.
+    Taken(String),
+    /// It did not go, or Splat could not confirm it. This message stays until the DM closes it.
+    Failed(String),
+}
 
 #[derive(Default)]
 pub struct CombatSync {
@@ -812,8 +843,8 @@ pub struct CombatSync {
     first_read: bool,
     /// A sheet action the DM asked for. The next exchange takes it and sends it once.
     action: Option<SheetAction>,
-    /// What happened to the last sheet action: true when D&D Beyond took it.
-    action_notice: Option<(bool, String)>,
+    /// What happened to the last sheet action.
+    action_notice: Option<ActionNotice>,
     /// A rest the DM is setting up in the panel, before they send it.
     rest_form: Option<RestForm>,
     /// Unsent HP, death saves and conditions also last until the next first read. A run holds
@@ -878,12 +909,9 @@ impl CombatSync {
         }
         // A rest on its way may have reached D&D Beyond. Splat will not hear back.
         if let Some(name) = self.pending.as_ref().and_then(|pending| pending.action) {
-            self.action_notice = Some((
-                false,
-                format!(
-                    "Sync stopped before Splat heard back about the {name}. Check the sheet on D&D Beyond before you try again."
-                ),
-            ));
+            self.action_notice = Some(ActionNotice::Failed(format!(
+                "Sync stopped before Splat heard back about the {name}. Check the sheet on D&D Beyond before you try again."
+            )));
         }
         self.pending = None;
         self.gate = None;
@@ -1099,24 +1127,23 @@ impl CombatSync {
                     Ok((outcome, taken)) => {
                         self.accept(outcome, &sent);
                         // A success says so until the next read. An error stays until closed.
-                        if action.is_none() && self.action_notice.as_ref().is_some_and(|n| n.0) {
+                        if action.is_none()
+                            && matches!(self.action_notice, Some(ActionNotice::Taken(_)))
+                        {
                             self.action_notice = None;
                         }
                         if let (Some(name), Some(taken)) = (action, taken) {
                             self.action_notice = Some(match taken {
-                                Ok(()) => (
-                                    true,
-                                    format!(
-                                        "D&D Beyond took the {name}. The values below are the sheet's new values."
-                                    ),
-                                ),
-                                Err(e) => (false, e),
+                                Ok(()) => ActionNotice::Taken(format!(
+                                    "D&D Beyond took the {name}. The values below are the sheet's new values."
+                                )),
+                                Err(e) => ActionNotice::Failed(e),
                             });
                         }
                     }
                     Err(error) => {
                         if action.is_some() {
-                            self.action_notice = Some((false, error.clone()));
+                            self.action_notice = Some(ActionNotice::Failed(error.clone()));
                         }
                         self.error = Some(error);
                         if let Some(remote) = &self.remote {
@@ -1549,11 +1576,15 @@ impl CombatSync {
             ui.label(Type::Small.rich(ui, icon).color(color));
             ui.add(egui::Label::new(Type::Small.rich(ui, words).color(colors().muted)).wrap());
         });
-        if let Some((taken, words)) = &self.action_notice {
+        if let Some(notice) = &self.action_notice {
+            let (tone, words) = match notice {
+                ActionNotice::Taken(words) => (Tone::Success, words),
+                ActionNotice::Failed(words) => (Tone::Error, words),
+            };
             let mut close = false;
             ui.horizontal(|ui| {
                 close = design::icon_button(ui, icons::CLOSE, "Dismiss this message").clicked();
-                design::message(ui, if *taken { Tone::Success } else { Tone::Error }, words);
+                design::message(ui, tone, words);
             });
             if close {
                 self.action_notice = None;
@@ -1594,59 +1625,40 @@ impl CombatSync {
         use crate::design;
         ui.add_space(design::XS);
         design::group_label(ui, "Hit points");
-        egui::Grid::new("sheet_life")
-            .num_columns(2)
-            .spacing([design::L, design::XS])
-            .show(ui, |ui| {
-                if let Some(hp) = self.desired.get_mut("hp") {
-                    let mut current =
-                        (max_hp - hp["removedHitPoints"].as_i64().unwrap_or(0)).max(0);
-                    if edit_row(
-                        ui,
-                        "Current HP",
-                        &mut current,
-                        0..=max_hp,
-                        Some(format!("of {max_hp}")),
-                    ) {
-                        hp["removedHitPoints"] = (max_hp - current).into();
-                    }
-                    let mut temp = hp["temporaryHitPoints"].as_i64().unwrap_or(0);
-                    if edit_row(ui, "Temporary HP", &mut temp, 0..=MAX_HP_BONUS, None) {
-                        hp["temporaryHitPoints"] = temp.into();
-                    }
+        sheet_grid(ui, "sheet_life", |ui| {
+            if let Some(hp) = self.desired.get_mut("hp") {
+                let mut current = current_hp(hp, max_hp);
+                let note = Some(format!("of {max_hp}"));
+                if edit_row(ui, "Current HP", &mut current, 0..=max_hp, note) {
+                    hp["removedHitPoints"] = (max_hp - current).into();
                 }
-                if let Some(bonus) = self.desired.get_mut("hp_bonus") {
-                    let mut n = bonus["bonusHitPoints"].as_i64().unwrap_or(0);
-                    if edit_row(
-                        ui,
-                        "Maximum HP modifier",
-                        &mut n,
-                        -MAX_HP_BONUS..=MAX_HP_BONUS,
-                        None,
-                    ) {
-                        bonus["bonusHitPoints"] = n.into();
-                    }
+                step_field(hp, "temporaryHitPoints", |n| {
+                    edit_row(ui, "Temporary HP", n, 0..=MAX_HP_BONUS, None)
+                });
+            }
+            if let Some(bonus) = self.desired.get_mut("hp_bonus") {
+                step_field(bonus, "bonusHitPoints", |n| {
+                    let range = -MAX_HP_BONUS..=MAX_HP_BONUS;
+                    edit_row(ui, "Maximum HP modifier", n, range, None)
+                });
+            }
+            if let Some(death) = self.desired.get_mut("death") {
+                for (field, label) in [
+                    ("successCount", "Death save successes"),
+                    ("failCount", "Death save failures"),
+                ] {
+                    step_field(death, field, |n| edit_row(ui, label, n, 0..=3, None));
                 }
-                if let Some(death) = self.desired.get_mut("death") {
-                    for (field, label) in [
-                        ("successCount", "Death save successes"),
-                        ("failCount", "Death save failures"),
-                    ] {
-                        let mut n = death[field].as_i64().unwrap_or(0);
-                        if edit_row(ui, label, &mut n, 0..=3, None) {
-                            death[field] = n.into();
-                        }
-                    }
+            }
+            if let Some(inspiration) = self.desired.get_mut("inspiration") {
+                row_label(ui, "Inspiration");
+                let mut on = inspiration["inspiration"] == true;
+                if ui.checkbox(&mut on, "Has inspiration").changed() {
+                    inspiration["inspiration"] = on.into();
                 }
-                if let Some(inspiration) = self.desired.get_mut("inspiration") {
-                    row_label(ui, "Inspiration");
-                    let mut on = inspiration["inspiration"] == true;
-                    if ui.checkbox(&mut on, "Has inspiration").changed() {
-                        inspiration["inspiration"] = on.into();
-                    }
-                    ui.end_row();
-                }
-            });
+                ui.end_row();
+            }
+        });
         if self.desired.contains_key("hp_bonus") {
             use crate::design::{Type, colors};
             ui.label(
@@ -1665,11 +1677,9 @@ impl CombatSync {
         ui.add_space(design::S);
         design::group_label(ui, "Rests and recovery");
         let blocker = self.action_blocker();
-        let hp = self
-            .desired
-            .get("hp")
-            .map(|hp| (max_hp - hp["removedHitPoints"].as_i64().unwrap_or(0)).max(0));
-        match self.rest_form.clone() {
+        let hp = self.desired.get("hp").map(|hp| current_hp(hp, max_hp));
+        // Taken out while it shows, and put back unless the DM takes the rest or cancels.
+        match self.rest_form.take() {
             None => {
                 ui.horizontal_wrapped(|ui| {
                     if Action::secondary("Short rest…")
@@ -1719,110 +1729,73 @@ impl CombatSync {
                         .color(colors().muted),
                 );
             }
-            Some(RestForm::Short {
-                mut hit_dice,
-                mut reset_max_hp_bonus,
-            }) => {
-                ui.label(Type::Heading.rich(ui, "Short rest").color(colors().text));
-                ui.label(
-                    Type::Small
-                        .rich(ui, "Hit dice to spend")
-                        .color(colors().muted),
-                );
-                let classes = self.hit_dice().to_vec();
-                egui::Grid::new("sheet_short_rest")
-                    .num_columns(2)
-                    .spacing([design::L, design::XS])
-                    .show(ui, |ui| {
-                        for dice in &classes {
-                            let left = (dice.level - dice.used).max(0);
-                            let spend = hit_dice.entry(dice.class).or_insert(0);
-                            edit_row(
-                                ui,
-                                &format!("{} (d{})", dice.name, dice.die),
-                                spend,
-                                0..=left,
-                                Some(format!("{left} of {} left", dice.level)),
-                            );
-                        }
-                    });
-                ui.checkbox(
-                    &mut reset_max_hp_bonus,
-                    "Reset the maximum HP modifier to 0",
-                );
-                ui.label(
-                    Type::Small
-                        .rich(ui, "This marks the hit dice as spent. Add the HP that they give in Current HP.")
-                        .color(colors().muted),
-                );
-                let mut close = false;
+            Some(mut form) => {
+                let (title, take_label, note) = match form {
+                    RestForm::Short { .. } => (
+                        "Short rest",
+                        "Take short rest",
+                        "This marks the hit dice as spent. Add the HP that they give in Current HP.",
+                    ),
+                    RestForm::Long { .. } => (
+                        "Long rest",
+                        "Take long rest",
+                        "D&D Beyond restores HP, hit dice, spell slots and resources by its own rules.",
+                    ),
+                };
+                ui.label(Type::Heading.rich(ui, title).color(colors().text));
+                let reset_max_hp_bonus = match &mut form {
+                    RestForm::Short {
+                        hit_dice,
+                        reset_max_hp_bonus,
+                    } => {
+                        ui.label(
+                            Type::Small
+                                .rich(ui, "Hit dice to spend")
+                                .color(colors().muted),
+                        );
+                        sheet_grid(ui, "sheet_short_rest", |ui| {
+                            for dice in self.hit_dice() {
+                                let left = (dice.level - dice.used).max(0);
+                                edit_row(
+                                    ui,
+                                    &format!("{} (d{})", dice.name, dice.die),
+                                    hit_dice.entry(dice.class).or_insert(0),
+                                    0..=left,
+                                    Some(format!("{left} of {} left", dice.level)),
+                                );
+                            }
+                        });
+                        reset_max_hp_bonus
+                    }
+                    RestForm::Long {
+                        reset_max_hp_bonus, ..
+                    } => reset_max_hp_bonus,
+                };
+                ui.checkbox(reset_max_hp_bonus, "Reset the maximum HP modifier to 0");
+                if let RestForm::Long {
+                    reduce_exhaustion, ..
+                } = &mut form
+                {
+                    ui.checkbox(reduce_exhaustion, "Reduce Exhaustion by one level");
+                }
+                ui.label(Type::Small.rich(ui, note).color(colors().muted));
+                let (mut take, mut cancel) = (false, false);
                 ui.horizontal(|ui| {
-                    if Action::primary("Take short rest")
+                    take = Action::primary(take_label)
                         .density(Density::Read)
                         .blocked(blocker)
                         .show(ui)
-                        .clicked()
-                    {
-                        let _ = self.request(SheetAction::ShortRest {
-                            hit_dice: hit_dice.clone(),
-                            reset_max_hp_bonus,
-                        });
-                        close = true;
-                    }
-                    if Action::quiet("Cancel")
+                        .clicked();
+                    cancel = Action::quiet("Cancel")
                         .density(Density::Read)
                         .show(ui)
-                        .clicked()
-                    {
-                        close = true;
-                    }
+                        .clicked();
                 });
-                self.rest_form = (!close).then_some(RestForm::Short {
-                    hit_dice,
-                    reset_max_hp_bonus,
-                });
-            }
-            Some(RestForm::Long {
-                mut reset_max_hp_bonus,
-                mut reduce_exhaustion,
-            }) => {
-                ui.label(Type::Heading.rich(ui, "Long rest").color(colors().text));
-                ui.checkbox(
-                    &mut reset_max_hp_bonus,
-                    "Reset the maximum HP modifier to 0",
-                );
-                ui.checkbox(&mut reduce_exhaustion, "Reduce Exhaustion by one level");
-                ui.label(
-                    Type::Small
-                        .rich(ui, "D&D Beyond restores HP, hit dice, spell slots and resources by its own rules.")
-                        .color(colors().muted),
-                );
-                let mut close = false;
-                ui.horizontal(|ui| {
-                    if Action::primary("Take long rest")
-                        .density(Density::Read)
-                        .blocked(blocker)
-                        .show(ui)
-                        .clicked()
-                    {
-                        let _ = self.request(SheetAction::LongRest {
-                            reset_max_hp_bonus,
-                            reduce_exhaustion,
-                        });
-                        close = true;
-                    }
-                    if Action::quiet("Cancel")
-                        .density(Density::Read)
-                        .show(ui)
-                        .clicked()
-                    {
-                        close = true;
-                    }
-                });
-                self.rest_form = (!close).then_some(RestForm::Long {
-                    reset_max_hp_bonus,
-                    reduce_exhaustion,
-                });
+                if take {
+                    let _ = self.request(form.into_action());
+                } else if !cancel {
+                    self.rest_form = Some(form);
+                }
             }
         }
     }
@@ -1866,70 +1839,44 @@ impl CombatSync {
     fn spending(&mut self, ui: &mut egui::Ui) {
         use crate::design;
         design::section(ui, "Spell slots spent", |ui| {
-            egui::Grid::new("sheet_slots")
-                .num_columns(2)
-                .spacing([design::L, design::XS])
-                .show(ui, |ui| {
-                    for (key, label, levels) in
-                        [("slots", "Spell slots", 9), ("pact", "Pact slots", 5)]
-                    {
-                        let Some(slots) = self.desired.get_mut(key) else {
-                            continue;
-                        };
-                        for level in 1..=levels {
-                            let field = format!("level{level}");
-                            let mut used = slots[&field].as_i64().unwrap_or(0);
-                            if edit_row(
-                                ui,
-                                &format!("{label}, level {level}"),
-                                &mut used,
-                                0..=99,
-                                None,
-                            ) {
-                                slots[&field] = used.into();
-                            }
-                        }
+            sheet_grid(ui, "sheet_slots", |ui| {
+                for (key, label, levels) in [("slots", "Spell slots", 9), ("pact", "Pact slots", 5)]
+                {
+                    let Some(slots) = self.desired.get_mut(key) else {
+                        continue;
+                    };
+                    for level in 1..=levels {
+                        let label = format!("{label}, level {level}");
+                        step_field(slots, &format!("level{level}"), |n| {
+                            edit_row(ui, &label, n, 0..=99, None)
+                        });
                     }
-                });
+                }
+            });
         });
-        let labels = self
-            .remote
-            .as_ref()
-            .map(|r| r.labels.clone())
-            .unwrap_or_default();
+        let remote = self.remote.as_ref();
         design::section(ui, "Limited uses spent", |ui| {
-            egui::Grid::new("sheet_limited")
-                .num_columns(2)
-                .spacing([design::L, design::XS])
-                .show(ui, |ui| {
-                    for (key, label) in labels.iter().filter(|(k, _)| k.starts_with("limited/")) {
-                        if let Some(resource) = self.desired.get_mut(key) {
-                            let mut used = resource["uses"].as_i64().unwrap_or(0);
-                            if edit_row(ui, label, &mut used, 0..=MAX_COUNT, None) {
-                                resource["uses"] = used.into();
-                            }
-                        }
+            sheet_grid(ui, "sheet_limited", |ui| {
+                for (key, label, _) in remote.into_iter().flat_map(|r| r.named("limited/")) {
+                    if let Some(resource) = self.desired.get_mut(key) {
+                        step_field(resource, "uses", |n| {
+                            edit_row(ui, label, n, 0..=MAX_COUNT, None)
+                        });
                     }
-                });
+                }
+            });
         });
     }
     fn purse(&mut self, ui: &mut egui::Ui) {
-        use crate::design;
         let Some(purse) = self.desired.get_mut("currency") else {
             return;
         };
-        design::section(ui, "Currency", |ui| {
-            egui::Grid::new("sheet_currency")
-                .num_columns(2)
-                .spacing([design::L, design::XS])
-                .show(ui, |ui| {
-                    for (field, _, name) in COINS {
-                        let mut n = purse[field].as_i64().unwrap_or(0);
-                        if edit_row(ui, name, &mut n, 0..=MAX_COUNT, None) {
-                            purse[field] = n.into();
-                        }
-                    }
-                });
+        crate::design::section(ui, "Currency", |ui| {
+            sheet_grid(ui, "sheet_currency", |ui| {
+                for (field, _, name) in COINS {
+                    step_field(purse, field, |n| edit_row(ui, name, n, 0..=MAX_COUNT, None));
+                }
+            });
         });
     }
     /// Each item's quantity, and the charges spent where it has charges.
@@ -1938,12 +1885,7 @@ impl CombatSync {
         let Some(remote) = &self.remote else {
             return;
         };
-        let items: Vec<_> = remote
-            .labels
-            .iter()
-            .filter(|(k, _)| k.starts_with("item/"))
-            .map(|(k, name)| (k.clone(), name.clone(), remote.limits.get(k).copied()))
-            .collect();
+        let items: Vec<_> = remote.named("item/").collect();
         if items.is_empty() {
             return;
         }
@@ -1954,36 +1896,23 @@ impl CombatSync {
             format!("Inventory · {} items", items.len()),
             |ui| {
                 for (key, name, max) in items {
-                    let Some(item) = self.desired.get_mut(&key) else {
+                    let Some(item) = self.desired.get_mut(key) else {
                         continue;
                     };
                     // The name on its own line, and each value on a line under it, so a narrow
                     // column never cuts one off.
-                    row_label(ui, &name);
-                    ui.indent(&key, |ui| {
-                        let mut quantity = item["quantity"].as_i64().unwrap_or(0);
-                        if labelled_stepper(
-                            ui,
-                            "Quantity",
-                            &format!("{name} quantity"),
-                            &mut quantity,
-                            1..=MAX_COUNT,
-                            None,
-                        ) {
-                            item["quantity"] = quantity.into();
-                        }
+                    row_label(ui, name);
+                    ui.indent(key, |ui| {
+                        step_field(item, "quantity", |n| {
+                            let name = format!("{name} quantity");
+                            labelled_stepper(ui, "Quantity", &name, n, 1..=MAX_COUNT, None)
+                        });
                         if item.get("charges").is_some() {
-                            let mut used = item["charges"].as_i64().unwrap_or(0);
-                            if labelled_stepper(
-                                ui,
-                                "Charges spent",
-                                &format!("{name} charges spent"),
-                                &mut used,
-                                0..=MAX_COUNT,
-                                max.map(|max| format!("of {max}")),
-                            ) {
-                                item["charges"] = used.into();
-                            }
+                            step_field(item, "charges", |n| {
+                                let name = format!("{name} charges spent");
+                                let note = max.map(|max| format!("of {max}"));
+                                labelled_stepper(ui, "Charges spent", &name, n, 0..=MAX_COUNT, note)
+                            });
                         }
                     });
                     ui.add_space(design::XS);
@@ -2005,47 +1934,28 @@ impl CombatSync {
         let Some(remote) = &self.remote else {
             return;
         };
-        let creatures: Vec<_> = remote
-            .labels
-            .iter()
-            .filter(|(k, _)| k.starts_with("creature/"))
-            .map(|(k, name)| (k.clone(), name.clone(), remote.limits.get(k).copied()))
-            .collect();
+        let creatures: Vec<_> = remote.named("creature/").collect();
         if creatures.is_empty() {
             return;
         }
         design::section(ui, "Companions and summons", |ui| {
             for (key, name, max) in creatures {
-                let Some(creature) = self.desired.get_mut(&key) else {
+                let Some(creature) = self.desired.get_mut(key) else {
                     continue;
                 };
-                row_label(ui, &name);
-                ui.indent(&key, |ui| {
-                    let mut taken = creature["removedHitPoints"].as_i64().unwrap_or(0);
+                row_label(ui, name);
+                ui.indent(key, |ui| {
                     // The sheet works a companion's maximum out itself. The stat block's
                     // average is only a guide, so it is a note and not a limit.
-                    let note = max.map(|max| format!("Stat block average {max} HP"));
-                    if labelled_stepper(
-                        ui,
-                        "Damage taken",
-                        &format!("{name} damage taken"),
-                        &mut taken,
-                        0..=MAX_COUNT,
-                        note,
-                    ) {
-                        creature["removedHitPoints"] = taken.into();
-                    }
-                    let mut temp = creature["temporaryHitPoints"].as_i64().unwrap_or(0);
-                    if labelled_stepper(
-                        ui,
-                        "Temporary HP",
-                        &format!("{name} temporary HP"),
-                        &mut temp,
-                        0..=MAX_HP_BONUS,
-                        None,
-                    ) {
-                        creature["temporaryHitPoints"] = temp.into();
-                    }
+                    step_field(creature, "removedHitPoints", |n| {
+                        let name = format!("{name} damage taken");
+                        let note = max.map(|max| format!("Stat block average {max} HP"));
+                        labelled_stepper(ui, "Damage taken", &name, n, 0..=MAX_COUNT, note)
+                    });
+                    step_field(creature, "temporaryHitPoints", |n| {
+                        let name = format!("{name} temporary HP");
+                        labelled_stepper(ui, "Temporary HP", &name, n, 0..=MAX_HP_BONUS, None)
+                    });
                 });
                 ui.add_space(design::XS);
             }
@@ -2061,19 +1971,13 @@ fn labelled_stepper(
     range: std::ops::RangeInclusive<i64>,
     note: Option<String>,
 ) -> bool {
-    use crate::design::{self, Type, colors};
+    use crate::design::{Type, colors};
     ui.horizontal(|ui| {
         ui.label(Type::Small.rich(ui, label).color(colors().muted));
-        let changed = design::stepper(ui, name, value, range);
-        if let Some(note) = note {
-            ui.label(Type::Small.rich(ui, note).color(colors().muted));
-        }
-        changed
+        stepper_and_note(ui, name, value, range, note)
     })
     .inner
 }
-/// The largest count Splat sends for a coin, an item or a use.
-const MAX_COUNT: i64 = 1_000_000;
 /// A row label in a sheet grid.
 fn row_label(ui: &mut egui::Ui, label: &str) {
     use crate::design::{Type, colors};
@@ -2087,19 +1991,47 @@ fn edit_row(
     range: std::ops::RangeInclusive<i64>,
     note: Option<String>,
 ) -> bool {
-    use crate::design::{self, Type, colors};
     row_label(ui, label);
     let changed = ui
-        .horizontal(|ui| {
-            let changed = design::stepper(ui, label, value, range);
-            if let Some(note) = note {
-                ui.label(Type::Small.rich(ui, note).color(colors().muted));
-            }
-            changed
-        })
+        .horizontal(|ui| stepper_and_note(ui, label, value, range, note))
         .inner;
     ui.end_row();
     changed
+}
+/// The value's stepper, and a small note after it. True on a change.
+fn stepper_and_note(
+    ui: &mut egui::Ui,
+    name: &str,
+    value: &mut i64,
+    range: std::ops::RangeInclusive<i64>,
+    note: Option<String>,
+) -> bool {
+    use crate::design::{self, Type, colors};
+    let changed = design::stepper(ui, name, value, range);
+    if let Some(note) = note {
+        ui.label(Type::Small.rich(ui, note).color(colors().muted));
+    }
+    changed
+}
+/// A two-column grid of sheet values: a label on the left, its stepper on the right.
+fn sheet_grid(ui: &mut egui::Ui, id: &str, rows: impl FnOnce(&mut egui::Ui)) {
+    use crate::design;
+    egui::Grid::new(id)
+        .num_columns(2)
+        .spacing([design::L, design::XS])
+        .show(ui, rows);
+}
+/// Edit the whole number at `field` in a sheet group. The group changes only when `edit` says
+/// the number changed.
+fn step_field(group: &mut Value, field: &str, edit: impl FnOnce(&mut i64) -> bool) {
+    let mut n = group[field].as_i64().unwrap_or(0);
+    if edit(&mut n) {
+        group[field] = n.into();
+    }
+}
+/// Current HP from the HP group, never below 0.
+fn current_hp(hp: &Value, max_hp: i64) -> i64 {
+    (max_hp - hp["removedHitPoints"].as_i64().unwrap_or(0)).max(0)
 }
 fn describe(key: &str, value: Option<&Value>, max_hp: i64) -> String {
     let Some(value) = value else {
@@ -2900,7 +2832,7 @@ mod tests {
         });
         sync.stop();
         assert!(
-            matches!(&sync.action_notice, Some((false, words)) if words.contains("Check the sheet"))
+            matches!(&sync.action_notice, Some(ActionNotice::Failed(words)) if words.contains("Check the sheet"))
         );
     }
     #[test]
