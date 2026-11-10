@@ -959,6 +959,7 @@ Errors and setup help call the chosen text service the transcript and summary se
 Not processed uses a neutral file icon. Continue processing resumes stopped or failed work. Process and
 Continue processing are primary when no open run owns Next turn and no other primary action is in view.
 Only the first recording that needs processing owns that primary action; later rows use secondary actions.
+A recovery action in the bottom banner takes priority over processing in a recording row.
 While recording consent is open, Start recording owns primary.
 They are secondary while a run is open. A stalled recording keeps Record again as its primary action. Put destination
 below enabled Process or Continue processing, in Small muted text at reader measure, and in Process again

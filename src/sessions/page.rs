@@ -1190,6 +1190,36 @@ impl Sessions {
         book.poll(ctx);
     }
 
+    fn recording_row_here(&self, session: Uuid) -> bool {
+        self.on_page
+            && self.selected == Some(session)
+            && self.tab == Tab::Recordings
+            && self.view == View::Notes
+            && self.form.is_none()
+            && (self.list_beside || !self.list_only)
+            && self.reading.is_none()
+    }
+
+    fn stalled_elsewhere(&self) -> Option<&Live> {
+        self.live.as_ref().filter(|live| {
+            !self.recording_row_here(live.session)
+                && matches!(live.recorder.health(), Health::Stalled | Health::Stopped(_))
+        })
+    }
+
+    fn banner_has_primary(&self, settings: &ProcessingSettings, run_open: bool) -> bool {
+        !run_open
+            && (self.stalled_elsewhere().is_some()
+                || self.alerts.iter().any(|alert| {
+                    !self.recording_row_here(alert.session)
+                        && (alert.retry.is_some()
+                            || (alert.can_record
+                                && (self.live.is_none()
+                                    || settings.input_missing()
+                                    || alert.words.to_lowercase().contains("no such device"))))
+                }))
+    }
+
     /// What cannot wait, on every page. It sits at the bottom, so that it never moves `Next
     /// turn` under a pointer parked on it. A silence takes no banner: it is often only a quiet
     /// table, and it shows in the rail and on the run's own line.
@@ -1200,34 +1230,20 @@ impl Sessions {
         book: &Book,
         run_open: bool,
     ) {
-        let mut stalled = self
-            .live
-            .as_ref()
-            .filter(|live| matches!(live.recorder.health(), Health::Stalled | Health::Stopped(_)))
-            .map(|live| {
-                format!(
-                    "The recording of {} is not saving audio after {}. What was saved is kept. Record again starts a new file.",
-                    live.label,
-                    spoken_length(live.recorder.seconds())
-                )
-            });
-        let row_here = |session| {
-            self.on_page
-                && self.selected == Some(session)
-                && self.tab == Tab::Recordings
-                && self.view == View::Notes
-                && self.form.is_none()
-                && (self.list_beside || !self.list_only)
-                && self.reading.is_none()
-        };
-        if self
-            .live
-            .as_ref()
-            .is_some_and(|live| row_here(live.session))
+        let banner_primary = self.banner_has_primary(settings, run_open);
+        let stalled = self.stalled_elsewhere().map(|live| {
+            format!(
+                "The recording of {} is not saving audio after {}. What was saved is kept. Record again starts a new file.",
+                live.label,
+                spoken_length(live.recorder.seconds())
+            )
+        });
+        if stalled.is_none()
+            && self
+                .alerts
+                .iter()
+                .all(|alert| self.recording_row_here(alert.session))
         {
-            stalled = None;
-        }
-        if stalled.is_none() && self.alerts.iter().all(|alert| row_here(alert.session)) {
             return;
         }
         let mut retry = None;
@@ -1245,10 +1261,10 @@ impl Sessions {
                     let session = self.live.as_ref().map(|live| live.session);
                     design::message(ui, Tone::Error, words);
                     ui.horizontal(|ui| {
-                        if (if run_open {
-                            Action::secondary("Record again")
-                        } else {
+                        if (if banner_primary {
                             Action::primary("Record again")
+                        } else {
+                            Action::secondary("Record again")
                         })
                         .show(ui)
                         .clicked()
@@ -1267,12 +1283,10 @@ impl Sessions {
                     });
                 }
                 let mut dismiss = None;
-                for (index, alert) in self
-                    .alerts
-                    .iter()
-                    .enumerate()
-                    .filter(|(_, alert)| !row_here(alert.session))
-                {
+                for (index, alert) in self.alerts.iter().enumerate() {
+                    if self.recording_row_here(alert.session) {
+                        continue;
+                    }
                     let missing_input = alert.can_record
                         && (settings.input_missing()
                             || alert.words.to_lowercase().contains("no such device"));
@@ -1284,10 +1298,10 @@ impl Sessions {
                     design::message(ui, Tone::Error, &words);
                     ui.horizontal_wrapped(|ui| {
                         if missing_input
-                            && (if run_open {
-                                Action::secondary("Choose an input")
-                            } else {
+                            && (if banner_primary {
                                 Action::primary("Choose an input")
+                            } else {
+                                Action::secondary("Choose an input")
                             })
                             .show(ui)
                             .clicked()
@@ -1295,10 +1309,10 @@ impl Sessions {
                             self.wants_recording_input = true;
                         }
                         if let Some(path) = &alert.retry
-                            && (if run_open {
-                                Action::secondary("Continue processing")
-                            } else {
+                            && (if banner_primary {
                                 Action::primary("Continue processing")
+                            } else {
+                                Action::secondary("Continue processing")
                             })
                             .blocked_if(
                                 self.job.is_some() || self.live.is_some(),
@@ -1313,10 +1327,10 @@ impl Sessions {
                             && self.live.is_none()
                             && (if missing_input {
                                 Action::quiet("Record again")
-                            } else if run_open {
-                                Action::secondary("Record again")
-                            } else {
+                            } else if banner_primary {
                                 Action::primary("Record again")
+                            } else {
+                                Action::secondary("Record again")
                             })
                             .show(ui)
                             .clicked()
@@ -5442,6 +5456,7 @@ impl Sessions {
             self.reading_view(ui, book);
             return;
         }
+        let banner_primary = self.banner_has_primary(settings, self.run_open);
         let recordings = self.recordings.clone();
         if recordings.is_empty() {
             ui.add_space(design::M);
@@ -5486,7 +5501,7 @@ impl Sessions {
                                 recording,
                                 settings,
                                 book,
-                                primary == Some(index) && !self.confirm_record,
+                                primary == Some(index) && !self.confirm_record && !banner_primary,
                             );
                         },
                     );

@@ -6646,6 +6646,102 @@ pub mod session_recording {
         }
     }
 
+    fn check_one_primary(d: &mut Driver<'_>, expected: &str, id: &str) {
+        assert!(d.in_view(expected), "The expected primary action is visible");
+        let colors = crate::design::colors();
+        let primary: Vec<_> = d
+            .nodes()
+            .into_iter()
+            .filter(|node| node.in_view() && node.role == egui::accesskit::Role::Button)
+            .filter(|node| {
+                d.control_frame(&node.name).is_some_and(|frame| {
+                    frame.fill == colors.accent_fill || frame.fill == colors.accent_hover
+                })
+            })
+            .map(|node| node.name)
+            .collect();
+        d.observe(
+            id,
+            primary == [expected],
+            format!("Exactly one accent-filled control is visible, {expected}: {primary:?}"),
+        );
+    }
+
+    pub fn banner_priority(d: &mut Driver<'_>) {
+        d.click(NAV_SESSIONS);
+        new_session(d, "Failed processing");
+        let first = d.app_mut().sessions.current().unwrap();
+        d.app_mut().processing.simulate_keys();
+        d.app_mut().processing.simulate_input("table.mic");
+        d.settle();
+        d.click("Record this session");
+        d.click("Start recording");
+        d.click("Stop recording");
+        d.click_starting("Recordings");
+        d.app_mut().sessions.simulate_job(Progress::Asking {
+            pass: crate::processing::Pass::Review,
+            seconds: 42,
+        });
+        d.app_mut().sessions.simulate_job_end(Err(
+            "The transcript and summary service is busy. Wait, then select Continue processing."
+                .to_owned(),
+        ));
+        d.settle();
+        d.click("New session");
+        d.type_into("Session title", "Unprocessed recording");
+        d.click("Create session");
+        d.expect("Session 2: Unprocessed recording");
+        let second = d.app_mut().sessions.current().unwrap();
+        d.click("Record this session");
+        d.click("Start recording");
+        d.click("Stop recording");
+        d.click_starting("Recordings");
+        assert!(!d.app_mut().encounters.has_run());
+        d.state_prepared("failed-elsewhere-with-unprocessed-row", Sizes::All, |d| {
+            d.expect("Session 2: Unprocessed recording");
+            d.expect("Not processed");
+            d.expect("Processing Session 1: Failed processing failed");
+            assert!(
+                d.nodes()
+                    .iter()
+                    .any(|node| node.in_view() && node.name.starts_with("Process:"))
+            );
+            check_one_primary(d, "Continue processing", "iter-8-C-banner-failed-primary");
+        });
+        assert!(d.in_view("Continue processing"));
+        d.click("Continue processing");
+        d.expect("Processed");
+        assert!(!d.visible_text("The transcript and summary service is busy"));
+        d.app_mut().sessions.open(first);
+        d.settle();
+        d.click("Record this session");
+        d.click("Start recording");
+        d.app_mut()
+            .sessions
+            .simulate_recorder_health(Health::Stalled);
+        d.app_mut().sessions.open(second);
+        d.settle();
+        d.state_prepared("stalled-elsewhere-with-unprocessed-row", Sizes::All, |d| {
+            d.expect("Session 2: Unprocessed recording");
+            d.expect("Not processed");
+            d.expect("The recording of Session 1: Failed processing is not saving audio");
+            assert!(
+                d.nodes()
+                    .iter()
+                    .any(|node| node.in_view() && node.name.starts_with("Process:"))
+            );
+            check_one_primary(d, "Record again", "iter-8-C-banner-stalled-primary");
+        });
+        assert!(d.in_view("Record again"));
+        d.click("Record again");
+        d.expect("Stop recording");
+        d.observe(
+            "iter-8-C-banner-restart",
+            !d.visible_text("is not saving audio"),
+            "Record again clears the stalled recorder's warning",
+        );
+    }
+
     fn check_marker_columns(d: &mut Driver<'_>) {
         let add_name = "Add to timeline: Wolves at the bridge (0)";
         assert!(d.in_view(add_name) && d.in_view("On the timeline"));
@@ -7424,6 +7520,7 @@ pub mod session_recording {
         d.state_prepared("processing-while-recording-consent", Sizes::All, |d| {
             assert!(d.in_view("Start recording"));
             check_processing_action(d, "Process:", false);
+            check_one_primary(d, "Start recording", "iter-8-C-consent-primary");
         });
         d.click("Start recording");
         d.click("Stop recording");

@@ -518,7 +518,8 @@ dies, and the file stays if it does.
 
 Nothing leaves the computer until you select **Process** on a recording. Choose the services in **Settings**.
 The first recording that needs processing owns the primary **Process** or **Continue processing** action
-when no run is open. Open runs keep these actions secondary.
+when no run is open and no recovery action in the bottom banner owns primary.
+Open runs keep these actions secondary.
 
 1. A **speech service** writes `<recording>.transcript.md`. The default is OpenAI's `gpt-transcribe`, and any service
    with the OpenAI `audio/transcriptions` API works. It needs a key, kept in the desktop keyring. Audio goes up in parts
