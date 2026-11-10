@@ -1838,7 +1838,7 @@ fn natural_key(name: &str) -> Vec<(String, u64)> {
     parts
 }
 
-const EDITOR_MAX_WIDTH: f32 = 720.0;
+pub(crate) const EDITOR_MAX_WIDTH: f32 = 720.0;
 
 fn form_heading(ui: &mut egui::Ui, title: &str) {
     ui.add_space(design::L);
