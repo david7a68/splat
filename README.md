@@ -172,7 +172,8 @@ that needs repair and keep raw references in Technical details.
 
 The reader keeps ordinary bold and bold italic as emphasis. A bold phrase opens Lookup
 only when it resolves to an entry. Explicit Markdown and wiki links still work. Tab reaches each
-link in a paragraph in turn, and Enter or Space follows it.
+link in a paragraph in turn, and Enter or Space follows it. Each link, even a two-letter name, has its
+own press target at least 24 px square.
 
 Timeline files use `Fight`, `Travel`, `Short rest`, `Long rest` and `Major event`.
 The reader also accepts `Encounter` and `Event`, in any case, with or without a colon.
