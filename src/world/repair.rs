@@ -122,7 +122,7 @@ impl Repair {
                         // An unfinished repair stays editable; only valid text can be written.
                         if problem.is_some() {
                             self.error =
-                                Some("Not saved: fix the problem above, then save.".into());
+                                Some(format!("Not saved. {}", problem.as_deref().unwrap()));
                             return false;
                         }
                         return self.save(campaign);
@@ -134,16 +134,16 @@ impl Repair {
         if self.reloaded.is_some() && design::reloaded_draft(ui) {
             self.draft = self.reloaded.take().unwrap();
         }
-        if let Some(problem) = &problem {
-            design::message(ui, design::Tone::Error, problem);
-        }
         if let Some(error) = &self.error {
             design::message(ui, design::Tone::Error, error);
+        } else if let Some(problem) = &problem {
+            design::message(ui, design::Tone::Error, problem);
         }
         let before = self.draft.clone();
         editor(ui, &self.path, &mut self.draft, line);
         if self.draft != before {
             self.reloaded = None;
+            self.error = None;
         }
         let mut saved = false;
         ui.horizontal(|ui| {
@@ -163,48 +163,38 @@ impl Repair {
                     saved = self.save(campaign);
                 }
                 ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
-                    if self.draft != self.baseline
-                        && design::Action::quiet("Discard").show(ui).clicked()
-                    {
+                    let dirty = self.dirty();
+                    let state = if dirty {
+                        design::Status {
+                            icon: design::icons::DRAFT,
+                            word: "Unsaved",
+                            color: colors().document.unsaved,
+                        }
+                    } else {
+                        design::Status {
+                            icon: design::icons::OK,
+                            word: "No changes",
+                            color: colors().muted,
+                        }
+                    };
+                    if design::save_row_state(ui, state, dirty, None) {
                         self.discarded = Some(self.draft.clone());
                         self.draft = self.baseline.clone();
+                        // The restored text has its own problem, if any; drop the old message.
+                        self.error = None;
                     }
-                    if let Some(discarded) = &self.discarded
-                        && design::draft_discarded(
-                            ui,
-                            self.path.rsplit('/').next().unwrap_or(&self.path),
-                        )
-                    {
-                        self.draft = discarded.clone();
-                        self.discarded = None;
-                    }
-
                     if self.dirty() {
-                        design::status(
-                            ui,
-                            design::Status {
-                                icon: design::icons::DRAFT,
-                                word: "Unsaved",
-                                color: colors().document.unsaved,
-                            },
-                        );
-                    } else {
-                        design::save_row_state(
-                            ui,
-                            design::Status {
-                                icon: design::icons::OK,
-                                word: "No changes",
-                                color: colors().muted,
-                            },
-                            false,
-                            None,
-                        );
+                        design::blocked_reason(ui, Some(crate::encounters::draft_switch_reason()));
                     }
                 });
             });
         });
-        if self.dirty() {
-            design::blocked_reason(ui, Some(crate::encounters::draft_switch_reason()));
+        if let Some(discarded) = &self.discarded
+            && design::draft_discarded(ui, self.path.rsplit('/').next().unwrap_or(&self.path))
+        {
+            self.draft = discarded.clone();
+            self.discarded = None;
+            self.error = None;
         }
         saved
     }
@@ -232,5 +222,101 @@ impl Repair {
                 false
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn campaign(root: &std::path::Path) -> Campaign {
+        Campaign {
+            id: uuid::Uuid::new_v4(),
+            name: "Repair checks".into(),
+            path: root.into(),
+            dndbeyond_campaign_id: None,
+            dndbeyond_campaign_name: None,
+        }
+    }
+
+    fn show(repair: &mut Repair, campaign: &Campaign) {
+        let ctx = egui::Context::default();
+        design::theme::install(&ctx);
+        let _ = ctx.run(egui::RawInput::default(), |ctx| {
+            egui::CentralPanel::default().show(ctx, |ui| {
+                assert!(!repair.show(ui, campaign));
+            });
+        });
+    }
+
+    #[test]
+    fn iter5_d_repair_keeps_bad_input_and_does_not_write_on_read() {
+        let temp = tempfile::tempdir().unwrap();
+        let campaign = campaign(temp.path());
+        let path = temp.path().join("Broken.md");
+        let header = format!(
+            "---\nsplat_schema: 2\nsplat_id: {}\nsplat_kind: encounter\nsplat_name: Broken\n---\n",
+            uuid::Uuid::new_v4()
+        );
+        for row in [
+            "| Enemies |",                                  // Short row.
+            "| Enemies | Goblin | | | | extra |",           // Extra cell.
+            "| Enemies | | | | |",                          // Empty value.
+            "| Enemies | [[Missing]] | | not a change | |", // Unreadable value.
+        ] {
+            let text = format!(
+                "{header}\n| Side | Creature | Name | Changes | Note |\n| --- | --- | --- | --- | --- |\n{row}\n"
+            );
+            std::fs::write(&path, &text).unwrap();
+            let mut repair = Repair::open(&campaign, "Broken.md").unwrap();
+            repair.draft.push_str("\nMy unsent text.\n");
+            let draft = repair.draft.clone();
+            show(&mut repair, &campaign);
+            assert_eq!(repair.draft, draft, "{row}");
+            assert_eq!(std::fs::read_to_string(&path).unwrap(), text, "{row}");
+        }
+        for value in ["[", "", "not-an-id"] {
+            let text = format!("---\nsplat_schema: 2\nsplat_id: {value}\n---\n");
+            std::fs::write(&path, &text).unwrap();
+            let mut repair = Repair::open(&campaign, "Broken.md").unwrap();
+            repair.draft.push_str("\nMy unsent text.\n");
+            let draft = repair.draft.clone();
+            assert!(!repair.save(&campaign), "{value}");
+            assert_eq!(repair.draft, draft);
+            assert_eq!(std::fs::read_to_string(&path).unwrap(), text);
+        }
+        std::fs::write(&path, [0xff]).unwrap();
+        assert!(Repair::open(&campaign, "Broken.md").is_err());
+    }
+
+    #[test]
+    fn iter5_d_repair_keeps_draft_when_source_disappears_and_recovers() {
+        let temp = tempfile::tempdir().unwrap();
+        let campaign = campaign(temp.path());
+        let path = temp.path().join("Broken.md");
+        let before = "---\nsplat_schema: 2\nsplat_id: [\n---\n";
+        std::fs::write(&path, before).unwrap();
+        let mut repair = Repair::open(&campaign, "Broken.md").unwrap();
+        let draft = format!(
+            "---\nsplat_schema: 2\nsplat_id: {}\nsplat_kind: world\nsplat_name: Kept\n---\n\nMy unsent text.\n",
+            uuid::Uuid::new_v4()
+        );
+        repair.draft = draft.clone();
+        for moved in [true, false] {
+            if moved {
+                std::fs::rename(&path, temp.path().join("Moved.md")).unwrap();
+            } else {
+                std::fs::remove_file(&path).unwrap();
+            }
+            show(&mut repair, &campaign);
+            assert_eq!(repair.draft, draft);
+            assert!(!repair.save(&campaign));
+            assert!(!path.exists());
+            assert_eq!(repair.draft, draft);
+            std::fs::write(&path, before).unwrap();
+        }
+        assert!(repair.save(&campaign));
+        assert!(!repair.dirty());
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), draft);
     }
 }
