@@ -59,6 +59,7 @@ const PLAN_KINDS: [Kind; 5] = [
 ];
 const CHECK_DISK_EVERY: Duration = Duration::from_secs(1);
 const SCAN_EVERY: Duration = Duration::from_secs(5);
+const MISSING_INPUT_ERROR: &str = "no such device";
 
 #[derive(Clone, Copy, Default, PartialEq)]
 enum View {
@@ -1216,7 +1217,7 @@ impl Sessions {
                             || (alert.can_record
                                 && (self.live.is_none()
                                     || settings.input_missing()
-                                    || alert.words.to_lowercase().contains("no such device"))))
+                                    || alert.words.to_lowercase().contains(MISSING_INPUT_ERROR))))
                 }))
     }
 
@@ -1289,7 +1290,7 @@ impl Sessions {
                     }
                     let missing_input = alert.can_record
                         && (settings.input_missing()
-                            || alert.words.to_lowercase().contains("no such device"));
+                            || alert.words.to_lowercase().contains(MISSING_INPUT_ERROR));
                     let words = if alert.word == "Recording stopped" {
                         format!("{} {}", alert.words, recording_recovery(missing_input))
                     } else {
@@ -4649,7 +4650,7 @@ impl Sessions {
         let missing_input = settings.input_missing()
             || stored
                 .as_ref()
-                .is_some_and(|words| words.to_lowercase().contains("no such device"));
+                .is_some_and(|words| words.to_lowercase().contains(MISSING_INPUT_ERROR));
         let (icon, word, color) = if live {
             self.recording_status()
                 .unwrap_or((icons::RECORD, "Recording", c.recording))
