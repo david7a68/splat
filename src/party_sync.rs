@@ -349,7 +349,11 @@ fn save_cached(
     tx: &mpsc::Sender<Event>,
 ) {
     for record in records {
-        if gate.lock().map_or(true, |active| !*active) {
+        // Hold the gate through the save, so a campaign switch cannot meet a save halfway.
+        let Ok(active) = gate.lock() else {
+            break;
+        };
+        if !*active {
             break;
         }
         match may_save(path, tx) {
@@ -366,6 +370,7 @@ fn save_cached(
             record.source.character_id.clone(),
             saved,
         ));
+        drop(active);
     }
 }
 #[derive(Default)]
@@ -498,6 +503,13 @@ impl Reader {
     }
     pub fn tick(&mut self, session: Option<Session>, ctx: &egui::Context) {
         self.poll();
+        // An idle app draws no frames, so ask for one when the cached saves are due.
+        if let Some(due) = self.cache_saves_at {
+            ctx.request_repaint_after(
+                due.saturating_duration_since(Instant::now())
+                    .max(Duration::from_millis(250)),
+            );
+        }
         if self.pending.is_none() && self.cache_saves_at.is_some_and(|t| t <= Instant::now()) {
             self.cache_saves_at = None;
             self.save_cached_later(ctx);
@@ -700,10 +712,19 @@ impl Reader {
                                 .map(|_| ());
                             let _ = tx.send(Event::Stored(Stored::Sheet(id.clone()), saved));
                             let forced = force.contains(&id);
-                            if by_hand
+                            let allowed = by_hand
                                 || forced
-                                || may_save(&scope.path, &tx) == crate::sheet_writer::Turn::Mine
-                            {
+                                || match may_save(&scope.path, &tx) {
+                                    crate::sheet_writer::Turn::Mine => true,
+                                    crate::sheet_writer::Turn::Settling => {
+                                        // The read is cached. Save it once the claim settles,
+                                        // even if the next reads fail.
+                                        let _ = tx.send(Event::CacheSavesLater);
+                                        false
+                                    }
+                                    _ => false,
+                                };
+                            if allowed {
                                 let saved = save_campaign_copy(record, &scope.path, forced);
                                 if !by_hand && !forced {
                                     release_after(&scope.path, &saved);
@@ -1070,6 +1091,17 @@ mod tests {
         assert!(reader.cache_saves_at.is_some());
         assert!(!campaign.path().join("Characters/D&D Beyond").exists());
         assert!(campaign.path().join(crate::sheet_writer::FILE).exists());
+    }
+    #[test]
+    fn a_closed_gate_stops_cached_saves_before_they_claim_or_write() {
+        let campaign = tempfile::tempdir().unwrap();
+        let record = crate::visual_tests::fixture::sample_sheet();
+        let gate = Arc::new(Mutex::new(false));
+        let (tx, rx) = mpsc::channel();
+        save_cached(std::slice::from_ref(&record), campaign.path(), &gate, &tx);
+        drop(tx);
+        assert_eq!(rx.try_iter().count(), 0);
+        assert!(!campaign.path().join(crate::sheet_writer::FILE).exists());
     }
     #[test]
     fn a_request_by_hand_counts_only_for_the_read_it_asked_for() {
