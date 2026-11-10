@@ -593,13 +593,13 @@ reading the code, not from a test run.
 | T15.3 | A page shows the dated entries that concern it, oldest first | world-facts | state | New |
 | T15.4 | A change in play writes one Log line in the entry, the session lists it, and one undo removes the value and the line | world-facts | state | New |
 | T15.5 | The World page lists the open questions and the problems, and each opens its page | world-facts | state | New |
-| T16.1 | A creature's attack rolls from its stat block in 1 | run-rolls | cost | New |
-| T16.2 | Choosing a target shows its AC beside the attack total in 1 more, and the attack's text stays | run-rolls | cost | New |
-| T16.3 | The attack's damage rolls into Amount and applies to that target in 2 more | run-rolls | cost | New |
-| T16.4 | A second Multiattack attack against the same target, with damage, in 3 | run-rolls | cost | New |
-| T16.5 | Two creatures save against an area effect, and its damage applies, in ≤ 7 | run-rolls | cost | New |
-| T16.7 | A bonus rolls with disadvantage by pointer only in 2 | run-rolls | cost | New |
-| T16.8 | After a pointer roll and target, D and Enter apply the damage in 2 keys | run-rolls | cost | New |
+| T16.1 | The selected creature's attack and its damage roll from its strip in 1 | run-rolls | cost | New |
+| T16.2 | The damage applies by the target's HP in 1 more, and the attacker stays selected | run-rolls | cost | New |
+| T16.3 | A second attack rolls and applies in 2 | run-rolls | cost | New |
+| T16.4 | An area save against two creatures, one taking half, in ≤ 4 | run-rolls | cost | New |
+| T16.5 | The last action rolls again with advantage in 1 | run-rolls | cost | New |
+| T16.6 | An attack rolls with a Bless bonus in ≤ 3 | run-rolls | cost | New |
+| T16.7 | A Library reader previews an attack with advantage by pointer in 1 | run-rolls | cost | New |
 | T13.1 | The run's group panel lists each group's members and total XP | encounter-groups | state | New |
 | T13.2 | A group joins the running fight in ≤ 1 with a roll, or with a typed total. Undo removes every member | encounter-groups | cost, state | New |
 | T13.3 | A changed creature shows its base and changed values in the editor and on the run's card, marked as changed | encounter-groups, run-overrides | state | New |

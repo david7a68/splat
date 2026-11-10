@@ -1909,12 +1909,15 @@ impl Splat {
         let Some(ask) = rolls::take_ask(ctx) else {
             return;
         };
-        match self.encounters.run_mut().filter(|_| self.page == Page::Run) {
+        // Only a number in a participant's own stat block or sheet rolls for the run. One in
+        // Lookup, even beside the run, is a preview on the entry's own action line.
+        match self
+            .encounters
+            .run_mut()
+            .filter(|_| self.page == Page::Run && ask.roller.is_some())
+        {
             Some(run) => run.roll_link(ask),
-            // Its result shows on the entry's own action line.
-            None => {
-                let _ = rolls::preview(ctx, &ask);
-            }
+            None => rolls::preview(ctx, &ask),
         }
     }
 

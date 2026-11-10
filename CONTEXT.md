@@ -114,19 +114,20 @@ A named game behavior, such as taking a long rest, for which the campaign choose
 the applicable rule. Content using that mechanic follows the campaign's choice.
 
 **Inline control**:
-An interactive element within rendered descriptive text that uses an ability or
-changes state. Its behavior comes from structured mechanics, not from interpreting
-the surrounding prose. A dice link is the exception, for rolls that change nothing.
+An interactive element within rendered descriptive text that invokes a defined
+roll or other supported interaction. Its behavior comes from structured mechanics,
+not from interpreting the surrounding prose.
 
-**Dice link**:
-A number or dice expression in an entry's text, such as `Attack Roll: +4`,
-`9 (2d6 + 2) Bludgeoning damage` or `Dexterity Saving Throw: DC 14`, that makes a
-standalone or preview roll from its printed value. Structured data and run changes
-can add to it. A save DC link starts a call for a save and is never rolled itself.
+**Action strip**:
+The line under the selected row in a live run: a chip for each of its actions,
+read from its rules text or its sheet, a bonus field, and the last result. An
+attack rolls its damage with it; a save rolls its damage and every creature's
+save. Outside a run, a reader shows the same line as a preview.
 
-**Call for a save**:
-One DC that the run's selected rows save against during a run. Each rolled save
-shows on its row until the DM applies the damage, which ends the call.
+**Waiting damage**:
+Damage an action rolled that no participant has taken yet. A click on a target's
+HP applies it as one step of Undo; an attack's lands once, a save's once per
+target, full or half.
 
 **Encounter participant**:
 One particular creature or character taking part in an encounter run, with its

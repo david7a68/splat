@@ -19,7 +19,8 @@ pub(crate) enum Mode {
 
 impl Mode {
     /// Shift for advantage, Ctrl for disadvantage, on a d20.
-    fn from_keys(ui: &egui::Ui, d20: bool) -> Self {
+    fn from_keys(ui: &egui::Ui, link: &RollLink) -> Self {
+        let d20 = matches!(link, RollLink::D20 { .. });
         let keys = ui.input(|i| i.modifiers);
         if d20 && keys.shift {
             Self::Advantage
@@ -153,7 +154,7 @@ fn part_text(part: &DamagePart) -> String {
 }
 
 /// `2d6+2 bludgeoning, 1d6 fire`: every part of a damage roll.
-pub(crate) fn parts_text(parts: &[DamagePart]) -> String {
+fn parts_text(parts: &[DamagePart]) -> String {
     parts.iter().map(part_text).collect::<Vec<_>>().join(", ")
 }
 
@@ -207,8 +208,7 @@ pub(crate) fn interact(ui: &egui::Ui, response: &egui::Response, link: &RollLink
     ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
     response.clone().on_hover_text(hint(link));
     if response.clicked() {
-        let mode = Mode::from_keys(ui, matches!(link, RollLink::D20 { .. }));
-        ask(ui.ctx(), link.clone(), mode);
+        ask(ui.ctx(), link.clone(), Mode::from_keys(ui, link));
     }
 }
 
@@ -242,7 +242,7 @@ pub(crate) struct Rolled {
 
 impl Rolled {
     /// The words after the total: `to hit`, `damage`, `Dexterity save`.
-    pub fn what(&self) -> String {
+    fn what(&self) -> String {
         match &self.link {
             RollLink::D20 { what, label, .. } => d20_words(*what, label),
             RollLink::Damage { .. } => "damage".to_owned(),
@@ -252,7 +252,7 @@ impl Rolled {
     }
 
     /// The feature, when the words after the total do not already name it.
-    pub fn feature(&self) -> Option<&str> {
+    fn feature(&self) -> Option<&str> {
         match &self.link {
             RollLink::D20 {
                 what: D20::Attack,
@@ -285,7 +285,7 @@ impl Rolled {
     }
 
     /// The parts with dropped dice struck through, in Small type.
-    pub fn parts_job(&self, ui: &egui::Ui, color: egui::Color32) -> LayoutJob {
+    fn parts_job(&self, ui: &egui::Ui, color: egui::Color32) -> LayoutJob {
         let font = Type::Small.font(ui);
         let mut job = LayoutJob::default();
         let plain = egui::TextFormat {
@@ -305,7 +305,7 @@ impl Rolled {
     }
 
     /// `17 to hit`, `14 damage: 7 piercing, 7 fire`.
-    pub fn headline(&self) -> String {
+    fn headline(&self) -> String {
         match self.by_kind.as_slice() {
             [(_, Some(kind))] => format!("{} {} damage", self.total, kind.to_lowercase()),
             [_] | [] => format!("{} {}", self.total, self.what()),
@@ -324,7 +324,7 @@ impl Rolled {
     }
 
     /// `Natural 20` or `Natural 1`, where the rules give them a meaning.
-    pub fn natural_words(&self) -> Option<&'static str> {
+    fn natural_words(&self) -> Option<&'static str> {
         match self.natural {
             Some(20) => Some("Natural 20"),
             Some(1) => Some("Natural 1"),
@@ -332,7 +332,7 @@ impl Rolled {
         }
     }
 
-    pub fn changed_words(&self) -> Option<String> {
+    fn changed_words(&self) -> Option<String> {
         self.changed_from.map(|printed| {
             format!(
                 "{} (changed from {})",
@@ -579,7 +579,6 @@ pub(crate) fn chips(text: &str) -> Vec<Chip> {
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) struct Outcome {
     pub link: RollLink,
-    pub mode: Mode,
     /// The d20, or plain dice.
     pub first: Option<Rolled>,
     pub damage: Option<Rolled>,
@@ -613,10 +612,6 @@ pub(crate) fn make(
     random: &mut Random,
 ) -> Result<Outcome, String> {
     let (attack_change, damage_change) = changes;
-    let damage_of = |label: &str, parts: &[DamagePart]| RollLink::Damage {
-        label: label.to_owned(),
-        parts: parts.to_vec(),
-    };
     let (first, damage) = match link {
         RollLink::D20 {
             what: D20::Attack,
@@ -630,47 +625,46 @@ pub(crate) fn make(
             } else {
                 Mode::Normal
             };
-            let damage = (!damage.is_empty())
-                .then(|| {
-                    roll(
-                        who,
-                        &damage_of(label, damage),
-                        critical,
-                        damage_change,
-                        random,
-                    )
-                })
-                .transpose()?;
+            let damage = damage_roll(who, label, damage, critical, damage_change, random)?;
             (Some(attack), damage)
         }
         RollLink::D20 { .. } => (Some(roll_with(who, link, mode, 0, extra, random)?), None),
         RollLink::Damage { .. } => (None, Some(roll(who, link, mode, damage_change, random)?)),
         RollLink::Dice { .. } => (Some(roll(who, link, mode, 0, random)?), None),
-        RollLink::SaveDc { label, damage, .. } => {
-            let damage = (!damage.is_empty())
-                .then(|| {
-                    roll(
-                        who,
-                        &damage_of(label, damage),
-                        Mode::Normal,
-                        damage_change,
-                        random,
-                    )
-                })
-                .transpose()?;
-            (None, damage)
-        }
+        RollLink::SaveDc { label, damage, .. } => (
+            None,
+            damage_roll(who, label, damage, Mode::Normal, damage_change, random)?,
+        ),
     };
     Ok(Outcome {
         link: link.clone(),
-        mode,
         first,
         damage,
     })
 }
 
-/// A preview outside a run, on its own stream. Tests use a fixed seed.
-pub(crate) fn preview(ctx: &egui::Context, ask: &Ask) -> Result<Outcome, String> {
+/// A feature's damage, if it has any.
+fn damage_roll(
+    who: &str,
+    label: &str,
+    parts: &[DamagePart],
+    mode: Mode,
+    change: i64,
+    random: &mut Random,
+) -> Result<Option<Rolled>, String> {
+    if parts.is_empty() {
+        return Ok(None);
+    }
+    let link = RollLink::Damage {
+        label: label.to_owned(),
+        parts: parts.to_vec(),
+    };
+    roll(who, &link, mode, change, random).map(Some)
+}
+
+/// A preview outside a run, on its own stream, kept for the entry's action line. Tests use a
+/// fixed seed.
+pub(crate) fn preview(ctx: &egui::Context, ask: &Ask) {
     let mut random = ctx
         .data(|data| data.get_temp::<Random>(preview_id()))
         .unwrap_or_else(|| {
@@ -695,11 +689,10 @@ pub(crate) fn preview(ctx: &egui::Context, ask: &Ask) -> Result<Outcome, String>
     );
     ctx.data_mut(|data| {
         data.insert_temp(preview_id(), random);
-        if let Ok(outcome) = &outcome {
-            data.insert_temp(outcome_id(&ask.entry), outcome.clone());
+        if let Ok(outcome) = outcome {
+            data.insert_temp(outcome_id(&ask.entry), outcome);
         }
     });
-    outcome
 }
 
 /// An entry's last preview, for its action line.
@@ -816,8 +809,10 @@ fn chip_row(
             .hint(&hint(&chip.link))
             .show(ui);
         if response.clicked() {
-            let mode = Mode::from_keys(ui, matches!(chip.link, RollLink::D20 { .. }));
-            event = Some(LineEvent::Roll(chip.link.clone(), mode));
+            event = Some(LineEvent::Roll(
+                chip.link.clone(),
+                Mode::from_keys(ui, &chip.link),
+            ));
         }
     }
     if shown < chips.len() {
@@ -829,8 +824,10 @@ fn chip_row(
                     .on_hover_text(hint(&chip.link))
                     .clicked()
                 {
-                    let mode = Mode::from_keys(ui, matches!(chip.link, RollLink::D20 { .. }));
-                    event = Some(LineEvent::Roll(chip.link.clone(), mode));
+                    event = Some(LineEvent::Roll(
+                        chip.link.clone(),
+                        Mode::from_keys(ui, &chip.link),
+                    ));
                     ui.close();
                 }
             }

@@ -1802,35 +1802,8 @@ impl Run {
                             ),
                         )
                         .intersect(rect);
-                        let target = ui
-                            .interact(
-                                cell,
-                                ui.id().with(("apply_damage", &p.key)),
-                                egui::Sense::click(),
-                            )
-                            .on_hover_cursor(egui::CursorIcon::PointingHand);
-                        target.widget_info(|| {
-                            egui::WidgetInfo::labeled(egui::WidgetType::Link, true, &words)
-                        });
-                        // A quiet frame says the HP takes a click; hover shows it in accent.
-                        let c = colors();
-                        let edge = if target.hovered() {
-                            ui.painter()
-                                .rect_filled(cell, design::RADIUS_CONTROL, c.hover);
-                            c.accent
-                        } else {
-                            c.rule
-                        };
-                        ui.painter().rect_stroke(
-                            cell,
-                            design::RADIUS_CONTROL,
-                            egui::Stroke::new(design::HAIRLINE_WIDTH, edge),
-                            egui::StrokeKind::Inside,
-                        );
-                        if target.has_focus() {
-                            design::focus_ring(ui, cell);
-                        }
-                        if target.on_hover_text(&words).clicked() {
+                        let id = ui.id().with(("apply_damage", &p.key));
+                        if apply_target(ui, cell, id, &words) {
                             apply = Some(index);
                             clicked = None;
                         }
@@ -3949,7 +3922,6 @@ impl Run {
                 .auto_shrink([false, false])
                 .show(ui, |ui| {
                     crate::rolls::set_roller(ui.ctx(), Some(index));
-                    crate::rolls::set_entry(ui.ctx(), &record.definition.splat_name);
                     crate::party::sheet_page(ui, &record, page, "", Some(&live));
                     crate::rolls::set_roller(ui.ctx(), None);
                 });
@@ -5900,6 +5872,32 @@ fn sheet_notice_words(ui: &egui::Ui, summary: &str, font: &egui::FontId, width: 
         }
         values.pop();
     }
+}
+
+/// A row's HP while damage waits: a quiet frame that takes a click, in accent on hover.
+fn apply_target(ui: &egui::Ui, cell: Rect, id: egui::Id, words: &str) -> bool {
+    let target = ui
+        .interact(cell, id, egui::Sense::click())
+        .on_hover_cursor(egui::CursorIcon::PointingHand);
+    target.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Link, true, words));
+    let c = colors();
+    let edge = if target.hovered() {
+        ui.painter()
+            .rect_filled(cell, design::RADIUS_CONTROL, c.hover);
+        c.accent
+    } else {
+        c.rule
+    };
+    ui.painter().rect_stroke(
+        cell,
+        design::RADIUS_CONTROL,
+        egui::Stroke::new(design::HAIRLINE_WIDTH, edge),
+        egui::StrokeKind::Inside,
+    );
+    if target.has_focus() {
+        design::focus_ring(ui, cell);
+    }
+    target.on_hover_text(words).clicked()
 }
 
 /// Keep the copy suffix when a name needs fewer words.

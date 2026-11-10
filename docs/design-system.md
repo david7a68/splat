@@ -848,33 +848,29 @@ Paused snapshots state when they differ from the current file.
 
 ### Rolls
 
-Dice links look like reader links: accent text and an underline, at least 24 px tall and wide. A number
-narrower than its target sits in the middle of it, so the words on each side keep even gaps (`Dagger · +6 to
-hit`). Attribute-table rows are 24 px so their Mod and Save links are full targets; numbers stay right-aligned.
-The physical and mental halves have an `XL` gutter, and a creature with no saving throw has no Save column. A
-Skills row with links drops its label to the links' line. A click rolls, Shift+click rolls with advantage,
-Ctrl+click with disadvantage, and right-click opens a menu of plain quiet items with the same choices and
-critical damage. Each result opens beside its link, below it, or above it when there is no room: the roller and
-feature in muted Small, the total and its words in Heading, then each die in Small with a dropped die struck
-through. It follows its link when the page moves, and when it opens above a link it ends clear of the link's
-whole line, so the link stays free for its next roll. `Natural 20` and `Natural 1` appear in words, with an icon,
-only on attacks and death saves. Escape or a click elsewhere closes it. Outside a run that is all a roll does.
+In live play the selected row has an action strip under it, aligned with its name, inside the roster's scroll
+area. It has one fixed height of two `Read` control lines and an `XS` gap, with an `S` gap after it, and the
+roster's fit leaves room for it, so nothing moves when a result arrives. Line one holds secondary chips at `Read`
+density, `Bite +4`, `Ember Burst DC 12`, `Claw 2d6`, in printed order; the chip rolled last is selected, and those
+that do not fit go in a quiet `More` menu. Line two holds the result: each total in Strong, damage by type when
+there is room and its total alone when not (types and dice in hover), `Natural 20` or `Natural 1` in Body on
+attacks and death saves, then Small accent links `adv`, `dis` and `crit` in 24 px targets, or for a save a
+`Full`/`Half` segmented choice, then a muted Small apply hint while it fits whole. With no result it says `Click an
+action to roll it.` and the shortcut words when they fit. A `+` and a 52 px `Bonus` field, placeholder `1d4`, keep
+the right end of line two; a bad bonus replaces the result with a warning-colour line.
 
-In live play a roll from a stat block or sheet holds the panel on its roller while its result is open. A click on a
-roster row selects the target for the dock, and the Stat block tab stays on the roller; Conditions and Correct
-follow the selected row. Below the title, muted Small says `Held on <roller> while its roll is open ·` with a
-Small link `Show <selected>`, which closes the result. Escape, Next turn and a click on the roller's own row also
-end the hold. The held result shows `AC 13 Cinder Wolf 2` beside an attack total and offers `Roll damage`, or
-`Roll critical damage` after a natural 20. Damage goes straight into Amount when a target other than the roller is
-selected; Enter applies it. The dock shows the last total as `= N` beside the dice; a click on it, or T, puts it
-in Amount. D rolls damage for the open attack or call.
+While damage waits, each other present row's HP cell has a hairline frame in the rule colour, inside the row and
+clipped to it, a link in accessibility named `Apply 10 damage to Oren`. Hover fills it with the hover colour and
+draws the frame in accent. A click applies the amount and is one Undo step; an attack's frames go after one target,
+a save's after each target. During a save, each creature's result stands in its AC cell in text colour, with the
+ability's three capitals in muted Small where `AC` was, and the row's accessible name adds `DEX save 14`.
 
-A save DC opens a call card beside the link, held in the same way: who and which feature in muted Small, `DC 12
-Dexterity save` in Heading, then how many targets. Targets are roster rows: a click adds or removes one, and the
-caster's row does nothing. Each rolled save stands in the row's AC cell, `DEX 19`, in text colour with its label
-muted. The card offers `Roll saves`, `Half for those at or above DC`, which sets the rows' half marks, and `Roll
-damage` once there is a target. Damage fills Amount for every target; a lone half target takes the halved number.
-Applying it ends the call.
+Numbers in tables that roll (attribute Mod and Save cells, skills, a sheet's abilities, saves and skills, a death
+save's `Roll`) are accent text with a quiet underline, at least 24 px each way; a short number sits in the middle of
+its target. Attribute rows are 24 px for this; the halves keep an `XL` gutter, and a creature with no saving throw
+has no Save column. Prose has no dice links. Outside a run, a creature's reader shows the same action line under its
+heavy stat-head rule with an `S` gap after it, and a character's Actions page shows it above Attacks; rolls there
+are previews, with no HP frames.
 
 ### Arrivals
 

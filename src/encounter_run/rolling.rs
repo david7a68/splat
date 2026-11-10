@@ -25,6 +25,23 @@ pub(super) struct Turn {
     pub saves: BTreeMap<usize, i64>,
 }
 
+impl Turn {
+    /// The damage a HP click applies, full or half, never below 0.
+    fn amount(&self) -> Option<i64> {
+        let total = self.outcome.damage.as_ref()?.total.max(0);
+        Some(if self.half { total / 2 } else { total })
+    }
+
+    /// An attack's damage lands once; a save's lands once per target.
+    fn landed(&self, row: usize) -> bool {
+        if self.outcome.many_targets() {
+            self.applied.contains(&row)
+        } else {
+            !self.applied.is_empty()
+        }
+    }
+}
+
 /// Why nothing rolls once the encounter has ended.
 const ENDED: &str = "This encounter has ended. Undo the ending to continue.";
 
@@ -44,9 +61,11 @@ fn save_bonus(entry: &Entry, ability: &str) -> Option<i64> {
 }
 
 impl Run {
-    /// Make the roll a number or a chip asked for, for its roller or else the selected row.
+    /// Make the roll a number in a participant's stat block or sheet asked for.
     pub(crate) fn roll_link(&mut self, ask: Ask) {
-        let actor = self.existing(ask.roller).unwrap_or(self.selected);
+        let Some(actor) = self.existing(ask.roller) else {
+            return;
+        };
         if let Err(error) = self.roll_action(actor, &ask.link, ask.mode) {
             self.error = Some(error);
         }
@@ -141,17 +160,11 @@ impl Run {
     /// has landed, and none on the actor itself.
     pub(super) fn waiting_damage(&self, row: usize) -> Option<i64> {
         let turn = self.turn.as_ref()?;
-        let damage = turn.outcome.damage.as_ref()?;
-        let done = if turn.outcome.many_targets() {
-            turn.applied.contains(&row)
-        } else {
-            !turn.applied.is_empty()
-        };
-        if row == turn.actor || done || !self.state.participants.get(row)?.present {
+        let amount = turn.amount()?;
+        if row == turn.actor || turn.landed(row) || !self.state.participants.get(row)?.present {
             return None;
         }
-        let total = damage.total.max(0);
-        Some(if turn.half { total / 2 } else { total })
+        Some(amount)
     }
 
     /// A click on a row's HP while damage waits: apply it there, as one step of Undo.
@@ -191,13 +204,14 @@ impl Run {
         let chips = self.chips(row);
         let turn = self.turn.as_ref().filter(|turn| turn.actor == row);
         let apply = turn.and_then(|turn| {
-            let damage = turn.outcome.damage.as_ref()?;
-            let total = damage.total.max(0);
-            let amount = if turn.half { total / 2 } else { total };
-            if !turn.outcome.many_targets() && !turn.applied.is_empty() {
-                return Some("Applied.".to_owned());
-            }
-            Some(format!("Click a row's HP to apply {amount}."))
+            let amount = turn.amount()?;
+            Some(
+                if !turn.outcome.many_targets() && !turn.applied.is_empty() {
+                    "Applied.".to_owned()
+                } else {
+                    format!("Click a row's HP to apply {amount}.")
+                },
+            )
         });
         let result = LineResult {
             outcome: turn.map(|turn| &turn.outcome),
@@ -207,19 +221,17 @@ impl Run {
             apply,
         };
         let mut bonus = self.bonuses.get(&row).cloned().unwrap_or_default();
-        let name = self.state.participants[row].name.clone();
-        rolls::set_entry(ui.ctx(), &name);
         let event = rolls::action_line(ui, ("run", row), &chips, &result, &mut bonus);
         if bonus.is_empty() {
             self.bonuses.remove(&row);
         } else {
             self.bonuses.insert(row, bonus);
         }
-        let outcome = turn.map(|turn| turn.outcome.clone());
+        let last = turn.map(|turn| turn.outcome.link.clone());
         let result = match event {
             Some(LineEvent::Roll(link, mode)) => self.roll_action(row, &link, mode),
-            Some(LineEvent::Again(mode)) => match outcome {
-                Some(outcome) => self.roll_action(row, &outcome.link, mode),
+            Some(LineEvent::Again(mode)) => match last {
+                Some(link) => self.roll_action(row, &link, mode),
                 None => Ok(()),
             },
             Some(LineEvent::Half(half)) => {
