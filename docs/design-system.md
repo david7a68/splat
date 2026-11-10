@@ -168,7 +168,7 @@ eye during long sessions.
 | Submenu | `menu_submenu` | Match quiet Read actions: `S` horizontal padding, Strong type and Read height |
 | Row menu | `row_menu` | Quiet `⋯` at the right, named `More actions for <name>`; holds Remove and Delete |
 | Add strip | `hanging_add_strip` | `Add` in its own Label column; one line of quiet icon-and-word buttons. Show all seven actions when they fit. Otherwise keep Fight, Group (plan only) and Long rest visible; put Day, Short rest, Travel and Major event in one compact `⋯⌄` menu named `More Add actions`; hover text names its actions. Keep the strip on one line |
-| Message | `message`, `small_message`, `message_with_action`, `Tone` | Inline icon and bar; the words start `XS` after the icon whatever the caller's spacing; cap the notice at `LIST_MEASURE`; actions follow text after an `L` gap or wrap below, aligned with the text; measure the whole action with padding; move it below and align it with the text if it cannot fit; actions without icons use a secondary border |
+| Message | `message`, `small_message`, `message_with_action`, `Tone` | Inline icon and bar; `message`, `message_with_action` and `undo_message` start the words `XS` after the icon whatever the caller's spacing; cap the notice at `LIST_MEASURE`; actions follow text after an `L` gap or wrap below, aligned with the text; measure the whole action with padding; move it below and align it with the text if it cannot fit; actions without icons use a secondary border |
 | Side panel | `side_panel_width`, `panel_header` | One width rule for Lookup, Notes and the run; separate participant and fight tabs |
 | Column | `Column::left / right / panel` | Rail, page lists and panels; inner-edge drag handle; natural width until dragged or moved with keys, then saved width across restarts; preserve page room and `RUN_LIST_KEEPS`; adjacent content reaches the column edge, with text measured inside it |
 | Link | `link` | Real `Link` role, at least 24 px high |
@@ -969,8 +969,10 @@ source. Hover fill and the 2 px focus ring use `RADIUS_CONTROL`. A click opens t
 
 Outside a fight the level fits the words in view. While a run is open, the level may drop when the words
 in view need it (a `Bloodied` word, temporary HP), but it never rises again until the run ends, and no
-item narrows, so nothing moves back when a player is healed. A change of bar width (the window or the
-rail) or of the party measures again. The bar keeps this in its own state, keyed to the run, never in
+item narrows, so nothing moves back when a player is healed. The hold never hides a player who would
+show without it: when the held widths no longer fit, the level drops to the first lower one that fits,
+and when none does, the hold ends. A change of bar width (the window or the rail) or of the party
+measures again. The bar keeps this in its own state, keyed to the run, never in
 the party data.
 
 ### Timeline

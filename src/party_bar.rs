@@ -344,37 +344,72 @@ pub fn show(
                 })
                 .unwrap_or(0)
         });
-    // In a fight the level never rises. At the same level, no item narrows.
-    let index = held.as_ref().map_or(fitted, |hold| fitted.max(hold.step));
-    let step = steps[index];
-    set(&mut items, step);
-    for (at, item) in items.iter_mut().enumerate() {
-        item.stats.truncate(step.shown);
-        if let Some(hold) = held.as_ref().filter(|hold| hold.step == index) {
-            item.held = hold.widths[at];
-        }
-    }
     // No item is ever cut off. When even the narrowest step does not fit, the items that fit
     // show whole, and `N more` names the rest on hover and in its accessible name.
     let (painter, small) = (ui.painter().clone(), Type::Small.font(ui));
     let more = |hidden: usize| {
         painter.layout_no_wrap(format!("{hidden} more"), small.clone(), colors().muted)
     };
-    let widths: Vec<f32> = items.iter().map(|item| item.width(step.shown)).collect();
-    let kept = (0..=items.len())
-        .rev()
-        .find(|&kept| {
-            let shown = widths[..kept].iter().sum::<f32>() + gap * kept.saturating_sub(1) as f32;
-            let hidden = items.len() - kept;
-            let count = if hidden == 0 {
-                0.0
+    // How many items show whole, from the first, with these widths.
+    let fit = |widths: &[f32]| {
+        (0..=widths.len())
+            .rev()
+            .find(|&kept| {
+                let shown =
+                    widths[..kept].iter().sum::<f32>() + gap * kept.saturating_sub(1) as f32;
+                let hidden = widths.len() - kept;
+                let count = if hidden == 0 {
+                    0.0
+                } else {
+                    gap + more(hidden).size().x + 2.0 * design::XS
+                };
+                shown + count <= room
+            })
+            .unwrap_or(0)
+    };
+    // Each item's width at this step, with or without the widths a fight held.
+    let measure = |items: &mut [Item], index: usize, hold: Option<&Hold>| {
+        set(items, steps[index]);
+        for (at, item) in items.iter_mut().enumerate() {
+            item.held = hold.map_or(0.0, |hold| hold.widths[at]);
+        }
+        items
+            .iter()
+            .map(|item| item.width(steps[index].shown))
+            .collect::<Vec<f32>>()
+    };
+    let fresh = fit(&measure(&mut items, fitted, None));
+    // In a fight the level never rises, and at the same level no item narrows. The hold never
+    // hides a player who would show without it: when the held widths no longer fit, the level
+    // drops to the first lower one that fits.
+    let (index, widths, kept) = match held.as_ref() {
+        Some(hold) if fitted <= hold.step => {
+            let widths = measure(&mut items, hold.step, Some(hold));
+            let kept = fit(&widths);
+            if kept >= fresh {
+                (hold.step, widths, kept.min(hold.kept).max(fresh))
             } else {
-                gap + more(hidden).size().x + 2.0 * design::XS
-            };
-            shown + count <= room
-        })
-        .unwrap_or(0);
-    let kept = held.as_ref().map_or(kept, |hold| kept.min(hold.kept));
+                // When no lower step fits, the hold ends: the fresh fit shows the most players.
+                let index = (hold.step + 1..steps.len())
+                    .find(|&index| needed(&mut items, steps[index], gap) <= room)
+                    .unwrap_or(fitted);
+                let widths = measure(&mut items, index, None);
+                let kept = fit(&widths);
+                (index, widths, kept)
+            }
+        }
+        _ => {
+            let widths = measure(&mut items, fitted, None);
+            (fitted, widths, fresh)
+        }
+    };
+    let step = steps[index];
+    set(&mut items, step);
+    for (item, width) in items.iter_mut().zip(&widths) {
+        item.stats.truncate(step.shown);
+        // Paint each item at the width it was measured with.
+        item.held = *width;
+    }
     ui.data_mut(|data| match fight {
         Some(run) => data.insert_temp(
             hold_id,
@@ -879,8 +914,11 @@ mod tests {
         let hurt = party(5, 1, 0);
         let mut held = 0;
         for width in (30..=200).map(|step| step as f32 * 10.0).chain([1040.0]) {
-            // Where one Bloodied player needs a lower level than a calm party.
-            if level(&draw(width, &calm)) == level(&draw(width, &hurt)) {
+            // Where one Bloodied player needs a lower level than a calm party, and every player
+            // still shows. Narrower bars, where the hold must give way rather than hide a
+            // player, are checked below.
+            let fresh = draw(width, &hurt);
+            if level(&draw(width, &calm)) == level(&fresh) || fresh.spoken < 5 {
                 continue;
             }
             held += 1;
@@ -933,6 +971,42 @@ mod tests {
             held > 2,
             "some widths need a lower level for one Bloodied player"
         );
+
+        // Review of PR 185: the hold never hides a player who shows without it. Each player is
+        // Bloodied in turn and healed before the next, in one fight.
+        let mut whole_party = 0;
+        for width in (30..=200).map(|step| step as f32 * 10.0).chain([1040.0]) {
+            let all_shown = draw(width, &party(5, 5, 0)).spoken == 5;
+            whole_party += usize::from(all_shown);
+            let ctx = egui::Context::default();
+            design::theme::install(&ctx);
+            ctx.enable_accesskit();
+            let fight = Some(Uuid::from_u128(9));
+            draw_in(&ctx, width, &calm, fight);
+            for player in 0..5 {
+                let mut turn = party(5, 0, 0);
+                turn[player].hp = Some(11);
+                let bloodied = draw_in(&ctx, width, &turn, fight);
+                let healed = draw_in(&ctx, width, &calm, fight);
+                assert!(
+                    bloodied.whole(width),
+                    "{width}, player {player}: {bloodied:?}"
+                );
+                assert!(
+                    healed.whole(width),
+                    "{width}, player {player} healed: {healed:?}"
+                );
+                if all_shown {
+                    for (frame, at) in [("Bloodied", &bloodied), ("healed", &healed)] {
+                        assert!(
+                            at.items.len() == 5 && at.more.is_none(),
+                            "{width}, player {player} {frame}: a player is hidden: {at:?}"
+                        );
+                    }
+                }
+            }
+        }
+        assert!(whole_party > 100, "most widths show a whole Bloodied party");
     }
 
     /// FT3 and its repair: the optional stats drop first, then the portraits go together, then
