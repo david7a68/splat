@@ -442,6 +442,55 @@ fn output_directory() -> (PathBuf, bool) {
     )
 }
 
+/// Reports describe only a completed run, including runs without captures.
+fn prepare_output(directory: &Path, capture: bool) {
+    fs::create_dir_all(directory).expect("create output folder");
+    for name in [
+        "ergonomics.json",
+        "ergonomics.md",
+        "chrome-observation.json",
+    ] {
+        match fs::remove_file(directory.join(name)) {
+            Ok(()) => {}
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(error) => panic!("clear previous {name}: {error}"),
+        }
+    }
+    if capture {
+        clear_old_captures(directory);
+    }
+}
+
+#[test]
+fn a_run_without_captures_clears_reports_but_keeps_other_files() {
+    let directory = tempfile::tempdir().unwrap();
+    let reports = [
+        "ergonomics.json",
+        "ergonomics.md",
+        "chrome-observation.json",
+    ];
+    let retained = ["empty__01__960x640.png", "manifest.txt", "notes.md"];
+    for name in reports.into_iter().chain(retained) {
+        fs::write(directory.path().join(name), "previous run").unwrap();
+    }
+    prepare_output(directory.path(), false);
+    for name in reports {
+        assert!(
+            !directory.path().join(name).exists(),
+            "H-report-cleared: {name}"
+        );
+    }
+    for name in retained {
+        assert_eq!(
+            fs::read_to_string(directory.path().join(name)).unwrap(),
+            "previous run",
+            "H-output-retained: {name}",
+        );
+    }
+    // A first run, or a run after an early exit, need not have any reports.
+    prepare_output(directory.path(), false);
+}
+
 /// A partial run replaces only its own captures.
 fn is_selected(scenario: &str) -> bool {
     selected().iter().any(|(name, ..)| *name == scenario)
@@ -449,12 +498,7 @@ fn is_selected(scenario: &str) -> bool {
 
 /// Only files this suite writes. The folder can be one the caller chose.
 fn clear_old_captures(directory: &Path) {
-    let names = [
-        "ergonomics.json",
-        "ergonomics.md",
-        "manifest.txt",
-        "contact-sheet.png",
-    ];
+    let names = ["manifest.txt", "contact-sheet.png"];
     let is_ours = |path: &Path| {
         let name = path
             .file_name()
@@ -548,14 +592,8 @@ fn visual_suite() {
     }
     let started = Instant::now();
     let (directory, capture) = output_directory();
-    fs::create_dir_all(&directory).expect("create output folder");
+    prepare_output(&directory, capture);
     let chrome_observation = directory.join("chrome-observation.json");
-    if chrome_observation.exists() {
-        fs::remove_file(&chrome_observation).expect("clear previous chrome measurements");
-    }
-    if capture {
-        clear_old_captures(&directory);
-    }
     let record = capture && std::env::var("SPLAT_VISUAL_VIDEO").is_ok_and(|value| value == "1");
     if record {
         fs::create_dir_all(directory.join("video")).expect("create video folder");
