@@ -5668,13 +5668,7 @@ fn presence_action(present: bool) -> (&'static str, &'static str) {
 }
 
 fn hp_word(p: &Participant) -> Option<(&'static str, &'static str, egui::Color32)> {
-    let hp = colors().hp;
-    match design::hp_state(p.hp, p.max_hp) {
-        design::HpState::Zero => Some((icons::ZERO_HP, "0 HP", hp.zero)),
-        design::HpState::Bloodied => Some((icons::BLOODIED, "Bloodied", hp.bloodied)),
-        design::HpState::Unknown => Some((icons::WARN, "HP unknown", colors().muted)),
-        _ => None,
-    }
+    design::hp_word(p.hp, p.max_hp)
 }
 
 /// A row's place in the turn order. The next participant is never the current one.

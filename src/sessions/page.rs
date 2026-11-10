@@ -192,6 +192,10 @@ struct LinkUndoState {
 #[derive(Default)]
 pub struct Sessions {
     identity_undo: Option<super::IdentityUndo>,
+    /// The DM showed or hid the party bar. Otherwise it shows while a session is played.
+    pub party_bar: Option<bool>,
+    /// The party has members, and the bar does not show, so the header offers it.
+    pub party_hidden: bool,
     pub run_open: bool,
     campaign: Option<Campaign>,
     folder: Option<PathBuf>,
@@ -1664,6 +1668,21 @@ impl Sessions {
         self.today
             .get_or_insert_with(crate::hermetic::today)
             .clone()
+    }
+
+    /// The party bar shows: the DM said so, or a session is being played. That is an open
+    /// fight, a live recording, or a current session that is not dated before today.
+    pub fn party_bar_shows(&mut self) -> bool {
+        if let Some(chosen) = self.party_bar {
+            return chosen;
+        }
+        if self.run_open || self.live.is_some() {
+            return true;
+        }
+        let today = self.today();
+        self.current()
+            .and_then(|current| self.notes.iter().find(|note| note.id == current))
+            .is_some_and(|note| note.date.as_str() >= today.as_str())
     }
 
     /// The words if new events go to a session that looks like an old one.
@@ -6597,6 +6616,14 @@ impl Sessions {
             }
             if self.view == View::Notes && Action::quiet("Templates").show(ui).clicked() {
                 self.view = View::Templates;
+            }
+            if self.party_hidden
+                && Action::quiet("Show party")
+                    .icon(icons::PARTY)
+                    .show(ui)
+                    .clicked()
+            {
+                self.party_bar = Some(true);
             }
         });
         if stop {
