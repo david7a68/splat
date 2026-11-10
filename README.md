@@ -103,6 +103,10 @@ or set `SPLAT_VISUAL_CONTACT_SHEET=1` to make it with a full `visual-test` run.
   clears scenario filters and baseline-update mode, and enforces the baseline.
   Video and optional contact-sheet settings work as for `visual-test`.
 
+Session Read view omits plan links already shown beside the note, including group links.
+The note file keeps its Markdown and prose. Campaign dependency issues name the entry
+that needs repair and keep raw references in Technical details.
+
 Timeline files use `Fight`, `Travel`, `Short rest`, `Long rest` and `Major event`.
 The reader also accepts `Encounter` and `Event`, in any case, with or without a colon.
 Each save renumbers day headings. Separate edits in Splat and in Obsidian save together;
