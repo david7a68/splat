@@ -2896,11 +2896,15 @@ impl Library {
                 _ => label(scope),
             };
             let budget = width - design::XXL - design::L;
-            let fitted = scope_label(ui, &selected, budget);
+            let fitted = if matches!(scope, Scope::Package(_)) {
+                scope_label(ui, &selected, budget)
+            } else {
+                selected
+            };
             let combo = egui::ComboBox::from_id_salt("library_scope")
                 .icon(design::combo_icon)
                 .width(width)
-                .truncate()
+                .wrap()
                 .selected_text(Type::Strong.rich(ui, fitted))
                 .show_ui(ui, |ui| {
                     ui.set_min_width(260.0);

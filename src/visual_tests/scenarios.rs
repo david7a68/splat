@@ -751,6 +751,7 @@ pub mod campaign_content {
 
         d.click(TAB_ENTRIES);
         d.expect(CAMPAIGN_ENTRY);
+        assert!(d.visible_text("Campaign entries"));
         d.state("own-entries-in-library", Sizes::All);
         d.begin_task();
         let in_list = |d: &Driver<'_>, name: &str| {

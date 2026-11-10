@@ -368,7 +368,7 @@ before it can replace those words. A repaired Timeline file is read
 again, and the open fight's latest result is applied.
 
 Session storage remembers each known note path in `.splat-session-paths.json`. A copied session
-shows both file names and offers **New identity**, with Undo. A moved draft can save to its new path
+shows both file names and offers **Make <file> a separate entry**, with **Undo separate entry**. A moved draft can save to its new path
 with the same session ID. If a session or run folder is gone, choose its folder before making new
 files. Recording results stay listed as **Audio removed** when their WAV is gone.
 

@@ -460,7 +460,7 @@ The app-close dialog uses Keep running for a run, Keep recording for audio, and 
 ## Sessions and the timeline
 
 Storage recovery uses the existing warning, comparison and save controls. A copied session names
-both files and offers **New identity** with Undo. A moved draft offers its new path and **Let it go**.
+both files and offers **Make <file> a separate entry** with **Undo separate entry**. A moved draft offers its new path and **Let it go**.
 Missing session and run folders show **Choose folder**. Recording results remain visible with
 **Audio removed** after the WAV is deleted. Conflicting edits to a Timeline item open its disk-conflict comparison at the first difference.
 The Timeline keeps outside prose and separate event edits on save. Overwrite comes before Reload and lose my timeline,
@@ -517,7 +517,8 @@ entries. Changing the scope never changes the active campaign. Editing, save sta
 `Copy to…` stay in the same page. Package actions are inline. The word `module` is gone
 from the interface.
 
-The scope menu and its selected button both say `Campaign entries`. While a package's
+The scope menu and its selected button both say `Campaign entries`. Fixed scope names
+wrap when space is tight; package names can end with an ellipsis. While a package's
 About page is open, its About row uses the selected fill and no category is selected.
 Choosing a category restores its selected state.
 
