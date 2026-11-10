@@ -4462,10 +4462,16 @@ impl Run {
             0.0
         };
         let place = design::XL;
-        // Freeze only the tie slot while a field has focus. Place numbers can appear
-        // immediately without moving the total under the cursor.
+        // Freeze only the tie slot while an initiative field has focus. Place numbers can
+        // appear immediately without moving the total under the cursor. Tab to Absent or a
+        // menu is a blur, so the tie slot settles then.
         let slot_width = egui::Id::new("setup_tie_slot_width");
-        let tie = if ui.memory(|memory| memory.focused().is_some()) {
+        let in_initiative = ui.memory(|memory| memory.focused()).is_some_and(|focused| {
+            self.state.participants.iter().any(|p| {
+                focused == design::focus_id(&format!("Initiative for {}", p.name))
+            })
+        });
+        let tie = if in_initiative {
             ui.data(|data| data.get_temp::<f32>(slot_width))
                 .unwrap_or(tie)
         } else {
@@ -6742,15 +6748,39 @@ mod tests {
             harness.event(egui::Event::Text("5".into()));
             harness.run_steps(2);
             assert_eq!(run.borrow().state.participants[2].initiative, Some(15));
-            harness
-                .ctx
-                .memory_mut(|m| m.surrender_focus(design::focus_id(label)));
+            // Tab to the next control is a blur of the field too.
+            harness.key_press(Key::Tab);
+            harness.run_steps(2);
+            assert!(
+                !harness
+                    .ctx
+                    .memory(|m| m.has_focus(design::focus_id(label))),
+                "iter8-B-tie: Tab leaves the field"
+            );
+            assert!(
+                harness
+                    .query_by_label("Move Guard 3 before Guard 2")
+                    .is_some(),
+                "iter8-B-tie: a kept tie shows its controls after Tab"
+            );
+            harness.ctx.memory_mut(|m| {
+                if let Some(id) = m.focused() {
+                    m.surrender_focus(id);
+                }
+            });
             harness.run_steps(2);
             assert!(
                 harness
                     .query_by_label("Move Guard 3 before Guard 2")
                     .is_some(),
                 "iter8-B-tie: a kept tie shows its controls on blur"
+            );
+            // The tie slot opens on blur, once, after the DM has left the field: the row
+            // keeps its line, and the field moves left by the slot only then.
+            assert_eq!(
+                harness.get_by_label(label).rect().min.y,
+                before.y,
+                "iter8-B-tie: a kept tie keeps the row on its line after blur"
             );
         }
     }
