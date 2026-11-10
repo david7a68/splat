@@ -545,6 +545,9 @@ pub(crate) struct Run {
     history: Vec<State>,
     /// What each history step did, for a named Undo.
     history_labels: Vec<String>,
+    /// Beside each label: true when a sheet made the step, not the DM. Only such a step may
+    /// give up its source when Undo is tight.
+    history_from_sheet: Vec<bool>,
     selected: usize,
     /// More targets for one amount, beside the selected row. Never saved.
     also: BTreeSet<usize>,
@@ -656,6 +659,9 @@ enum Panel {
 const GROUP_ADDED: &str = "Encounter group ";
 /// How one creature's log line starts, with no group to name.
 const ONE_ADDED: &str = "Added by hand: ";
+/// The source at the start of an Undo step that a sheet made. A tight Undo gives it up before
+/// its target.
+const SHEET_SOURCE: &str = "D&D Beyond ";
 /// What a saved run may hold. A larger one does not open again.
 const MAX_PARTICIPANTS: usize = 2000;
 /// Where a run's own text ends. Saved runs hold both parts in one string.
@@ -712,7 +718,6 @@ enum Command {
     Concentration(usize, bool),
     DeathSaves(usize, u8, u8),
     Note(usize, String),
-    Roll(String),
     /// Add every member of an encounter group, on this total, or by rolling.
     AddGroup(Arc<RunGroup>, Option<i64>),
     /// One line of creatures with no group behind them.
@@ -855,6 +860,7 @@ impl Run {
             },
             history: Vec::new(),
             history_labels: Vec::new(),
+            history_from_sheet: Vec::new(),
             selected: 0,
             also: BTreeSet::new(),
             halved: BTreeSet::new(),
@@ -972,6 +978,7 @@ impl Run {
         }
         self.history.push(before);
         self.history_labels.push("full HP after long rest".into());
+        self.history_from_sheet.push(false);
         self.state.last_change = Some("full HP after long rest".into());
         self.state
             .log
@@ -1350,6 +1357,24 @@ impl Run {
         }
         Ok((names.join(", "), initiative))
     }
+    /// The dock's roll. It changes no game state, so it goes to the Log and is not an Undo
+    /// step. Undo of an earlier step keeps its line, and the dice do not roll the same again.
+    pub(super) fn roll_dice(&mut self, expression: &str) -> Result<(), String> {
+        if matches!(self.state.phase, Phase::Ended { .. }) {
+            return Err("This encounter has ended. Undo the ending to continue.".into());
+        }
+        let mut random = self.state.random.clone();
+        let roll = Dice::parse(expression)?.roll(&mut random, false)?;
+        let line = format!("DM roll {expression}: {:?} = {}.", roll.dice, roll.total);
+        for state in self.history.iter_mut().chain([&mut self.state]) {
+            state.log.push(line.clone());
+            state.random = random.clone();
+        }
+        self.dm_steps += 1;
+        self.dirty = true;
+        self.error = None;
+        Ok(())
+    }
     /// Roll on a table in a note. The run's log keeps the result, and its Undo takes it back.
     pub(crate) fn roll_table(
         &mut self,
@@ -1642,10 +1667,6 @@ impl Run {
                     next.round
                 )
             }
-            Command::Roll(expression) => {
-                let roll = Dice::parse(&expression)?.roll(&mut next.random, false)?;
-                format!("DM roll {expression}: {:?} = {}.", roll.dice, roll.total)
-            }
             Command::AddGroup(group, total) => {
                 let first = next.participants.len();
                 let (added, initiative) =
@@ -1692,6 +1713,7 @@ impl Run {
         if self.history.len() == 100 {
             self.history.remove(0);
             self.history_labels.remove(0);
+            self.history_from_sheet.remove(0);
         }
         self.dm_steps += 1;
         self.notice = None;
@@ -1700,6 +1722,7 @@ impl Run {
             self.panel = Panel::Reference;
         }
         self.history_labels.push(undo_label);
+        self.history_from_sheet.push(false);
         self.notice_summary = None;
         if let Some((index, total, had, acted)) = live_initiative {
             self.notice = Some(Self::initiative_notice(
@@ -1935,6 +1958,7 @@ impl Run {
             self.notice = None;
             self.dm_steps += 1;
             self.history_labels.pop();
+            self.history_from_sheet.pop();
             // What D&D Beyond last confirmed is a fact, not a step that can be taken back.
             let confirmed: Vec<_> = self
                 .state
@@ -1950,7 +1974,6 @@ impl Run {
             self.dirty = true;
             self.error = None;
             self.last_initiative = None;
-            self.last_roll = None;
         }
     }
     /// Undo can take away an encounter group, and these all hold a participant's place.
@@ -2045,7 +2068,6 @@ impl Run {
             ),
             Command::DeathSaves(i, ..) => format!("death saves on {}", name(i)),
             Command::Note(i, _) => format!("note on {}", name(i)),
-            Command::Roll(expression) => format!("{expression} roll"),
             Command::AddGroup(group, _) | Command::AddCreature(group, _) => {
                 format!("add {}", group.name)
             }
@@ -2111,6 +2133,10 @@ impl Run {
             // Short, because the ended view's header holds it beside the title.
             Command::Loot(rolls) => loot::describe(rolls),
         }
+    }
+    /// True when a sheet made the newest Undo step.
+    fn undo_from_sheet(&self) -> bool {
+        self.history_from_sheet.last().copied().unwrap_or(false)
     }
     fn undo_label(&self) -> String {
         self.history_labels
@@ -2755,6 +2781,7 @@ impl Run {
     fn reconcile_sync_history(&mut self, before: &State, indices: &[usize], choices: &[usize]) {
         let mut kept = Vec::new();
         let mut labels = Vec::new();
+        let mut from_sheet = Vec::new();
         let mut dropped = Vec::new();
         // A multi-target step is atomic. If it also touched another participant, its
         // older steps cannot safely cross this boundary either. Say which steps were lost.
@@ -2806,9 +2833,11 @@ impl Run {
             }
             kept.push(previous);
             labels.push(self.history_labels[at].clone());
+            from_sheet.push(self.history_from_sheet[at]);
         }
         self.history = kept;
         self.history_labels = labels;
+        self.history_from_sheet = from_sheet;
         if !dropped.is_empty() {
             let line = format!("Sheet update removed undo steps: {}.", dropped.join("; "));
             self.state.log.push(line.clone());
@@ -2833,15 +2862,16 @@ impl Run {
                 } else {
                     "values"
                 };
-                format!("D&D Beyond {what} for {}", now.name)
+                format!("{SHEET_SOURCE}{what} for {}", now.name)
             } else {
                 format!(
-                    "D&D Beyond values for {}",
+                    "{SHEET_SOURCE}values for {}",
                     crate::design::count(choices.len(), "character", "characters")
                 )
             };
             self.state.last_change = Some(Self::change_with_result(&self.state, &label));
             self.history_labels.push(label);
+            self.history_from_sheet.push(true);
             self.dm_steps += 1;
         }
     }
@@ -3413,6 +3443,7 @@ impl Run {
             dirty: false,
             history: Vec::new(),
             history_labels: Vec::new(),
+            history_from_sheet: Vec::new(),
             also: BTreeSet::new(),
             halved: BTreeSet::new(),
             dm_steps: 0,
@@ -3933,6 +3964,7 @@ impl Run {
         assert_eq!(self.state.phase, Phase::Running);
         self.history.clear();
         self.history_labels.clear();
+        self.history_from_sheet.clear();
         self.reopened = false;
         self.undo_stopped = false;
     }
@@ -4366,6 +4398,46 @@ mod tests {
         }
         assert!(run.apply(Command::Next).is_err());
         assert_eq!(run.state.round, 2);
+    }
+    #[test]
+    fn a_dice_roll_stays_in_the_log_and_is_not_an_undo_step() {
+        let mut run = run();
+        begin(&mut run);
+        let health = |run: &Run| {
+            let p = &run.state.participants[0];
+            (p.hp, p.temporary_hp)
+        };
+        let whole = health(&run);
+        run.apply(Command::Damage(0, 3)).unwrap();
+        assert_ne!(health(&run), whole);
+        let label = run.undo_label();
+        let steps = run.history.len();
+        run.state.random = Random::controlled([4, 5]);
+        run.roll_dice("1d6").unwrap();
+        let line = run.state.log.last().cloned().unwrap();
+        assert!(
+            line.starts_with("DM roll 1d6:") && line.ends_with("= 4."),
+            "{line}"
+        );
+        // The roll is not a step: Undo still names the damage.
+        assert_eq!(run.history.len(), steps);
+        assert_eq!(run.undo_label(), label);
+        run.undo();
+        assert_eq!(health(&run), whole, "U takes back the damage");
+        assert!(run.state.log.contains(&line), "the roll stays in the Log");
+        // The dice go on, so the next roll is not the same one again.
+        run.roll_dice("1d6").unwrap();
+        assert!(run.state.log.last().unwrap().ends_with("= 5."));
+        // Other commands keep their Undo.
+        run.apply(Command::Heal(0, 1)).unwrap();
+        assert_eq!(
+            run.undo_label(),
+            format!("Undo: 1 healing to {}", run.state.participants[0].name)
+        );
+        // A bad expression changes nothing.
+        let log = run.state.log.len();
+        assert!(run.roll_dice("1d").is_err());
+        assert_eq!(run.state.log.len(), log);
     }
     #[test]
     fn initiative_requires_input_preserves_dm_ties_and_rolls_use_supplied_bonus_once() {

@@ -1841,23 +1841,16 @@ pub fn save_row_state(ui: &mut Ui, state: Status<'_>, dirty: bool, blocked: Opti
     dirty && Action::quiet("Discard").blocked(blocked).show(ui).clicked()
 }
 
-/// Names the discarded draft beside its undo. Returns true when undo is pressed.
+/// Names the discarded draft in an Undo message. Undo's accessible name also names the draft.
+/// Returns true when undo is pressed.
 pub fn draft_discarded(ui: &mut Ui, name: &str) -> bool {
-    let mut pressed = false;
-    ui.horizontal(|ui| {
-        ui.label(
-            Type::Small
-                .rich(ui, format!("{name} draft discarded."))
-                .color(colors().muted),
-        );
-        pressed = Action::quiet("Undo discard")
-            .name(&format!("Undo discard of {name}"))
-            .icon(icons::UNDO)
-            .density(Density::Read)
-            .show(ui)
-            .clicked();
-    });
-    pressed
+    undo_message_named(
+        ui,
+        Tone::Info,
+        &format!("{name} draft discarded."),
+        "Undo discard",
+        Some(&format!("Undo discard of {name}")),
+    )
 }
 
 /// A message with one action beside it. Returns true when the action is used.
@@ -2045,9 +2038,24 @@ pub fn reloaded_draft(ui: &mut Ui) -> bool {
 
 /// A recovery message whose action restores the previous state.
 pub fn undo_message(ui: &mut Ui, tone: Tone, text: &str, action: &str) -> bool {
+    undo_message_named(ui, tone, text, action, None)
+}
+
+/// `undo_message`, with an accessible name for the action when its words are not enough.
+pub fn undo_message_named(
+    ui: &mut Ui,
+    tone: Tone,
+    text: &str,
+    action: &str,
+    name: Option<&str>,
+) -> bool {
     let button = Action::quiet(action)
         .icon(icons::UNDO)
         .density(Density::Read);
+    let button = match name {
+        Some(name) => button.name(name),
+        None => button,
+    };
     let button_width = button.natural_width(ui);
     let icon_width = number_width(ui, tone.parts().0, &Type::Body.font(ui));
     let inset = S + 1.0 + icon_width + ui.spacing().item_spacing.x * 2.0 - XS;
