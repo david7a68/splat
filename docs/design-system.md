@@ -429,7 +429,10 @@ package has Undo and keeps links to affected encounters. Unregister keeps the la
 offers Undo unregister; Campaign offers Register it again.
 
 Missing-package recovery searches beside known package folders. A unique match gets bordered secondary Use
-this folder; Find the folder… is then quiet. Use Body text throughout the missing-package sentence. The picker
+this folder; Find the folder… is then quiet. Show one warning naming the old and new folders, followed by
+the affected encounter links with word spaces. Align Use this folder, Find the folder… and Remove from this
+campaign on one action line with the warning text. Technical details follows below. Say Splat cannot find the
+package only when there is no match. Use Body text throughout the missing-package sentence. The picker
 starts beside the old folder and checks identity before restoring registration. Both recovery paths have Undo.
 
 A broken or deleted Package.md leaves its entries available and names the manifest fault. Campaign offers Open
@@ -540,7 +543,8 @@ closed section. Frames use Move to… for ownership; full editors use Belongs to
 
 ### Groups and changes
 
-A plan group editor takes the whole notes column; the note stays behind its tab. Plan summaries start directly
+A plan group editor stays beside the note when `LIST_MEASURE`, an `L` gap and `READER_MEASURE` fit.
+Bound the editor at `LIST_MEASURE`, anchored left. Below that width, the note stays behind its tab. Plan summaries start directly
 below name and action, without an extra item gap, and extend to the menu slot. Order summary parts as side,
 member count, XP, Changed, members. Shorten members first, with full text on hover. Member counts and XP use
 one dot-separated line. Members and XP share one heading. Keep a member summary below search when there are
@@ -828,7 +832,7 @@ Tab indents inside it and cannot reach Next turn.
 
 Run buttons keep working and return focus to notes after each step, except a field being typed in. Clicking a
 row or Amount takes focus to Amount for one number. Letters there go to notes with preceding digits. Typing
-and pasting with nothing focused still go to notes. Mark LLM words as a draft, make second-pass changes
+and pasting with nothing focused still go to notes. Mark automatically written words as a draft, make second-pass changes
 readable, and offer Add for transcript markers rather than placing them automatically.
 
 ## Party
@@ -882,14 +886,15 @@ again. With a partial transcript, name remaining audio parts and destination.
 Reserve Process again… for replacing results, in the row menu above Delete… with inline confirmation. One info
 message names transcript and context sent to the LLM and says audio is not sent again. Confirmation uses
 secondary Not now and red Replace the results; Keep the recording is secondary. Processing help keeps
-READER_MEASURE. Clean and warned results say Processed in the rail. Warnings retain icon and colour; row,
+READER_MEASURE. Clean and warned results say Processed in the rail until a later recording or processing replaces the result.
+Opening the session acknowledges the completion notice and keeps the result and its warning. Warnings retain icon and colour; row,
 hover and accessible name use Processed, with a warning. On the timeline is a success link for added events
 and transcript markers. Marker actions sit beside text.
 
 The viewer has back link and muted date on line one, Add to notes at the right on Summary, and left-aligned
 view choices on line two. Use one segmented control for Summary, Clean transcript, What the check changed and
 Raw transcript; never wrap it. When tight, replace it with one dropdown naming the current view. Generated
-views share a Small draft notice. If no check ran, put No check ran beside Raw transcript. Keep row menu
+views share a Small draft notice: This draft was written automatically. Check it against your memory. If no check ran, put No check ran beside Raw transcript. Keep row menu
 beside title and `L` between its actions and events heading.
 
 ## Settings
