@@ -554,23 +554,48 @@ impl Reader {
             let font = style::prose_type(ui).font(ui);
             let height = (ui.available_height() - Density::Read.control() - design::L - design::S)
                 .max(style::prose_type(ui).line() * 2.0);
-            egui::ScrollArea::vertical()
-                .id_salt(("world_edit_text_scroll", id))
-                .max_height(height)
-                .auto_shrink([false, true])
-                .show(ui, |ui| {
-                    ui.add(
-                        egui::TextEdit::multiline(&mut draft.now.text)
-                            .id(egui::Id::new(("world_edit_text", id)))
-                            .font(font)
-                            .desired_width(
-                                ui.available_width().min(design::FORM_WIDTH) - 2.0 * design::S,
-                            )
-                            .desired_rows(8)
-                            .margin(egui::vec2(design::S, design::S)),
+            ui.scope(|ui| {
+                ui.set_max_width(ui.available_width().min(design::FORM_WIDTH));
+                // One field frame includes the editor and its standard scrollbar.
+                let frame = egui::Frame::new()
+                    .fill(colors().well)
+                    .stroke(egui::Stroke::new(
+                        design::HAIRLINE_WIDTH,
+                        colors().field_border,
+                    ))
+                    .corner_radius(design::RADIUS_CONTROL)
+                    .inner_margin(egui::Margin::same(design::S as i8))
+                    .show(ui, |ui| {
+                        egui::ScrollArea::vertical()
+                            .id_salt(("world_edit_text_scroll", id))
+                            .max_height(height - 2.0 * (design::S + design::HAIRLINE_WIDTH))
+                            .auto_shrink([false, true])
+                            .show(ui, |ui| {
+                                ui.add(
+                                    egui::TextEdit::multiline(&mut draft.now.text)
+                                        .id(egui::Id::new(("world_edit_text", id)))
+                                        .font(font)
+                                        .desired_width(ui.available_width())
+                                        .desired_rows(8)
+                                        .frame(false)
+                                        .margin(egui::Vec2::ZERO),
+                                )
+                            })
+                            .inner
+                    });
+                frame.response.widget_info(|| {
+                    egui::WidgetInfo::labeled(
+                        egui::WidgetType::Other,
+                        ui.is_enabled(),
+                        "Text field",
                     )
-                })
-                .inner
+                });
+                if frame.inner.has_focus() {
+                    design::focus_ring(ui, frame.response.rect);
+                }
+                frame.inner
+            })
+            .inner
         });
         design::named(ui, &text, "Text");
         focused |= text.has_focus();

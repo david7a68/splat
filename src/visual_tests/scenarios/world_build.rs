@@ -815,7 +815,7 @@ pub fn round_trip(d: &mut Driver<'_>) {
     }
     for size in [SMALL, DEFAULT, LARGE] {
         let aligned = d.at_size(size, |d| {
-            for name in ["Status", "Text", "Save changes", "Discard"] {
+            for name in ["Status", "Text", "Text field", "Save changes", "Discard"] {
                 d.expect(name);
             }
             let nodes = d.nodes();
@@ -824,11 +824,7 @@ pub fn round_trip(d: &mut Driver<'_>) {
                 .find(|node| node.name == "Status" && node.role == Role::TextInput)
                 .expect("Status input")
                 .rect;
-            let text = nodes
-                .iter()
-                .find(|node| node.name == "Text" && node.role == Role::MultilineTextInput)
-                .expect("Text input")
-                .rect;
+            let text = d.place_of("Text field").expect("Text field frame");
             let save = d.place_of("Save changes").unwrap();
             let discard = d.place_of("Discard").unwrap();
             let unsaved = d
@@ -1116,6 +1112,26 @@ pub fn npc_in_lookup(d: &mut Driver<'_>) {
             "iter-6-D-ST1",
             one_primary,
             format!("Next turn owns primary while NPC Save stays secondary at {size:?}"),
+        );
+        let shared_edge = d.at_size(size, |d| {
+            for name in ["Status", "Text", "Text field", "Save changes"] {
+                d.expect(name);
+            }
+            let nodes = d.nodes();
+            let status = nodes
+                .iter()
+                .find(|node| node.name == "Status" && node.role == Role::TextInput)
+                .expect("Status input")
+                .rect;
+            let text = d.place_of("Text field").expect("Text field frame");
+            let save = d.place_of("Save changes").unwrap();
+            (status.right() - text.right()).abs() <= 1.0
+                && (status.right() - save.right()).abs() <= 1.0
+        });
+        d.observe(
+            "iter-8-D-FD11-scroll",
+            shared_edge,
+            format!("The scrolling Text field shares Status and Save's right edge at {size:?}"),
         );
     }
     d.click("Save changes");

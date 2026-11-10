@@ -503,7 +503,8 @@ Lookup.
 
 A campaign world entry has a quiet Edit action, with a pencil icon and the word Edit, on its title line in Lookup and World. Edit replaces the rows and
 the text with one form: Status, Stat block, In and Part of as labelled fields, then Text in the reader's prose type,
-without the title line. The Text field ends at the same `FORM_WIDTH` edge as Status. The shared save row
+without the title line. The Text field ends at the same `FORM_WIDTH` edge as Status. One frame holds
+the editor and its scrollbar, so scrolling does not shorten the field. The shared save row
 keeps the state and quiet Discard at the left, and Save changes at that right edge. Save changes is primary
 unless a live run owns Next turn; then it is secondary. Discard closes the form and offers Undo discard.
 The rail shows World draft while an edit is unsaved. If a repair is also unsaved, it shows World repair draft once.
