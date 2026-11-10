@@ -1485,6 +1485,9 @@ pub fn world_note_deleted(d: &mut Driver<'_>) {
     d.state("npc-deleted-stat-block-encounter-search", Sizes::All);
     d.click("Open in World");
     d.expect("Watchkeeper Guard · Not found");
+    // Only the rail's encounter draft and the focus differ, since the account line no longer
+    // moves when a status is added above it.
+    d.expect_same("Open in World returns to the World view of npc-stat-block-deleted-in-world");
     d.state("npc-stat-block-repair-from-search", Sizes::All);
 }
 
