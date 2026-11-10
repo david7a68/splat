@@ -993,6 +993,7 @@ impl Splat {
     /// What the World page, Lookup and the roll tables in them need from the rest of the app.
     fn follow_world(&mut self, ctx: &egui::Context) {
         let sides = self.encounters.run().map(|run| run.side_names());
+        let live = self.encounters.run().is_some_and(|run| run.strip().running);
         let in_run = self
             .encounters
             .run()
@@ -1035,6 +1036,7 @@ impl Splat {
         for reader in [&mut self.world_page.reader, &mut self.lookup.reader] {
             reader.log_as.clone_from(&log_as);
             reader.sides = sides.clone();
+            reader.live = live;
             reader.in_run = in_run.clone();
             if let Some(index) = reader.select_run.take()
                 && let Some(run) = self.encounters.run_mut()

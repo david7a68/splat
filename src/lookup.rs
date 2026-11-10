@@ -2269,8 +2269,16 @@ pub(crate) fn generated_card(
     ui.scope(|ui| {
         ui.set_max_width(ui.available_width().min(design::READER_MEASURE));
         for problem in problems {
-            design::message(ui, Tone::Warning, &problem.message).on_hover_text(&problem.marker);
-            if design::link(ui, &format!("Open {}", problem.path)).clicked() {
+            let opened = ui.scope(|ui| {
+                design::message_with_action(
+                    ui,
+                    Tone::Warning,
+                    &problem.message,
+                    &format!("Open {}", problem.path),
+                )
+            });
+            opened.response.on_hover_text(&problem.marker);
+            if opened.inner {
                 ui.ctx().data_mut(|data| {
                     data.insert_temp(egui::Id::new("markdown_clicked_note"), problem.path.clone())
                 });

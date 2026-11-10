@@ -580,6 +580,38 @@ pub fn round_trip(d: &mut Driver<'_>) {
         );
     }
     d.state("new-faction-note", Sizes::All);
+    let faction_path = root(d).join("Notes/Ashfall Faction.md");
+    let faction_before = fs::read_to_string(&faction_path).unwrap();
+    d.expect("Edit Ashfall Faction");
+    d.click("Edit Ashfall Faction");
+    d.type_into("Status", "ready");
+    for size in [SMALL, DEFAULT, LARGE] {
+        let primary = d.at_size(size, |d| {
+            d.expect("Save changes");
+            d.expect("Cancel");
+            d.expect("Unsaved");
+            !d.has(NEXT_TURN)
+                && d.control_frame("Save changes").is_some_and(|frame| {
+                    frame.fill == design::colors().accent_fill
+                        || frame.fill == design::colors().accent_hover
+                })
+        });
+        d.observe(
+            "iter-6-D-ST1-desk",
+            primary,
+            format!("World Save owns primary without a live run at {size:?}"),
+        );
+    }
+    d.state("world-edit-without-run", Sizes::All);
+    d.click("Status");
+    d.press_ctrl(Key::S);
+    d.wait_for_text("Changes saved.");
+    assert!(
+        fs::read_to_string(&faction_path).unwrap().contains("ready"),
+        "iter-6-D-ST1-shortcut: Ctrl+S must save the focused form",
+    );
+    d.click("Undo changes");
+    assert_eq!(fs::read_to_string(&faction_path).unwrap(), faction_before);
     go_campaign(d);
     d.click(TAB_ENTRIES);
     d.click_containing("Captain Varra · Creature");
@@ -675,6 +707,27 @@ pub fn generator(d: &mut Driver<'_>) {
         "A bad campaign table states why the built-in list stands in",
     );
     d.state("generator-bad-table", Sizes::All);
+    for size in [SMALL, DEFAULT, LARGE] {
+        let aligned = d.at_size(size, |d| {
+            d.expect("Open Names.md");
+            let action = d.place_of("Open Names.md").unwrap();
+            let warning = d
+                .nodes()
+                .into_iter()
+                .find(|n| n.role == Role::Label && n.name.contains("the name table stops at 1"))
+                .unwrap();
+            action.top() >= warning.rect.bottom()
+                && (action.left() - warning.rect.left()).abs() <= 1.0
+                && d.control_frame("Open Names.md")
+                    .is_some_and(|frame| frame.stroke.color == design::colors().field_border)
+        });
+        d.observe(
+            "iter-6-D-FD11",
+            aligned,
+            format!("The generator repair action is bordered and aligned at {size:?}"),
+        );
+    }
+    d.expect("Open Names.md");
     d.click("Open Names.md");
     d.wait_for_text("Names");
     d.observe(
@@ -743,6 +796,20 @@ pub fn npc_in_lookup(d: &mut Driver<'_>) {
     };
     let at_start = turn(d);
     d.begin_task();
+    for size in [SMALL, DEFAULT, LARGE] {
+        let named = d.at_size(size, |d| {
+            d.expect("Edit Rook Ambry");
+            let rect = d.place_of("Edit Rook Ambry").unwrap();
+            let words = d.painted_in(rect);
+            words.contains("Edit") && words.contains(design::icons::EDIT)
+        });
+        d.observe(
+            "iter-6-D-FD7",
+            named,
+            format!("Lookup's Edit action has its pencil and word at {size:?}"),
+        );
+    }
+    d.expect("Edit Rook Ambry");
     d.click("Edit Rook Ambry");
     d.wait_for_text("Save changes");
     d.click("Change In");
@@ -756,6 +823,26 @@ pub fn npc_in_lookup(d: &mut Driver<'_>) {
         "Editing an NPC in Lookup leaves the run's turn as it was",
     );
     d.state("npc-edit-form-in-lookup", Sizes::All);
+    for size in [SMALL, DEFAULT, LARGE] {
+        let one_primary = d.at_size(size, |d| {
+            d.expect("Save changes");
+            d.expect(NEXT_TURN);
+            d.expect("Cancel");
+            d.expect("Unsaved");
+            d.control_frame("Save changes").is_some_and(|frame| {
+                frame.stroke.color == design::colors().field_border
+                    && frame.fill != design::colors().accent_fill
+            }) && d.control_frame(NEXT_TURN).is_some_and(|frame| {
+                frame.fill == design::colors().accent_fill
+                    || frame.fill == design::colors().accent_hover
+            })
+        });
+        d.observe(
+            "iter-6-D-ST1",
+            one_primary,
+            format!("Next turn owns primary while NPC Save stays secondary at {size:?}"),
+        );
+    }
     d.click("Save changes");
     d.wait_for_text("Changes saved.");
     d.audit_goal_within("W2", "change an NPC's place and text beside the run", 9);
@@ -1662,6 +1749,19 @@ pub fn world_note_deleted(d: &mut Driver<'_>) {
     d.click(NAV_WORLD);
     d.click_containing("Watchkeeper · ");
     d.wait_for_text("Watch House");
+    for size in [SMALL, DEFAULT, LARGE] {
+        let named = d.at_size(size, |d| {
+            d.expect("Edit Watchkeeper");
+            let rect = d.place_of("Edit Watchkeeper").unwrap();
+            let words = d.painted_in(rect);
+            words.contains("Edit") && words.contains(design::icons::EDIT)
+        });
+        d.observe(
+            "iter-6-D-FD7-world",
+            named,
+            format!("World's Edit action has its pencil and word at {size:?}"),
+        );
+    }
     d.state("npc-before-place-deleted", Sizes::All);
     fs::remove_file(root(d).join("Locations/Watch House.md")).unwrap();
     d.focus_window(false);
@@ -1909,10 +2009,33 @@ pub fn package_folder_copied(d: &mut Driver<'_>) {
         );
     }
     d.state("copied-package-registered-alongside-original", Sizes::All);
+    for size in [SMALL, DEFAULT, LARGE] {
+        let aligned = d.at_size(size, |d| {
+            d.expect("Use the copy's entries");
+            let action = d.place_of("Use the copy's entries").unwrap();
+            let message = d
+                .nodes()
+                .into_iter()
+                .find(|n| {
+                    n.role == Role::Label && n.name.starts_with("Ashen Reaches is registered")
+                })
+                .unwrap();
+            action.top() >= message.rect.bottom()
+                && (action.left() - message.rect.left()).abs() <= 1.0
+                && d.control_frame("Use the copy's entries")
+                    .is_some_and(|frame| frame.stroke.color == design::colors().field_border)
+        });
+        d.observe(
+            "iter-6-D-FD4",
+            aligned,
+            format!("The copied-package action is bordered below the message at {size:?}"),
+        );
+    }
     go_campaign(d);
     d.expect("Ashen Reaches");
     d.state("campaign-after-copy-registration", Sizes::All);
     go_library(d);
+    d.expect("Use the copy's entries");
     d.click("Use the copy's entries");
     d.wait_for_text("Undo source change");
     go_encounters(d);

@@ -2348,33 +2348,47 @@ impl Library {
                 }
             }
         }
-        if self.package_copy.is_some()
-            && design::undo_message(
+        let (undo_copy, use_copy) = if let Some(copy) = &self.package_copy {
+            design::message_with_actions(
                 ui,
                 Tone::Success,
                 &format!(
                     "{} is registered · {}",
-                    self.package_copy.as_ref().unwrap().module.name,
+                    copy.module.name,
                     if self.copy_campaign_before.is_some() {
                         "Used here"
                     } else {
                         "Not used here"
                     }
                 ),
-                "Undo package registration",
+                |ui| {
+                    let undo = Action::quiet("Undo package registration")
+                        .icon(icons::UNDO)
+                        .density(Density::Read)
+                        .line_start()
+                        .show(ui)
+                        .clicked();
+                    let use_copy = campaigns.active_campaign().is_some()
+                        && self.copied_rosters.is_none()
+                        && Action::secondary("Use the copy's entries")
+                            .density(Density::Read)
+                            .blocked(self.draft_reason())
+                            .show(ui)
+                            .clicked();
+                    (undo, use_copy)
+                },
             )
-            && let Err(error) = self.undo_package_registration(campaigns)
-        {
+        } else {
+            (false, false)
+        };
+        if undo_copy && let Err(error) = self.undo_package_registration(campaigns) {
             self.error = Some(error);
         }
 
         if let Some(copy) = &self.package_copy
             && let Some(campaign) = campaigns.active_campaign()
             && self.copied_rosters.is_none()
-            && Action::quiet("Use the copy's entries")
-                .blocked(self.draft_reason())
-                .show(ui)
-                .clicked()
+            && use_copy
         {
             match copy.use_in_rosters(&campaign) {
                 Ok(edits) => {
