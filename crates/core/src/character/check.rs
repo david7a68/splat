@@ -100,9 +100,10 @@ fn links() -> Result<&'static Links, String> {
     static LINKS: OnceLock<Result<Links, String>> = OnceLock::new();
     LINKS
         .get_or_init(|| {
-            let links: Links =
-                serde_json::from_str(include_str!("../../builtin/dndbeyond/class-links.json"))
-                    .map_err(|e| e.to_string())?;
+            let links: Links = serde_json::from_str(include_str!(
+                "../../../../builtin/dndbeyond/class-links.json"
+            ))
+            .map_err(|e| e.to_string())?;
             if links.version != 1 {
                 return Err("Unsupported class link version".into());
             }

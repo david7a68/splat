@@ -29,8 +29,10 @@ struct Conversion {
 fn registry() -> &'static Registry {
     static REGISTRY: OnceLock<Registry> = OnceLock::new();
     REGISTRY.get_or_init(|| {
-        serde_json::from_str(include_str!("../../builtin/dndbeyond/conversions.json"))
-            .expect("checked conversion registry")
+        serde_json::from_str(include_str!(
+            "../../../../builtin/dndbeyond/conversions.json"
+        ))
+        .expect("checked conversion registry")
     })
 }
 fn builtin() -> Result<&'static BTreeMap<String, &'static Entry>, String> {

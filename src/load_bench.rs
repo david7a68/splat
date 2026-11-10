@@ -2,7 +2,7 @@
 //! file named by `SPLAT_BENCH_SETTINGS`, so normal test runs stay hermetic.
 //!
 //! `SPLAT_BENCH_SETTINGS=~/.config/splat/settings.json SPLAT_BENCH_PHASE=app \
-//!  cargo test --locked --bin splat load_bench -- --ignored --nocapture`
+//!  cargo test --locked --package splat --lib load_bench -- --ignored --nocapture`
 //!
 //! Phases:
 //! - `app` (default): every page loader at once, as opening a campaign starts them.
