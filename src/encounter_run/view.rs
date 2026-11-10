@@ -904,8 +904,11 @@ impl Run {
                     .clicked();
                 // As the strip pairs Back to run with Next turn: one height, one small gap.
                 ui.add_space(design::S);
-                let roster_width = ui.max_rect().width();
-                self.add_to_fight(ui, roster_width, Density::Glance);
+                // A narrow roster keeps its room for the turn's name.
+                let words = ui.max_rect().width() >= DOCK_ALL_WORDS_FROM;
+                if self.add_to_fight(words, Density::Glance).show(ui).clicked() {
+                    self.show_arrivals();
+                }
                 ui.add_space(design::S);
                 ui.with_layout(Layout::left_to_right(Align::Center), |ui| {
                     let response = ui.label(
@@ -2781,28 +2784,21 @@ impl Run {
         self.panel_body(ui, index, self.panel);
     }
 
-    /// Opens Arrivals. It is beside the fight's own controls, not among the panel's tabs,
-    /// so that the DM finds it when something arrives.
-    /// It takes the height of the controls in its row.
-    fn add_to_fight(&mut self, ui: &mut egui::Ui, roster_width: f32, density: Density) {
-        let open = self.panel == Panel::Groups && !self.hide_panel;
-        // A narrow roster keeps its room for the turn's name.
-        let label = if roster_width < DOCK_ALL_WORDS_FROM {
-            "Add"
+    /// Add to fight opens Arrivals. It is beside the fight's own controls, not among the
+    /// panel's tabs, so that the DM finds it when something arrives. It takes the height of
+    /// the controls in its row. Without words, its icon is its label, as on a split
+    /// action's caret.
+    fn add_to_fight(&self, words: bool, density: Density) -> Action<'static> {
+        let action = if words {
+            Action::secondary("Add to fight").icon(icons::ADD)
         } else {
-            "Add to fight"
+            Action::secondary(icons::ADD)
         };
-        if Action::secondary(label)
-            .icon(icons::ADD)
+        action
             .name("Add to fight")
             .hint("Add an encounter group or a creature (Ctrl+G)")
             .density(density)
-            .selected(open)
-            .show(ui)
-            .clicked()
-        {
-            self.show_arrivals();
-        }
+            .selected(self.panel == Panel::Groups && !self.hide_panel)
     }
 
     /// One row, with participant controls on the left and fight controls on the right.
@@ -4092,8 +4088,6 @@ impl Run {
                         if roll.clicked() {
                             command = Some(Command::RollNpcs(default_roll));
                         }
-                        ui.add_space(design::XS);
-                        self.add_to_fight(ui, setup_width, Density::Read);
                     },
                 );
                 ui.with_layout(Layout::top_down(Align::LEFT), |ui| {
@@ -4158,16 +4152,31 @@ impl Run {
             vec2(ui.available_width(), Density::Read.control()),
             Layout::right_to_left(Align::Center),
             |ui| {
+                // Add to fight keeps its room beside Undo, which shortens first.
+                let add = self.add_to_fight(true, Density::Read);
+                let undo_room = ui.available_width() - add.natural_width(ui) - design::S;
                 let label = self.undo_label();
-                let undo = if self.history.is_empty() {
-                    self.empty_undo(ui)
-                } else {
-                    self.undo_action(&label)
-                        .name(&label)
-                        .hint(&label)
-                        .show(ui)
-                        .clicked()
-                };
+                let undo = ui
+                    .allocate_ui_with_layout(
+                        vec2(undo_room, Density::Read.control()),
+                        Layout::right_to_left(Align::Center),
+                        |ui| {
+                            if self.history.is_empty() {
+                                self.empty_undo(ui)
+                            } else {
+                                self.undo_action(&label)
+                                    .name(&label)
+                                    .hint(&label)
+                                    .show(ui)
+                                    .clicked()
+                            }
+                        },
+                    )
+                    .inner;
+                ui.add_space(design::S);
+                if add.show(ui).clicked() {
+                    self.show_arrivals();
+                }
                 if undo {
                     self.undo();
                     self.return_focus = self.lookup_open;

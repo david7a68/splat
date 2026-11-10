@@ -2908,7 +2908,7 @@ pub mod run_sync_conflict {
         d.click(NEXT_TURN);
         d.observe(
             "T3.4",
-            !d.has("Log") && !d.has_containing(UNDO_CLEARED),
+            !d.has("Dismiss this message") && !d.has_containing(UNDO_CLEARED),
             "The next turn clears the old notice",
         );
         fight_tab(d, "Log");
