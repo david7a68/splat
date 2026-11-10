@@ -22,6 +22,7 @@ mod lookup;
 mod loot_editor;
 mod markdown_source;
 mod markdown_view;
+mod matching;
 mod npc_generator;
 mod party;
 mod party_stream;
