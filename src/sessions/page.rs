@@ -7552,6 +7552,43 @@ mod tests {
         });
     }
 
+    /// Round 13 FT4: the plan column has wider item spacing than other callers. A message's words
+    /// still start `XS` after its icon, and a wrapped Undo still lines up with the words.
+    #[test]
+    fn message_words_and_undo_keep_their_place_whatever_the_spacing() {
+        use egui_kittest::kittest::Queryable;
+        let words = "Removed “Shrine of Cinders” from tonight.";
+        let place = |spacing: f32| {
+            let mut harness = egui_kittest::Harness::builder()
+                .with_size(egui::vec2(260.0, 200.0))
+                .build(move |ctx| {
+                    egui::CentralPanel::default().show(ctx, |ui| {
+                        ui.spacing_mut().item_spacing.x = spacing;
+                        design::undo_message(ui, Tone::Info, words, "Undo remove");
+                    });
+                });
+            design::theme::install(&harness.ctx);
+            harness.run_steps(2);
+            let message = harness.get_by_label(words).rect();
+            let undo = harness.get_by_label("Undo remove").rect();
+            (message, undo)
+        };
+        let (message, undo) = place(design::S);
+        // The narrow pane puts Undo below the words.
+        assert!(undo.top() >= message.bottom(), "{message:?} {undo:?}");
+        for spacing in [design::XS, design::L, design::XL] {
+            let (other, other_undo) = place(spacing);
+            assert!(
+                (other.left() - message.left()).abs() < 0.5,
+                "words at {spacing}: {other:?} against {message:?}"
+            );
+            assert!(
+                (other_undo.left() - undo.left()).abs() < 0.5,
+                "Undo at {spacing}: {other_undo:?} against {undo:?}"
+            );
+        }
+    }
+
     #[test]
     fn i19_p5_group_summary_wraps_before_it_shortens() {
         let mut harness = egui_kittest::Harness::builder()
