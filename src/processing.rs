@@ -1685,7 +1685,7 @@ mod tests {
         let mut request = request(dir.path(), &url, "", Provider::CodexCli, 1);
         request.codex_program = fake_codex(dir.path(), &["First.", "Just a recap."], 0);
         let warning = go(&request).unwrap().unwrap();
-        assert!(warning.contains("without a check"), "{warning}");
+        assert!(warning.contains(NO_CHECK_WARNING), "{warning}");
         // It lasts as long as the result, past any message on screen.
         assert_eq!(
             fs::read_to_string(warning_path(&request.recording)).unwrap(),

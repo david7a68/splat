@@ -5739,12 +5739,12 @@ mod tests {
         );
         assert!(!closure.direct.contains(&id));
         assert!(closure.errors.iter().any(|error| {
-            error.contains("Wolf copy.md and Wolf.md share an identity. Choose one in Library.")
+            error.contains("These two files claim to be the same entry: Wolf copy.md and Wolf.md.")
         }));
         assert!(
             catalogue.unreadable[&id]
                 .word
-                .contains("Wolf copy.md and Wolf.md share an identity. Choose one in Library.")
+                .contains("These two files claim to be the same entry: Wolf copy.md and Wolf.md.")
         );
         let copy_index = library
             .loaded
@@ -5825,7 +5825,7 @@ mod tests {
             catalogue
                 .errors
                 .iter()
-                .any(|e| e.contains("share an identity"))
+                .any(|e| e.contains("These two files claim to be the same entry:"))
         );
         let loaded = load_all(&modules, None).unwrap();
         let wolves: Vec<_> = loaded

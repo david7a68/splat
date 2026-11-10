@@ -6145,7 +6145,7 @@ impl Sessions {
         let Some(campaign) = self.campaign.clone() else {
             return;
         };
-        ui.set_max_width(ui.available_width().min(design::READER_MEASURE));
+        ui.set_max_width(ui.available_width().min(design::FORM_WIDTH));
         ui.add_space(design::XS);
         design::group_heading(ui, "Session folder", 0);
         let response = ui
