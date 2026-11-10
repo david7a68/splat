@@ -2659,16 +2659,22 @@ impl Run {
             }
             ui.add_space(design::S);
             if (self.sync_needs_sign_in() && !stranded.is_empty()) || conflict.is_some() {
+                // The first action starts the line at the text edge; a second follows it.
                 ui.horizontal(|ui| {
-                    if self.sync_needs_sign_in()
-                        && !stranded.is_empty()
-                        && Action::quiet("Connect to sync").show(ui).clicked()
+                    let connect = self.sync_needs_sign_in() && !stranded.is_empty();
+                    if connect
+                        && Action::quiet("Connect to sync")
+                            .line_start()
+                            .show(ui)
+                            .clicked()
                     {
                         self.wants_sign_in = true;
                         keep = true;
                     }
                     if conflict.is_some() {
-                        review = Action::quiet("Review conflict").show(ui).clicked();
+                        let action = Action::quiet("Review conflict");
+                        let action = if connect { action } else { action.line_start() };
+                        review = action.show(ui).clicked();
                     }
                 });
             }
@@ -2874,6 +2880,7 @@ impl Run {
                 }
                 if Action::quiet(&format!("Stop sync for {name}"))
                     .density(Density::Read)
+                    .line_start()
                     .name(&format!("Stop sync for {name}"))
                     .hint("Sync stops, and changes not yet confirmed are not sent")
                     .show(ui)
@@ -3874,7 +3881,10 @@ impl Run {
             if let Some(message) = snapshot_notice(definition, current, unreadable) {
                 ui.label(Type::Small.rich(ui, message).color(colors().muted));
                 if let Some(at) = at
-                    && Action::quiet("Read the new version").show(ui).clicked()
+                    && Action::quiet("Read the new version")
+                        .line_start()
+                        .show(ui)
+                        .clicked()
                 {
                     self.lookup_request = Some(at);
                 }
@@ -5122,16 +5132,34 @@ impl Run {
                     } else {
                         ui.available_height() * 0.6
                     };
-                    egui::ScrollArea::vertical()
-                        .id_salt("run_ended_sync")
-                        .max_height(room)
-                        .auto_shrink([false, true])
-                        .show(ui, |ui| {
-                            self.sync_block(ui);
-                            if !self.setup_details.is_empty() {
-                                design::section(ui, "Prep", |ui| self.notes_tab(ui));
-                            }
-                        });
+                    // A quiet action at the text edge (`Stop sync for …`) reaches `S` into the
+                    // panel's gutter. The scroll area starts there too, so it shows the whole
+                    // target, and its margin keeps the text where it was.
+                    let area = ui.available_rect_before_wrap();
+                    ui.scope_builder(
+                        egui::UiBuilder::new().max_rect(area.with_min_x(area.min.x - design::S)),
+                        |ui| {
+                            egui::ScrollArea::vertical()
+                                .id_salt("run_ended_sync")
+                                .max_height(room)
+                                .auto_shrink([false, true])
+                                .show(ui, |ui| {
+                                    egui::Frame::new()
+                                        .inner_margin(egui::Margin {
+                                            left: design::S as i8,
+                                            ..egui::Margin::ZERO
+                                        })
+                                        .show(ui, |ui| {
+                                            self.sync_block(ui);
+                                            if !self.setup_details.is_empty() {
+                                                design::section(ui, "Prep", |ui| {
+                                                    self.notes_tab(ui);
+                                                });
+                                            }
+                                        });
+                                });
+                        },
+                    );
                     if choosing {
                         design::section(ui, "Combat log", |ui| self.log_tab(ui));
                     } else {
