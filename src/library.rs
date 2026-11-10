@@ -5345,19 +5345,20 @@ impl Library {
         }
         let mut reload_from_disk = false;
         if let Some(change) = &mut self.disk_change {
-            design::message(
-                ui,
-                Tone::Warning,
-                if change.moved_to.is_some() {
-                    "This entry moved on disk. Save your draft to its new path, or keep the disk version."
-                } else if change.text.is_some() {
-                    "This entry changed on disk. Your draft is safe until you choose."
-                } else {
-                    "This entry's file has gone from disk. Your draft is safe here until you choose."
-                },
-            );
-            if change.text.is_none() {
-                let names = self.loaded.as_ref().unwrap().dependents(note);
+            let text = if change.moved_to.is_some() {
+                "This entry moved on disk. Save your draft to its new path, or keep the disk version."
+            } else if change.text.is_some() {
+                "This entry changed on disk. Your draft is safe until you choose."
+            } else {
+                "This entry's file has gone from disk. Your draft is safe here until you choose."
+            };
+            let names = if change.text.is_none() {
+                self.loaded.as_ref().unwrap().dependents(note)
+            } else {
+                Vec::new()
+            };
+            // The note and the choices start at the message text, as in World and the run.
+            let (overwrite, reload) = design::message_with_actions(ui, Tone::Warning, text, |ui| {
                 if !names.is_empty() {
                     ui.label(
                         Type::Small
@@ -5365,35 +5366,37 @@ impl Library {
                             .color(colors().muted),
                     );
                 }
-            }
-            ui.horizontal(|ui| {
-                let save_word = change.moved_to.as_ref().map_or_else(
-                    || {
-                        if change.text.is_none() {
-                            "Save my draft again".to_owned()
-                        } else {
-                            "Overwrite with my draft".to_owned()
-                        }
-                    },
-                    |path| format!("Save my draft to {path}"),
-                );
-                if Action::secondary(&save_word)
+                ui.horizontal_wrapped(|ui| {
+                    let save_word = change.moved_to.as_ref().map_or_else(
+                        || {
+                            if change.text.is_none() {
+                                "Save my draft again".to_owned()
+                            } else {
+                                "Overwrite with my draft".to_owned()
+                            }
+                        },
+                        |path| format!("Save my draft to {path}"),
+                    );
+                    let overwrite = Action::secondary(&save_word)
+                        .density(Density::Read)
+                        .show(ui)
+                        .clicked();
+                    // The layout adds its own item gap after each control; together they make `L`.
+                    ui.add_space(design::L - ui.spacing().item_spacing.x);
+                    let reload = Action::destructive(if change.text.is_none() {
+                        "Let it go"
+                    } else {
+                        "Reload and lose my draft"
+                    })
                     .density(Density::Read)
                     .show(ui)
-                    .clicked()
-                {
-                    self.overwrite_disk = true;
-                }
-                ui.add_space(design::L);
-                reload_from_disk = Action::destructive(if change.text.is_none() {
-                    "Let it go"
-                } else {
-                    "Reload and lose my draft"
+                    .clicked();
+                    (overwrite, reload)
                 })
-                .density(Density::Read)
-                .show(ui)
-                .clicked();
+                .inner
             });
+            self.overwrite_disk |= overwrite;
+            reload_from_disk = reload;
         }
         if editable
             && !conflict
