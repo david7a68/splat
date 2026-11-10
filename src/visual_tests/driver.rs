@@ -1636,15 +1636,32 @@ impl<'a> Driver<'a> {
     /// Check a return against a named earlier state, at every size it captured.
     /// Rendering and ergonomics still run; no duplicate PNG is written.
     pub fn assert_state_matches(&mut self, name: &str, earlier: &str) {
-        self.state_matching(name, earlier, None);
+        self.state_matching(name, earlier, None, |_| {});
     }
 
     /// Save only the sizes where this step changes the view. Compare the others.
     pub fn state_changed_at(&mut self, name: &str, earlier: &str, changed: Sizes) {
-        self.state_matching(name, earlier, Some(changed));
+        self.state_matching(name, earlier, Some(changed), |_| {});
     }
 
-    fn state_matching(&mut self, name: &str, earlier: &str, changed: Option<Sizes>) {
+    /// Retain per-size preparation and observations when comparing shared views.
+    pub fn state_changed_at_prepared(
+        &mut self,
+        name: &str,
+        earlier: &str,
+        changed: Sizes,
+        prepare: impl FnMut(&mut Self),
+    ) {
+        self.state_matching(name, earlier, Some(changed), prepare);
+    }
+
+    fn state_matching(
+        &mut self,
+        name: &str,
+        earlier: &str,
+        changed: Option<Sizes>,
+        prepare: impl FnMut(&mut Self),
+    ) {
         let (label, sizes) = self
             .named_states
             .get(earlier)
@@ -1659,7 +1676,7 @@ impl<'a> Driver<'a> {
                 earlier: &label,
                 changed,
             },
-            |_| {},
+            prepare,
         );
     }
 

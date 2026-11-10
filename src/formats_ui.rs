@@ -397,9 +397,13 @@ impl State {
                     let line_height = Type::Mono
                         .line()
                         .max(ui.fonts_mut(|fonts| fonts.row_height(&Type::Mono.font(ui))));
-                    // Short previews fit the longer side; rows that alignment adds scroll.
-                    let content_height = file.before.lines().count().max(file.after.lines().count())
-                        as f32
+                    let comparison_id = ("convert_file", &file.root, &file.path, &file.before);
+                    // Alignment adds missing rows. Size from the rows the panes paint.
+                    let content_height = design::source_comparison_rows(
+                        ui,
+                        [&file.before, &file.after],
+                        comparison_id,
+                    ) as f32
                         * line_height;
                     // The panes get the height, not the comparison's headings. Do not
                     // cap it by the modal's previous frame, which can keep it short.
@@ -419,7 +423,6 @@ impl State {
                     let scroll_bar = ui.spacing().scroll.allocated_width();
                     let room = ui.ctx().content_rect().bottom()
                         - design::XXL
-                        - design::L
                         - ui.cursor().top()
                         - headings
                         - scroll_bar
@@ -439,11 +442,7 @@ impl State {
                     ui.scope_builder(egui::UiBuilder::new().max_rect(rect), |ui| {
                         ui.spacing_mut().interact_size.y = design::Density::Scan.control();
                         ui.set_min_height(height);
-                        design::source_comparison(
-                            ui,
-                            [&file.before, &file.after],
-                            ("convert_file", &file.root, &file.path, &file.before),
-                        );
+                        design::source_comparison(ui, [&file.before, &file.after], comparison_id);
                     });
                 }
                 if !self.skipped.is_empty() {
@@ -537,6 +536,126 @@ fn skipped_list(ui: &mut egui::Ui, files: &[String]) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn conversion_preview_bad_inputs_and_missing_source_recover_without_stale_faults() {
+        let dir = tempfile::tempdir().unwrap();
+        let world = crate::visual_tests::fixture::World::build(
+            dir.path(),
+            &dir.path().join("cache"),
+            "conversion-input-recovery",
+            crate::visual_tests::fixture::Seed::Formats,
+        )
+        .unwrap();
+        let app = world.app();
+        let campaign = app.campaigns.active_campaign().unwrap();
+        let path = campaign.path.join("NPCs/Rook.md");
+        let valid = fs::read(&path).unwrap();
+        let mut state = State::default();
+        // These malformed prose rows remain literal source in the preview. The last
+        // two inputs cannot be read as notes and must recover on the next scan.
+        for (input, readable) in [
+            (
+                [
+                    valid.as_slice(),
+                    b"\n| Field | Value |\n| --- | --- |\n| Short |\n",
+                ]
+                .concat(),
+                true,
+            ),
+            (
+                [
+                    valid.as_slice(),
+                    b"\n| Field | Value |\n| --- | --- |\n| Extra | value | cell |\n",
+                ]
+                .concat(),
+                true,
+            ),
+            (
+                [
+                    valid.as_slice(),
+                    b"\n| Field | Value |\n| --- | --- |\n| Empty | |\n",
+                ]
+                .concat(),
+                true,
+            ),
+            (Vec::new(), false),
+            (vec![0xff, 0xfe], false),
+        ] {
+            fs::write(&path, &input).unwrap();
+            state.scan(&app.campaigns);
+            assert_eq!(fs::read(&path).unwrap(), input, "Preview never writes");
+            let files: Vec<_> = state
+                .preview
+                .as_ref()
+                .unwrap()
+                .iter()
+                .filter(|file| file.root.join(&file.path) == path)
+                .collect();
+            assert_eq!(files.len(), usize::from(readable));
+            if readable {
+                assert_eq!(files[0].before.as_bytes(), input);
+            }
+            fs::write(&path, &valid).unwrap();
+            state.scan(&app.campaigns);
+            assert!(
+                state
+                    .preview
+                    .as_ref()
+                    .unwrap()
+                    .iter()
+                    .any(|file| file.root.join(&file.path) == path)
+            );
+            assert!(
+                !state
+                    .skipped
+                    .iter()
+                    .any(|fault| fault.contains("NPCs/Rook.md"))
+            );
+        }
+        for moved in [false, true] {
+            state.scan_paths(&app.campaigns, std::slice::from_ref(&path));
+            let moved_path = path.with_file_name("Rook moved.md");
+            if moved {
+                fs::rename(&path, &moved_path).unwrap();
+            } else {
+                fs::remove_file(&path).unwrap();
+            }
+            state.apply();
+            assert!(
+                !path.exists(),
+                "Conversion must not recreate a missing source"
+            );
+            assert!(!state.undo.iter().any(|change| change.path == path));
+            assert!(
+                state
+                    .skipped
+                    .iter()
+                    .any(|fault| fault.contains("NPCs/Rook.md"))
+            );
+            if moved {
+                assert_eq!(fs::read(&moved_path).unwrap(), valid);
+                fs::rename(&moved_path, &path).unwrap();
+            } else {
+                fs::write(&path, &valid).unwrap();
+            }
+            state.scan_paths(&app.campaigns, std::slice::from_ref(&path));
+            assert!(
+                !state
+                    .skipped
+                    .iter()
+                    .any(|fault| fault.contains("NPCs/Rook.md"))
+            );
+            state.apply();
+            assert!(
+                fs::read_to_string(&path)
+                    .unwrap()
+                    .contains("splat_schema: 2")
+            );
+            state.undo().unwrap();
+            assert_eq!(fs::read(&path).unwrap(), valid);
+        }
+    }
 
     #[test]
     fn i19_u4_conversion_preview_counts_one_file_and_many_files() {
