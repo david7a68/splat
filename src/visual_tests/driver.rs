@@ -904,10 +904,10 @@ impl<'a> Driver<'a> {
     }
 
     /// Where the reader's title is, which moves when the reader scrolls.
-    pub fn scroll_position_of_reader(&self) -> Option<f32> {
+    pub fn scroll_position_of_reader(&self, title: &str) -> Option<f32> {
         self.nodes()
             .into_iter()
-            .find(|node| node.role == Role::Label && node.name.starts_with("Library / "))
+            .find(|node| node.role == Role::Label && node.name == title)
             .map(|node| node.rect.min.y)
     }
 

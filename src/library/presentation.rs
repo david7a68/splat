@@ -663,7 +663,7 @@ fn joins_across_break(left: &str, right: &str, words: &std::collections::HashSet
 }
 
 /// Split at real Markdown headings; headings in fenced examples remain content.
-/// Keep every section, including custom homebrew prose and structured tables.
+/// Keep custom prose and tables; omit reserved storage and empty reading sections.
 pub(crate) fn reading_sections<'a>(body: &'a str, name: &str) -> Vec<ReadingSection<'a>> {
     let body = body.trim_start();
     let body = body.strip_prefix(&format!("# {name}\n")).unwrap_or(body);
@@ -708,7 +708,20 @@ pub(crate) fn reading_sections<'a>(body: &'a str, name: &str) -> Vec<ReadingSect
             body: &body[range.end..next],
         });
     }
+    sections.retain(visible_reading_section);
     sections
+}
+
+/// A heading is useful only when the reader can show something below it.
+pub(super) fn visible_reading_section(section: &ReadingSection<'_>) -> bool {
+    section.title != "Splat data"
+        && Parser::new_ext(section.body, pulldown_cmark::Options::ENABLE_TABLES).any(|event| {
+            match event {
+                Event::Text(text) | Event::Code(text) => !text.trim().is_empty(),
+                Event::Start(Tag::Image { .. }) | Event::Rule => true,
+                _ => false,
+            }
+        })
 }
 
 #[cfg(test)]

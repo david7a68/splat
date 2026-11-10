@@ -111,32 +111,36 @@ impl CopyDialog {
                 if let Some(path) = &self.completed_path {
                     response.on_hover_text(path.display().to_string());
                 }
-                ui.horizontal(|ui| {
-                    if let (Some(id), Some(draft)) = (self.copied_creature, &self.draft) {
-                        let label = format!("Add to {draft}");
-                        if Action::primary(&label).show(ui).clicked() {
-                            self.add_to_draft = Some(id);
+                design::dialog_actions(
+                    ui,
+                    |_| (),
+                    |ui| {
+                        if let (Some(id), Some(draft)) = (self.copied_creature, &self.draft) {
+                            let label = format!("Add to {draft}");
+                            if Action::primary(&label).show(ui).clicked() {
+                                self.add_to_draft = Some(id);
+                                close = true;
+                            }
+                        }
+                        let edit = if self.copied_creature.is_some() && self.draft.is_some() {
+                            Action::secondary("Edit the copy")
+                        } else {
+                            Action::primary("Edit the copy")
+                        };
+                        if edit.show(ui).clicked() {
+                            self.edit_copy = self.copied_entry.clone();
                             close = true;
                         }
-                    }
-                    let edit = if self.copied_creature.is_some() && self.draft.is_some() {
-                        Action::secondary("Edit the copy")
-                    } else {
-                        Action::primary("Edit the copy")
-                    };
-                    if edit.show(ui).clicked() {
-                        self.edit_copy = self.copied_entry.clone();
-                        close = true;
-                    }
-                    if Action::secondary("Copy another").show(ui).clicked() {
-                        self.completed = None;
-                        self.plan = None;
-                    }
-                    ui.add_space(design::L);
-                    if Action::quiet("Close").show(ui).clicked() {
-                        close = true;
-                    }
-                });
+                        if Action::secondary("Copy another").show(ui).clicked() {
+                            self.completed = None;
+                            self.plan = None;
+                        }
+                        ui.add_space(design::L);
+                        if Action::quiet("Close").show(ui).clicked() {
+                            close = true;
+                        }
+                    },
+                );
                 return;
             }
             if self.pending.is_some() {
@@ -280,9 +284,15 @@ impl CopyDialog {
                 if let Some(reason) = blocked {
                     ui.label(Type::Small.rich(ui, reason).color(colors().muted));
                 }
-                if Action::quiet("Cancel").show(ui).clicked() {
-                    close = true;
-                }
+                design::dialog_actions(
+                    ui,
+                    |_| (),
+                    |ui| {
+                        if Action::quiet("Cancel").show(ui).clicked() {
+                            close = true;
+                        }
+                    },
+                );
             }
             if let Some(plan) = &self.plan {
                 design::rule(ui);
@@ -356,18 +366,22 @@ impl CopyDialog {
                     });
                 }
                 let mut create = false;
-                ui.horizontal(|ui| {
-                    create = Action::primary(if plan.shared.is_empty() {
-                        "Create copy"
-                    } else {
-                        "Copy both"
-                    })
-                    .show(ui)
-                    .clicked();
-                    if Action::quiet("Cancel").show(ui).clicked() {
-                        close = true;
-                    }
-                });
+                design::dialog_actions(
+                    ui,
+                    |_| (),
+                    |ui| {
+                        create = Action::primary(if plan.shared.is_empty() {
+                            "Create copy"
+                        } else {
+                            "Copy both"
+                        })
+                        .show(ui)
+                        .clicked();
+                        if Action::quiet("Cancel").show(ui).clicked() {
+                            close = true;
+                        }
+                    },
+                );
                 if create {
                     let result = destinations
                         .iter()
