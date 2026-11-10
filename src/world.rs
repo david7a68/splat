@@ -3,7 +3,7 @@
 //! note becomes a Lookup item, not an entry, so nothing depends on it.
 //! See `docs/design/world-and-house-rules.md`.
 mod checks;
-mod edit;
+pub(crate) mod edit;
 mod fields;
 pub mod lines;
 pub mod page;
@@ -437,17 +437,66 @@ fn duplicate_consequence(paths: &[String], at: usize) -> Option<String> {
     }
 }
 
+/// Which group a Part of value names. Two spellings of one link (an alias, a folder path, a
+/// different case) are one group.
+#[derive(PartialEq)]
+enum GroupKey {
+    /// The entry the value resolves to.
+    Found(usize),
+    /// A link that resolves to no single entry: its target as Obsidian reads it.
+    Link(String),
+    /// Any other value, compared as written.
+    Text(Value),
+}
+
+fn group_key(index: &ContentIndex, value: &Value) -> GroupKey {
+    if let Some(at) = index.world_value_target(value) {
+        return GroupKey::Found(at);
+    }
+    value
+        .as_str()
+        .or_else(|| value.get("link").and_then(Value::as_str))
+        .and_then(|raw| raw.trim().strip_prefix("[[")?.strip_suffix("]]"))
+        .and_then(|link| link.split(['|', '#']).next())
+        .map_or_else(
+            || GroupKey::Text(value.clone()),
+            |target| GroupKey::Link(target.trim().trim_end_matches(".md").to_lowercase()),
+        )
+}
+
+/// Each group's key, found once per list: a link to no note can scan the whole catalogue.
+fn group_keys(index: &ContentIndex, groups: &[Value]) -> Vec<GroupKey> {
+    groups.iter().map(|group| group_key(index, group)).collect()
+}
+
+/// True when `groups` has a value that names the same group as `group`.
+#[cfg(test)]
+fn has_group(index: &ContentIndex, groups: &[Value], group: &Value) -> bool {
+    group_keys(index, groups).contains(&group_key(index, group))
+}
+
 /// The disk list with only the groups that changed from `before` to `after` added or removed.
-/// Groups added outside Splat stay. The Read picker and Edit's Overwrite both use this.
-fn merge_groups(before: &[Value], after: &[Value], disk: &[Value]) -> Vec<Value> {
-    let mut groups: Vec<_> = disk
+/// Groups added outside Splat stay. Groups compare by target, so a link Obsidian respelled is
+/// still the same group, and an unchanged group keeps its disk spelling. The Read picker and
+/// Edit's Overwrite both use this.
+fn merge_groups(
+    index: &ContentIndex,
+    before: &[Value],
+    after: &[Value],
+    disk: &[Value],
+) -> Vec<Value> {
+    let before = group_keys(index, before);
+    let after_keys = group_keys(index, after);
+    let (mut groups, mut keys): (Vec<_>, Vec<_>) = disk
         .iter()
-        .filter(|group| !before.contains(group) || after.contains(group))
-        .cloned()
-        .collect();
-    for group in after.iter().filter(|group| !before.contains(group)) {
-        if !groups.contains(group) {
+        .zip(group_keys(index, disk))
+        .filter(|(_, key)| !before.contains(key) || after_keys.contains(key))
+        .map(|(group, key)| (group.clone(), key))
+        .unzip();
+    for (group, key) in after.iter().zip(after_keys) {
+        if !before.contains(&key) && !keys.contains(&key) {
             groups.push(group.clone());
+            keys.push(key);
         }
     }
     groups
@@ -662,6 +711,21 @@ pub(crate) fn broken_links(item: &Item, index: &ContentIndex) -> Vec<&'static st
         && index.world_target(&item.entry, "creature").is_none()
     {
         problems.push("Stat block not found");
+    }
+    // The index found each group when it loaded. Its list follows the file's order; a value it
+    // did not see (two files with one id) is looked up again.
+    let found = index.groups_of(&item.entry);
+    for (at, value) in part_of(&item.entry).into_iter().enumerate() {
+        if empty_optional(value) {
+            continue;
+        }
+        let target = match found.get(at) {
+            Some((name, target)) if *name == link_name(value, "Group") => *target,
+            _ => index.world_value_target(value),
+        };
+        if target.is_none() {
+            problems.push("Group not found");
+        }
     }
     problems
 }
@@ -1235,11 +1299,35 @@ enum FormEnd {
     Add,
 }
 
-/// One index generation's source-line lookup and the entry with that flag drawn separately.
+/// One index generation's source-line lookup, and the entry without the flags drawn below the
+/// file line.
 struct GroupFault {
     id: Uuid,
     generation: u64,
-    source: Option<(usize, Entry)>,
+    /// The Part of list on disk that could not be read.
+    unread: Option<fields::Unread>,
+    /// Every other value not read, as the reader words it. They sit with the Part of reason.
+    notices: Vec<String>,
+    /// The entry for the shared reader, without its flags. None when it has none.
+    entry: Option<Entry>,
+}
+
+impl GroupFault {
+    /// The flags of `entry` other than the Part of one, and the entry without any flags.
+    fn flags(entry: &Entry, unread: Option<&fields::Unread>) -> (Vec<String>, Option<Entry>) {
+        if entry.flags.is_empty() {
+            return (Vec::new(), None);
+        }
+        let notices = entry
+            .flags
+            .iter()
+            .filter(|flag| unread.is_none_or(|unread| unread.line != flag.line))
+            .map(view::flag_words)
+            .collect();
+        let mut entry = entry.clone();
+        entry.flags.clear();
+        (notices, Some(entry))
+    }
 }
 
 /// Lookup's and the World page's reader, and its controls for the item on show.
@@ -1422,6 +1510,29 @@ impl Reader {
             .map_or_else(|| item.entry.name.clone(), |reading| reading.title);
         let id = item.entry.id;
         let edit = campaign.filter(|_| edit::editable(item, index) && !self.editing(id));
+        // Lookup has no file line. While the repair message names the fault, the kind line
+        // names the open file in place of the fault.
+        let kind_line = if self.compact
+            && campaign.is_some()
+            && index.duplicate_world.contains_key(&item.entry.path)
+        {
+            format!(
+                "{} · {} · {}",
+                crate::library::presentation::subtitle(&item.entry),
+                item.owner,
+                item.entry.path
+            )
+        } else {
+            format!(
+                "{} · {}",
+                if !self.compact && world_type(&item.entry) == "npc" {
+                    "NPC"
+                } else {
+                    &item.subtitle
+                },
+                item.owner
+            )
+        };
         ui.horizontal_top(|ui| {
             let edit_action = Action::quiet("Edit")
                 .icon(design::icons::EDIT)
@@ -1431,20 +1542,7 @@ impl Reader {
                 egui::vec2(ui.available_width() - room, 0.0),
                 egui::Layout::top_down(egui::Align::Min),
                 |ui| {
-                    view::title_with_art(
-                        ui,
-                        &title,
-                        &format!(
-                            "{} · {}",
-                            if !self.compact && world_type(&item.entry) == "npc" {
-                                "NPC"
-                            } else {
-                                &item.subtitle
-                            },
-                            item.owner
-                        ),
-                        Some(&item.entry),
-                    );
+                    view::title_with_art(ui, &title, &kind_line, Some(&item.entry));
                 },
             );
             if let Some(campaign) = edit
@@ -1466,15 +1564,15 @@ impl Reader {
                     .and_then(|path| fs::read_to_string(path).ok())
             });
         }
-        let unread_line = self
+        let unread_reason = self
             .group_fault
             .as_ref()
             .filter(|fault| !editing && fault.id == id)
-            .and_then(|fault| fault.source.as_ref())
-            .map(|(line, _)| *line);
+            .and_then(|fault| fault.unread.as_ref())
+            .map(|unread| unread.reason.clone());
         // A refused Part of write shows as the unread warning below the file line.
         if let Some(error) = &self.error
-            && !(self.group_error && unread_line.is_some())
+            && !(self.group_error && unread_reason.is_some())
         {
             ui.horizontal_wrapped(|ui| {
                 design::message(ui, Tone::Error, error);
@@ -1501,16 +1599,21 @@ impl Reader {
         if file_line && let Some(campaign) = campaign {
             file_actions(ui, campaign, &item.entry.path);
         }
-        if let Some(line) = unread_line
+        if let Some(reason) = unread_reason
             && let Some(campaign) = campaign
             && (self.error.is_none() || self.group_error)
         {
-            let reason = fields::unread_groups_reason(line);
             if file_line {
                 // The file line just above has the one Edit in Obsidian link.
                 design::message(ui, Tone::Warning, &reason);
             } else {
                 unread_groups_message(ui, campaign, &item.entry.path, &reason);
+            }
+        }
+        // Every other value not read sits here too, not below the values.
+        if let Some(fault) = self.group_fault.as_ref().filter(|fault| fault.id == id) {
+            for notice in &fault.notices {
+                design::message(ui, Tone::Warning, notice);
             }
         }
         if let Some(campaign) = campaign {
@@ -1695,8 +1798,9 @@ impl Reader {
                 Some(
                     self.group_fault
                         .as_ref()
-                        .and_then(|fault| fault.source.as_ref())
-                        .map_or(&item.entry, |(_, entry)| entry),
+                        .filter(|fault| fault.id == item.entry.id)
+                        .and_then(|fault| fault.entry.as_ref())
+                        .unwrap_or(&item.entry),
                 ),
                 &item.entry.body,
                 &view::Origin {
@@ -1802,11 +1906,11 @@ impl Reader {
         } else {
             read()
         };
-        let line = source
+        let unread = source
             .as_ref()
             .and_then(|file| fields::unread_groups(&item.entry, file));
         if self.group_error
-            && line.is_none()
+            && unread.is_none()
             && source.as_ref().is_some_and(|file| {
                 Entry::parse(&item.entry.path, file)
                     .is_ok_and(|entry| fields::unread_groups(&entry, file).is_none())
@@ -1815,16 +1919,14 @@ impl Reader {
             self.error = None;
             self.group_error = false;
         }
-        // Draw the actionable Part of reason once. Other flags stay in the shared reader.
-        let source = line.map(|line| {
-            let mut entry = item.entry.clone();
-            entry.flags.retain(|flag| flag.line != line);
-            (line, entry)
-        });
+        // Draw each unread value once, below the file line.
+        let (notices, entry) = GroupFault::flags(&item.entry, unread.as_ref());
         self.group_fault = Some(GroupFault {
             id: item.entry.id,
             generation,
-            source,
+            unread,
+            notices,
+            entry,
         });
     }
 
@@ -1843,11 +1945,8 @@ impl Reader {
                     note_path(&campaign.path, &item.entry.path).map_err(|error| (error, None))?;
                 let file = fs::read_to_string(path).map_err(|error| (error.to_string(), None))?;
                 let entry = Entry::parse(&item.entry.path, &file).map_err(|error| (error, None))?;
-                if let Some(line) = fields::unread_groups(&entry, &file) {
-                    return Err((
-                        fields::unread_groups_reason(line),
-                        Some((line, Box::new(entry))),
-                    ));
+                if let Some(unread) = fields::unread_groups(&entry, &file) {
+                    return Err((unread.reason.clone(), Some((unread, Box::new(entry)))));
                 }
                 Ok((file, entry))
             })();
@@ -1859,13 +1958,12 @@ impl Reader {
                     self.group_error = true;
                     // The file on disk has an unread list now. Show that state at once, and
                     // read the note again so its list row and the header count it too.
-                    let (line, entry) = unread?;
-                    let mut entry = *entry;
-                    entry.flags.retain(|flag| flag.line != line);
+                    let (unread, entry) = unread?;
                     if let Some(fault) = &mut self.group_fault
                         && fault.id == item.entry.id
                     {
-                        fault.source = Some((line, entry));
+                        (fault.notices, fault.entry) = GroupFault::flags(&entry, Some(&unread));
+                        fault.unread = Some(unread);
                     }
                     return Some(Go::Reload(item.entry.id));
                 }
@@ -1878,7 +1976,7 @@ impl Reader {
             // Apply only the picker's add/remove to the fresh disk list.
             let previous: Vec<_> = part_of(&item.entry).into_iter().cloned().collect();
             let disk: Vec<_> = part_of(current_entry).into_iter().cloned().collect();
-            Value::Sequence(merge_groups(&previous, value.as_sequence()?, &disk))
+            Value::Sequence(merge_groups(index, &previous, value.as_sequence()?, &disk))
         } else {
             value
         };
@@ -1980,8 +2078,8 @@ impl Reader {
         self.group_fault
             .as_ref()
             .filter(|fault| fault.id == id)
-            .and_then(|fault| fault.source.as_ref())
-            .map(|(line, _)| fields::unread_groups_reason(*line))
+            .and_then(|fault| fault.unread.as_ref())
+            .map(|unread| unread.reason.clone())
     }
 
     fn relationship_value_width(&self, ui: &egui::Ui, item: &Item, index: &ContentIndex) -> f32 {
@@ -2048,27 +2146,59 @@ impl Reader {
             status(&item.entry)
         };
         values.push((status.into(), Type::Small));
-        values
+        // The place choices' files share the value column, so Change and each choice's action
+        // stand in one column.
+        let choices = index.place_choices(item.entry.id);
+        if !self.compact && reader_field(&item.entry, "in").is_some() && !choices.is_empty() {
+            for &at in &choices {
+                values.push((index.items[at].entry.path.clone(), Type::Body));
+            }
+        }
+        let width = values
             .iter()
             .map(|(value, role)| design::number_width(ui, value, &role.font(ui)))
             .fold(groups_width, f32::max)
-            .min(Self::relationship_width(ui))
+            .min(Self::relationship_width(ui));
+        if !self.compact && !choices.is_empty() {
+            // The choice action is wider than Change. Both keep the column the narrower room allows.
+            width.min(
+                (ui.available_width() - Self::chooser_indent(ui) - Self::choice_room(ui))
+                    .max(design::XXL),
+            )
+        } else {
+            width
+        }
     }
 
+    /// The room a place choice's action takes after its file: the action and an `L` gap.
+    fn choice_room(ui: &egui::Ui) -> f32 {
+        Action::secondary("Always use this one").natural_width(ui) + design::L
+    }
+
+    /// The place choices start below the values: below the label column on a wide pane.
+    fn chooser_indent(ui: &egui::Ui) -> f32 {
+        if ui.available_width() >= design::XXL * 12.0 {
+            design::XXL * 3.0 + design::S + ui.spacing().item_spacing.x
+        } else {
+            0.0
+        }
+    }
+
+    /// The files and their actions. `column` is the World reader's value column, which the files
+    /// share so each action stands under Change.
     fn place_chooser(
         &self,
         ui: &mut egui::Ui,
         item: &Item,
         index: &ContentIndex,
+        column: Option<f32>,
     ) -> (Option<Go>, Option<usize>) {
         let mut go = None;
         let mut chosen = None;
         let indent = if self.compact {
             design::number_width(ui, "In", &Type::Small.font(ui)) + ui.spacing().item_spacing.x
-        } else if ui.available_width() >= design::XXL * 12.0 {
-            design::XXL * 3.0 + design::S + ui.spacing().item_spacing.x
         } else {
-            0.0
+            Self::chooser_indent(ui)
         };
         egui::Frame::new()
             .inner_margin(egui::Margin {
@@ -2082,18 +2212,19 @@ impl Reader {
                         .color(colors().muted),
                 );
                 let choices = index.place_choices(item.entry.id);
-                let file_width = choices
-                    .iter()
-                    .map(|&at| {
-                        design::number_width(ui, &index.items[at].entry.path, &Type::Body.font(ui))
-                    })
-                    .fold(0.0_f32, f32::max)
-                    .min(
-                        (ui.available_width()
-                            - Action::secondary("Always use this one").natural_width(ui)
-                            - design::L)
-                            .max(design::XXL),
-                    );
+                let file_width = column.unwrap_or_else(|| {
+                    choices
+                        .iter()
+                        .map(|&at| {
+                            design::number_width(
+                                ui,
+                                &index.items[at].entry.path,
+                                &Type::Body.font(ui),
+                            )
+                        })
+                        .fold(0.0_f32, f32::max)
+                        .min((ui.available_width() - Self::choice_room(ui)).max(design::XXL))
+                });
                 for at in choices {
                     let path = &index.items[at].entry.path;
                     ui.horizontal(|ui| {
@@ -2311,7 +2442,7 @@ impl Reader {
                 }
             });
             if key == "in" && self.place_choices_open {
-                let (followed, chosen) = self.place_chooser(ui, item, index);
+                let (followed, chosen) = self.place_chooser(ui, item, index, Some(value_width));
                 go = go.or(followed);
                 if let Some(at) = chosen {
                     let path = index.items[at].entry.path.trim_end_matches(".md");
@@ -2557,7 +2688,7 @@ impl Reader {
                     }
                 });
                 if self.place_choices_open {
-                    let (followed, chosen) = self.place_chooser(ui, item, index);
+                    let (followed, chosen) = self.place_chooser(ui, item, index, None);
                     go = go.or(followed);
                     if let Some(at) = chosen {
                         let path = index.items[at].entry.path.trim_end_matches(".md");
@@ -2941,6 +3072,46 @@ mod tests {
                     "FD-1-{key}-{value}"
                 );
             }
+        }
+    }
+
+    #[test]
+    fn iter11_d_fd1_each_missing_group_is_a_broken_link() {
+        for (groups, expected) in [
+            ("['[[Nowhere]]']", 1),
+            ("['[[Nowhere]]', '[[Elsewhere|the else]]']", 2),
+            ("['[[Arena Guild]]', '[[Nowhere]]']", 1),
+            ("['[[Factions/Arena Guild|the arena]]']", 0),
+            ("['[[Arena Guild]]']", 0),
+            ("[]", 0),
+            ("['']", 0),
+            ("['  ']", 0),
+        ] {
+            let dir = tempfile::tempdir().unwrap();
+            let campaign = sample_campaign(dir.path());
+            let id = create_entry(&campaign, "Rook", "npc").unwrap();
+            create_entry(&campaign, "Arena Guild", "faction").unwrap();
+            let path = dir.path().join("NPCs/Rook.md");
+            let file = fs::read_to_string(&path).unwrap().replacen(
+                "---\n",
+                &format!("---\nsplat_part_of: {groups}\n"),
+                1,
+            );
+            fs::write(path, file).unwrap();
+            let index = ContentIndex::load(&[], Some(&campaign)).unwrap();
+            let item = &index.items[index.position(id).unwrap()];
+            assert!(item.entry.flags.is_empty(), "fixture {groups} reads");
+            let problems = broken_links(item, &index);
+            assert_eq!(
+                problems
+                    .iter()
+                    .filter(|problem| **problem == "Group not found")
+                    .count(),
+                expected,
+                "FD1-{groups}"
+            );
+            // Neighbour: Part of adds no In or Stat block warning.
+            assert_eq!(problems.len(), expected, "FD1-only-groups-{groups}");
         }
     }
 

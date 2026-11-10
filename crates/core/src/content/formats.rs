@@ -77,6 +77,48 @@ pub fn model_reference(value: Value) -> Value {
     value
 }
 
+/// The text of a value that was not read, without its comment, and its line. A list written
+/// below its key names its first item that is not text; the key's line names the rest.
+fn unread_value(text: &str, key_line: usize) -> (String, usize) {
+    let lines: Vec<&str> = text.lines().collect();
+    let shown = |raw: &str| {
+        let raw = raw.trim();
+        let parsed = serde_yaml_ng::from_str::<Value>(raw).ok();
+        // A comment starts at ` #` outside quotes: cutting there reads as the same value.
+        raw.match_indices(" #")
+            .map(|(at, _)| raw[..at].trim_end())
+            .find(|cut| parsed.is_some() && serde_yaml_ng::from_str::<Value>(cut).ok() == parsed)
+            .unwrap_or(if raw.starts_with('#') { "" } else { raw })
+            .to_owned()
+    };
+    let on_key = lines
+        .get(key_line.saturating_sub(1))
+        .and_then(|line| line.split_once(':'))
+        .map(|(_, value)| shown(value))
+        .unwrap_or_default();
+    if !on_key.is_empty() {
+        return (on_key, key_line);
+    }
+    lines
+        .iter()
+        .enumerate()
+        .skip(key_line)
+        .take_while(|(_, line)| line.trim().is_empty() || line.starts_with([' ', '\t', '-', '#']))
+        .filter_map(|(at, line)| Some((at + 1, shown(line.trim_start().strip_prefix('-')?))))
+        .find(|(_, item)| {
+            serde_yaml_ng::from_str::<Value>(item).is_ok_and(|value| {
+                // `- [[Name]]` reads as a list in a list, and the reader accepts it.
+                !value.is_string()
+                    && !value
+                        .as_sequence()
+                        .and_then(|outer| outer.first())
+                        .and_then(Value::as_sequence)
+                        .is_some_and(|inner| inner.first().is_some_and(Value::is_string))
+            })
+        })
+        .map_or((on_key, key_line), |(line, item)| (item, line))
+}
+
 pub fn read(text: &str, fields: &mut Mapping) -> Vec<Flag> {
     let mut flags = Vec::new();
     if let Some(Value::Mapping(payload)) = fields.remove("splat_payload") {
@@ -195,25 +237,25 @@ pub fn read(text: &str, fields: &mut Mapping) -> Vec<Flag> {
                             },
                         );
                     } else {
-                        let shown = text
-                            .lines()
-                            .find_map(|line| line.strip_prefix(&format!("{flat}:")))
-                            .map(str::trim)
-                            .unwrap_or("");
                         let (label, help) = match old {
                             "type" => ("Type", "Use one short word, such as npc or faction."),
                             "status" => ("Status", "Use a short word, such as alive."),
                             "creature" => ("Stat block", "Use one creature name or link."),
                             "in" => ("In", "Use one place name or link."),
-                            "part_of" => ("Part of", "Use a list of names or links."),
+                            "part_of" => (
+                                "Part of",
+                                "Write each group as a link, such as [[Arena Guild]].",
+                            ),
                             "when" => ("When", "Use words such as 120 years ago."),
                             "until" => ("Until", "Use words such as 90 years ago."),
                             _ => ("Aliases", "Use a list of names."),
                         };
                         flag(&mut flags, flat, "");
                         let last = flags.last_mut().unwrap();
+                        let (shown, line) = unread_value(text, last.line);
+                        last.line = line;
                         last.message =
-                            format!("{label} \"{shown}\" not read (line {}). {help}", last.line);
+                            format!("{label} \"{shown}\" not read (line {line}). {help}");
                     }
                 }
             }
