@@ -104,8 +104,8 @@ or set `SPLAT_VISUAL_CONTACT_SHEET=1` to make it with a full `visual-test` run.
   clears scenario filters and baseline-update mode, and enforces the baseline.
   Video and optional contact-sheet settings work as for `visual-test`.
 
-Session Read view keeps a left-aligned prose width of at most 75 characters per line. Write follows
-the column. Read omits plan links already shown beside the note, including group links.
+Session Read and Write views keep the same left-aligned prose width of at most 75 characters per line.
+The Write frame follows the column; stored line breaks stay unchanged. Read omits plan links already shown beside the note, including group links.
 A group editor stays beside the note when both fit at their width limits. Smaller pages use the Note tab.
 A paused fight on the plan offers Resume even when it came from a timeline event.
 The Add strip stays directly below Tonight, above messages and plan rows. Fight,

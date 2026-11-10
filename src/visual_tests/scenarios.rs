@@ -24,6 +24,43 @@ pub mod world_build;
 const READER: Pos2 = pos2(720.0, 400.0);
 const ENTRY_LIST: Pos2 = pos2(400.0, 400.0);
 
+/// Recovery actions keep the shared Undo icon, inside their own target.
+fn check_undo_icon(d: &mut Driver<'_>, action: &str, id: &str) {
+    let target = d.place_of(action).expect("The Undo action is visible");
+    d.observe(
+        id,
+        d.painted_in(target).contains(crate::design::icons::UNDO),
+        format!("{action} uses the shared Undo icon"),
+    );
+}
+
+/// Each affected encounter remains a separate link with a word space on both sides of `and`.
+fn check_link_spaces(d: &mut Driver<'_>) {
+    let first = d
+        .place_of("Bridge Ambush")
+        .expect("First affected encounter link");
+    let second = d
+        .place_of("Shrine of Cinders")
+        .expect("Second affected encounter link");
+    let area = first.union(second).expand(crate::design::XS);
+    let conjunction = d
+        .painted_word_rect("and", area)
+        .expect("The conjunction is painted");
+    let first = d
+        .painted_word_rect("Bridge Ambush", area)
+        .expect("First link is painted");
+    let second = d
+        .painted_word_rect("Shrine of Cinders", area)
+        .expect("Second link is painted");
+    let before = conjunction.left() - first.right();
+    let after = second.left() - conjunction.right();
+    d.observe(
+        "iter-6-C-SD4",
+        before > 1.0 && after > 1.0 && (before - after).abs() <= 1.0,
+        format!("Affected encounter links have word spaces: {before}, {after}"),
+    );
+}
+
 fn escape_closes(d: &mut Driver<'_>, view: &str, still_open: &str, close_with: &str) {
     d.press(Key::Escape);
     let closed = !d.has_containing(still_open);
@@ -899,7 +936,9 @@ pub mod campaign_content {
         d.click("Write Campaign.md again");
         d.wait_for_text("Undo write Campaign.md");
         assert_eq!(std::fs::read_to_string(&manifest).unwrap(), before);
-        d.state("campaign-manifest-written-with-undo", Sizes::All);
+        d.state_prepared("campaign-manifest-written-with-undo", Sizes::All, |d| {
+            check_undo_icon(d, "Undo write Campaign.md", "iter-6-C-SD3-Campaign");
+        });
         d.click("Undo write Campaign.md");
         d.wait_for_text("Write Campaign.md again");
         assert!(!manifest.exists());
@@ -3548,12 +3587,16 @@ pub mod column_resize {
         d.state("session-fills-its-column", Sizes::All);
     }
 
-    /// Write follows the column; Read keeps a comfortable prose measure.
+    /// Write and Read share a prose measure; the editor frame follows the column.
     fn the_session_tabs_fill_their_column(d: &mut Driver<'_>) {
         d.set_base(LARGE);
         let page = right_of(d, "New session");
         let filled = |right: f32| page - right <= crate::design::XL;
-        let box_right = right_of(d, "Note text");
+        let box_right = d
+            .input_frame("Note text")
+            .expect("The note frame is visible")
+            .0
+            .right();
         d.observe(
             CHECK,
             filled(box_right),
@@ -3561,11 +3604,31 @@ pub mod column_resize {
         );
         d.type_into_editor(&"The party crossed the old bridge at dusk. ".repeat(30));
         let write = d.longest_visible_line();
+        d.state_prepared("session-write-keeps-prose-measure", Sizes::All, |d| {
+            let longest = d.longest_visible_line();
+            let note = d
+                .place_of("Note text")
+                .expect("The Write editor is visible");
+            let frame = d
+                .input_frame("Note text")
+                .expect("The note frame is visible")
+                .0;
+            d.observe(
+                "iter-6-C-FT5",
+                longest > 0
+                    && longest <= 75
+                    && note.width() <= crate::design::READER_MEASURE + 1.0
+                    && (note.left() - frame.left() - crate::design::S).abs() <= 1.0,
+                format!(
+                    "Write is anchored left and keeps its measure at the captured size: {longest}"
+                ),
+            );
+        });
         d.click("Read");
         let read = d.longest_visible_line();
         d.observe(
             CHECK,
-            read <= 75 && write > read,
+            read > 0 && read <= 75 && write > 0 && write <= 75,
             format!("Longest line in a wide window: {write} in Write, {read} in Read"),
         );
         d.state_prepared("session-read-keeps-prose-measure", Sizes::All, |d| {
@@ -8842,7 +8905,11 @@ pub mod remove_package_in_use {
             !d.visible_text(&package.to_string()),
             "The missing package keeps its name; identifiers stay in Technical details",
         );
-        d.state("campaign-keeps-missing-package-choice", Sizes::All);
+        d.state_prepared(
+            "campaign-keeps-missing-package-choice",
+            Sizes::All,
+            check_link_spaces,
+        );
         d.click("Technical details");
         d.expect(&package.to_string());
         d.state("missing-package-technical-details", Sizes::Default);
@@ -8851,7 +8918,18 @@ pub mod remove_package_in_use {
         d.wait_for_text("now have creatures Splat cannot find.");
         d.expect("Bridge Ambush");
         d.expect("Shrine of Cinders");
-        d.state("missing-package-removed-with-undo", Sizes::All);
+        d.state_prepared("missing-package-removed-with-undo", Sizes::All, |d| {
+            check_link_spaces(d);
+            check_undo_icon(d, "Undo package removal", "iter-6-C-FD3-Undo");
+            let first = d
+                .place_of("Bridge Ambush")
+                .expect("First affected encounter link");
+            d.observe(
+                "iter-6-C-FD3",
+                d.has_message_bar(first, crate::design::colors().result.warning),
+                "The linked missing-creatures warning keeps the shared warning bar and icon",
+            );
+        });
         d.click("Undo package removal");
         d.wait_for_text("Find the folder…");
         d.expect_same("Undo restores the missing-package choice shown before removal.");

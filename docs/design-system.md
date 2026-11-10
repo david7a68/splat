@@ -381,8 +381,9 @@ change; results explaining which entry an encounter will use are Small muted tex
 
 Library keeps its old-layout count in the header, including generated packages. Old-layout files offer
 `Convert files…`, never Repair. Campaign combines them into one count line. An unused old file does not block
-Save selections; name a required old file beside conversion. An open run blocks conversion and disables
-old-layout links with the reason on hover.
+Save selections; name a required old file in the save row. Campaign keeps one Convert files action beside
+the combined warning. An open run blocks conversion. Lookup states `Close the run to convert these files.`
+on its old-layout warning and hides the conversion action; other old-layout links show the reason on hover.
 
 Convert files groups files and its picker by owner. Initially only the campaign is checked. Generated
 packages start unchecked but can be selected; warn that their converter overwrites these files on its
@@ -752,7 +753,8 @@ Notes are Markdown in the campaign folder. Write styles source in Reader faces: 
 emphasis, and visible markup in the plain face and faint colour. Store exactly what was typed so Obsidian
 reads the same text. Read uses the one Reader, anchored left, at no more than READER_MEASURE
 (at most 75 characters per line).
-Write follows the column and keeps stored line breaks. Events and recordings follow column width;
+Write keeps the same left-aligned READER_MEASURE as Read (at most 75 characters per line), inside a
+frame that follows the column. Stored line breaks stay unchanged. Events and recordings follow column width;
 book prose keeps READER_MEASURE. The gallery's Markdown sheet shows both
 views of one note. Autosave runs two seconds after editing; show muted Saving… with the busy icon during
 delay. Disk changes stop saving and open the comparison in Keeping a draft. Missing notes show Notes not saved

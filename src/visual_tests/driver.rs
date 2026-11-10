@@ -366,6 +366,31 @@ impl<'a> Driver<'a> {
         left
     }
 
+    /// A tone bar beside a linked message, rather than a hand-built warning row.
+    pub fn has_message_bar(&self, first: egui::Rect, color: egui::Color32) -> bool {
+        fn contains(shape: &egui::Shape, first: egui::Rect, color: egui::Color32) -> bool {
+            match shape {
+                egui::Shape::Vec(shapes) => {
+                    shapes.iter().any(|shape| contains(shape, first, color))
+                }
+                egui::Shape::Rect(bar) => {
+                    bar.fill == color
+                        && bar.rect.width() <= crate::design::XS
+                        && bar.rect.right() < first.left()
+                        && first.left() - bar.rect.right() <= crate::design::XXL
+                        && (bar.rect.top() - first.top()).abs() <= crate::design::S
+                        && bar.rect.height() >= crate::design::Type::Body.line()
+                }
+                _ => false,
+            }
+        }
+        self.harness
+            .output()
+            .shapes
+            .iter()
+            .any(|shape| contains(&shape.shape, first, color))
+    }
+
     pub fn painted_right(&self, words: &str) -> Option<f32> {
         let mut right = None;
         self.each_painted_text(|text, clip| {
@@ -906,6 +931,24 @@ impl<'a> Driver<'a> {
                 && clip.intersects(rect)
             {
                 found = Some(rect);
+            }
+        });
+        found
+    }
+
+    /// Actual row bounds exclude a wrapping label's indentation before its first word.
+    pub fn painted_word_rect(&self, words: &str, area: egui::Rect) -> Option<egui::Rect> {
+        let mut found = None;
+        self.each_painted_text(|text, clip| {
+            if text.galley.job.text == words {
+                for row in &text.galley.rows {
+                    let rect = row
+                        .rect_without_leading_space()
+                        .translate(text.pos.to_vec2());
+                    if area.contains(rect.center()) && clip.intersects(rect) {
+                        found = Some(rect);
+                    }
+                }
             }
         });
         found

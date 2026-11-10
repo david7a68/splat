@@ -29,7 +29,52 @@ struct Snapshot {
     /// The closure of these selections. It is too slow to calculate on every frame.
     closure: (Vec<PackageSelection>, Closure),
     subtitles: std::collections::HashMap<Uuid, String>,
+    /// Old timelines and saved runs are not catalogue entries. Scan only when this
+    /// snapshot reloads (campaign, registration or file changes), never per frame.
+    other_old_files: Vec<std::path::PathBuf>,
 }
+/// Keep the standard conversion route for timelines and embedded entries in saved runs.
+/// Only inspect version markers; unreadable files retain their existing repair routes.
+fn other_old_files(roots: impl IntoIterator<Item = std::path::PathBuf>) -> Vec<std::path::PathBuf> {
+    fn old_run(value: &serde_json::Value) -> bool {
+        match value {
+            serde_json::Value::Object(map) => {
+                map.get("fields")
+                    .and_then(|fields| fields.get("splat_schema"))
+                    .and_then(serde_json::Value::as_u64)
+                    == Some(1)
+                    || map.values().any(old_run)
+            }
+            serde_json::Value::Array(values) => values.iter().any(old_run),
+            _ => false,
+        }
+    }
+    let mut old = Vec::new();
+    for root in roots {
+        let files = crate::conversion::timelines(&root)
+            .unwrap_or_default()
+            .into_iter()
+            .chain(crate::conversion::runs(&root).unwrap_or_default());
+        for path in files {
+            let is_old = fs::read_to_string(&path).is_ok_and(|text| {
+                if path
+                    .extension()
+                    .is_some_and(|extension| extension == "json")
+                {
+                    serde_json::from_str(&text).is_ok_and(|value| old_run(&value))
+                } else {
+                    crate::timeline::parse(&text)
+                        .is_err_and(|error| crate::formats_ui::is_old(&error))
+                }
+            });
+            if is_old {
+                old.push(path);
+            }
+        }
+    }
+    old
+}
+
 /// An invalid note: its path, its text on disk, and its draft.
 type Repair = (String, String, String);
 type Loaded = (Vec<Repair>, Result<Snapshot, String>);
@@ -398,7 +443,12 @@ impl CampaignContent {
                 CampaignDocument::load_with_modules(&campaign, &modules).and_then(|document| {
                     let catalogue = Catalogue::load(&modules, Some(&campaign))?;
                     let closure = catalogue.closure(&document.selections, document.campaign.id);
+                    let other_old_files = other_old_files(
+                        std::iter::once(campaign.path.clone())
+                            .chain(modules.iter().map(|module| module.path.clone())),
+                    );
                     Ok(Snapshot {
+                        other_old_files,
                         closure: (document.selections.clone(), closure),
                         document,
                         subtitles: crate::library::catalogue_subtitles(&catalogue),
@@ -514,7 +564,7 @@ impl CampaignContent {
             }
         }
         if let Some(write) = &self.campaign_write
-            && design::message_with_action(
+            && design::undo_message(
                 ui,
                 Tone::Success,
                 "Campaign.md was written again.",
@@ -536,7 +586,7 @@ impl CampaignContent {
         }
         if let Some((module, previous)) = self.recovered.clone() {
             let message = format!("{} found in {}/.", module.name, folder_words(&module.path));
-            if design::message_with_action(ui, Tone::Success, &message, "Undo folder recovery") {
+            if design::undo_message(ui, Tone::Success, &message, "Undo folder recovery") {
                 if let Some(previous) = previous {
                     self.found_package = Some(previous);
                 } else {
@@ -678,7 +728,9 @@ impl CampaignContent {
         active: &Campaign,
     ) {
         let mut repaired = false;
-        let old: Vec<_> = self
+        // Include both campaign repairs and package files, whether selected or not.
+        // Conversion still checks file baselines before writing.
+        let mut old: BTreeSet<_> = self
             .repairs
             .iter()
             .filter(|(path, _, draft)| {
@@ -686,11 +738,28 @@ impl CampaignContent {
                     .err()
                     .is_some_and(|error| crate::formats_ui::is_old(&error))
             })
-            .map(|(path, _, _)| path.clone())
+            .map(|(path, _, _)| active.path.join(path))
             .collect();
+        if let Some(snapshot) = &self.snapshot {
+            old.extend(snapshot.other_old_files.iter().cloned());
+            old.extend(
+                snapshot
+                    .catalogue
+                    .unreadable
+                    .values()
+                    .filter(|note| note.old_layout)
+                    .map(|note| note.path.clone()),
+            );
+        }
+        let old: Vec<_> = old.into_iter().collect();
         if !old.is_empty() {
             let message = if old.len() == 1 {
-                crate::formats_ui::old_message(&old[0])
+                crate::formats_ui::old_message(
+                    &old[0]
+                        .strip_prefix(&active.path)
+                        .unwrap_or(&old[0])
+                        .to_string_lossy(),
+                )
             } else {
                 format!("{} files use the old layout.", old.len())
             };
@@ -700,16 +769,11 @@ impl CampaignContent {
                     .then_some("Close the run before converting files."),
                 |ui| design::message_with_action(ui, Tone::Warning, &message, "Convert files…"),
             ) {
-                self.layouts.scan_paths(
-                    campaigns,
-                    &old.iter()
-                        .map(|path| active.path.join(path))
-                        .collect::<Vec<_>>(),
-                );
+                self.layouts.scan(campaigns);
             }
         }
         for (path, baseline, draft) in &mut self.repairs {
-            if old.contains(path) {
+            if old.contains(&active.path.join(&*path)) {
                 continue;
             }
             let (problem, error_line) = repair_problem(path, draft);
@@ -967,24 +1031,6 @@ impl CampaignContent {
                     .blocked(blocked)
                     .show(ui)
                     .clicked();
-                    if !closure.old_layout.is_empty()
-                        && Action::quiet("Convert files…")
-                            .blocked(
-                                self.run_open
-                                    .then_some("Close the run before converting files."),
-                            )
-                            .show(ui)
-                            .clicked()
-                    {
-                        self.layouts.scan_paths(
-                            campaigns,
-                            &closure
-                                .old_layout
-                                .iter()
-                                .map(|id| catalogue.unreadable[id].path.clone())
-                                .collect::<Vec<_>>(),
-                        );
-                    }
                     if reason_fits {
                         design::blocked_reason(ui, repair);
                     } else {
@@ -1073,7 +1119,7 @@ impl CampaignContent {
                 if exists {
                     ui.label(
                         Type::Small
-                            .rich(ui, "Keeps the id, name and namespace. Drops the rest.")
+                            .rich(ui, "Keeps the package name and its links. Replaces the other contents of Package.md, including its description. The entries stay unchanged.")
                             .color(colors().muted),
                     );
                 }
@@ -1098,7 +1144,7 @@ impl CampaignContent {
         }
         if let Some(write) = &self.manifest_write
             && design::locked(ui, manifest_locked, |ui| {
-                design::message_with_action(
+                design::undo_message(
                     ui,
                     Tone::Success,
                     if write.replaced() {
@@ -1140,27 +1186,26 @@ impl CampaignContent {
                     "Undo package removal",
                 )
             } else {
-                ui.horizontal_wrapped(|ui| {
-                    ui.label(Type::Body.rich(ui, icons::WARN).color(c.result.warning));
-                    for (at, (id, name)) in removed.users.iter().enumerate() {
-                        if at > 0 {
-                            ui.label("and");
-                        }
-                        if design::link(ui, name).clicked() {
-                            self.open_lookup = Some(*id);
-                        }
-                    }
-                    ui.label(if removed.users.len() == 1 {
+                let names: Vec<_> = removed
+                    .users
+                    .iter()
+                    .map(|(_, name)| name.as_str())
+                    .collect();
+                let (undo, link) = design::undo_message_with_links(
+                    ui,
+                    Tone::Warning,
+                    &names,
+                    if names.len() == 1 {
                         "now has creatures Splat cannot find."
                     } else {
                         "now have creatures Splat cannot find."
-                    });
-                    Action::quiet("Undo package removal")
-                        .icon(icons::UNDO)
-                        .show(ui)
-                        .clicked()
-                })
-                .inner
+                    },
+                    "Undo package removal",
+                );
+                if let Some(at) = link {
+                    self.open_lookup = Some(removed.users[at].0);
+                }
+                undo
             };
             if undo {
                 if document.selections != removed.after {
@@ -1405,21 +1450,18 @@ impl CampaignContent {
                 ui.scope_builder(egui::UiBuilder::new().max_rect(remaining), |ui| {
                     let users = selection.campaign_users(catalogue);
                     if !users.is_empty() {
-                        ui.scope(|ui| {
-                            ui.spacing_mut().item_spacing.x =
-                                design::number_width(ui, " ", &Type::Body.font(ui));
-                            ui.horizontal_wrapped(|ui| {
-                                for (at, (id, name)) in users.iter().enumerate() {
-                                    if at > 0 {
-                                        ui.label(Type::Body.rich(ui, "and"));
-                                    }
-                                    if design::link(ui, name).clicked() {
-                                        self.open_lookup = Some(*id);
-                                    }
-                                }
-                                ui.label(Type::Body.rich(ui, "use its creatures."));
-                            });
-                        });
+                        let names: Vec<_> = users.iter().map(|(_, name)| name.as_str()).collect();
+                        if let Some(at) = design::linked_sentence(
+                            ui,
+                            &names,
+                            if names.len() == 1 {
+                                "uses its creatures."
+                            } else {
+                                "use its creatures."
+                            },
+                        ) {
+                            self.open_lookup = Some(users[at].0);
+                        }
                     }
                     if relocated.is_none()
                         && let Some(known) = &known
@@ -2111,6 +2153,56 @@ mod tests {
     }
 
     #[test]
+    fn conversion_notice_tracks_old_timelines_and_recovers_after_file_changes() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        let path = root.join("Timeline.md");
+        let old = "---\ntimeline_version: 1\ntimeline: []\n---\n";
+        fs::write(&path, old).unwrap();
+        assert_eq!(other_old_files([root.to_path_buf()]), vec![path.clone()]);
+        let converted = crate::timeline::formats::convert(old, &Default::default()).unwrap();
+        for (input, text) in [
+            (
+                "short table row",
+                "---\ntimeline_version: 2\n---\n| Day | Event |\n| --- | --- |\n| 1 |\n",
+            ),
+            (
+                "extra table cell",
+                "---\ntimeline_version: 2\n---\n| Day | Event |\n| --- | --- |\n| 1 | Event | Extra |\n",
+            ),
+            ("empty value", ""),
+            ("unreadable value", "---\ntimeline_version: [\n---\n"),
+            ("converted timeline", converted.as_str()),
+        ] {
+            fs::write(&path, text).unwrap();
+            assert!(other_old_files([root.to_path_buf()]).is_empty(), "{input}");
+            assert_eq!(
+                fs::read_to_string(&path).unwrap(),
+                text,
+                "Scanning never writes {input}"
+            );
+        }
+        fs::write(&path, old).unwrap();
+        let moved = root.join("Moved.md");
+        fs::rename(&path, &moved).unwrap();
+        assert!(
+            other_old_files([root.to_path_buf()]).is_empty(),
+            "Renamed file clears the warning"
+        );
+        fs::rename(&moved, &path).unwrap();
+        assert_eq!(other_old_files([root.to_path_buf()]), vec![path.clone()]);
+        fs::remove_file(&path).unwrap();
+        assert!(
+            other_old_files([root.to_path_buf()]).is_empty(),
+            "Deleted file clears the warning"
+        );
+        assert!(
+            other_old_files([root.join("missing-folder")]).is_empty(),
+            "Moved source folder clears the warning"
+        );
+    }
+
+    #[test]
     fn closure_follows_a_selection_change() {
         let temp = tempfile::tempdir().unwrap();
         let active = campaign(temp.path());
@@ -2121,6 +2213,7 @@ mod tests {
         let mut content = CampaignContent {
             active: Some(active.clone()),
             snapshot: Some(Snapshot {
+                other_old_files: Vec::new(),
                 closure: (document.selections.clone(), closure),
                 document,
                 subtitles: crate::library::catalogue_subtitles(&catalogue),

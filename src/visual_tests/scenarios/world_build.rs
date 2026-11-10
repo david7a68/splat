@@ -665,6 +665,7 @@ pub fn package_rename(d: &mut Driver<'_>) {
         let first = d.place_of("Bridge Ambush");
         let second = d.place_of("Shrine of Cinders");
         let and = d.nodes().into_iter().find(|node| node.name == "and");
+        check_link_spaces(d);
         let aligned = warning.zip(action).is_some_and(|(text, action)| {
             (text.left() - action.left()).abs() < 1.0 && action.top() > text.bottom()
         });
@@ -690,7 +691,9 @@ pub fn package_rename(d: &mut Driver<'_>) {
     d.click("Find the folder…");
     d.wait_for_text("Undo folder recovery");
     d.expect("Ashen Marches found in modules/watch-package/.");
-    d.state("package-correct-folder-picked", Sizes::All);
+    d.state_prepared("package-correct-folder-picked", Sizes::All, |d| {
+        check_undo_icon(d, "Undo folder recovery", "iter-6-C-AD3");
+    });
     d.click("Undo folder recovery");
     d.wait_for_text("Use this folder");
     d.click("Use this folder");
@@ -802,7 +805,30 @@ pub fn package_manifest_broken(d: &mut Driver<'_>) {
     d.click("Reload from disk");
     d.expect("Package.md cannot be read (line 4)");
     assert!(!d.has("Find the folder…"));
-    d.state("manifest-invalid-campaign", Sizes::All);
+    d.state_prepared("manifest-invalid-campaign", Sizes::All, |d| {
+        d.observe("iter-6-C-AD1", d.visible_text("Keeps the package name and its links.")
+            && d.visible_text("including its description.")
+            && d.visible_text("The entries stay unchanged."),
+            "Manifest replacement states the package name, links, description and unchanged entries");
+    });
+    let broken = fs::read_to_string(&path).unwrap();
+    let creatures = folder.join("Creatures/Cinder Wolf.md");
+    let creature_before = fs::read_to_string(&creatures).unwrap();
+    d.click("Replace with a basic Package.md");
+    d.wait_for_text("Undo write Package.md");
+    let basic = fs::read_to_string(&path).unwrap();
+    assert_eq!(
+        crate::content_workspace::note_id(&basic),
+        crate::content_workspace::note_id(&valid)
+    );
+    assert!(basic.contains("splat_name: Ashen Marches"));
+    assert_eq!(fs::read_to_string(&creatures).unwrap(), creature_before);
+    d.state_prepared("manifest-replaced-with-undo", Sizes::All, |d| {
+        check_undo_icon(d, "Undo write Package.md", "iter-6-C-SD3-Replaced");
+    });
+    d.click("Undo write Package.md");
+    d.wait_for_text("Package.md cannot be read (line 4)");
+    assert_eq!(fs::read_to_string(&path).unwrap(), broken);
     d.click("Open in Library");
     d.expect("Markdown editor");
     d.expect("Line 4 opens a list");
@@ -852,7 +878,9 @@ pub fn package_manifest_broken(d: &mut Driver<'_>) {
     );
     d.expect("Package.md was written again.");
     d.expect("Undo write Package.md");
-    d.state("manifest-written-again-campaign", Sizes::All);
+    d.state_prepared("manifest-written-again-campaign", Sizes::All, |d| {
+        check_undo_icon(d, "Undo write Package.md", "iter-6-C-SD3-Package");
+    });
     d.click("Undo write Package.md");
     d.wait_for_text("Package.md was deleted");
     assert!(!path.exists());
