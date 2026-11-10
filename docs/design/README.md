@@ -95,5 +95,8 @@ with identity in frontmatter and generated verification records in package repor
 and custom rules, with NPCs, locations, custom timeline event types and a campaign clock.
 World notes, roll tables, NPCs, locations and the clock are implemented. The rest is proposed. [World and rules: later](world-and-rules-later.md) holds the parts it defers.
 
+[Rolling](rolling.md) is a proposed design for rolling checks, saves, attacks and damage from a
+stat block or a character sheet, with results in the run's Log and no automatic rulings.
+
 [World data](world-data.md) is a proposed design for how world notes are organised: one home for
 each fact, with lines, relations, events and a log that Splat shows on every page they concern.
