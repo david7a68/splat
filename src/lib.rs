@@ -845,11 +845,11 @@ impl Splat {
             let (slot_height, lower_height) =
                 ui.data(|d| (d.get_temp::<f32>(slot_id), d.get_temp::<f32>(lower_id)));
             let slot_height = slot_height.unwrap_or(0.0);
+            // The account slot always holds two lines, so a status that wraps or adds a line
+            // never moves Lookup, Notes or Settings.
+            let account_slot = 2.0 * Type::Small.line();
             let lower_height = lower_height.unwrap_or(
-                design::XS
-                    + 3.0 * (Density::Scan.control() + 2.0)
-                    + design::XS
-                    + Type::Small.line(),
+                design::XS + 3.0 * (Density::Scan.control() + 2.0) + design::XS + account_slot,
             );
             let top = ui.cursor().top();
             let lower_top = (rail_rect.bottom() - lower_height).max(top + slot_height);
@@ -997,7 +997,9 @@ impl Splat {
                     }
                     if let Some(account) = account {
                         ui.add_space(design::XS);
+                        let top = ui.cursor().top();
                         self.rail_status(ui, account, true);
+                        ui.expand_to_include_y(top + account_slot);
                     }
                 },
             );

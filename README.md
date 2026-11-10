@@ -223,7 +223,8 @@ recordings into text; **Transcript and summary** chooses the service that checks
 those words and writes the summary. Custom speech services show their API requirement.
 Timeline and the Session plan use the same fight state words. An open fight's Timeline round links
 back to the run and does not say **Paused**. Processing says **Processing**, with
-the full step on hover. Completed jobs say **Processed** in the rail. Warned jobs
+the full step on hover. Completed jobs say **Processed** in the rail, and the session list shows the
+same check icon and green **Processed**. Warned jobs
 keep their warning icon and full words on hover. Note conflicts say **Notes changed**. Long rest starts the next new fight at full from both Session
 and Timeline. Every closed long-rest row shows **Everyone at full** or **Not at full**, with an icon.
 Both pages let you turn the ruling off or on, with Undo.
