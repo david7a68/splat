@@ -346,6 +346,11 @@ pub fn clock_now(events: &[Event]) -> Option<u64> {
         .map(|(start, event)| start.saturating_add(event.minutes()))
 }
 
+/// The day the story is on now. Nothing, before the first day.
+pub fn day_now(events: &[Event]) -> Option<u64> {
+    clock_now(events).map(|minute| minute / DAY + 1)
+}
+
 /// A moment on the clock in the words a DM reads.
 pub fn clock_words(minute: u64) -> String {
     format!("Day {}, hour {}", minute / DAY + 1, minute % DAY / HOUR)

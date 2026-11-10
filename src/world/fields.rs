@@ -9,17 +9,20 @@ pub(super) fn patch(text: &str, key: &str, value: Value) -> Result<String, Strin
         .find(|(old, _)| *old == key)
         .ok_or("Unknown World field")?
         .1;
-    let output = splat::content::patch_fields(
-        text,
-        &[(flat, Some(splat::content::formats::flat_reference(&value)))],
-    )?;
+    // An empty list leaves no property behind.
+    let stored = (!value.as_sequence().is_some_and(Vec::is_empty))
+        .then(|| splat::content::formats::flat_reference(&value));
+    let output = splat::content::patch_fields(text, &[(flat, stored)])?;
     let checked = splat::content::Entry::parse("World.md", &output)?;
     let mut expected = (*entry.fields).clone();
-    expected
+    let world = expected
         .get_mut("splat_world")
         .and_then(Value::as_mapping_mut)
-        .ok_or("Missing World properties")?
-        .insert(key.into(), checked.fields["splat_world"][key].clone());
+        .ok_or("Missing World properties")?;
+    match checked.fields["splat_world"].get(key) {
+        Some(value) => world.insert(key.into(), value.clone()),
+        None => world.remove(key),
+    };
     if *checked.fields != expected {
         return Err("Edit changed another World value".into());
     }

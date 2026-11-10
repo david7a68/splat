@@ -94,3 +94,6 @@ with identity in frontmatter and generated verification records in package repor
 [World and house rules](world-and-house-rules.md) is a proposed design for campaign settings
 and custom rules, with NPCs, locations, custom timeline event types and a campaign clock.
 World notes, roll tables, NPCs, locations and the clock are implemented. The rest is proposed. [World and rules: later](world-and-rules-later.md) holds the parts it defers.
+
+[World data](world-data.md) is a proposed design for how world notes are organised: one home for
+each fact, with lines, relations, events and a log that Splat shows on every page they concern.

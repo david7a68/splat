@@ -366,7 +366,7 @@ splat_world:
 
 | Field | Meaning |
 |---|---|
-| `type` | A free word. `npc` and `location` have behaviour. `faction` or `quest` only group the World page |
+| `type` | A free word. It only groups the World page. Fields give behaviour: see [World data](world-data.md) |
 | `aliases` | Other names for search and mentions |
 | `in` | The place this is in. A location's `in` builds the tree, and a loop is an error |
 | `status` | A free word, kept in the note. The page has a control for it. A different status per campaign needs a campaign copy |
@@ -374,7 +374,8 @@ splat_world:
 
 **Create at the table.** Lookup always shows **New NPC** and **New location** for the typed words, in a fixed row outside
 the scrolling results, because a name can also match unrelated prose. That is 3 interactions: open, type, press.
-An unresolved link in the Reader offers the same two actions. The note goes to `NPCs/` or `Locations/`.
+An unresolved link in the Reader offers the same two actions. The note goes to the folder that holds most
+entries of its type, or to `NPCs/` or `Locations/` when the campaign has none. See [World data](world-data.md).
 
 **In a fight.** This builds on encounter groups. An NPC's page and its Lookup result have **Add to run**
 while a run is open. It asks for a stat block if the NPC has none, and it offers to save the choice. It asks for a side if

@@ -922,6 +922,48 @@ pub fn wrapped_link(ui: &mut Ui, label: &str) -> Response {
     response.on_hover_cursor(egui::CursorIcon::PointingHand)
 }
 
+/// Small words that wrap and can be pressed, with a quiet label before them. It is a link to
+/// the page the words are from, and it reads as that page's text and not as a control.
+pub fn line_link(ui: &mut Ui, label: &str, words: &str) -> Response {
+    let c = colors();
+    let name = format!("{label}{words}");
+    let mut job = LayoutJob::default();
+    job.wrap.max_width = ui.available_width().max(1.0);
+    for (part, color) in [(label, c.muted), (words, c.text)] {
+        job.append(
+            part,
+            0.0,
+            egui::TextFormat {
+                font_id: Type::Small.font(ui),
+                line_height: Some(Type::Small.line()),
+                color,
+                ..Default::default()
+            },
+        );
+    }
+    let galley = ui.fonts_mut(|fonts| fonts.layout_job(job));
+    let (rect, response) = ui.allocate_exact_size(
+        vec2(galley.size().x, galley.size().y.max(24.0)),
+        Sense::click(),
+    );
+    response.widget_info(|| WidgetInfo::labeled(WidgetType::Link, ui.is_enabled(), &name));
+    if ui.is_rect_visible(rect) {
+        let top = rect.center().y - galley.size().y / 2.0;
+        ui.painter().galley(pos2(rect.left(), top), galley, c.text);
+        if response.hovered() {
+            ui.painter().hline(
+                rect.x_range(),
+                rect.bottom() - 1.0,
+                Stroke::new(1.0, c.focus.gamma_multiply(0.6)),
+            );
+        }
+        if response.has_focus() {
+            focus_ring(ui, rect);
+        }
+    }
+    response.on_hover_cursor(egui::CursorIcon::PointingHand)
+}
+
 /// A label above a control, with help and an error below it.
 pub fn field<R>(
     ui: &mut Ui,
@@ -1276,8 +1318,9 @@ pub fn wrapped_status(ui: &mut Ui, state: Status<'_>) -> Response {
     status_label(ui, state, true)
 }
 
-/// Two rail lines share the word's left edge, leaving the icon in its own column.
-pub fn rail_status_detail(ui: &mut Ui, state: Status<'_>, detail: &str) -> Response {
+/// Two rail lines share the word's left edge, leaving the icon in its own column. Returns the
+/// whole status, and the rect of its first line's word.
+pub fn rail_status_detail(ui: &mut Ui, state: Status<'_>, detail: &str) -> (Response, Rect) {
     ui.horizontal_top(|ui| {
         ui.spacing_mut().item_spacing.x = S;
         ui.add_sized(
@@ -1287,7 +1330,8 @@ pub fn rail_status_detail(ui: &mut Ui, state: Status<'_>, detail: &str) -> Respo
         ui.vertical(|ui| {
             ui.spacing_mut().item_spacing.y = 0.0;
             let response = ui.label(Type::Small.rich(ui, state.word).color(state.color));
-            response.union(ui.label(Type::Small.rich(ui, detail).color(state.color)))
+            let word = response.rect;
+            (response.union(ui.label(Type::Small.rich(ui, detail).color(state.color))), word)
         })
         .inner
     })
@@ -1660,6 +1704,36 @@ pub fn spinner(ui: &mut Ui) {
     ui.label(Type::Body.rich(ui, icons::BUSY).color(colors().muted));
     #[cfg(not(test))]
     ui.spinner();
+}
+
+/// A small spinner just after a rail status, so work in progress needs no line of its own and
+/// nothing below it moves. It is as tall as the text's capitals, with a line near the text's weight;
+/// egui's own spinner has a 3-point line, which is heavy beside small text.
+pub fn busy_after(ui: &Ui, status: Rect, color: Color32) {
+    const STROKE: f32 = 1.5;
+    // The outer edge is 9 points across, the height of the small text's capitals.
+    let radius = (9.0 - STROKE) / 2.0;
+    let center = pos2(
+        status.right() + XS + radius + STROKE / 2.0,
+        status.top() + Type::Small.line() / 2.0,
+    );
+    // Tests draw one fixed frame, so captures repeat between runs.
+    #[cfg(test)]
+    let turn = 0.0;
+    #[cfg(not(test))]
+    let turn = {
+        ui.ctx().request_repaint();
+        ui.input(|i| i.time) as f32 * std::f32::consts::TAU
+    };
+    let arc = 1.5 * std::f32::consts::PI;
+    let points = (0..=24)
+        .map(|i| {
+            let angle = turn + arc * i as f32 / 24.0;
+            center + radius * vec2(angle.cos(), angle.sin())
+        })
+        .collect();
+    ui.painter()
+        .add(egui::Shape::line(points, Stroke::new(STROKE, color)));
 }
 
 /// The state comes before Discard on every save row.

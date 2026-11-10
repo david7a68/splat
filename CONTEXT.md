@@ -195,6 +195,27 @@ A Lookup action that rolls a name and three attributes (look, manner, want) from
 **Location**:
 A world entry for a place. Locations can be inside other locations.
 
+**Line**:
+One list item, one paragraph or one table row of a note. A line that links to a page or names it is a fact about that page, and Splat shows it there.
+_Avoid_: Mention, backlink.
+
+**Summary**:
+The first paragraph of a world entry, which says what the subject is.
+
+**Group**:
+A world entry that other entries are part of, such as a faction, a team or a Power. Its **members** name it in their own notes.
+
+**Event**:
+A world entry with a date, counted back from Day 1 of the campaign clock. Its type can be any word.
+_Avoid_: Timeline event, which is a thing that happened in play.
+
+**Log**:
+The last heading of a world entry, with one line for each thing that play changed.
+_Avoid_: Ledger, which is the proposed history of trackers.
+
+**Open question**:
+An unticked task line in a world note: a fact the DM has not decided.
+
 **Roll table**:
 An existing Markdown table that a marker makes rollable.
 
