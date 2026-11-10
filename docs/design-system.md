@@ -367,8 +367,8 @@ write only the open file. A renamed copy comes first, otherwise the newest file 
 ambiguous creatures; Open in Library opens the first repair action's file. Encounter search names hidden
 duplicate notes and offers file-specific identity repair with Undo.
 
-Library, World, Encounters and Sessions say “These two files claim to be the same entry.” Rows say `Same
-entry in two files`. Each bordered secondary repair says `Make <file> a separate entry`. Its result
+Library, World and Encounters say “These two files claim to be the same entry,” with the file names.
+Sessions use “session” for their repair and Undo actions. Rows say `Same entry in two files`. Each bordered secondary repair says `Make <file> a separate entry`. Its result
 names the file and keeps `Undo separate entry` on the message line. Folder repairs use `separate
 entries` and `Undo separate entries`, with one guarded Undo for the batch. In Library, each single-file
 or folder choice states which file or folder an encounter will keep or use, in `Small` muted text an
@@ -403,6 +403,8 @@ check` reports schema-2 flags and unreadable files by path and line.
 
 Campaign's header counts chosen entries only. Flags appear once in the content issue count, with file and
 repair actions on their warning line. Packages keeps its save row directly below the tabs, before notices.
+The save row, package list and entry search stop at LIST_MEASURE from the tab’s left edge.
+An open repair keeps the same right edge as the save row.
 Repair fills the column with the invalid-note reason above it; an `L` gap and hairline separate its save row
 from the package save row. Invalid YAML uses plain words and marks the line to fix.
 
@@ -748,8 +750,10 @@ characters.
 
 Notes are Markdown in the campaign folder. Write styles source in Reader faces: large ruled headings, italic
 emphasis, and visible markup in the plain face and faint colour. Store exactly what was typed so Obsidian
-reads the same text. Read uses the one Reader. Both views fill the column and keep line breaks. Notes, events
-and recordings follow column width; book prose keeps READER_MEASURE. The gallery's Markdown sheet shows both
+reads the same text. Read uses the one Reader, anchored left, at no more than READER_MEASURE
+(at most 75 characters per line).
+Write follows the column and keeps stored line breaks. Events and recordings follow column width;
+book prose keeps READER_MEASURE. The gallery's Markdown sheet shows both
 views of one note. Autosave runs two seconds after editing; show muted Saving… with the busy icon during
 delay. Disk changes stop saving and open the comparison in Keeping a draft. Missing notes show Notes not saved
 with error status in header and rail. Rail conflicts say Notes changed, with Notes changed on disk on hover
@@ -793,8 +797,11 @@ below the strip. Add-strip messages stay below Add. In notes ends at the button
 text's inner edge.
 
 The first upcoming fight gets primary Start fight when no run is open; later fights use secondary. Use Start
-fight here and in Encounters. Saved unfinished fights offer Resume, with Start a new run and Delete the saved
-run in the menu. Open fights use a status link while the strip owns primary. Planned, played and running
+fight here and in Encounters. Saved unfinished fights offer Resume, including timeline rows whose run
+is not a planned note link.
+Find the saved run by its run ID among all unfinished runs. Delete the saved run stays in the menu;
+Start a new run is available when a planned encounter supplies its source. Open fights use a status link
+while the strip owns primary. Planned, played and running
 summaries use space below actions up to the menu. Keep summary parts and Ended · Round 1 whole; join
 separators to the next part and wrap without trailing dots. Group summaries wrap to two lines, then shorten
 with full hover text. Plan and Timeline share fight summaries: open fights show round as a run status link
@@ -850,7 +857,7 @@ actions; flagged days have a warning icon. Rail conflicts use warning Timeline c
 use error Timeline not saved. Run updates change only the Result line and never convert Timeline.
 
 Copied sessions say `<first file> and <second file> claim to be the same session.` They offer
-Make <file> a separate entry with Undo separate entry. Moved drafts
+Make <file> a separate session with Undo separate session. Moved drafts
 offer the new path and Let it go. Missing session and run folders offer Choose folder.
 
 ### Notes panel
