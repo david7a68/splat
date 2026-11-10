@@ -125,7 +125,7 @@ A creature's `Habitat` row holds its 2024 Monster Manual habitat, such as
 Library's Creatures section, Library search results and the encounter creature
 search have **Filter**. It filters by habitat, type, size, alignment, challenge,
 movement, senses, languages, resistances, immunities and vulnerabilities. Each
-chosen value shows as a chip; click a chip to remove it. Search also finds these
+chosen value shows as a chip; click a chip to remove it. Filtered creature lists show the number of matches. Search also finds these
 values: `darkvision`, `habitat:forest`, `type:dragon`, `cr:5-10`, `cr:5+`,
 `immune:fire` or `lang:"deep speech"`. A creature with habitat `Any` is found
 under every habitat.
@@ -161,7 +161,8 @@ Both pages name only saved, unfinished fights past Setup as keeping their saved 
 
 Library has **New entry** in its header. Its form opens in the reader column and closes after creation. World has **New ▾** for a plain note, a note with a type, an NPC, a location, or a generated NPC. Type headings use capitals and a count. World folder headings keep normal-case paths. Page headers show state or nonzero counts beside the title, with a rule and an `L` gap below. Counts use thousands separators.
 
-A broken or deleted `Package.md` keeps the package's entries available. Campaign
+A broken or deleted `Package.md` keeps the package's entries available. The manifest
+never counts as an entry, even when unreadable; its warning stays on About. Campaign
 names the manifest fault and opens an unreadable manifest in Library for repair.
 SRD copies no longer warn about hidden citation links. World lists table faults
 and offers its repair count in the header. New entries start in their kind folder.
@@ -181,7 +182,9 @@ An empty fight **Prep** tab offers **Edit encounter** while the encounter exists
 
 Moving a typed World note keeps its stored identity. Plain notes use temporary
 path identities; their name links still work after a folder move. Duplicate names
-open a chooser, including an NPC's **In** link in World and Lookup.
+open a chooser, including an NPC's **In** link in World and Lookup. Each choice pairs its file
+with **Always use this one**. Empty World notes say **Nothing written yet.** and
+offer **Edit in Obsidian**.
 
 With no campaigns, the switcher says **No campaign** and offers **Add campaign…**.
 New entry and Copy entry use **Destination** and show a short path, with the full path
