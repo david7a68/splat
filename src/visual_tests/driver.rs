@@ -312,7 +312,7 @@ impl<'a> Driver<'a> {
             .with_pixels_per_point(1.0)
             .with_max_steps(64);
         let builder = if capturing {
-            builder.renderer(super::render::SoftwareRenderer::new())
+            builder.renderer(super::render::CaptureRenderer::new())
         } else {
             builder
         };
@@ -1051,6 +1051,35 @@ impl<'a> Driver<'a> {
         visible
     }
 
+    /// The heights of painted horizontal rules (hairlines and separators) that cross `x` between
+    /// `top` and `bottom`. All values are AccessKit pixels, like `place_of`.
+    pub fn horizontal_rules(&self, x: f32, top: f32, bottom: f32) -> Vec<f32> {
+        let scale = self.harness.ctx.pixels_per_point();
+        fn walk(shape: &egui::Shape, clip: egui::Rect, out: &mut Vec<(egui::Pos2, egui::Pos2)>) {
+            match shape {
+                egui::Shape::Vec(shapes) => shapes.iter().for_each(|shape| walk(shape, clip, out)),
+                egui::Shape::LineSegment { points, .. }
+                    if (points[0].y - points[1].y).abs() < 0.01 && clip.contains(points[0]) =>
+                {
+                    out.push((points[0], points[1]));
+                }
+                _ => {}
+            }
+        }
+        let mut lines = Vec::new();
+        for clipped in &self.harness.output().shapes {
+            walk(&clipped.shape, clipped.clip_rect, &mut lines);
+        }
+        let mut rules: Vec<f32> = lines
+            .into_iter()
+            .map(|(a, b)| (a.x.min(b.x) * scale, a.x.max(b.x) * scale, a.y * scale))
+            .filter(|&(left, right, y)| left <= x && x <= right && top <= y && y <= bottom)
+            .map(|(_, _, y)| y)
+            .collect();
+        rules.sort_by(f32::total_cmp);
+        rules
+    }
+
     pub fn painted_rect_in(&self, words: &str, area: egui::Rect) -> Option<egui::Rect> {
         let mut found = None;
         self.each_painted_text(|text, clip| {
@@ -1416,6 +1445,32 @@ impl<'a> Driver<'a> {
         let caption = format!("Press: Alt+{}", key.name());
         self.film_caption(&caption);
         self.harness.key_press_modifiers(egui::Modifiers::ALT, key);
+        self.interactions += 1;
+        self.settle();
+        self.film_result(&caption);
+    }
+
+    /// Press a mouse side button over a visible node: Extra1 is Back and Extra2 is Forward.
+    pub fn press_side_button(&mut self, button: egui::PointerButton, over: &str) {
+        let rect = self.aim(&format!("{button:?} over {over:?}"), |node| {
+            node.name == over
+        });
+        let caption = format!("Press: mouse {button:?} over {over}");
+        self.film_aim(rect, &caption);
+        let mut raw = egui::RawInput {
+            events: vec![egui::Event::PointerButton {
+                pos: rect.center(),
+                button,
+                pressed: true,
+                modifiers: egui::Modifiers::NONE,
+            }],
+            ..Default::default()
+        };
+        // Kittest does not call eframe's raw input hook, which sets the side buttons aside.
+        let ctx = self.harness.ctx.clone();
+        eframe::App::raw_input_hook(self.harness.state_mut(), &ctx, &mut raw);
+        self.harness.step();
+        self.harness.remove_cursor();
         self.interactions += 1;
         self.settle();
         self.film_result(&caption);

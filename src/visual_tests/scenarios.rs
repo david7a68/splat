@@ -1092,6 +1092,28 @@ pub mod campaign_content {
                     })
             },
         );
+        // FD2: one rule separates the open repair from the package list, an `L` gap below Save
+        // repaired note. The rule must sit above the first thing drawn after the repair.
+        d.observe_both(
+            "iter-14-E-FD2",
+            "One rule, an L gap below Save repaired note, separates the repair from the list",
+            |d| {
+                let Some(save) = d.place_of("Save repaired note") else {
+                    return false;
+                };
+                let Some(next) = d
+                    .nodes()
+                    .into_iter()
+                    .filter(|node| node.in_view() && node.rect.top() > save.bottom() + 1.0)
+                    .map(|node| node.rect.top())
+                    .min_by(f32::total_cmp)
+                else {
+                    return false;
+                };
+                let rules = d.horizontal_rules(save.left(), save.bottom(), next);
+                rules.len() == 1 && rules[0] - save.bottom() >= crate::design::L
+            },
+        );
         d.state("repair-open", Sizes::Default);
         d.observe(
             "Repair says why",
@@ -5440,6 +5462,14 @@ pub mod nav_table {
             "G2",
             d.in_view(LINKED_TITLE),
             "Reading history: Alt+Left still returns to the entry before the link",
+        );
+        d.press_side_button(egui::PointerButton::Extra2, LINKED_TITLE);
+        let forward = !d.in_view(LINKED_TITLE) && d.in_view(LINK);
+        d.press_side_button(egui::PointerButton::Extra1, LINK);
+        d.observe(
+            "G2",
+            forward && d.in_view(LINKED_TITLE),
+            "Reading history: the mouse's Forward and Back buttons step through it",
         );
         d.click(CLEAR_SEARCH);
         d.begin_task();
