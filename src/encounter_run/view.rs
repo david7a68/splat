@@ -4467,9 +4467,10 @@ impl Run {
         // menu is a blur, so the tie slot settles then.
         let slot_width = egui::Id::new("setup_tie_slot_width");
         let in_initiative = ui.memory(|memory| memory.focused()).is_some_and(|focused| {
-            self.state.participants.iter().any(|p| {
-                focused == design::focus_id(&format!("Initiative for {}", p.name))
-            })
+            self.state
+                .participants
+                .iter()
+                .any(|p| focused == design::focus_id(&format!("Initiative for {}", p.name)))
         });
         let tie = if in_initiative {
             ui.data(|data| data.get_temp::<f32>(slot_width))
@@ -6752,9 +6753,7 @@ mod tests {
             harness.key_press(Key::Tab);
             harness.run_steps(2);
             assert!(
-                !harness
-                    .ctx
-                    .memory(|m| m.has_focus(design::focus_id(label))),
+                !harness.ctx.memory(|m| m.has_focus(design::focus_id(label))),
                 "iter8-B-tie: Tab leaves the field"
             );
             assert!(
