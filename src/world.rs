@@ -993,6 +993,8 @@ pub struct Reader {
     pub join: Option<Join>,
     pub open_timeline: Option<String>,
     pub sides: RunSides,
+    /// A run is in live play and owns `Next turn`, the screen's primary action.
+    pub live: bool,
     pub in_run: std::collections::BTreeMap<Uuid, (usize, Option<i64>)>,
     pub select_run: Option<usize>,
 }
@@ -1132,7 +1134,10 @@ impl Reader {
         let id = item.entry.id;
         let edit = campaign.filter(|_| edit::editable(item, index) && !self.editing(id));
         ui.horizontal_top(|ui| {
-            let room = edit.map_or(0.0, |_| design::Density::Read.control() + design::S);
+            let edit_action = Action::quiet("Edit")
+                .icon(design::icons::EDIT)
+                .density(Density::Read);
+            let room = edit.map_or(0.0, |_| edit_action.natural_width(ui) + design::S);
             ui.allocate_ui_with_layout(
                 egui::vec2(ui.available_width() - room, 0.0),
                 egui::Layout::top_down(egui::Align::Min),
@@ -1140,18 +1145,24 @@ impl Reader {
                     view::title_with_art(
                         ui,
                         &title,
-                        &format!("{} · {}", item.subtitle, item.owner),
+                        &format!(
+                            "{} · {}",
+                            if !self.compact && world_type(&item.entry) == "npc" {
+                                "NPC"
+                            } else {
+                                &item.subtitle
+                            },
+                            item.owner
+                        ),
                         Some(&item.entry),
                     );
                 },
             );
             if let Some(campaign) = edit
-                && design::icon_button(
-                    ui,
-                    design::icons::EDIT,
-                    &format!("Edit {}", item.entry.name),
-                )
-                .clicked()
+                && edit_action
+                    .name(&format!("Edit {}", item.entry.name))
+                    .show(ui)
+                    .clicked()
             {
                 self.begin_edit(campaign, item);
             }
@@ -2146,7 +2157,7 @@ impl Reader {
         }
         let sides = self.sides.as_ref()?;
         let Some(adding) = &mut self.adding else {
-            if Action::secondary("Add to run")
+            if Action::secondary("Add to fight")
                 .icon(design::icons::ADD)
                 .density(Density::Read)
                 .show(ui)
@@ -2249,13 +2260,17 @@ fn add_form(
     sides: &[String],
     adding: &mut Adding,
 ) -> Option<FormEnd> {
-    ui.label(Type::Strong.rich(ui, format!("Add {} to the run", item.entry.name)));
+    ui.label(Type::Strong.rich(ui, format!("Add {} to the fight", item.entry.name)));
     match adding.stat_block.map(|at| &index.items[at].entry) {
         Some(stat_block) => {
             ui.horizontal_wrapped(|ui| {
                 ui.label(Type::Small.rich(ui, "Stat block").color(colors().muted));
                 ui.label(Type::Body.rich(ui, &stat_block.name).color(colors().text));
-                if design::link(ui, "Change").clicked() {
+                if Action::quiet("Change")
+                    .density(Density::Read)
+                    .show(ui)
+                    .clicked()
+                {
                     adding.search = stat_block.name.clone();
                     adding.stat_block = None;
                 }
@@ -2281,31 +2296,40 @@ fn add_form(
         ui.checkbox(&mut adding.save, "Save this as their stat block");
     }
     if sides.len() > 1 {
-        ui.label(Type::Label.rich(ui, "SIDE").color(colors().muted));
-        let combo = egui::ComboBox::from_id_salt("world_add_side")
-            .selected_text(design::reader::human_label(&adding.side))
-            .icon(design::combo_icon)
-            .show_ui(ui, |ui| {
-                for side in sides {
-                    ui.selectable_value(
-                        &mut adding.side,
-                        side.clone(),
-                        design::reader::human_label(side),
-                    );
-                }
-            });
-        design::named(ui, &combo.response, "Side");
+        design::small_field(ui, "Side", None, None, |ui| {
+            let combo = egui::ComboBox::from_id_salt("world_add_side")
+                .selected_text(design::reader::human_label(&adding.side))
+                .icon(design::combo_icon)
+                .show_ui(ui, |ui| {
+                    for side in sides {
+                        ui.selectable_value(
+                            &mut adding.side,
+                            side.clone(),
+                            design::reader::human_label(side),
+                        );
+                    }
+                });
+            design::named(ui, &combo.response, "Side");
+        });
     }
-    design::text_field(
+    design::small_field(
         ui,
         "Initiative",
-        &mut adding.initiative,
         Some("Leave empty to roll it."),
         None,
+        |ui| {
+            design::text_input(
+                ui,
+                "Initiative",
+                &mut adding.initiative,
+                "",
+                design::L * 5.0,
+            );
+        },
     );
     let mut end = None;
     ui.horizontal(|ui| {
-        if Action::secondary("Add")
+        if Action::secondary("Add to fight")
             .density(Density::Read)
             .blocked_if(adding.stat_block.is_none(), "Choose a stat block first.")
             .show(ui)
