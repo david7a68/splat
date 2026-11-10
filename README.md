@@ -2,6 +2,9 @@
 
 A desktop foundation for D&D 2024 encounter planning and simulation.
 Built with Rust and egui (eframe). The design system is in [docs/design-system.md](docs/design-system.md).
+Form labels use sentence case. Reader headings appear only above visible content;
+Splat data stays out of the reading view. Dialogs keep red actions at the left and
+keep and commit actions at the right on one line.
 The sidebar has one flat level: **Run** (while a run is open), **Paused run** (one unfinished fight) or **Paused runs** (several unfinished fights), **Encounters**, **Session**, **Timeline**, **World**, **Party**,
 **Library**, **Campaign**, and **Settings**. The campaign switcher is always above them. **Lookup** (Ctrl+K) searches every entry, every session note and the timeline, and
 opens beside any page. While a run is open, other pages show a strip with the turn, primary **Next turn**, and secondary **Back to run**. Each page keeps its

@@ -382,7 +382,10 @@ pub(super) fn show(
             !table_stats && sections.iter().any(|s| s.title == "Source text"),
         );
     }
-    for section in sections {
+    for section in sections
+        .iter()
+        .filter(|section| presentation::visible_reading_section(section))
+    {
         if section.title == "Source text" && has_summary {
             continue;
         }
@@ -445,6 +448,46 @@ pub(super) fn show(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn iter_two_reader_hides_reserved_and_empty_sections_but_keeps_readable_content() {
+        for size in [egui::vec2(960.0, 640.0), egui::vec2(1920.0, 1080.0)] {
+            let ctx = egui::Context::default();
+            crate::design::theme::install(&ctx);
+            let body = "## Splat data\n\nStorage only.\n\n## Empty\n\n<!-- hidden -->\n\n## Words\n\nKeep these words.\n\n## Code\n\n`Keep this code`\n";
+            let output = ctx.run(
+                egui::RawInput {
+                    screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, size)),
+                    ..Default::default()
+                },
+                |ctx| {
+                    egui::CentralPanel::default().show(ctx, |ui| {
+                        show(
+                            ui,
+                            None,
+                            &presentation::reading_sections(body, ""),
+                            false,
+                            false,
+                        );
+                    });
+                },
+            );
+            let text: Vec<_> = output
+                .shapes
+                .iter()
+                .filter_map(|shape| match &shape.shape {
+                    egui::Shape::Text(text) => Some(text.galley.job.text.as_str()),
+                    _ => None,
+                })
+                .collect();
+            for hidden in ["Splat data", "Storage only.", "Empty"] {
+                assert!(!text.contains(&hidden), "{text:?}");
+            }
+            for kept in ["Words", "Keep these words.", "Code", "Keep this code"] {
+                assert!(text.contains(&kept), "{text:?}");
+            }
+        }
+    }
 
     #[test]
     fn converted_spell_and_item_readers_hide_tables_and_machine_lines() {
