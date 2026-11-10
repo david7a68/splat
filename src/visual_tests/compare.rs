@@ -8,7 +8,7 @@ use image::RgbaImage;
 use rayon::prelude::*;
 use std::{fs, path::Path};
 
-const DEFAULT_TOLERANCE: u8 = 2;
+pub(super) const DEFAULT_TOLERANCE: u8 = 2;
 
 /// How many pixels differ by more than the tolerance in any channel, and the largest gap.
 pub fn differing_pixels(a: &RgbaImage, b: &RgbaImage, tolerance: u8) -> (usize, u8) {
