@@ -198,6 +198,9 @@ gives Undo the same name for accessibility. Inline creation uses a Label title, 
 action, its `Small` blocked reason, an `L` gap and quiet Cancel. Creation and copy fields share one
 right edge.
 
+Several safe choices after a message share one line when they fit. Put a destructive choice at the end
+after an `L` gap, or on its own line below after an `M` gap.
+
 Library, Lookup and encounter search rank equal names in this order: campaign entries, book and package
 entries, then character sheet copies. Creature results keep names close to stats with an `S` gap between
 results. The CR column fits `CR 1/8` plus an `M` gap. Paths shorten before file actions wrap; hover keeps the
@@ -448,8 +451,10 @@ campaign on one action line with the warning text. Technical details follows bel
 package only when there is no match. Use Body text throughout the missing-package sentence. The picker
 starts beside the old folder and checks identity before restoring registration. Both recovery paths have Undo.
 
-A broken or deleted Package.md leaves its entries available and names the manifest fault. Campaign offers Open
-in Library for unreadable manifests. Campaign Packages and the Library details row offer Write Package.md
+A broken or deleted Package.md leaves its entries available and names the manifest fault. Campaign offers
+bordered Open in Library first for unreadable manifests, then Replace with a basic Package.md. Align the
+first action and the replacement's consequence below the actions with the warning text.
+Campaign Packages and the Library details row offer Write Package.md
 again for a missing file. An existing file offers Replace with a basic Package.md and warns that other fields
 will be dropped. Keep the registered identity and reload. Writes show a success message and Undo write
 Package.md, including for a missing file.
@@ -938,6 +943,7 @@ jobs.
 ### Processing and results
 
 Use one spinner and Processing progress line. Rail and session list say Processing; hover keeps the full step.
+Errors and setup help call the chosen text service the transcript and summary service, as in Settings.
 Not processed uses a neutral file icon. Continue processing resumes stopped or failed work. Put destination
 below enabled Process or Continue processing, in Small muted text at reader measure, and in Process again
 confirmation. With a complete transcript, name raw transcript and session context and say audio is not sent

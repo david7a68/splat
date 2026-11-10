@@ -983,6 +983,7 @@ keeps Stop recording on the row. Its list has a width limit; result readers keep
 
 Package repair keeps entries available when `Package.md` breaks or is deleted.
 **Write Package.md again** restores a missing manifest. **Replace with a basic Package.md** replaces an existing manifest and says which fields it drops.
+For an unreadable manifest, Campaign puts bordered **Open in Library** first, followed by replacement and its consequence.
 Replacing a broken file offers **Undo write Package.md**. Copied World notes stay
 visible in World and Lookup with a duplicate warning and file-specific identity
 repair. Each repair has Undo. It also uses the file name for the copy's name and matching
