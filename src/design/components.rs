@@ -1926,7 +1926,7 @@ pub fn hanging_add_strip(
     ui.horizontal(|ui| {
         ui.spacing_mut().item_spacing.x = XS;
         ui.label(Type::Label.rich(ui, "Add").color(colors().muted));
-        ui.horizontal_wrapped(|ui| {
+        ui.horizontal(|ui| {
             ui.spacing_mut().item_spacing.x = XS;
             first(ui);
             let width = actions
@@ -1951,8 +1951,14 @@ pub fn hanging_add_strip(
                         overflow.push((index, action));
                     }
                 }
-                let response = Action::quiet(&format!("More {}", icons::DOWN))
+                let hint = overflow
+                    .iter()
+                    .map(|(_, action)| action.label)
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                let response = Action::quiet(&format!("{}{}", icons::EXPAND, icons::DOWN))
                     .name("More Add actions")
+                    .hint(&hint)
                     .density(Density::Read)
                     .show(ui);
                 egui::Popup::menu(&response).show(|ui| {
@@ -2417,14 +2423,19 @@ pub fn draft_comparison_styled(
     );
 }
 
+/// Aligned rows, from the same cache the source panes paint. Either text invalidates it.
+pub fn source_comparison_rows(ui: &Ui, text: [&str; 2], id: impl std::hash::Hash) -> usize {
+    Comparison::cached_rows(ui.ctx(), Id::new(("source_comparison_layout", id)), text)
+}
+
 /// Two source panes share their scroll position. Source lines never wrap.
 pub fn source_comparison(ui: &mut Ui, text: [&str; 2], id: impl std::hash::Hash) {
-    let state = ui.make_persistent_id(("source_comparison", id));
+    let state = ui.make_persistent_id(("source_comparison", &id));
     let Comparison {
         columns: lines,
         changed,
         groups: differences,
-    } = Comparison::cached(ui.ctx(), state.with("layout"), text);
+    } = Comparison::cached(ui.ctx(), Id::new(("source_comparison_layout", id)), text);
     let count = lines[0].len();
     let previous = ui.data(|data| data.get_temp::<egui::Vec2>(state));
     let mut offset = previous.unwrap_or_default();
@@ -2481,6 +2492,7 @@ pub fn source_comparison(ui: &mut Ui, text: [&str; 2], id: impl std::hash::Hash)
             let output = egui::ScrollArea::both()
                 .id_salt(state.with(side))
                 .auto_shrink([false, false])
+                .scroll_bar_visibility(egui::scroll_area::ScrollBarVisibility::AlwaysVisible)
                 .max_height(height)
                 .scroll_offset(offset)
                 .show(ui, |ui| {
@@ -2497,7 +2509,10 @@ pub fn source_comparison(ui: &mut Ui, text: [&str; 2], id: impl std::hash::Hash)
                                 ui.set_min_width(min_width);
                                 ui.set_min_height(line_height);
                                 if let Some(line) = lines[side][at] {
-                                    ui.add(egui::Label::new(Type::Mono.rich(ui, line)).extend());
+                                    ui.add_sized(
+                                        vec2(min_width, line_height),
+                                        egui::Label::new(Type::Mono.rich(ui, line)).extend(),
+                                    );
                                 } else {
                                     let (rect, _) = ui.allocate_exact_size(
                                         vec2(min_width, line_height),
@@ -2508,6 +2523,13 @@ pub fn source_comparison(ui: &mut Ui, text: [&str; 2], id: impl std::hash::Hash)
                             });
                     }
                 });
+            let pane = ui.interact(
+                output.inner_rect,
+                state.with((side, "pane")),
+                Sense::hover(),
+            );
+            pane.widget_info(|| WidgetInfo::new(WidgetType::Other));
+            named(ui, &pane, ["Before source pane", "After source pane"][side]);
             if output.state.offset != offset {
                 next = output.state.offset;
             }
