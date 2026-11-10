@@ -672,6 +672,8 @@ apply a change. The sidebar shows how many changes wait. See
 Under **Packages → Manage packages…**, register an existing folder containing exactly one package
 manifest, or enter a name to create a package. The form shows the new folder path. **Browse…** changes its parent folder. After creation, the first entry form opens. Package
 registrations are stored in user settings; package notes remain in their own folders.
+New packages write their manifest as `Package.md`. Existing `Module.md` files keep their name;
+repair messages and Undo actions name that file.
 A copied folder offers **Register as a new package** beside its warning. **Add folder**
 stays blocked until you choose another folder.
 Unregistering a package leaves its files in place. Campaign keeps its last known name and offers **Remove from this campaign** or **Find the folder…** if it becomes unavailable. Package IDs stay under **Technical details**. Package and campaign folders must
@@ -683,7 +685,9 @@ Local packages support new entries and Markdown editing. **About <package name>*
 structure, keeps existing UUIDs and kinds, rejects duplicate identities, and checks
 for external edits before replacing a file. The header validation count opens messages for unresolved
 references; a package-only check can report references to other packages as unresolved.
-Invalid entry notes remain available for repair, with file line numbers and the caret on the error. Saving a repair restores the campaign-use state at once. If the file changed on disk, the save stops
+Invalid entry notes remain available for repair. Edit Markdown scrolls to the error line and puts the caret there.
+The owner line says **Cannot be read** once. A deleted manifest shows only its missing-file warning and repair action;
+a manifest that exists without front matter still shows its parse error. Saving a repair restores the campaign-use state at once. If the file changed on disk, the save stops
 and shows disk and draft side by side, with marked lines and **Next difference**. Choose **Overwrite with my draft** or **Reload and lose my draft**.
 **Discard** takes one press and offers **Undo discard** until the next edit or disk change. If the file was deleted, **Overwrite with my draft** creates it again. Changing
 pages keeps the draft in memory.

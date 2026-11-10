@@ -1361,37 +1361,40 @@ fn read_folder_using(
                     .to_string_lossy()
                     .into_owned();
                 let problems = errors.len();
-                let note = {
-                    let normalized = text.trim_start_matches('\u{feff}');
-                    // Most notes have no CR. Replacing still copies and scans every byte.
-                    let normalized = if normalized.as_bytes().contains(&b'\r') {
-                        std::borrow::Cow::Owned(normalized.replace("\r\n", "\n"))
-                    } else {
-                        std::borrow::Cow::Borrowed(normalized)
-                    };
-                    if let Some(frontmatter) = normalized.strip_prefix("---\n") {
-                        let frontmatter = before_line(frontmatter, "---");
-                        if has_line(frontmatter, "splat_") {
-                            true
+                // Root package manifests must report parse faults even without Splat fields.
+                let note = matches!(name.as_str(), "Package.md" | "Module.md")
+                    || {
+                        let normalized = text.trim_start_matches('\u{feff}');
+                        // Most notes have no CR. Replacing still copies and scans every byte.
+                        let normalized = if normalized.as_bytes().contains(&b'\r') {
+                            std::borrow::Cow::Owned(normalized.replace("\r\n", "\n"))
                         } else {
-                            if ["schema:", "id:", "kind:"]
-                                .iter()
-                                .all(|key| has_line(frontmatter, key))
-                            {
-                                errors.push(Diagnostic { path: name.clone(), message: "Line 2: These fields look like Splat content. Restore their splat_ prefixes.".into() });
+                            std::borrow::Cow::Borrowed(normalized)
+                        };
+                        if let Some(frontmatter) = normalized.strip_prefix("---\n") {
+                            let frontmatter = before_line(frontmatter, "---");
+                            if has_line(frontmatter, "splat_") {
+                                true
+                            } else {
+                                if ["schema:", "id:", "kind:"]
+                                    .iter()
+                                    .all(|key| has_line(frontmatter, key))
+                                {
+                                    errors.push(Diagnostic { path: name.clone(), message: "Line 2: These fields look like Splat content. Restore their splat_ prefixes.".into() });
+                                }
+                                false
+                            }
+                        } else {
+                            if normalized.trim_start().starts_with("splat_") {
+                                errors.push(Diagnostic {
+                                    path: name.clone(),
+                                    message: "Line 1: Splat fields need an opening --- line."
+                                        .into(),
+                                });
                             }
                             false
                         }
-                    } else {
-                        if normalized.trim_start().starts_with("splat_") {
-                            errors.push(Diagnostic {
-                                path: name.clone(),
-                                message: "Line 1: Splat fields need an opening --- line.".into(),
-                            });
-                        }
-                        false
-                    }
-                };
+                    };
                 // A problem names this file, and a repair needs its text.
                 let text = if note || errors.len() != problems {
                     Text::Kept(text)

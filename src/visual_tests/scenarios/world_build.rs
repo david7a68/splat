@@ -1213,6 +1213,16 @@ pub fn package_rename(d: &mut Driver<'_>) {
     assert!(!d.has("Undo save"));
 }
 
+fn check_unreadable_owner(d: &mut Driver<'_>, id: &str) {
+    let read = d.place_of("Read").expect("The Library reader is visible");
+    let reader = egui::Rect::from_min_max(read.min, egui::pos2(10000.0, 10000.0));
+    d.observe(
+        id,
+        d.painted_in(reader).matches("Cannot be read").count() == 1,
+        "The reader says Cannot be read once, on the owner line",
+    );
+}
+
 pub fn package_about(d: &mut Driver<'_>) {
     go_library(d);
     d.open_combo_at(LIBRARY_PACKAGE_DROPDOWN);
@@ -1229,7 +1239,9 @@ pub fn package_about(d: &mut Driver<'_>) {
     d.state("package-about", Sizes::All);
     d.click("Use every entry");
     d.wait_for_text("All entries used here");
-    d.state("package-every-entry-used", Sizes::All);
+    d.state_prepared("package-every-entry-used", Sizes::All, |d| {
+        check_undo_icon(d, "Undo package use", "iter-8-E-FD3-use");
+    });
     d.click("Undo package use");
     d.wait_for_text("Used here · 5 of 6 entries");
     d.expect_same("Undo package use restores the original package selection and About reader.");
@@ -1252,6 +1264,45 @@ pub fn package_about(d: &mut Driver<'_>) {
     go_campaign(d);
     d.wait_for_text("Emberfall Watch");
     d.state("renamed-package-in-campaign", Sizes::All);
+    let folder = d.root.join("modules/ashen-marches");
+    let path = folder.join("Module.md");
+    let manifest = fs::read_to_string(&path).unwrap();
+    let broken = manifest.replace("splat_kind: package", "splat_kind: [");
+    fs::write(&path, &broken).unwrap();
+    d.click("Reload from disk");
+    d.expect("Module.md cannot be read (line 4)");
+    d.click("Replace with a basic Module.md");
+    d.wait_for_text("Undo write Module.md");
+    d.state_prepared("legacy-manifest-replaced-in-campaign", Sizes::All, |d| {
+        check_undo_icon(d, "Undo write Module.md", "iter-8-E-FD7-campaign-undo");
+        d.observe(
+            "iter-8-E-FD7-campaign-name",
+            d.visible_text("Module.md was replaced.")
+                && !d.visible_text("Package.md was replaced."),
+            "Campaign names the existing manifest file",
+        );
+    });
+    assert!(!folder.join("Package.md").exists());
+    d.click("Undo write Module.md");
+    d.wait_for_text("Module.md cannot be read (line 4)");
+    assert_eq!(fs::read_to_string(&path).unwrap(), broken);
+    d.click("Open in Library");
+    d.expect("Markdown editor");
+    d.click("Replace with a basic Module.md");
+    d.wait_for_text("Undo write Module.md");
+    d.state_prepared("legacy-manifest-replaced-in-library", Sizes::All, |d| {
+        check_undo_icon(d, "Undo write Module.md", "iter-8-E-FD7-library-undo");
+        d.observe(
+            "iter-8-E-FD7-library-name",
+            d.visible_text("Module.md was replaced.")
+                && !d.visible_text("Package.md was replaced."),
+            "Library names the existing manifest file",
+        );
+    });
+    assert!(!folder.join("Package.md").exists());
+    d.click("Undo write Module.md");
+    d.wait_for_text("Line 4 opens a list");
+    assert_eq!(fs::read_to_string(&path).unwrap(), broken);
 }
 
 /// External edits refresh all catalogue users; a draft still needs a choice.
@@ -1376,13 +1427,49 @@ pub fn package_manifest_broken(d: &mut Driver<'_>) {
     open_local_package(d, MODULE);
     d.click_containing("About Ashen Marches");
     d.expect("Write Package.md again");
-    d.state("manifest-deleted-library-repair", Sizes::All);
+    d.state_prepared("manifest-deleted-library-repair", Sizes::All, |d| {
+        check_unreadable_owner(d, "iter-8-E-FD10-manifest");
+        d.observe(
+            "iter-8-E-FD8-deleted",
+            !d.visible_text("Missing YAML frontmatter"),
+            "A deleted manifest has only its missing-file warning",
+        );
+        let action = d
+            .place_of("Write Package.md again")
+            .expect("Manifest repair is visible");
+        let text_edge = d
+            .painted_left("Package.md was deleted.")
+            .expect("Missing-file warning is visible");
+        let warning = d
+            .painted_rect_in("Package.md was deleted.", egui::Rect::EVERYTHING)
+            .expect("The warning text is visible");
+        let aligned = if action.top() >= warning.bottom() {
+            (action.left() - text_edge).abs() <= 1.0
+        } else {
+            action.left() >= warning.right() && action.top() <= warning.bottom()
+        };
+        d.observe(
+            "iter-8-E-FD9-edge",
+            aligned,
+            "Manifest repair sits beside the warning, or below at its text edge",
+        );
+        d.observe(
+            "iter-8-E-FD9-border",
+            d.control_frame("Write Package.md again")
+                .is_some_and(|frame| {
+                    frame.stroke.width > 0.0 && frame.stroke.color == design::colors().field_border
+                }),
+            "Manifest repair has a secondary border",
+        );
+    });
     d.click("Write Package.md again");
     d.settle();
     assert!(!d.has_containing("Package.md was deleted"));
     d.expect("Package.md was written again.");
     d.expect("Undo write Package.md");
-    d.state("manifest-written-again-library", Sizes::All);
+    d.state_prepared("manifest-written-again-library", Sizes::All, |d| {
+        check_undo_icon(d, "Undo write Package.md", "iter-8-E-SD3-library");
+    });
     go_encounters(d);
     d.expect("Cinder Wolf");
     assert!(!d.has_containing("Not found"));
@@ -1444,7 +1531,9 @@ pub fn package_file_changed(d: &mut Driver<'_>) {
     d.focus_window(false);
     d.focus_window(true);
     d.wait_for_text("Cannot be read");
-    d.state("package-yaml-broken-on-disk", Sizes::All);
+    d.state_prepared("package-yaml-broken-on-disk", Sizes::All, |d| {
+        check_unreadable_owner(d, "iter-8-E-FD10-entry");
+    });
     d.click(EDIT_MARKDOWN);
     d.expect("Save");
     assert!(
@@ -1461,7 +1550,32 @@ pub fn package_file_changed(d: &mut Driver<'_>) {
         visible_frame,
     );
     assert!(d.at_size((1920.0, 1080.0), visible_frame));
-    d.state("package-yaml-repair-editor", Sizes::All);
+    d.state_prepared("package-yaml-repair-editor", Sizes::All, |d| {
+        d.observe(
+            "iter-8-E-FD4-visible",
+            d.visible_passage("splat_kind: ["),
+            "Edit Markdown opens with the faulty line in view",
+        );
+        d.observe(
+            "iter-8-E-FD4-focus",
+            d.focused_name().as_deref() == Some("Markdown editor"),
+            "The repair editor has keyboard focus",
+        );
+    });
+    // Typing without a helper click proves that the caret is at the error line.
+    d.type_text("repair ");
+    d.observe(
+        "iter-8-E-FD4-caret",
+        d.editor_text().as_deref()
+            == Some(
+                broken
+                    .replacen("splat_kind: [", "repair splat_kind: [", 1)
+                    .as_str(),
+            ),
+        "Typing lands at the start of the error line",
+    );
+    d.press_ctrl(Key::Z);
+    assert_eq!(d.editor_text().as_deref(), Some(broken.as_str()));
     let before_scroll = d.input_frame("Markdown editor").unwrap().0;
     d.scroll_at(before_scroll.center(), 3);
     assert_eq!(

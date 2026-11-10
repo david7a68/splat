@@ -1083,7 +1083,7 @@ impl CampaignContent {
                         });
                         ui.label(
                             Type::Small
-                                .rich(ui, "Keeps the package name and its links. Replaces the other contents of Package.md, including its description. The entries stay unchanged.")
+                                .rich(ui, format!("Keeps the package name and its links. Replaces the other contents of {path}, including its description. The entries stay unchanged."))
                                 .color(colors().muted),
                         );
                         pressed
@@ -1117,12 +1117,8 @@ impl CampaignContent {
                 design::undo_message(
                     ui,
                     Tone::Success,
-                    if write.replaced() {
-                        "Package.md was replaced."
-                    } else {
-                        "Package.md was written again."
-                    },
-                    "Undo write Package.md",
+                    &write.message(),
+                    &format!("Undo write {}", write.path()),
                 )
             })
         {

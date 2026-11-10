@@ -244,7 +244,8 @@ Back before More. Lookup keeps its Back hint. Both use Alt+Left; Lookup takes th
 Library omits `Library / <kind>` above the title. Its kind line does not repeat the package name. Owner status
 and `Use in this campaign` stay on the wrapping file line in Read and Edit Markdown, so Back does not move the
 title. During a draft, Back opens the earlier entry in Lookup. Show file is on that line; vault entries also
-have Edit in Obsidian. An unreadable entry shows `Cannot be read` once below its title and keeps front matter
+have Edit in Obsidian. An unreadable entry keeps `Cannot be read` on its owner line, in place of `Used here`.
+Below its title, show only the kind when known and the specific error with its file line. Keep front matter
 out of prose. Empty readers say `No entry open` or `No note open`, then “Choose one from the list, or make a
 new one.” Library omits the creation offer without a campaign or package destination.
 
@@ -308,14 +309,17 @@ wrap; package names can shorten with full hover text and accessible names. Both 
 selected button say `Campaign entries`. An open package About row uses selected fill with no selected
 category; choosing a category restores it. About is followed by the manifest name. A manifest is never
 counted or listed as an entry, even when unreadable. Keep its warning on About and in the file issue
-count. Show used and total entries and `Use every entry` with Undo; omit the entry breadcrumb and Engine
-support. Empty package counts have no separator.
+count. New packages write `Package.md`. Existing `Module.md` files keep their name. Every message and repair
+action names the real file. A deleted manifest shows only its missing-file warning and shared message action;
+an existing manifest without front matter keeps its parse error. Show used and total entries and
+`Use every entry` with Undo; omit the entry breadcrumb and Engine support. Empty package counts have no separator.
 
 Nonzero file status links sit in the page header before Packages and New entry. The amber validation count
 says how many entries need fixing; its menu opens the messages. Unreadable notes use CANNOT BE READ. Rows name
 their kind, path and error line; the owner line says Cannot be read. Opening one from a roster selects its
-kind under Cannot be read and opens repair. Repair errors use file line numbers and put the caret on the line
-to fix. Repair reloads campaign use at once. Validation messages also update after encounter or group edits.
+kind under Cannot be read and opens repair. Repair errors use file line numbers. Edit Markdown opens with
+the caret on the line to fix and scrolls that line into view. Repair reloads campaign use at once. Validation
+messages also update after encounter or group edits.
 Other readable files stay available.
 
 A deleted draft shows YOUR DRAFT, `Save my draft again` and red `Let it go`, with Undo let go. Let it go names

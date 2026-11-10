@@ -367,7 +367,10 @@ impl ManifestWrite {
     pub fn write(module: &Module) -> Result<Self, String> {
         let catalogue = Catalogue::load(std::slice::from_ref(module), None)?;
         if !catalogue.manifest_problems.contains_key(&module.id) {
-            return Err("Package.md is valid. No repair is needed.".into());
+            return Err(format!(
+                "{} is valid. No repair is needed.",
+                package_manifest_path(module)
+            ));
         }
         let manifest = &catalogue
             .entries
@@ -397,6 +400,20 @@ impl ManifestWrite {
             before,
             after,
         })
+    }
+    pub fn path(&self) -> &str {
+        &self.path
+    }
+    pub fn message(&self) -> String {
+        format!(
+            "{} was {}.",
+            self.path,
+            if self.replaced() {
+                "replaced"
+            } else {
+                "written again"
+            }
+        )
     }
     pub fn replaced(&self) -> bool {
         self.before.is_some()
