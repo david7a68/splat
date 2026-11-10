@@ -1838,6 +1838,27 @@ mod tests {
     }
 
     #[test]
+    fn discarding_a_deleted_notes_draft_writes_no_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let note = create_note(dir.path(), &new_note(5, "", "Start\n")).unwrap();
+        let mut draft = Draft::open(&note.path).unwrap();
+        fs::remove_file(&note.path).unwrap();
+        draft.body = "My words\n".into();
+        draft.edited();
+        draft.save();
+        assert_eq!(draft.state, DraftState::Missing);
+        assert_eq!(draft.moved_to, None);
+        assert!(!note.path.exists());
+
+        draft.discard();
+        assert!(!note.path.exists());
+        assert!(list_notes(dir.path()).is_empty());
+        draft.undo_dropped();
+        assert_eq!(draft.body, "My words\n");
+        assert!(!note.path.exists());
+    }
+
+    #[test]
     fn a_note_whose_file_went_is_saved_again_under_a_new_id() {
         let dir = tempfile::tempdir().unwrap();
         let note = create_note(dir.path(), &new_note(4, "", "Start\n")).unwrap();
@@ -1865,9 +1886,13 @@ mod tests {
         );
         assert!(!note.path.exists());
 
-        // Discard names itself, so its Undo says Undo discard, not Undo reload.
+        // Discard names itself, so its Undo says Undo discard, not Undo reload. It writes
+        // nothing: the moved file keeps its text, and no file comes back at the old path.
+        let moved_text = fs::read_to_string(&renamed).unwrap();
         let mut discarded = draft.clone();
         discarded.discard();
+        assert!(!note.path.exists());
+        assert_eq!(fs::read_to_string(&renamed).unwrap(), moved_text);
         assert_eq!(
             discarded.dropped,
             Some(Dropped::Discarded("My words\n".into()))
@@ -1876,6 +1901,8 @@ mod tests {
         discarded.undo_dropped();
         assert_eq!(discarded.body, "My words\n");
         assert_eq!(discarded.dropped, None);
+        assert!(!note.path.exists());
+        assert_eq!(fs::read_to_string(&renamed).unwrap(), moved_text);
 
         draft.save_again();
         assert_eq!(draft.state, DraftState::Saved);

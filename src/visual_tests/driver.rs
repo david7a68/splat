@@ -1691,7 +1691,8 @@ impl<'a> Driver<'a> {
     }
 
     /// Steps that prove a result and come back to the same place. The task being counted
-    /// keeps its own cost: these steps are not part of it.
+    /// keeps its own cost: these steps are not part of it. Only proof steps that end in the
+    /// state they started from go inside; no step of the DM's task may, or its cost hides.
     pub fn aside<T>(&mut self, steps: impl FnOnce(&mut Self) -> T) -> T {
         let before = self.interactions;
         let result = steps(self);

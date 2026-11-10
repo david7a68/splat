@@ -1508,6 +1508,7 @@ impl Sessions {
                     design::message_with_actions(ui, Tone::Error, &words, |ui| {
                         words_end = ui.min_rect().top() - ui.spacing().item_spacing.y;
                         ui.horizontal_wrapped(|ui| {
+                            let mut drawn = false;
                             if missing_input
                                 && (if banner_primary {
                                     Action::primary("Choose an input")
@@ -1519,6 +1520,7 @@ impl Sessions {
                             {
                                 self.wants_recording_input = true;
                             }
+                            drawn |= missing_input;
                             if let Some(path) = &alert.retry
                                 && (if banner_primary {
                                     Action::primary("Continue processing")
@@ -1537,6 +1539,7 @@ impl Sessions {
                             {
                                 retry = Some((alert.session, path.clone()));
                             }
+                            drawn |= alert.retry.is_some();
                             if alert.can_record
                                 && self.live.is_none()
                                 && (if missing_input {
@@ -1551,13 +1554,19 @@ impl Sessions {
                             {
                                 record_again = Some(alert.session);
                             }
+                            drawn |= alert.can_record && self.live.is_none();
                             let here = self.on_page
                                 && self.selected == Some(alert.session)
                                 && self.tab == Tab::Recordings;
                             if !here && Action::quiet("Open the session").show(ui).clicked() {
                                 open = Some(alert.session);
                             }
-                            ui.add_space(design::L - ui.spacing().item_spacing.x);
+                            drawn |= !here;
+                            // The `L` gap separates Dismiss from a choice before it. Alone, it
+                            // starts at the message text like any first choice.
+                            if drawn {
+                                ui.add_space(design::L - ui.spacing().item_spacing.x);
+                            }
                             if Action::quiet("Dismiss this error").show(ui).clicked() {
                                 dismiss = Some(index);
                             }

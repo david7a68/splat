@@ -6436,6 +6436,31 @@ pub mod session_notes {
             d.has_containing("My words during the conflict."),
             "Opening the session again keeps the words that could not be saved",
         );
+        // Reload names itself as World does, and Undo reload brings the draft back. A new outside
+        // change then brings the same choices back, so the step below starts where it did.
+        d.aside(|d| {
+            d.click("Reload and lose my draft");
+            d.expect("Undo reload");
+            d.observe(
+                "iter-15-C-FT4-reload",
+                d.visible_text("Reloaded from disk.")
+                    && !d.visible_text("Draft dropped.")
+                    && d.editor_text()
+                        .is_some_and(|text| !text.contains("My words during the conflict.")),
+                "Reload says Reloaded from disk. with Undo reload, and the editor shows the file",
+            );
+            d.click("Undo reload");
+            d.observe(
+                "iter-15-C-FT4-undo-reload",
+                !d.has("Undo reload")
+                    && d.editor_text()
+                        .is_some_and(|text| text.contains("My words during the conflict.")),
+                "Undo reload puts the draft's words back in the editor",
+            );
+            d.app_mut().sessions.simulate_disk_change();
+            d.press_ctrl(Key::S);
+            d.expect("Overwrite with my draft");
+        });
         d.click("Overwrite with my draft");
         d.expect("Notes saved");
 
@@ -7397,6 +7422,38 @@ pub mod session_recording {
         assert!(d.in_view("Choose an input"));
         d.click("Choose an input");
         d.expect("Recording input");
+
+        // Dismiss alone: Session 1's recording stopped, another recording runs (so no Record
+        // again), and Session 1's own Recordings tab is open behind its details form (so no Open
+        // the session). Dismiss is then the first choice, at the message text.
+        // A stopped recorder ends its recording. Record again starts Session 1 anew and clears
+        // its old alert; the next stop has an error with no plain words, so no Choose an input.
+        go_library(d);
+        d.click("Record again");
+        d.app_mut()
+            .sessions
+            .simulate_recorder_health(Health::Stopped("stream error 42".to_owned()));
+        d.settle();
+        d.app_mut().sessions.open(second);
+        d.click(NAV_SESSIONS);
+        d.click("Record this session");
+        d.click("Start recording");
+        d.expect("Stop recording");
+        d.app_mut().sessions.open(first);
+        d.settle();
+        d.click_starting("Recordings");
+        d.click("Edit session details");
+        d.expect("Dismiss this error");
+        assert!(!d.has("Open the session") && !d.has("Record again"));
+        let size = d.window_size();
+        check_choices_at_text(
+            d,
+            "iter-15-C-FD5-dismiss-alone",
+            "stream error 42",
+            &["Dismiss this error"],
+            None,
+            &[size],
+        );
     }
 
     fn check_marker_columns(d: &mut Driver<'_>) {
@@ -8439,6 +8496,15 @@ pub mod session_recording {
             d.has_containing("stopped by itself: the microphone is no longer connected")
                 && !d.visible_text("no such device"),
             "The banner puts the recorder's error in plain words",
+        );
+        let hover = d.painted_tooltip_shows(
+            "stopped by itself: the microphone",
+            "The recorder said: no such device.",
+        );
+        d.observe(
+            "iter-15-C-FD5-hover",
+            hover,
+            "The banner's words keep the recorder's own words on hover",
         );
         d.click(NAV_SESSIONS);
         d.expect("Stopped by itself: the microphone is no longer connected.");
