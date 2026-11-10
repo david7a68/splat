@@ -1799,11 +1799,6 @@ impl<'a> Driver<'a> {
         expect_same: Option<&str>,
         capture: Capture<'_>,
     ) {
-        if matches!(capture, Capture::ChecksOnly)
-            || matches!(capture, Capture::SaveAt(plan) if !plan.contains(&(size, density)))
-        {
-            return;
-        }
         let Some(directory) = &self.output else {
             return;
         };
@@ -1859,8 +1854,12 @@ impl<'a> Driver<'a> {
                 detail: format!("{window}: {reason}"),
             });
         }
-        // Save a failed comparison for review; successful returns need no second PNG.
-        if matched {
+        // Shared views still enter the repetition history. Save no second PNG unless
+        // a named comparison fails and needs a diagnostic image.
+        if matched
+            || matches!(capture, Capture::ChecksOnly)
+            || matches!(capture, Capture::SaveAt(plan) if !plan.contains(&(size, density)))
+        {
             return;
         }
         let started = Instant::now();
