@@ -56,7 +56,7 @@ fn slot_count(value: Option<&str>) -> Result<usize, &'static str> {
     (count > 0).then_some(count).ok_or("zero slots")
 }
 
-fn acquire_in(temp: &Path, count: usize) -> io::Result<Permit> {
+pub(super) fn acquire_in(temp: &Path, count: usize) -> io::Result<Permit> {
     loop {
         if let Some(permit) = try_acquire(temp, count)? {
             return Ok(permit);
@@ -65,7 +65,7 @@ fn acquire_in(temp: &Path, count: usize) -> io::Result<Permit> {
     }
 }
 
-fn try_acquire(temp: &Path, count: usize) -> io::Result<Option<Permit>> {
+pub(super) fn try_acquire(temp: &Path, count: usize) -> io::Result<Option<Permit>> {
     for index in 0..count {
         // Reuse the old lock for slot zero, so main/older worktrees count
         // against the default limit too. Never unlink any slot lock file.
