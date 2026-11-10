@@ -1,5 +1,9 @@
 //! Exercise timeout exits without a renderer or a three-minute wait.
-use super::{driver::check_settle_deadline, isolation, slots};
+use super::{
+    driver::{Driver, check_settle_deadline},
+    fixture::{Seed, World},
+    isolation, slots,
+};
 use std::{
     env, fs,
     os::unix::process::CommandExt,
@@ -14,7 +18,9 @@ const TEST: &str =
     "visual_tests::settle_probe::expired_settle_exits_child_and_parent_and_releases_slot";
 const ROLE: &str = "SPLAT_SETTLE_PROBE_ROLE";
 const ROOT: &str = "SPLAT_SETTLE_PROBE_ROOT";
-const DEADLINE: Duration = Duration::from_millis(25);
+// The first frame must still wait for the remaining quiet frames. One nanosecond
+// expires that real wait deterministically, without a slow or stuck app worker.
+const DEADLINE: Duration = Duration::from_nanos(1);
 const EXIT_BOUND: Duration = Duration::from_secs(5);
 
 fn timestamp() -> Duration {
@@ -68,14 +74,21 @@ fn blocked_child(root: &Path) {
         // An earlier ordered join is already stuck in sibling cleanup.
         let sibling = scope.spawn(|| drop(BlockingCleanup(entered)));
         cleanup_entered.recv_timeout(EXIT_BOUND).unwrap();
-        scope.spawn(|| {
+        scope.spawn(move || {
+            let world = World::build(
+                &root.join("world"),
+                &root.join("cache"),
+                "blocked-settle-probe",
+                Seed::Empty,
+            )
+            .unwrap();
+            let mut driver = Driver::new(&world, "blocked-settle-probe", root, None, false);
+            driver.settle_timeout = DEADLINE;
             // The timed-out scenario would also hang while unwinding.
             let (entered, _receive) = mpsc::channel();
             let _cleanup = BlockingCleanup(entered);
-            let started = Instant::now();
-            thread::sleep(DEADLINE);
             record_time(&root.join("expired"));
-            check_settle_deadline("blocked-settle-probe", started, DEADLINE);
+            driver.settle();
             panic!("the expired settle check returned");
         });
         sibling.join().unwrap();
@@ -140,7 +153,7 @@ fn expired_settle_exits_child_and_parent_and_releases_slot() {
     println!("{log}");
     assert_eq!(status.code(), Some(101), "H-parent-status");
     assert!(
-        log.contains("blocked-settle-probe: the app did not settle within 25ms"),
+        log.contains("blocked-settle-probe: the app did not settle within 1ns"),
         "H-diagnostic",
     );
     assert!(
