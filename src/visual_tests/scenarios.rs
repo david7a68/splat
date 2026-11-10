@@ -5244,7 +5244,7 @@ pub mod library_scope {
             d.field_text("Search the Library").as_deref() == Some("fireball"),
             "A scope change keeps the query and selected Fireball",
         );
-        d.state("scope-everything", Sizes::Default);
+        d.state("scope-everything", Sizes::All);
         d.observe(
             "Reader selection",
             d.visible_text("Casting Time"),
@@ -5257,6 +5257,94 @@ pub mod library_scope {
             before == after && after.as_deref() == Some(ACTIVE),
             format!("The active campaign is {after:?} after browsing, as before: {before:?}"),
         );
+        // The file line is one Read row for every owner, so the title does not move
+        // between the built-in Fireball, the campaign Fireball and a package About.
+        assert!(
+            d.visible_text(BUILT_IN) && !d.has("Show file"),
+            "fixture: the built-in Fireball is open"
+        );
+        let built_in = title_offsets(d, "Fireball");
+        d.click_starting("Fireball · Spell · Level 3 · Campaign");
+        d.wait_for_text(CAMPAIGN_OWNER);
+        d.expect("Show file");
+        let campaign = title_offsets(d, "Fireball");
+        file_line_centred(d, &[CAMPAIGN_OWNER], &["Show file"], "campaign Fireball");
+        d.state("campaign-fireball", Sizes::All);
+        d.open_combo_at(LIBRARY_PACKAGE_DROPDOWN);
+        d.click(MODULE);
+        d.click("About Ashen Marches");
+        d.wait_for_text(PACKAGE_OWNER);
+        d.expect("Use every entry");
+        let about = title_offsets(d, MODULE);
+        file_line_centred(
+            d,
+            &[PACKAGE_OWNER],
+            &["Use every entry", "Show file"],
+            "package About",
+        );
+        d.state("package-about-title", Sizes::All);
+        d.observe(
+            "iter-17-E-FD2",
+            built_in.iter().all(Option::is_some)
+                && built_in == campaign
+                && built_in == about,
+            format!(
+                "The reader title is the same distance below Read for every owner (960, 1200, 1920): built-in {built_in:?}, campaign {campaign:?}, package About {about:?}"
+            ),
+        );
+    }
+
+    const BUILT_IN: &str = "Built-in · Read only";
+    const CAMPAIGN_OWNER: &str = "Campaign · Editable";
+    const PACKAGE_OWNER: &str = "Used here · 5 of 6 entries";
+
+    /// The reader title's distance below the Read tab, at each captured size.
+    fn title_offsets(d: &mut Driver<'_>, title: &str) -> Vec<Option<f32>> {
+        [SMALL, DEFAULT, LARGE]
+            .into_iter()
+            .map(|size| {
+                d.at_size(size, |d| {
+                    let read = d.place_of("Read")?;
+                    super::world_build::reader_title(d, title)
+                        .map(|rect| rect.top() - read.bottom())
+                })
+            })
+            .collect()
+    }
+
+    /// Must stay true: the owner words and every control on the file line share one centre
+    /// line, at each captured size.
+    fn file_line_centred(d: &mut Driver<'_>, words: &[&str], controls: &[&str], what: &str) {
+        for size in [SMALL, DEFAULT, LARGE] {
+            let centres = d.at_size(size, |d| {
+                let read = d.place_of("Read")?;
+                let below = egui::Rect::from_min_max(
+                    egui::pos2(read.left() - 1.0, read.bottom()),
+                    egui::pos2(f32::INFINITY, f32::INFINITY),
+                );
+                words
+                    .iter()
+                    .map(|word| d.painted_rect_in(word, below).map(|rect| rect.center().y))
+                    .chain(
+                        controls
+                            .iter()
+                            .map(|name| d.place_of(name).map(|rect| rect.center().y)),
+                    )
+                    .collect::<Option<Vec<f32>>>()
+            });
+            let line = centres.as_ref().map(|centres| {
+                centres.iter().copied().fold(f32::INFINITY, f32::min)
+                    ..=centres.iter().copied().fold(f32::NEG_INFINITY, f32::max)
+            });
+            d.observe(
+                "iter-17-E-FD2-centre",
+                line.as_ref()
+                    .is_some_and(|line| line.end() - line.start() <= 1.0),
+                format!(
+                    "The {what} file line keeps its words and controls on one centre line at {size:?}: {centres:?}"
+                ),
+            );
+        }
     }
 }
 

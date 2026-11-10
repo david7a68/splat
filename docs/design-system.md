@@ -266,7 +266,10 @@ Back before More. Lookup keeps its Back hint. Both use Alt+Left, and Alt+Right f
 
 Library omits `Library / <kind>` above the title. Its kind line does not repeat the package name. Owner status
 and `Use in this campaign` stay on the wrapping file line in Read and Edit Markdown, so Back does not move the
-title. During a draft, Back opens the earlier entry in Lookup. Show file is on that line; vault entries also
+title. The file line is one Read row (28 px) for every owner: built-in, campaign and package About. Its status, path,
+links and quiet actions centre in that row, so the title stays at one height when the DM goes from one owner to
+another. When the line is too narrow and the path goes to a second row, that row is also one Read row. During a
+draft, Back opens the earlier entry in Lookup. Show file is on that line; vault entries also
 have Edit in Obsidian. An unreadable entry keeps `Cannot be read` on its owner line, in place of `Used here`.
 Below its title, show only the kind when known and the specific error with its file line.
 Offer bordered `Fix in Edit Markdown` below an unreadable entry's error, at the text edge.
