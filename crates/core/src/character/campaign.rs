@@ -361,7 +361,7 @@ fn retire_plan(
 ) -> Result<Vec<Former>, CampaignCopyError> {
     let mut formers = Vec::new();
     let mut candidates = BTreeMap::new();
-    let mut retired: BTreeSet<_> = super::rules::retired_shared_paths(record)?
+    let mut retired: BTreeSet<_> = super::rules::retired_shared_paths(record, root)?
         .into_iter()
         .collect();
     retired.extend(campaign_package::former_paths(root, record));

@@ -86,14 +86,22 @@ pub(super) fn shared_source_link(id: Uuid) -> Result<Option<String>, String> {
 }
 
 /// Paths emitted by the former copying importer that now resolve to the shared catalogue.
-pub(super) fn retired_shared_paths(record: &EntitySnapshot) -> Result<Vec<String>, String> {
+/// `root` is the folder the paths are relative to. Each built-in rule names a possible note,
+/// about two thousand in all, so they are listed only when the rules folder holds a file.
+pub(super) fn retired_shared_paths(
+    record: &EntitySnapshot,
+    root: &std::path::Path,
+) -> Result<Vec<String>, String> {
     let folder = format!("Definitions/{}", record.definition.splat_id);
     let mut paths = BTreeSet::new();
-    for key in builtin()?.keys() {
-        paths.insert(format!(
-            "{folder}/Rules/{}.md",
-            reference_id(record, "rule", key)
-        ));
+    let rules = root.join(&folder).join("Rules");
+    if std::fs::read_dir(rules).is_ok_and(|mut files| files.next().is_some()) {
+        for key in builtin()?.keys() {
+            paths.insert(format!(
+                "{folder}/Rules/{}.md",
+                reference_id(record, "rule", key)
+            ));
+        }
     }
     for item in &record.inventory {
         if shared_reference(

@@ -604,8 +604,12 @@ impl EntitySnapshot {
         if hash != self.source.content_hash {
             return Err("Cached source fingerprint is invalid.".into());
         }
-        self.entry()?;
-        Ok(())
+        // A load and a save each validate the same sheet; its note parses the same each time.
+        static PARSED: crate::memo::Memo<Result<(), String>> = crate::memo::Memo::new(16);
+        let markdown = self.entry_markdown()?;
+        PARSED.get_or(&[markdown.as_bytes()], || {
+            Entry::parse("imported-character.md", &markdown).map(|_| ())
+        })
     }
     /// The same Entry reader used for authored creature definitions accepts this definition.
     /// Source inventory remains instance state, not a second authored inventory table.

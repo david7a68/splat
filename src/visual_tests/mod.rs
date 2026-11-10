@@ -33,6 +33,7 @@ pub(crate) mod ergonomics;
 pub(crate) mod fixture;
 #[cfg(target_os = "linux")]
 mod isolation;
+mod render;
 mod repeated_captures;
 mod scenarios;
 #[cfg(target_os = "linux")]

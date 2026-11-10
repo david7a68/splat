@@ -429,6 +429,21 @@ fn rewritten(
     ids: &BTreeMap<String, String>,
     links: &BTreeMap<String, String>,
 ) -> Result<String, String> {
+    // Each save of a character rewrites all its notes again, mostly with the same inputs.
+    static REWRITTEN: crate::memo::Memo<Result<String, String>> = crate::memo::Memo::new(256);
+    let maps = serde_json::to_vec(&(ids, links)).map_err(|e| e.to_string())?;
+    REWRITTEN.get_or(
+        &[relative_path.as_bytes(), markdown.as_bytes(), &maps],
+        || rewrite(relative_path, markdown, ids, links),
+    )
+}
+
+fn rewrite(
+    relative_path: &str,
+    markdown: &str,
+    ids: &BTreeMap<String, String>,
+    links: &BTreeMap<String, String>,
+) -> Result<String, String> {
     let entry = Entry::parse(relative_path, markdown)?;
     let replace = |mut text: String| {
         for (from, to) in links {

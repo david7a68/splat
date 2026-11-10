@@ -963,9 +963,7 @@ fn party(
         let record = hero.snapshot()?;
         cache.save(campaign, &record)?;
         if let Some(url) = record.portrait_url() {
-            let color = hero.portrait_color();
-            let bytes = cached_picture_bytes(320, 320, color)?;
-            cache.save_portrait(campaign, REMOTE_CAMPAIGN, hero.id, url, &bytes)?;
+            save_portrait(&cache, campaign, &hero, url)?;
         }
         record.save_campaign_copy(campaign_path)?;
         party.push(record);
@@ -976,6 +974,38 @@ fn party(
         &HEROES.map(|hero| hero.id.to_string()),
     )?;
     Ok(party)
+}
+
+/// Save a hero's portrait as the cache keeps it. The cache resizes each picture; doing that
+/// once, not in every scenario, saves about a tenth of the suite's fixture time.
+fn save_portrait(
+    cache: &Cache,
+    campaign: uuid::Uuid,
+    hero: &Hero,
+    url: &str,
+) -> Result<(), String> {
+    type Stored = std::collections::BTreeMap<&'static str, Arc<[u8]>>;
+    static STORED: OnceLock<Mutex<Stored>> = OnceLock::new();
+    let stored = STORED.get_or_init(Mutex::default);
+    let path = cache.portrait_path(campaign, REMOTE_CAMPAIGN, hero.id, url)?;
+    let known = stored
+        .lock()
+        .map_err(|e| e.to_string())?
+        .get(hero.id)
+        .cloned();
+    if let Some(bytes) = known {
+        let parent = path.parent().ok_or("A portrait path has no folder.")?;
+        fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+        return fs::write(&path, bytes).map_err(|e| e.to_string());
+    }
+    let picture = cached_picture_bytes(320, 320, hero.portrait_color())?;
+    cache.save_portrait(campaign, REMOTE_CAMPAIGN, hero.id, url, &picture)?;
+    let bytes: Arc<[u8]> = fs::read(&path).map_err(|e| e.to_string())?.into();
+    stored
+        .lock()
+        .map_err(|e| e.to_string())?
+        .insert(hero.id, bytes);
+    Ok(())
 }
 
 impl Hero {

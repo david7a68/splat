@@ -141,6 +141,15 @@ struct RemovedPackage {
 
 /// Return a useful YAML repair message and the physical line to mark.
 pub(crate) fn repair_problem(path: &str, text: &str) -> (Option<String>, Option<usize>) {
+    // Repair rows and editors ask on every frame, and a parse of a long note takes about 1 ms.
+    static PROBLEMS: splat::memo::Memo<(Option<String>, Option<usize>)> =
+        splat::memo::Memo::new(64);
+    PROBLEMS.get_or(&[path.as_bytes(), text.as_bytes()], || {
+        find_repair_problem(path, text)
+    })
+}
+
+fn find_repair_problem(path: &str, text: &str) -> (Option<String>, Option<usize>) {
     let Some(problem) = Entry::parse(path, text).err() else {
         return (None, None);
     };
