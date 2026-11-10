@@ -229,8 +229,8 @@ A changed file stops saving. World uses `disk_conflict_choices` with the noun `n
 red `Reload and lose my draft`. Neither has accent fill. These messages cannot be dismissed. Library gives the
 choices one row at full reader width. World Overwrite saves valid text; invalid text returns to the repair
 editor without a write. World Reload keeps the replaced draft for one `Undo reload` on its message line until
-the next edit. If the file changes again before that edit, the choices show again; a second Reload keeps the
-first draft as the one `Undo reload` restores. A run offers `Replace the file with this run` and `Save as a new run`.
+the next edit. If the file changes again before that edit, the held draft comes back as unsaved work and the
+choices show again: Overwrite writes it with Undo, and Reload holds it again for `Undo reload`. A run offers `Replace the file with this run` and `Save as a new run`.
 
 Session conflicts call the item a note in the warning. Keep Record available because audio uses its own file.
 Show draft and disk text side by side in Write's styled source face. Hide the plan and use the whole session

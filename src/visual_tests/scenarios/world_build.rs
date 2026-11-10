@@ -3753,6 +3753,42 @@ pub fn part_of_safety(d: &mut Driver<'_>) {
         gone.as_bytes(),
         "iter-13-D-FD2-second-no-write"
     );
+    // iter-13-D-FD2-second-overwrite: the same start, then Overwrite at the second choice. The
+    // DM's own draft goes in, with Undo, and the reopened choice counts as unsaved work.
+    fs::write(&path, &readable).unwrap();
+    reload(d);
+    d.click("Edit Safe Rook");
+    d.replace_text_in("Status", "ready");
+    fs::write(&path, &away).unwrap();
+    d.click("Save changes");
+    d.expect(conflict);
+    d.settle();
+    fs::write(&path, &gone).unwrap();
+    d.click("Reload and lose my draft");
+    d.settle();
+    d.expect(conflict);
+    let unsaved = d.app_mut().any_unsaved_edits();
+    d.observe(
+        "iter-13-D-FD2-second-unsaved",
+        unsaved && d.in_view("Overwrite with my draft"),
+        "While the second choice shows, the DM's draft counts as unsaved for the close guard",
+    );
+    d.click("Overwrite with my draft");
+    d.settle();
+    let ready_over_gone = gone.replace("splat_status: gone", "splat_status: ready");
+    assert_ne!(ready_over_gone, gone, "fixture: the draft's status differs");
+    assert_eq!(
+        fs::read(&path).unwrap(),
+        ready_over_gone.as_bytes(),
+        "iter-13-D-FD2-second-overwrite: Overwrite writes the DM's ready over gone"
+    );
+    d.expect("Undo changes");
+    d.click("Undo changes");
+    assert_eq!(
+        fs::read(&path).unwrap(),
+        gone.as_bytes(),
+        "iter-13-D-FD2-second-overwrite-undo: Undo restores gone"
+    );
 
     // Compact Read has no group Change. Use its real Edit → Change → Save route.
     fs::write(&path, &readable).unwrap();
