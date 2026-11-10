@@ -1700,22 +1700,24 @@ fn tiles(ui: &mut egui::Ui, add: impl FnOnce(&mut egui::Ui)) {
 
 /// One label line and one value line, so tiles in a row keep their values level.
 fn metric(ui: &mut egui::Ui, label: &str, value: impl ToString) {
-    ui.allocate_ui(egui::vec2(TILE_WIDTH, 44.0), |ui| {
-        ui.set_min_height(design::XXL + design::M);
-        ui.set_width(TILE_WIDTH);
-        design::stat_tile(ui, label, &value.to_string());
-    });
+    tile(ui, |ui| design::stat_tile(ui, label, &value.to_string()));
 }
 /// A tile whose number rolls.
 fn roll_metric(ui: &mut egui::Ui, label: &str, value: &str, link: &RollLink) {
-    ui.allocate_ui(egui::vec2(TILE_WIDTH, 44.0), |ui| {
-        ui.set_min_height(design::XXL + design::M);
-        ui.set_width(TILE_WIDTH);
+    tile(ui, |ui| {
         ui.vertical(|ui| {
             ui.spacing_mut().item_spacing.y = 0.0;
             ui.add(egui::Label::new(Type::Small.rich(ui, label).color(colors().muted)).truncate());
             crate::rolls::link(ui, value, Type::NumeralLarge, link);
         });
+    });
+}
+/// A tile's room, the same for every tile in a row.
+fn tile(ui: &mut egui::Ui, add: impl FnOnce(&mut egui::Ui)) {
+    ui.allocate_ui(egui::vec2(TILE_WIDTH, 44.0), |ui| {
+        ui.set_min_height(design::XXL + design::M);
+        ui.set_width(TILE_WIDTH);
+        add(ui);
     });
 }
 
@@ -1825,8 +1827,9 @@ pub(crate) fn overview(ui: &mut egui::Ui, record: &EntitySnapshot, live: Option<
                 &ability[1..3],
                 val(record, ability)
             );
-            let value = signed(record, &format!("{ability}_modifier"));
-            match record.stat(&format!("{ability}_modifier")) {
+            let key = format!("{ability}_modifier");
+            let value = signed(record, &key);
+            match record.stat(&key) {
                 Some(bonus) => roll_metric(ui, &label, &value, &d20(D20::Check, bonus, ability)),
                 None => metric(ui, &label, value),
             }
@@ -2171,16 +2174,14 @@ fn sheet_entries(record: &EntitySnapshot, page: usize) -> Vec<SheetEntry> {
 fn attack_line(ui: &mut egui::Ui, attack: &Value, hit: &str, damage: &str) {
     let name = text(&attack["name"]);
     let kind = text(&attack["damage"]["type"]);
-    let dice = attack["damage"]["value"]["diceString"]
+    let parts: Vec<DamagePart> = attack["damage"]["value"]["diceString"]
         .as_str()
         .filter(|_| attack["damage"]["value"].as_i64().is_none())
-        .map(|_| splat::content::dice_text::plain_dice(damage));
-    let parts: Vec<DamagePart> = dice
-        .iter()
-        .map(|dice| DamagePart {
-            dice: dice.clone(),
+        .map(|_| DamagePart {
+            dice: splat::content::dice_text::plain_dice(damage),
             kind: (!kind.is_empty()).then(|| design::reader::human_label(kind)),
         })
+        .into_iter()
         .collect();
     ui.horizontal_wrapped(|ui| {
         ui.spacing_mut().item_spacing.x = design::XS;

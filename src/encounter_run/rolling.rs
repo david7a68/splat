@@ -50,6 +50,26 @@ pub(super) struct CallRow {
     pub half: bool,
 }
 
+/// Why nothing rolls once the encounter has ended.
+const ENDED: &str = "This encounter has ended. Undo the ending to continue.";
+
+/// The width of a player's typed save in a call row.
+const TYPED_WIDTH: f32 = 52.0;
+
+/// A call row's word for a save total against the DC.
+fn verdict(total: i64, dc: i64) -> &'static str {
+    if total >= dc {
+        "At or above DC"
+    } else {
+        "Below DC"
+    }
+}
+
+/// A call row's button that rolls a save. A player's sheet is rolled for them.
+fn roll_word(character: bool) -> &'static str {
+    if character { "Roll for them" } else { "Roll" }
+}
+
 /// A linked player sheet rolls its own saves.
 fn character(entry: &Entry) -> bool {
     entry.fields.contains_key("splat_external")
@@ -103,13 +123,13 @@ impl Run {
 
     fn try_roll_link(&mut self, ask: Ask) -> Result<Option<Shown>, String> {
         if self.ended() {
-            return Err("This encounter has ended. Undo the ending to continue.".into());
+            return Err(ENDED.into());
         }
         let roller = self.existing(ask.roller);
-        let who = roller.map_or_else(
-            || ask.entry.clone(),
-            |row| self.state.participants[row].name.clone(),
-        );
+        let who = match roller {
+            Some(row) => self.state.participants[row].name.clone(),
+            None => ask.entry,
+        };
         if let RollLink::SaveDc {
             label,
             ability,
@@ -169,7 +189,7 @@ impl Run {
         roll: impl FnOnce(&mut Random) -> Result<Rolled, String>,
     ) -> Result<Rolled, String> {
         if self.ended() {
-            return Err("This encounter has ended. Undo the ending to continue.".into());
+            return Err(ENDED.into());
         }
         let mut random = self.state.random.clone();
         let rolled = roll(&mut random)?;
@@ -196,7 +216,7 @@ impl Run {
         }
         Shown {
             armor: self.armor_words(roller, &rolled),
-            use_blocked: self.use_blocked(roller, &rolled).map(str::to_owned),
+            use_blocked: self.use_blocked(roller, &rolled),
             actions: live && self.hide_panel,
             rolled,
             at,
@@ -222,24 +242,23 @@ impl Run {
     /// A natural 20 rolls it as a critical hit.
     /// `at` places the result beside its link, when the side panel is hidden.
     pub(super) fn roll_strip_damage(&mut self, at: Option<egui::Pos2>) -> Option<Shown> {
-        let strip = self.strip.clone()?;
-        let damage = strip.rolled.damage().to_vec();
-        if !strip.rolled.attack() || damage.is_empty() {
+        let strip = self.strip.as_ref()?;
+        let attack = &strip.rolled;
+        if !attack.attack() || attack.damage().is_empty() {
             return None;
         }
-        let label = strip.rolled.feature().unwrap_or_default().to_owned();
         let link = RollLink::Damage {
-            label,
-            parts: damage,
+            label: attack.feature().unwrap_or_default().to_owned(),
+            parts: attack.damage().to_vec(),
         };
-        let mode = if strip.rolled.natural == Some(20) {
+        let mode = if attack.natural == Some(20) {
             Mode::Critical
         } else {
             Mode::Normal
         };
+        let who = attack.who.clone();
         let roller = self.existing(strip.roller);
         let change = self.change(roller, &link);
-        let who = strip.rolled.who.clone();
         match self.record(|random| rolls::roll(&who, &link, mode, change, random)) {
             Ok(rolled) => {
                 let shown = self.after_roll(roller, rolled, at.unwrap_or_default());
@@ -284,14 +303,14 @@ impl Run {
         let roller = self.strip.as_ref().and_then(|strip| strip.roller);
         Shown {
             armor: self.armor_words(roller, &shown.rolled),
-            use_blocked: self.use_blocked(roller, &shown.rolled).map(str::to_owned),
+            use_blocked: self.use_blocked(roller, &shown.rolled),
             ..shown.clone()
         }
     }
 
     /// Two lines above the panel's tabs: the last roll, then what can follow it.
     pub(super) fn strip_view(&mut self, ui: &mut egui::Ui) {
-        let Some(strip) = self.strip.clone() else {
+        let Some(strip) = self.strip.as_ref() else {
             return;
         };
         let c = colors();
@@ -429,7 +448,7 @@ impl Run {
     }
 
     fn roll_save(&mut self, row: usize) {
-        let Some(call) = self.call.clone() else {
+        let Some(call) = &self.call else {
             return;
         };
         let p = &self.state.participants[row];
@@ -482,7 +501,7 @@ impl Run {
 
     /// The call view: the feature, its targets with their saves, then the damage and `Use`.
     pub(super) fn call_tab(&mut self, ui: &mut egui::Ui) {
-        let Some(call) = self.call.clone() else {
+        let Some(call) = self.call.as_ref() else {
             self.panel = Panel::Reference;
             return;
         };
@@ -544,7 +563,7 @@ impl Run {
                     .filter(|&row| Some(row) != call.caster && self.state.participants[row].present)
                     .collect();
                 // Name, result and Half are columns, so totals and toggles can be read down.
-                let columns = self.call_columns(ui, &call, &listed);
+                let columns = self.call_columns(ui, call, &listed);
                 for &row in &listed {
                     let p = &self.state.participants[row];
                     let ticked = call.rows.get(&row);
@@ -576,30 +595,24 @@ impl Run {
                                 &format!("Save of {}", p.name),
                                 &mut typed,
                                 "Total",
-                                52.0,
+                                TYPED_WIDTH,
                             );
                             if field.changed() {
                                 actions.push(CallStep::Typed(row, typed));
                             }
                         }
-                        if bonus.is_some() && entry.total.is_none() {
-                            let word = if character { "Roll for them" } else { "Roll" };
-                            if Action::secondary(word)
+                        if bonus.is_some()
+                            && entry.total.is_none()
+                            && Action::secondary(roll_word(character))
                                 .density(Density::Read)
                                 .show(ui)
                                 .clicked()
-                            {
-                                actions.push(CallStep::Roll(row));
-                            }
+                        {
+                            actions.push(CallStep::Roll(row));
                         }
                         if let Some(total) = entry.total {
-                            let made = total >= call.dc;
                             ui.label(Type::Strong.rich(ui, total.to_string()).color(c.text));
-                            ui.label(
-                                Type::Small
-                                    .rich(ui, if made { "At or above DC" } else { "Below DC" })
-                                    .color(c.muted),
-                            );
+                            ui.label(Type::Small.rich(ui, verdict(total, call.dc)).color(c.muted));
                         }
                         to_column(ui, columns.map(|(_, half)| half));
                         let mut half = entry.half;
@@ -611,7 +624,7 @@ impl Run {
                 ui.add_space(design::S);
                 ui.horizontal_wrapped(|ui| {
                     ui.spacing_mut().item_spacing.x = design::S;
-                    if !self.unrolled_creatures(&call).is_empty()
+                    if !self.unrolled_creatures(call).is_empty()
                         && Action::secondary("Roll all creatures")
                             .density(Density::Read)
                             .show(ui)
@@ -658,8 +671,7 @@ impl Run {
                             .rows
                             .keys()
                             .next()
-                            .map(|row| self.state.participants[*row].name.clone())
-                            .unwrap_or_default();
+                            .map_or("", |row| self.state.participants[*row].name.as_str());
                         format!("Use {} (half) on {name}", total / 2)
                     }
                     Some(total) => format!(
@@ -705,13 +717,10 @@ impl Run {
             .iter()
             .map(|&row| width(&self.state.participants[row].name, Type::Body))
             .fold(0.0, f32::max);
-        let verdict = |total: i64| {
-            let made = if total >= call.dc {
-                "At or above DC"
-            } else {
-                "Below DC"
-            };
-            width(&total.to_string(), Type::Strong) + design::S + width(made, Type::Small)
+        let total_width = |total: i64| {
+            width(&total.to_string(), Type::Strong)
+                + design::S
+                + width(verdict(total, call.dc), Type::Small)
         };
         let results = call
             .rows
@@ -719,11 +728,15 @@ impl Run {
             .map(|(&row, entry)| {
                 let p = &self.state.participants[row];
                 let character = character(&p.definition);
-                let field = if character { 52.0 + design::S } else { 0.0 };
+                let field = if character {
+                    TYPED_WIDTH + design::S
+                } else {
+                    0.0
+                };
                 let shown = match entry.total {
-                    Some(total) => verdict(total),
+                    Some(total) => total_width(total),
                     None if save_bonus(&p.definition, &call.ability).is_some() => {
-                        Action::secondary(if character { "Roll for them" } else { "Roll" })
+                        Action::secondary(roll_word(character))
                             .density(Density::Read)
                             .natural_width(ui)
                     }
@@ -731,7 +744,7 @@ impl Run {
                 };
                 field + shown
             })
-            .fold(verdict(call.dc), f32::max);
+            .fold(total_width(call.dc), f32::max);
         let result = tick + names + design::S;
         let half = result + results + design::S;
         let needed = half + tick + width("Half", Type::Body);
@@ -910,7 +923,7 @@ mod tests {
             }],
         };
         let shown = run.roll_link(ask(damage, Some(roller))).unwrap().unwrap();
-        assert_eq!(shown.use_blocked.as_deref(), Some("Choose a target first."));
+        assert_eq!(shown.use_blocked, Some("Choose a target first."));
         run.use_strip_total();
         assert!(
             run.amount.is_empty(),

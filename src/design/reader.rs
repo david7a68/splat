@@ -55,14 +55,9 @@ const DETAIL_MEASURE: f32 = 330.0;
 /// One row of a reference table: a label column, then a wrapped value.
 pub fn detail(ui: &mut Ui, label: &str, value: &str) {
     let color = colors().text;
-    detail_with(ui, label, |ui| {
+    detail_row(ui, label, 0.0, |ui| {
         ui.add(egui::Label::new(Type::Stat.rich(ui, value).color(color)).wrap());
     });
-}
-
-/// A reference row whose value is drawn by `value`, such as one with dice links.
-pub fn detail_with(ui: &mut Ui, label: &str, value: impl FnOnce(&mut Ui)) {
-    detail_row(ui, label, 0.0, value);
 }
 
 /// A reference row whose value has dice links. A linked line is a control tall, with its text

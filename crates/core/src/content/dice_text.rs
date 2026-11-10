@@ -118,8 +118,8 @@ impl RollLink {
 /// One rollable number in a text, by its byte range.
 #[derive(Clone, Debug, PartialEq, Eq)]
 struct Span {
-    pub range: Range<usize>,
-    pub link: RollLink,
+    range: Range<usize>,
+    link: RollLink,
 }
 
 /// Book minus signs and dashes read as minus in a dice expression.
@@ -266,13 +266,14 @@ fn find(text: &str, label: &str) -> Vec<Span> {
         }
         let dice = plain_dice(&text[open + 1..end]);
         let kind = damage_kind(&text[end + 1..]);
+        let damage = kind.is_some();
         groups.push((
             average_start..end + 1,
             DamagePart {
                 dice,
-                kind: kind.clone().flatten(),
+                kind: kind.flatten(),
             },
-            kind.is_some(),
+            damage,
         ));
         at = end + 1;
     }

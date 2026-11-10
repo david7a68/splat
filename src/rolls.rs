@@ -7,9 +7,8 @@ use splat::content::dice_text::{D20, DamagePart, RollLink};
 use splat::execution::dice::{Dice, Random, Roll};
 
 /// How a d20 or a damage roll is made.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum Mode {
-    #[default]
     Normal,
     Advantage,
     Disadvantage,
@@ -217,7 +216,14 @@ pub(crate) fn follow(ui: &egui::Ui, response: &egui::Response) {
 /// A dice link outside Markdown: a table cell, a skill, a sheet's bonus.
 pub(crate) fn link(ui: &mut egui::Ui, text: &str, role: Type, link: &RollLink) -> egui::Response {
     let c = colors();
-    let galley = design::one_line(ui, text, role.font(ui), c.accent, ui.available_width());
+    // Laid out without a colour, so the hover colour below paints the words too.
+    let galley = design::one_line(
+        ui,
+        text,
+        role.font(ui),
+        egui::Color32::PLACEHOLDER,
+        ui.available_width(),
+    );
     // A pointer target is at least 24 px tall, as the reader's other links are.
     let (rect, response) = ui.allocate_exact_size(
         egui::vec2(
@@ -245,11 +251,16 @@ pub(crate) fn link(ui: &mut egui::Ui, text: &str, role: Type, link: &RollLink) -
         );
         ui.painter().galley(egui::pos2(left, top), galley, color);
     }
-    follow(ui, &response);
-    if response.hovered() || response.clicked() || response.secondary_clicked() {
-        press(ui, &response, link);
-    }
+    interact(ui, &response, link);
     response
+}
+
+/// The pointer on a drawn dice link: its open result stays beside it, and a press rolls.
+pub(crate) fn interact(ui: &egui::Ui, response: &egui::Response, link: &RollLink) {
+    follow(ui, response);
+    if response.hovered() || response.clicked() || response.secondary_clicked() {
+        press(ui, response, link);
+    }
 }
 
 /// Where a popup at `at` fits in the window: below its link, or above it when there is no
@@ -419,26 +430,29 @@ impl Rolled {
         }
     }
 
+    /// The parts in order, each with whether a keep dropped it.
+    fn each_part(&self, mut push: impl FnMut(&str, bool)) {
+        for (at, piece) in self.pieces.iter().enumerate() {
+            if at > 0 {
+                push(" · ", false);
+            }
+            push(&format!("{} ", piece.label), false);
+            for (index, (face, gone)) in piece.faces.iter().enumerate() {
+                if index > 0 {
+                    push(", ", false);
+                }
+                push(&face.to_string(), *gone);
+            }
+        }
+        if self.flat != 0 {
+            push(&format!(" {}", signed_spaced(self.flat)), false);
+        }
+    }
+
     /// `d20 13, 6 + 4` or `2d6+2 bludgeoning 3, 4 · 1d6 fire 5 + 2`.
     pub fn parts(&self) -> String {
-        let mut out = self
-            .pieces
-            .iter()
-            .map(|piece| {
-                let faces = piece
-                    .faces
-                    .iter()
-                    .map(|(face, _)| face.to_string())
-                    .collect::<Vec<_>>()
-                    .join(", ");
-                format!("{} {faces}", piece.label)
-            })
-            .collect::<Vec<_>>()
-            .join(" · ");
-        if self.flat != 0 {
-            out.push(' ');
-            out.push_str(&signed_spaced(self.flat));
-        }
+        let mut out = String::new();
+        self.each_part(|text, _| out.push_str(text));
         out
     }
 
@@ -455,52 +469,30 @@ impl Rolled {
             strikethrough: egui::Stroke::new(1.0, color),
             ..plain.clone()
         };
-        for (at, piece) in self.pieces.iter().enumerate() {
-            if at > 0 {
-                job.append(" · ", 0.0, plain.clone());
-            }
-            job.append(&format!("{} ", piece.label), 0.0, plain.clone());
-            for (index, (face, gone)) in piece.faces.iter().enumerate() {
-                if index > 0 {
-                    job.append(", ", 0.0, plain.clone());
-                }
-                job.append(
-                    &face.to_string(),
-                    0.0,
-                    if *gone {
-                        dropped.clone()
-                    } else {
-                        plain.clone()
-                    },
-                );
-            }
-        }
-        if self.flat != 0 {
-            job.append(&format!(" {}", signed_spaced(self.flat)), 0.0, plain);
-        }
+        self.each_part(|text, gone| {
+            let format = if gone { &dropped } else { &plain };
+            job.append(text, 0.0, format.clone());
+        });
         job
     }
 
     /// `17 to hit`, `14 damage: 7 piercing, 7 fire`.
     pub fn headline(&self) -> String {
-        let mut out = format!("{} {}", self.total, self.what());
-        if self.by_kind.len() > 1 {
-            out.push_str(": ");
-            out.push_str(
-                &self
-                    .by_kind
+        match self.by_kind.as_slice() {
+            [(_, Some(kind))] => format!("{} {} damage", self.total, kind.to_lowercase()),
+            [_] | [] => format!("{} {}", self.total, self.what()),
+            by_kind => {
+                let each = by_kind
                     .iter()
                     .map(|(amount, kind)| match kind {
                         Some(kind) => format!("{amount} {}", kind.to_lowercase()),
                         None => amount.to_string(),
                     })
                     .collect::<Vec<_>>()
-                    .join(", "),
-            );
-        } else if let Some((_, Some(kind))) = self.by_kind.first() {
-            out = format!("{} {} damage", self.total, kind.to_lowercase());
+                    .join(", ");
+                format!("{} {}: {each}", self.total, self.what())
+            }
         }
-        out
     }
 
     /// `Natural 20` or `Natural 1`, where the rules give them a meaning.
@@ -606,13 +598,11 @@ pub(crate) fn roll(
                     faces: rolled.dice.iter().map(|face| (*face, false)).collect(),
                 });
             }
-            if change != 0
-                && let Some(first) = by_kind.first_mut()
-            {
-                first.0 += change;
-            }
             let mut expression = parts_text(parts);
             if change != 0 {
+                if let Some(first) = by_kind.first_mut() {
+                    first.0 += change;
+                }
                 expression.push_str(&format!(" {}", signed_spaced(change)));
             }
             (expression, change, sum + change, None, None)
@@ -689,7 +679,7 @@ pub(crate) struct Shown {
     /// stays open across a click on the roster.
     pub actions: bool,
     /// Why `Use` cannot be pressed now, if it cannot.
-    pub use_blocked: Option<String>,
+    pub use_blocked: Option<&'static str>,
     /// The selected row's AC beside an attack, such as `AC 15 Oren`.
     pub armor: Option<String>,
 }
@@ -763,7 +753,7 @@ pub(crate) fn show_popover(ctx: &egui::Context) -> Option<Action> {
                 ui.spacing_mut().item_spacing.y = design::XS;
                 result_lines(ui, &shown.rolled, shown.armor.as_deref());
                 if shown.actions {
-                    action = actions(ui, &shown.rolled, shown.use_blocked.as_deref());
+                    action = actions(ui, &shown.rolled, shown.use_blocked);
                 }
             });
         });

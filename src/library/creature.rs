@@ -462,10 +462,7 @@ fn link_cell(ui: &mut egui::Ui, width: f32, text: &str, link: &RollLink) {
     response.widget_info(|| {
         egui::WidgetInfo::labeled(egui::WidgetType::Link, true, crate::rolls::hint(link))
     });
-    crate::rolls::follow(ui, &response);
-    if response.hovered() || response.clicked() || response.secondary_clicked() {
-        crate::rolls::press(ui, &response, link);
-    }
+    crate::rolls::interact(ui, &response, link);
 }
 
 /// The Skills row, with each bonus a dice link.
@@ -810,7 +807,7 @@ pub(super) fn stat_head(ui: &mut egui::Ui, entry: &Entry, values: Option<&super:
                 && let Some(speed) = values.and_then(|values| values.speed.as_ref())
             {
                 changed_speed(ui, &text, speed);
-            } else if label == "Skills" && !dice_text::skills(&text).is_empty() {
+            } else if label == "Skills" {
                 skills_detail(ui, &text);
             } else {
                 reader_style::detail(ui, label, &text);
