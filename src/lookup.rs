@@ -5,6 +5,7 @@ use crate::{
     campaigns::Campaigns,
     content_workspace::Catalogue,
     design::{self, Action, Density, Tone, Type, colors, icons, reader as style},
+    history::{self, Step, Trail},
     library::{presentation, view},
     persistence::{Campaign, Module},
     world::{self, Go, Nav, Reader, Role, lines::Line},
@@ -20,6 +21,8 @@ use uuid::Uuid;
 use crate::matching::{self, Rank, Typed, names_lower_word};
 
 const RESULT_ROW: f32 = design::XXL;
+const PANEL_MARGIN: f32 = design::M;
+
 pub const SEARCH_NAME: &str = "Search everything";
 /// How many lines of a long note show where the words were found.
 const FOUND_LINES: usize = 3;
@@ -1371,7 +1374,9 @@ pub struct Lookup {
     /// The note or event being read, in place of an entry.
     reading_written: Option<usize>,
     /// Identity, because a rebuilt index can change positions.
-    history: Vec<Uuid>,
+    trail: Trail<Uuid>,
+    /// Where the panel was drawn last, for Back and Forward beside the Library.
+    panel_rect: Option<egui::Rect>,
     waiting_for: Option<Uuid>,
     focus_search: bool,
     results_open: bool,
@@ -1391,6 +1396,8 @@ pub struct Lookup {
     generator_problems: Vec<crate::npc_generator::TableProblem>,
     generator_sources: Vec<String>,
     pub open_world_repair: Option<String>,
+    /// A generated NPC that `Use your own names` hands to the World page.
+    pub open_world_names: Option<GeneratedCard>,
     /// A check of campaign and package files, away from the frame.
     pub files_changed: bool,
     checking: Option<mpsc::Receiver<u64>>,
@@ -1569,6 +1576,18 @@ impl Lookup {
         self.open = false;
     }
 
+    /// The name of the NPC this panel rolled and has not saved.
+    pub fn generated_name(&self) -> Option<&str> {
+        self.generated.as_ref().map(|npc| npc.name.as_str())
+    }
+
+    /// Take back a generated NPC that the World page did not take.
+    pub fn keep_generated(&mut self, card: GeneratedCard) {
+        self.generated = Some(card.npc);
+        self.generator_problems = card.problems;
+        self.generator_sources = card.sources;
+    }
+
     /// Open one entry from a link somewhere else in the app.
     pub fn open_note_link(&mut self, target: &str, from: Option<Uuid>, ctx: &egui::Context) {
         let Some(index) = &self.index else {
@@ -1634,10 +1653,8 @@ impl Lookup {
     }
 
     fn navigate(&mut self, position: usize) {
-        if let Some(id) = self.current_id()
-            && self.current != Some(position)
-        {
-            self.history.push(id);
+        if self.current != Some(position) {
+            self.trail.leave(self.current_id());
         }
         self.current = Some(position);
     }
@@ -1667,33 +1684,41 @@ impl Lookup {
         }
     }
 
-    fn back(&mut self) {
+    /// With nothing that way, nothing changes, so a stray press keeps a written note open.
+    fn step(&mut self, step: Step) {
+        if self.trail.peek(step).is_none() {
+            return;
+        }
         self.reading_written = None;
-        if let Some(id) = self.history.pop()
-            && let Some(position) = self.index.as_ref().and_then(|index| index.position(id))
+        let here = self.current_id();
+        if let Some((_, position)) = self
+            .trail
+            .go(step, here, |id| self.index.as_ref()?.position(*id))
         {
             self.current = Some(position);
             self.results_open = false;
         }
     }
 
-    pub(crate) fn back_key(&mut self, ctx: &egui::Context, library_page: bool) {
-        if !self.open
-            || !ctx.input(|input| input.modifiers.alt && input.key_pressed(egui::Key::ArrowLeft))
-        {
+    /// Back and Forward. Beside the Library page, a key acts here only with focus here,
+    /// and a mouse button only with the pointer here; the Library takes the rest.
+    pub(crate) fn history_input(&mut self, ctx: &egui::Context, library_page: bool) {
+        if !self.open {
             return;
         }
-        let focused_here = ctx
-            .memory(|memory| memory.focused())
-            .and_then(|id| ctx.read_response(id))
-            .is_some_and(|response| {
-                ctx.data(|data| data.get_temp::<egui::Rect>(egui::Id::new("lookup_rect")))
-                    .is_some_and(|rect| rect.contains(response.rect.center()))
-            });
-        if (!library_page || focused_here)
-            && ctx.input_mut(|input| input.consume_key(egui::Modifiers::ALT, egui::Key::ArrowLeft))
-        {
-            self.back();
+        let over_panel = |pos: egui::Pos2| self.panel_rect.is_some_and(|rect| rect.contains(pos));
+        let step = history::take_if(ctx, |source| {
+            !library_page
+                || match source {
+                    history::Request::Key => ctx
+                        .memory(|memory| memory.focused())
+                        .and_then(|id| ctx.read_response(id))
+                        .is_some_and(|response| over_panel(response.rect.center())),
+                    history::Request::Button(pos) => over_panel(pos),
+                }
+        });
+        if let Some(step) = step {
+            self.step(step);
         }
     }
 
@@ -1705,28 +1730,29 @@ impl Lookup {
                 egui::Frame::new()
                     .fill(colors().page)
                     .stroke(egui::Stroke::new(design::HAIRLINE_WIDTH, colors().rule))
-                    .inner_margin(egui::Margin::same(design::M as i8)),
+                    .inner_margin(egui::Margin::same(PANEL_MARGIN as i8)),
             )
             .show(ctx, |ui| self.panel(ui));
     }
 
     fn panel(&mut self, ui: &mut egui::Ui) {
-        ui.ctx()
-            .data_mut(|data| data.insert_temp(egui::Id::new("lookup_rect"), ui.max_rect()));
+        // With the margin, so a press anywhere on the panel counts as here.
+        let panel = ui.max_rect().expand(PANEL_MARGIN);
+        self.panel_rect = Some(panel);
         ui.ctx().data_mut(|data| {
             data.insert_temp(egui::Id::new("reader_surface"), egui::Id::new("lookup"))
         });
         let mut close = false;
         ui.horizontal(|ui| {
             ui.label(Type::Heading.rich(ui, "Lookup"));
-            if !self.history.is_empty()
+            if self.trail.peek(Step::Back).is_some()
                 && Action::quiet("Back")
                     .icon(icons::BACK)
                     .key("Alt+Left")
                     .show(ui)
                     .clicked()
             {
-                self.back();
+                self.step(Step::Back);
             }
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 close = design::icon_button(ui, icons::CLOSE, "Close Lookup").clicked();
@@ -2086,19 +2112,30 @@ impl Lookup {
             });
             let mut reroll = generate;
             if let Some(npc) = &self.generated {
-                let (saved, again, discard) = generated_card(
+                let choice = generator_card(
                     ui,
                     npc,
                     &self.generator_problems,
                     &self.generator_sources,
                     self.run_open,
+                    NamesHelp::Link,
                 );
-                reroll = again;
-                if saved {
+                reroll = choice.again;
+                if choice.save {
                     made = Some(world::create_generated(&campaign, npc));
                 }
-                if discard {
+                if choice.discard {
                     self.generated = None;
+                    self.create_error = None;
+                }
+                if choice.own_names {
+                    // The NPC moves to the World page, so only one card can save it.
+                    self.open_world_names = self.generated.take().map(|npc| GeneratedCard {
+                        campaign: campaign.id,
+                        npc,
+                        problems: std::mem::take(&mut self.generator_problems),
+                        sources: std::mem::take(&mut self.generator_sources),
+                    });
                     self.create_error = None;
                 }
             }
@@ -2225,7 +2262,45 @@ impl Lookup {
     }
 }
 
-/// What the generator rolled, with its choices. Returns save, reroll and discard.
+/// A generated NPC with the table facts its card shows.
+#[derive(Clone, Debug, PartialEq)]
+pub struct GeneratedCard {
+    /// The campaign whose tables rolled it, and where it will be saved.
+    pub campaign: Uuid,
+    pub npc: crate::npc_generator::Generated,
+    pub problems: Vec<crate::npc_generator::TableProblem>,
+    pub sources: Vec<String>,
+}
+
+/// How a generator card says that it uses the built-in names.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum NamesHelp {
+    /// The World page, where the DM prepares: the table marker in full.
+    Marker,
+    /// Lookup: short words and a quiet link to the World page's card.
+    Link,
+    /// A session note's card keeps the note's keyboard, so it only says so.
+    Plain,
+}
+
+/// The text a World note needs for the generator to use its own names.
+pub(crate) const OWN_NAMES_HELP: &str = "Built-in names. To use your own, put \
+     <!-- splat:rolls key=npc-name dice=1d6 --> on the line above a table of names in any note.";
+pub(crate) const BUILT_IN_NAMES: &str = "Built-in names.";
+pub(crate) const USE_OWN_NAMES: &str = "Use your own names";
+
+/// What the DM chose on a generator card.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(crate) struct CardChoice {
+    pub save: bool,
+    pub again: bool,
+    pub discard: bool,
+    /// Lookup's `Use your own names`: show this NPC on the World page with the full help.
+    pub own_names: bool,
+}
+
+/// What the generator rolled, with its choices. Returns save, reroll and discard. A session
+/// note's card says only that the names are built in.
 pub(crate) fn generated_card(
     ui: &mut egui::Ui,
     npc: &crate::npc_generator::Generated,
@@ -2233,6 +2308,20 @@ pub(crate) fn generated_card(
     sources: &[String],
     run_open: bool,
 ) -> (bool, bool, bool) {
+    let choice = generator_card(ui, npc, problems, sources, run_open, NamesHelp::Plain);
+    (choice.save, choice.again, choice.discard)
+}
+
+/// What the generator rolled, with its choices and the names help for this place.
+pub(crate) fn generator_card(
+    ui: &mut egui::Ui,
+    npc: &crate::npc_generator::Generated,
+    problems: &[crate::npc_generator::TableProblem],
+    sources: &[String],
+    run_open: bool,
+    help: NamesHelp,
+) -> CardChoice {
+    let mut choice = CardChoice::default();
     design::group_label(ui, "Generated NPC");
     ui.add(egui::Label::new(Type::Strong.rich(ui, &npc.name).color(colors().text)).wrap());
     for (label, text) in crate::npc_generator::ATTRIBUTES.iter().zip(&npc.attributes) {
@@ -2246,15 +2335,20 @@ pub(crate) fn generated_card(
         );
     }
     if sources.is_empty() && problems.is_empty() {
-        ui.label(
-            Type::Small
-                .rich(
-                    ui,
-                    "Built-in names. To use your own, put <!-- splat:rolls key=npc-name dice=1d6 --> \
-                     on the line above a table of names in any note.",
-                )
-                .color(colors().muted),
-        );
+        match help {
+            NamesHelp::Marker => {
+                ui.label(Type::Small.rich(ui, OWN_NAMES_HELP).color(colors().muted));
+            }
+            NamesHelp::Plain => {
+                ui.label(Type::Small.rich(ui, BUILT_IN_NAMES).color(colors().muted));
+            }
+            NamesHelp::Link => {
+                ui.horizontal_wrapped(|ui| {
+                    ui.label(Type::Small.rich(ui, BUILT_IN_NAMES).color(colors().muted));
+                    choice.own_names = design::link(ui, USE_OWN_NAMES).clicked();
+                });
+            }
+        }
     }
     for source in sources {
         let (kind, path) = source.split_once(": ").unwrap_or(("npc-name", source));
@@ -2306,9 +2400,8 @@ pub(crate) fn generated_card(
             )
             .color(colors().muted),
     );
-    let (mut saved, mut again, mut discard) = (false, false, false);
     ui.horizontal_wrapped(|ui| {
-        saved = (if run_open {
+        choice.save = (if run_open {
             Action::secondary("Save NPC")
         } else {
             Action::primary("Save NPC")
@@ -2316,22 +2409,73 @@ pub(crate) fn generated_card(
         .density(Density::Read)
         .show(ui)
         .clicked();
-        again = Action::secondary("Reroll")
+        choice.again = Action::secondary("Reroll")
             .icon(icons::DICE)
             .density(Density::Read)
             .show(ui)
             .clicked();
-        discard = Action::quiet("Discard")
+        choice.discard = Action::quiet("Discard")
             .density(Density::Read)
             .show(ui)
             .clicked();
     });
-    (saved, again, discard)
+    choice
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The table marker stays on the World page. Lookup links there, and a session note
+    /// only says so. A campaign table replaces the words in every place.
+    #[test]
+    fn generator_card_names_help_fits_its_place() {
+        use egui_kittest::kittest::Queryable;
+        let npc = crate::npc_generator::Generated {
+            name: "Wren Hallam".into(),
+            attributes: ["A scar".into(), "Calm".into(), "Gold".into()],
+        };
+        let table = vec!["npc-name: Names.md".to_owned()];
+        for (help, sources, marker, short, link) in [
+            (NamesHelp::Marker, vec![], true, false, false),
+            (NamesHelp::Link, vec![], false, true, true),
+            (NamesHelp::Plain, vec![], false, true, false),
+            (NamesHelp::Link, table.clone(), false, false, false),
+        ] {
+            let npc = npc.clone();
+            let mut harness = egui_kittest::Harness::new_ui_state(
+                move |ui, pressed: &mut bool| {
+                    *pressed |= generator_card(ui, &npc, &[], &sources, false, help).own_names;
+                },
+                false,
+            );
+            design::theme::install(&harness.ctx);
+            harness.run_steps(2);
+            let case = format!("{help:?}");
+            assert!(harness.query_by_label("Save NPC").is_some(), "{case}");
+            assert_eq!(
+                harness.query_by_label(OWN_NAMES_HELP).is_some(),
+                marker,
+                "{case}"
+            );
+            assert_eq!(
+                harness.query_by_label(BUILT_IN_NAMES).is_some(),
+                short,
+                "{case}"
+            );
+            assert_eq!(
+                harness.query_by_label(USE_OWN_NAMES).is_some(),
+                link,
+                "{case}"
+            );
+            if link {
+                assert!(!*harness.state());
+                harness.get_by_label(USE_OWN_NAMES).click();
+                harness.run_steps(2);
+                assert!(*harness.state(), "{case}: the link reports its press");
+            }
+        }
+    }
 
     #[test]
     fn repaired_note_has_a_distinct_name_link_and_no_false_mention() {
@@ -2397,6 +2541,68 @@ mod tests {
         item.from_sheet = true;
         assert_eq!(item.origin(), Origin::Sheet, "a sheet's copy ranks last");
         assert!(Origin::Own < Origin::Book && Origin::Book < Origin::Sheet);
+    }
+
+    fn browsed_lookup() -> Lookup {
+        let mut lookup = Lookup {
+            open: true,
+            index: Some(Arc::new(ContentIndex::load(&[], None).unwrap())),
+            ..Default::default()
+        };
+        lookup.navigate(0);
+        lookup.navigate(1);
+        lookup
+    }
+
+    #[test]
+    fn forward_returns_to_what_back_left_until_another_entry() {
+        let mut lookup = browsed_lookup();
+        lookup.step(Step::Back);
+        assert_eq!(lookup.current, Some(0));
+        lookup.step(Step::Forward);
+        assert_eq!(lookup.current, Some(1));
+        lookup.step(Step::Back);
+        lookup.navigate(2);
+        assert!(
+            lookup.trail.peek(Step::Forward).is_none(),
+            "a new entry starts a new trail"
+        );
+        lookup.reading_written = Some(0);
+        lookup.step(Step::Forward);
+        assert_eq!(
+            lookup.reading_written,
+            Some(0),
+            "nothing ahead keeps the note open"
+        );
+    }
+
+    /// Beside the Library, Lookup takes a side button only under the pointer, and leaves
+    /// the rest in the input for the Library.
+    #[test]
+    fn beside_the_library_a_side_button_acts_where_the_pointer_is() {
+        let press = |lookup: &mut Lookup, x: f32, library_page: bool| {
+            let back = history::tests::press(egui::PointerButton::Extra1, egui::pos2(x, 50.0));
+            lookup.panel_rect = Some(egui::Rect::from_min_max(
+                egui::pos2(300.0, 0.0),
+                egui::pos2(600.0, 400.0),
+            ));
+            history::tests::frame(vec![back], |ctx| {
+                lookup.history_input(ctx, library_page);
+                history::take_if(ctx, |_| true)
+            })
+        };
+        let mut lookup = browsed_lookup();
+        assert_eq!(press(&mut lookup, 100.0, true), Some(Step::Back));
+        assert_eq!(
+            lookup.current,
+            Some(1),
+            "over the Library page, Lookup stays"
+        );
+        assert_eq!(press(&mut lookup, 400.0, true), None);
+        assert_eq!(lookup.current, Some(0), "over Lookup, Lookup goes back");
+        let mut lookup = browsed_lookup();
+        assert_eq!(press(&mut lookup, 100.0, false), None);
+        assert_eq!(lookup.current, Some(0), "on other pages, Lookup goes back");
     }
 
     #[test]

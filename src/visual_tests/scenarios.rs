@@ -24,6 +24,96 @@ pub mod world_build;
 const READER: Pos2 = pos2(720.0, 400.0);
 const ENTRY_LIST: Pos2 = pos2(400.0, 400.0);
 
+/// Where each painted copy of these words starts on screen, after stepping back `back`
+/// characters (to the icon before them). Only copies inside their pane's clip count.
+fn painted_starts(d: &Driver<'_>, words: &str, back: usize) -> Vec<Pos2> {
+    let mut starts = Vec::new();
+    d.each_painted_text(|text, clip| {
+        let job = &text.galley.job.text;
+        if let Some(at) = job.find(words) {
+            let index = job[..at].chars().count().saturating_sub(back);
+            let rect = text
+                .galley
+                .pos_from_cursor(egui::text::CCursor::new(index))
+                .translate(text.pos.to_vec2());
+            if clip.contains(rect.center()) {
+                starts.push(rect.left_top());
+            }
+        }
+    });
+    starts
+}
+
+/// Every disk-conflict choice row uses the Read density, so its buttons are one height on every
+/// page. Runs at the size being captured.
+fn conflict_choices_read_height(d: &mut Driver<'_>, id: &str, safe: &str, red: &str) {
+    let height = crate::design::Density::Read.control();
+    let (safe_rect, red_rect) = (d.place_of(safe), d.place_of(red));
+    let size = d.window_size();
+    d.observe(
+        id,
+        safe_rect.zip(red_rect).is_some_and(|(safe, red)| {
+            (safe.height() - height).abs() < 0.5 && (red.height() - height).abs() < 0.5
+        }),
+        format!("At {size:?}: {safe} {safe_rect:?} and {red} {red_rect:?} are {height} px tall"),
+    );
+}
+
+/// iter-15-E: a file-conflict message's choices start at its text edge, not at its bar. The safe
+/// choice comes first; the red one follows exactly `L` after it on the same line (every captured
+/// size has room for both). `below`, when given, is text that must stay under both choices. The
+/// check runs at the size being captured.
+fn choices_at_text(
+    d: &mut Driver<'_>,
+    id: &str,
+    message: &str,
+    safe: &str,
+    red: &str,
+    below: Option<&str>,
+) {
+    let text = d.painted_rect_in(message, egui::Rect::EVERYTHING);
+    let (safe_rect, red_rect) = (d.place_of(safe), d.place_of(red));
+    let below_rect = below.map(|words| d.painted_rect_in(words, egui::Rect::EVERYTHING));
+    let size = d.window_size();
+    let (ok, detail) = match (text, safe_rect, red_rect) {
+        (Some(text), Some(safe_rect), Some(red_rect)) => {
+            let at_text = (safe_rect.left() - text.left()).abs() < 1.0;
+            let one_line = (safe_rect.center().y - red_rect.center().y).abs() < 1.0;
+            let gap = red_rect.left() - safe_rect.right();
+            let red_placed = one_line && (gap - crate::design::L).abs() < 0.5;
+            let stays_below = match below_rect {
+                None => true,
+                Some(Some(rect)) => rect.top() >= safe_rect.bottom().max(red_rect.bottom()),
+                Some(None) => false,
+            };
+            (
+                at_text && red_placed && stays_below && text.bottom() <= safe_rect.top(),
+                format!(
+                    "At {size:?}: text x {:.1}, {safe} x {:.1}; {red} x {:.1}, {} gap {gap:.1}; {}",
+                    text.left(),
+                    safe_rect.left(),
+                    red_rect.left(),
+                    if one_line {
+                        "same line,"
+                    } else {
+                        "not on one line,"
+                    },
+                    match below {
+                        Some(words) if stays_below => format!("{words} stays below"),
+                        Some(words) => format!("{words} is not below"),
+                        None => "nothing below to check".into(),
+                    }
+                ),
+            )
+        }
+        _ => (
+            false,
+            format!("At {size:?}: missing message text, {safe} or {red}"),
+        ),
+    };
+    d.observe(id, ok, detail);
+}
+
 /// FT-2: the run's Undo button always shows the word Undo, at every captured size, and keeps
 /// its full action as its accessible name.
 fn undo_keeps_its_word(d: &mut Driver<'_>, action: &str) {
@@ -468,6 +558,15 @@ pub mod library_author {
             "An external change keeps the draft's words, and offers overwrite, reload and the disk version",
         );
         d.state_prepared("save-conflict", Sizes::All, |d| {
+            choices_at_text(
+                d,
+                "iter-15-E-AD3-library",
+                CHANGED_ON_DISK,
+                OVERWRITE,
+                RELOAD_DISK,
+                Some("YOUR DRAFT"),
+            );
+            conflict_choices_read_height(d, "iter-15-B2-density-library", OVERWRITE, RELOAD_DISK);
             // Each column is (width - gap) / 2 wide, so the second starts (width + gap) / 2 after
             // the first; the theme's gap is S. At 1920x1080 the side-by-side comparison takes the
             // full pane, wider than the source editor (a 720 px cap measures exactly 720).
@@ -1092,6 +1191,28 @@ pub mod campaign_content {
                     })
             },
         );
+        // FD2: one rule separates the open repair from the package list, an `L` gap below Save
+        // repaired note. The rule must sit above the first thing drawn after the repair.
+        d.observe_both(
+            "iter-14-E-FD2",
+            "One rule, an L gap below Save repaired note, separates the repair from the list",
+            |d| {
+                let Some(save) = d.place_of("Save repaired note") else {
+                    return false;
+                };
+                let Some(next) = d
+                    .nodes()
+                    .into_iter()
+                    .filter(|node| node.in_view() && node.rect.top() > save.bottom() + 1.0)
+                    .map(|node| node.rect.top())
+                    .min_by(f32::total_cmp)
+                else {
+                    return false;
+                };
+                let rules = d.horizontal_rules(save.left(), save.bottom(), next);
+                rules.len() == 1 && rules[0] - save.bottom() >= crate::design::L
+            },
+        );
         d.state("repair-open", Sizes::Default);
         d.observe(
             "Repair says why",
@@ -1300,7 +1421,7 @@ pub mod party {
             .expect("a character copy");
         std::fs::write(&note, EDITED_NOTE).expect("edit the copy on disk");
         switch_campaign(d, CAMPAIGN);
-        d.expect(CONNECT_FIRST);
+        d.expect(CONNECT);
         d.observe(
             "Force read needs a session",
             !d.has(FORCE_READ) && std::fs::read_to_string(&note).is_ok_and(|t| t == EDITED_NOTE),
@@ -1311,15 +1432,67 @@ pub mod party {
             d.has_containing("Local edits"),
             "The affected party row marks its local edits",
         );
+        // The warning asks the DM to connect, so its own line has the way to connect, first.
+        for size in [SMALL, DEFAULT, LARGE] {
+            let (placed, detail) = d.at_size(size, |d| {
+                let words = d.painted_rect_in("Connect, then replace it.", egui::Rect::EVERYTHING);
+                let connect = d.place_of("Connect D&D Beyond");
+                let file = d.place_of("Show file");
+                let placed = match (words, connect, file) {
+                    (Some(words), Some(connect), Some(file)) => {
+                        // One line: the bordered button is taller than the link beside it.
+                        (connect.top()..=connect.bottom()).contains(&file.center().y)
+                            && file.left() - connect.right() >= crate::design::L - 0.5
+                            && connect.left() >= words.left() - 0.5
+                    }
+                    _ => false,
+                };
+                (
+                    placed,
+                    format!("words {words:?}, connect {connect:?}, file {file:?}"),
+                )
+            });
+            d.observe(
+                "iter-14-B-FD1",
+                placed,
+                format!(
+                    "Connect D&D Beyond comes before Show file on the warning at {size:?}: {detail}"
+                ),
+            );
+        }
+        // One action, one name: the warning's Connect D&D Beyond is the only way to connect on
+        // the page. The header keeps the state.
+        d.observe_both(
+            "iter-15-B-FD8",
+            "With the warning's Connect D&D Beyond, the header shows only Not connected and when it fetched",
+            |d| {
+                !d.has(CONNECT_FIRST)
+                    && d.nodes().iter().filter(|node| node.name == CONNECT).count() == 1
+                    && d.visible_text("Not connected · Fetched")
+            },
+        );
         d.state("copy-has-local-edits-signed-out", Sizes::All);
-        d.click(CONNECT_FIRST);
+        d.click(CONNECT);
         d.observe(
-            "iter-18-B-P3",
+            "iter-14-B-FD1-opens",
             d.page_title().as_deref() == Some("Settings")
                 && d.focused_name().as_deref() == Some("Paste session cookie"),
-            "The Party header connects with the cookie field focused while local edits remain safe",
+            "Connect D&D Beyond on the warning opens Settings with the cookie field focused",
         );
         d.click(NAV_PARTY);
+        d.expect(CONNECT);
+        // Must stay true: the edited note is still on disk, untouched, after the detour.
+        d.observe(
+            "iter-14-B-FD1-safe",
+            std::fs::read_to_string(&note).is_ok_and(|t| t == EDITED_NOTE),
+            "Opening Settings from the warning leaves the edited note as it was",
+        );
+        d.observe(
+            "iter-15-B-FD8-back",
+            !d.has(CONNECT_FIRST)
+                && d.nodes().iter().filter(|node| node.name == CONNECT).count() == 1,
+            "Back from Settings, the warning still owns the one Connect D&D Beyond",
+        );
 
         d.app_mut()
             .settings
@@ -1376,6 +1549,7 @@ pub mod party {
     }
     const FORCE_READ: &str = "Replace with D&D Beyond sheet";
     const CONNECT_FIRST: &str = "Connect to refresh";
+    const CONNECT: &str = "Connect D&D Beyond";
     const REPLACED: &str = "sheet now matches D&D Beyond. Your edited version is kept.";
     const DISMISS: &str = "Dismiss";
     const EDITED_NOTE: &str = "My own words";
@@ -1395,6 +1569,11 @@ pub mod encounter_build {
     const LIVE_ROW: &str = "HP\u{a0}11/41";
     const LOCAL_ONLY: &str = "Nothing in this encounter reaches D&D Beyond";
     const VIRTUALISED_LIMIT: usize = 100;
+    const CHANGED_ON_DISK: &str = "changed on disk. Your draft is safe until you choose.";
+    const OVERWRITE: &str = "Overwrite with my draft";
+    const RELOAD: &str = "Reload and lose my draft";
+    const OUTSIDE_WORDS: &str = "\nWritten outside Splat.\n";
+    const DRAFT_WORDS: &str = " Ash on the water.";
     const RESULT_NAME: &str = "Wolf";
     const OWN_CREATURE: &str = "Cinder Wolf";
     const EDITOR_NAME: &str = "Encounter name";
@@ -1586,6 +1765,58 @@ pub mod encounter_build {
         );
         d.click(SYNC_OPTION);
         d.expect(PARTY_NOW);
+
+        // Another program changes the encounter while the DM edits it. The choices start at the
+        // message text: the safe one first, then exactly `L` before the red one.
+        let file = d
+            .root
+            .join("campaigns/emberfall/Encounters/Bridge Ambush.md");
+        let outside = std::fs::read_to_string(&file).expect("read the encounter") + OUTSIDE_WORDS;
+        std::fs::write(&file, &outside).expect("change the encounter on disk");
+        d.type_into("Read-aloud and notes", DRAFT_WORDS);
+        d.click(SAVE_ENCOUNTER);
+        d.expect(CHANGED_ON_DISK);
+        d.observe(
+            "iter-15-B-EC-safe",
+            std::fs::read_to_string(&file).is_ok_and(|text| text == outside)
+                && d.has_containing(OUTSIDE_WORDS.trim()),
+            "The changed file stays as it is, and the comparison shows its words, until the DM chooses",
+        );
+        for size in [SMALL, DEFAULT, LARGE] {
+            let (placed, detail) = d.at_size(size, |d| {
+                let text = d.painted_rect_in(CHANGED_ON_DISK, egui::Rect::EVERYTHING);
+                let safe = d.place_of(OVERWRITE);
+                let red = d.place_of(RELOAD);
+                let placed = match (text, safe, red) {
+                    (Some(text), Some(safe), Some(red)) => {
+                        (safe.left() - text.left()).abs() < 1.0
+                            && safe.top() >= text.bottom() - 0.5
+                            && (safe.center().y - red.center().y).abs() < 1.0
+                            && (red.left() - safe.right() - crate::design::L).abs() < 0.5
+                    }
+                    _ => false,
+                };
+                (placed, format!("text {text:?}, safe {safe:?}, red {red:?}"))
+            });
+            d.observe(
+                "iter-15-B-EC",
+                placed,
+                format!(
+                    "Overwrite with my draft starts at the message text, and the red choice is L after it at {size:?}: {detail}"
+                ),
+            );
+        }
+        d.state_prepared("encounter-changed-on-disk", Sizes::All, |d| {
+            conflict_choices_read_height(d, "iter-15-B2-density", OVERWRITE, RELOAD);
+        });
+        d.click(OVERWRITE);
+        d.expect(SAVED_NOTE);
+        d.observe(
+            "iter-15-B-EC-overwrite",
+            !d.has(OVERWRITE)
+                && std::fs::read_to_string(&file).is_ok_and(|text| text.contains(DRAFT_WORDS)),
+            "Overwrite with my draft still saves the draft over the changed file",
+        );
         d.click(RESUME);
         d.expect(&format!("{RUN_HEADING}Bridge Ambush"));
         d.observe(
@@ -4419,7 +4650,36 @@ pub mod run_edge_states {
                     })
             },
         );
-        d.state("changed-on-disk", Sizes::Default);
+        // Both choices start at the message text, not at the warning bar.
+        d.observe_both(
+            "iter-14-B-AT2",
+            "Save as a new run starts at the message text edge, and the red choice follows it",
+            |d| {
+                let text = d.painted_rect_in("This run changed on disk", egui::Rect::EVERYTHING);
+                match (text, d.place_of(SAVE_AS_NEW), d.place_of(KEEP_RUN)) {
+                    (Some(text), Some(safe), Some(red)) => {
+                        (safe.left() - text.left()).abs() < 1.0 && red.left() > safe.right()
+                    }
+                    _ => false,
+                }
+            },
+        );
+        // Exactly `L`: egui's own item spacing once made this gap 24 px.
+        d.observe_both(
+            "iter-15-B-ST4",
+            "Replace the file with this run starts exactly L after Save as a new run",
+            |d| {
+                d.place_of(SAVE_AS_NEW)
+                    .zip(d.place_of(KEEP_RUN))
+                    .is_some_and(|(safe, red)| {
+                        (safe.center().y - red.center().y).abs() < 1.0
+                            && (red.left() - safe.right() - crate::design::L).abs() < 0.5
+                    })
+            },
+        );
+        d.state_prepared("changed-on-disk", Sizes::Default, |d| {
+            conflict_choices_read_height(d, "iter-15-B2-density-run", SAVE_AS_NEW, KEEP_RUN);
+        });
         d.goal("see the run changed on disk");
         // The state cannot be dismissed, and closing tells the truth about it.
         d.observe(
@@ -4768,6 +5028,23 @@ pub mod run_roster_conflict {
             .simulate_sync_state(SYNCED, SyncState::Conflict);
         d.settle();
         d.state("roster-of-12-with-conflict", Sizes::All);
+        // On the compact row, the conflict's icon starts where Bloodied's icon starts on the
+        // rows below: the second lines share one left edge.
+        let (aligned, detail) = d.at_size(SMALL, |d| {
+            let conflict = painted_starts(d, "Conflict", 2);
+            let bloodied = painted_starts(d, "Bloodied", 2);
+            let aligned = matches!(conflict.as_slice(), [conflict] if !bloodied.is_empty()
+                && bloodied.iter().all(|b| (b.x - conflict.x).abs() < 0.5));
+            (
+                aligned,
+                format!("conflict {conflict:?}, bloodied {bloodied:?}"),
+            )
+        });
+        d.observe(
+            "iter-15-B-FT3",
+            aligned,
+            format!("The compact row's Conflict starts at the second line's edge: {detail}"),
+        );
         let nodes = d.nodes();
         let rows = run_large_roster::ROSTER_12
             .iter()
@@ -5384,6 +5661,14 @@ pub mod nav_table {
             d.in_view(LINKED_TITLE),
             "Reading history: Alt+Left still returns to the entry before the link",
         );
+        d.press_side_button(egui::PointerButton::Extra2, LINKED_TITLE);
+        let forward = !d.in_view(LINKED_TITLE) && d.in_view(LINK);
+        d.press_side_button(egui::PointerButton::Extra1, LINK);
+        d.observe(
+            "G2",
+            forward && d.in_view(LINKED_TITLE),
+            "Reading history: the mouse's Forward and Back buttons step through it",
+        );
         d.click(CLEAR_SEARCH);
         d.begin_task();
 
@@ -5439,6 +5724,12 @@ pub mod nav_table {
                     "G3",
                     title.as_deref() == Some("Encounters"),
                     "Several paused runs open the Encounters list",
+                );
+            } else if name == crate::no_run_name() {
+                d.observe(
+                    "G3",
+                    title.as_deref() == Some("Encounters"),
+                    "The empty Run slot opens the Encounters list",
                 );
             } else {
                 titles.push((name, title));
@@ -5605,6 +5896,13 @@ pub mod world {
                 && d.has_containing("Manner: ")
                 && d.has_containing("Want: "),
             "The generator gives a name and three attributes, and writes nothing yet",
+        );
+        d.observe(
+            "iter-14-D-FD5",
+            d.visible_text(crate::lookup::BUILT_IN_NAMES)
+                && d.has(crate::lookup::USE_OWN_NAMES)
+                && !d.visible_text("splat:rolls"),
+            "Lookup beside a run says Built-in names. with a link, not the table marker",
         );
         d.state("world-generated-npc", Sizes::All);
         d.click("Reroll");
@@ -8481,6 +8779,46 @@ pub mod encounter_groups {
             "The editor says why a creature is unavailable, and that a change cannot stand",
         );
         d.expect("Replace Unknown creature");
+        // The repair link is a notice action: its words start at the warning text, and its icon
+        // hangs in the gutter before them.
+        for size in [SMALL, DEFAULT, LARGE] {
+            let (aligned, detail) = d.at_size(size, |d| {
+                let text = d.painted_rect_in(
+                    "This campaign cannot find this creature",
+                    egui::Rect::EVERYTHING,
+                );
+                let mut words = None;
+                d.each_painted_text(|shape, _| {
+                    let job = &shape.galley.job.text;
+                    if let Some(at) = job.find("Campaign → Packages")
+                        && let Some(row) = shape.galley.rows.first()
+                        && let Some(glyph) = row.glyphs.get(job[..at].chars().count())
+                    {
+                        words = Some(shape.pos.x + row.pos.x + glyph.pos.x);
+                    }
+                });
+                let link = d.place_of("Campaign → Packages");
+                let aligned = match (text, words, link) {
+                    (Some(text), Some(words), Some(link)) => {
+                        (words - text.left()).abs() < 1.0
+                            && link.left() < text.left() - 1.0
+                            && link.top() >= text.bottom() - 0.5
+                    }
+                    _ => false,
+                };
+                (
+                    aligned,
+                    format!("text {text:?}, words {words:?}, link {link:?}"),
+                )
+            });
+            d.observe(
+                "iter-14-B-AT3",
+                aligned,
+                format!(
+                    "Campaign → Packages starts its words at the warning text at {size:?}: {detail}"
+                ),
+            );
+        }
         d.state("group-unavailable-creature", Sizes::All);
         d.click("Changes for Cinder Wolf");
         let in_view = d.at_size(SMALL, |d| d.in_view_containing("would become −28"));
@@ -9143,6 +9481,52 @@ pub mod encounter_owned_groups {
             "Dragging an encounter's own group in combat adds each member",
         );
         d.expect("Maximum HP would become −28. It must be 1 or more.");
+        // A repair link under its member fault starts its words at the warning text, and its
+        // icon hangs in the gutter. In a wide panel, it stays beside the fault on its line.
+        for size in [SMALL, DEFAULT, LARGE] {
+            let (placed, detail) = d.at_size(size, |d| {
+                let mut placed = true;
+                let mut detail = String::new();
+                for (fault, link) in [
+                    ("Member 1, Unknown creature", "Campaign → Packages"),
+                    ("Member 2, Cinder Wolf: Maximum HP", "Edit group"),
+                ] {
+                    let text = d.painted_rect_in(fault, egui::Rect::EVERYTHING);
+                    let near = |at: &Pos2| {
+                        text.is_some_and(|text| {
+                            at.y >= text.top() - 1.0 && at.y < text.bottom() + crate::design::XL
+                        })
+                    };
+                    let words: Vec<_> = painted_starts(d, link, 0)
+                        .into_iter()
+                        .filter(near)
+                        .collect();
+                    let icons: Vec<_> = painted_starts(d, link, 2)
+                        .into_iter()
+                        .filter(near)
+                        .collect();
+                    placed &= match (text, words.as_slice(), icons.as_slice()) {
+                        (Some(text), [words], [icon]) if size == LARGE => {
+                            words.y < text.bottom()
+                                && icon.x >= text.right() + crate::design::L - 0.5
+                        }
+                        (Some(text), [words], [icon]) => {
+                            words.y >= text.bottom() - 0.5
+                                && (words.x - text.left()).abs() < 1.0
+                                && icon.x < text.left() - 1.0
+                        }
+                        _ => false,
+                    };
+                    detail += &format!("{link}: text {text:?}, words {words:?}, icon {icons:?}. ");
+                }
+                (placed, detail)
+            });
+            d.observe(
+                "iter-15-B-FD4",
+                placed,
+                format!("Arrivals repair links hang their icon at {size:?}: {detail}"),
+            );
+        }
         d.state("own-group-dragged-in-combat", Sizes::All);
         close_run(d);
 
@@ -9540,6 +9924,170 @@ pub mod run_add_creature {
         d.clear_text_in(FIELD);
         d.expect("Added by hand: Wolf");
         d.begin_task();
+        d.type_into(FIELD, "wolf");
+        d.expect("Choose Wolf");
+        // Show all lists every match in place: the words, the chosen match and the list stay.
+        let choices = |d: &Driver<'_>| {
+            d.nodes()
+                .into_iter()
+                .filter(|node| node.name.starts_with("Choose ") && node.in_view())
+                .count()
+        };
+        let show_all = d
+            .nodes()
+            .into_iter()
+            .find_map(|node| {
+                node.name
+                    .strip_prefix("Show all ")
+                    .and_then(|count| count.parse::<usize>().ok())
+            })
+            .expect("Show all names how many creatures match");
+        let before = choices(d);
+        d.click(&format!("Show all {show_all}"));
+        d.observe(
+            "iter-14-B-AT1",
+            before == 5
+                && show_all > before
+                && choices(d) == show_all
+                && !d.has_containing("Show all")
+                && !d.has_containing("Keep typing")
+                && d.in_view(FIELD)
+                && d.in_view("Choose Wolf")
+                && d.row_node("Wolf 2").is_some_and(|row| row.in_view()),
+            format!(
+                "Show all {show_all} lists every match ({before} before, {} after), with the \
+                 words, the chosen match and the roster in view",
+                choices(d)
+            ),
+        );
+        // Must stay true: the button still adds the whole name typed.
+        d.observe(
+            "iter-14-B-AT1-add",
+            d.has("Add Wolf to the initiative list"),
+            "With every match listed, the button still adds the whole name typed",
+        );
+        d.state("arrivals-found-all", Sizes::All);
+        // New words start a short list again, and the same words do not bring the long one back.
+        d.replace_text_in(FIELD, "wol");
+        d.replace_text_in(FIELD, "wolf");
+        d.observe(
+            "iter-14-B-AT1-reset",
+            choices(d) == 5 && d.has(&format!("Show all {show_all}")),
+            "Changed words close Show all",
+        );
+        // A match that only Show all lists can be chosen and added, with its own values.
+        d.click(&format!("Show all {show_all}"));
+        let listed = d.in_view("Choose Winter Wolf");
+        if listed {
+            d.click("Choose Winter Wolf");
+        }
+        let picked = listed
+            && d.has("Choose another creature")
+            && d.has_label("Winter Wolf")
+            && d.nodes().iter().any(|node| {
+                node.role == egui::accesskit::Role::Label
+                    && node.name.contains("HP 75")
+                    && node.name.contains("AC 13")
+            })
+            && d.has("Add Winter Wolf to the initiative list");
+        d.observe(
+            "iter-14-B-AT1-pick",
+            picked,
+            "Winter Wolf, listed only by Show all, can be chosen, and the form shows its HP 75 and AC 13",
+        );
+        if picked {
+            d.click("Add Winter Wolf to the initiative list");
+        }
+        let row = d.nodes().into_iter().find(|node| {
+            node.role == egui::accesskit::Role::Button
+                && node.name.starts_with("Winter Wolf")
+                && node.name.contains("HP 75/75")
+                && node.name.contains("AC 13")
+        });
+        d.observe(
+            "iter-14-B-AT1-added",
+            picked && row.is_some(),
+            format!(
+                "Winter Wolf joins the roster with HP 75 and AC 13: {:?}",
+                row.map(|row| row.name)
+            ),
+        );
+
+        // A broad search: rows below the list's edge are reached by Tab, and the list follows.
+        d.replace_text_in(FIELD, "dragon");
+        let broad = d
+            .nodes()
+            .into_iter()
+            .find_map(|node| {
+                node.name
+                    .strip_prefix("Show all ")
+                    .and_then(|count| count.parse::<usize>().ok())
+            })
+            .expect("a broad search offers Show all");
+        d.click(&format!("Show all {broad}"));
+        let rows: Vec<_> = d
+            .nodes()
+            .into_iter()
+            .filter(|node| node.name.starts_with("Choose "))
+            .collect();
+        let first = rows
+            .first()
+            .map(|row| row.name["Choose ".len()..].to_owned());
+        let last = rows
+            .last()
+            .map(|row| row.name["Choose ".len()..].to_owned());
+        let ninth = rows.get(8).map(|row| (row.name.clone(), row.rect));
+        // The list's own visible area: the clip its first row's words are painted in.
+        let mut list_clip = None;
+        d.each_painted_text(|text, clip| {
+            if first.as_deref() == Some(text.galley.job.text.as_str()) {
+                list_clip = Some(clip);
+            }
+        });
+        let inside =
+            |rect: egui::Rect| list_clip.is_some_and(|clip| clip.expand(0.5).contains_rect(rect));
+        // Rows out of view keep their control and name, but skip their words until shown.
+        d.observe(
+            "iter-14-B-AT1-visible-only",
+            broad > 9
+                && rows.len() == broad
+                && rows.last().is_some_and(|row| !inside(row.rect))
+                && first.as_deref().is_some_and(|name| d.has_label(name))
+                && last.as_deref().is_some_and(|name| !d.has_label(name)),
+            format!(
+                "Show all {broad}: {} rows named; the first row's words are drawn ({first:?}), the last \
+                 row's words are not drawn while it is out of view ({last:?})",
+                rows.len()
+            ),
+        );
+        if let Some((ninth, before)) = ninth {
+            // Focus starts in the search field, above the list.
+            d.type_into(FIELD, "");
+            let mut tabs = 0;
+            while d.focused_name().as_deref() != Some(ninth.as_str()) && tabs < 40 {
+                d.press(Key::Tab);
+                tabs += 1;
+            }
+            let after = d.place_of(&ninth);
+            d.observe(
+                "iter-14-B-AT1-tab",
+                !inside(before)
+                    && d.focused_name().as_deref() == Some(ninth.as_str())
+                    && after.is_some_and(|after| after.top() < before.top() - 1.0 && inside(after)),
+                format!(
+                    "Tab reaches {ninth} after {tabs} presses, and the list scrolls it inside its clip \
+                     {list_clip:?}: before {before:?}, after {after:?}"
+                ),
+            );
+        } else {
+            d.observe(
+                "iter-14-B-AT1-tab",
+                false,
+                format!("Show all {broad} lists no ninth row to reach with Tab"),
+            );
+        }
+        d.clear_text_in(FIELD);
+        d.begin_task();
     }
 }
 
@@ -9789,6 +10337,126 @@ pub mod session_plan {
         d.click(NAV_TIMELINE);
         d.click("Session for new events");
         d.click_starting(session);
+    }
+
+    /// The top edge of each main rail item, found at the rail's left edge, not on the page.
+    fn rail_tops(d: &Driver<'_>) -> Vec<(&'static str, Option<f32>)> {
+        let nodes = d.nodes();
+        [
+            NAV_ENCOUNTERS,
+            NAV_SESSIONS,
+            NAV_TIMELINE,
+            NAV_WORLD,
+            NAV_PARTY,
+            NAV_LIBRARY,
+            NAV_CAMPAIGN,
+        ]
+        .map(|name| {
+            let top = nodes
+                .iter()
+                .find(|node| node.name == name && node.rect.left() < crate::design::XL)
+                .map(|node| node.rect.top());
+            (name, top)
+        })
+        .to_vec()
+    }
+
+    /// FT4: the played fight's `Log`, `Whole run` and `Timeline` start their words at the text
+    /// edge of the HP grid above, with no spaces in the words, and each target is at least `XL`
+    /// square from the link's own size.
+    fn played_fight_links_at_the_text_edge(d: &mut Driver<'_>) {
+        use egui::accesskit::Role;
+        let size = d.window_size();
+        let xl = crate::design::XL;
+        let nodes = d.nodes();
+        let links = ["Log", "Whole run", "Timeline"].map(|name| {
+            nodes
+                .iter()
+                .find(|node| node.name == name && node.role == Role::Link && node.in_view())
+                .map(|node| node.rect)
+        });
+        // The word as painted, alone in its galley: a padded ` Log ` does not match.
+        let words: Vec<_> = ["Log", "Whole run", "Timeline"]
+            .iter()
+            .zip(&links)
+            .map(|(name, link)| {
+                link.and_then(|link| d.painted_word_rect(name, link.expand(crate::design::XS)))
+            })
+            .collect();
+        let edge = d.painted_left("Kestrel 7/41");
+        let log = words[0];
+        d.observe(
+            "iter-14-C-FT4",
+            links.iter().all(|link| {
+                link.is_some_and(|link| link.width() >= xl - 0.5 && link.height() >= xl - 0.5)
+            }) && words.iter().all(Option::is_some)
+                && edge
+                    .zip(log)
+                    .is_some_and(|(edge, log)| (log.left() - edge).abs() <= 0.5),
+            format!(
+                "At {size:?}, Log starts at the HP grid's text edge {edge:?}: words {words:?}, \
+                 targets {links:?}"
+            ),
+        );
+        // Must stay true: the links stay on one line, in order.
+        d.observe(
+            "iter-14-C-FT4-order",
+            words.iter().flatten().count() == 3
+                && words.windows(2).all(|pair| {
+                    pair[0].zip(pair[1]).is_some_and(|(a, b)| {
+                        a.right() < b.left() && (a.center().y - b.center().y).abs() <= 0.5
+                    })
+                }),
+            format!("At {size:?}, Log, Whole run and Timeline share one line: {words:?}"),
+        );
+    }
+
+    /// FT1: the party bar says where its numbers come from whenever the room after the players
+    /// holds it. Its words are the last fact of each player's accessible name.
+    fn party_bar_names_its_source(d: &mut Driver<'_>) {
+        use egui::accesskit::Role;
+        let size = d.window_size();
+        let nodes = d.nodes();
+        let hide = nodes
+            .iter()
+            .find(|node| node.name == "Hide the party")
+            .map(|node| node.rect);
+        let players: Vec<_> = nodes
+            .iter()
+            .filter(|node| {
+                node.role == Role::Button
+                    && node.name.contains(" · HP ")
+                    && hide.is_some_and(|hide| {
+                        (node.rect.center().y - hide.center().y).abs() <= crate::design::S
+                    })
+            })
+            .collect();
+        let kestrel = players
+            .iter()
+            .find(|node| node.name.starts_with("Kestrel Dunmoor · HP 7/41"));
+        let source = kestrel.and_then(|node| node.name.rsplit(" · ").next());
+        let last = players
+            .iter()
+            .map(|node| node.rect.right())
+            .fold(0.0, f32::max);
+        let status = source.and_then(|source| {
+            nodes
+                .iter()
+                .find(|node| node.name.ends_with(source) && !node.name.contains(" · HP "))
+                .map(|node| node.rect)
+        });
+        let placed = status
+            .zip(hide)
+            .is_some_and(|(status, hide)| status.left() >= last && status.right() <= hide.left());
+        d.observe(
+            "iter-14-C-FT1",
+            kestrel.is_some() && (size == SMALL || placed),
+            format!(
+                "At {size:?}, the bar after {} players (to x {last}) shows its source {source:?} \
+                 at {status:?}, before Hide the party at {hide:?}",
+                players.len()
+            ),
+        );
     }
 
     const FIRST: &str = "Bridge Ambush";
@@ -10161,14 +10829,41 @@ pub mod session_plan {
         d.type_text("Held the bridge");
         d.press(Key::Enter);
         d.expect("Outcome: Held the bridge");
+        let with_run = rail_tops(d);
+        let had_slot = d.has(&crate::no_run_name());
         d.begin_task();
         d.click(CLOSE_RUN);
         d.goal_within("T12.1", "go back from a finished fight", 1);
+        // FT3: closing the last run leaves the quiet Run slot, and no main rail item moves.
+        let without_run = rail_tops(d);
+        d.observe(
+            "iter-14-C-FT3-close",
+            !had_slot
+                && d.has(&crate::no_run_name())
+                && without_run.iter().all(|(_, top)| top.is_some())
+                && without_run == with_run,
+            format!(
+                "Closing the run leaves the empty Run slot, and the rail items keep their places: \
+                 {with_run:?} then {without_run:?}"
+            ),
+        );
         d.observe(
             "T12.1",
             d.page_title().as_deref() == Some("Session"),
             "Close run goes back to the page the fight began on",
         );
+        // FT3: the empty Run slot is a working target. It opens the Encounters list.
+        assert!(
+            d.in_view(&crate::no_run_name()),
+            "the empty Run slot is in view"
+        );
+        d.click(&crate::no_run_name());
+        d.observe(
+            "iter-14-C-FT3-opens",
+            d.page_title().as_deref() == Some("Encounters"),
+            format!("The empty Run slot opens Encounters: {:?}", d.page_title()),
+        );
+        d.click(NAV_SESSIONS);
 
         // T12.5: how a fight ended, in place.
         show_plan(d);
@@ -10201,7 +10896,10 @@ pub mod session_plan {
             "A played fight gives its result and last round on one line",
         );
         d.goal_within("T12.5", "read how a fight ended", 1);
-        d.state("fight-in-place", Sizes::All);
+        d.state_prepared("fight-in-place", Sizes::All, |d| {
+            played_fight_links_at_the_text_edge(d);
+            party_bar_names_its_source(d);
+        });
         d.observe(
             "T12.5",
             d.visible_text("Kestrel 7/41") && d.page_title().as_deref() == Some("Session"),
@@ -10249,6 +10947,15 @@ pub mod session_plan {
                 .map_or_else(String::new, |node| node.name)
         };
         d.state("setup-carries-hp", Sizes::All);
+        // FT3: a run opening takes the slot in place, so the rail items do not move down.
+        let opened = rail_tops(d);
+        d.observe(
+            "iter-14-C-FT3-open",
+            !d.has(&crate::no_run_name()) && opened == without_run,
+            format!(
+                "Starting a fight keeps the rail items in place: {without_run:?} then {opened:?}"
+            ),
+        );
         d.observe(
             "T12.2",
             kestrel(d).contains("HP 7/41") && d.has_containing("Party HP carries over"),

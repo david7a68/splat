@@ -8,10 +8,18 @@ use ab_glyph::{Font, FontRef, PxScale, ScaleFont, point};
 use eframe::egui;
 use image::{Rgba, RgbaImage};
 use std::{
+    fs::File,
     io::Write,
     path::{Path, PathBuf},
     process::{Child, ChildStdin, Command, Stdio},
 };
+
+mod encoder;
+
+/// The encoder this run's videos use, once one has started.
+pub fn encoder() -> String {
+    encoder::chosen().describe()
+}
 
 const FPS: usize = 12;
 /// About one second, so a viewer can read each settled state.
@@ -50,37 +58,36 @@ impl Overlay {
 
 pub struct Recorder {
     child: Child,
+    /// A hardware encode session this video holds until ffmpeg exits.
+    _session: Option<File>,
     stdin: Option<ChildStdin>,
     path: PathBuf,
     font: FontRef<'static>,
     /// Frames shown so far, at `FPS`. The next picture appears after them.
     shown: usize,
     /// The last picture sent, and how many frames it is shown for.
-    last: Option<(Vec<u8>, usize)>,
+    last: Option<Last>,
+}
+
+struct Last {
+    rgba: Vec<u8>,
+    yuv: Vec<u8>,
+    length: usize,
 }
 
 impl Recorder {
     pub fn start(path: &Path) -> Result<Self, String> {
+        let (encoder, session) = encoder::for_video();
         // ffmpeg is a host program. The shell's library path holds Nix libraries.
         let child = Command::new(ffmpeg_path())
             .env_remove("LD_LIBRARY_PATH")
             .args(["-hide_banner", "-loglevel", "error", "-y"])
+            .args(encoder.input_args())
             .args(["-f", "matroska", "-i", "-", "-an"])
             // Keep each picture's own time: a held picture is one encoded frame.
             .args(["-fps_mode", "vfr"])
-            // ultrafast took half the CPU of veryfast at the same quality, for files about
-            // twice the size. The animation tune keeps flat UI colours smaller.
-            .args([
-                "-c:v",
-                "libx264",
-                "-preset",
-                "ultrafast",
-                "-tune",
-                "animation",
-            ])
-            .args(["-crf", "22"])
-            .args(["-pix_fmt", "yuv420p", "-movflags", "+faststart"])
-            .args(["-threads", "2"])
+            .args(encoder.output_args())
+            .args(["-movflags", "+faststart"])
             .arg(path)
             .stdin(Stdio::piped())
             .stdout(Stdio::null())
@@ -94,6 +101,7 @@ impl Recorder {
         }
         Ok(Self {
             child,
+            _session: session,
             stdin,
             path: path.to_path_buf(),
             font: FontRef::try_from_slice(epaint_default_fonts::UBUNTU_LIGHT)
@@ -140,30 +148,48 @@ impl Recorder {
         if let Some(caption) = &overlay.caption {
             draw_caption(&mut frame, &self.font, caption);
         }
-        let yuv = yuv420(&frame);
         let start = self.shown;
         self.shown += count;
         // The same picture again only lengthens the last one.
-        if let Some((last, length)) = &mut self.last
-            && *last == yuv
+        if let Some(last) = &mut self.last
+            && last.rgba == *frame.as_raw()
         {
-            *length += count;
+            last.length += count;
             return;
         }
+        // A moving pointer or a new caption changes a few rows. Convert only the rows that
+        // changed since the last picture, which took a fifth of a video run's CPU before.
+        let yuv = match self.last.take() {
+            Some(mut last) => {
+                if !yuv420_changed(&mut last.yuv, &last.rgba, &frame) {
+                    // Changes the video cannot show, such as alpha, still make the same picture.
+                    last.rgba = frame.into_raw();
+                    last.length += count;
+                    self.last = Some(last);
+                    return;
+                }
+                last.yuv
+            }
+            None => yuv420(&frame),
+        };
         if let Some(stdin) = &mut self.stdin {
             // A failure here shows at `finish`, with ffmpeg's own exit status.
-            let _ = stdin.write_all(&mkv::frame(start, FPS, &yuv));
+            let _ = mkv::write_frame(stdin, start, FPS, &yuv);
         }
-        self.last = Some((yuv, count));
+        self.last = Some(Last {
+            rgba: frame.into_raw(),
+            yuv,
+            length: count,
+        });
     }
 
     pub fn finish(mut self) -> Result<String, String> {
         // A frame's time ends where the next one starts. Repeat the last picture on the last
         // frame, so the final hold keeps its length.
-        if let (Some((last, length)), Some(stdin)) = (&self.last, &mut self.stdin)
-            && *length > 1
+        if let (Some(last), Some(stdin)) = (&self.last, &mut self.stdin)
+            && last.length > 1
         {
-            let _ = stdin.write_all(&mkv::frame(self.shown - 1, FPS, last));
+            let _ = mkv::write_frame(stdin, self.shown - 1, FPS, &last.yuv);
         }
         self.stdin = None;
         let status = self
@@ -264,15 +290,40 @@ mod mkv {
         out
     }
 
-    /// One picture in its own cluster, starting at frame `index`.
-    pub(super) fn frame(index: usize, fps: usize, yuv: &[u8]) -> Vec<u8> {
+    /// One picture in its own cluster, starting at frame `index`. The picture goes to the
+    /// writer as it is, without a copy.
+    pub(super) fn write_frame(
+        out: &mut impl std::io::Write,
+        index: usize,
+        fps: usize,
+        yuv: &[u8],
+    ) -> std::io::Result<()> {
+        let time = uint(&[0xE7], millis(index, fps));
         // Track 1, no offset from the cluster's time, a key frame.
-        let mut block = vec![0x81, 0x00, 0x00, 0x80];
-        block.extend_from_slice(yuv);
-        element(
+        let block = [0x81, 0x00, 0x00, 0x80];
+        let block_size = block.len() + yuv.len();
+        let mut head = vec![0x1F, 0x43, 0xB6, 0x75, 0x01];
+        let cluster_size = time.len() + 1 + 8 + block_size;
+        head.extend_from_slice(&(cluster_size as u64).to_be_bytes()[1..]);
+        head.extend_from_slice(&time);
+        head.extend_from_slice(&[0xA3, 0x01]);
+        head.extend_from_slice(&(block_size as u64).to_be_bytes()[1..]);
+        head.extend_from_slice(&block);
+        out.write_all(&head)?;
+        out.write_all(yuv)
+    }
+
+    #[test]
+    fn a_frame_is_a_cluster_with_its_time_and_one_simple_block() {
+        let yuv = [1, 2, 3, 4, 5, 6];
+        let mut written = Vec::new();
+        write_frame(&mut written, 3, 12, &yuv).unwrap();
+        let block = [&[0x81, 0x00, 0x00, 0x80][..], &yuv].concat();
+        let expected = element(
             &[0x1F, 0x43, 0xB6, 0x75],
-            &[uint(&[0xE7], millis(index, fps)), element(&[0xA3], &block)].concat(),
-        )
+            &[uint(&[0xE7], 250), element(&[0xA3], &block)].concat(),
+        );
+        assert_eq!(written, expected);
     }
 }
 
@@ -281,54 +332,108 @@ mod mkv {
 /// even sizes.
 fn yuv420(image: &RgbaImage) -> Vec<u8> {
     let (width, height) = (image.width() as usize, image.height() as usize);
+    let mut out = vec![0; width * height * 3 / 2];
+    convert(&mut out, width, height, image.as_raw(), None);
+    out
+}
+
+/// Bring `yuv`, the conversion of `old`, up to date with `image`. Only the row pairs that
+/// differ are converted again. False when the conversion is the same as before.
+fn yuv420_changed(yuv: &mut [u8], old: &[u8], image: &RgbaImage) -> bool {
+    let (width, height) = (image.width() as usize, image.height() as usize);
+    convert(yuv, width, height, image.as_raw(), Some(old))
+}
+
+/// Convert `rgba` into `out`, skipping row pairs that equal `old`. True if `out` changed.
+fn convert(out: &mut [u8], width: usize, height: usize, rgba: &[u8], old: Option<&[u8]>) -> bool {
     assert!(
-        width % 2 == 0 && height % 2 == 0,
+        width.is_multiple_of(2) && height.is_multiple_of(2),
         "video frames have even sizes"
     );
-    let mut out = vec![0; width * height * 3 / 2];
     let (luma, chroma) = out.split_at_mut(width * height);
     let (blue, red) = chroma.split_at_mut(width * height / 4);
-    let luma_of = |p: &[u8]| {
-        let [r, g, b] = [p[0], p[1], p[2]].map(i32::from);
-        (((66 * r + 129 * g + 25 * b + 128) >> 8) + 16) as u8
-    };
-    let rows = image.as_raw().chunks_exact(width * 8);
-    let luma_rows = luma.chunks_exact_mut(width * 2);
-    let chroma_rows = blue
-        .chunks_exact_mut(width / 2)
-        .zip(red.chunks_exact_mut(width / 2));
-    for ((pair, luma_pair), (blue_row, red_row)) in rows.zip(luma_rows).zip(chroma_rows) {
+    let pairs = rgba
+        .chunks_exact(width * 8)
+        .zip(luma.chunks_exact_mut(width * 2))
+        .zip(
+            blue.chunks_exact_mut(width / 2)
+                .zip(red.chunks_exact_mut(width / 2)),
+        );
+    // Until a row pair converts to new values, keep each pair's old values to compare.
+    let mut changed = old.is_none();
+    let mut before = Vec::with_capacity(width * 3);
+    for (index, ((pair, luma), (blue, red))) in pairs.enumerate() {
+        let range = index * width * 8..(index + 1) * width * 8;
+        if old.is_some_and(|old| old[range] == *pair) {
+            continue;
+        }
+        if !changed {
+            before.clear();
+            before.extend_from_slice(luma);
+            before.extend_from_slice(blue);
+            before.extend_from_slice(red);
+        }
         let (top, bottom) = pair.split_at(width * 4);
-        let (luma_top, luma_bottom) = luma_pair.split_at_mut(width);
-        let blocks = top.chunks_exact(8).zip(bottom.chunks_exact(8));
-        let luma_blocks = luma_top
-            .chunks_exact_mut(2)
-            .zip(luma_bottom.chunks_exact_mut(2));
-        for (((top, bottom), (luma_top, luma_bottom)), (blue, red)) in blocks
-            .zip(luma_blocks)
-            .zip(blue_row.iter_mut().zip(red_row.iter_mut()))
-        {
-            luma_top[0] = luma_of(&top[..4]);
-            luma_top[1] = luma_of(&top[4..]);
-            luma_bottom[0] = luma_of(&bottom[..4]);
-            luma_bottom[1] = luma_of(&bottom[4..]);
-            let sum = |channel: usize| {
-                [
-                    top[channel],
-                    top[channel + 4],
-                    bottom[channel],
-                    bottom[channel + 4],
-                ]
-                .map(i32::from)
-                .iter()
-                .sum::<i32>()
-            };
-            let [r, g, b] = [0, 1, 2].map(|channel| (sum(channel) + 2) / 4);
-            *blue = (((-38 * r - 74 * g + 112 * b + 128) >> 8) + 128) as u8;
-            *red = (((112 * r - 94 * g - 18 * b + 128) >> 8) + 128) as u8;
+        let (luma_top, luma_bottom) = luma.split_at_mut(width);
+        convert_row_pair(top, bottom, luma_top, luma_bottom, blue, red);
+        if !changed {
+            let (old_luma, old_chroma) = before.split_at(luma.len());
+            let (old_blue, old_red) = old_chroma.split_at(blue.len());
+            changed = old_luma != luma || old_blue != blue || old_red != red;
         }
     }
-    out
+    changed
+}
+
+#[inline(always)]
+fn luma_of(r: i32, g: i32, b: i32) -> u8 {
+    (((66 * r + 129 * g + 25 * b + 128) >> 8) + 16) as u8
+}
+
+fn convert_row_pair(
+    top: &[u8],
+    bottom: &[u8],
+    luma_top: &mut [u8],
+    luma_bottom: &mut [u8],
+    blue: &mut [u8],
+    red: &mut [u8],
+) {
+    let blocks = top.chunks_exact(8).zip(bottom.chunks_exact(8));
+    let luma = luma_top
+        .chunks_exact_mut(2)
+        .zip(luma_bottom.chunks_exact_mut(2));
+    for (((top, bottom), (luma_top, luma_bottom)), (blue, red)) in
+        blocks.zip(luma).zip(blue.iter_mut().zip(red.iter_mut()))
+    {
+        let [r0, g0, b0, _, r1, g1, b1, _] = <[u8; 8]>::try_from(top).unwrap().map(i32::from);
+        let [r2, g2, b2, _, r3, g3, b3, _] = <[u8; 8]>::try_from(bottom).unwrap().map(i32::from);
+        luma_top[0] = luma_of(r0, g0, b0);
+        luma_top[1] = luma_of(r1, g1, b1);
+        luma_bottom[0] = luma_of(r2, g2, b2);
+        luma_bottom[1] = luma_of(r3, g3, b3);
+        let r = (r0 + r1 + r2 + r3 + 2) >> 2;
+        let g = (g0 + g1 + g2 + g3 + 2) >> 2;
+        let b = (b0 + b1 + b2 + b3 + 2) >> 2;
+        *blue = (((-38 * r - 74 * g + 112 * b + 128) >> 8) + 128) as u8;
+        *red = (((112 * r - 94 * g - 18 * b + 128) >> 8) + 128) as u8;
+    }
+}
+
+#[test]
+fn a_changed_frame_converts_like_a_new_one() {
+    let mut old = RgbaImage::from_pixel(8, 6, Rgba([10, 200, 30, 255]));
+    old.put_pixel(7, 5, Rgba([0, 0, 0, 255]));
+    let mut new = old.clone();
+    new.put_pixel(2, 2, Rgba([250, 10, 10, 255]));
+    new.put_pixel(7, 5, Rgba([255, 255, 255, 255]));
+    let mut yuv = yuv420(&old);
+    assert!(yuv420_changed(&mut yuv, old.as_raw(), &new));
+    assert_eq!(yuv, yuv420(&new));
+    // Alpha alone does not change the video.
+    let mut faded = new.clone();
+    faded.put_pixel(0, 0, Rgba([10, 200, 30, 0]));
+    assert!(!yuv420_changed(&mut yuv, new.as_raw(), &faded));
+    assert_eq!(yuv, yuv420(&new));
 }
 
 #[test]

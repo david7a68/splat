@@ -6,6 +6,10 @@ use egui::accesskit::Role;
 use std::fs;
 use uuid::Uuid;
 
+/// A free-text History date longer than a third of the reader, short enough for the list.
+const LONG_WHEN: &str = "In the winter before the founding";
+const LONG_SUMMARY: &str = "The guild held the Arena through the winter siege, and fed the miners' families from its own stores until the thaw came and the soldiers went home.";
+
 fn root(d: &Driver<'_>) -> std::path::PathBuf {
     d.root.join("campaigns/emberfall")
 }
@@ -197,7 +201,16 @@ pub fn broken(d: &mut Driver<'_>) {
     fs::write(&path, format!("{external}\nAnother outside edit.\n")).unwrap();
     d.settle();
     d.expect("This note changed on disk. Your draft is safe until you choose.");
-    d.state("dirty-repair-compares-disk", Sizes::All);
+    d.state_prepared("dirty-repair-compares-disk", Sizes::All, |d| {
+        choices_at_text(
+            d,
+            "iter-15-E-AD3-world-repair",
+            "This note changed on disk",
+            "Overwrite with my draft",
+            "Reload and lose my draft",
+            Some("YOUR DRAFT"),
+        );
+    });
     d.click("Reload and lose my draft");
     d.expect("Undo reload");
     assert_eq!(
@@ -271,6 +284,16 @@ pub fn broken(d: &mut Driver<'_>) {
     );
 }
 
+/// The file each generated NPC card will save, one label per card. A text run repeats its
+/// label's name, so it is not counted.
+fn npc_saves(d: &Driver<'_>) -> Vec<String> {
+    d.nodes()
+        .into_iter()
+        .filter(|n| n.role == Role::Label)
+        .filter_map(|n| n.name.strip_prefix("Will save NPCs/").map(str::to_owned))
+        .collect()
+}
+
 fn flat_entry(d: &Driver<'_>, path: &str, name: &str, fields: &str, body: &str) {
     let id = splat::character::stable_id(path);
     let path = root(d).join(path);
@@ -335,6 +358,14 @@ pub fn facts(d: &mut Driver<'_>) {
         "The Revolt",
         "splat_type: event\nsplat_when: 90 years ago\nsplat_until: 85 years ago",
         "The miners took the Arena and held it for five years.\n",
+    );
+    // A free-text date longer than the date column's limit, with a summary that wraps.
+    flat_entry(
+        d,
+        "History/The Long Siege.md",
+        "The Long Siege",
+        &format!("splat_type: event\nsplat_when: {LONG_WHEN}"),
+        &format!("{LONG_SUMMARY}\n"),
     );
     flat_entry(
         d,
@@ -570,6 +601,102 @@ pub fn facts(d: &mut Driver<'_>) {
             .is_some_and(|(first, second)| first.top() < second.top()),
         "A place shows the events that concern it, oldest first, each with its date",
     );
+    // FD3: the dates share one column, as wide as the widest date plus an `S` gap, but never
+    // more than a third of the reader. A longer date wraps inside its cell.
+    for size in [SMALL, DEFAULT, LARGE] {
+        let (column, bound, kept, level) = d
+            .at_size(size, |d| {
+                let body = d.painted_left("The arena at the capital, where the race starts.")?;
+                let reader = egui::Rect::from_min_max(
+                    egui::pos2(body - 1.0, 0.0),
+                    egui::pos2(f32::INFINITY, f32::INFINITY),
+                );
+                let short = d.painted_rect_in("120 years ago", reader)?;
+                let wide = d.painted_rect_in("90 to 85 years ago", reader)?;
+                let long = d.painted_rect_in(LONG_WHEN, reader)?;
+                let names = [
+                    d.painted_rect_in("The Massacre", reader)?,
+                    d.painted_rect_in("The Revolt", reader)?,
+                    d.painted_rect_in("The Long Siege", reader)?,
+                ];
+                let edge = names[0].left();
+                // The rule under the History heading spans the reader's own width.
+                let heading = d.painted_rect_in("History", reader)?;
+                let whole = d
+                    .hairlines_in(reader)
+                    .into_iter()
+                    .filter(|rule| rule.top() > heading.top() && rule.bottom() < short.top())
+                    .min_by(|a, b| a.top().total_cmp(&b.top()))?;
+                let summary = d.painted_word_rect(
+                    "The miners took the Arena and held it for five years.",
+                    reader,
+                )?;
+                let wrapped = d.painted_rect_in(LONG_SUMMARY, reader)?;
+                let last_row = d.painted_word_rect(LONG_SUMMARY, reader)?;
+                Some((
+                    names.iter().all(|name| (name.left() - edge).abs() <= 0.5)
+                        && edge - body >= wide.width() + design::S - 1.0
+                        && [short, wide, long]
+                            .iter()
+                            .all(|date| date.right() <= edge - design::S + 1.0),
+                    // The long date wraps in a column of at most a third of the reader's own
+                    // width, and the name after it stays inside the reader.
+                    (
+                        (whole.left() - body).abs() <= 2.0
+                            && long.height() > short.height() * 1.5
+                            && edge - body <= whole.width() / 3.0 + design::S + 1.0
+                            && names[2].right() <= whole.right(),
+                        edge - body,
+                        whole.width(),
+                    ),
+                    // Must stay true: dates start at the text edge, and a summary, also on its
+                    // wrapped lines, never sits under the date column.
+                    (short.left() - body).abs() <= 1.0
+                        && (wide.left() - body).abs() <= 1.0
+                        && (long.left() - body).abs() <= 1.0
+                        && summary.left() >= edge - 0.5
+                        && last_row.top() > wrapped.top() + 1.0
+                        && last_row.left() >= edge - 0.5,
+                    // Each date's first line sits on its name's line, also when the date wraps.
+                    [(short, names[0]), (wide, names[1]), (long, names[2])]
+                        .iter()
+                        .all(|(date, name)| {
+                            (date.top() + design::Type::Small.line() / 2.0 - name.center().y).abs()
+                                <= 1.5
+                        }),
+                ))
+            })
+            .unwrap_or_default();
+        d.observe(
+            "iter-14-D-FD3",
+            column,
+            format!(
+                "History names share one left edge after the widest date and an S gap at {size:?}"
+            ),
+        );
+        let (bound, column_width, reader_width) = bound;
+        d.observe(
+            "iter-14-D2-FD3-bound",
+            bound,
+            format!(
+                "Date column {column_width:.0} px plus S, reader {reader_width:.0} px at {size:?}. "
+            ) + &format!(
+                "A long History date wraps in a column of at most a third of the reader at {size:?}"
+            ),
+        );
+        d.observe(
+            "iter-14-D2-FD3-level",
+            level,
+            format!("Each History date's first line sits on its name's line at {size:?}"),
+        );
+        d.observe(
+            "iter-14-D2-FD3-wrap",
+            kept,
+            format!(
+                "History dates start at the text edge, and wrapped summaries stay right of them at {size:?}"
+            ),
+        );
+    }
     d.state("place-history", Sizes::All);
 
     d.click_containing("Zarel · ");
@@ -1105,6 +1232,138 @@ pub fn generator(d: &mut Driver<'_>) {
         d.has("Close Lookup") && !d.has("New NPC \"Names.md\""),
         "The warning opens its source note in Lookup",
     );
+
+    // FD5: with no names table, Lookup says so in the DM's words. Its link hands this NPC to
+    // the World page, which keeps the table marker for the DM who prepares.
+    fs::remove_file(root(d).join("Names.md")).unwrap();
+    reload(d);
+    d.click("Close Lookup");
+    d.click("Discard");
+    d.observe(
+        "iter-14-D-FD5-start",
+        !d.has("Save NPC"),
+        "The World page has no generated NPC before Lookup rolls one",
+    );
+    look_up(d, "Tally");
+    d.click("Clear");
+    d.click("Generate NPC");
+    d.expect(crate::lookup::USE_OWN_NAMES);
+    // One label per card. A text run repeats its label's name, so it is not counted.
+    let saves = npc_saves;
+    let rolled = saves(d);
+    d.observe(
+        "iter-14-D-FD5-lookup",
+        rolled.len() == 1
+            && d.visible_text(crate::lookup::BUILT_IN_NAMES)
+            && !d.visible_text("splat:rolls"),
+        "Lookup's generated NPC says Built-in names. and shows no table marker",
+    );
+    d.state("generator-built-in-names-in-lookup", Sizes::All);
+    d.click(crate::lookup::USE_OWN_NAMES);
+    d.settle();
+    d.observe(
+        "iter-14-D-FD5-world",
+        d.current_page() == "World"
+            && !d.has("Close Lookup")
+            && saves(d) == rolled
+            && d.visible_text("<!-- splat:rolls key=npc-name dice=1d6 -->"),
+        "Use your own names opens the same NPC on the World page, with the table marker",
+    );
+    d.state("generator-own-names-on-world", Sizes::Default);
+    // Must stay true: the NPC moved, so Lookup cannot save it twice, and World still saves it.
+    d.click(NAV_LOOKUP);
+    d.observe(
+        "iter-14-D-FD5-moved",
+        d.has("Close Lookup") && !d.has(crate::lookup::USE_OWN_NAMES) && saves(d) == rolled,
+        "Lookup no longer holds the NPC that moved to World",
+    );
+    d.click("Close Lookup");
+    d.click("Save NPC");
+    d.settle();
+    let file = root(d).join(format!("NPCs/{}", rolled[0]));
+    d.observe(
+        "iter-14-D-FD5-saved",
+        file.exists() && !d.has("Save NPC"),
+        "Save NPC on the World page writes the NPC that Lookup rolled",
+    );
+
+    // An unsaved NPC on the World page is never replaced by Lookup's. The link opens World,
+    // and Lookup keeps its own NPC.
+    d.click("New ▾");
+    d.click("Generate NPC");
+    let world = saves(d);
+    look_up(d, "Tally");
+    d.click("Clear");
+    d.click("Generate NPC");
+    d.expect(crate::lookup::USE_OWN_NAMES);
+    let both = saves(d);
+    let lookup: Vec<String> = both
+        .iter()
+        .filter(|n| !world.contains(n))
+        .cloned()
+        .collect();
+    d.observe(
+        "iter-14-D2-FD5-two",
+        world.len() == 1 && both.len() == 2 && lookup.len() == 1,
+        "World and Lookup each hold a different unsaved NPC",
+    );
+    d.click(crate::lookup::USE_OWN_NAMES);
+    d.settle();
+    d.observe(
+        "iter-14-D2-FD5-kept",
+        d.current_page() == "World" && !d.has("Close Lookup") && saves(d) == world,
+        "Use your own names opens World, which keeps its own unsaved NPC",
+    );
+    let kept_line = |file: &str| {
+        let name = file.strip_suffix(".md").unwrap_or(file);
+        format!("Lookup keeps {name}. Save or discard this NPC to move it here.")
+    };
+    d.observe(
+        "iter-14-D3-FD5-reason",
+        d.visible_text(&kept_line(&lookup[0])),
+        "World's card says why it kept its own NPC, naming Lookup's",
+    );
+    d.state("generator-world-keeps-its-npc", Sizes::All);
+    d.click(NAV_LOOKUP);
+    d.observe(
+        "iter-14-D2-FD5-lookup-kept",
+        d.has("Close Lookup") && d.has(crate::lookup::USE_OWN_NAMES) && saves(d) == both,
+        "Lookup still holds its NPC after the link",
+    );
+    // The line follows Lookup's NPC: a reroll there renames it on World.
+    d.click_below(&format!("Will save NPCs/{}", lookup[0]), "Reroll");
+    d.settle();
+    let rerolled: Vec<String> = saves(d)
+        .into_iter()
+        .filter(|n| !world.contains(n))
+        .collect();
+    d.click("Close Lookup");
+    d.observe(
+        "iter-14-D3-FD5-reason-live",
+        rerolled.len() == 1
+            && rerolled != lookup
+            && d.visible_text(&kept_line(&rerolled[0]))
+            && !d.visible_text(&kept_line(&lookup[0])),
+        "World's line names the NPC Lookup holds now",
+    );
+    let lookup = rerolled;
+    d.click("Save NPC");
+    d.settle();
+    d.click(NAV_LOOKUP);
+    if d.has("Save NPC") {
+        d.click("Save NPC");
+        d.settle();
+    }
+    let written = [&world, &lookup].map(|names| {
+        names
+            .first()
+            .is_some_and(|name| root(d).join(format!("NPCs/{name}")).exists())
+    });
+    d.observe(
+        "iter-14-D2-FD5-both-saved",
+        written == [true, true],
+        "Saving both NPCs writes two files",
+    );
 }
 
 /// The NPC keeps both reference links beside a live fight.
@@ -1410,7 +1669,16 @@ pub fn package_rename(d: &mut Driver<'_>) {
                     && (file.center().y - from.center().y).abs() < crate::design::XS
             })
     });
-    d.state("draft-file-moved-on-disk", Sizes::All);
+    d.state_prepared("draft-file-moved-on-disk", Sizes::All, |d| {
+        choices_at_text(
+            d,
+            "iter-15-E-AD3-library-moved",
+            "This entry moved on disk",
+            "Save my draft to Moved/Ash Exposure.md",
+            "Reload and lose my draft",
+            None,
+        );
+    });
     let before_save = fs::read_to_string(&moved).unwrap();
     d.click("Save my draft to Moved/Ash Exposure.md");
     d.wait_for_text("Saved");
@@ -1918,7 +2186,16 @@ pub fn package_file_changed(d: &mut Driver<'_>) {
     d.focus_window(true);
     d.wait_for_text("This entry changed on disk. Your draft is safe until you choose.");
     d.expect("Overwrite with my draft");
-    d.state("package-draft-changed-on-disk", Sizes::All);
+    d.state_prepared("package-draft-changed-on-disk", Sizes::All, |d| {
+        choices_at_text(
+            d,
+            "iter-15-E-AD3-library-package",
+            "This entry changed on disk",
+            "Overwrite with my draft",
+            "Reload and lose my draft",
+            None,
+        );
+    });
     d.click("Reload and lose my draft");
     d.click("Read");
     // The attribute table's rows are pointer targets, so the actions can start lower.
@@ -2189,6 +2466,23 @@ pub fn package_delete_entry(d: &mut Driver<'_>) {
     );
     d.expect("Ember Cultist needs this entry.");
     d.state_prepared("draft-file-deleted-on-disk", Sizes::All, |d| {
+        choices_at_text(
+            d,
+            "iter-15-E-AD3-library-gone",
+            "This entry's file has gone from disk",
+            "Save my draft again",
+            "Let it go",
+            None,
+        );
+        // The note about who needs the entry sits with the message, at its text edge.
+        let text = d.painted_rect_in("This entry's file has gone", egui::Rect::EVERYTHING);
+        let needs = d.painted_rect_in("Ember Cultist needs this entry.", egui::Rect::EVERYTHING);
+        d.observe(
+            "iter-15-E-AD3-library-gone-needs",
+            text.zip(needs)
+                .is_some_and(|(text, needs)| (needs.left() - text.left()).abs() < 1.0),
+            format!("The dependents line starts at the message text: {text:?}, {needs:?}"),
+        );
         let draft = d.place_of("Your draft").expect("The lone draft is visible");
         d.observe(
             "iter-13-E-AD3",
@@ -2277,6 +2571,25 @@ pub fn package_duplicate_id(d: &mut Driver<'_>) {
     d.click_starting("Cinder Wolf · ");
     d.expect("Make Cinder Wolf copy.md a separate entry");
     d.click(EDIT_MARKDOWN);
+    // Must stay true with iter-14-E-FD4: Edit Markdown keeps the choices above the editor.
+    d.observe_both(
+        "iter-14-E-FD4-source",
+        "Edit Markdown keeps both repair choices above the Markdown editor",
+        |d| {
+            let Some(editor) = d.place_of("Markdown editor") else {
+                return false;
+            };
+            [
+                "Make Cinder Wolf copy.md a separate entry",
+                "Make Cinder Wolf.md a separate entry",
+            ]
+            .iter()
+            .all(|name| {
+                d.place_of(name)
+                    .is_some_and(|choice| d.in_view(name) && choice.bottom() < editor.top())
+            })
+        },
+    );
     d.state("duplicate-original-editor", Sizes::All);
     d.type_into_editor("Saved only to the original.\n");
     d.click("Save");
@@ -3165,6 +3478,54 @@ pub fn package_folder_copied(d: &mut Driver<'_>) {
             format!("The copied-package action is bordered below the message at {size:?}"),
         );
     }
+    // AD1, a result with another action: an outside change to a copied file blocks Undo package
+    // registration with its reason, and Use the copy's entries stays. Restoring the bytes and
+    // reloading brings Undo back, so the later steps see the usual state.
+    {
+        let reload_library = |d: &mut Driver<'_>| {
+            d.click("Packages");
+            d.click("Reload from disk");
+            d.wait_for_text("Undo package registration");
+        };
+        let (entries, _) = splat::content::read_directory(&copied).unwrap();
+        let file = copied.join(
+            &entries
+                .iter()
+                .find(|entry| entry.kind != "package")
+                .expect("fixture: a copied entry")
+                .path,
+        );
+        let written = fs::read(&file).unwrap();
+        assert!(
+            !d.is_disabled("Undo package registration"),
+            "fixture: Undo starts available"
+        );
+        let mut outside = written.clone();
+        outside.extend_from_slice(b"\nAn outside note.\n");
+        fs::write(&file, &outside).unwrap();
+        reload_library(d);
+        let blocked = d.is_disabled("Undo package registration");
+        let use_kept =
+            d.in_view("Use the copy's entries") && !d.is_disabled("Use the copy's entries");
+        let reason = d.tooltip_contains(
+            "Undo package registration",
+            crate::content_workspace::UNDO_ENDED,
+        );
+        d.observe(
+            "iter-14-E-AD1-registration",
+            blocked && use_kept && reason && fs::read(&file).unwrap() == outside,
+            format!(
+                "After an outside change, Undo package registration is blocked ({blocked}) and says why ({reason}); Use the copy's entries stays ({use_kept}); the file keeps the outside bytes"
+            ),
+        );
+        fs::write(&file, &written).unwrap();
+        reload_library(d);
+        d.observe(
+            "iter-14-E-AD1-registration-back",
+            !d.is_disabled("Undo package registration"),
+            "With the written bytes back, a reload makes Undo package registration available again",
+        );
+    }
     go_campaign(d);
     d.expect("Ashen Reaches");
     d.state("campaign-after-copy-registration", Sizes::All);
@@ -3238,6 +3599,59 @@ pub fn package_folder_copied(d: &mut Driver<'_>) {
         );
     }
     d.state("manifest-only-hand-repair-keeps-both-files", Sizes::All);
+    // FD4: the four choices sit in the reader's scroll area after the title, so a scroll over the
+    // reader moves them with the title and brings the body into view. Checked at 960x640.
+    {
+        let single = "Make Cinder Wolf.md in ashen-marches-copy/ a separate entry";
+        let last_choice = |d: &Driver<'_>| {
+            d.nodes()
+                .into_iter()
+                .filter(|node| node.name.starts_with("Make all ") && node.in_view())
+                .map(|node| node.rect)
+                .max_by(|a, b| a.top().total_cmp(&b.top()))
+        };
+        d.expect(single);
+        let title = d
+            .scroll_position_of_reader("Cinder Wolf")
+            .expect("the reader title is on the page");
+        let choice = d.place_of(single).unwrap();
+        let last = last_choice(d).expect("a folder choice is in view");
+        let warning = d
+            .painted_rect_in(crate::world::DUPLICATE_ENTRY, egui::Rect::EVERYTHING)
+            .expect("the duplicate warning is painted");
+        let at = egui::pos2(choice.center().x, title + 4.0);
+        d.scroll_at(at, 2);
+        let title_after = d
+            .scroll_position_of_reader("Cinder Wolf")
+            .unwrap_or(f32::MIN);
+        let moved = title - title_after;
+        let choice_moved = choice.top() - d.place_of(single).map_or(f32::MAX, |rect| rect.top());
+        let last_moved = last_choice(d).map_or(0.0, |rect| last.top() - rect.top());
+        d.scroll_up_at(at, 4);
+        let restored = d.scroll_position_of_reader("Cinder Wolf") == Some(title);
+        d.observe(
+            "iter-14-E-FD4",
+            title >= 0.0
+                && title < choice.top()
+                && moved > 0.0
+                && (choice_moved - moved).abs() < 1.0
+                && (last_moved - moved).abs() < 1.0
+                && restored,
+            format!(
+                "The copied-folder choices scroll with the reader title: title {title:.0} moved {moved:.0}, single choice moved {choice_moved:.0}, last folder choice moved {last_moved:.0}, restored {restored}"
+            ),
+        );
+        // Must stay true: the choices still start at the message text edge.
+        d.observe(
+            "iter-14-E-FD4-edge",
+            (choice.left() - warning.left()).abs() < 1.0,
+            format!(
+                "The first choice starts at the warning text: text {:.0}, choice {:.0}",
+                warning.left(),
+                choice.left()
+            ),
+        );
+    }
     search_library(d, "Cinder Wolf");
     d.click_containing("· ashen-marches/");
     d.expect("Make Cinder Wolf.md in ashen-marches-copy/ a separate entry");
@@ -3271,6 +3685,9 @@ pub fn package_folder_copied(d: &mut Driver<'_>) {
     d.click(&format!(
         "Make all {count} files in ashen-marches-copy/ separate entries"
     ));
+    let batch_words = format!("{count} files in ashen-marches-copy/ are now separate entries.");
+    d.wait_for_text("Undo separate entries");
+    d.expect(&batch_words);
     let wolf = copied_entries
         .iter()
         .find(|entry| entry.name == "Cinder Wolf")
@@ -3280,11 +3697,33 @@ pub fn package_folder_copied(d: &mut Driver<'_>) {
         copied.join(&wolf.path),
     )
     .unwrap();
+    // The reported fixture: the original's bytes over one repaired file, and the batch's other files.
+    let on_disk = |copied: &std::path::Path| {
+        copied_entries
+            .iter()
+            .map(|entry| fs::read(copied.join(&entry.path)).unwrap())
+            .collect::<Vec<_>>()
+    };
+    let outside = on_disk(&copied);
+    assert_eq!(
+        fs::read(copied.join(&wolf.path)).unwrap(),
+        fs::read(d.root.join("modules/ashen-marches").join(&wolf.path)).unwrap()
+    );
     d.click("Packages");
     d.click("Reload from disk");
     search_library(d, "Cinder Wolf");
     d.click_containing("· ashen-marches/");
     d.expect("Make Cinder Wolf.md in ashen-marches-copy/ a separate entry");
+    // AD1: the outside copy ended the batch result, so the message and its Undo go. The reload
+    // writes nothing, and the duplicate repair choices stay.
+    d.observe(
+        "iter-14-E-AD1",
+        !d.has("Undo separate entries")
+            && !d.visible_text(&batch_words)
+            && d.has("Make Cinder Wolf.md in ashen-marches-copy/ a separate entry")
+            && on_disk(&copied) == outside,
+        "After an outside copy over a repaired file, the batch result and Undo separate entries are gone, the choices stay and no file changed",
+    );
     d.state("one-entry-copied-between-registered-packages", Sizes::All);
     go_encounters(d);
     if d.has("Back to encounters") {
@@ -3676,7 +4115,16 @@ pub fn part_of_safety(d: &mut Driver<'_>) {
                 && d.in_view("Reload and lose my draft")
         },
     );
-    d.state("group-draft-disk-conflict", Sizes::All);
+    d.state_prepared("group-draft-disk-conflict", Sizes::All, |d| {
+        choices_at_text(
+            d,
+            "iter-15-E-AD3-world-edit",
+            "This note changed on disk",
+            "Overwrite with my draft",
+            "Reload and lose my draft",
+            None,
+        );
+    });
     d.click("Overwrite with my draft");
     d.wait_for_text("Changes saved.");
     let saved = fs::read_to_string(&path).unwrap();

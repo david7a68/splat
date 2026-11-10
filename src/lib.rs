@@ -27,6 +27,7 @@ mod encounters;
 mod file_batch;
 mod formats_ui;
 mod hermetic;
+mod history;
 mod library;
 #[cfg(test)]
 mod load_bench;
@@ -186,6 +187,14 @@ enum Connection {
     /// The session still works, but renewing it fails. It ends soon.
     Failing,
     Offline,
+}
+
+/// The rail's Run slot with no fight open. It keeps the slot, so no rail target moves.
+pub(crate) const NO_FIGHT_OPEN: &str = "No fight open";
+
+/// The empty Run slot's accessible name. It does not start like an open run's `Run · …`.
+pub(crate) fn no_run_name() -> String {
+    format!("Run: {NO_FIGHT_OPEN}")
 }
 
 /// One flat level. A run is a place, not a mode of a tab.
@@ -788,13 +797,25 @@ impl Splat {
                         crate::encounters::run_state_word(run, false),
                     )
                 });
-                if let Some((path, name, state)) = paused
-                    && design::paused_run_nav(ui, fights, &name, &state).clicked()
-                {
-                    if fights > 1 {
+                if let Some((path, name, state)) = paused {
+                    if design::paused_run_nav(ui, fights, &name, &state).clicked() {
+                        if fights > 1 {
+                            self.page = Page::Encounters;
+                        } else if let Some(active) = self.campaigns.active_campaign() {
+                            self.encounters.open_saved_run(&path, &active);
+                        }
+                    }
+                } else {
+                    // The Run slot stays when no fight is open, as tall as a run's item, so
+                    // Encounters, Session and the rest never move when a run opens or closes.
+                    let response =
+                        design::nav_item(ui, icons::RUN, "Run", Some(NO_FIGHT_OPEN), false);
+                    design::named(ui, &response, &no_run_name());
+                    if response
+                        .on_hover_text(format!("{NO_FIGHT_OPEN}. Encounters lists the fights."))
+                        .clicked()
+                    {
                         self.page = Page::Encounters;
-                    } else if let Some(active) = self.campaigns.active_campaign() {
-                        self.encounters.open_saved_run(&path, &active);
                     }
                 }
             } else {
@@ -1114,6 +1135,22 @@ impl Splat {
             self.world_page.open_repair(&campaign, &path);
             self.lookup.close();
             self.page = Page::World;
+        }
+        if let Some(card) = self.lookup.open_world_names.take() {
+            // An unsaved NPC on the World page is never replaced. Lookup keeps its own, and the
+            // World page's card shows the same help.
+            if self.world_page.has_generated() {
+                self.lookup.keep_generated(card);
+                self.world_page.lookup_kept();
+            } else {
+                self.world_page.show_generated(card);
+            }
+            self.lookup.close();
+            self.page = Page::World;
+        }
+        if self.world_page.wants_lookup_npc() {
+            self.world_page
+                .set_lookup_npc(self.lookup.generated_name().map(str::to_owned));
         }
         if let Some(id) = ctx
             .data_mut(|data| data.remove_temp::<uuid::Uuid>(egui::Id::new("reveal_encounter_npc")))
@@ -2218,12 +2255,13 @@ impl Splat {
 }
 
 impl eframe::App for Splat {
-    fn raw_input_hook(&mut self, _: &egui::Context, raw_input: &mut egui::RawInput) {
+    fn raw_input_hook(&mut self, ctx: &egui::Context, raw_input: &mut egui::RawInput) {
         // eframe calls this before the first `update`, where `start` restores the rest.
         if !self.started {
             self.touchpad_speed = self.ui_store.load().touchpad_speed;
         }
         self.touchpad_speed.apply(&mut raw_input.events);
+        history::set_aside(ctx, &mut raw_input.events);
     }
 
     fn update(&mut self, ctx: &egui::Context, _: &mut eframe::Frame) {
@@ -2418,7 +2456,7 @@ impl eframe::App for Splat {
             self.encounters.has_run(),
         );
         design::reserve_primary(ctx, false);
-        self.lookup.back_key(ctx, self.page == Page::Library);
+        self.lookup.history_input(ctx, self.page == Page::Library);
         self.route_rolls(ctx);
         self.run_strip(ctx);
         self.party_bar(ctx);

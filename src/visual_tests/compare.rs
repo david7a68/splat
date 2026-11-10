@@ -1,8 +1,8 @@
 //! `visual-compare <labelA> <labelB>`: which captures of two runs differ, by more than the
 //! rendering noise. A simplify pass that changes no behaviour should report nothing.
 //!
-//! Software rendering is threaded, so a few pixels on a blended edge can differ by one level
-//! between two runs of the same code. The tolerance is above that, and below anything a
+//! Mesa's software rendering is threaded, so a few pixels on a blended edge can differ by one
+//! level between two runs of the same code. The tolerance is above that, and below anything a
 //! person could see.
 use image::RgbaImage;
 use rayon::prelude::*;
@@ -101,6 +101,16 @@ fn visual_compare() {
         .and_then(|value| value.parse().ok())
         .unwrap_or(DEFAULT_TOLERANCE);
     let (a, b) = (folder("VISUAL_COMPARE_A"), folder("VISUAL_COMPARE_B"));
+    let renderer = |dir: &std::ffi::OsStr| {
+        let file = Path::new(dir).join("renderer.txt");
+        fs::read_to_string(file).unwrap_or_else(|_| "not recorded\n".to_owned())
+    };
+    let (renderer_a, renderer_b) = (renderer(&a), renderer(&b));
+    if renderer_a != renderer_b {
+        // A GPU and the software rasterizer differ on a few edge pixels.
+        println!("The runs used different renderers. Expect small edge differences.");
+        print!("A: {renderer_a}B: {renderer_b}");
+    }
     let (_, lines) = compare(Path::new(&a), Path::new(&b), tolerance);
     for line in &lines {
         println!("{line}");

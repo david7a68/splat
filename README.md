@@ -92,9 +92,14 @@ devenv shell -- audit-gate final
 This also writes to `artifacts/screenshots/iter-0/`: PNGs at 960x640 and 1200x800,
 with 1920x1080 for width-sensitive layouts and recorded wide proof states. Selected
 states also have a 2x-density capture. The folder holds `ergonomics.json`, `ergonomics.md`,
-`manifest.txt`, and one `video/<scenario>.mp4` per scenario. Rendering uses Mesa's
-software Vulkan driver, so captures repeat between runs. Video needs the host's
-`ffmpeg`. The optional contact sheet needs `montage` and can use several GB of RAM.
+`manifest.txt`, `renderer.txt` and one `video/<scenario>.mp4` per scenario. Rendering uses
+Mesa's Vulkan driver for an Intel or AMD GPU, or its software rasterizer when there is no
+such GPU. `SPLAT_VISUAL_RENDERER=software` always uses the software rasterizer. Two runs
+on the same renderer give the same pixels. A GPU and the software rasterizer differ on a
+few edge pixels, so compare runs from the same computer. Video needs the host's
+`ffmpeg`. Videos are 12 frames per second, and each picture is stored once. They use the
+first H.264 encoder that works: VA-API for Intel or AMD, then NVIDIA's
+NVENC, then x264 on the CPU. `renderer.txt` names the encoder. The optional contact sheet needs `montage` and can use several GB of RAM.
 Use `devenv shell -- visual-contact-sheet iter-0` to make one from existing captures,
 or set `SPLAT_VISUAL_CONTACT_SHEET=1` to make it with a full `visual-test` run.
 
@@ -130,6 +135,9 @@ or set `SPLAT_VISUAL_CONTACT_SHEET=1` to make it with a full `visual-test` run.
 - `SPLAT_VISUAL_SCENARIOS=party,settings` runs only those scenarios. `visual-test <label> --only
   party,settings` is the same, and keeps the captures of the label's other scenarios.
 - `SPLAT_VISUAL_VIDEO=0` turns video off for `visual-test`.
+- `SPLAT_VISUAL_ENCODER=vaapi`, `nvenc` or `x264` uses only that kind of video encoder.
+  An unavailable one falls back to x264. At most six videos at once use NVENC, because
+  NVIDIA drivers limit encode sessions. Other videos then use x264.
 - `Sizes::Standard` captures and checks 960x640 and 1200x800. `StandardAndHiDpi`
   adds 2x density. Use `All` or `AllAndHiDpi` for readers, forms, lists, panes,
   action notices and wide proof states where width matters. The older `Default`
@@ -376,6 +384,7 @@ Close the open run before saving run settings.
 The run panel groups participant tabs and fight tabs. `Correct` changes a participant's
 values. A blocked Undo shows **Nothing to undo**, or **Nothing to undo since reopening**.
 `Add to fight` opens the Arrivals panel for a creature or a prepared group; a blank initiative total rolls it.
+Search shows five creatures; **Show all** lists every match without more typing.
 Group Add buttons share a fixed slot, so all Initiative fields align.
 `Ctrl+G` opens the same panel in one step.
 Unsaved runs offer **Save as a new run and close** in the close dialog.
@@ -664,7 +673,9 @@ encounter, and Undo removes them. A location lists what is in it, and World show
 
 **Generate NPC** in Lookup rolls a name and three attributes: look, manner and want. **Reroll** rolls them all again,
 and nothing is written until **Save NPC**, which creates the note in `NPCs/` and opens it. **Discard** lets it go.
-The card names the campaign tables it uses, or says that it uses built-in lists.
+The card names the campaign tables it uses, or says that it uses built-in lists. Without a names table, Lookup says
+**Built-in names.** and offers **Use your own names**, which opens the same NPC on the World page. The World page's card
+says how to mark a table of names.
 
 The built-in lists suit no world in particular, so a campaign can replace any of the four. Mark a table with the key
 `npc-name`, `npc-look`, `npc-manner` or `npc-want` in any world note. The first table in path order wins, session notes
@@ -784,7 +795,7 @@ creature records remain available offline, and open sheets use the event stream
 with polling fallback. No character changes are sent to D&D Beyond. See [viewer details and streaming findings](docs/character-viewer.md).
 
 If you edit a generated campaign note, Splat keeps your edit and stops updating that character's notes. To
-get updates again, use **Show file** to inspect it or choose **Replace with D&D Beyond sheet** on the warning. Splat reads that character again and replaces its edited notes. Your version stays beside the note in a `.splat-archive` file. The row says **Local edits** until replacement. The result names the character and has **Show file** for the kept version and **Dismiss**. When signed out, **Connect to refresh** takes you to the connection. Personal notes carry over when Splat can still find them.
+get updates again, use **Show file** to inspect it or choose **Replace with D&D Beyond sheet** on the warning. Splat reads that character again and replaces its edited notes. Your version stays beside the note in a `.splat-archive` file. The row says **Local edits** until replacement. The result names the character and has **Show file** for the kept version and **Dismiss**. When signed out, the warning has **Connect D&D Beyond**, which takes you to the connection. While that warning shows, the header shows only **Not connected** and when the sheets were fetched; it offers **Connect to refresh** again when no warning has its own Connect. Personal notes carry over when Splat can still find them.
 
 ## Encounter builder
 
@@ -1030,7 +1041,7 @@ Session Read view keeps each link's written words. When a Timeline event is rena
 
 Settings imports a D&D Beyond campaign directly below its row and suggests a new folder beside the existing campaigns. Saved API keys name their slot, such as **Remove speech key (OpenAI)**. The quiet remove action sits below the key state, at the column’s left edge. Failed recording jobs use **Continue processing**; **Process again** replaces existing results after a separate confirmation.
 
-Library shows **Back** with **Alt+Left** whenever an earlier entry is available. Both ordinary and wiki links open in place. The draft and disk comparison opens at the first changed line, with two context lines above it; a missing line says **No line**. Lookup has **Clear** beside search. An NPC read beside a run shows linked **Fights as** and **In** values. New packages start beside the last registered package. **Folder** accepts a new folder or suggests an existing one.
+Library shows **Back** with **Alt+Left** whenever an earlier entry is available. **Alt+Right** goes forward again to an entry left by Back, until a new link starts a new trail. The mouse's Back and Forward buttons do the same. Both ordinary and wiki links open in place. The draft and disk comparison opens at the first changed line, with two context lines above it; a missing line says **No line**. Lookup has **Clear** beside search. An NPC read beside a run shows linked **Fights as** and **In** values. New packages start beside the last registered package. **Folder** accepts a new folder or suggests an existing one.
 
 The visual suite includes `npc-in-lookup`, `package-rename` and `package-about`. `share-to-package` checks the new references after **Copy both**, and Library navigation checks the dependency copy action and its Undo.
 
@@ -1040,7 +1051,7 @@ If a package creature is deleted on disk, its encounter row keeps the last known
 
 New creature entries start with speed and six ability scores in the Stat block tables. HP and AC stay unset until you enter them. Size, type, alignment and CR are fields too. Library, Lookup, encounter search and XP use one CR rule. The reader shows each vital once. If a visible AC or HP line disagrees, the editor offers to use its value for the fight, with Undo. A renamed copy also renames its first H1 when it matches the source name. If the first heading differs from the entry name, Library offers to fix that heading, with Undo. Package creation shows a **Folder** field and the destination path after you type a name. `package-file-changed`, `package-delete-entry`, `book-to-package` and `world-note-deleted` cover these disk and copy paths.
 
-Library keeps its reader toolbar on one line. At narrow widths, **More** holds Copy and Make NPC note. Lookup supports **Alt+Left** for Back. World lists broken place and stat block links beside each note and counts affected notes in its header. Generated NPCs show their save path before **Save NPC**.
+Library keeps its reader toolbar on one line. At narrow widths, **More** holds Copy and Make NPC note. Lookup supports **Alt+Left** for Back and **Alt+Right** for Forward, as do the mouse's Back and Forward buttons. World lists broken place and stat block links beside each note and counts affected notes in its header. Generated NPCs show their save path before **Save NPC**.
 
 The run header keeps two lines after each action. Undo uses the space after the notice.
 A short label keeps the action, amount and copy number; hover gives the full action.
@@ -1061,14 +1072,16 @@ Package repair keeps entries available when the manifest breaks or is deleted.
 **Replace with a basic Module.md** names the existing file and says which fields it drops.
 For an unreadable manifest, Campaign puts bordered **Open in Library** first, followed by replacement and its consequence.
 Replacing a broken file offers **Undo write Package.md** or **Undo write Module.md** for the file written.
-If the file changes after the write, the result and its Undo go away at the next reload. Copied World notes stay
+If the file changes after the write, the result and its Undo go away at the next reload. The same applies to
+every Library and Campaign result with Undo that wrote files, such as **Undo separate entries**. The copy
+registration message stays, because it has another action; its Undo is turned off and says why. Copied World notes stay
 visible in World and Lookup with a duplicate warning and file-specific identity
 repair. Each repair has Undo. It also uses the file name for the copy's name and matching
 first heading. A copied package folder offers **Register as a new package** under
 its warning. This writes new package and entry identities, keeps links within the
 copy, and has one Undo that restores the files. A run's Sheet uses its live death-save counts once.
 
-Copy registration has **Use in this campaign**. It starts off when the campaign uses the original. **Use the copy's entries** changes encounter and group sources while keeping their names, counts and changes, with Undo. Duplicate repair actions name the folder when filenames match and can repair a whole copied folder at once.
+Copy registration has **Use in this campaign**. It starts off when the campaign uses the original. **Use the copy's entries** changes encounter and group sources while keeping their names, counts and changes, with Undo. Duplicate repair actions name the folder when filenames match and can repair a whole copied folder at once. In the reader, the choices follow the entry's title and scroll with the entry.
 
 After **Unregister**, Library offers **Undo unregister**. Campaign keeps the last folder and offers **Register it again**. A missing folder shows its last path. When one matching folder is nearby, one warning names the old and new
 folders and the affected encounters. **Use this folder** comes first on the action line. Folder recovery has Undo.

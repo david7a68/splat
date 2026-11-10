@@ -596,29 +596,33 @@ impl Run {
 
     /// The run cannot save until the DM chooses, so this cannot be dismissed.
     fn disk_conflict_line(&mut self, ui: &mut egui::Ui) {
-        design::message(ui, Tone::Error, super::DISK_CONFLICT);
-        ui.add_space(design::XS);
-        let mut outcome = None;
-        ui.horizontal(|ui| {
-            // Neither action is filled: the safe one comes first, and the red one keeps an `L` gap.
-            if Action::secondary("Save as a new run")
-                .density(Density::Read)
-                .hint("Keep the changed file as it is, and save this run beside it")
-                .show(ui)
-                .clicked()
-            {
-                outcome = Some(self.save_as_new_run());
-            }
-            ui.add_space(design::L);
-            if Action::destructive("Replace the file with this run")
-                .density(Density::Read)
-                .hint("The changes in the file on disk are lost")
-                .show(ui)
-                .clicked()
-            {
-                outcome = Some(self.keep_this_run());
-            }
+        // The choices start at the message text, like every other message with choices.
+        let choice = design::message_with_actions(ui, Tone::Error, super::DISK_CONFLICT, |ui| {
+            ui.add_space(design::XS);
+            ui.horizontal(|ui| {
+                // Neither action is filled: the safe one comes first, and the red one keeps an
+                // `L` gap.
+                let save_new = Action::secondary("Save as a new run")
+                    .density(Density::Read)
+                    .hint("Keep the changed file as it is, and save this run beside it")
+                    .show(ui)
+                    .clicked();
+                // egui adds its item spacing too, so the whole gap is exactly `L`.
+                ui.add_space(design::L - ui.spacing().item_spacing.x);
+                let replace = Action::destructive("Replace the file with this run")
+                    .density(Density::Read)
+                    .hint("The changes in the file on disk are lost")
+                    .show(ui)
+                    .clicked();
+                (save_new, replace)
+            })
+            .inner
         });
+        let outcome = match choice {
+            (true, _) => Some(self.save_as_new_run()),
+            (_, true) => Some(self.keep_this_run()),
+            _ => None,
+        };
         if let Some(Err(error)) = outcome {
             self.error = Some(error);
         }
@@ -848,7 +852,7 @@ impl Run {
                                 let detail = self.notice.as_deref().unwrap_or(shown);
                                 design::named(ui, &response, detail);
                                 response.on_hover_text(detail);
-                                let log = design::small_link(ui, " Log ");
+                                let log = log_link(ui);
                                 design::named(ui, &log, "Log");
                                 if log.clicked() {
                                     self.panel = Panel::Log;
@@ -1141,7 +1145,7 @@ impl Run {
                     (ui.available_width() - sheet_reserve - notice_width - design::L).max(0.0);
                 let sheet_width = |summary: &str| {
                     design::number_width(ui, &format!("{} {summary}", icons::WARN), &font)
-                        + design::number_width(ui, " Log ", &Type::Body.font(ui))
+                        + design::number_width(ui, "Log", &Type::Small.font(ui))
                         + Density::Read.control()
                         + design::L
                         + design::S * 3.0
@@ -1349,7 +1353,7 @@ impl Run {
                         let detail = self.notice.as_deref().unwrap_or(summary);
                         design::named(ui, &response, detail);
                         response.on_hover_text(detail);
-                        let log = design::small_link(ui, " Log ");
+                        let log = log_link(ui);
                         design::named(ui, &log, "Log");
                         if log.clicked() {
                             self.panel = Panel::Log;
@@ -5610,13 +5614,29 @@ pub(crate) fn group_fault(ui: &mut egui::Ui, fault: &str) -> bool {
         })
         .inner
     } else {
-        design::message(ui, Tone::Warning, fault);
-        ui.horizontal(|ui| {
-            ui.add_space((inset - gap).max(0.0));
-            design::status_link(ui, status).clicked()
+        // A notice action: the link's words start at the warning text.
+        design::message_with_actions(ui, Tone::Warning, fault, |ui| {
+            hanging_link(ui, status.icon, |ui| {
+                design::status_link(ui, status).clicked()
+            })
         })
-        .inner
     }
+}
+
+/// A repair link under a message. Its words start at the message text, and its icon hangs in
+/// the gutter before them.
+pub(crate) fn hanging_link(
+    ui: &mut egui::Ui,
+    icon: &str,
+    link: impl FnOnce(&mut egui::Ui) -> bool,
+) -> bool {
+    let hang = design::number_width(ui, &format!("{icon} "), &Type::Small.font(ui));
+    ui.horizontal(|ui| {
+        ui.spacing_mut().item_spacing.x = 0.0;
+        ui.add_space(-hang);
+        link(ui)
+    })
+    .inner
 }
 
 fn arrival_summary(ui: &egui::Ui, status: &str, members: &str, width: f32) -> String {
@@ -5889,6 +5909,40 @@ impl TurnMark {
 }
 
 /// Everything on a row, for assistive technology and for the tests.
+/// The notice's `Log` link. The underline covers only the word, and the word starts where the
+/// item gap puts it. The 24 px target is the link's own minimum size: a word narrower than that
+/// gets the extra width evenly on both sides, inside the gaps, so nothing beside it moves.
+fn log_link(ui: &mut egui::Ui) -> egui::Response {
+    const WORD: &str = "Log";
+    let c = colors();
+    let galley = ui
+        .painter()
+        .layout_no_wrap(WORD.to_owned(), Type::Small.font(ui), c.accent);
+    let (id, word) = ui.allocate_space(vec2(galley.size().x, galley.size().y.max(design::XL)));
+    let target = word.expand2(vec2(((design::XL - word.width()) / 2.0).max(0.0), 0.0));
+    let response = ui.interact(target, id, egui::Sense::click());
+    response
+        .widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Link, ui.is_enabled(), WORD));
+    if ui.is_rect_visible(target) {
+        let top = word.center().y - galley.size().y / 2.0;
+        let color = if response.hovered() {
+            c.focus
+        } else {
+            c.accent
+        };
+        ui.painter().hline(
+            word.x_range(),
+            top + galley.size().y - 1.0,
+            egui::Stroke::new(design::HAIRLINE_WIDTH, color.gamma_multiply(0.6)),
+        );
+        ui.painter().galley(pos2(word.left(), top), galley, color);
+        if response.has_focus() {
+            design::focus_ring(ui, target);
+        }
+    }
+    response.on_hover_cursor(egui::CursorIcon::PointingHand)
+}
+
 fn row_name(p: &Participant, turn: TurnMark, sync: Option<SyncState>) -> String {
     let mut parts = vec![
         p.name.clone(),
@@ -6207,17 +6261,21 @@ impl RowLayout {
         }
         if inline_state && let Some(sync) = sync {
             let status = sync_status(sync);
-            job.append(
-                " ",
-                0.0,
-                egui::TextFormat {
-                    font_id: font.clone(),
-                    ..Default::default()
-                },
-            );
+            // Alone on the line, the state starts at the line's edge, like Bloodied.
+            let alone = job.is_empty();
+            if !alone {
+                job.append(
+                    " ",
+                    0.0,
+                    egui::TextFormat {
+                        font_id: font.clone(),
+                        ..Default::default()
+                    },
+                );
+            }
             job.append(
                 &format!("{} {}", status.icon, status.word).replace(' ', "\u{a0}"),
-                design::XS,
+                if alone { 0.0 } else { design::XS },
                 egui::TextFormat {
                     font_id: Type::Small.sized(ui, scale.mark),
                     color: status.color,
@@ -7978,6 +8036,80 @@ mod tests {
     }
 
     #[test]
+    fn iter_15_b_inline_conflict_starts_at_the_second_line_edge() {
+        let base = super::super::tests::run().state.participants[0].clone();
+        let ctx = egui::Context::default();
+        design::theme::install(&ctx);
+        let _ = ctx.run(egui::RawInput::default(), |ctx| {
+            egui::CentralPanel::default().show(ctx, |ui| {
+                // The x where the state's icon starts on the second line.
+                let icon_x = |participant: &Participant, sync: Option<SyncState>| {
+                    let layout = RowLayout::new(
+                        ui,
+                        442.40625,
+                        participant,
+                        sync,
+                        design::RUN_COMPACT,
+                        RowFit::Summary,
+                        0.0,
+                    );
+                    assert!(layout.inline_state, "the compact row puts its state inline");
+                    let line = layout.second_line.as_ref().unwrap();
+                    let text = line.text();
+                    let word = if sync.is_some() {
+                        "Conflict"
+                    } else {
+                        "Bloodied"
+                    };
+                    let at = text.find(word).expect("the state is on the second line");
+                    let icon = text[..at].chars().count() - 2;
+                    let before = text[..at].chars().take(icon).collect::<String>();
+                    let x = line.pos_from_cursor(egui::text::CCursor::new(icon)).left();
+                    (x, before)
+                };
+                let mut alone = base.clone();
+                alone.side = "party".into();
+                alone.conditions.clear();
+                alone.hp = alone.max_hp;
+                alone.initiative = Some(14);
+                let mut bloodied = alone.clone();
+                bloodied.hp = alone.max_hp.map(|max| max / 3);
+                let (conflict, before) = icon_x(&alone, Some(SyncState::Conflict));
+                let (hurt, _) = icon_x(&bloodied, None);
+                assert_eq!(before, "", "nothing comes before a conflict that is alone");
+                assert!(
+                    (conflict - hurt).abs() < 0.5,
+                    "Conflict starts at {conflict}, Bloodied at {hurt}"
+                );
+                // Must stay true: after other words, the state keeps its space from them.
+                let mut prone = alone.clone();
+                prone.conditions = vec!["Prone".into()];
+                let (after, before) = icon_x(&prone, Some(SyncState::Conflict));
+                assert!(
+                    before.ends_with(' ') && before.contains("Prone"),
+                    "{before:?}"
+                );
+                let prone_end = {
+                    let layout = RowLayout::new(
+                        ui,
+                        442.40625,
+                        &prone,
+                        Some(SyncState::Conflict),
+                        design::RUN_COMPACT,
+                        RowFit::Summary,
+                        0.0,
+                    );
+                    let line = layout.second_line.unwrap();
+                    let text = line.text();
+                    let end = text[..text.find("Prone").unwrap()].chars().count() + "Prone".len();
+                    line.pos_from_cursor(egui::text::CCursor::new(end)).left()
+                };
+                assert!(after >= prone_end + design::XS, "{after} after {prone_end}");
+            });
+        });
+    }
+
+    #[test]
     fn iter_1_b_reading_sheet_fits_beside_a_condition_and_overflow_count() {
         let mut participant = super::super::tests::run().state.participants[0].clone();
         participant.side = "party".into();
@@ -8723,6 +8855,113 @@ mod tests {
                 }
             }
         }
+    }
+
+    /// Both `Log` links (below the roster, and inline in the control row) take their 24 px
+    /// target from their own size: the painted word has no spaces, starts one item gap after the
+    /// message, and its underline covers only the word.
+    #[test]
+    fn iter14_b_log_link_word_starts_at_its_gap_and_underline_covers_only_it() {
+        use egui_kittest::kittest::Queryable;
+        let summary = "Guard 1: HP 17 → 15";
+        let mut paths = std::collections::BTreeSet::new();
+        for (width, height) in [(960.0, 640.0), (1200.0, 800.0), (1920.0, 1080.0)] {
+            for below in [true, false] {
+                let mut run = super::super::tests::run();
+                for (index, total) in [20, 15, 10].into_iter().enumerate() {
+                    run.apply(Command::Initiative(index, Some(total))).unwrap();
+                }
+                run.apply(Command::Begin).unwrap();
+                if below {
+                    run.recording_notice = Some("Recording stopped");
+                }
+                run.notice = Some(summary.into());
+                run.notice_summary = Some(summary.into());
+                let mut harness = egui_kittest::Harness::builder()
+                    .with_size(vec2(width, height))
+                    .build(move |ctx| {
+                        egui::CentralPanel::default().show(ctx, |ui| {
+                            run.live_view(ui);
+                        });
+                    });
+                design::theme::install(&harness.ctx);
+                harness.run_steps(3);
+                let gap = harness.ctx.style().spacing.item_spacing.x;
+                let target = harness
+                    .query_all_by_label("Log")
+                    .map(|n| n.rect())
+                    .max_by(|a, b| a.bottom().total_cmp(&b.bottom()))
+                    .expect("Required notice Log link");
+                let mut word = None;
+                let mut message = None;
+                let mut lines = Vec::new();
+                for shape in &harness.output().shapes {
+                    match &shape.shape {
+                        egui::Shape::Text(text) if text.galley.text().trim() == "Log" => {
+                            let rect = Rect::from_min_size(text.pos, text.galley.size());
+                            if target.intersects(rect) {
+                                word = Some((text.galley.text().to_owned(), rect));
+                            }
+                        }
+                        egui::Shape::Text(text)
+                            if text.galley.text().starts_with("Guard 1: HP") =>
+                        {
+                            message = Some(Rect::from_min_size(text.pos, text.galley.size()));
+                        }
+                        egui::Shape::LineSegment { points, .. }
+                            if (points[0].y - points[1].y).abs() < 0.1 =>
+                        {
+                            lines.push((
+                                points[0].x.min(points[1].x),
+                                points[0].x.max(points[1].x),
+                                points[0].y,
+                            ));
+                        }
+                        _ => {}
+                    }
+                }
+                let (painted, word) = word.expect("Required painted Log word");
+                let message = message.expect("Required notice words");
+                let underline = lines
+                    .iter()
+                    .find(|(left, right, y)| {
+                        *y > word.center().y
+                            && *y <= word.bottom() + 0.5
+                            && *left < word.right()
+                            && *right > word.left()
+                    })
+                    .copied();
+                paths.insert(below);
+                let context = format!(
+                    "{width}x{height}, below {below}: painted {painted:?} at {word:?}, target {target:?}, \
+                     message {message:?}, underline {underline:?}, gap {gap}"
+                );
+                assert_eq!(painted, "Log", "iter14-B-log-words: {context}");
+                assert!(
+                    underline.is_some_and(|(left, right, _)| (left - word.left()).abs() < 0.5
+                        && (right - word.right()).abs() < 0.5),
+                    "iter14-B-log-underline: {context}"
+                );
+                assert!(
+                    target.width() >= design::XL - 0.01 && target.height() >= design::XL - 0.01,
+                    "iter14-B-log-target: {context}"
+                );
+                // The word starts at the message's last word plus the row's item gap: the
+                // default gap below the roster, `XS` in the control row.
+                let separator = if below { gap } else { design::XS };
+                assert!(
+                    (word.left() - message.right() - separator).abs() < 0.5,
+                    "iter14-B-log-gap: {context}"
+                );
+                // The two paths sit in different places: below the roster, or in the top row.
+                assert_eq!(
+                    word.top() > height / 2.0,
+                    below,
+                    "iter14-B-log-path: {context}"
+                );
+            }
+        }
+        assert_eq!(paths.len(), 2, "Both Log paths are reached");
     }
 
     #[test]

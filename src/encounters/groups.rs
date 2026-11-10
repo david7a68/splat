@@ -2349,13 +2349,17 @@ fn members(
             });
             if entry.is_none() {
                 // The reference is on hover: it is what a repair needs, and not a word to read.
-                design::message(
-                    ui,
-                    Tone::Warning,
-                    "This campaign cannot find this creature. Choose a replacement, check the packages it uses, or remove this member.",
-                )
-                .on_hover_text(member.creature.label());
-                if packages_link(ui) {
+                // The repair link is a notice action, so its words start at the warning text.
+                let repair = ui.scope(|ui| {
+                    design::message_with_actions(
+                        ui,
+                        Tone::Warning,
+                        "This campaign cannot find this creature. Choose a replacement, check the packages it uses, or remove this member.",
+                        packages_repair,
+                    )
+                });
+                repair.response.on_hover_text(member.creature.label());
+                if repair.inner {
                     ui.data_mut(|data| data.insert_temp(egui::Id::new("open_campaign_packages"), true));
                 }
                 if is_open && let Some(creature) = super::choose_replacement_creature(ui, snapshot) {
@@ -2621,6 +2625,12 @@ fn unread_member(
         design::message(ui, Tone::Warning, error);
     }
     design::rule(ui);
+}
+
+/// The repair link under a member's warning. Its words start at the warning text, and its icon
+/// hangs in the gutter before them.
+fn packages_repair(ui: &mut egui::Ui) -> bool {
+    crate::encounter_run::view::hanging_link(ui, icons::CAMPAIGN, packages_link)
 }
 
 pub(super) fn packages_link(ui: &mut egui::Ui) -> bool {
