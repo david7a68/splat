@@ -152,7 +152,7 @@ when a prose AC or HP line disagrees and offers `Use <value>` with Undo. Missing
 replacements use the shared search row, with CR, HP, AC and `Use`. Replace all matching
 rows is on by default; it keeps their names and starting values, with one Undo.
 
-World uses labelled `Stat block`, `In` and `Status` rows with `Change` actions. Values share a fixed column and text baseline; empty values say `not set`. Missing links keep their names. New NPCs
+World uses labelled `Stat block`, `In` and `Status` rows with `Change` actions. Labels share a fixed column so the values align. `Change` follows each value after an `L` gap. Empty values say `not set`. Missing links keep their names. New NPCs
 show their future path below the name. A missing place stays visible as `Not found`.
 
 The schema-2 creature reader uses the Markdown table, which
@@ -468,7 +468,7 @@ The app-close dialog uses Keep running for a run, Keep recording for audio, and 
 ## Sessions and the timeline
 
 Storage recovery uses the existing warning, comparison and save controls. A copied session names
-both files and offers **New identity** with Undo. A moved draft offers its new path and **Let it go**.
+both files and offers **Make <file> a separate entry** with **Undo separate entry**. A moved draft offers its new path and **Let it go**.
 Missing session and run folders show **Choose folder**. Recording results remain visible with
 **Audio removed** after the WAV is deleted. Key removal names the task: Remove transcript and summary key (OpenAI), including its accessible name. Conflicting edits to a Timeline item open its disk-conflict comparison at the first difference.
 The Timeline keeps outside prose and separate event edits on save. Overwrite comes before Reload and lose my timeline,
@@ -526,6 +526,22 @@ entries. Changing the scope never changes the active campaign. Editing, save sta
 from the interface.
 
 Missing dependencies lead with the owner and retained member name, such as Lost Patrol needs Scout, which was deleted. If no name is known, say Lost Patrol needs a creature that cannot be found. Each issue offers a repair link to the referring file; the raw reference stays in Technical details.
+
+The scope menu and its selected button both say `Campaign entries`. Fixed scope names
+wrap when space is tight; package names can end with an ellipsis. While a package's
+About page is open, its About row uses the selected fill and no category is selected.
+Choosing a category restores its selected state.
+
+Duplicate-file repairs in Library, World, Encounters and Sessions say “These two files
+claim to be the same entry.” Each bordered secondary action says `Make <file> a separate
+entry`. The result says “<file> is now a separate entry.” with `Undo separate entry` on
+that line. List rows say `Same entry in two files`. A duplicate NPC note keeps an existing
+name-only roster override recognised; the duplicate warning does not imply changed stats.
+
+A copied package folder puts bordered `Register as a new package` on the warning's action
+line, with Technical details below. `Add folder` is blocked with “This folder is a copy.”
+A copy preview explains each additional entry: “Also copies <entry>, because <source>
+links to it.” When more than one entry is copied, it says “because a copied entry links to it.”
 
 ## Icons
 
@@ -782,7 +798,7 @@ the ID on disk so it cannot create a second file after a move.
 Creature copies write schema-2 stat tables and keep prose.
 Source text and structured item fields stay in the end group after related notes.
 Fight and Packages use the same menu button, with the caret after the word.
-World relationship values use a 240 px column; Not found stays on one line.
+World relationship warnings keep Not found on one line.
 Empty fight prep offers Edit encounter while its encounter exists.
 
 ## Run and session audit, iteration 11
@@ -822,7 +838,7 @@ tile edges. Skills sort A to Z and fill each column from top to bottom. Library
 form headings use text colour and an L gap; field labels stay muted.
 
 Duplicate identities keep both files visible with a warning. Saves write only the
-open file. Each New identity action names its file and has Undo. A renamed copy
+open file. Each separate-entry action names its file and has Undo. A renamed copy
 comes first, or else the newest file does. Other actions name the encounters that
 will change source. Encounters
 block ambiguous creatures; Open in Library opens the first repair action's file.
@@ -877,11 +893,11 @@ The campaign-added message follows the campaign rows, below their heading.
 
 The run's Sheet shows live death saves once, with singular and plural words.
 Campaign Packages and the Library details row offer Write Package.md again for a missing file. An existing file offers Replace with a basic Package.md, with a note that it drops the other fields. The action keeps the registered identity and reloads; replacing a file has Undo.
-Copied typed World notes stay visible with a duplicate warning. Each identity
+Copied typed World notes stay visible with a duplicate warning. Each separate-entry
 action names its file and has Undo. Encounter repair opens World for World notes.
 A copied package folder names the original under Add folder, with the id in
 Technical details. Register as a new package asks for a name, writes independent
-package and entry identities, and has one Undo for all files. New identity also
+package and entry identities, and has one Undo for all files. Making a separate entry also
 sets a note's name and matching first heading to its file stem. World rows with
 the same typed name show each file name on the second line.
 

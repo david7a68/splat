@@ -25,6 +25,9 @@ use std::{
 };
 use uuid::Uuid;
 
+/// The last sentence of a deleted-entry roster fault; it marks the message as a warning.
+const REPLACE_DELETED_ENTRY: &str = "Choose a replacement in the roster.";
+
 fn named_note_path(root: &std::path::Path, folder: &str, name: &str) -> Result<String, String> {
     let stem: String = name
         .trim()
@@ -459,9 +462,9 @@ impl Draft {
                         let name = roster_name(&named, None, &snapshot.known_creature_names);
                         snapshot.catalogue.unreadable_ref(reference)
                             .map_or_else(|| if count > 1 {
-                                format!("{count} {name} rows have no creature. Their package entry was deleted. Choose a replacement in the roster.")
+                                format!("{count} {name} rows have no creature. Their package entry was deleted. {REPLACE_DELETED_ENTRY}")
                             } else {
-                                format!("{name} has no creature. Its package entry was deleted. Choose a replacement in the roster.")
+                                format!("{name} has no creature. Its package entry was deleted. {REPLACE_DELETED_ENTRY}")
                             },
                                 |note| if note.old_layout { note.word.clone() } else { format!("{}. Open in {} to fix it.", note.word, if crate::world::repair_in_world(&note.path) { "World" } else { "Library" }) })
                     })?;
@@ -1020,7 +1023,12 @@ fn duplicate_creature_results(ui: &mut egui::Ui, query: &str) -> bool {
     let undo_key = egui::Id::new(("encounter_identity_undo", campaign.id));
     let undo = ui.data(|data| data.get_temp::<crate::world::Change>(undo_key));
     if let Some(undo) = undo
-        && Action::quiet("Undo new identity").show(ui).clicked()
+        && design::undo_message(
+            ui,
+            Tone::Success,
+            undo.message(),
+            crate::world::SEPARATE_ENTRY_UNDO,
+        )
     {
         match undo.undo(campaign) {
             Ok(()) => {
@@ -1056,18 +1064,11 @@ fn duplicate_creature_results(ui: &mut egui::Ui, query: &str) -> bool {
         if !seen.insert(identity) {
             continue;
         }
-        let files = paths
-            .iter()
-            .map(|path| path.rsplit('/').next().unwrap_or(path))
-            .collect::<Vec<_>>()
-            .join(" and ");
-        design::message(ui, Tone::Warning, &format!("{files} share one ID."));
+        design::message(ui, Tone::Warning, crate::world::DUPLICATE_ENTRY);
         for path in paths {
             let filename = path.rsplit('/').next().unwrap_or(path);
-            if Action::quiet(&format!("New identity for {filename}"))
-                .show(ui)
-                .clicked()
-            {
+            let action = crate::world::separate_entry_action(filename);
+            if Action::secondary(&action).hint(&action).show(ui).clicked() {
                 match crate::world::new_identity(campaign, path) {
                     Ok((undo, _)) => ui.data_mut(|data| {
                         data.insert_temp(undo_key, undo);
@@ -1237,10 +1238,23 @@ impl Snapshot {
     }
     fn npc_name_for(&self, entry: &Entry, overrides: &Mapping) -> Option<String> {
         let name = overrides.get("name")?.as_str()?;
-        self.catalogue.entries.values().find_map(|candidate| {
-            let (stat, npc_name) = self.npc_stat_block(candidate.entry.id)?;
-            (stat == entry.id && name == npc_name).then_some(npc_name)
-        })
+        self.catalogue
+            .entries
+            .values()
+            .chain(&self.catalogue.duplicate_world)
+            .find_map(|candidate| {
+                let npc = &candidate.entry;
+                if npc.kind != "world" || npc.name != name {
+                    return None;
+                }
+                let world = npc.fields.get("splat_world")?;
+                if world.get("type")?.as_str()? != "npc" {
+                    return None;
+                }
+                let reference: EntryRef =
+                    serde_yaml_ng::from_value(world.get("creature")?.clone()).ok()?;
+                (self.catalogue.resolve_ref(&reference).ok()? == entry.id).then(|| npc.name.clone())
+            })
     }
     fn load(campaign: &Campaign, modules: &[Module]) -> Result<Self, String> {
         let document = CampaignDocument::load_with_modules(campaign, modules)?;
@@ -3343,7 +3357,12 @@ impl Encounters {
         }
         self.refresh_validation_error(false);
         if let Some(e) = &self.error {
-            design::message(ui, Tone::Error, e);
+            let tone = if e.ends_with(REPLACE_DELETED_ENTRY) {
+                Tone::Warning
+            } else {
+                Tone::Error
+            };
+            design::message(ui, tone, e);
         }
         let Some(snapshot) = &self.snapshot else {
             crate::design::spinner(ui);
@@ -4414,7 +4433,7 @@ mod tests {
         harness.run_steps(2);
         assert!(harness.query_by_label("No creatures match").is_none());
         harness
-            .get_by_label("New identity for Rook copy.md")
+            .get_by_label("Make Rook copy.md a separate entry")
             .click();
         harness.run_steps(2);
         let snapshot = Snapshot::load(&active, &[]).unwrap();
@@ -4426,7 +4445,7 @@ mod tests {
                 .count(),
             2
         );
-        harness.get_by_label("Undo new identity").click();
+        harness.get_by_label("Undo separate entry").click();
         harness.run_steps(2);
         assert_eq!(
             fs::read_to_string(dir.path().join("Rook copy.md")).unwrap(),
@@ -4467,19 +4486,19 @@ mod tests {
         harness.run_steps(2);
         assert_eq!(
             harness
-                .query_all_by_label("New identity for Rook copy.md")
+                .query_all_by_label("Make Rook copy.md a separate entry")
                 .count(),
             1
         );
         assert_eq!(
             harness
-                .query_all_by_label("New identity for Rook.md")
+                .query_all_by_label("Make Rook.md a separate entry")
                 .count(),
             1
         );
         assert_eq!(
             harness
-                .query_all_by_label("Rook copy.md and Rook.md share one ID.")
+                .query_all_by_label("These two files claim to be the same entry.")
                 .count(),
             1
         );
@@ -4817,6 +4836,43 @@ mod tests {
             reopened.setup.roster[0].overrides,
             draft.setup.roster[0].overrides
         );
+    }
+
+    #[test]
+    fn iter2_d_duplicate_npc_keeps_its_name_classification() {
+        let dir = tempfile::tempdir().unwrap();
+        let active = campaign(dir.path());
+        let stat = creature(dir.path(), "Guard", false);
+        let text = splat::content::formats::convert("Fixture.md", &format!(
+            "---\nsplat_schema: 1\nsplat_id: {}\nsplat_kind: world\nsplat_name: Rook Ambry\nsplat_world:\n  type: npc\n  creature: {{id: {stat}}}\n---\n",
+            Uuid::new_v4()
+        )).unwrap();
+        write_note(dir.path(), "Rook.md", None, &text).unwrap();
+        let overrides = yaml("{name: Rook Ambry}").as_mapping().unwrap().clone();
+        for copies in 0..=2 {
+            if copies > 0 {
+                fs::write(dir.path().join(format!("Rook copy {copies}.md")), &text).unwrap();
+            }
+            let snapshot = Snapshot::load(&active, &[]).unwrap();
+            let guard = &snapshot.catalogue.entries[&stat].entry;
+            assert_eq!(
+                snapshot.npc_name_for(guard, &overrides).as_deref(),
+                Some("Rook Ambry"),
+                "copy count: {copies}"
+            );
+            let other_name = yaml("{name: Someone else}").as_mapping().unwrap().clone();
+            assert_eq!(snapshot.npc_name_for(guard, &other_name), None);
+            let other_stat = snapshot
+                .catalogue
+                .entries
+                .values()
+                .find(|item| item.entry.kind == "creature" && item.entry.id != stat)
+                .unwrap();
+            assert_eq!(snapshot.npc_name_for(&other_stat.entry, &overrides), None);
+            if copies > 0 {
+                assert!(!snapshot.catalogue.duplicate_world.is_empty());
+            }
+        }
     }
 
     #[test]

@@ -375,7 +375,7 @@ before it can replace those words. A repaired Timeline file is read
 again, and the open fight's latest result is applied.
 
 Session storage remembers each known note path in `.splat-session-paths.json`. A copied session
-shows both file names and offers **New identity**, with Undo. A moved draft can save to its new path
+shows both file names and offers **Make <file> a separate entry**, with **Undo separate entry**. A moved draft can save to its new path
 with the same session ID. If a session or run folder is gone, choose its folder before making new
 files. Recording results stay listed as **Audio removed** when their WAV is gone.
 
@@ -545,7 +545,7 @@ The design and what is still only proposed are in [World and house rules](docs/d
 Select **Library** to work on reusable packages without changing the active campaign.
 The built-in D&D 2024 SRD, your packages, and the active campaign's own entries are one
 catalogue. It opens on what this campaign can use, and the menu at the top shows everything,
-one package, or the campaign's own entries. The built-in SRD is read-only. Browse Creatures,
+one package, or **Campaign entries**. The built-in SRD is read-only. Browse Creatures,
 Spells, Items, Character options, Rules, Glossary, and Encounters in the section
 sidebar. Sections use subject metadata as well as entry kinds, so spell references
 appear with spells. Other entries includes package notes and invalid notes for repair.
@@ -571,10 +571,12 @@ apply a change. The sidebar shows how many changes wait. See
 Under **Packages → Manage packages…**, register an existing folder containing exactly one package
 manifest, or enter a name to create a package. The form shows the new folder path. **Browse…** changes its parent folder. After creation, the first entry form opens. Package
 registrations are stored in user settings; package notes remain in their own folders.
+A copied folder offers **Register as a new package** beside its warning. **Add folder**
+stays blocked until you choose another folder.
 Unregistering a package leaves its files in place. Campaign keeps its last known name and offers **Remove from this campaign** or **Find the folder…** if it becomes unavailable. Package IDs stay under **Technical details**. Package and campaign folders must
 be separate. Register My Homebrew in your preferred location for shared homebrew.
 
-Local packages support new entries and Markdown editing. **About <package name>** opens the manifest. **New entry** shows the folder, kind and path before it writes a note, then opens its editor. Kind templates include a reader skeleton. A new subfolder is created when the note is saved.
+Local packages support new entries and Markdown editing. **About <package name>** opens the manifest and selects its About row. **New entry** shows the folder, kind and path before it writes a note, then opens its editor. Kind templates include a reader skeleton. A new subfolder is created when the note is saved.
 
 **Use in this campaign** starts on for new entries, new packages and copies to packages. It saves the package choice too, so the content can be found in the encounter editor. The reader shows whether an entry is used here and offers the same action when it is not. **Save** checks note
 structure, keeps existing UUIDs and kinds, rejects duplicate identities, and checks
@@ -586,7 +588,11 @@ and shows disk and draft side by side, with marked lines and **Next difference**
 pages keeps the draft in memory.
 Save before closing the app; drafts are not persisted.
 
-Every reader accepts Obsidian links: `[[Name]]`, `[[Name#Heading]]` and `[[Name|text]]`. Names resolve to World notes and content this campaign can use. **Alt+Left** returns through Library history. Duplicate names open a chooser. A missing name has a dotted underline and **Not found in this campaign** on hover. Existing reference keys still work. A package entry that refers to campaign-only content warns before sharing.
+Every reader accepts Obsidian links: `[[Name]]`, `[[Name#Heading]]` and `[[Name|text]]`. Names resolve to World notes and content this campaign can use. **Alt+Left** returns through Library history. Duplicate names open a chooser. A missing name has a dotted underline and **Not found in this campaign** on hover. Existing reference keys still work. A package entry that refers to campaign-only content warns before sharing. The copy
+preview names each additional entry and explains which source links to it.
+
+Copied notes show **Same entry in two files**. In Library, World, Encounters and Sessions,
+**Make <file> a separate entry** keeps both files and offers **Undo separate entry**.
 
 In **Campaign → Packages**, enable a whole package or select individual
 entries. Required dependencies are included separately with their reasons, and rule

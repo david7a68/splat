@@ -751,6 +751,7 @@ pub mod campaign_content {
 
         d.click(TAB_ENTRIES);
         d.expect(CAMPAIGN_ENTRY);
+        assert!(d.visible_text("Campaign entries"));
         d.state("own-entries-in-library", Sizes::All);
         d.begin_task();
         let in_list = |d: &Driver<'_>, name: &str| {
@@ -8215,6 +8216,7 @@ pub mod share_to_package {
         d.click("Destination");
         d.click(&format!("Package · {MODULE}"));
         d.wait_for_text("Ashen Marches/Captain Varra.md");
+        d.expect("Also copies Captain Varra, because Watch Orders links to it.");
         assert!(!d.visible_text("Required entries: 1"));
         d.state("private-dependency-shared-together", Sizes::All);
         d.wait_for_text("Ashen Marches/Watch Orders.md");
