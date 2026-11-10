@@ -664,7 +664,9 @@ encounter, and Undo removes them. A location lists what is in it, and World show
 
 **Generate NPC** in Lookup rolls a name and three attributes: look, manner and want. **Reroll** rolls them all again,
 and nothing is written until **Save NPC**, which creates the note in `NPCs/` and opens it. **Discard** lets it go.
-The card names the campaign tables it uses, or says that it uses built-in lists.
+The card names the campaign tables it uses, or says that it uses built-in lists. Without a names table, Lookup says
+**Built-in names.** and offers **Use your own names**, which opens the same NPC on the World page. The World page's card
+says how to mark a table of names.
 
 The built-in lists suit no world in particular, so a campaign can replace any of the four. Mark a table with the key
 `npc-name`, `npc-look`, `npc-manner` or `npc-want` in any world note. The first table in path order wins, session notes

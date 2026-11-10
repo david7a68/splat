@@ -2402,6 +2402,57 @@ pub(crate) fn generator_card(
 mod tests {
     use super::*;
 
+    /// The table marker stays on the World page. Lookup links there, and a session note
+    /// only says so. A campaign table replaces the words in every place.
+    #[test]
+    fn generator_card_names_help_fits_its_place() {
+        use egui_kittest::kittest::Queryable;
+        let npc = crate::npc_generator::Generated {
+            name: "Wren Hallam".into(),
+            attributes: ["A scar".into(), "Calm".into(), "Gold".into()],
+        };
+        let table = vec!["npc-name: Names.md".to_owned()];
+        for (help, sources, marker, short, link) in [
+            (NamesHelp::Marker, vec![], true, false, false),
+            (NamesHelp::Link, vec![], false, true, true),
+            (NamesHelp::Plain, vec![], false, true, false),
+            (NamesHelp::Link, table.clone(), false, false, false),
+        ] {
+            let npc = npc.clone();
+            let mut harness = egui_kittest::Harness::new_ui_state(
+                move |ui, pressed: &mut bool| {
+                    *pressed |= generator_card(ui, &npc, &[], &sources, false, help).own_names;
+                },
+                false,
+            );
+            design::theme::install(&harness.ctx);
+            harness.run_steps(2);
+            let case = format!("{help:?}");
+            assert!(harness.query_by_label("Save NPC").is_some(), "{case}");
+            assert_eq!(
+                harness.query_by_label(OWN_NAMES_HELP).is_some(),
+                marker,
+                "{case}"
+            );
+            assert_eq!(
+                harness.query_by_label(BUILT_IN_NAMES).is_some(),
+                short,
+                "{case}"
+            );
+            assert_eq!(
+                harness.query_by_label(USE_OWN_NAMES).is_some(),
+                link,
+                "{case}"
+            );
+            if link {
+                assert!(!*harness.state());
+                harness.get_by_label(USE_OWN_NAMES).click();
+                harness.run_steps(2);
+                assert!(*harness.state(), "{case}: the link reports its press");
+            }
+        }
+    }
+
     #[test]
     fn repaired_note_has_a_distinct_name_link_and_no_false_mention() {
         let temp = tempfile::tempdir().unwrap();
