@@ -350,6 +350,7 @@ result’s name opens its stat block; its one button is `Add`. An NPC whose stat
 present shows `In roster`, and leaves an empty search once the whole party is present.
 Results use text-coloured names, underlined on hover. The main source has no suffix; other sources
 and campaign-owned entries show their source or `Campaign`, including roster rows.
+When changed roster detail must shorten, keep `as <base creature>` and the full change link. Remove the source before the base creature.
 The sync and repeat options follow the roster. The
 header keeps Save and Start on its first line, and the name field gives up width.
 An encounter with an unfinished run offers Resume and moves Start another fight into its menu.
@@ -694,8 +695,7 @@ The session Number field is five L units wide.
 Encounter drafts keep Save or discard to switch campaign on their save row.
 A blocked Start fight shows Close the open run first beside it. Clean group saves show No changes at the left. Save group keeps its clean reason on hover.
 NPC search results keep CR, HP and AC in fixed columns and put NPC · as Guard after AC.
-An offline Party now line offers Connect to sync. The first-sheet-read help keeps its Settings link inside the Small sentence. Initiative tie arrows have one fixed slot
-before the ordinal and use the standard setup row height.
+An offline Party now line offers Connect to sync. The first-sheet-read help keeps its Settings link inside the Small sentence.
 
 ## Session and preparation audit, iteration 6
 
@@ -896,8 +896,7 @@ Edit and a row menu with Remove member, aligned with the other member actions.
 Edit opens the normal change form with the readable values, the unread text, its
 reason, and an example. Done keeps the name and note. Remove offers Undo.
 Groups, Arrivals and the plan say how many members can join and name the creature
-that needs fixing. The warning uses the member's shown name, its base creature when different, and its source line. Readable members can still join. Unknown member XP adds
-`+ unknown` to the total. Changed member summaries also name the base creature.
+that needs fixing. The warning uses the member's shown name, its base creature when different, and its source line. Readable members can still join. Changed member summaries also name the base creature.
 Encounter search names hidden duplicate notes and offers file-specific identity
 repair with Undo. Source comparisons use the monospace face.
 An arriving member's card says `Changed · arrived with <group>` once. Add by hand
