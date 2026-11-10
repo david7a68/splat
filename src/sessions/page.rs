@@ -5643,18 +5643,22 @@ impl Sessions {
                 ui.horizontal_top(|ui| {
                     ui.spacing_mut().item_spacing.x = design::L;
                     page_column(ui, plan_width, height, |ui| {
-                        fixed_scope(ui, "session_plan_pane", |ui| self.plan_pane(ui, book, plan));
+                        fixed_scope(ui, editing_group_here, "session_plan_pane", |ui| {
+                            self.plan_pane(ui, book, plan)
+                        });
                     });
                     page_column(ui, note_width, height, |ui| {
-                        fixed_scope(ui, "session_note_pane", |ui| {
+                        fixed_scope(ui, editing_group_here, "session_note_pane", |ui| {
                             self.note_pane(ui, book, plan, beside)
                         })
                     });
                 });
             }
             // The same ids in both layouts: crossing the width keeps typed text, focus and scroll.
-            Tab::Plan => fixed_scope(ui, "session_plan_pane", |ui| self.plan_pane(ui, book, plan)),
-            Tab::Note => fixed_scope(ui, "session_note_pane", |ui| {
+            Tab::Plan => fixed_scope(ui, editing_group_here, "session_plan_pane", |ui| {
+                self.plan_pane(ui, book, plan)
+            }),
+            Tab::Note => fixed_scope(ui, editing_group_here, "session_note_pane", |ui| {
                 self.note_pane(ui, book, plan, beside)
             }),
             Tab::Recordings => {
@@ -6484,6 +6488,22 @@ impl Sessions {
     }
 }
 
+/// Draw a pane under a fixed id while `fixed`, so a group draft keeps its typed text, focus and
+/// scroll when the page crosses the side-by-side width. Otherwise the pane keeps its usual ids.
+fn fixed_scope<R>(
+    ui: &mut egui::Ui,
+    fixed: bool,
+    id: &str,
+    add: impl FnOnce(&mut egui::Ui) -> R,
+) -> R {
+    if fixed {
+        ui.scope_builder(egui::UiBuilder::new().id(egui::Id::new(id)), add)
+            .inner
+    } else {
+        add(ui)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -7017,10 +7037,4 @@ mod tests {
         assert!(rendered.contains(&format!("[Old name](<splat-note:Timeline#^{id}>)")));
         assert!(source.contains("|Old name]]"));
     }
-}
-
-/// Draw a pane under a fixed id, so its widgets keep their state when the layout around it changes.
-fn fixed_scope<R>(ui: &mut egui::Ui, id: &str, add: impl FnOnce(&mut egui::Ui) -> R) -> R {
-    ui.scope_builder(egui::UiBuilder::new().id(egui::Id::new(id)), add)
-        .inner
 }
