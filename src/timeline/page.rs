@@ -244,48 +244,55 @@ pub fn problems(ui: &mut egui::Ui, book: &mut Book) -> bool {
         design::message(ui, Tone::Warning, warning);
     }
     if let Some(error) = book.unreadable.clone() {
+        // Message choices start at the message text. The old-format notice draws its own.
+        let choices = |ui: &mut egui::Ui, book: &mut Book| {
+            ui.horizontal_wrapped(|ui| {
+                if Action::secondary("Read the file again").show(ui).clicked() {
+                    book.reload();
+                }
+                if book.gone
+                    && Action::quiet("Save this timeline there again")
+                        .show(ui)
+                        .clicked()
+                {
+                    book.save_again();
+                }
+            });
+        };
         if crate::formats_ui::is_old(&error) {
             crate::formats_ui::old_notice(
                 ui,
                 &crate::formats_ui::old_message(super::FILE),
                 book.path.clone().into_iter().collect(),
             );
+            choices(ui, book);
         } else {
-            design::message(ui, Tone::Error, &error);
+            design::message_with_actions(ui, Tone::Error, &error, |ui| choices(ui, book));
         }
-        ui.horizontal(|ui| {
-            if Action::secondary("Read the file again").show(ui).clicked() {
-                book.reload();
-            }
-            if book.gone
-                && Action::quiet("Save this timeline there again")
-                    .show(ui)
-                    .clicked()
-            {
-                book.save_again();
-            }
-        });
     } else if book.conflict {
-        design::message(
+        design::message_with_actions(
             ui,
             Tone::Warning,
             "Timeline.md changed on disk. Your draft is safe until you choose.",
+            |ui| {
+                ui.horizontal_wrapped(|ui| {
+                    if Action::secondary("Overwrite with my timeline")
+                        .show(ui)
+                        .clicked()
+                    {
+                        book.overwrite();
+                    }
+                    // One `L` gap before the red choice.
+                    ui.add_space(design::L - ui.spacing().item_spacing.x);
+                    if Action::destructive("Reload and lose my timeline")
+                        .show(ui)
+                        .clicked()
+                    {
+                        book.reload_keeping_undo();
+                    }
+                });
+            },
         );
-        ui.horizontal_wrapped(|ui| {
-            if Action::secondary("Overwrite with my timeline")
-                .show(ui)
-                .clicked()
-            {
-                book.overwrite();
-            }
-            ui.add_space(design::L);
-            if Action::destructive("Reload and lose my timeline")
-                .show(ui)
-                .clicked()
-            {
-                book.reload_keeping_undo();
-            }
-        });
         if book.conflict {
             match book.conflict_comparison() {
                 Ok((draft, disk)) => {
@@ -301,8 +308,9 @@ pub fn problems(ui: &mut egui::Ui, book: &mut Book) -> bool {
             return true;
         }
     } else if let Some(error) = book.error.clone() {
-        design::message(ui, Tone::Error, &error);
-        if Action::secondary("Try to save again").show(ui).clicked() {
+        if design::message_with_actions(ui, Tone::Error, &error, |ui| {
+            Action::secondary("Try to save again").show(ui).clicked()
+        }) {
             book.error = None;
             book.save();
         }

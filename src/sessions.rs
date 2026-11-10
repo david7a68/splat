@@ -1206,9 +1206,18 @@ pub struct Draft {
     pub moved_to: Option<PathBuf>,
     /// This note's new ID, once it was saved again after its file went.
     pub restored: Option<Uuid>,
-    /// The words the DM chose to lose, until the next edit.
-    pub dropped: Option<String>,
+    /// The words the DM chose to lose, and how, until the next edit.
+    pub dropped: Option<Dropped>,
     last_edit: Option<Instant>,
+}
+
+/// How a note's draft was lost. Its Undo names the same action.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Dropped {
+    /// `Reload and lose my draft` after the file changed on disk.
+    Reloaded(String),
+    /// `Discard` after the file was moved or deleted.
+    Discarded(String),
 }
 
 impl Draft {
@@ -1357,8 +1366,9 @@ impl Draft {
         }
     }
 
-    pub fn let_it_go(&mut self) {
-        self.dropped = Some(self.body.clone());
+    /// The file went, and the DM chose to lose the draft. One step of undo brings it back.
+    pub fn discard(&mut self) {
+        self.dropped = Some(Dropped::Discarded(self.body.clone()));
         self.body = self
             .baseline
             .as_deref()
@@ -1391,13 +1401,13 @@ impl Draft {
     pub fn reload_keeping_undo(&mut self) -> Result<(), String> {
         let words = self.body.clone();
         self.reload()?;
-        self.dropped = Some(words);
+        self.dropped = Some(Dropped::Reloaded(words));
         Ok(())
     }
 
-    /// Bring back what `reload_keeping_undo` dropped.
-    pub fn undo_reload(&mut self) {
-        if let Some(words) = self.dropped.take() {
+    /// Bring back what `reload_keeping_undo` or `discard` dropped.
+    pub fn undo_dropped(&mut self) {
+        if let Some(Dropped::Reloaded(words) | Dropped::Discarded(words)) = self.dropped.take() {
             self.body = words;
             self.edited();
         }
@@ -1813,7 +1823,8 @@ mod tests {
         draft.edited();
         draft.save();
         draft.reload_keeping_undo().unwrap();
-        draft.undo_reload();
+        assert!(matches!(draft.dropped, Some(Dropped::Reloaded(_))));
+        draft.undo_dropped();
         assert_eq!(draft.body, "Kept for one step\n");
         assert_eq!(draft.state, DraftState::Unsaved);
         draft.overwrite();
@@ -1853,6 +1864,18 @@ mod tests {
             note.id
         );
         assert!(!note.path.exists());
+
+        // Discard names itself, so its Undo says Undo discard, not Undo reload.
+        let mut discarded = draft.clone();
+        discarded.discard();
+        assert_eq!(
+            discarded.dropped,
+            Some(Dropped::Discarded("My words\n".into()))
+        );
+        assert_ne!(discarded.body, "My words\n");
+        discarded.undo_dropped();
+        assert_eq!(discarded.body, "My words\n");
+        assert_eq!(discarded.dropped, None);
 
         draft.save_again();
         assert_eq!(draft.state, DraftState::Saved);

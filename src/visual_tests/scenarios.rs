@@ -24,6 +24,53 @@ pub mod world_build;
 const READER: Pos2 = pos2(720.0, 400.0);
 const ENTRY_LIST: Pos2 = pos2(400.0, 400.0);
 
+/// Message choices start at the message text, never at its bar. `choices` are in order and must
+/// all show. `gap` names the choice that keeps exactly an `L` gap from the one before it (the red
+/// choice, or a quiet dismissal): on a shared line the gap is `L`; on a line of its own it starts at
+/// the text edge, as every wrapped choice does.
+fn check_choices_at_text(
+    d: &mut Driver<'_>,
+    id: &str,
+    words: &str,
+    choices: &[&str],
+    gap: Option<&str>,
+    sizes: &[(f32, f32)],
+) {
+    for &size in sizes {
+        let (passed, detail) = d.at_size(size, |d| {
+            let text = d.painted_rect_in(words, egui::Rect::EVERYTHING);
+            let places: Vec<_> = choices.iter().map(|name| d.place_of(name)).collect();
+            let detail = format!(
+                "Choices {choices:?} start at the text of \"{words}\" at {size:?}: text {text:?}, choices {places:?}"
+            );
+            let (Some(text), Some(places)) = (text, places.into_iter().collect::<Option<Vec<_>>>())
+            else {
+                return (false, detail);
+            };
+            let first = (places[0].left() - text.left()).abs() < 1.0;
+            let below = places
+                .iter()
+                .all(|place| place.left() >= text.left() - 0.5 && place.top() >= text.bottom());
+            let spaced = gap.is_none_or(|gap| {
+                choices
+                    .iter()
+                    .position(|name| *name == gap)
+                    .filter(|at| *at > 0)
+                    .is_some_and(|at| {
+                        let (before, after) = (places[at - 1], places[at]);
+                        if (before.center().y - after.center().y).abs() < 1.0 {
+                            (after.left() - before.right() - crate::design::L).abs() < 1.0
+                        } else {
+                            (after.left() - text.left()).abs() < 1.0
+                        }
+                    })
+            });
+            (first && below && spaced, detail)
+        });
+        d.observe(id, passed, detail);
+    }
+}
+
 /// FT-2: the run's Undo button always shows the word Undo, at every captured size, and keeps
 /// its full action as its accessible name.
 fn undo_keeps_its_word(d: &mut Driver<'_>, action: &str) {
@@ -6256,9 +6303,32 @@ pub mod session_notes {
             d.has_containing("Written in Obsidian."),
             "A conflict shows the file's words, so the DM chooses knowing both",
         );
+        check_choices_at_text(
+            d,
+            "iter-15-C-FT1-conflict",
+            "This note changed on disk.",
+            &["Overwrite with my draft", "Reload and lose my draft"],
+            Some("Reload and lose my draft"),
+            &[SMALL, DEFAULT, LARGE],
+        );
         d.state("note-conflict", Sizes::All);
         d.click("Record this session");
         d.expect("Start recording");
+        // Two stacked messages share one left edge for their choices: each message's text.
+        for (words, choices, gap) in [
+            (
+                "This note changed on disk.",
+                &["Overwrite with my draft", "Reload and lose my draft"][..],
+                Some("Reload and lose my draft"),
+            ),
+            (
+                "Tell everyone at the table first.",
+                &["Start recording", "Not now"][..],
+                None,
+            ),
+        ] {
+            check_choices_at_text(d, "iter-15-C-FT1-stacked", words, choices, gap, &[DEFAULT]);
+        }
         d.observe(
             "iter-5-S2",
             d.has("Overwrite with my draft"),
@@ -6272,6 +6342,14 @@ pub mod session_notes {
             "iter-5-S2",
             recording_in_conflict,
             "Audio recording starts while the note conflict stays unresolved",
+        );
+        check_choices_at_text(
+            d,
+            "iter-15-C-ST1",
+            "This note changed on disk.",
+            &["Overwrite with my draft", "Reload and lose my draft"],
+            Some("Reload and lose my draft"),
+            &[DEFAULT],
         );
         d.state("note-conflict-recording", Sizes::Default);
         d.click("Stop recording");
@@ -6726,6 +6804,14 @@ pub mod session_notes {
             d.has_containing("This session is dated 2025-12-25."),
             "The panel warns when the session being played looks like an old one",
         );
+        check_choices_at_text(
+            d,
+            "iter-15-C-ST3",
+            "This session is dated 2025-12-25.",
+            &["Play it tonight", "New session"],
+            None,
+            &[DEFAULT],
+        );
         d.state("run-with-old-note", Sizes::Default);
         d.observe(
             "T11.8",
@@ -7010,6 +7096,22 @@ pub mod session_recording {
     const TITLE: &str = "The Bridge";
     const RECORDING: &str = "19:00";
     const WARNING: &str = "The check returned nothing, so the clean transcript was not checked.";
+    const DISCARD: &str = "Discard";
+
+    /// FT2: one `L` gap between the recording's result links and its marked events heading.
+    fn check_events_gap(d: &mut Driver<'_>, id: &str) {
+        let heading = d.painted_rect_in("EVENTS MARKED IN THIS RECORDING", egui::Rect::EVERYTHING);
+        let links = d.place_of("Raw transcript");
+        let gap = heading
+            .zip(links)
+            .map(|(heading, links)| heading.top() - links.bottom());
+        d.observe(
+            id,
+            // The heading's capitals sit 1 px inside their `L`-spaced line.
+            gap.is_some_and(|gap| (gap - crate::design::L).abs() <= 1.0),
+            format!("The marked events heading sits L below Raw transcript: gap {gap:?}"),
+        );
+    }
 
     fn check_processing_action(d: &mut Driver<'_>, prefix: &str, primary: bool) {
         let actions: Vec<_> = d
@@ -7102,6 +7204,19 @@ pub mod session_recording {
                     .any(|node| node.in_view() && node.name.starts_with("Process:"))
             );
             check_one_primary(d, "Continue processing", "iter-8-C-banner-failed-primary");
+            let size = d.window_size();
+            check_choices_at_text(
+                d,
+                "iter-15-C-FD5",
+                "Processing Session 1: Failed processing failed",
+                &[
+                    "Continue processing",
+                    "Open the session",
+                    "Dismiss this error",
+                ],
+                Some("Dismiss this error"),
+                &[size],
+            );
         });
         let campaign = d.app_mut().campaigns.active_campaign().unwrap();
         let folder = crate::sessions::folder(&campaign).unwrap();
@@ -7620,6 +7735,14 @@ pub mod session_recording {
         // T11.5: nothing records without a stated step.
         d.click("Record this session");
         d.expect("Start recording");
+        check_choices_at_text(
+            d,
+            "iter-15-C-ST2",
+            "Tell everyone at the table first.",
+            &["Start recording", "Not now"],
+            None,
+            &[DEFAULT],
+        );
         d.state("record-consent", Sizes::Default);
         d.observe(
             "T11.5",
@@ -8041,6 +8164,7 @@ pub mod session_recording {
         );
         d.expect("These events were suggested from the transcript. Only events you add go on the timeline.");
         d.state_prepared("marker-added", Sizes::All, |d| {
+            check_events_gap(d, "iter-15-C-FT2");
             check_marker_columns(d);
             check_clean_row(d, "iter-11-C-FT3-marker");
             let size = d.window_size();
@@ -8184,6 +8308,20 @@ pub mod session_recording {
                 }
             });
             let buttons = d.place_of("Not now").zip(d.place_of("Replace the results"));
+            check_choices_at_text(
+                d,
+                "iter-15-C-AT4",
+                "The audio is not sent again",
+                &["Not now", "Replace the results"],
+                Some("Replace the results"),
+                &[DEFAULT],
+            );
+            // AT1: a check that ran and gave nothing back is not a check that never ran.
+            d.observe(
+                "iter-15-C-AT1",
+                d.visible_text("Check returned no result") && !d.visible_text("No check ran"),
+                "The warned recording says Check returned no result beside Raw transcript",
+            );
             d.observe(
                 "iter-11-C-ST1",
                 message.zip(buttons).is_some_and(|(message, (not_now, replace))| {
@@ -8203,6 +8341,7 @@ pub mod session_recording {
 
         d.click_containing("More actions for 2026-01-01");
         d.expect("Delete recording:");
+        check_events_gap(d, "iter-15-C-FT2-menu");
         d.state("recording-row-menu", Sizes::All);
         d.click_containing("Delete recording:");
         d.expect("Keep the recording");
@@ -8305,12 +8444,12 @@ pub mod session_recording {
                     .place_of("Save my draft as a new file")
                     .expect("New-file recovery is present");
                 let drop = d
-                    .place_of("Let it go")
+                    .place_of(DISCARD)
                     .expect("Destructive recovery is present");
                 assert!(
                     d.in_view("Save my draft to Renamed in Obsidian.md")
                         && d.in_view("Save my draft as a new file")
-                        && d.in_view("Let it go")
+                        && d.in_view(DISCARD)
                 );
                 if size == SMALL {
                     (drop.top() - new.top()).abs() <= 1.0
@@ -8323,9 +8462,47 @@ pub mod session_recording {
                         && drop.left() - new.right() >= crate::design::L
                 }
             });
-            d.observe("iter-7-C-FT3", separated, format!("Missing-note safe choices share a line when they fit; Let it go has an L or M gap at {size:?}"));
+            d.observe("iter-7-C-FT3", separated, format!("Missing-note safe choices share a line when they fit; Discard has an L or M gap at {size:?}"));
         }
+        check_choices_at_text(
+            d,
+            "iter-15-C-FT1-gone",
+            "This file is gone from the folder.",
+            &[
+                "Save my draft to Renamed in Obsidian.md",
+                "Save my draft as a new file",
+                DISCARD,
+            ],
+            Some(DISCARD),
+            &[SMALL, DEFAULT, LARGE],
+        );
         d.state("note-file-gone", Sizes::All);
+        // FT4: Discard has one name. Its notice and Undo say discard, not drop or reload. These
+        // steps prove the words and come back to the same choices, so they are not task cost.
+        d.aside(|d| {
+        d.click(DISCARD);
+        d.expect("Undo discard");
+        d.observe(
+            "iter-15-C-FT4",
+            d.visible_text("Draft discarded.")
+                && !d.has("Undo reload")
+                && !d.has_containing("dropped")
+                && d.editor_text()
+                    .is_some_and(|text| !text.contains("Words typed after the rename.")),
+            "Discard says Draft discarded. with Undo discard, and the draft's words leave the editor",
+        );
+        d.state("note-discarded", Sizes::Default);
+        d.click("Undo discard");
+        d.observe(
+            "iter-15-C-FT4-undo",
+            !d.has("Undo discard")
+                && d.editor_text()
+                    .is_some_and(|text| text.contains("Words typed after the rename.")),
+            "Undo discard brings the draft's words back",
+        );
+        d.press_ctrl(Key::S);
+        d.expect("Your draft is still here.");
+        });
         assert!(d.in_view("Save my draft as a new file"));
         d.click("Save my draft as a new file");
         d.expect("Notes saved");
