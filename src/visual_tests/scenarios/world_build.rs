@@ -201,7 +201,16 @@ pub fn broken(d: &mut Driver<'_>) {
     fs::write(&path, format!("{external}\nAnother outside edit.\n")).unwrap();
     d.settle();
     d.expect("This note changed on disk. Your draft is safe until you choose.");
-    d.state("dirty-repair-compares-disk", Sizes::All);
+    d.state_prepared("dirty-repair-compares-disk", Sizes::All, |d| {
+        choices_at_text(
+            d,
+            "iter-15-E-AD3-world-repair",
+            "This note changed on disk",
+            "Overwrite with my draft",
+            "Reload and lose my draft",
+            Some("YOUR DRAFT"),
+        );
+    });
     d.click("Reload and lose my draft");
     d.expect("Undo reload");
     assert_eq!(
@@ -1796,7 +1805,16 @@ pub fn package_rename(d: &mut Driver<'_>) {
                     && (file.center().y - from.center().y).abs() < crate::design::XS
             })
     });
-    d.state("draft-file-moved-on-disk", Sizes::All);
+    d.state_prepared("draft-file-moved-on-disk", Sizes::All, |d| {
+        choices_at_text(
+            d,
+            "iter-15-E-AD3-library-moved",
+            "This entry moved on disk",
+            "Save my draft to Moved/Ash Exposure.md",
+            "Reload and lose my draft",
+            None,
+        );
+    });
     let before_save = fs::read_to_string(&moved).unwrap();
     d.click("Save my draft to Moved/Ash Exposure.md");
     d.wait_for_text("Saved");
@@ -2304,7 +2322,16 @@ pub fn package_file_changed(d: &mut Driver<'_>) {
     d.focus_window(true);
     d.wait_for_text("This entry changed on disk. Your draft is safe until you choose.");
     d.expect("Overwrite with my draft");
-    d.state("package-draft-changed-on-disk", Sizes::All);
+    d.state_prepared("package-draft-changed-on-disk", Sizes::All, |d| {
+        choices_at_text(
+            d,
+            "iter-15-E-AD3-library-package",
+            "This entry changed on disk",
+            "Overwrite with my draft",
+            "Reload and lose my draft",
+            None,
+        );
+    });
     d.click("Reload and lose my draft");
     d.click("Read");
     d.wait_for_text("Ash Bite");
@@ -2571,6 +2598,23 @@ pub fn package_delete_entry(d: &mut Driver<'_>) {
     );
     d.expect("Ember Cultist needs this entry.");
     d.state_prepared("draft-file-deleted-on-disk", Sizes::All, |d| {
+        choices_at_text(
+            d,
+            "iter-15-E-AD3-library-gone",
+            "This entry's file has gone from disk",
+            "Save my draft again",
+            "Let it go",
+            None,
+        );
+        // The note about who needs the entry sits with the message, at its text edge.
+        let text = d.painted_rect_in("This entry's file has gone", egui::Rect::EVERYTHING);
+        let needs = d.painted_rect_in("Ember Cultist needs this entry.", egui::Rect::EVERYTHING);
+        d.observe(
+            "iter-15-E-AD3-library-gone-needs",
+            text.zip(needs)
+                .is_some_and(|(text, needs)| (needs.left() - text.left()).abs() < 1.0),
+            format!("The dependents line starts at the message text: {text:?}, {needs:?}"),
+        );
         let draft = d.place_of("Your draft").expect("The lone draft is visible");
         d.observe(
             "iter-13-E-AD3",
@@ -4238,7 +4282,16 @@ pub fn part_of_safety(d: &mut Driver<'_>) {
                 && d.in_view("Reload and lose my draft")
         },
     );
-    d.state("group-draft-disk-conflict", Sizes::All);
+    d.state_prepared("group-draft-disk-conflict", Sizes::All, |d| {
+        choices_at_text(
+            d,
+            "iter-15-E-AD3-world-edit",
+            "This note changed on disk",
+            "Overwrite with my draft",
+            "Reload and lose my draft",
+            None,
+        );
+    });
     d.click("Overwrite with my draft");
     d.wait_for_text("Changes saved.");
     let saved = fs::read_to_string(&path).unwrap();

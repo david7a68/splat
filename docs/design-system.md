@@ -232,8 +232,10 @@ message's height, so neither the reason nor the message moves the editor. Keepin
 its editor focus and cursor.
 
 A changed file stops saving. World uses `disk_conflict_choices` with the noun `note`: “This note changed on disk. Your draft is safe until you choose.” Library uses `entry` in the same choices. Show secondary `Overwrite with my draft` first, then
-red `Reload and lose my draft`. Neither has accent fill. These messages cannot be dismissed. Library gives the
-choices one row at full reader width. World Overwrite saves valid text; invalid text returns to the repair
+red `Reload and lose my draft`. Neither has accent fill. These messages cannot be dismissed. Library and World
+draw the choices through `message_with_actions`: the row starts at the message text, not at the warning bar, and
+an `L` gap comes before the red choice. Library's note of the entries that need a deleted file sits in the same
+column, above the choices. World Overwrite saves valid text; invalid text returns to the repair
 editor without a write. World Reload keeps the replaced draft for one `Undo reload` on its message line until
 the next edit. If the note changes again on disk before that edit, the held draft comes back as unsaved work and
 the choices show again: Overwrite writes only the DM's own changes over the newest file, with Undo, and Reload
