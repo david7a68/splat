@@ -1516,20 +1516,30 @@ impl Reader {
                         .rich(ui, "This link matches more than one note. Choose one.")
                         .color(colors().muted),
                 );
-                for at in index.place_choices(item.entry.id) {
+                let choices = index.place_choices(item.entry.id);
+                let file_width = choices
+                    .iter()
+                    .map(|&at| {
+                        design::number_width(ui, &index.items[at].entry.path, &Type::Body.font(ui))
+                    })
+                    .fold(0.0_f32, f32::max)
+                    .min(
+                        (ui.available_width()
+                            - Action::secondary("Always use this one").natural_width(ui)
+                            - design::L)
+                            .max(design::XXL),
+                    );
+                for at in choices {
                     let path = &index.items[at].entry.path;
                     ui.horizontal(|ui| {
                         ui.spacing_mut().item_spacing.x = design::L;
                         let name = format!("Always use {path}");
                         let action = Action::secondary("Always use this one").name(&name);
-                        let width = (ui.available_width() - action.natural_width(ui) - design::L)
-                            .max(design::XXL);
-                        let width = width.min(design::number_width(ui, path, &Type::Body.font(ui)));
                         ui.allocate_ui_with_layout(
-                            egui::vec2(width, Density::Read.control()),
+                            egui::vec2(file_width, Density::Read.control()),
                             egui::Layout::top_down(egui::Align::LEFT),
                             |ui| {
-                                ui.set_width(width);
+                                ui.set_width(file_width);
                                 if design::wrapped_link(ui, path).clicked() {
                                     go = Some(Go::Item(at, None));
                                 }
@@ -1613,11 +1623,16 @@ impl Reader {
                 + Action::quiet("Change")
                     .density(Density::Scan)
                     .natural_width(ui)
-                + design::number_width(ui, word, &Type::Small.font(ui))
-                + Type::Small.line()
-                + design::XS
-                + Action::quiet(Self::undo_label(word)).natural_width(ui)
-                + ui.spacing().item_spacing.x * 4.0
+                + design::number_width(ui, word, &Type::Body.font(ui))
+                + design::S
+                + design::HAIRLINE_WIDTH
+                + design::number_width(ui, design::icons::INFO, &Type::Body.font(ui))
+                - design::XS
+                + Action::quiet(Self::undo_label(word))
+                    .icon(design::icons::UNDO)
+                    .density(Density::Read)
+                    .natural_width(ui)
+                + ui.spacing().item_spacing.x * 6.0
     }
 
     fn undo_label(word: &str) -> &'static str {
@@ -1631,15 +1646,7 @@ impl Reader {
     }
 
     fn change_notice(ui: &mut egui::Ui, word: &str) -> bool {
-        design::status(
-            ui,
-            design::Status {
-                icon: design::icons::INFO,
-                word,
-                color: colors().muted,
-            },
-        );
-        Action::quiet(Self::undo_label(word)).show(ui).clicked()
+        design::undo_message(ui, Tone::Info, word, Self::undo_label(word))
     }
 
     pub fn clear_notice(&mut self) {

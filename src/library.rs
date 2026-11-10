@@ -3190,9 +3190,17 @@ impl Library {
                                 .iter()
                                 .find(|m| m.id == module.id && m.path != module.path)
                             {
-                                self.copied_package = Some(module);
                                 self.copy_name = format!("{} copy", original.name);
                                 self.copy_name_open = false;
+                                self.copy_not_used = campaigns
+                                    .active_campaign()
+                                    .and_then(|campaign| CampaignDocument::load(&campaign).ok())
+                                    .is_some_and(|document| {
+                                        document.selections.iter().any(|selection| {
+                                            selection.package.id == Some(module.id)
+                                        })
+                                    });
+                                self.copied_package = Some(module);
                                 self.error = None;
                                 return Ok(None);
                             }
@@ -3224,6 +3232,8 @@ impl Library {
                             .map_or(copy.name.as_str(), |m| m.name.as_str());
                         let warning = format!("This folder is a copy of {name}.");
                         if self.copy_name_open {
+                            design::message(ui, Tone::Warning, &warning);
+                            form_heading(ui, "Register a copy");
                             design::text_field(
                                 ui,
                                 "New package name",
@@ -3232,11 +3242,15 @@ impl Library {
                                 None,
                             );
                             if campaigns.active_campaign().is_some() {
-                                use_checkbox(
-                                    ui,
-                                    &mut self.copy_not_used,
-                                    "Uses every entry in this package, including future entries.",
-                                );
+                                let mut enabled = !self.copy_not_used;
+                                ui.checkbox(&mut enabled, "Use in this campaign");
+                                self.copy_not_used = !enabled;
+                                let help = if enabled {
+                                    "Uses every entry in this package, including future entries."
+                                } else {
+                                    "This campaign keeps the original. The copy is registered but not used."
+                                };
+                                ui.label(Type::Small.rich(ui, help).color(colors().muted));
                             }
                         }
                         let label = if self.copy_name_open && self.copy_name.trim().is_empty() {
@@ -3254,6 +3268,10 @@ impl Library {
                                 let clicked =
                                     Action::secondary(&label).blocked(reason).show(ui).clicked();
                                 design::blocked_reason(ui, reason);
+                                ui.add_space(design::L);
+                                if Action::quiet("Cancel").show(ui).clicked() {
+                                    self.copy_name_open = false;
+                                }
                                 clicked
                             })
                             .inner
@@ -3262,24 +3280,12 @@ impl Library {
                                 design::message_with_action(ui, Tone::Warning, &warning, &label)
                             })
                         };
-                        if self.copy_name_open {
-                            design::message(ui, Tone::Warning, &warning);
-                        }
                         if register {
                             if self.copy_name_open {
                                 if let Err(error) = self.register_copy(campaigns) {
                                     self.error = Some(error);
                                 }
                             } else {
-                                self.copy_not_used = campaigns
-                                    .active_campaign()
-                                    .and_then(|campaign| CampaignDocument::load(&campaign).ok())
-                                    .is_some_and(|document| {
-                                        document
-                                            .selections
-                                            .iter()
-                                            .any(|selection| selection.package.id == Some(copy.id))
-                                    });
                                 self.copy_name_open = true;
                             }
                         }

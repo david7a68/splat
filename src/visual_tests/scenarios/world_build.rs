@@ -44,6 +44,8 @@ pub fn broken(d: &mut Driver<'_>) {
         "The World total includes the note that cannot be read",
     );
     d.state("broken-note-listed", Sizes::All);
+    d.click("1 note cannot be read");
+    d.expect("Save repaired note");
     d.click_containing("Notes/Broken.md");
     d.expect("Save repaired note");
     d.observe(
@@ -60,6 +62,8 @@ pub fn broken(d: &mut Driver<'_>) {
     let unfinished = format!("{external}\nMy unfinished draft.\n");
     let outside = format!("{external}\nNew words on disk.\n");
     d.replace_text_in("Note text", &unfinished);
+    d.click("1 note cannot be read");
+    assert_eq!(d.editor_text().as_deref(), Some(unfinished.as_str()));
     fs::write(&path, &outside).unwrap();
     d.settle();
     d.click("Overwrite with my draft");
@@ -385,7 +389,7 @@ pub fn generator(d: &mut Driver<'_>) {
     d.click("Generate NPC");
     d.observe(
         "W14",
-        d.visible_text("the npc-name table stops at 1, but 1d6 rolls up to 6.")
+        d.visible_text("the name table stops at 1, but 1d6 rolls up to 6.")
             && d.visible_text("Built-in names stand in until it is fixed."),
         "A bad campaign table states why the built-in list stands in",
     );
@@ -1227,6 +1231,15 @@ pub fn world_note_moved(d: &mut Driver<'_>) {
                 })
         },
     );
+    d.observe_both(
+        "iter-4-D-FD11",
+        "Place choices share one action column in World",
+        |d| {
+            let first = d.place_of("Always use Locations/Watch House.md").unwrap();
+            let second = d.place_of("Always use Other/Watch House.md").unwrap();
+            (first.left() - second.left()).abs() < 1.0
+        },
+    );
     d.state("duplicate-place-chooser-in-world", Sizes::All);
     d.click("Always use Locations/Watch House.md");
     d.state("place-choice-kept-with-undo", Sizes::All);
@@ -1483,7 +1496,44 @@ pub fn package_folder_copied(d: &mut Driver<'_>) {
     assert!(d.is_disabled("Register package"));
     d.state("copied-package-needs-a-name", Sizes::All);
     d.replace_text_in("New package name", "Ashen Reaches");
+    d.expect("REGISTER A COPY");
+    d.expect("This campaign keeps the original. The copy is registered but not used.");
+    d.expect("Cancel");
+    d.observe_both(
+        "iter-4-D-FD2",
+        "The copy warning stays above the named registration form and Cancel",
+        |d| {
+            let warning = d
+                .place_of("This folder is a copy of Ashen Marches.")
+                .unwrap();
+            let title = d.place_of("REGISTER A COPY").unwrap();
+            let register = d.place_of("Register Ashen Reaches").unwrap();
+            let cancel = d.place_of("Cancel").unwrap();
+            warning.bottom() < title.top()
+                && title.bottom() < register.top()
+                && cancel.left() >= register.right() + design::L
+                && cancel.top() < register.bottom()
+        },
+    );
     d.state("copied-package-new-name", Sizes::All);
+    d.click("Use in this campaign");
+    d.expect("Uses every entry in this package, including future entries.");
+    assert!(!d.has("This campaign keeps the original. The copy is registered but not used."));
+    d.state("copied-package-use-enabled", Sizes::All);
+    d.click("Cancel");
+    d.expect("Register as a new package");
+    assert!(!d.has("New package name"));
+    assert_eq!(d.app_mut().campaigns.modules().len(), 1);
+    assert_eq!(fs::read(copied.join("Module.md")).unwrap(), before);
+    d.expect_same(
+        "Cancel restores the copied-folder warning and its registration action without writing.",
+    );
+    d.state("copied-package-registration-cancelled", Sizes::All);
+    d.click("Register as a new package");
+    d.expect("Register Ashen Reaches");
+    d.expect("Uses every entry in this package, including future entries.");
+    d.click("Use in this campaign");
+    d.expect("This campaign keeps the original. The copy is registered but not used.");
     d.click("Register Ashen Reaches");
     d.wait_for_text("Undo package registration");
     search_library(d, "Cinder Wolf");
