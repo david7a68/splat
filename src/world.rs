@@ -418,6 +418,13 @@ fn world_field<'a>(entry: &'a Entry, name: &str) -> Option<&'a Value> {
     entry.fields.get("splat_world")?.get(name)
 }
 
+/// Empty optional values have no row in Read mode. The editor keeps the source value.
+fn reader_field<'a>(entry: &'a Entry, key: &str) -> Option<&'a Value> {
+    world_field(entry, key).filter(|value| {
+        !value.is_null() && value.as_str().is_none_or(|text| !text.trim().is_empty())
+    })
+}
+
 fn reference(value: &Value) -> Option<Reference> {
     serde_yaml_ng::from_value::<EntryRef>(value.clone())
         .ok()?
@@ -1709,18 +1716,20 @@ impl Reader {
                 index.items[at].entry.name.clone()
             } else if key == "in" && !index.place_choices(item.entry.id).is_empty() {
                 let choices = index.place_choices(item.entry.id);
-                let name = world_field(&item.entry, key)
+                let name = reader_field(&item.entry, key)
                     .map(|value| link_name(value, label))
                     .unwrap_or_default();
                 format!("{} {name} · {} matches", design::icons::WARN, choices.len())
-            } else if let Some(value) = world_field(&item.entry, key) {
+            } else if let Some(value) = reader_field(&item.entry, key) {
                 format!(
                     "{} {} · Not found",
                     design::icons::WARN,
                     link_name(value, label)
                 )
-            } else {
+            } else if key == "creature" {
                 "not set".into()
+            } else {
+                continue;
             };
             let linked =
                 target.is_some() || (key == "in" && !index.place_choices(item.entry.id).is_empty());
@@ -1953,6 +1962,9 @@ impl Reader {
             } else {
                 index.world_target(&item.entry, "creature")
             };
+            if key != "creature" && reader_field(&item.entry, key).is_none_or(Value::is_null) {
+                continue;
+            }
             let notice = self.row_notice(ui, item, ChangeKind::of_key(key), value_width);
             ui.push_id(key, |ui| {
                 let (changed, undo) = Self::relationship_row(
@@ -1966,7 +1978,7 @@ impl Reader {
                             }
                         } else if key == "in" && !index.place_choices(item.entry.id).is_empty() {
                             let choices = index.place_choices(item.entry.id);
-                            let name = world_field(&item.entry, key)
+                            let name = reader_field(&item.entry, key)
                                 .map(|value| link_name(value, label))
                                 .unwrap_or_default();
                             if design::wrapped_link(
@@ -1981,7 +1993,7 @@ impl Reader {
                             {
                                 self.place_choices_open = !self.place_choices_open;
                             }
-                        } else if let Some(value) = world_field(&item.entry, key) {
+                        } else if let Some(value) = reader_field(&item.entry, key) {
                             let words = format!(
                                 "{} {} · Not found",
                                 design::icons::WARN,
@@ -2037,51 +2049,54 @@ impl Reader {
         }
         let groups = index.groups_of(&item.entry);
         let notice = self.row_notice(ui, item, ChangeKind::PartOf, value_width);
-        ui.push_id("part_of", |ui| {
-            let (changed, undo) = Self::relationship_row(
-                ui,
-                "Part of",
-                value_width,
-                |ui| {
-                    if groups.is_empty() {
-                        ui.label(Type::Small.rich(ui, "not set").color(colors().muted));
-                    }
-                    for (name, target) in groups {
-                        match target {
-                            Some(at) => {
-                                if design::wrapped_link(ui, &index.items[*at].entry.name).clicked()
-                                {
-                                    go = Some(Go::Item(*at, None));
+        if !groups.is_empty() {
+            ui.push_id("part_of", |ui| {
+                let (changed, undo) = Self::relationship_row(
+                    ui,
+                    "Part of",
+                    value_width,
+                    |ui| {
+                        for (name, target) in groups {
+                            match target {
+                                Some(at) => {
+                                    if design::wrapped_link(ui, &index.items[*at].entry.name)
+                                        .clicked()
+                                    {
+                                        go = Some(Go::Item(*at, None));
+                                    }
+                                }
+                                None => {
+                                    ui.label(
+                                        Type::Small
+                                            .rich(
+                                                ui,
+                                                format!(
+                                                    "{} {name} · Not found",
+                                                    design::icons::WARN
+                                                ),
+                                            )
+                                            .color(colors().result.warning),
+                                    );
                                 }
                             }
-                            None => {
-                                ui.label(
-                                    Type::Small
-                                        .rich(
-                                            ui,
-                                            format!("{} {name} · Not found", design::icons::WARN),
-                                        )
-                                        .color(colors().result.warning),
-                                );
-                            }
                         }
-                    }
-                },
-                notice.as_ref().map(|(word, kind)| (word.as_str(), *kind)),
-            );
-            if changed {
-                self.picker = Some(Picker {
-                    key: "part_of",
-                    focus: true,
-                    ..Default::default()
-                });
-            }
-            if undo {
-                go = self.undo_change(campaign, item.entry.id);
-            }
-        });
+                    },
+                    notice.as_ref().map(|(word, kind)| (word.as_str(), *kind)),
+                );
+                if changed {
+                    self.picker = Some(Picker {
+                        key: "part_of",
+                        focus: true,
+                        ..Default::default()
+                    });
+                }
+                if undo {
+                    go = self.undo_change(campaign, item.entry.id);
+                }
+            });
+        }
         if let Some(key) = self.picker.as_ref().map(|picker| picker.key)
-            && let Some(value) = self.pick(ui, item, index, campaign)
+            && let Some(value) = self.pick(ui, item, index, campaign, None)
         {
             return self.change(campaign, item, index, key, value);
         }
@@ -2095,6 +2110,7 @@ impl Reader {
         item: &Item,
         index: &ContentIndex,
         campaign: &Campaign,
+        draft_groups: Option<&[Value]>,
     ) -> Option<Value> {
         let picker = self.picker.as_mut()?;
         let key = picker.key;
@@ -2103,11 +2119,13 @@ impl Reader {
             "part_of" => "Find a group",
             _ => "Find a stat block",
         };
-        let groups: Vec<Value> = part_of(&item.entry).into_iter().cloned().collect();
-        let joined: Vec<usize> = index
-            .groups_of(&item.entry)
+        let groups: Vec<Value> = draft_groups.map_or_else(
+            || part_of(&item.entry).into_iter().cloned().collect(),
+            <[Value]>::to_vec,
+        );
+        let joined: Vec<usize> = groups
             .iter()
-            .filter_map(|(_, at)| *at)
+            .filter_map(|value| index.world_value_target(value))
             .collect();
         let width = ui.available_width();
         let response = design::search_field(ui, label, &mut picker.search, label, width);
@@ -2316,7 +2334,14 @@ impl Reader {
         }
         if !self.compact {
             let value_width = Self::relationship_value_width(ui, item, index);
-            if !self.status_editing {
+            if !self.status_editing
+                && (!status(&item.entry).trim().is_empty()
+                    || item
+                        .entry
+                        .flags
+                        .iter()
+                        .any(|flag| flag.message.starts_with("Status ")))
+            {
                 let value = status(&item.entry);
                 let unread = item
                     .entry
@@ -2398,7 +2423,9 @@ impl Reader {
                 &change.word,
                 change.kind,
             ) || !change.kind.has_row()
-                || (change.kind == ChangeKind::Status && self.status_editing))
+                || (change.kind == ChangeKind::Status && (self.status_editing || status(&item.entry).is_empty()))
+                || (change.kind == ChangeKind::Place && reader_field(&item.entry, "in").is_none())
+                || (change.kind == ChangeKind::PartOf && index.groups_of(&item.entry).is_empty()))
             && ui
                 .horizontal_wrapped(|ui| Self::change_notice(ui, &change.word, change.kind))
                 .inner

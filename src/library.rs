@@ -2812,10 +2812,6 @@ impl Library {
                             });
                         design::named(ui, &combo.response, "Section");
                     });
-                    if let Scope::Package(package) = scope
-                        && let Some((index, note)) = loaded.notes.iter().enumerate().find(|(_, n)| n.owner.id() == Some(package) && n.is_manifest())
-                        && about_row(ui, &note.about_label(), about_open).clicked() && !dirty
-                    { self.selected = Some(index); self.draft = note.text.clone(); self.source = false; }
                 }
                 ui.horizontal(|ui| {
                     let width =
@@ -2836,6 +2832,11 @@ impl Library {
                         self.search.clear();
                     }
                 });
+                if compact
+                    && let Scope::Package(package) = scope
+                    && let Some((index, note)) = loaded.notes.iter().enumerate().find(|(_, n)| n.owner.id() == Some(package) && n.is_manifest())
+                    && about_row(ui, &note.about_label(), about_open).clicked() && !dirty
+                { self.selected = Some(index); self.draft = note.text.clone(); self.source = false; }
                 if self.section == Section::Creatures || searching {
                     let notes = &loaded.notes;
                     let facets = loaded.facets();
@@ -3626,46 +3627,49 @@ impl Library {
                 if self.new_kind.is_empty() {
                     self.new_kind = "creature".into();
                 }
-                design::group_label(ui, "Kind");
                 let old_kind = self.new_kind.clone();
-                let combo = form_control(ui, |ui| {
-                    egui::ComboBox::from_id_salt("new_kind")
-                        .width(ui.available_width())
-                        .icon(design::combo_icon)
-                        .selected_text(
-                            self.new_kind
-                                .replace('_', " ")
-                                .chars()
-                                .enumerate()
-                                .map(|(i, c)| if i == 0 { c.to_ascii_uppercase() } else { c })
-                                .collect::<String>(),
-                        )
-                        .show_ui(ui, |ui| {
-                            for kind in
-                                ["creature", "spell", "item", "effect", "rule", "rule_group"]
-                            {
-                                let word = kind.replace('_', " ");
-                                let word = format!("{}{}", word[..1].to_uppercase(), &word[1..]);
-                                ui.selectable_value(&mut self.new_kind, kind.into(), word);
-                            }
-                        })
+                let combo = design::field(ui, "Kind", None, None, |ui| {
+                    form_control(ui, |ui| {
+                        egui::ComboBox::from_id_salt("new_kind")
+                            .width(ui.available_width())
+                            .icon(design::combo_icon)
+                            .selected_text(
+                                self.new_kind
+                                    .replace('_', " ")
+                                    .chars()
+                                    .enumerate()
+                                    .map(|(i, c)| if i == 0 { c.to_ascii_uppercase() } else { c })
+                                    .collect::<String>(),
+                            )
+                            .show_ui(ui, |ui| {
+                                for kind in
+                                    ["creature", "spell", "item", "effect", "rule", "rule_group"]
+                                {
+                                    let word = kind.replace('_', " ");
+                                    let word =
+                                        format!("{}{}", word[..1].to_uppercase(), &word[1..]);
+                                    ui.selectable_value(&mut self.new_kind, kind.into(), word);
+                                }
+                            })
+                    })
                 });
                 if self.new_kind != old_kind {
                     self.new_folder = kind_folder(&self.new_kind).into();
                 }
                 design::named(ui, &combo.response, "Kind of entry");
-                design::group_label(ui, "Destination");
-                let combo = form_control(ui, |ui| {
-                    egui::ComboBox::from_id_salt("new_place")
-                        .icon(design::combo_icon)
-                        .width(ui.available_width())
-                        .truncate()
-                        .selected_text(places[place].label())
-                        .show_ui(ui, |ui| {
-                            for (i, owner) in places.iter().enumerate() {
-                                ui.selectable_value(&mut place, i, owner.label());
-                            }
-                        })
+                let combo = design::field(ui, "Destination", None, None, |ui| {
+                    form_control(ui, |ui| {
+                        egui::ComboBox::from_id_salt("new_place")
+                            .icon(design::combo_icon)
+                            .width(ui.available_width())
+                            .truncate()
+                            .selected_text(places[place].label())
+                            .show_ui(ui, |ui| {
+                                for (i, owner) in places.iter().enumerate() {
+                                    ui.selectable_value(&mut place, i, owner.label());
+                                }
+                            })
+                    })
                 });
                 design::named(ui, &combo.response, "Destination");
                 folder_field(
@@ -5064,7 +5068,7 @@ impl Library {
                                     }
                                 }
                                 if self.dependency_undo.as_ref().is_some_and(|change| change.path == note.path) {
-                                    undo_dependency = design::message_with_action(ui, Tone::Success, "Dependency copied and linked.", "Undo dependency copy");
+                                    undo_dependency = design::undo_message(ui, Tone::Success, "Dependency copied and linked.", "Undo dependency copy");
                                 }
                                 None
                             },

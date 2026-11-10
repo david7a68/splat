@@ -526,8 +526,10 @@ transcripts. Links such as `[[Verori]]`, `[[Gate Mechanics#Reliability]]` and `!
 to two notes asks which one, and a link to nothing offers to create it. Each note lists what links to it.
 
 Every World note offers **Edit in Obsidian** and **Show file**. A file that cannot be read stays in the
-**Cannot be read** group. Open it to repair its text here, or follow **Edit in Obsidian**. Lookup's warning
+**Cannot be read** group, with the cause below its filename. Open it to repair its text here, or follow **Edit in Obsidian**. Lookup's warning
 also opens the file in World. A repair draft stays in memory when you read another note. If its file changes, choose **Overwrite with my draft** or red **Reload and lose my draft**. Reload keeps the old draft for **Undo reload** until the next edit.
+
+Open and answered questions show empty and checked boxes in the reader. The note keeps its Markdown task marks (`[ ]` and `[x]`).
 
 ### Table marks
 
@@ -587,12 +589,12 @@ splat_world:
   creature: {key: dnd2024:creatures/goblin_boss}
 ```
 
-An NPC's **Stat block** and **In** rows each have a **Change** picker. A location has **In** too.
+Set World values have a **Change** picker. Read mode hides empty values, except an NPC's **Stat block** row: its **Change** action stays available to assign the first stat block in three interactions.
 Choose by name, or create a location from that picker. Each change edits only that key and offers **Undo**.
 The rest of the file, including comments and spacing, stays as it was. `in: "[[Ashfall Keep]]"` also works,
 including a location's aliases. A place loop stays in the list and shows a warning.
 The **Edit** action beside a campaign entry's name, in World or Lookup, opens one form with **Status**, **Stat block**,
-**In** and the entry's text, without its title line. **Save changes** (Ctrl+S) writes them together and offers
+**In**, **Part of** and the entry's text, without its title line. This form includes empty fields. **Save changes** (Ctrl+S) writes them together and offers
 **Undo changes**. During a live fight, **Save changes** uses a secondary border so **Next turn** stays the primary action.
 **Cancel** writes nothing and offers **Undo discard**. If the note changed on disk, Splat writes
 nothing until you choose. **Overwrite with my draft** saves only the values you changed over the disk version.

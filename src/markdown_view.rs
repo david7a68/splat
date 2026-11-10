@@ -151,7 +151,7 @@ fn show_with_density(ui: &mut egui::Ui, markdown: &str, dense: bool) {
     let source = local_figure_links(&linked, |url| crate::art::link_art(&ctx, url).is_some());
     for (event, range) in Parser::new_ext(
         &source,
-        Options::ENABLE_TABLES | Options::ENABLE_STRIKETHROUGH,
+        Options::ENABLE_TABLES | Options::ENABLE_STRIKETHROUGH | Options::ENABLE_TASKLISTS,
     )
     .into_offset_iter()
     {
@@ -436,6 +436,31 @@ fn show_with_density(ui: &mut egui::Ui, markdown: &str, dense: bool) {
                         ..Default::default()
                     },
                 );
+            }
+            Event::TaskListMarker(done) => {
+                // The marker follows Item's indentation and bullet, before any prose or links.
+                let indent = "  ".repeat(lists.len().saturating_sub(1));
+                job = LayoutJob::default();
+                let icon = if done {
+                    egui_phosphor::regular::CHECK_SQUARE
+                } else {
+                    egui_phosphor::regular::SQUARE
+                };
+                job.append(
+                    &format!("{indent}{icon} "),
+                    0.0,
+                    egui::TextFormat {
+                        font_id: prose.font(ui),
+                        line_height: Some(prose.line()),
+                        color: colors().muted,
+                        ..Default::default()
+                    },
+                );
+                target.task = Some((
+                    done,
+                    design::number_width(ui, &indent, &prose.font(ui)),
+                    prose,
+                ));
             }
             Event::End(TagEnd::Paragraph | TagEnd::Item) => {
                 draw_figures(ui, &mut figures, &job);
@@ -909,6 +934,7 @@ const QUOTE_BAR_WIDTH: f32 = 2.0;
 #[derive(Default)]
 struct Targets {
     links: Vec<(std::ops::Range<usize>, LinkTarget)>,
+    task: Option<(bool, f32, Type)>,
     /// The top of each open quote, outermost first.
     quotes: Vec<f32>,
     /// The bottom of the last words drawn in a quote, where its bar stops.
@@ -941,7 +967,7 @@ fn draw_with_links(
     ui: &mut egui::Ui,
     mut job: LayoutJob,
     links: Vec<(std::ops::Range<usize>, LinkTarget)>,
-) {
+) -> egui::Rect {
     // A one-line linked paragraph still needs a full control target.
     job.first_row_min_height = job
         .first_row_min_height
@@ -985,7 +1011,7 @@ fn draw_with_links(
     }
     response.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Link, true, text.as_str()));
     let Some(pointer) = response.hover_pos() else {
-        return;
+        return response.rect;
     };
     let at = galley.cursor_from_pos(pointer - position).index;
     let byte = text
@@ -1006,6 +1032,7 @@ fn draw_with_links(
             _ => {}
         }
     }
+    response.rect
 }
 
 /// Show that the pointer is on a link that can be pressed. A pressed web link opens here.
@@ -1062,12 +1089,31 @@ fn flush(ui: &mut egui::Ui, job: &mut LayoutJob, target: &mut Targets) {
         return;
     }
     let links = std::mem::take(&mut target.links);
+    let task = target.task.take();
     let job = std::mem::take(job);
     let draw = |ui: &mut egui::Ui| {
-        if links.is_empty() {
-            ui.add(egui::Label::new(job).wrap());
+        let rect = if links.is_empty() {
+            ui.add(egui::Label::new(job).wrap()).rect
         } else {
-            draw_with_links(ui, job, links);
+            draw_with_links(ui, job, links)
+        };
+        if let Some((done, indent, role)) = task {
+            let icon_rect = egui::Rect::from_min_size(
+                rect.min + egui::vec2(indent, 0.0),
+                egui::vec2(role.size(), role.line()),
+            );
+            ui.interact(
+                icon_rect,
+                ui.next_auto_id().with("task-marker"),
+                egui::Sense::hover(),
+            )
+            .widget_info(|| {
+                egui::WidgetInfo::labeled(
+                    egui::WidgetType::Label,
+                    true,
+                    if done { "Answered" } else { "Open question" },
+                )
+            });
         }
     };
     if target.quotes.is_empty() {
@@ -1089,6 +1135,48 @@ fn flush(ui: &mut egui::Ui, job: &mut LayoutJob, target: &mut Targets) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn task_markers_replace_only_leading_list_syntax() {
+        let markdown = "- [ ] Can a ring be sold?\n- [x] Decided.\n- Keep [ ] and [x] in this line.\n\n[ ] A paragraph, not a task.\n\n`[x] Code stays text.`\n";
+        let unchanged = markdown.to_owned();
+        let text = painted(markdown)
+            .iter()
+            .map(|galley| galley.job.text.as_str())
+            .collect::<Vec<_>>()
+            .join("\n");
+        assert!(
+            text.contains(&format!(
+                "{} Can a ring be sold?",
+                egui_phosphor::regular::SQUARE
+            )),
+            "FD-2-open: {text}"
+        );
+        assert!(
+            text.contains(&format!(
+                "{} Decided.",
+                egui_phosphor::regular::CHECK_SQUARE
+            )),
+            "FD-2-answered: {text}"
+        );
+        for literal in [
+            "Keep [ ] and [x] in this line.",
+            "[ ] A paragraph, not a task.",
+            "[x] Code stays text.",
+        ] {
+            assert!(
+                text.contains(literal),
+                "FD-2-literal: missing {literal:?} in {text}"
+            );
+        }
+        assert_eq!(markdown, unchanged);
+        assert_eq!(
+            click_words("- [ ] [Read the note](splat-note:Rook)", "Read the note")
+                .0
+                .as_deref(),
+            Some("Rook")
+        );
+    }
 
     #[test]
     fn wide_tables_keep_whole_words_and_can_scroll_to_the_last_column() {
