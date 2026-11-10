@@ -437,8 +437,7 @@ impl Splat {
 
     /// A World entry form with changes, in World or Lookup.
     fn any_unsaved_edits(&self) -> bool {
-        !self.world_page.reader.unsaved_edits().is_empty()
-            || !self.lookup.reader.unsaved_edits().is_empty()
+        self.world_page.reader.has_unsaved_edits() || self.lookup.reader.has_unsaved_edits()
     }
 
     /// Everything closing the app would lose, by name, with the page where it can be kept.

@@ -463,7 +463,7 @@ pub fn npc_in_lookup(d: &mut Driver<'_>) {
     let at_start = turn(d);
     d.begin_task();
     d.click("Edit Rook Ambry");
-    d.wait_for_text("TEXT");
+    d.wait_for_text("Save changes");
     d.click("Change In");
     d.type_into("Find a location", "North");
     d.click("North Gate");

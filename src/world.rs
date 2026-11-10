@@ -640,6 +640,14 @@ pub fn make_entry(campaign: &Campaign, item: &Item, kind: &str) -> Result<Uuid, 
     Ok(id)
 }
 
+/// What a note keeps to point at an entry: its key, or a link Obsidian can follow too.
+fn stored_link(entry: &Entry) -> String {
+    entry
+        .key
+        .clone()
+        .unwrap_or_else(|| format!("[[{}|{}]]", entry.path.trim_end_matches(".md"), entry.name))
+}
+
 /// Change one field of a world entry's `splat_world`, keeping the rest of the note.
 fn set_world_field(
     campaign: &Campaign,
@@ -657,6 +665,7 @@ fn set_world_field(
         before: text,
         after: updated,
         word: "World value saved.".into(),
+        kind: ChangeKind::of_key(name),
     })
 }
 
@@ -794,6 +803,46 @@ pub(crate) struct Change {
     before: String,
     after: String,
     word: String,
+    kind: ChangeKind,
+}
+
+/// What a change touched, which decides its Undo words and the row that shows it.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub(crate) enum ChangeKind {
+    Place,
+    StatBlock,
+    Status,
+    Name,
+    Identity,
+    /// Everything the edit form saved at once.
+    Edit,
+}
+
+impl ChangeKind {
+    /// The kind for one `splat_world` key.
+    fn of_key(key: &str) -> Self {
+        match key {
+            "in" => Self::Place,
+            "status" => Self::Status,
+            _ => Self::StatBlock,
+        }
+    }
+
+    fn undo_label(self) -> &'static str {
+        match self {
+            Self::Place => "Undo place change",
+            Self::Status => "Undo status change",
+            Self::StatBlock => "Undo stat block change",
+            Self::Name => "Undo name change",
+            Self::Identity => "Undo new identity",
+            Self::Edit => "Undo changes",
+        }
+    }
+
+    /// A relationship row shows its own change when there is room beside it.
+    fn has_row(self) -> bool {
+        matches!(self, Self::Place | Self::StatBlock | Self::Status)
+    }
 }
 
 impl Change {
@@ -855,6 +904,7 @@ pub(crate) fn new_identity(campaign: &Campaign, relative: &str) -> Result<(Chang
                     .to_string_lossy()
                     .as_ref(),
             ),
+            kind: ChangeKind::Identity,
         },
         id,
     ))
@@ -1160,6 +1210,7 @@ impl Reader {
                                 before,
                                 after,
                                 word: format!("Name changed to {stem}."),
+                                kind: ChangeKind::Name,
                             })
                         })();
                         match result {
@@ -1419,6 +1470,7 @@ impl Reader {
                 before: before.clone(),
                 after: after.clone(),
                 word: format!("{label}: {before_name} → {after_name}."),
+                kind: ChangeKind::of_key(key),
             })
         })();
         match result {
@@ -1569,7 +1621,7 @@ impl Reader {
         label: &str,
         width: f32,
         value: impl FnOnce(&mut egui::Ui),
-        notice: Option<&str>,
+        notice: Option<(&str, ChangeKind)>,
     ) -> (bool, bool) {
         let name = format!("Change {label}");
         let change = Action::quiet("Change")
@@ -1608,12 +1660,12 @@ impl Reader {
                     );
                     ui.add_space((design::L - ui.spacing().item_spacing.x).max(0.0));
                     let clicked = change.show(ui).clicked();
-                    if let Some(word) = notice {
+                    if let Some((word, kind)) = notice {
                         ui.allocate_ui_with_layout(
                             egui::vec2(ui.available_width(), Density::Scan.control()),
                             egui::Layout::left_to_right(egui::Align::Center),
                             |ui| {
-                                undo = Self::change_notice(ui, word);
+                                undo = Self::change_notice(ui, word, kind);
                             },
                         );
                     }
@@ -1625,7 +1677,7 @@ impl Reader {
         (clicked, undo)
     }
 
-    fn notice_fits(ui: &egui::Ui, value_width: f32, word: &str) -> bool {
+    fn notice_fits(ui: &egui::Ui, value_width: f32, word: &str, kind: ChangeKind) -> bool {
         ui.available_width()
             >= design::XXL * 3.0
                 + design::S
@@ -1638,27 +1690,33 @@ impl Reader {
                 + design::HAIRLINE_WIDTH
                 + design::number_width(ui, design::icons::INFO, &Type::Body.font(ui))
                 - design::XS
-                + Action::quiet(Self::undo_label(word))
+                + Action::quiet(kind.undo_label())
                     .icon(design::icons::UNDO)
                     .density(Density::Read)
                     .natural_width(ui)
                 + ui.spacing().item_spacing.x * 6.0
     }
 
-    fn undo_label(word: &str) -> &'static str {
-        if word.starts_with("In:") {
-            "Undo place change"
-        } else if word.starts_with("Status:") {
-            "Undo status change"
-        } else if word == edit::SAVED {
-            "Undo changes"
-        } else {
-            "Undo stat block change"
-        }
+    fn change_notice(ui: &mut egui::Ui, word: &str, kind: ChangeKind) -> bool {
+        design::undo_message(ui, Tone::Info, word, kind.undo_label())
     }
 
-    fn change_notice(ui: &mut egui::Ui, word: &str) -> bool {
-        design::undo_message(ui, Tone::Info, word, Self::undo_label(word))
+    /// The change to show beside this row, when it is this row's and there is room.
+    fn row_notice(
+        &self,
+        ui: &egui::Ui,
+        item: &Item,
+        kind: ChangeKind,
+        value_width: f32,
+    ) -> Option<(String, ChangeKind)> {
+        self.undo
+            .as_ref()
+            .filter(|change| {
+                change.path == item.entry.path
+                    && change.kind == kind
+                    && Self::notice_fits(ui, value_width, &change.word, kind)
+            })
+            .map(|change| (change.word.clone(), kind))
     }
 
     pub fn clear_notice(&mut self) {
@@ -1696,17 +1754,7 @@ impl Reader {
             } else {
                 index.world_target(&item.entry, "creature")
             };
-            let notice = self
-                .undo
-                .as_ref()
-                .filter(|change| {
-                    change.path == item.entry.path
-                        && change
-                            .word
-                            .starts_with(if key == "in" { "In:" } else { "Stat block:" })
-                        && Self::notice_fits(ui, value_width, &change.word)
-                })
-                .map(|change| change.word.clone());
+            let notice = self.row_notice(ui, item, ChangeKind::of_key(key), value_width);
             ui.push_id(key, |ui| {
                 let (changed, undo) = Self::relationship_row(
                     ui,
@@ -1766,7 +1814,7 @@ impl Reader {
                             ui.label(Type::Small.rich(ui, "not set").color(colors().muted));
                         }
                     },
-                    notice.as_deref(),
+                    notice.as_ref().map(|(word, kind)| (word.as_str(), *kind)),
                 );
                 if changed {
                     self.picker = Some(Picker {
@@ -1962,7 +2010,7 @@ impl Reader {
             }
             if let Some(change) = &self.undo
                 && change.path == item.entry.path
-                && Self::change_notice(ui, &change.word)
+                && Self::change_notice(ui, &change.word, change.kind)
             {
                 return self.undo_change(campaign, item.entry.id);
             }
@@ -2001,15 +2049,7 @@ impl Reader {
                     .flags
                     .iter()
                     .any(|flag| flag.message.starts_with("Status "));
-                let notice = self
-                    .undo
-                    .as_ref()
-                    .filter(|change| {
-                        change.path == item.entry.path
-                            && change.word.starts_with("Status:")
-                            && Self::notice_fits(ui, value_width, &change.word)
-                    })
-                    .map(|change| change.word.clone());
+                let notice = self.row_notice(ui, item, ChangeKind::Status, value_width);
                 let (changed, undo) = Self::relationship_row(
                     ui,
                     "Status",
@@ -2034,7 +2074,7 @@ impl Reader {
                                 }),
                         );
                     },
-                    notice.as_deref(),
+                    notice.as_ref().map(|(word, kind)| (word.as_str(), *kind)),
                 );
                 if undo {
                     return self.undo_change(campaign, item.entry.id);
@@ -2082,11 +2122,11 @@ impl Reader {
                 ui,
                 Self::relationship_value_width(ui, item, index),
                 &change.word,
-            ) || !(change.word.starts_with("In:")
-                || change.word.starts_with("Stat block:")
-                || (change.word.starts_with("Status:") && !self.status_editing)))
+                change.kind,
+            ) || !change.kind.has_row()
+                || (change.kind == ChangeKind::Status && self.status_editing))
             && ui
-                .horizontal_wrapped(|ui| Self::change_notice(ui, &change.word))
+                .horizontal_wrapped(|ui| Self::change_notice(ui, &change.word, change.kind))
                 .inner
         {
             return self.undo_change(campaign, item.entry.id);
@@ -2150,14 +2190,12 @@ impl Reader {
                 };
                 let saved = adding.save && index.world_target(&item.entry, "creature").is_none();
                 if saved {
-                    let stored = stat_block.key.clone().unwrap_or_else(|| {
-                        format!(
-                            "[[{}|{}]]",
-                            stat_block.path.trim_end_matches(".md"),
-                            stat_block.name
-                        )
-                    });
-                    match set_world_field(campaign, &item.entry, "creature", stored.into()) {
+                    match set_world_field(
+                        campaign,
+                        &item.entry,
+                        "creature",
+                        stored_link(stat_block).into(),
+                    ) {
                         Ok(mut change) => {
                             change.word = format!("Stat block: not set → {}.", stat_block.name);
                             self.undo = Some(change);
@@ -2306,7 +2344,7 @@ mod tests {
         ctx.enable_accesskit();
         let output = ctx.run(Default::default(), |ctx| {
             egui::CentralPanel::default().show(ctx, |ui| {
-                Reader::change_notice(ui, "In: Watch House → North Gate.");
+                Reader::change_notice(ui, "In: Watch House → North Gate.", ChangeKind::Place);
             });
         });
         let nodes = output.platform_output.accesskit_update.unwrap().nodes;
@@ -2659,6 +2697,7 @@ mod tests {
             before: before.clone(),
             after: after.clone(),
             word: "Place changed.".into(),
+            kind: ChangeKind::Place,
         };
         change.undo(&campaign).unwrap();
         assert_eq!(fs::read_to_string(dir.path().join(path)).unwrap(), before);
