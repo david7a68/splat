@@ -98,7 +98,7 @@ such GPU. `SPLAT_VISUAL_RENDERER=software` always uses the software rasterizer. 
 on the same renderer give the same pixels. A GPU and the software rasterizer differ on a
 few edge pixels, so compare runs from the same computer. Video needs the host's
 `ffmpeg`. Videos are 12 frames per second, and each picture is stored once. They use the
-first H.264 encoder that works: VA-API for Intel (low-power mode) or AMD, then NVIDIA's
+first H.264 encoder that works: VA-API for Intel or AMD, then NVIDIA's
 NVENC, then x264 on the CPU. `renderer.txt` names the encoder. The optional contact sheet needs `montage` and can use several GB of RAM.
 Use `devenv shell -- visual-contact-sheet iter-0` to make one from existing captures,
 or set `SPLAT_VISUAL_CONTACT_SHEET=1` to make it with a full `visual-test` run.

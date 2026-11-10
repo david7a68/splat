@@ -12,7 +12,7 @@ use std::{
 #[derive(Clone, Debug, PartialEq)]
 pub(super) enum Encoder {
     /// Intel and AMD GPUs, through the VA-API render node `device`.
-    Vaapi { device: PathBuf, low_power: bool },
+    Vaapi { device: PathBuf },
     /// NVIDIA GPUs.
     Nvenc,
     /// The CPU.
@@ -25,10 +25,11 @@ pub(super) enum Encoder {
 const NVENC_SESSIONS: usize = 6;
 
 impl Encoder {
-    /// The order of preference. On the laptop, a whole video run took 190 CPU-s and 41 s
-    /// with VA-API's low-power mode on the Intel GPU, 187 CPU-s and 49 s with NVENC, and
-    /// 213 CPU-s and 44 s with x264. VA-API comes first: it is faster, and it does not wake
-    /// a discrete GPU. AMD GPUs have no low-power mode, so the normal mode follows.
+    /// The order of preference: VA-API on each render node, then NVENC, then x264. VA-API
+    /// uses its normal mode, which Intel and AMD GPUs both have. On the laptop, a whole
+    /// video run took 199 CPU-s and 43 s with VA-API on the Intel GPU, 187 CPU-s and 49 s
+    /// with NVENC, and 213 CPU-s and 44 s with x264. VA-API comes first: it is faster than
+    /// NVENC, and it does not wake a discrete GPU.
     fn priority() -> Vec<Self> {
         let mut nodes: Vec<PathBuf> = std::fs::read_dir("/dev/dri")
             .into_iter()
@@ -42,15 +43,10 @@ impl Encoder {
             })
             .collect();
         nodes.sort();
-        let mut list = Vec::new();
-        for low_power in [true, false] {
-            for device in &nodes {
-                list.push(Self::Vaapi {
-                    device: device.clone(),
-                    low_power,
-                });
-            }
-        }
+        let mut list: Vec<Self> = nodes
+            .into_iter()
+            .map(|device| Self::Vaapi { device })
+            .collect();
         list.push(Self::Nvenc);
         list.push(Self::X264);
         list
@@ -66,11 +62,7 @@ impl Encoder {
 
     pub(super) fn describe(&self) -> String {
         match self {
-            Self::Vaapi { device, low_power } => format!(
-                "h264_vaapi on {}{}",
-                device.display(),
-                if *low_power { ", low power" } else { "" }
-            ),
+            Self::Vaapi { device } => format!("h264_vaapi on {}", device.display()),
             Self::Nvenc => "h264_nvenc".to_owned(),
             Self::X264 => "libx264".to_owned(),
         }
@@ -79,7 +71,7 @@ impl Encoder {
     /// Options before the input.
     pub(super) fn input_args(&self) -> Vec<String> {
         match self {
-            Self::Vaapi { device, .. } => {
+            Self::Vaapi { device } => {
                 vec!["-vaapi_device".into(), device.display().to_string()]
             }
             Self::Nvenc | Self::X264 => Vec::new(),
@@ -90,18 +82,6 @@ impl Encoder {
     /// 45-49 dB PSNR, with the same frames, in about 60% of the size.
     pub(super) fn output_args(&self) -> Vec<String> {
         let args: &[&str] = match self {
-            Self::Vaapi {
-                low_power: true, ..
-            } => &[
-                "-vf",
-                "format=nv12,hwupload",
-                "-c:v",
-                "h264_vaapi",
-                "-low_power",
-                "1",
-                "-qp",
-                "22",
-            ],
             Self::Vaapi { .. } => &[
                 "-vf",
                 "format=nv12,hwupload",
@@ -212,24 +192,4 @@ fn hardware_encoders_come_before_x264() {
             .iter()
             .all(|e| matches!(e, Encoder::Vaapi { .. }))
     );
-    // Low power first on every device, then the normal mode.
-    let first_normal = list
-        .iter()
-        .position(|e| {
-            matches!(
-                e,
-                Encoder::Vaapi {
-                    low_power: false,
-                    ..
-                }
-            )
-        })
-        .unwrap_or(nvenc);
-    assert!(list[..first_normal].iter().all(|e| matches!(
-        e,
-        Encoder::Vaapi {
-            low_power: true,
-            ..
-        }
-    )));
 }
