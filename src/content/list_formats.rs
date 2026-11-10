@@ -71,8 +71,18 @@ pub fn changes(text: &str, name: &str, note: &str) -> Result<Mapping, String> {
     if !note.is_empty() {
         out.insert("note".into(), note.into());
     }
+    let (text, loot) = super::loot::split_changes(text);
+    if let Some(loot) = loot {
+        if loot.is_empty() {
+            return Err("Changes: Loot needs what the creature carries".into());
+        }
+        out.insert("loot".into(), loot.into());
+    }
     let mut conditions = Vec::new();
     for term in text.split(',').map(str::trim).filter(|s| !s.is_empty()) {
+        if term.eq_ignore_ascii_case("loot") {
+            return Err("Changes: Loot needs what the creature carries".into());
+        }
         if term.to_ascii_lowercase().starts_with("start hp ") {
             return Err("Start HP is set on an encounter's roster".into());
         }
@@ -147,6 +157,10 @@ pub fn show_changes(overrides: &Value) -> String {
         terms.push(format!("Side {side}"));
     }
     terms.extend(super::overrides::condition_names(&overrides["conditions"]));
+    // Last, because its words can hold commas.
+    if let Some(loot) = overrides.get("loot").and_then(Value::as_str) {
+        terms.push(format!("Loot {loot}"));
+    }
     terms.join(", ")
 }
 fn reference(text: &str) -> Result<Value, String> {
@@ -577,7 +591,8 @@ pub fn read(text: &str, fields: &mut Mapping, flags: &mut Vec<Flag>) {
                 }
                 let mut start_hp = None;
                 let mut terms = Vec::new();
-                for term in row[3].value.split(',').map(str::trim) {
+                let (stats, loot) = super::loot::split_changes(&row[3].value);
+                for term in stats.split(',').map(str::trim) {
                     if !group && term.to_ascii_lowercase().starts_with("start hp ") {
                         let hp = term[9..]
                             .trim()
@@ -592,8 +607,11 @@ pub fn read(text: &str, fields: &mut Mapping, flags: &mut Vec<Flag>) {
                         terms.push(term);
                     }
                 }
-                let mut overrides =
-                    changes(&terms.join(", "), &row[2].value, &visible(&row[4].value))?;
+                let mut text = terms.join(", ");
+                if let Some(loot) = loot {
+                    text.push_str(&format!(", Loot {loot}"));
+                }
+                let mut overrides = changes(&text, &row[2].value, &visible(&row[4].value))?;
                 if group {
                     let creature = reference(&row[1].value)?;
                     if let Some(extra) = model
@@ -879,11 +897,15 @@ fn render(fields: &Mapping) -> Result<Rendered, String> {
         for (_, key) in STATS {
             overrides_left.remove(*key);
         }
-        for key in ["name", "note", "conditions", "side"] {
+        for key in ["name", "note", "conditions", "side", "loot"] {
             overrides_left.remove(key);
         }
         members_data.push(Value::Mapping(overrides_left.clone()));
-        let mut shown_changes = show_changes(&overrides);
+        let mut stat_changes = overrides.clone();
+        if let Some(changes) = stat_changes.as_mapping_mut() {
+            changes.remove("loot");
+        }
+        let mut shown_changes = show_changes(&stat_changes);
         if !group
             && let Some(hp) = member
                 .get("initial")
@@ -894,6 +916,13 @@ fn render(fields: &Mapping) -> Result<Rendered, String> {
                 shown_changes.push_str(", ");
             }
             shown_changes.push_str(&format!("Start HP {hp}"));
+        }
+        // Loot is last, because its words can hold commas.
+        if let Some(loot) = overrides.get("loot").and_then(Value::as_str) {
+            if !shown_changes.is_empty() {
+                shown_changes.push_str(", ");
+            }
+            shown_changes.push_str(&format!("Loot {loot}"));
         }
         let mut note = cell(words(&overrides, "note"));
         let first = if group {

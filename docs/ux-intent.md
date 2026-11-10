@@ -307,7 +307,10 @@ recap, the plan, the note, the rest to record. **Context:** table. **Frequency:*
 the plan, so that a DM never chooses between Encounters, Timeline and the note in the gap between two fights. A measured
 evening is in `artifacts/dm-audit/README.md`.
 
-**Done well:** T12.0 to T12.9, T14.1 to T14.5, and T14.7.
+When a fight ends, the party searches it. The ended view lists the encounter's loot and the loot of each creature
+at 0 HP, and each roll on a loot table is one button, with Undo.
+
+**Done well:** T12.0 to T12.9, T14.1 to T14.5, T14.7 and T14.8.
 
 ## 3. Information architecture
 
@@ -600,6 +603,7 @@ reading the code, not from a test run.
 | T14.4 | A fight planned a second time can start a second time | session-plan | state | New |
 | T14.5 | After a restart, Close run goes to the page the run began on, in the session the DM chose | session-plan | state | New |
 | T14.6 | A group is assembled in the session's plan, with the note beside it. It is linked in the plan when saved, and comes first in the run's Arrivals panel. With a fight open, its row goes to that panel in 1 | session-plan-groups | cost, state | New |
+| T14.8 | A creature at 0 HP with loot says Loot on its row, and its card lists the loot. The ended view lists the encounter's loot and each downed creature's, and a loot roll is one step of undo | run-loot | state | New |
 | T14.1 | An interrupted run says Resume, and can be deleted with one step of undo. Ended runs are in the history | session-plan | state | New |
 | G1 | Every disabled control states why, in text or a working tooltip | all | state | Fail |
 | G2 | Go through every top-level page and back: each page restores section 3 state | nav-state **new** | state | Fail |
