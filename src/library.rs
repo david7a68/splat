@@ -9,7 +9,7 @@ use crate::{
     campaigns::Campaigns,
     content_workspace::{CampaignDocument, Catalogue},
     design::{self, Action, Density, Status, Tone, Type, colors, icons, reader as reader_style},
-    matching::{TYPO, Typed, name_fit, row_rank},
+    matching::{CLOSE_NAMES, Rank, Typed, with_other},
     persistence::{Campaign, Module},
 };
 use eframe::egui;
@@ -339,7 +339,7 @@ impl Note {
             .as_ref()
             .map_or(Section::Unreadable, Section::for_entry)
     }
-    /// How the row matches, as `matching::row_rank` ranks it, or None if it does not. Plain
+    /// How the row matches, as `matching::with_other` ranks it, or None if it does not. Plain
     /// words match the name (in any order, or with a typo), path or section, or a creature's
     /// facts. `habitat:forest` and the other fact terms match creatures only.
     fn search_rank(
@@ -348,22 +348,22 @@ impl Note {
         query: &Query,
         typed: &Typed,
         facets: Option<&Facets>,
-    ) -> Option<u8> {
+    ) -> Option<Rank> {
         let words = query.words.as_str();
         if words.is_empty() && !query.names_facts() {
-            return (section == Section::All || self.section() == section).then_some(0);
+            return (section == Section::All || self.section() == section)
+                .then_some(Rank::typed(0));
         }
         if query.names_facts() && !facets.is_some_and(|facets| query.matches_facts(facets)) {
             return None;
         }
         if words.is_empty() {
-            return Some(0);
+            return Some(Rank::typed(0));
         }
-        let fit = name_fit(&self.name().to_lowercase(), words, typed);
         let other = self.path.to_lowercase().contains(words)
             || self.section().label().to_lowercase().contains(words)
             || facets.is_some_and(|facets| query.words_in(self.name(), facets));
-        (fit.is_some() || other).then(|| row_rank(fit, other))
+        with_other(typed.name(&self.name().to_lowercase()), other)
     }
 }
 #[derive(Default)]
@@ -2674,7 +2674,7 @@ impl Library {
             let parsed = Query::parse(&query);
             let typed = Typed::new(&parsed.words);
             let facets = loaded.facets();
-            let mut found: Vec<(u8, usize)> = loaded
+            let mut found: Vec<(Rank, usize)> = loaded
                 .notes
                 .iter()
                 .enumerate()
@@ -2709,7 +2709,7 @@ impl Library {
             }
             self.typo_from = found
                 .iter()
-                .position(|&(rank, _)| !parsed.words.is_empty() && rank > TYPO)
+                .position(|(rank, _)| rank.typo)
                 .unwrap_or(found.len());
             let found = found.into_iter().map(|(_, i)| i).collect();
             self.matches = Some((self.section, query.clone(), found));
@@ -2830,8 +2830,7 @@ impl Library {
                     ui.add_space(design::S);
                     ui.add(
                         egui::Label::new(
-                            Type::Body
-                                .rich(ui, "No name matches as typed. These names are close.")
+                            Type::Body.rich(ui, CLOSE_NAMES)
                                 .color(colors().muted),
                         )
                         .wrap(),

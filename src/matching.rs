@@ -10,35 +10,61 @@ pub(crate) fn words(text: &str) -> impl Iterator<Item = &str> {
         .filter(|word| !word.is_empty())
 }
 
-/// The rank `name_fit` gives a name found only with a typo.
-pub(crate) const TYPO: u8 = 6;
-
-/// How a lower-case name fits a lower-case search, best first: the exact name, a prefix, a
-/// whole word or phrase, anywhere in the name (0 to 3, as `lookup::name_rank`), then each
-/// typed word in any order, as whole words (4) or as the start of words (5), then a typo
-/// (`TYPO`).
-pub(crate) fn name_fit(name: &str, query: &str, typed: &Typed) -> Option<u8> {
-    crate::lookup::name_rank(name, query).or_else(|| typed.in_name(words(name)).map(words_fit))
+/// Where a result sorts. Every result found as typed sorts before every result found only
+/// with a typo. Inside each group, a lower tier sorts first.
+#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
+pub(crate) struct Rank {
+    pub(crate) typo: bool,
+    tier: u8,
 }
 
-/// The rank to sort a row by when the row can also match by something other than its name,
-/// such as its facts or its path: the name as typed (as `name_fit` ranks it), then the other
-/// match, then a typo in the name. A rank above `TYPO` was found only with a typo.
-pub(crate) fn row_rank(fit: Option<u8>, other: bool) -> u8 {
-    match fit {
-        Some(rank) if rank < TYPO => rank,
-        _ if other => TYPO,
-        Some(_) => TYPO + 1,
-        None => TYPO,
+impl Rank {
+    pub(crate) const fn typed(tier: u8) -> Self {
+        Self { typo: false, tier }
+    }
+
+    const fn typo(tier: u8) -> Self {
+        Self { typo: true, tier }
     }
 }
 
-/// The rank of a name found by its words, as `name_fit` ranks it.
-pub(crate) fn words_fit(fit: Fit) -> u8 {
-    match fit {
-        Fit::Exact => 4,
-        Fit::Start => 5,
-        Fit::Typo => TYPO,
+/// Shown when every result was found only with a typo.
+pub(crate) const CLOSE_NAMES: &str = "No name matches as typed. These names are close.";
+
+/// How a lower-case name fits a lower-case search as typed: the exact name (0), a prefix (1),
+/// a whole word or phrase (2), or anywhere in the name (3).
+pub(crate) fn name_rank(name: &str, query: &str) -> Option<u8> {
+    if name == query {
+        Some(0)
+    } else if name.starts_with(query) {
+        Some(1)
+    } else if names_lower_word(name, query) {
+        Some(2)
+    } else if name.contains(query) {
+        Some(3)
+    } else {
+        None
+    }
+}
+
+/// True if lower-case `name` appears in lower-case `text` as whole words.
+pub(crate) fn names_lower_word(text: &str, name: &str) -> bool {
+    if name.is_empty() {
+        return false;
+    }
+    let boundary = |c: Option<char>| c.is_none_or(|c| !c.is_alphanumeric());
+    text.match_indices(name).any(|(at, _)| {
+        boundary(text[..at].chars().next_back()) && boundary(text[at + name.len()..].chars().next())
+    })
+}
+
+/// A row that can also match another way, such as by its facts, path or section: the name as
+/// typed, then the other match (tier 6), then a typo in the name.
+pub(crate) fn with_other(name: Option<Rank>, other: bool) -> Option<Rank> {
+    match name {
+        Some(rank) if !rank.typo => Some(rank),
+        _ if other => Some(Rank::typed(6)),
+        name => name,
     }
 }
 
@@ -60,8 +86,9 @@ pub(crate) enum Fit {
     Typo,
 }
 
-/// The words of a lower-case search, prepared once for each search.
+/// A lower-case search, prepared once for each search.
 pub(crate) struct Typed {
+    phrase: String,
     words: Vec<String>,
 }
 
@@ -76,7 +103,59 @@ impl Typed {
             .filter(|&(at, word)| at == last || !FILLER.contains(word))
             .map(|(_, word)| (*word).to_owned())
             .collect();
-        Self { words }
+        Self {
+            phrase: query.to_owned(),
+            words,
+        }
+    }
+
+    /// How a lower-case name fits: as `name_rank` ranks the search as typed, then each typed
+    /// word in any order, as whole words (tier 4) or as the start of words (5), then with a
+    /// typo.
+    pub(crate) fn name(&self, name: &str) -> Option<Rank> {
+        self.name_with_words(name, words(name))
+    }
+
+    /// `name`, for a name whose words are already split.
+    pub(crate) fn name_with_words<'a>(
+        &self,
+        name: &str,
+        name_words: impl IntoIterator<Item = &'a str>,
+    ) -> Option<Rank> {
+        if let Some(tier) = name_rank(name, &self.phrase) {
+            return Some(Rank::typed(tier));
+        }
+        self.in_name(name_words).map(|fit| match fit {
+            Fit::Exact => Rank::typed(4),
+            Fit::Start => Rank::typed(5),
+            Fit::Typo => Rank::typo(0),
+        })
+    }
+
+    /// A row found by its name or its lower-case text: the name as typed, then the text as
+    /// typed (tier `from`), then each typed word in the text (`from + 1`) or the start of each
+    /// (`from + 2`), then a typo in the name, then, last of all, a typo in the text.
+    /// `text_words` is `word_set` of the text.
+    pub(crate) fn with_text(
+        &self,
+        name: Option<Rank>,
+        text: &str,
+        text_words: &[String],
+        from: u8,
+    ) -> Option<Rank> {
+        if name.is_some_and(|rank| !rank.typo) {
+            return name;
+        }
+        if !self.phrase.is_empty() && text.contains(&self.phrase) {
+            return Some(Rank::typed(from));
+        }
+        match self.in_text(text_words) {
+            Some(Fit::Exact) => Some(Rank::typed(from + 1)),
+            Some(Fit::Start) => Some(Rank::typed(from + 2)),
+            _ if name.is_some() => name,
+            Some(Fit::Typo) => Some(Rank::typo(1)),
+            None => None,
+        }
     }
 
     /// The worst fit when each typed word fits a different word of the name, in any order.
@@ -290,14 +369,53 @@ mod tests {
 
     #[test]
     fn a_name_ranks_as_typed_then_by_words_then_with_a_typo() {
-        let rank = |name: &str, query: &str| name_fit(name, query, &Typed::new(query));
-        assert_eq!(rank("potion of healing", "potion of healing"), Some(0));
-        assert_eq!(rank("potion of healing", "potion"), Some(1));
-        assert_eq!(rank("potion of healing", "healing"), Some(2));
-        assert_eq!(rank("potion of healing", "healing potion"), Some(4));
-        assert_eq!(rank("potions of healing", "healing potion"), Some(5));
-        assert_eq!(rank("potion of healing", "healng potion"), Some(TYPO));
+        let rank = |name: &str, query: &str| Typed::new(query).name(name);
+        assert_eq!(
+            rank("potion of healing", "potion of healing"),
+            Some(Rank::typed(0))
+        );
+        assert_eq!(rank("potion of healing", "potion"), Some(Rank::typed(1)));
+        assert_eq!(rank("potion of healing", "healing"), Some(Rank::typed(2)));
+        assert_eq!(
+            rank("potion of healing", "healing potion"),
+            Some(Rank::typed(4))
+        );
+        assert_eq!(
+            rank("potions of healing", "healing potion"),
+            Some(Rank::typed(5))
+        );
+        assert_eq!(
+            rank("potion of healing", "healng potion"),
+            Some(Rank::typo(0))
+        );
         assert_eq!(rank("potion of healing", "fire"), None);
+        // A typo sorts after every tier found as typed.
+        assert!(Rank::typed(9) < Rank::typo(0));
+    }
+
+    #[test]
+    fn text_ranks_after_the_name_and_a_typo_in_text_comes_last() {
+        let typed = Typed::new("smugglers");
+        let text = "the smugglers hide here";
+        let set = word_set(text);
+        assert_eq!(
+            typed.with_text(Some(Rank::typed(2)), text, &set, 7),
+            Some(Rank::typed(2))
+        );
+        assert_eq!(typed.with_text(None, text, &set, 7), Some(Rank::typed(7)));
+        let typed = Typed::new("hide smugglers");
+        assert_eq!(typed.with_text(None, text, &set, 7), Some(Rank::typed(8)));
+        assert_eq!(
+            typed.with_text(Some(Rank::typo(0)), text, &set, 7),
+            Some(Rank::typed(8))
+        );
+        let typed = Typed::new("smuglers");
+        assert_eq!(
+            typed.with_text(Some(Rank::typo(0)), text, &set, 7),
+            Some(Rank::typo(0))
+        );
+        assert_eq!(typed.with_text(None, text, &set, 7), Some(Rank::typo(1)));
+        assert_eq!(Typed::new("castle").with_text(None, text, &set, 7), None);
     }
 
     #[test]
@@ -327,10 +445,11 @@ mod tests {
 
     #[test]
     fn a_row_found_another_way_is_not_a_typo() {
-        assert_eq!(row_rank(Some(4), false), 4);
-        assert_eq!(row_rank(Some(TYPO), true), TYPO);
-        assert_eq!(row_rank(None, true), TYPO);
-        assert_eq!(row_rank(Some(TYPO), false), TYPO + 1);
+        assert_eq!(with_other(Some(Rank::typed(4)), true), Some(Rank::typed(4)));
+        assert_eq!(with_other(Some(Rank::typo(0)), true), Some(Rank::typed(6)));
+        assert_eq!(with_other(None, true), Some(Rank::typed(6)));
+        assert_eq!(with_other(Some(Rank::typo(0)), false), Some(Rank::typo(0)));
+        assert_eq!(with_other(None, false), None);
     }
 
     #[test]

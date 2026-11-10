@@ -17,7 +17,7 @@ use std::{
 };
 use uuid::Uuid;
 
-use crate::matching::{self, Fit, Typed};
+use crate::matching::{self, Rank, Typed, names_lower_word};
 
 const RESULT_ROW: f32 = design::XXL;
 pub const SEARCH_NAME: &str = "Search everything";
@@ -52,22 +52,7 @@ pub fn names_word(text: &str, name: &str) -> bool {
     names_lower_word(&text.to_lowercase(), &name.to_lowercase())
 }
 
-pub(crate) fn name_rank(name: &str, query: &str) -> Option<u8> {
-    if name == query {
-        Some(0)
-    } else if name.starts_with(query) {
-        Some(1)
-    } else if names_lower_word(name, query) {
-        Some(2)
-    } else if name.contains(query) {
-        Some(3)
-    } else {
-        None
-    }
-}
-
 /// Something the DM wrote, in lower case and with its words, for search.
-#[derive(Default)]
 struct WrittenSearch {
     title: String,
     text: String,
@@ -85,31 +70,23 @@ impl WrittenSearch {
     }
 }
 
-/// What the DM wrote that has these words: the title as typed, then the title's words, then
-/// the text as typed, then the text's words. A typo comes last. True marks a result found only
-/// with a typo.
+/// What the DM wrote that has these words: the title, then the text, as
+/// `matching::Typed::with_text` ranks them. True marks a result found only with a typo.
 fn search_written(written: &[WrittenSearch], query: &str) -> Vec<(usize, bool)> {
-    const WORDS: u8 = 4;
     let typed = Typed::new(query);
-    let mut found: Vec<(u8, usize)> = written
+    let mut found: Vec<(Rank, usize)> = written
         .iter()
         .enumerate()
         .filter_map(|(at, written)| {
-            let in_title = typed.in_name(matching::words(&written.title));
-            let rank = match in_title {
-                _ if written.title.contains(query) => 0,
-                Some(Fit::Exact) => 1,
-                Some(Fit::Start) => 2,
-                _ if written.text.contains(query) => 3,
-                _ => words_rank(in_title, typed.in_text(&written.text_words), WORDS)?,
-            };
+            let title = typed.name(&written.title);
+            let rank = typed.with_text(title, &written.text, &written.text_words, 6)?;
             Some((rank, at))
         })
         .collect();
     found.sort_unstable();
     found
         .into_iter()
-        .map(|(rank, at)| (at, rank >= WORDS + TYPO_FROM))
+        .map(|(rank, at)| (at, rank.typo))
         .collect()
 }
 
@@ -124,33 +101,6 @@ fn merge_hits(entries: &[(usize, bool)], written: &[(usize, bool)]) -> Vec<Hit> 
             .chain(written.map(|&(at, _)| Hit::Written(at)))
     };
     hits(false).chain(hits(true)).collect()
-}
-
-/// How far after `first` a `words_rank` is a typo.
-const TYPO_FROM: u8 = 2;
-
-/// The rank, from `first` on, for a search by words that is not in the name or text as typed:
-/// each word in the text, then the start of each word in the text, then a typo in the name,
-/// then, last of all, a typo in the text.
-fn words_rank(in_name: Option<Fit>, in_text: Option<Fit>, first: u8) -> Option<u8> {
-    match (in_name, in_text) {
-        (_, Some(Fit::Exact)) => Some(first),
-        (_, Some(Fit::Start)) => Some(first + 1),
-        (Some(Fit::Typo), _) => Some(first + 2),
-        (_, Some(Fit::Typo)) => Some(first + 3),
-        _ => None,
-    }
-}
-
-/// `names_word`, for words already in lower case.
-fn names_lower_word(text: &str, name: &str) -> bool {
-    if name.is_empty() {
-        return false;
-    }
-    let boundary = |c: Option<char>| c.is_none_or(|c| !c.is_alphanumeric());
-    text.match_indices(name).any(|(at, _)| {
-        boundary(text[..at].chars().next_back()) && boundary(text[at + name.len()..].chars().next())
-    })
 }
 
 /// Where an item came from.
@@ -251,6 +201,11 @@ fn origin(private: bool, from_sheet: bool) -> Origin {
 }
 
 impl Item {
+    /// How the name fits a search, with the words split at load.
+    fn name_rank(&self, typed: &Typed) -> Option<Rank> {
+        typed.name_with_words(&self.lower, self.name_words.iter().map(String::as_str))
+    }
+
     fn origin(&self) -> Origin {
         origin(self.private, self.from_sheet)
     }
@@ -1039,19 +994,17 @@ impl ContentIndex {
         self.mentions.get(&id).map_or(&[], Vec::as_slice)
     }
 
-    /// Creatures by name, best first as `matching::name_fit` ranks them.
+    /// Creatures by name, best first as `matching::Typed::name` ranks them.
     pub fn creatures_matching(&self, query: &str, limit: usize) -> Vec<usize> {
         let query = query.trim().to_lowercase();
         if query.is_empty() {
             return Vec::new();
         }
         let typed = Typed::new(&query);
-        let mut found: Vec<(u8, usize)> = self
+        let mut found: Vec<(Rank, usize)> = self
             .creatures
             .iter()
-            .filter_map(|&at| {
-                matching::name_fit(&self.items[at].lower, &query, &typed).map(|rank| (rank, at))
-            })
+            .filter_map(|&at| Some((self.items[at].name_rank(&typed)?, at)))
             .collect();
         found.sort_unstable();
         found.into_iter().take(limit).map(|(_, at)| at).collect()
@@ -1151,9 +1104,8 @@ impl ContentIndex {
 
     /// `search`, with true for a result found only with a typo.
     fn search_typos(&self, query: &str) -> Vec<(usize, bool)> {
-        const WORDS: u8 = 8;
         let typed = Typed::new(query);
-        let mut found: Vec<(u8, Origin, usize)> = self
+        let mut found: Vec<(Rank, Origin, usize)> = self
             .items
             .iter()
             .enumerate()
@@ -1162,24 +1114,17 @@ impl ContentIndex {
                 if matches!(item.source, Source::Note(Role::Session | Role::Transcript)) {
                     return None;
                 }
-                let rank = if let Some(rank) = name_rank(&item.lower, query) {
-                    rank
-                } else {
-                    let in_name = typed.in_name(item.name_words.iter().map(String::as_str));
-                    match in_name {
-                        Some(fit) if fit < Fit::Typo => matching::words_fit(fit),
-                        _ if item.section.label().to_lowercase() == query => 6,
-                        _ if item.lower_body.contains(query) => 7,
-                        _ => words_rank(in_name, typed.in_text(&item.body_words), WORDS)?,
-                    }
-                };
+                let name = item.name_rank(&typed);
+                let section = || item.section.label().to_lowercase() == query;
+                let name = matching::with_other(name, name.is_none_or(|r| r.typo) && section());
+                let rank = typed.with_text(name, &item.lower_body, &item.body_words, 7)?;
                 Some((rank, item.origin(), index))
             })
             .collect();
         found.sort_unstable();
         found
             .into_iter()
-            .map(|(rank, _, index)| (index, rank >= WORDS + TYPO_FROM))
+            .map(|(rank, _, index)| (index, rank.typo))
             .collect()
     }
 }

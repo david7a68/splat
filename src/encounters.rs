@@ -3851,7 +3851,7 @@ impl Encounters {
         let query = search.to_lowercase();
         let parsed = Query::parse(&query);
         let typed = crate::matching::Typed::new(&parsed.words);
-        let mut ranked: Vec<(u8, &Creature)> = creatures
+        let mut ranked: Vec<(crate::matching::Rank, &Creature)> = creatures
             .into_iter()
             .filter(|c| {
                 let facets = c.facets.as_ref();
@@ -3861,14 +3861,13 @@ impl Encounters {
             })
             .filter_map(|c| {
                 if parsed.words.is_empty() {
-                    return Some((0, c));
+                    return Some((crate::matching::Rank::typed(0), c));
                 }
-                let fit = crate::matching::name_fit(&c.lower, &parsed.words, &typed);
                 let facts = c
                     .facets
                     .as_ref()
                     .is_some_and(|f| parsed.words_in(&c.name, f));
-                (fit.is_some() || facts).then(|| (crate::matching::row_rank(fit, facts), c))
+                Some((crate::matching::with_other(typed.name(&c.lower), facts)?, c))
             })
             .collect();
         // The plain name first, so "wolf" finds Wolf before Dire Wolf. A fact match comes
@@ -3877,10 +3876,7 @@ impl Encounters {
         if !parsed.words.is_empty() {
             ranked.sort_by_key(|&(rank, c)| (rank, c.origin));
         }
-        let as_typed = ranked
-            .iter()
-            .take_while(|&&(rank, _)| rank <= crate::matching::TYPO)
-            .count();
+        let as_typed = ranked.iter().take_while(|(rank, _)| !rank.typo).count();
         let matches: Vec<&Creature> = ranked.into_iter().map(|(_, c)| c).collect();
         // Enter adds the best match, with focus kept for the next name. A name found only with
         // a typo is a guess, so Enter does not add it.
@@ -3899,7 +3895,7 @@ impl Encounters {
         if as_typed == 0 && !matches.is_empty() {
             ui.label(
                 Type::Small
-                    .rich(ui, "No name matches as typed. These names are close.")
+                    .rich(ui, crate::matching::CLOSE_NAMES)
                     .color(colors().muted),
             );
         }
