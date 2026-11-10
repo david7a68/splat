@@ -411,6 +411,14 @@ impl Run {
         if self.back_out_on_escape(ui) {
             return;
         }
+        // Escape in a row's initiative field closes the field and nothing else. The field
+        // has lost focus by now, so the check above does not keep the key from here.
+        if self.live_initiative.is_some()
+            && ui.input_mut(|i| i.consume_key(Modifiers::NONE, Key::Escape))
+        {
+            self.live_initiative = None;
+            return;
+        }
         // Back to whose turn it is, after a look at someone else.
         if let Some(current) = self.current()
             && (self.selected != current || !self.also.is_empty())
@@ -1502,8 +1510,16 @@ impl Run {
                         }
                     }
                     // In combat the number itself opens a field to change it.
-                    if self.state.phase == Phase::Running && self.live_initiative != Some(index) {
-                        let middle = rect.top() + layout.line_y(scale, rect.height());
+                    // With several targets, this place holds the half-damage mark.
+                    if self.state.phase == Phase::Running
+                        && self.live_initiative != Some(index)
+                        && (!selected || self.also.is_empty())
+                    {
+                        // Inside the row, as its second target, like the missing-total link.
+                        // A short summary row keeps it to the row, with no clamp to panic.
+                        let middle = (rect.top() + layout.line_y(scale, rect.height()))
+                            .min(rect.bottom() - Density::Read.control() / 2.0)
+                            .max(rect.top() + Density::Read.control() / 2.0);
                         let target = Rect::from_min_max(
                             pos2(
                                 rect.left() + design::S,
@@ -1513,7 +1529,8 @@ impl Run {
                                 rect.left() + layout.initiative_right + design::XS,
                                 middle + Density::Read.control() / 2.0,
                             ),
-                        );
+                        )
+                        .intersect(rect);
                         let number = ui
                             .interact(
                                 target,
@@ -1524,7 +1541,7 @@ impl Run {
                             .on_hover_cursor(egui::CursorIcon::PointingHand);
                         number.widget_info(|| {
                             egui::WidgetInfo::labeled(
-                                egui::WidgetType::Button,
+                                egui::WidgetType::Link,
                                 true,
                                 format!("Change initiative for {}", p.name),
                             )
@@ -1568,8 +1585,9 @@ impl Run {
                                 && let Ok(total) = text.parse()
                             {
                                 set_initiative = Some((index, total));
-                            } else if response.lost_focus() && !enter {
-                                // Escape, or a click away, leaves the total as it was.
+                            } else if response.lost_focus() {
+                                // Escape, a click away, or Enter with no number leaves the
+                                // total as it was.
                                 close_initiative = true;
                             }
                         });
@@ -3732,7 +3750,7 @@ impl Run {
                     } else if self.current() == Some(index) {
                         // Moving it now would skip others, or give them a second turn.
                         (
-                            "The turn stays. This row moves when its turn ends.",
+                            "The turn stays. If the new total moves this row, it moves when its turn ends.",
                             colors().muted,
                         )
                     } else {
@@ -6757,18 +6775,33 @@ mod tests {
             .with_size(vec2(1280.0, 720.0))
             .build(move |ctx| {
                 egui::CentralPanel::default().show(ctx, |ui| {
-                    shown.borrow_mut().roster(ui, 600.0, 0.0);
+                    let mut run = shown.borrow_mut();
+                    run.live_keys(ui);
+                    run.roster(ui, 600.0, 0.0);
                 });
             });
         design::theme::install(&harness.ctx);
+        run.borrow_mut().select(1);
         harness.run_steps(2);
-        // Escape leaves the total as it was.
+        // Escape leaves the total as it was, and the DM's look at another row stays.
         harness
             .get_by_label("Change initiative for Guard 3")
             .click();
         harness.run_steps(3);
         assert_eq!(run.borrow().live_initiative, Some(2));
         harness.key_press(Key::Escape);
+        harness.run_steps(3);
+        assert_eq!(run.borrow().live_initiative, None);
+        assert_eq!(run.borrow().state.participants[2].initiative, Some(10));
+        assert_eq!(run.borrow().selected, 1);
+        // Enter with no number closes the field too.
+        harness
+            .get_by_label("Change initiative for Guard 3")
+            .click();
+        harness.run_steps(3);
+        harness.key_press(Key::Backspace);
+        harness.run_steps(1);
+        harness.key_press(Key::Enter);
         harness.run_steps(3);
         assert_eq!(run.borrow().live_initiative, None);
         assert_eq!(run.borrow().state.participants[2].initiative, Some(10));

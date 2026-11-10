@@ -1066,8 +1066,12 @@ impl Run {
     }
     /// The current row whose total changed during its turn. It keeps its place until its
     /// turn ends, so that no one else is skipped or acts twice in this round.
-    fn moves_after_turn(state: &State, roster_ties: bool) -> Option<usize> {
-        (state.phase == Phase::Running && !Self::in_place(state, state.cursor, roster_ties, None))
+    ///
+    /// Only a total out of order says so. A tie is never out of order here: the DM can move
+    /// an arrival within a tie, and the campaign's tie rule can change while a run is open.
+    /// A row that only sits in another tie order does not wait for its turn to end.
+    fn moves_after_turn(state: &State) -> Option<usize> {
+        (state.phase == Phase::Running && !Self::in_place(state, state.cursor, false, None))
             .then(|| state.order[state.cursor])
     }
     /// Put a participant where its total goes, and keep the current turn on the same row.
@@ -1103,8 +1107,11 @@ impl Run {
         let name = &state.participants[index].name;
         let at = state.order.iter().position(|i| *i == index);
         if at == Some(state.cursor) {
-            if Self::moves_after_turn(state, roster_ties).is_none() {
+            if Self::moves_after_turn(state).is_none() {
                 return format!("{name} moves to\u{a0}{total}. The turn stays.");
+            }
+            if !state.participants[index].present {
+                return format!("{name} moves to\u{a0}{total} when this turn ends.");
             }
             // Where the row goes when this turn ends, and whether that is in this round.
             let mut after = state.clone();
@@ -1114,7 +1121,7 @@ impl Run {
                     .order
                     .iter()
                     .position(|i| *i == index)
-                    .is_some_and(|at| at > after.cursor);
+                    .is_some_and(|at| at >= after.cursor);
             return format!(
                 "{name} moves to\u{a0}{total} when this turn ends\u{a0}· acts {}.",
                 if later {
@@ -1125,7 +1132,10 @@ impl Run {
             );
         }
         let passed = at.is_some_and(|at| at < state.cursor);
-        let when = if passed {
+        // An absent row has no turn to speak of until it returns.
+        let when = if !state.participants[index].present {
+            ""
+        } else if passed {
             "\u{a0}· acts next round"
         } else if acted {
             "\u{a0}· acts again this round"
@@ -1136,41 +1146,39 @@ impl Run {
         format!("{name} {verb}\u{a0}{total}{when}.")
     }
     /// Give the turn to the next present participant. A current row whose total changed in
-    /// its turn goes to its new place now: if that is later in this round, it acts again
-    /// there; if it is earlier, it acts there next round.
+    /// its turn goes to its new place first: if that is still to come in this round, it acts
+    /// again there; if it has passed, it acts there next round.
     fn end_turn(state: &mut State, roster_ties: bool) -> Result<(), String> {
-        let moves = Self::moves_after_turn(state, roster_ties);
-        let round = state.round;
-        loop {
-            state.cursor += 1;
-            if state.cursor == state.order.len() {
-                state.cursor = 0;
-                state.round = state.round.checked_add(1).ok_or("Round limit reached.")?;
-            }
-            if state.participants[state.order[state.cursor]].present {
-                break;
-            }
+        if !state.participants.iter().any(|p| p.present) {
+            return Err(NOBODY_PRESENT.into());
         }
-        if let Some(moved) = moves {
-            let next = state.order[state.cursor];
-            state.order.retain(|i| *i != moved);
+        // The rows still to come in this round start after the current one.
+        let mut from = state.cursor + 1;
+        if let Some(moved) = Self::moves_after_turn(state) {
+            state.order.remove(state.cursor);
             let place = state
                 .order
                 .iter()
                 .position(|i| Self::goes_before(state, moved, *i, roster_ties))
                 .unwrap_or(state.order.len());
             state.order.insert(place, moved);
-            state.cursor = if state.round == round {
-                state.order.iter().position(|i| *i == next)
-            } else {
-                // A new round starts at the top, which can now be the row that moved.
-                state
-                    .order
-                    .iter()
-                    .position(|i| state.participants[*i].present)
+            // A place above the rows still to come pushes them down by one. A place among
+            // them is one of them, after its turn here.
+            if place > state.cursor {
+                from = state.cursor;
             }
-            .ok_or(NOBODY_PRESENT)?;
         }
+        let present = |i: &usize| state.participants[*i].present;
+        state.cursor = match state.order[from.min(state.order.len())..]
+            .iter()
+            .position(present)
+        {
+            Some(at) => from + at,
+            None => {
+                state.round = state.round.checked_add(1).ok_or("Round limit reached.")?;
+                state.order.iter().position(present).ok_or(NOBODY_PRESENT)?
+            }
+        };
         Ok(())
     }
     /// The initiative of each new participant, and the words the log uses for it. They are
@@ -1251,7 +1259,7 @@ impl Run {
         rule: &Initiative,
     ) -> Result<(String, String), String> {
         let grouping = rule.grouping;
-        let waiting = Self::moves_after_turn(state, rule.roster_ties);
+        let waiting = Self::moves_after_turn(state);
         if let Some(problem) = &group.problem {
             return Err(format!("{}: {problem}", group.name));
         }
@@ -1669,7 +1677,7 @@ impl Run {
     ) -> Result<String, String> {
         // Found before the change, which can make a neighbour of the current row look out of
         // place.
-        let waiting = Self::moves_after_turn(state, roster_ties);
+        let waiting = Self::moves_after_turn(state);
         let index = match &command {
             Command::Npc(i, ..)
             | Command::RollMode(i, ..)
@@ -5750,6 +5758,61 @@ mod tests {
         assert!(run.notice.as_deref().unwrap().contains("The turn stays"));
         run.apply(Command::Next).unwrap();
         assert_eq!(turns(&run), (vec![0, 1, 2], Some(1)));
+    }
+
+    /// Whose turn each Next gives, as (round, participant).
+    fn next_turns(run: &mut Run, count: usize) -> Vec<(u64, usize)> {
+        (0..count)
+            .map(|_| {
+                run.apply(Command::Next).unwrap();
+                (run.state.round, run.current().unwrap())
+            })
+            .collect()
+    }
+
+    #[test]
+    fn a_change_with_nobody_present_ends_and_says_so() {
+        let mut run = run();
+        begin(&mut run);
+        for index in 0..3 {
+            run.apply(Command::Presence(index, false)).unwrap();
+        }
+        run.apply(Command::Initiative(0, Some(1))).unwrap();
+        assert!(
+            run.notice
+                .as_deref()
+                .unwrap()
+                .contains("when this turn ends")
+        );
+        assert_eq!(run.apply(Command::Next), Err(NOBODY_PRESENT.into()));
+    }
+
+    #[test]
+    fn a_tie_out_of_roster_order_is_no_change_to_wait_for() {
+        // An arrival moved within a tie, or a tie set by hand before the campaign chose
+        // roster order. Each row still acts once a round.
+        let mut run = run();
+        begin(&mut run);
+        run.state.participants[2].initiative = Some(15);
+        run.state.order = vec![0, 2, 1];
+        run.initiative.roster_ties = true;
+        assert_eq!(
+            next_turns(&mut run, 5),
+            vec![(1, 2), (1, 1), (2, 0), (2, 2), (2, 1)]
+        );
+    }
+
+    #[test]
+    fn a_delay_past_an_absent_row_acts_later_this_round() {
+        let mut run = run();
+        begin(&mut run);
+        run.apply(Command::Presence(1, false)).unwrap();
+        // 12 is above the 10 whose turn is next, so this row acts before it.
+        run.apply(Command::Initiative(0, Some(12))).unwrap();
+        let notice = run.notice.clone().unwrap();
+        assert!(notice.contains("acts later this round"), "{notice}");
+        assert_eq!(next_turns(&mut run, 3), vec![(1, 0), (1, 2), (2, 0)]);
+        assert_eq!(run.state.order, vec![1, 0, 2]);
     }
 
     #[test]
