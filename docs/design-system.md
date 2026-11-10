@@ -517,7 +517,9 @@ values and a 32 px pitch. Change uses one column at the widest visible value in 
 gap, capped at the value measure. Values wrap within their column, with Change on the first line. Read mode hides empty relationship and status values. An NPC keeps its empty Stat block row and Change action, so assigning its first stat block still takes three interactions from the reader. This row says `not set`. Edit on the title line opens all fields, including empty ones. A typed page with no set values shows its prose directly, except for this NPC Stat block row. Missing links retain names and keep `Not found` on one line. The value column measures each value as it
 is drawn, including a missing group's icon and ` · Not found`. Empty or whitespace-only place, stat block and group values, and a Part of key with no value, are unset and give no warning. Broken links have a
 warning icon, list warning and count in the header. A Part of target that is not found is a broken link
-(`Group not found`); the header counts its note once, and the count's menu opens it. Table faults use the
+(`Group not found`); the header counts its note once, and the count's menu opens it. A place link that
+matches more than one note also needs fixing: its list row says `Place has 2 matches`, and the header
+count and its menu include the note until `Always use this one` picks one. Table faults use the
 same list warning and header repair link. Unread values name field, bad value, source line and repair, in
 the form `<Field> "<text on that line>" not read (line N). <How to write it>.` When the shape is not
 obvious, the repair gives an example: Hit Points says `Start with a number, such as 22 (4d8 + 4).` Every unread-value warning
@@ -541,7 +543,10 @@ keeps the state at the left, then quiet `Cancel` while the form has no changes o
 has changes, and Save changes at that right edge. Save changes is primary unless a live run owns Next turn;
 then it is secondary. Cancel closes the form. Discard closes the form and offers Undo discard.
 The rail shows World draft while an edit is unsaved. If a repair is also unsaved, it shows World repair draft once.
-One save writes every change with one Undo. A disk change uses the shared conflict choices. Below the
+One save writes every change with one Undo. If the note on disk already reads as the save would write it
+(for example, Overwrite adds a group that Obsidian added too), write nothing, add no Undo, and close the
+form with the Info message `Your changes are already in the note.` A group change refused because Part of
+could not be read closes without that message; the reason shows instead. A disk change uses the shared conflict choices. Below the
 choices, one Small line for each field that differs says what Overwrite does to it, including the groups it
 adds, removes and keeps.
 If Part of could not be read, block its Change action with the unread-value message, for example

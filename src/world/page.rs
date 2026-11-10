@@ -798,7 +798,7 @@ impl WorldPage {
                         if problems.len() > 1 {
                             design::count(problems.len(), "broken link", "broken links")
                         } else {
-                            problems[0].to_owned()
+                            problems[0].to_string()
                         }
                     )
                 } else if entry.kind == "world" {

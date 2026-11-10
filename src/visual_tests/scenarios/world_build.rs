@@ -1,6 +1,7 @@
 //! Desk work in World, including a real disk edit while the app stays open.
 use super::*;
 use crate::design;
+use crate::world::edit::ALREADY_SAVED;
 use egui::accesskit::Role;
 use std::fs;
 use uuid::Uuid;
@@ -2377,6 +2378,14 @@ pub fn book_to_package(d: &mut Driver<'_>) {
     d.state("book-creature-changed-in-package", Sizes::All);
 }
 
+/// Rook Ambry's World list rows, by the name the row starts with.
+fn rook_rows(d: &Driver<'_>) -> Vec<crate::visual_tests::driver::Found> {
+    d.nodes()
+        .into_iter()
+        .filter(|node| node.name.starts_with("Rook Ambry · "))
+        .collect()
+}
+
 pub fn world_note_moved(d: &mut Driver<'_>) {
     let folder = root(d);
     fs::create_dir_all(folder.join("Locations")).unwrap();
@@ -2451,10 +2460,52 @@ pub fn world_note_moved(d: &mut Driver<'_>) {
                 })
         },
     );
+    d.observe_both(
+        "iter-12-D-FD1",
+        "A place with two matches warns on the list row and counts its note in the header",
+        |d| {
+            let rows = rook_rows(d);
+            // Neighbour: the place waits for a choice. It is not missing.
+            !rows.is_empty()
+                && rows
+                    .iter()
+                    .all(|row| row.name.contains("Place has 2 matches") && row.in_view())
+                && d.in_view_containing("1 note needs fixing")
+                && !d.has_containing("Place not found")
+        },
+    );
     d.state("duplicate-place-chooser-in-world", Sizes::All);
     d.click("Always use Locations/Watch House.md");
+    d.expect("Undo place change");
+    d.observe_both(
+        "iter-12-D-FD1-cleared",
+        "After Always use this one, the list row and the header count no longer warn",
+        |d| {
+            let rows = rook_rows(d);
+            // Neighbour: the choice keeps its Undo.
+            !rows.is_empty()
+                && rows
+                    .iter()
+                    .all(|row| !row.name.contains("Place has") && row.in_view())
+                && !d.has_containing("note needs fixing")
+                && !d.has_containing("notes need fixing")
+                && d.in_view("Undo place change")
+        },
+    );
     d.state("place-choice-kept-with-undo", Sizes::All);
     d.click("Undo place change");
+    // From another note, the header count's menu opens the note whose place waits.
+    d.click_containing("North Gate · ");
+    d.expect("Edit North Gate");
+    assert!(!d.has("Edit Rook Ambry"), "fixture: another note is open");
+    d.click("1 note needs fixing");
+    d.click("Rook Ambry");
+    d.expect("Edit Rook Ambry");
+    d.observe(
+        "iter-12-D-FD1-menu",
+        d.in_view("Edit Rook Ambry") && !d.has("Edit North Gate"),
+        "The header count's repair menu opens the note whose place has two matches",
+    );
     d.click_containing("Watch House · 2 matches");
     d.click("Locations/Watch House.md");
     look_up(d, "Rook Ambry");
@@ -3382,17 +3433,47 @@ pub fn part_of_safety(d: &mut Driver<'_>) {
         !d.has_containing("Overwrite adds"),
         "Before the choice, the comparison does not offer to add a group the note has",
     );
+    // An old time on the file shows whether Overwrite wrote it, even with the same bytes.
+    let old = std::time::SystemTime::UNIX_EPOCH + std::time::Duration::from_secs(1_000_000);
+    fs::File::options()
+        .write(true)
+        .open(&path)
+        .unwrap()
+        .set_modified(old)
+        .unwrap();
     d.click("Overwrite with my draft");
-    d.wait_for_text("Changes saved.");
+    d.wait_for_text(ALREADY_SAVED);
     assert_eq!(
         fs::read(&path).unwrap(),
         other.as_bytes(),
         "iter-11-D-SD1-same-raw: one line for the group, in the note's own spelling"
     );
-    d.click("Undo changes");
-    assert_eq!(fs::read(&path).unwrap(), other.as_bytes());
+    assert_eq!(
+        fs::metadata(&path).unwrap().modified().unwrap(),
+        old,
+        "iter-12-D-AD2-no-write: Overwrite with nothing to change does not write the note"
+    );
+    d.observe_both(
+        "iter-12-D-AD2",
+        "Overwrite with nothing to change says so, offers no Undo and closes the form",
+        |d| {
+            d.expect(ALREADY_SAVED);
+            // Neighbour: the note's groups still show in the reader.
+            !d.has("Undo changes")
+                && !d.has("Changes saved.")
+                && !d.has("Save changes")
+                && !d.has("Overwrite with my draft")
+                && d.has_containing("Added Guild")
+        },
+    );
+    d.state("overwrite-already-in-note", Sizes::All);
     fs::write(&path, &readable).unwrap();
     reload(d);
+    d.observe(
+        "iter-12-D-AD2-ends",
+        !d.has(ALREADY_SAVED),
+        "The message goes when the note changes on disk",
+    );
     d.click("Edit Safe Rook");
     d.replace_text_in("Status", "ready");
     d.click("Change Part of");
@@ -3471,11 +3552,17 @@ pub fn part_of_safety(d: &mut Driver<'_>) {
     d.click("Save changes");
     d.expect("This note changed on disk. Your draft is safe until you choose.");
     d.click("Overwrite with my draft");
-    d.wait_for_text("Changes saved.");
+    d.settle();
     assert_eq!(
         fs::read(&path).unwrap(),
         unread.as_bytes(),
         "iter-9-D-AT1-raw: live group change preserves every byte and writes no Log"
+    );
+    // The group change did not go in, so the form does not say it is in the note.
+    d.observe(
+        "iter-12-D-AD2-refused",
+        !d.has(ALREADY_SAVED) && !d.has("Undo changes"),
+        "A refused group change writes nothing, gives no Undo and does not say it is in the note",
     );
     d.expect(reason);
     d.observe_both("iter-9-D-AT1", "The live group change keeps unread disk groups, closes the form and keeps Next turn visible", |d| {
