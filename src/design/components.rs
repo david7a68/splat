@@ -154,21 +154,26 @@ pub fn page_header(ui: &mut Ui, title: &str, context: Option<&str>, actions: imp
         |ui| {
             ui.set_min_height(Density::Scan.control());
             actions(ui);
-            ui.with_layout(Layout::left_to_right(Align::Max), |ui| {
-                ui.label(Type::Title.rich(ui, title).color(colors().text));
-                if let Some(context) = context {
-                    ui.add_space(XS);
-                    ui.add(
-                        egui::Label::new(Type::Small.rich(ui, context).color(colors().muted))
-                            .truncate(),
-                    )
-                    .on_hover_text(context);
-                }
-            });
+            page_title(ui, title, context);
         },
     );
     rule(ui);
     ui.add_space(L);
+}
+
+// Keep rendering that does not depend on the caller's closure out of the generic
+// function. Otherwise rustc generates another copy for every page header.
+fn page_title(ui: &mut Ui, title: &str, context: Option<&str>) {
+    ui.with_layout(Layout::left_to_right(Align::Max), |ui| {
+        ui.label(Type::Title.rich(ui, title).color(colors().text));
+        if let Some(context) = context {
+            ui.add_space(XS);
+            ui.add(
+                egui::Label::new(Type::Small.rich(ui, context).color(colors().muted)).truncate(),
+            )
+            .on_hover_text(context);
+        }
+    });
 }
 
 /// A list group, with its nonzero count in muted type and no rule.
@@ -994,6 +999,13 @@ fn field_label<R>(
     error: Option<&str>,
     add: impl FnOnce(&mut Ui) -> R,
 ) -> R {
+    field_caption(ui, label, role);
+    let inner = add(ui);
+    field_feedback(ui, help, error);
+    inner
+}
+
+fn field_caption(ui: &mut Ui, label: &str, role: Type) {
     let c = colors();
     ui.spacing_mut().item_spacing.y = XS;
     let label = if matches!(role, Type::Label) {
@@ -1002,15 +1014,16 @@ fn field_label<R>(
         label.to_owned()
     };
     ui.label(role.rich(ui, label).color(c.muted));
-    let inner = add(ui);
+}
+
+fn field_feedback(ui: &mut Ui, help: Option<&str>, error: Option<&str>) {
     if let Some(help) = help {
-        ui.label(Type::Small.rich(ui, help).color(c.muted));
+        ui.label(Type::Small.rich(ui, help).color(colors().muted));
     }
     if let Some(error) = error {
         message(ui, Tone::Error, error);
     }
     ui.add_space(XS);
-    inner
 }
 
 /// A one-line text field with a label above it.

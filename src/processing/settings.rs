@@ -316,9 +316,9 @@ impl ProcessingSettings {
             if !self.has_key(KeySlot::Speech) && !super::is_local(&self.config.speech_url) {
                 Some("Save an API key for this speech service in Settings.".into())
             } else if codex && !self.codex_found {
-                Some("The codex command was not found. Install Codex, or choose another LLM in Settings.".into())
+                Some("The codex command was not found. Install Codex, or choose another transcript and summary service in Settings.".into())
             } else if !codex && !self.has_key(KeySlot::Llm) && !super::is_local(&self.config.llm_url) {
-                Some("Save an API key for this LLM in Settings.".into())
+                Some("Save an API key for the transcript and summary service in Settings.".into())
             } else {
                 None
             }

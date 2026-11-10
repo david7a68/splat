@@ -2598,26 +2598,30 @@ impl Sessions {
                     Tone::Warning,
                     "This file is gone from the folder. Your draft is still here. Choose where to save it, or let this draft go.",
                 );
-                if let Some(path) = &draft.moved_to {
-                    let label = format!(
-                        "Save my draft to {}",
-                        path.strip_prefix(&draft.search_folder)
-                            .unwrap_or(path)
-                            .display()
-                    );
-                    if Action::secondary(&label).show(ui).clicked() {
-                        draft.save_moved();
+                ui.horizontal_wrapped(|ui| {
+                    ui.spacing_mut().item_spacing.y = design::M;
+                    if let Some(path) = &draft.moved_to {
+                        let label = format!(
+                            "Save my draft to {}",
+                            path.strip_prefix(&draft.search_folder)
+                                .unwrap_or(path)
+                                .display()
+                        );
+                        if Action::secondary(&label).show(ui).clicked() {
+                            draft.save_moved();
+                        }
                     }
-                }
-                if Action::secondary("Save my draft as a new file")
-                    .show(ui)
-                    .clicked()
-                {
-                    draft.save_again();
-                }
-                if Action::destructive("Let it go").show(ui).clicked() {
-                    draft.let_it_go();
-                }
+                    if Action::secondary("Save my draft as a new file")
+                        .show(ui)
+                        .clicked()
+                    {
+                        draft.save_again();
+                    }
+                    ui.add_space(design::L);
+                    if Action::destructive("Let it go").show(ui).clicked() {
+                        draft.let_it_go();
+                    }
+                });
             }
             DraftState::Failed(error) => {
                 design::message(ui, Tone::Error, &error);

@@ -1256,6 +1256,18 @@ pub fn package_manifest_broken(d: &mut Driver<'_>) {
     d.expect("Package.md cannot be read (line 4)");
     assert!(!d.has("Find the folder…"));
     d.state_prepared("manifest-invalid-campaign", Sizes::All, |d| {
+        let open = d.place_of("Open in Library").expect("Safe manifest repair is present");
+        let replace = d.place_of("Replace with a basic Package.md").expect("Manifest replacement is present");
+        let notice = d.painted_left("Ashen Marches: Package.md cannot be read").expect("Manifest warning is visible");
+        let help = d.painted_left("Keeps the package name and its links.").expect("Replacement consequence is visible");
+        d.observe("iter-7-C-FD4-order", open.top() <= replace.top() && (open.top() < replace.top() || open.right() <= replace.left()),
+            "Open in Library precedes manifest replacement");
+        d.observe("iter-7-C-FD4-edge", (open.left() - notice).abs() <= 1.0 && (help - notice).abs() <= 1.0,
+            "Manifest warning, first action and replacement consequence share a left edge");
+        d.observe("iter-7-C-FD4-border", d.control_frame("Open in Library").is_some_and(|frame| frame.stroke.width > 0.0 && frame.stroke.color == design::colors().field_border),
+            "Open in Library has a secondary border");
+        d.observe("iter-7-C-FD5", d.visible_text("Package.md cannot be read (line 4). Entries are still available."),
+            "The manifest fault and availability sentence have a full stop between them");
         d.observe("iter-6-C-AD1", d.visible_text("Keeps the package name and its links.")
             && d.visible_text("including its description.")
             && d.visible_text("The entries stay unchanged."),

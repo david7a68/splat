@@ -76,14 +76,20 @@ pub(super) fn run() -> bool {
         backing.path().display(),
         temp.display()
     );
-    let status = namespace(backing.path(), &temp)
+    let mut command = namespace(backing.path(), &temp);
+    command
         .arg(executable)
-        .args(["--exact", "visual_tests::visual_suite", "--nocapture"])
+        .args(["--exact", "visual_tests::visual_suite", "--nocapture"]);
+    run_child(command);
+    true
+}
+
+pub(super) fn run_child(mut command: Command) {
+    let status = command
         .env(CHILD, "1")
         .status()
         .expect("start isolated visual suite");
     assert!(status.success(), "isolated visual suite failed: {status}");
-    true
 }
 
 fn namespace(backing: &Path, temp: &Path) -> Command {

@@ -156,12 +156,12 @@ rules do not allow. An unset choice is reported, but it is an incomplete sheet, 
 devenv shell -- cargo run --locked --bin verify-content -- --check-characters CACHE_DIRECTORY
 ```
 
-[`character::build`](../../src/character/build.rs) knows only the catalogue. It gives
+[`character::build`](../../crates/core/src/character/build.rs) knows only the catalogue. It gives
 the features, capacities, class values, spell slots and choices for a class, a level
 and a subclass. Multiclass characters use their total level for the proficiency bonus
 and the Multiclass Spellcaster table for slots. Pact Magic stays separate.
 
-[`character::check`](../../src/character/check.rs) compares that result with the sheet:
+[`character::check`](../../crates/core/src/character/check.rs) compares that result with the sheet:
 
 | Finding | Meaning |
 | --- | --- |

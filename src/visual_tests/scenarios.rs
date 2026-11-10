@@ -6911,7 +6911,7 @@ pub mod session_recording {
             "LLM work says Processing",
         );
         d.app_mut().sessions.simulate_job_end(Err(
-            "The LLM is busy, or your limit is reached. Wait, then select Continue processing."
+            "The transcript and summary service is busy, or your limit is reached. Wait, then select Continue processing."
                 .to_owned(),
         ));
         d.settle();
@@ -6922,7 +6922,13 @@ pub mod session_recording {
             d.has_containing("Processing failed"),
             "A failed job stays in the rail on other pages",
         );
-        d.state("processing-failed-elsewhere", Sizes::Default);
+        d.state_prepared("processing-failed-elsewhere", Sizes::All, |d| {
+            d.observe(
+                "iter-7-C-ST1",
+                d.visible_text("The transcript and summary service is busy"),
+                "Processing failures use the configured service role from Settings",
+            );
+        });
         d.click(NAV_SESSIONS);
         d.expect("your limit is reached");
         d.expect("Continue processing sends the raw transcript");
@@ -7153,7 +7159,37 @@ pub mod session_recording {
         d.press_ctrl(Key::S);
         d.expect("Notes not saved");
         d.expect("Your draft is still here.");
+        for size in [SMALL, DEFAULT, LARGE] {
+            let separated = d.at_size(size, |d| {
+                let moved = d
+                    .place_of("Save my draft to Renamed in Obsidian.md")
+                    .expect("Moved-file recovery is present");
+                let new = d
+                    .place_of("Save my draft as a new file")
+                    .expect("New-file recovery is present");
+                let drop = d
+                    .place_of("Let it go")
+                    .expect("Destructive recovery is present");
+                assert!(
+                    d.in_view("Save my draft to Renamed in Obsidian.md")
+                        && d.in_view("Save my draft as a new file")
+                        && d.in_view("Let it go")
+                );
+                if size == SMALL {
+                    (drop.top() - new.top()).abs() <= 1.0
+                        && drop.left() - new.right() >= crate::design::L
+                        || drop.top() - new.bottom() >= crate::design::M - 1.0
+                } else {
+                    (moved.top() - new.top()).abs() <= 1.0
+                        && (new.top() - drop.top()).abs() <= 1.0
+                        && moved.right() <= new.left()
+                        && drop.left() - new.right() >= crate::design::L
+                }
+            });
+            d.observe("iter-7-C-FT3", separated, format!("Missing-note safe choices share a line when they fit; Let it go has an L or M gap at {size:?}"));
+        }
         d.state("note-file-gone", Sizes::All);
+        assert!(d.in_view("Save my draft as a new file"));
         d.click("Save my draft as a new file");
         d.expect("Notes saved");
         d.observe(

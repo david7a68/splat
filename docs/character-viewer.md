@@ -39,7 +39,7 @@ against SCDS, validates normal creature entries, writes/reads the local cache, a
 connects to the official event stream:
 
 ```sh
-devenv shell cargo test --locked --bin splat live_parity_cache_and_stream -- --ignored --nocapture
+devenv shell cargo test --locked --package splat --lib live_parity_cache_and_stream -- --ignored --nocapture
 ```
 
 It passed for Morana, Rohan of Unc, and Tiny in Heralds of the End. The live listener also received both user-initiated temporary-HP update events.

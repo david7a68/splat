@@ -158,7 +158,7 @@ fn fmt_f1_machine_kinds_and_character_have_independent_conversions() {
 fn fmt_f1_bundled_files_parse_within_budget() {
     let started = std::time::Instant::now();
     let (entries, errors) = super::read_directory(std::path::Path::new(concat!(
-        env!("CARGO_MANIFEST_DIR"),
+        concat!(env!("CARGO_MANIFEST_DIR"), "/../.."),
         "/builtin"
     )))
     .unwrap();

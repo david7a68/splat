@@ -3832,7 +3832,6 @@ dependencies = [
  "egui_kittest",
  "epaint_default_fonts",
  "image",
- "include_dir",
  "keyring",
  "libc",
  "pulldown-cmark",
@@ -3843,10 +3842,46 @@ dependencies = [
  "serde_json",
  "serde_yaml_ng",
  "sha2",
+ "splat-assets",
+ "splat-core",
  "tempfile",
  "tungstenite",
  "uuid",
  "zeroize",
+]
+
+[[package]]
+name = "splat-assets"
+version = "0.1.0"
+dependencies = [
+ "include_dir",
+]
+
+[[package]]
+name = "splat-cli"
+version = "0.1.0"
+dependencies = [
+ "serde_json",
+ "serde_yaml_ng",
+ "splat-core",
+]
+
+[[package]]
+name = "splat-core"
+version = "0.1.0"
+dependencies = [
+ "directories",
+ "image",
+ "include_dir",
+ "pulldown-cmark",
+ "rayon",
+ "serde",
+ "serde_json",
+ "serde_yaml_ng",
+ "sha2",
+ "splat-assets",
+ "tempfile",
+ "uuid",
 ]
 
 [[package]]
