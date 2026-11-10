@@ -600,7 +600,6 @@ reading the code, not from a test run.
 | T16.5 | Two creatures save against an area effect, and its damage applies, in ≤ 7 | run-rolls | cost | New |
 | T16.7 | A bonus rolls with disadvantage by pointer only in 2 | run-rolls | cost | New |
 | T16.8 | After a pointer roll and target, D and Enter apply the damage in 2 keys | run-rolls | cost | New |
-| T16.9 | An attack rolls with a Bless bonus from its menu in 4 | run-rolls | cost | New |
 | T13.1 | The run's group panel lists each group's members and total XP | encounter-groups | state | New |
 | T13.2 | A group joins the running fight in ≤ 1 with a roll, or with a typed total. Undo removes every member | encounter-groups | cost, state | New |
 | T13.3 | A changed creature shows its base and changed values in the editor and on the run's card, marked as changed | encounter-groups, run-overrides | state | New |

@@ -116,21 +116,11 @@ in prose uses the plain dice rule above. Upcasting is not covered.
 | Click | Normal roll |
 | Shift+click | Advantage: roll two d20s and keep the higher |
 | Ctrl+click | Disadvantage: roll two d20s and keep the lower |
-| Right-click | Menu: what it rolls, then Roll, advantage and disadvantage with their clicks, critical damage, an attack's own damage, and a Bonus field |
+| Right-click | Menu: Normal, Advantage, Disadvantage, Critical (damage only) |
 
-Alt is not used, because Alt+Left is Back in the reader and in Lookup.
-
-The right-click menu does what a click cannot:
-
-- It names what it rolls at its head, such as `Bite attack · 1d20 + 4`, and shows
-  each item's click (Click, Shift+click, Ctrl+click), so the menu teaches the
-  shortcuts.
-- On an attack it also offers `Roll damage` and `Roll critical damage`, for an
-  automatic hit or a roll again, without an attack roll first.
-- A `Bonus` field takes a situational bonus, such as `1d4` for Bless, `1d4` for
-  Guidance, or `-2`. It is added to the item that is picked, as its own part of
-  the result and the Log line. Each menu starts empty, so one creature's Bless
-  never rolls for another.
+Alt is not used, because Alt+Left is Back in the reader and in Lookup. For a
+one-off bonus, such as `1d4` for Bless, the DM types the expression in the
+run's dice field.
 
 ### Keys in a run
 
@@ -223,7 +213,7 @@ beside the DC, held like a roll: `DC 14 Dexterity save` and how many targets.
   are `src/rolls.rs`; the hold and calls are `src/encounter_run/rolling.rs`.
 - An empty `Save` cell has no link.
 - The `run-rolls` visual scenario measures T16.1 to T16.5, T16.7 and T16.8:
-  1, 1, 2, 3, 7, 2 and 2, and T16.9 (a bonus from the menu) at 4.
+  1, 1, 2, 3, 7, 2 and 2.
 
 ## Engine and data
 
@@ -304,7 +294,6 @@ to `docs/ux-intent.md`:
 | T16.5 | Two creatures save against an area effect: open the call, choose them, roll the saves, set Half, roll damage, apply | 7 |
 | T16.7 | Roll with disadvantage by pointer only | 2 |
 | T16.8 | After a pointer roll and target, D and Enter apply the damage | 2 keys |
-| T16.9 | Roll an attack with a Bless bonus from the menu | 4 |
 
 ## Later
 
@@ -312,7 +301,8 @@ to `docs/ux-intent.md`:
   Skills row, each feature paragraph), Left and Right inside a group, Enter to
   roll, Shift+Enter and Ctrl+Enter for advantage and disadvantage, and the
   context-menu key. Reader links cannot take focus today.
-- Keeping a bonus, such as Bless, for later rolls by the same creature.
+- `Add a bonus…` on a dice link, and keeping it for later rolls by the same
+  creature, such as Bless.
 - Recharge links: `(Recharge 5–6)` rolls a d6 against the range.
 - Using one damage part, or half, without typing the number.
 - Clearing the targets at or above the DC, for features that do no damage on a

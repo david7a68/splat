@@ -11793,28 +11793,5 @@ pub mod run_rolls {
         d.state("roll-menu", Sizes::Default);
         d.click("Roll with disadvantage");
         d.goal_within("T16.7", "roll with disadvantage by pointer only", 2);
-
-        // The menu names what it rolls, offers the attack's damage, and takes a bonus.
-        d.press(Key::Escape);
-        d.begin_task();
-        d.click_words(
-            ATTACK_BONUS,
-            egui::Modifiers::NONE,
-            egui::PointerButton::Secondary,
-        );
-        d.observe(
-            "T16.9",
-            d.has_containing("Bite attack · 1d20 + 4") && d.has("Roll critical damage"),
-            "The menu names its roll and offers the attack's damage",
-        );
-        d.type_into("Bonus", "1d4");
-        d.click("Roll");
-        d.observe(
-            "T16.9",
-            d.has_containing("1d4 bonus"),
-            "A bonus typed in the menu is rolled as its own part",
-        );
-        d.goal_within("T16.9", "roll an attack with a Bless bonus by pointer", 4);
-        d.state("bonus-rolled", Sizes::Default);
     }
 }
