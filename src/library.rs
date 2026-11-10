@@ -498,11 +498,7 @@ impl Loaded {
     }
 
     fn in_scope(&self, note: &Note, scope: Scope) -> bool {
-        if note
-            .entry
-            .as_ref()
-            .is_some_and(|entry| entry.kind == "package")
-        {
+        if note.is_manifest() {
             return false;
         }
         match scope {
@@ -2244,7 +2240,7 @@ impl Library {
                 module.name,
                 module.path.display()
             );
-            if design::message_with_action(ui, Tone::Info, &message, "Undo unregister") {
+            if design::undo_message(ui, Tone::Info, &message, "Undo unregister") {
                 let result = local_module(&module.path).and_then(|found| {
                     if found.id != module.id {
                         return Err("That folder now holds a different package.".into());
@@ -2561,6 +2557,8 @@ impl Library {
         // A query always searches the whole scope. Clearing it returns to the selected section.
         let query = self.search.trim().to_lowercase();
         let searching = !query.is_empty();
+        let filtering =
+            (self.section == Section::Creatures || searching) && !self.filter.is_empty();
         if self.matches_scope != Some(scope)
             || self
                 .matches
@@ -2583,8 +2581,6 @@ impl Library {
             self.matches_scope = Some(scope);
             let parsed = Query::parse(&query);
             let facets = loaded.facets();
-            let filtering = (self.section == Section::Creatures || !query.is_empty())
-                && !self.filter.is_empty();
             let mut found: Vec<usize> = loaded
                 .notes
                 .iter()
@@ -2727,8 +2723,8 @@ impl Library {
                     }
                 }
                 ui.add_space(design::XS);
-                if searching || (compact && self.section != Section::All) {
-                    design::group_heading(ui, if searching { "Search results" } else { self.section.label() }, matches.len());
+                if searching || filtering || (compact && self.section != Section::All) {
+                    design::group_heading(ui, if searching { "Search results" } else if filtering { "Matches" } else { self.section.label() }, matches.len());
                 }
                 if matches.is_empty() {
                     ui.add_space(design::S);
@@ -3068,7 +3064,11 @@ impl Library {
                 ui.set_max_width(ui.available_width().min(design::FORM_WIDTH));
                 ui.add_space(design::L);
                 ui.horizontal(|ui| {
-                    ui.label(Type::Label.rich(ui, "MANAGE PACKAGES").color(colors().text));
+                    ui.label(
+                        Type::Heading
+                            .rich(ui, "Manage packages")
+                            .color(colors().text),
+                    );
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         if Action::quiet("Close")
                             .name("Close the package form")
@@ -3110,7 +3110,7 @@ impl Library {
                     .or(self
                         .copied_package
                         .is_some()
-                        .then_some("This folder is a copy."))
+                        .then_some("Register it as a new package below."))
                     .or(self
                         .path
                         .trim()
@@ -4405,38 +4405,48 @@ impl Library {
                 } else {
                     filename.into_owned()
                 };
-                let action = crate::world::separate_entry_action(&filename);
-                if Action::secondary(&action)
-                    .hint(&action)
-                    .blocked(draft_reason)
-                    .show(ui)
-                    .clicked()
-                {
-                    new_identity = Some(at);
+                if position > 0 {
+                    ui.add_space((design::L - ui.spacing().item_spacing.y).max(0.0));
                 }
-                if position > 0 && !users.is_empty() {
-                    let remaining = &loaded.notes[duplicate_indices[0]].path;
-                    let remaining = Path::new(remaining)
-                        .file_name()
-                        .unwrap_or_default()
-                        .to_string_lossy();
-                    let remaining = if same_filename {
-                        format!(
-                            "{remaining} in {}/",
-                            loaded.notes[duplicate_indices[0]].owner.folder()
-                        )
-                    } else {
-                        remaining.into_owned()
-                    };
-                    ui.label(
-                        Type::Small
-                            .rich(
-                                ui,
-                                format!("{} will then use {remaining}.", name_list(&users)),
-                            )
-                            .color(colors().muted),
-                    );
-                }
+                ui.scope(|ui| {
+                    ui.spacing_mut().item_spacing.y = design::XS;
+                    let action = crate::world::separate_entry_action(&filename);
+                    if Action::secondary(&action)
+                        .hint(&action)
+                        .blocked(draft_reason)
+                        .show(ui)
+                        .clicked()
+                    {
+                        new_identity = Some(at);
+                    }
+                    if !users.is_empty() {
+                        let remaining = duplicate_indices
+                            .iter()
+                            .copied()
+                            .find(|&other| other != at)
+                            .unwrap();
+                        let note = &loaded.notes[remaining];
+                        let remaining = Path::new(&note.path)
+                            .file_name()
+                            .unwrap_or_default()
+                            .to_string_lossy();
+                        let remaining = if same_filename {
+                            format!("{remaining} in {}/", note.owner.folder())
+                        } else {
+                            remaining.into_owned()
+                        };
+                        let verb = if position == 0 {
+                            "keeps"
+                        } else {
+                            "will then use"
+                        };
+                        ui.label(
+                            Type::Small
+                                .rich(ui, format!("{} {verb} {remaining}.", name_list(&users)))
+                                .color(colors().muted),
+                        );
+                    }
+                });
             }
             let mut shown = std::collections::HashSet::new();
             for &at in &duplicate_indices {
@@ -4554,12 +4564,7 @@ impl Library {
         }
         if !save_row
             && discard_is_for(self.discarded.as_ref(), note)
-            && design::undo_message(
-                ui,
-                Tone::Info,
-                &format!("{} draft discarded.", note.name()),
-                &format!("Undo discard of {}", note.name()),
-            )
+            && design::draft_discarded(ui, note.name())
             && let Some((_, _, text)) = self.discarded.take()
         {
             self.draft = text;
@@ -7177,6 +7182,56 @@ mod tests {
                     .diagnostics
                     .iter()
                     .any(|message| message.contains("Package.md"))
+            );
+        }
+    }
+
+    #[test]
+    fn iter3_d_manifests_never_enter_content_counts_or_results() {
+        let temp = tempfile::tempdir().unwrap();
+        let module = create_module(&temp.path().join("package"), "Test", "test").unwrap();
+        fs::write(
+            module.path.join("Wolf.md"),
+            note_text("Wolf", "creature", None),
+        )
+        .unwrap();
+        for text in [
+            "---\nsplat_id: [\n---\n",
+            "---\nsplat_kind: package\nsplat_id: [\n---\n",
+        ] {
+            fs::write(module.path.join("Module.md"), text).unwrap();
+            let loaded = load_all(std::slice::from_ref(&module), None).unwrap();
+            let manifest = loaded.notes.iter().find(|note| note.is_manifest()).unwrap();
+            assert!(manifest.error.is_some());
+            assert!(manifest.about_label().contains(icons::WARN));
+            assert!(
+                loaded
+                    .diagnostics
+                    .iter()
+                    .any(|line| line.contains("Module.md"))
+            );
+            for scope in [Scope::All, Scope::Uses, Scope::Package(module.id)] {
+                assert!(
+                    !loaded.in_scope(manifest, scope),
+                    "manifest entered {scope:?}"
+                );
+            }
+            assert_eq!(
+                loaded
+                    .notes
+                    .iter()
+                    .filter(|note| loaded.in_scope(note, Scope::Package(module.id)))
+                    .count(),
+                1
+            );
+            assert_eq!(
+                loaded
+                    .notes
+                    .iter()
+                    .filter(|note| loaded.in_scope(note, Scope::Package(module.id))
+                        && note.section() == Section::Unreadable)
+                    .count(),
+                0
             );
         }
     }

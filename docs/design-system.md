@@ -152,7 +152,7 @@ when a prose AC or HP line disagrees and offers `Use <value>` with Undo. Missing
 replacements use the shared search row, with CR, HP, AC and `Use`. Replace all matching
 rows is on by default; it keeps their names and starting values, with one Undo.
 
-World uses labelled `Stat block`, `In` and `Status` rows with `Change` actions. Labels share a fixed column so the values align. `Change` follows each value after an `L` gap. Empty values say `not set`. Missing links keep their names. New NPCs
+World uses labelled `Stat block`, `In` and `Status` rows with `Change` actions. Labels share a fixed column so the values align. `Change` uses one column at the widest visible value in the block plus an `L` gap, capped at the value measure. Empty values say `not set`. Missing links keep their names. New NPCs
 show their future path below the name. A missing place stays visible as `Not found`.
 
 The schema-2 creature reader uses the Markdown table, which
@@ -191,7 +191,7 @@ Convert files
 opens a modal with each file's before and after text, the counts by kind in words,
 and files skipped. Its wide source panes use about 60% of the window height. Source lines do not wrap;
 the two panes scroll together. Changed lines are
-marked, both sides scroll together, and it opens at the first difference.
+marked, both sides scroll together, and it opens at the first difference. Omit the kinds line when it has no text.
 Encounter and group conflict comparisons use the disk's layout. The draft includes
 outside properties and prose that Overwrite keeps. It is blocked while a run is open. Malformed flat properties stay in the
 file; the reader shows a warning with the line number and keeps the note available. Timeline version 2 uses event lists and day IDs in comments below the headings.
@@ -238,7 +238,7 @@ tooltips, and separators. Text cursors do not blink, because motion draws the ey
 | Group heading | `group_heading` | `Type::Label` in capitals and a muted, nonzero count after it. No rule. Serif headings belong to readers and stat blocks |
 | Row menu | `row_menu` | Quiet `⋯` at the right edge, named `More actions for <name>`. Put Remove and Delete here |
 | Add strip | `hanging_add_strip` | `Add` in its own Label column; quiet icon-and-word buttons wrap at the first button's left edge. Fight, Group (plan only), Day, Long rest, Short rest, Travel, Major event |
-| Message | `message`, `message_with_action`, `Tone` | Inline. An action without an icon uses the secondary border, including when it wraps below the message. Measure the full action, including padding. Move it below the text, aligned with the text, when both cannot fit on one line |
+| Message | `message`, `message_with_action`, `Tone` | Inline. Undo messages use `undo_message`: a quiet action with the Undo icon. Other actions without an icon use the secondary border, including when they wrap below the message. Measure the full action, including padding. Move it below the text, aligned with the text, when both cannot fit on one line |
 | Side panel | `side_panel_width`, `panel_header` | One width rule for Lookup, Notes and the run. The run separates participant tabs from fight tabs |
 | Column | `Column::left / right / panel` | Every side column: the rail, a page's list, a panel. A drag handle on its inner edge. Natural width until dragged, then the DM's width, here and after a restart. A drag always leaves the page its room, and the run's roster keeps `RUN_LIST_KEEPS`. What sits beside a column reaches its edge, so no blank band opens between them. Text keeps its measure inside that room |
 | Link | `link` | A real `Link` role, at least 24 px high |
@@ -250,6 +250,8 @@ Every form field label uses sentence-case, muted `Small` text. `Label` capitals 
 Dialog actions stay on one line. A red action sits at the left. Keep and commit actions sit at the right, with the commit action last. Keep remains the default keyboard focus when closing could lose work.
 
 Header actions have at most one bordered secondary button, for `New …`. Other header actions are quiet and come before it.
+Manage packages uses `Heading` for its pane title and `Label` for its sections.
+A filtered creature list shows `MATCHES` and its count, including when search is empty.
 The Library scope control uses Can use in both layouts and sits at the top of its category column. At a narrow width, scope and category share one line at equal widths above search. Hide the All entries heading when there is no search.
 
 **R-6: Empty states.** The full `empty_state` (icon, serif title and text) belongs to an empty pane or page only. An empty section inside a list page shows one muted line under its heading, with no `0` count.
@@ -268,6 +270,8 @@ Empty readers use `No entry open` or `No note open`, then “Choose one from the
 
 Icons support words. They replace a word only where the meaning is universal, and then the
 control still has an accessible name and a tooltip.
+
+World notes with no readable body say `Nothing written yet.` with `Edit in Obsidian`. A file whose stored name differs offers `Rename the note to <file name>`.
 
 ## Keeping a draft
 
@@ -291,7 +295,7 @@ Each value has one source. Printed source text stays separate from those tables.
 Campaign spells use the book's fact order: Casting Time, Range, Components, Duration.
 Concentration and Ritual appear in those values only when true.
 The reader uses one L gap after the kind line and one M gap after a spell's fact table.
-World relationship rows use a 32 px pitch, with aligned values and Change actions.
+World relationship rows use a 32 px pitch, with aligned values and Change actions. Place choices start at the value column, with one file link and a bordered `Always use this one` action on each row.
 Values wrap inside their column, with Change on the first line. A change's message and
 Undo follow Change when they fit; otherwise they sit below the whole row block.
 Broken links have a warning icon, a list-row warning and a count in the World header.
@@ -640,7 +644,7 @@ New entry, Create package and Copy to a package keep Use in this campaign on by 
 
 Every reader resolves `[[Name]]`, `[[Name#Heading]]` and `[[Name|text]]` against World notes and the entries the campaign can use. Duplicate names open a chooser. Missing names keep their words, with a dotted underline and Not found in this campaign on hover. Reference keys keep working. The shared resolver is `ContentIndex::resolve_link`; Markdown readers call `reader_markdown` through the current index.
 
-A package manifest opens from About followed by its name. It is not an entry row. Creation forms show their destination path. Creating a package opens its first entry form. Folder suggestions include existing folders, and saving can create a new subfolder. Reader pictures are 64 px thumbnails beside the title and meta line. Run-in titles use bold text. Sheet tabs use Small as a second level.
+A package manifest opens from About followed by its name. It is never counted or listed as an entry, even when unreadable. Its warning stays on About and in the file issue count. Creation forms show their destination path. Creating a package opens its first entry form. Folder suggestions include existing folders, and saving can create a new subfolder. Reader pictures are 64 px thumbnails beside the title and meta line. Run-in titles use bold text. Sheet tabs use Small as a second level.
 
 An unavailable package keeps its last known display name in the campaign selection. Older selections without a name say A package that is no longer on this computer. The message counts affected campaign entries when the selected references are known, with Remove from this campaign and Find the folder… beside it. The folder picker checks the package identity before restoring its registration. Only Technical details shows its ID.
 
@@ -979,8 +983,7 @@ Use in this campaign stays on the file line.
 
 Duplicate-file repair says which file becomes a separate entry. Its result names the
 file and keeps Undo separate entry on the message line. Folder repair uses separate
-entries and Undo separate entries. A result that explains which entry an encounter
-will use is Small muted text below the action.
+entries and Undo separate entries. Each choice states which file an encounter will keep or use, in Small muted text an `XS` gap below its own action. An `L` gap separates choices.
 
 A found package folder uses bordered secondary Use this folder. Find the folder… is
 quiet when that match exists. The missing-package sentence uses Body text throughout.

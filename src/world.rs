@@ -1100,7 +1100,7 @@ impl Reader {
                         ui,
                         Tone::Warning,
                         &message,
-                        &format!("Use {stem}"),
+                        &format!("Rename the note to {stem}"),
                     ) {
                         let result = (|| {
                             let before =
@@ -1231,6 +1231,25 @@ impl Reader {
                     );
                 }
             }
+        }
+        if (item.entry.kind == "world" || item.is_world_note())
+            && crate::library::presentation::reading_sections(&item.entry.body, &item.entry.name)
+                .is_empty()
+        {
+            ui.horizontal_wrapped(|ui| {
+                ui.label(
+                    Type::Small
+                        .rich(ui, "Nothing written yet.")
+                        .color(colors().muted),
+                );
+                if let Some(campaign) = campaign
+                    && design::link(ui, "Edit in Obsidian").clicked()
+                {
+                    ui.ctx().open_url(egui::OpenUrl::new_tab(obsidian_url(
+                        &campaign.path.join(&item.entry.path),
+                    )));
+                }
+            });
         }
         if item.is_note() {
             let followed = style::measure(ui, |ui| {
@@ -1419,6 +1438,112 @@ impl Reader {
         )
     }
 
+    fn relationship_value_width(ui: &egui::Ui, item: &Item, index: &ContentIndex) -> f32 {
+        let mut values = Vec::new();
+        for (key, label) in [("creature", "Stat block"), ("in", "In")] {
+            if key == "creature" && world_type(&item.entry) != "npc" {
+                continue;
+            }
+            let target = if key == "in" {
+                index.place_of(item.entry.id)
+            } else {
+                index.world_target(&item.entry, key)
+            };
+            let value = if let Some(at) = target {
+                index.items[at].entry.name.clone()
+            } else if key == "in" && !index.place_choices(item.entry.id).is_empty() {
+                let choices = index.place_choices(item.entry.id);
+                let name = world_field(&item.entry, key)
+                    .map(|value| link_name(value, label))
+                    .unwrap_or_default();
+                format!("{} {name} · {} matches", design::icons::WARN, choices.len())
+            } else if let Some(value) = world_field(&item.entry, key) {
+                format!(
+                    "{} {} · Not found",
+                    design::icons::WARN,
+                    link_name(value, label)
+                )
+            } else {
+                "not set".into()
+            };
+            let linked =
+                target.is_some() || (key == "in" && !index.place_choices(item.entry.id).is_empty());
+            values.push((value, if linked { Type::Body } else { Type::Small }));
+        }
+        let status = if item
+            .entry
+            .flags
+            .iter()
+            .any(|flag| flag.message.starts_with("Status "))
+        {
+            "not read"
+        } else if status(&item.entry).is_empty() {
+            "not set"
+        } else {
+            status(&item.entry)
+        };
+        values.push((status.into(), Type::Small));
+        values
+            .iter()
+            .map(|(value, role)| design::number_width(ui, value, &role.font(ui)))
+            .fold(0.0_f32, f32::max)
+            .min(Self::relationship_width(ui))
+    }
+
+    fn place_chooser(
+        &self,
+        ui: &mut egui::Ui,
+        item: &Item,
+        index: &ContentIndex,
+    ) -> (Option<Go>, Option<usize>) {
+        let mut go = None;
+        let mut chosen = None;
+        let indent = if self.compact {
+            design::number_width(ui, "In", &Type::Small.font(ui)) + ui.spacing().item_spacing.x
+        } else if ui.available_width() >= design::XXL * 12.0 {
+            design::XXL * 3.0 + design::S + ui.spacing().item_spacing.x
+        } else {
+            0.0
+        };
+        egui::Frame::new()
+            .inner_margin(egui::Margin {
+                left: indent as i8,
+                ..Default::default()
+            })
+            .show(ui, |ui| {
+                ui.label(
+                    Type::Small
+                        .rich(ui, "This link matches more than one note. Choose one.")
+                        .color(colors().muted),
+                );
+                for at in index.place_choices(item.entry.id) {
+                    let path = &index.items[at].entry.path;
+                    ui.horizontal(|ui| {
+                        ui.spacing_mut().item_spacing.x = design::L;
+                        let name = format!("Always use {path}");
+                        let action = Action::secondary("Always use this one").name(&name);
+                        let width = (ui.available_width() - action.natural_width(ui) - design::L)
+                            .max(design::XXL);
+                        let width = width.min(design::number_width(ui, path, &Type::Body.font(ui)));
+                        ui.allocate_ui_with_layout(
+                            egui::vec2(width, Density::Read.control()),
+                            egui::Layout::top_down(egui::Align::LEFT),
+                            |ui| {
+                                ui.set_width(width);
+                                if design::wrapped_link(ui, path).clicked() {
+                                    go = Some(Go::Item(at, None));
+                                }
+                            },
+                        );
+                        if action.show(ui).clicked() {
+                            chosen = Some(at);
+                        }
+                    });
+                }
+            });
+        (go, chosen)
+    }
+
     fn relationship_row(
         ui: &mut egui::Ui,
         label: &str,
@@ -1431,11 +1556,8 @@ impl Reader {
             .density(design::Density::Scan)
             .name(&name);
         let stacked = ui.available_width() < design::XXL * 12.0;
-        let width = if stacked {
-            ui.available_width() - change.natural_width(ui) - design::L
-        } else {
-            width
-        };
+        let width = width
+            .min((ui.available_width() - change.natural_width(ui) - design::L).max(design::XXL));
         if stacked {
             ui.label(Type::Small.rich(ui, label).color(colors().muted));
         }
@@ -1460,7 +1582,7 @@ impl Reader {
                         egui::vec2(width, design::Density::Scan.control()),
                         egui::Layout::left_to_right(egui::Align::Center).with_main_wrap(true),
                         |ui| {
-                            ui.set_max_width(width);
+                            ui.set_width(width);
                             value(ui);
                         },
                     );
@@ -1545,7 +1667,7 @@ impl Reader {
         campaign: &Campaign,
     ) -> Option<Go> {
         let mut go = None;
-        let value_width = Self::relationship_width(ui);
+        let value_width = Self::relationship_value_width(ui, item, index);
         for (key, label) in [("creature", "Stat block"), ("in", "In")] {
             if key == "creature" && world_type(&item.entry) != "npc" {
                 continue;
@@ -1639,30 +1761,11 @@ impl Reader {
                 }
             });
             if key == "in" && self.place_choices_open {
-                ui.label(
-                    Type::Small
-                        .rich(ui, "This link matches more than one note. Choose one.")
-                        .color(colors().muted),
-                );
-                for at in index.place_choices(item.entry.id) {
-                    let path = &index.items[at].entry.path;
-                    if design::link(ui, path).clicked() {
-                        go = Some(Go::Item(at, None));
-                    }
-                    if Action::quiet("Always use this one")
-                        .name(&format!("Always use {path}"))
-                        .show(ui)
-                        .clicked()
-                    {
-                        let path = path.strip_suffix(".md").unwrap_or(path);
-                        return self.change(
-                            campaign,
-                            item,
-                            index,
-                            "in",
-                            format!("[[{path}]]").into(),
-                        );
-                    }
+                let (followed, chosen) = self.place_chooser(ui, item, index);
+                go = go.or(followed);
+                if let Some(at) = chosen {
+                    let path = index.items[at].entry.path.trim_end_matches(".md");
+                    return self.change(campaign, item, index, "in", format!("[[{path}]]").into());
                 }
             }
         }
@@ -1811,30 +1914,17 @@ impl Reader {
                     }
                 });
                 if self.place_choices_open {
-                    ui.label(
-                        Type::Small
-                            .rich(ui, "This link matches more than one note. Choose one.")
-                            .color(colors().muted),
-                    );
-                    for at in choices {
-                        let path = &index.items[at].entry.path;
-                        if design::link(ui, path).clicked() {
-                            go = Some(Go::Item(at, None));
-                        }
-                        if Action::quiet("Always use this one")
-                            .name(&format!("Always use {path}"))
-                            .show(ui)
-                            .clicked()
-                        {
-                            let path = path.strip_suffix(".md").unwrap_or(path);
-                            return self.change(
-                                campaign,
-                                item,
-                                index,
-                                "in",
-                                format!("[[{path}]]").into(),
-                            );
-                        }
+                    let (followed, chosen) = self.place_chooser(ui, item, index);
+                    go = go.or(followed);
+                    if let Some(at) = chosen {
+                        let path = index.items[at].entry.path.trim_end_matches(".md");
+                        return self.change(
+                            campaign,
+                            item,
+                            index,
+                            "in",
+                            format!("[[{path}]]").into(),
+                        );
                     }
                 }
             }
@@ -1871,7 +1961,7 @@ impl Reader {
             return Some(go);
         }
         if !self.compact {
-            let value_width = Self::relationship_width(ui);
+            let value_width = Self::relationship_value_width(ui, item, index);
             if !self.status_editing {
                 let value = status(&item.entry);
                 let unread = item
@@ -1944,7 +2034,11 @@ impl Reader {
         if !self.compact
             && let Some(change) = &self.undo
             && change.path == item.entry.path
-            && !Self::notice_fits(ui, Self::relationship_width(ui), &change.word)
+            && !Self::notice_fits(
+                ui,
+                Self::relationship_value_width(ui, item, index),
+                &change.word,
+            )
             && ui
                 .horizontal_wrapped(|ui| Self::change_notice(ui, &change.word))
                 .inner
@@ -2428,11 +2522,10 @@ mod tests {
     }
 
     #[test]
-    fn iter2_d_relationship_change_follows_the_value() {
+    fn iter3_d_relationship_changes_share_one_column() {
         for width in [300.0, 600.0, 1000.0] {
             let ctx = egui::Context::default();
             design::theme::install(&ctx);
-            let mut value_rect = egui::Rect::NOTHING;
             let mut output = None;
             for _ in 0..2 {
                 output = Some(ctx.run(
@@ -2446,31 +2539,38 @@ mod tests {
                     |ctx| {
                         egui::CentralPanel::default().show(ctx, |ui| {
                             let width = Reader::relationship_width(ui);
-                            Reader::relationship_row(
-                                ui,
-                                "Status",
-                                width,
-                                |ui| {
-                                    value_rect = ui.label(Type::Small.rich(ui, "not set")).rect;
-                                },
-                                None,
-                            );
+                            for (label, value) in [
+                                ("Stat block", "Goblin Warrior"),
+                                ("In", "North Gate"),
+                                ("Status", "not read"),
+                            ] {
+                                Reader::relationship_row(
+                                    ui,
+                                    label,
+                                    width,
+                                    |ui| {
+                                        ui.label(Type::Small.rich(ui, value));
+                                    },
+                                    None,
+                                );
+                            }
                         });
                     },
                 ));
             }
-            let output = output.unwrap();
-            let change = output
+            let changes: Vec<_> = output
+                .unwrap()
                 .shapes
                 .iter()
-                .find_map(|shape| match &shape.shape {
-                    egui::Shape::Text(text) if text.galley.job.text == "Change" => Some(text.pos),
+                .filter_map(|shape| match &shape.shape {
+                    egui::Shape::Text(text) if text.galley.job.text == "Change" => Some(text.pos.x),
                     _ => None,
                 })
-                .unwrap();
+                .collect();
+            assert_eq!(changes.len(), 3);
             assert!(
-                change.x - value_rect.right() <= design::L * 2.0,
-                "Change is too far from the value at {width}: {change:?}, {value_rect:?}"
+                changes.iter().all(|x| (x - changes[0]).abs() < 1.0),
+                "{width}: {changes:?}"
             );
         }
     }
