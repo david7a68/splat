@@ -136,3 +136,32 @@ Follow-up source check: explicit JSON null values for these counters are compati
 Application recommendation: normalize explicit null to zero for `removedHitPoints`, `temporaryHitPoints`, and both death-save counts; a null death-save object means both counts are zero. Compare normalized values for conflict detection and read-back, so a server response of null matches a requested zero. Preserve strict validation for missing fields, wrong types, negative/fractional counters, and death-save counts above three. Outbound requests can use integer zero, which is already used by the verified mutation clients. [O1, A1, A3]
 
 Exact bundle search locators: `xs=e=>e.character.removedHitPoints`, `ws=e=>e.character.temporaryHitPoints`, `remainingHp:P-B`, `const i=e.tempHp?e.tempHp:0`, `null===e.tempHp?0:e.tempHp`, and `function H(e,t){return{failCount`.
+
+## More sheet values and sheet actions
+
+Research date: 2026-11-10. Source: the official character bundle `main.b9f1c122.js`, and the public `GET /character/v5/rule-data`. This is source inspection. No live write was made. Splat reads every write back, as above.
+
+Absolute values. Each body also has `characterId`. Splat sends these from `src/combat_sync.rs`:
+
+| Value | Method and route | Body fields | Raw read field |
+| --- | --- | --- | --- |
+| Inspiration | PUT `/character/inspiration` | `inspiration` (bool) | `inspiration` |
+| Maximum HP modifier | PUT `/life/hp/bonus` | `bonusHitPoints` (signed) | `bonusHitPoints`, null is 0 |
+| One coin | PUT `/inventory/currency/{copper,silver,electrum,gold,platinum}` | `amount`, `destinationEntityId` (character ID), `destinationEntityTypeId` 1581111423 | `currencies.{cp,sp,ep,gp,pp}` |
+| Item quantity | PUT `/inventory/item/quantity` | `id` (inventory mapping ID), `quantity` | `inventory[].quantity` |
+| Item charges spent | PUT `/inventory/item/charge` | `id`, `charges` | `inventory[].limitedUse.numberUsed` |
+| Companion HP | PUT `/creature/hp` | `id` (creature mapping ID), `removedHitPoints`, `temporaryHitPoints` | `creatures[]` |
+
+The coin route's destination is the official sheet's character container key: entity type 1581111423 (`ContainerTypeEnum.CHARACTER`) and the character ID. Coins in other containers and the party inventory use other destinations. Splat does not write those. The item charge body's `charges` is the official action's `uses`, which is charges spent. A companion's maximum HP is computed by the sheet. `definition.averageHitPoints` is only the stat block's average, so Splat edits damage taken and uses the average only as a limit and a note.
+
+Sheet actions. D&D Beyond applies these itself, so sending one twice applies it twice. Splat sends one only on the DM's request, between two reads, and never retries it:
+
+| Action | Method and route | Body fields |
+| --- | --- | --- |
+| Short rest | POST `/character/rest/short` | `classHitDiceUsed` (object: class mapping ID to total hit dice used after the rest), `resetMaxHpModifier` |
+| Long rest | POST `/character/rest/long` | `resetMaxHpModifier`, `adjustConditionLevel` (reduce Exhaustion) |
+| Restore to life | PUT `/life/restore` | `totalHp` (computed maximum HP), `restoreType` |
+
+`classHitDiceUsed` is absolute: the official dialog starts from each class's `hitDiceUsed` and adds the dice spent. The short rest body has no HP field, so it does not add the HP the dice give. Rule data lists `restoreTypes`: 1 is `Full`, 2 is `OneHP`.
+
+D&D Beyond has no route for concentration, and the condition route accepts only the 15 standard IDs. Concentration and other effects stay in Splat.

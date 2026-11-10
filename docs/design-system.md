@@ -147,6 +147,7 @@ eye during long sessions.
 | Split button | `split_action` | Default `Action`, then a caret menu for other actions |
 | Field | `field`, `small_field` | Sentence-case muted `Small` label, control, help and error; accessible name |
 | Text fields | `text_field`, `text_input`, `number_field`, `search_field`, `named` | Accessible name and a 26 px target; left-aligned numbers keep the caret off digits; placeholders use faint `Body` text |
+| Editable numbers | `stepper` | A value the DM can change: − and + beside the number in a bordered well. A value without a stepper is read only, so the two never look alike. The D&D Beyond sheet panel uses it for every value Splat can send |
 | Dialog | `dialog`, `dialog_actions` | `egui::Modal`, for the brief's modal tasks only; one action line, red at the left, keep and commit at the right, commit last |
 | Section | `section`, `quiet_section`, `section_icon`, `combo_icon` | Collapsing, with Phosphor arrows; `quiet_section` for technical details at a page's end |
 | Table row | `table_row` | Fixed cell widths and hairline for Markdown tables and sheets; no stripes; height follows text |
@@ -478,7 +479,7 @@ visible with duplicate warnings. A duplicate NPC still has its existing name-onl
 warning does not imply changed stats. Encounter repair opens World for World notes. A note with no
 readable body says `Nothing written yet.` only. The file line keeps the one `Edit in Obsidian` link.
 
-NPCs show labelled Stat block, In and Status rows; locations show In. Use a fixed label column, aligned
+NPCs show labelled Stat block, In and Status rows; locations show In. A full NPC reader's kind line shows NPC and its owner; Status stays in its own row. A compact reader keeps status on the kind line because it has no Status row. Use a fixed label column, aligned
 values and a 32 px pitch. Change uses one column at the widest visible value in the block plus an `L`
 gap, capped at the value measure. Values wrap within their column, with Change on the first line. Empty
 values say `not set`. Missing links retain names and keep `Not found` on one line. Broken links have a
@@ -495,9 +496,9 @@ stored names offer `Rename the note to <file name>`, with a guarded update and U
 future path below the name. A compact NPC reader puts Fights as and In on one read-only line; both open
 Lookup.
 
-A campaign world entry has a quiet Edit icon after its title, in Lookup and World. Edit replaces the rows and
+A campaign world entry has a quiet Edit action, with a pencil icon and the word Edit, on its title line in Lookup and World. Edit replaces the rows and
 the text with one form: Status, Stat block and In as labelled fields, then Text in the reader's prose type,
-without the title line. Save changes is primary, Unsaved follows it, then an `L` gap and quiet Cancel. One save
+without the title line. Save changes is primary unless a live run owns Next turn; then it is secondary. Unsaved follows it, then an `L` gap and quiet Cancel. One save
 writes every change with one Undo. A disk change uses the shared conflict choices.
 
 Broken notes stay under Cannot be read and use the Campaign repair source editor. Keep drafts in memory and

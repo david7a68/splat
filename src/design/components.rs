@@ -801,6 +801,60 @@ pub fn icon_button(ui: &mut Ui, icon: &str, name: &str) -> Response {
     response.on_hover_text(name)
 }
 
+/// A whole number that the DM can change. The value is in a well with a field border,
+/// as every input is, with − and + beside it. Drag, type or step it. Plain text beside a
+/// stepper is a value that cannot change, so the two never look alike. Returns true when
+/// the value changed. A value outside the range widens it: the stepper never changes a
+/// value that the DM did not touch.
+pub fn stepper(
+    ui: &mut Ui,
+    name: &str,
+    value: &mut i64,
+    range: std::ops::RangeInclusive<i64>,
+) -> bool {
+    let before = *value;
+    let (low, high) = ((*range.start()).min(before), (*range.end()).max(before));
+    ui.horizontal(|ui| {
+        ui.spacing_mut().item_spacing.x = XS / 2.0;
+        let down = ui
+            .add_enabled_ui(*value > low, |ui| {
+                icon_button(ui, icons::SUBTRACT, &format!("Decrease {name}"))
+            })
+            .inner;
+        if down.clicked() {
+            *value -= 1;
+        }
+        let field = ui
+            .scope(|ui| {
+                let c = colors();
+                let widgets = &mut ui.visuals_mut().widgets;
+                for state in [
+                    &mut widgets.inactive,
+                    &mut widgets.hovered,
+                    &mut widgets.active,
+                ] {
+                    state.bg_fill = c.well;
+                    state.weak_bg_fill = c.well;
+                }
+                widgets.inactive.bg_stroke = Stroke::new(HAIRLINE_WIDTH, c.field_border);
+                ui.spacing_mut().interact_size.y = Density::Read.control();
+                ui.add(egui::DragValue::new(value).range(low..=high).speed(0.1))
+            })
+            .inner;
+        named(ui, &field, name);
+        let up = ui
+            .add_enabled_ui(*value < high, |ui| {
+                icon_button(ui, icons::ADD, &format!("Increase {name}"))
+            })
+            .inner;
+        if up.clicked() {
+            *value += 1;
+        }
+    });
+    *value = (*value).clamp(low, high);
+    *value != before
+}
+
 /// An inline link with a real `Link` role, and a target of at least 24 px.
 pub fn link(ui: &mut Ui, label: &str) -> Response {
     text_link(ui, label, Type::Body)
@@ -1727,6 +1781,26 @@ pub fn undo_message_with_links(
             .inner;
     }
     (pressed, clicked)
+}
+
+/// A message with several actions below it, aligned with the message text.
+pub fn message_with_actions<R>(
+    ui: &mut Ui,
+    tone: Tone,
+    text: &str,
+    actions: impl FnOnce(&mut Ui) -> R,
+) -> R {
+    ui.scope(|ui| {
+        ui.set_max_width(ui.available_width().min(LIST_MEASURE));
+        let response = message(ui, tone, text);
+        let inset = response.rect.left() - ui.cursor().left();
+        ui.horizontal_top(|ui| {
+            ui.add_space(inset);
+            ui.vertical(actions).inner
+        })
+        .inner
+    })
+    .inner
 }
 
 /// The same safe-first choice for a draft whose file changed on disk.

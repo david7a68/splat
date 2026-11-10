@@ -4615,6 +4615,38 @@ pub mod signed_in {
         let on = d.has_containing(SYNC_ON);
         d.click_containing(SYNC_SECTION);
         d.state("party-sync-on", Sizes::All);
+        // After a read, every value Splat can send has − and + beside it.
+        d.app_mut().party.simulate_sheet_read(
+            62,
+            &serde_json::json!({
+                "id": 9100001, "canEdit": true, "removedHitPoints": 4, "temporaryHitPoints": 5,
+                "inspiration": true, "bonusHitPoints": 0,
+                "deathSaves": {"successCount": 0, "failCount": 0}, "conditions": [],
+                "currencies": {"cp": 12, "sp": 30, "ep": 0, "gp": 145, "pp": 2},
+                "actions": {"class": [{"id": 1, "entityTypeId": 2, "name": "Second Wind", "limitedUse": {"numberUsed": 1}}]},
+                "inventory": [
+                    {"id": 3, "quantity": 18, "definition": {"name": "Crossbow Bolts"}},
+                    {"id": 4, "quantity": 1, "limitedUse": {"maxUses": 3, "numberUsed": 1}, "definition": {"name": "Wand of Web"}}
+                ],
+                "creatures": [{"id": 5, "name": "Grit", "removedHitPoints": 2, "temporaryHitPoints": 0, "definition": {"name": "Mastiff", "averageHitPoints": 5}}],
+                "classes": [{"id": 6, "level": 6, "hitDiceUsed": 2, "definition": {"name": "Fighter", "hitDice": 10}}]
+            }),
+        );
+        d.settle();
+        d.observe(
+            "T7.3",
+            d.has("Increase Current HP")
+                && d.has("Increase Temporary HP")
+                && d.has_containing("Values with − and + are editable"),
+            "After a read, editable values have steppers and the panel says what they do",
+        );
+        d.click_containing("Short rest");
+        d.state("party-short-rest", Sizes::Default);
+        d.click("Cancel");
+        for section in ["Currency", "Inventory", "Companions and summons"] {
+            d.click_containing(section);
+        }
+        d.state("party-sync-editable", Sizes::All);
         go_library(d);
         let rail = !d.visible_text(RAIL_STOPPED);
         go_party(d);
@@ -4634,7 +4666,12 @@ pub mod signed_in {
             d.has_containing(SYNC_OFF) && !d.has_containing(STOPPED),
             "Turned off by the DM, sync stays off and nothing calls that a fault",
         );
-        d.click_containing(SYNC_SECTION);
+        // The panel stays open when sync turns off, so the box is still there.
+        d.observe(
+            "T7.3",
+            d.has(SYNC_TOGGLE),
+            "Turning sync off keeps its panel open",
+        );
         d.click(SYNC_TOGGLE);
         d.begin_task();
 
@@ -5055,6 +5092,7 @@ pub mod nav_table {
 /// World notes, roll tables, and an NPC made at the table.
 pub mod world {
     use super::*;
+    use egui::accesskit::Role;
 
     const NPC: &str = "Ashori Deepcut";
 
@@ -5078,7 +5116,19 @@ pub mod world {
             !d.has("Create NPC") && d.has_containing("Watchkeeper"),
             "Creating a World note closes the form and opens the note",
         );
-        d.state("world-new-note-created", Sizes::Default);
+        for size in [SMALL, DEFAULT, LARGE] {
+            let clear = d.at_size(size, |d| {
+                d.expect("NPC · Campaign");
+                d.expect("Status");
+                d.visible_text("alive") && !d.visible_text("NPC · alive · Campaign")
+            });
+            d.observe(
+                "iter-6-D-FD8",
+                clear,
+                format!("The full NPC reader shows status once at {size:?}"),
+            );
+        }
+        d.state("world-new-note-created", Sizes::All);
 
         d.click("Setting · ");
         d.observe(
@@ -5135,7 +5185,7 @@ pub mod world {
         d.settle();
         d.observe(
             "T14.7",
-            d.has("Add to run") && !d.has("Save NPC"),
+            d.has("Add to fight") && !d.has("Save NPC"),
             "A saved NPC opens as a note, ready to join the fight",
         );
         d.state("world-generated-npc-saved", Sizes::Default);
@@ -5143,16 +5193,65 @@ pub mod world {
         look_up_again(d, NPC);
         d.click(&format!("New NPC \"{NPC}\""));
         d.settle();
-        d.expect("Add to run");
+        d.expect("Add to fight");
+        d.expect("NPC · alive · Campaign");
         d.state("world-new-npc", Sizes::Default);
-        d.click("Add to run");
+        d.click("Add to fight");
         d.type_into("Stat block", "Guard");
         d.click("Guard");
         d.type_into("Initiative", "11");
-        d.expect("SIDE");
+        d.expect("Side");
         d.wait_for_text("Enemies");
+        for size in [SMALL, DEFAULT, LARGE] {
+            let (words, side, width, change) = d.at_size(size, |d| {
+                d.expect("Side");
+                d.expect("Initiative");
+                d.expect("Change");
+                d.expect("Add to fight");
+                let label = d
+                    .nodes()
+                    .into_iter()
+                    .find(|n| n.name == "Side" && n.role == Role::Label);
+                (
+                    d.visible_text(&format!("Add {NPC} to the fight")) && !d.has("Add to run"),
+                    label.is_some_and(|label| {
+                        d.painted_size(label.rect, "Side")
+                            == Some(crate::design::Type::Small.size())
+                    }),
+                    d.nodes()
+                        .into_iter()
+                        .find(|n| n.name == "Initiative" && n.role == Role::TextInput)
+                        .is_some_and(|field| field.rect.width() <= crate::design::L * 5.0 + 1.0),
+                    d.nodes()
+                        .into_iter()
+                        .any(|n| n.name == "Change" && n.role == Role::Button)
+                        && d.control_frame("Change")
+                            .is_some_and(|frame| frame.stroke.width == 0.0),
+                )
+            });
+            for (id, passed) in [
+                ("FT2", words),
+                ("FD5-label", side),
+                ("FD5-width", width),
+                ("FD5-change", change),
+            ] {
+                d.observe(
+                    &format!("iter-6-D-{id}"),
+                    passed,
+                    format!("NPC Add form: {id} at {size:?}"),
+                );
+            }
+        }
         d.state("npc-add-to-run-form", Sizes::All);
-        d.click("Add");
+        d.expect("Add to fight");
+        let add_buttons = |d: &Driver<'_>| {
+            d.nodes()
+                .into_iter()
+                .filter(|n| n.name == "Add to fight" && n.role == Role::Button)
+                .count()
+        };
+        let before_join = add_buttons(d);
+        d.click("Add to fight");
         d.settle();
         d.observe(
             "T14.5",
@@ -5164,7 +5263,10 @@ pub mod world {
         d.state("world-npc-in-run", Sizes::All);
         d.observe(
             "NPC arrival",
-            d.has_containing("In the run · initiative 11") && !d.has("Add to run"),
+            // The NPC's own Add to fight goes; any other (the run header's) stays.
+            d.has_containing("In the run · initiative 11")
+                && before_join >= 1
+                && add_buttons(d) == before_join - 1,
             "The NPC's panel links to their row after they join",
         );
         d.click("In the run · initiative 11");

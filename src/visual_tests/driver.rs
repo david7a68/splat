@@ -512,6 +512,28 @@ impl<'a> Driver<'a> {
             .min_by(|a, b| a.0.area().total_cmp(&b.0.area()))
     }
 
+    /// The painted frame of a named control, for fill and border checks.
+    pub fn control_frame(&self, name: &str) -> Option<egui::epaint::RectShape> {
+        let bounds = self.place_of(name)?;
+        fn find(shape: &egui::Shape, bounds: egui::Rect) -> Option<egui::epaint::RectShape> {
+            match shape {
+                egui::Shape::Vec(shapes) => shapes.iter().find_map(|shape| find(shape, bounds)),
+                egui::Shape::Rect(rect)
+                    if (rect.rect.min - bounds.min).length() < 1.0
+                        && (rect.rect.max - bounds.max).length() < 1.0 =>
+                {
+                    Some(rect.clone())
+                }
+                _ => None,
+            }
+        }
+        self.harness
+            .output()
+            .shapes
+            .iter()
+            .find_map(|shape| find(&shape.shape, bounds))
+    }
+
     /// Where a control is, by its exact name.
     pub fn place_of(&self, name: &str) -> Option<egui::Rect> {
         self.nodes()

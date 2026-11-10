@@ -216,6 +216,8 @@ pub fn components(ui: &mut egui::Ui) {
         ui.vertical(|ui| {
             search_field(ui, "Search", &mut empty, "Search…", 200.0);
             number_field(ui, "Amount", &mut amount, "Amount", 64.0, 30.0);
+            let mut quantity = 3;
+            stepper(ui, "Quantity", &mut quantity, 0..=99);
         });
     });
     design_group(ui, "Rows and status");
