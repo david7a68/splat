@@ -4586,7 +4586,12 @@ pub mod signed_in {
             d.has_containing(SYNC_OFF) && !d.has_containing(STOPPED),
             "Turned off by the DM, sync stays off and nothing calls that a fault",
         );
-        d.click_containing(SYNC_SECTION);
+        // The panel stays open when sync turns off, so the box is still there.
+        d.observe(
+            "T7.3",
+            d.has(SYNC_TOGGLE),
+            "Turning sync off keeps its panel open",
+        );
         d.click(SYNC_TOGGLE);
         d.begin_task();
 

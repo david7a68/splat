@@ -117,11 +117,21 @@ impl SheetAction {
                 json!({"resetMaxHpModifier":reset_max_hp_bonus,"adjustConditionLevel":reduce_exhaustion}),
             ),
             // The types are D&D Beyond's rule data: 1 is full HP, 2 is 1 HP.
-            Self::RestoreLife { full } => (
-                Method::PUT,
-                "/life/restore",
-                json!({"totalHp":remote.max_hp,"restoreType":if *full { 1 } else { 2 }}),
-            ),
+            Self::RestoreLife { full } => {
+                // The button showed at 0 HP, but the sheet may have changed since.
+                let removed = remote
+                    .groups
+                    .get("hp")
+                    .and_then(|hp| hp["removedHitPoints"].as_i64());
+                if removed.is_none_or(|removed| removed < remote.max_hp) {
+                    return Err("The character is no longer at 0 HP.".into());
+                }
+                (
+                    Method::PUT,
+                    "/life/restore",
+                    json!({"totalHp":remote.max_hp,"restoreType":if *full { 1 } else { 2 }}),
+                )
+            }
         };
         body["characterId"] = remote.id.into();
         Ok(Mutation {
@@ -490,13 +500,10 @@ fn mutations(remote: &Remote, key: &str, target: &Value) -> Result<Vec<Mutation>
         if ["id", "entityTypeId"].contains(&field.as_str()) && old.get(field) != Some(value) {
             return Err("Resource identity cannot change.".into());
         }
-        if let Some(max) = remote.limits.get(key)
-            && ((key.starts_with("item/") && field == "charges")
-                || (key.starts_with("creature/") && field == "removedHitPoints"))
-            && n > *max
-            && old.get(field) != Some(value)
+        // D&D Beyond may not delete an item at quantity 0, or may. Splat does not find out.
+        if key.starts_with("item/") && field == "quantity" && n < 1 && old.get(field) != Some(value)
         {
-            return Err(format!("This value cannot be more than {max}."));
+            return Err("Quantity must be at least 1. Remove an item on D&D Beyond.".into());
         }
     }
     // Currency and items have one route for each field. Each write is read back on its own.
@@ -869,6 +876,15 @@ impl CombatSync {
         if let Some(gate) = &self.gate {
             gate.store(false, Ordering::SeqCst);
         }
+        // A rest on its way may have reached D&D Beyond. Splat will not hear back.
+        if let Some(name) = self.pending.as_ref().and_then(|pending| pending.action) {
+            self.action_notice = Some((
+                false,
+                format!(
+                    "Sync stopped before Splat heard back about the {name}. Check the sheet on D&D Beyond before you try again."
+                ),
+            ));
+        }
         self.pending = None;
         self.gate = None;
         self.enabled = false;
@@ -1082,6 +1098,10 @@ impl CombatSync {
                 match result {
                     Ok((outcome, taken)) => {
                         self.accept(outcome, &sent);
+                        // A success says so until the next read. An error stays until closed.
+                        if action.is_none() && self.action_notice.as_ref().is_some_and(|n| n.0) {
+                            self.action_notice = None;
+                        }
                         if let (Some(name), Some(taken)) = (action, taken) {
                             self.action_notice = Some(match taken {
                                 Ok(()) => (
@@ -1206,6 +1226,7 @@ impl CombatSync {
             .map(|remote| remote.groups)
             .or_else(|| self.matched.take());
         self.stop();
+        let notice = self.action_notice.take();
         *self = Self::default();
         self.enabled = enabled;
         self.keeps_all_unsent = keeps_all_unsent;
@@ -1213,6 +1234,7 @@ impl CombatSync {
         if same_character {
             self.matched = matched;
             self.unsent = unsent;
+            self.action_notice = notice;
         }
     }
     /// True once for each first read, for the run to compare with its own values.
@@ -1528,7 +1550,14 @@ impl CombatSync {
             ui.add(egui::Label::new(Type::Small.rich(ui, words).color(colors().muted)).wrap());
         });
         if let Some((taken, words)) = &self.action_notice {
-            design::message(ui, if *taken { Tone::Success } else { Tone::Error }, words);
+            let mut close = false;
+            ui.horizontal(|ui| {
+                close = design::icon_button(ui, icons::CLOSE, "Dismiss this message").clicked();
+                design::message(ui, if *taken { Tone::Success } else { Tone::Error }, words);
+            });
+            if close {
+                self.action_notice = None;
+            }
         }
         let before = self.desired.clone();
         ui.add_enabled_ui(writable, |ui| {
@@ -1918,51 +1947,57 @@ impl CombatSync {
         if items.is_empty() {
             return;
         }
-        design::section(ui, format!("Inventory · {} items", items.len()), |ui| {
-            for (key, name, max) in items {
-                let Some(item) = self.desired.get_mut(&key) else {
-                    continue;
-                };
-                // The name on its own line, and each value on a line under it, so a narrow
-                // column never cuts one off.
-                row_label(ui, &name);
-                ui.indent(&key, |ui| {
-                    let mut quantity = item["quantity"].as_i64().unwrap_or(0);
-                    if labelled_stepper(
-                        ui,
-                        "Quantity",
-                        &format!("{name} quantity"),
-                        &mut quantity,
-                        0..=MAX_COUNT,
-                        None,
-                    ) {
-                        item["quantity"] = quantity.into();
-                    }
-                    if item.get("charges").is_some() {
-                        let mut used = item["charges"].as_i64().unwrap_or(0);
+        // The title holds the count, so the section keeps its own id as items come and go.
+        design::section_with_id(
+            ui,
+            "sheet_inventory",
+            format!("Inventory · {} items", items.len()),
+            |ui| {
+                for (key, name, max) in items {
+                    let Some(item) = self.desired.get_mut(&key) else {
+                        continue;
+                    };
+                    // The name on its own line, and each value on a line under it, so a narrow
+                    // column never cuts one off.
+                    row_label(ui, &name);
+                    ui.indent(&key, |ui| {
+                        let mut quantity = item["quantity"].as_i64().unwrap_or(0);
                         if labelled_stepper(
                             ui,
-                            "Charges spent",
-                            &format!("{name} charges spent"),
-                            &mut used,
-                            0..=max.unwrap_or(MAX_COUNT),
-                            max.map(|max| format!("of {max}")),
+                            "Quantity",
+                            &format!("{name} quantity"),
+                            &mut quantity,
+                            1..=MAX_COUNT,
+                            None,
                         ) {
-                            item["charges"] = used.into();
+                            item["quantity"] = quantity.into();
                         }
-                    }
-                });
-                ui.add_space(design::XS);
-            }
-            ui.label(
-                Type::Small
-                    .rich(
-                        ui,
-                        "Party inventory and the coins in containers stay on D&D Beyond.",
-                    )
-                    .color(colors().muted),
-            );
-        });
+                        if item.get("charges").is_some() {
+                            let mut used = item["charges"].as_i64().unwrap_or(0);
+                            if labelled_stepper(
+                                ui,
+                                "Charges spent",
+                                &format!("{name} charges spent"),
+                                &mut used,
+                                0..=MAX_COUNT,
+                                max.map(|max| format!("of {max}")),
+                            ) {
+                                item["charges"] = used.into();
+                            }
+                        }
+                    });
+                    ui.add_space(design::XS);
+                }
+                ui.label(
+                    Type::Small
+                        .rich(
+                            ui,
+                            "Party inventory and the coins in containers stay on D&D Beyond.",
+                        )
+                        .color(colors().muted),
+                );
+            },
+        );
     }
     /// Companion and summon HP, as damage taken: the sheet works their maximum out itself.
     fn companions(&mut self, ui: &mut egui::Ui) {
@@ -1987,13 +2022,15 @@ impl CombatSync {
                 row_label(ui, &name);
                 ui.indent(&key, |ui| {
                     let mut taken = creature["removedHitPoints"].as_i64().unwrap_or(0);
-                    let note = max.map(|max| format!("{} of {max} HP left", (max - taken).max(0)));
+                    // The sheet works a companion's maximum out itself. The stat block's
+                    // average is only a guide, so it is a note and not a limit.
+                    let note = max.map(|max| format!("Stat block average {max} HP"));
                     if labelled_stepper(
                         ui,
                         "Damage taken",
                         &format!("{name} damage taken"),
                         &mut taken,
-                        0..=max.unwrap_or(MAX_COUNT),
+                        0..=MAX_COUNT,
                         note,
                     ) {
                         creature["removedHitPoints"] = taken.into();
@@ -2714,8 +2751,8 @@ mod tests {
     #[test]
     fn new_groups_refuse_values_the_sheet_cannot_hold() {
         let r = full_remote(true);
-        let wand = |charges: i64| json!({"id": 8, "quantity": 1, "charges": charges});
-        assert!(mutations(&r, "item/8", &wand(8)).is_err());
+        let wand = |quantity: i64, charges: i64| json!({"id": 8, "quantity": quantity, "charges": charges});
+        assert!(mutations(&r, "item/8", &wand(0, 2)).is_err());
         assert!(
             mutations(
                 &r,
@@ -2724,14 +2761,10 @@ mod tests {
             )
             .is_err()
         );
-        assert!(
-            mutations(
-                &r,
-                "creature/9",
-                &json!({"id": 9, "removedHitPoints": 12, "temporaryHitPoints": 0})
-            )
-            .is_err()
-        );
+        // The sheet works maximums out itself, so the stat block's numbers are not limits.
+        assert!(mutations(&r, "item/8", &wand(1, 8)).is_ok());
+        let summon = json!({"id": 9, "removedHitPoints": 12, "temporaryHitPoints": 0});
+        assert!(mutations(&r, "creature/9", &summon).is_ok());
         assert!(mutations(&r, "hp_bonus", &json!({"bonusHitPoints": 1000})).is_err());
         assert!(mutations(&r, "inspiration", &json!({"inspiration": 1})).is_err());
         assert!(
@@ -2742,7 +2775,7 @@ mod tests {
             )
             .is_err()
         );
-        assert!(mutations(&r, "item/8", &wand(7)).is_ok());
+        assert!(mutations(&r, "item/8", &wand(2, 7)).is_ok());
     }
     #[test]
     fn rests_and_restore_send_once_with_the_sheets_own_values() {
@@ -2789,6 +2822,16 @@ mod tests {
             fake.writes[0].body,
             json!({"characterId": 123, "resetMaxHpModifier": true, "adjustConditionLevel": true})
         );
+        // Restore to life goes only while the new read still shows 0 HP.
+        let mut alive = r.clone();
+        alive.groups.insert(
+            "hp".into(),
+            json!({"removedHitPoints": 10, "temporaryHitPoints": 0}),
+        );
+        let mut fake = Fake::new(alive);
+        let (_, taken) = act(&mut fake, &SheetAction::RestoreLife { full: false }).unwrap();
+        assert!(matches!(taken, Some(Err(e)) if e.contains("no longer at 0 HP")));
+        assert!(fake.writes.is_empty());
         let mut fake = Fake::new(r.clone());
         act(&mut fake, &SheetAction::RestoreLife { full: false }).unwrap();
         assert_eq!(
@@ -2845,9 +2888,20 @@ mod tests {
         assert!(sync.request(long.clone()).is_ok());
         // One is queued, so another waits.
         assert!(sync.request(long).is_err());
-        // Stopping sync drops a rest that has not gone.
+        // Stopping sync drops a rest that has not gone, and says nothing about it.
         sync.stop();
-        assert!(sync.action.is_none());
+        assert!(sync.action.is_none() && sync.action_notice.is_none());
+        // A rest on its way when sync stops has an unknown result, and the panel says so.
+        let (_tx, rx) = mpsc::channel();
+        sync.pending = Some(Pending {
+            receiver: rx,
+            sent: r.groups.clone(),
+            action: Some("long rest"),
+        });
+        sync.stop();
+        assert!(
+            matches!(&sync.action_notice, Some((false, words)) if words.contains("Check the sheet"))
+        );
     }
     #[test]
     fn render_every_editable_group_at_minimum_size() {
@@ -2885,5 +2939,18 @@ mod tests {
             assert!(!out.shapes.is_empty());
         }
         assert_eq!(sync.desired, before);
+    }
+    #[test]
+    fn a_stepper_never_changes_a_value_outside_its_range_by_itself() {
+        let ctx = egui::Context::default();
+        let mut value = 33;
+        let mut changed = true;
+        let _ = ctx.run(egui::RawInput::default(), |ctx| {
+            egui::CentralPanel::default().show(ctx, |ui| {
+                changed = crate::design::stepper(ui, "Damage taken", &mut value, 0..=30);
+            });
+        });
+        assert!(!changed);
+        assert_eq!(value, 33);
     }
 }

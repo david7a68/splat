@@ -564,7 +564,9 @@ impl Party {
             } else {
                 format!("{} Combat sync · Off", icons::SYNC_OFF)
             };
+            // One id for On and Off, so the panel stays open when the DM ticks its box.
             egui::CollapsingHeader::new(state)
+                .id_salt("combat_sync_header")
                 .icon(design::section_icon)
                 .open(std::mem::take(&mut self.wants_combat_sync).then_some(true))
                 .show(ui, |_| ())
