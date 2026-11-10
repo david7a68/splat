@@ -2312,14 +2312,41 @@ impl Run {
             ui.spacing_mut().item_spacing.x = 0.0;
             let mut closing = false;
             let mut ending = false;
-            let close_width = ["Close run", "End encounter…", "Keys", "Saved", "Sync party"]
-                .iter()
-                .map(|word| design::number_width(ui, word, &Type::Strong.font(ui)) + design::L)
-                .sum::<f32>()
-                + design::L
-                + self.copy_label.as_ref().map_or(0.0, |copy| {
-                    design::number_width(ui, copy, &Type::Small.font(ui)) + design::L
-                });
+            let blocked = self.close_block();
+            let close_word = if blocked.is_some() {
+                "Close after sync"
+            } else {
+                "Close run"
+            };
+            let status = self.save_status_value();
+            let saved_word = self.copy_label.as_ref().map_or_else(
+                || status.word.to_owned(),
+                |copy| format!("{} · {copy}", status.word),
+            );
+            let status_width = design::number_width(
+                ui,
+                &format!("{} {saved_word}", status.icon),
+                &Type::Small.font(ui),
+            );
+            let keys = if compact {
+                Action::quiet("Keys")
+            } else {
+                Action::quiet("Keys").icon(icons::KEYS)
+            }
+            .density(Density::Read);
+            let right_width = status_width
+                + keys.natural_width(ui)
+                + self
+                    .party_sync_action()
+                    .map_or(0.0, |action| action.natural_width(ui));
+            let close_width = Action::quiet(close_word)
+                .density(Density::Read)
+                .natural_width(ui)
+                + Action::quiet("End encounter…")
+                    .density(Density::Read)
+                    .natural_width(ui)
+                + right_width
+                + design::L;
             let end_word = if ui.available_width() < close_width {
                 "End…"
             } else {
@@ -2640,12 +2667,12 @@ impl Run {
     }
 
     /// One action for the whole party (T3.3). The run works fully without it.
-    fn sync_party_button(&mut self, ui: &mut egui::Ui) {
+    fn party_sync_action(&self) -> Option<Action<'static>> {
         if self.linked_participants().is_empty() {
-            return;
+            return None;
         }
         let stopping = matches!(self.party_sync_plan(), PartySync::Stop(_));
-        if Action::quiet(if stopping { "Stop sync" } else { "Sync party" })
+        Some(Action::quiet(if stopping { "Stop sync" } else { "Sync party" })
             .icon(icons::SYNC_ON)
             .density(Density::Read)
             .name(if stopping {
@@ -2657,9 +2684,13 @@ impl Run {
             .blocked_if(
                 !self.connected && !self.simulate_connection,
                 "Connect to D&D Beyond in Settings to sync.",
-            )
-            .show(ui)
-            .clicked()
+            ))
+    }
+
+    fn sync_party_button(&mut self, ui: &mut egui::Ui) {
+        if self
+            .party_sync_action()
+            .is_some_and(|action| action.show(ui).clicked())
         {
             self.toggle_party_sync();
             self.return_focus = self.lookup_open;
@@ -3028,7 +3059,7 @@ impl Run {
                             }
                         });
                     } else {
-                        design::message(ui, Tone::Success, &line);
+                        design::message(ui, Tone::Success, line);
                     }
                 } else if let Some(line) = self
                     .state
@@ -4166,22 +4197,49 @@ impl Run {
         );
         design::rule(ui);
         if let Some(path) = &self.roster_source {
+            let filename = path.file_name().unwrap_or_default().to_string_lossy();
             for fault in &self.roster_faults {
-                let words = format!(
-                    "{} · {}, line {}: {}",
-                    fault.name,
-                    path.file_name().unwrap_or_default().to_string_lossy(),
-                    fault.line,
-                    fault.problem
-                );
-                ui.horizontal_wrapped(|ui| {
-                    design::message(ui, Tone::Warning, &words);
-                    crate::world::entry_file_parts(
-                        ui,
-                        path.parent().unwrap_or(path),
-                        &path.file_name().unwrap_or_default().to_string_lossy(),
-                        true,
-                    );
+                let words = format!("{} · line {}: {}", fault.name, fault.line, fault.problem);
+                ui.scope(|ui| {
+                    ui.spacing_mut().item_spacing.y = design::XS;
+                    let gap = ui.spacing().item_spacing.x;
+                    let inset = design::S
+                        + design::HAIRLINE_WIDTH
+                        + design::number_width(ui, icons::WARN, &Type::Body.font(ui))
+                        + gap * 2.0
+                        - design::XS;
+                    let message_width =
+                        design::number_width(ui, &words, &Type::Body.font(ui)) + inset;
+                    let file_width = design::number_width(ui, &filename, &Type::Small.font(ui))
+                        + design::number_width(ui, "Edit in Obsidian", &Type::Body.font(ui))
+                        + design::number_width(ui, "Show file", &Type::Body.font(ui))
+                        + gap * 2.0;
+                    if message_width + design::L + file_width <= ui.available_width() {
+                        ui.horizontal_top(|ui| {
+                            ui.allocate_ui_with_layout(
+                                vec2(message_width, 0.0),
+                                Layout::top_down(Align::Min),
+                                |ui| {
+                                    design::message(ui, Tone::Warning, &words);
+                                },
+                            );
+                            ui.add_space(design::L - gap);
+                            crate::world::entry_file_parts(
+                                ui,
+                                path.parent().unwrap_or(path),
+                                &filename,
+                                true,
+                            );
+                        });
+                    } else {
+                        design::message(ui, Tone::Warning, &words);
+                        crate::world::entry_file_actions(
+                            ui,
+                            path.parent().unwrap_or(path),
+                            &filename,
+                            true,
+                        );
+                    }
                 });
             }
         }

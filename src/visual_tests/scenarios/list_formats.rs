@@ -277,6 +277,7 @@ pub fn run(d: &mut Driver<'_>) {
             let header = d.place_of("Begin combat").unwrap();
             warning.is_some_and(|node| node.rect.top() > header.bottom())
                 && d.visible_text("Fix the unread row first.")
+                && d.in_view("Initiative for Ember Cultist 2")
                 && !d.visible_text("below, 1 needs initiative")
         });
         d.observe(
