@@ -5859,8 +5859,19 @@ fn name_lines(ui: &egui::Ui, name: &str, font: &egui::FontId, width: f32) -> (Ar
         }
         let shown = format!("{}…", words.join(" ").trim_end_matches([',', ';', ':']));
         let galley = layout(shown, usize::MAX);
-        if galley.rows.len() <= NAME_LINES || words.len() <= 1 {
+        if galley.rows.len() <= NAME_LINES {
             return (galley, true);
+        }
+        if words.len() <= 1 {
+            // One word longer than the lines: cut it by letters.
+            let mut letters: Vec<char> = name.chars().take(room.saturating_sub(1)).collect();
+            loop {
+                let galley = layout(format!("{}…", String::from_iter(&letters)), usize::MAX);
+                if galley.rows.len() <= NAME_LINES || letters.len() <= 1 {
+                    return (galley, true);
+                }
+                letters.pop();
+            }
         }
         words.pop();
     }
@@ -8060,6 +8071,9 @@ mod tests {
         longest.name = "Seraphina Thornwood-Ashgrave of the Ninth Bell, Warden of the Cinder \
                         Road and the Ashen Gate"
             .into();
+        // Edge content: one word longer than the three lines.
+        let mut one_word = short.clone();
+        one_word.name = "Thornwood".repeat(10);
         let ctx = egui::Context::default();
         design::theme::install(&ctx);
         let _ = ctx.run(egui::RawInput::default(), |ctx| {
@@ -8077,7 +8091,7 @@ mod tests {
                             RowLayout::new(ui, width, p, None, scale, fit, widest)
                         };
                         let base = layout(&short);
-                        for p in [&long, &longest] {
+                        for p in [&long, &longest, &one_word] {
                             let row = layout(p);
                             assert_eq!(
                                 (row.ac_right, row.temp_right, row.hp_right),
@@ -8119,6 +8133,28 @@ mod tests {
                 let last = row.name.rows.last().and_then(|line| line.glyphs.last());
                 assert!(row.name_cut && !row.name.elided && row.name.rows.len() == NAME_LINES);
                 assert_eq!(last.map(|glyph| glyph.chr), Some('…'));
+                assert!(row.name.text().starts_with("Seraphina Thornwood-Ashgrave"));
+                // The fixture's long name fits in three lines, so it stays whole.
+                let row = RowLayout::new(
+                    ui,
+                    442.40625,
+                    &long,
+                    None,
+                    design::RUN_COMPACT,
+                    RowFit::Natural,
+                    0.0,
+                );
+                assert!(!row.name_cut && row.name.text() == long.name);
+                let row = RowLayout::new(
+                    ui,
+                    442.40625,
+                    &one_word,
+                    None,
+                    design::RUN_COMPACT,
+                    RowFit::Natural,
+                    0.0,
+                );
+                assert!(row.name_cut && row.name.text().ends_with('…'));
             });
         });
     }

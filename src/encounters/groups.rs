@@ -2580,12 +2580,7 @@ fn unread_member(
         let unread = ui.add(
             egui::Label::new(
                 Type::Small
-                    .rich(
-                        ui,
-                        format!(
-                            "Changes “{raw}” not read. Set the changes below, then save the group."
-                        ),
-                    )
+                    .rich(ui, unread_changes(&raw))
                     .color(colors().result.warning),
             )
             .wrap(),
@@ -2645,9 +2640,25 @@ pub(super) fn packages_link(ui: &mut egui::Ui) -> bool {
     .clicked()
 }
 
+/// The repair form's reason. It names the words it could not read in curly quotation marks.
+fn unread_changes(raw: &str) -> String {
+    format!("Changes “{raw}” not read. Set the changes below, then save the group.")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// FT4: UI text names a value in curly quotation marks, never straight ones.
+    #[test]
+    fn iter_17_b_unread_changes_use_curly_quotes() {
+        let words = unread_changes("+2 to hit");
+        assert!(
+            words.starts_with("Changes “+2 to hit” not read."),
+            "{words}"
+        );
+        assert!(!words.contains('"'), "{words}");
+    }
 
     fn campaign(root: &std::path::Path) -> Campaign {
         let campaign = Campaign {
