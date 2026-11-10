@@ -510,8 +510,9 @@ including a location's aliases. A place loop stays in the list and shows a warni
 The pencil beside a campaign entry's name, in World or Lookup, opens **Edit**: one form with **Status**, **Stat block**,
 **In** and the entry's text, without its title line. **Save changes** (Ctrl+S) writes them together and offers
 **Undo changes**; **Cancel** writes nothing and offers **Undo discard**. If the note changed on disk, Splat writes
-nothing until you choose **Use disk version** or **Keep my changes**. A form with changes stays while you read other
-entries, and Splat asks before it closes or changes campaign.
+nothing until you choose. **Overwrite with my draft** saves only the values you changed over the disk version.
+**Reload and lose my draft** loads the disk version and offers **Undo reload**. A form with changes stays while you
+read other entries, and Splat asks before it closes or changes campaign.
 A campaign creature in Library offers **Make NPC note**, which opens its new NPC note in World.
 **New ▾ → Note…** creates a file in `Notes/`; its type is optional. The note opens with **Edit in Obsidian**.
 

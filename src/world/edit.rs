@@ -124,6 +124,16 @@ pub(super) struct EditDraft {
     now: Fields,
     /// The file on disk, when it changed under the draft.
     disk: Option<String>,
+    /// The draft before Reload, until the DM edits again.
+    reloaded: Option<Fields>,
+}
+
+/// Where a disk change under the draft stands.
+enum Conflict {
+    None,
+    Waiting,
+    /// The DM chose their draft: save it now.
+    Overwrite,
 }
 
 impl EditDraft {
@@ -140,6 +150,7 @@ impl EditDraft {
             now: start.clone(),
             start,
             disk: None,
+            reloaded: None,
         })
     }
 
@@ -319,10 +330,26 @@ impl Reader {
             }
         }
         ui.add_space(design::M);
-        if draft.conflict(ui) {
-            self.edits.insert(id, draft);
-            return None;
+        let overwrite = match draft.conflict(ui) {
+            Conflict::Waiting => {
+                self.edits.insert(id, draft);
+                return None;
+            }
+            Conflict::Overwrite => true,
+            Conflict::None => false,
+        };
+        if draft.reloaded.is_some()
+            && design::undo_message(
+                ui,
+                Tone::Info,
+                "Reloaded from disk. Your previous draft is kept until you edit or the file changes again.",
+                "Undo reload",
+            )
+            && let Some(previous) = draft.reloaded.take()
+        {
+            draft.now = previous;
         }
+        let before = draft.reloaded.as_ref().map(|_| draft.now.clone());
         let mut focused = false;
         focused |= design::text_field(ui, "Status", &mut draft.now.status, None, None).has_focus();
         for (key, label) in [("creature", "Stat block"), ("in", "In")] {
@@ -372,11 +399,15 @@ impl Reader {
         design::named(ui, &text, "Text");
         focused |= text.has_focus();
         self.form_focused = focused;
+        if before.is_some_and(|before| before != draft.now) {
+            draft.reloaded = None;
+        }
         let dirty = draft.dirty();
         let reason = (!dirty).then_some("No changes to save.");
-        let mut save = dirty
-            && focused
-            && ui.input_mut(|i| i.consume_key(egui::Modifiers::COMMAND, egui::Key::S));
+        let mut save = overwrite
+            || (dirty
+                && focused
+                && ui.input_mut(|i| i.consume_key(egui::Modifiers::COMMAND, egui::Key::S)));
         let mut cancel = false;
         ui.add_space(design::S);
         ui.horizontal_wrapped(|ui| {
@@ -428,26 +459,12 @@ impl Reader {
 
 impl EditDraft {
     /// The note changed on disk under the draft: the DM chooses which to keep.
-    fn conflict(&mut self, ui: &mut egui::Ui) -> bool {
+    /// The note changed on disk under the draft. The DM keeps it, or reloads with an Undo.
+    fn conflict(&mut self, ui: &mut egui::Ui) -> Conflict {
         let Some(disk) = self.disk.take() else {
-            return false;
+            return Conflict::None;
         };
-        design::message(
-            ui,
-            Tone::Warning,
-            "This note changed on disk. Choose which to keep.",
-        );
-        let (mut use_disk, mut keep) = (false, false);
-        ui.horizontal_wrapped(|ui| {
-            use_disk = Action::secondary("Use disk version")
-                .density(Density::Read)
-                .show(ui)
-                .clicked();
-            keep = Action::secondary("Keep my changes")
-                .density(Density::Read)
-                .show(ui)
-                .clicked();
-        });
+        let choice = design::disk_conflict_choices(ui);
         let theirs = Entry::parse(&self.path, &disk)
             .ok()
             .map(|entry| Fields::of(&entry, &disk));
@@ -455,33 +472,39 @@ impl EditDraft {
         if their_text != self.now.text {
             design::grouped_draft_comparison(ui, &self.now.text, their_text, &self.path, false);
         }
-        if !(use_disk || keep) {
+        let Some(choice) = choice else {
             self.disk = Some(disk);
-            return true;
-        }
+            return Conflict::Waiting;
+        };
         if let Some(theirs) = theirs {
             let (now, start) = (&mut self.now, &self.start);
-            if use_disk {
-                now.clone_from(&theirs);
-            } else {
-                // Keep only what the DM changed. The disk version supplies the rest.
-                if now.status.trim() == start.status {
-                    now.status.clone_from(&theirs.status);
+            match choice {
+                design::DiskConflictChoice::Reload => {
+                    self.reloaded = Some(std::mem::replace(now, theirs.clone()));
                 }
-                if now.creature == start.creature {
-                    now.creature.clone_from(&theirs.creature);
-                }
-                if now.place == start.place {
-                    now.place.clone_from(&theirs.place);
-                }
-                if now.text == start.text {
-                    now.text.clone_from(&theirs.text);
+                design::DiskConflictChoice::Overwrite => {
+                    // Only what the DM changed overwrites. The disk version supplies the rest.
+                    if now.status.trim() == start.status {
+                        now.status.clone_from(&theirs.status);
+                    }
+                    if now.creature == start.creature {
+                        now.creature.clone_from(&theirs.creature);
+                    }
+                    if now.place == start.place {
+                        now.place.clone_from(&theirs.place);
+                    }
+                    if now.text == start.text {
+                        now.text.clone_from(&theirs.text);
+                    }
                 }
             }
             self.start = theirs;
         }
         self.baseline = disk;
-        true
+        match choice {
+            design::DiskConflictChoice::Overwrite => Conflict::Overwrite,
+            design::DiskConflictChoice::Reload => Conflict::None,
+        }
     }
 }
 
