@@ -1600,8 +1600,13 @@ struct IdentityUndo {
     after: String,
 }
 
+type ParsedDraft = std::sync::Arc<Result<Entry, String>>;
+
 #[derive(Default)]
 pub struct Library {
+    /// The draft as last parsed, with its path. The editor needs the parse on every frame,
+    /// and parsing a long note each time took most of the frame.
+    draft_parse: Option<(String, String, ParsedDraft)>,
     layouts: crate::formats_ui::State,
     layout_scope: Option<Scope>,
     /// The list should scroll to the selected entry, which arrived by a link.
@@ -2181,6 +2186,20 @@ impl Library {
             ctx.request_repaint();
         });
     }
+    /// The draft of note `i`, parsed. The same text keeps the same parse.
+    fn parsed_draft(&mut self, i: usize) -> ParsedDraft {
+        let path = &self.loaded.as_ref().unwrap().notes[i].path;
+        if let Some((parsed_path, draft, parsed)) = &self.draft_parse
+            && parsed_path == path
+            && *draft == self.draft
+        {
+            return parsed.clone();
+        }
+        let parsed = std::sync::Arc::new(Entry::parse(path, &self.draft));
+        self.draft_parse = Some((path.clone(), self.draft.clone(), parsed.clone()));
+        parsed
+    }
+
     fn draft_reason(&self) -> Option<&'static str> {
         if self.disk_change.is_some() {
             Some("Choose what to do with the changed file first.")
@@ -4365,8 +4384,9 @@ impl Library {
             }
         }
         let draft_reason = self.draft_reason();
+        let parsed_draft = self.parsed_draft(i);
+        let parsed: &Result<Entry, String> = &parsed_draft;
         let note = &self.loaded.as_ref().unwrap().notes[i];
-        let parsed = Entry::parse(&note.path, &self.draft);
         let reading = parsed
             .as_ref()
             .ok()
