@@ -24,6 +24,18 @@ pub mod world_build;
 const READER: Pos2 = pos2(720.0, 400.0);
 const ENTRY_LIST: Pos2 = pos2(400.0, 400.0);
 
+/// FT-2: the run's Undo button always shows the word Undo, at every captured size, and keeps
+/// its full action as its accessible name.
+fn undo_keeps_its_word(d: &mut Driver<'_>, action: &str) {
+    let target = d.place_of(action).expect("The Undo action is visible");
+    let painted = d.painted_in(target);
+    d.observe(
+        "iter10-B-FT2-word",
+        painted.contains("Undo"),
+        format!("{action} shows the word Undo: {painted:?}"),
+    );
+}
+
 /// Recovery actions keep the shared Undo icon, inside their own target.
 fn check_undo_icon(d: &mut Driver<'_>, action: &str, id: &str) {
     let target = d.place_of(action).expect("The Undo action is visible");
@@ -4139,7 +4151,9 @@ pub mod run_edge_states {
         d.type_into(OTHER_EFFECT, LONG_EFFECT);
         d.click(ADD_EFFECT);
         d.expect(&format!("Undo: {LONG_EFFECT} on {TARGET}"));
-        d.state("long-effect-text", Sizes::All);
+        d.state_prepared("long-effect-text", Sizes::All, |d| {
+            undo_keeps_its_word(d, &format!("Undo: {LONG_EFFECT} on {TARGET}"));
+        });
         d.observe(
             "Long effects",
             d.visible_text("Poisoned") && d.has("Read all conditions"),
@@ -4149,10 +4163,18 @@ pub mod run_edge_states {
         d.begin_task();
         d.click("Concentrating");
         d.expect(&format!("Undo: start concentration for {TARGET}"));
-        d.state("start-concentration-undo", Sizes::All);
+        d.state_prepared("start-concentration-undo", Sizes::All, |d| {
+            undo_keeps_its_word(d, &format!("Undo: start concentration for {TARGET}"));
+        });
         d.click("Concentrating");
         d.expect(&format!("Undo: stop concentration for {TARGET}"));
-        d.state("stop-concentration-undo", Sizes::All);
+        d.expect_same(
+            "At 960, beside Sync off for the party, Undo shows only its word in both frames, and \
+             stopping concentration returns the row to the long-effect frame.",
+        );
+        d.state_prepared("stop-concentration-undo", Sizes::All, |d| {
+            undo_keeps_its_word(d, &format!("Undo: stop concentration for {TARGET}"));
+        });
         d.click("Sheet");
         d.click("Read all conditions");
         d.observe(
@@ -8427,7 +8449,34 @@ pub mod encounter_owned_groups {
         run_saved_encounter(d, SHRINE);
         open_arrivals(d);
         d.expect(&add_group(GROUP_SHRINE));
-        d.state("group-panel-for-one-encounter", Sizes::All);
+        d.state_prepared("group-panel-for-one-encounter", Sizes::All, |d| {
+            // SD5: every group's Initiative and Add block shares one column.
+            let groups = [
+                NEW_NAME,
+                GROUP_SHRINE,
+                GROUP_GOBLINS,
+                GROUP_LOST,
+                GROUP_RIVALS,
+            ];
+            let buttons = groups.map(|name| {
+                d.place_of(&add_group(name))
+                    .expect("Required group Add control")
+            });
+            let fields = groups.map(|name| {
+                d.place_of(&format!("Initiative total for {name}"))
+                    .expect("Required group Initiative field")
+            });
+            d.observe(
+                "iter10-B-SD5-column",
+                buttons
+                    .iter()
+                    .all(|b| (b.right() - buttons[0].right()).abs() <= 1.0)
+                    && fields
+                        .iter()
+                        .all(|f| (f.left() - fields[0].left()).abs() <= 1.0),
+                format!("Initiative and Add share one column: {fields:?} {buttons:?}"),
+            );
+        });
         d.check_tab_order("run, groups for one encounter");
         d.observe(
             "T13.5",

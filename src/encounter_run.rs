@@ -591,6 +591,8 @@ pub(crate) struct Run {
     setup_inputs: BTreeMap<usize, String>,
     /// The participant whose initiative the last step set, to merge keystrokes.
     last_initiative: Option<usize>,
+    /// An exhaustion drag shows its level and becomes one step when it ends.
+    exhaustion_drag: Option<view::ExhaustionDrag>,
     /// Lookup is beside the run, so the run's own panel gives up its space.
     pub hide_panel: bool,
     /// The recording needs a look, shown where the run's notices go, so nothing moves.
@@ -891,6 +893,7 @@ impl Run {
             undo_boundary: None,
             setup_inputs: BTreeMap::new(),
             last_initiative: None,
+            exhaustion_drag: None,
             hide_panel: false,
             lookup_open: false,
             reopened: false,
@@ -3446,6 +3449,7 @@ impl Run {
             undo_boundary: None,
             setup_inputs: BTreeMap::new(),
             last_initiative: None,
+            exhaustion_drag: None,
             hide_panel: false,
             lookup_open: false,
             reopened: true,

@@ -147,7 +147,7 @@ eye during long sessions.
 | Split button | `split_action` | Default `Action`, then a caret menu for other actions |
 | Field | `field`, `small_field` | Sentence-case muted `Small` label, control, help and error; accessible name |
 | Text fields | `text_field`, `text_input`, `number_field`, `search_field`, `named` | Accessible name and a 26 px target; left-aligned numbers keep the caret off digits; placeholders use faint `Body` text |
-| Editable numbers | `stepper` | A value the DM can change: − and + beside the number in a bordered well. A value without a stepper is read only, so the two never look alike. The D&D Beyond sheet panel uses it for every value Splat can send |
+| Editable numbers | `stepper` | A value the DM can change: − and + beside the number in a bordered well. A value without a stepper is read only, so the two never look alike. The D&D Beyond sheet panel uses it for every value Splat can send. At a limit, − or + is disabled; when the caller gives the limit's reason, that button says it on hover and in its accessible description. An enclosing lock's reason comes first |
 | Dialog | `dialog`, `dialog_actions` | `egui::Modal`, for the brief's modal tasks only; one action line, red at the left, keep and commit at the right, commit last |
 | Section | `section`, `quiet_section`, `section_icon`, `combo_icon` | Collapsing, with Phosphor arrows; `quiet_section` for technical details at a page's end |
 | Table row | `table_row` | Fixed cell widths and hairline for Markdown tables and sheets; no stripes; height follows text |
@@ -638,8 +638,9 @@ any encounter when you save.`, with Undo move until save. Move to… lists named
 to any encounter is the direct way to remove ownership; keep it distinct from Delete group, with Undo before
 saving.
 
-Arrivals reserves one Add slot as wide as the widest Add label in the panel, so every Initiative field
-shares one left edge. List, editor and Arrivals resolve the same joining members and XP. Partial groups say `1 of 3 can join · XP 50 · Will add: 1 × Goblin Warrior`; XP covers joining members only; `+ unknown` means a joining member lacks XP. Flagged list rows retain member summaries and Edit.
+Arrivals reserves one Add slot as wide as the widest Add label in the panel. Each group's Initiative and Add
+block ends at the panel's inner right edge, so every Initiative field shares one left edge and every Add one
+right edge; the member summary takes the rest. List, editor and Arrivals resolve the same joining members and XP. Partial groups say `1 of 3 can join · XP 50 · Will add: 1 × Goblin Warrior`; XP covers joining members only; `+ unknown` means a joining member lacks XP. Flagged list rows retain member summaries and Edit.
 Flagged members name file and line, with Edit in Obsidian, Show file, Edit and a Remove member row menu
 aligned with other actions. Show Count once, in the action row; retain `Count not read` in a faulty stat summary. Put each repair link at the end of its own member fault, without repeating the link words in the sentence. Edit opens the normal change form with readable values, unread text, reason and
 example. Done keeps name and note; Remove has Undo. Groups, Arrivals and plan state how many can join and name
@@ -726,7 +727,9 @@ The header has two lines. Round and current turn use bold sans larger than row n
 When the turn heading does not fit, drop `’s turn` before shortening the name. Keep the final copy number,
 such as `Cinder… 1`. Hover and accessibility keep the full name. Line
 two keeps a result icon and notice at the left and Undo at the right. Measure notice first; Undo gets the
-remainder less `L`. Drop `Undo:` before shortening the target; retain copy numbers, action words, amounts and
+remainder less `L`. Undo always keeps the word `Undo`: shorten the target first, then drop the `Next:` notice
+(the roster still marks NEXT). A state notice stays whole; beside one, Undo shows `Undo` alone when no
+shortened target fits, and a name is never cut to only `…` and its copy number; retain copy numbers, action words, amounts and
 condition directions. Hover and accessibility keep the full action. Empty history says Nothing to undo or
 Nothing to undo since reopening, to the left of blocked Undo on setup and live screens. A narrow slot uses
 Nothing to undo with full hover and accessible text. Sheet updates name whose sheet changed; only sheet reads
@@ -747,7 +750,7 @@ full error on hover.
 
 Long local effects show four words and more; Undo keeps four when they fit. Narrow Undo keeps Undo add or Undo
 remove, two effect words and target. Concentration Undo says start concentration or stop concentration before
-the target. Exhaustion Undo keeps both levels, such as `exhaustion 2 → 3 on Oren`. Exhaustion level uses the shared `stepper` at Scan height. Hover and accessibility keep full text.
+the target. Exhaustion Undo keeps both levels, such as `exhaustion 2 → 3 on Oren`. Exhaustion level uses the shared `stepper` at Scan height. One drag on the level is one Undo step, from the level where the drag started, committed when the drag ends; each − or + press is one step. At a limit the button says `Exhaustion stops at 6.` or `Exhaustion is already 0.` Hover and accessibility keep full text.
 
 The dock has a fixed place above the footer: Amount, Damage, Heal, Temp HP, selected name, Conditions, Conc,
 Absent. Off toggles use text colour; disabled controls stay muted. Enter applies damage. Dock and footer use
@@ -794,7 +797,7 @@ Undo names the addition.
 Exclude missing, unread and invalid members. Say `1 of 3 can join`, `Will add: 1 × Goblin Warrior` and
 `Add 1` using only joining members. Keep excluded members under Cannot join with reason and Edit group repair.
 Only zero valid members blocks Initiative and Add. Invalid Initiative retains text, says `Enter a whole number, or clear
-the field to roll.`, and blocks Add and drop. Campaign → Packages opens repair.
+the field to roll.` as a warning `small_message` (amber icon and bar, text-colour words), and blocks Add and drop. Campaign → Packages opens repair.
 
 Join status parts on one line with dot separators beside the group name when they fit, else before the first member. Use a separate line only when neither has room. `Changed` keeps its muted pencil. Member names stay intact. A line never ends with a separator: the `·` moves to the next line with the part after it. Keep `at`
 with its total in arrival messages. Live group notices name only the group and its initiative totals. Member names and roll details stay in Log. Arrival faults use `message`: an amber icon and bar with text-colour words. Live initiative notices name who joins and the total. Before the current turn,
