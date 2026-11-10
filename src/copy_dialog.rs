@@ -312,10 +312,19 @@ impl CopyDialog {
                             Type::Small
                                 .rich(
                                     ui,
-                                    format!(
-                                        "Also copies {}, because {} links to it.",
-                                        entry.name, self.source.entry.name
-                                    ),
+                                    // With one dependency the source links to it; with more,
+                                    // one may come through another copied entry.
+                                    if plan.shared.len() == 1 {
+                                        format!(
+                                            "Also copies {}, because {} links to it.",
+                                            entry.name, self.source.entry.name
+                                        )
+                                    } else {
+                                        format!(
+                                            "Also copies {}, because a copied entry links to it.",
+                                            entry.name
+                                        )
+                                    },
                                 )
                                 .color(colors().muted),
                         );

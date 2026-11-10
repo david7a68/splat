@@ -25,6 +25,9 @@ use std::{
 };
 use uuid::Uuid;
 
+/// The last sentence of a deleted-entry roster fault; it marks the message as a warning.
+const REPLACE_DELETED_ENTRY: &str = "Choose a replacement in the roster.";
+
 fn named_note_path(root: &std::path::Path, folder: &str, name: &str) -> Result<String, String> {
     let stem: String = name
         .trim()
@@ -459,9 +462,9 @@ impl Draft {
                         let name = roster_name(&named, None, &snapshot.known_creature_names);
                         snapshot.catalogue.unreadable_ref(reference)
                             .map_or_else(|| if count > 1 {
-                                format!("{count} {name} rows have no creature. Their package entry was deleted. Choose a replacement in the roster.")
+                                format!("{count} {name} rows have no creature. Their package entry was deleted. {REPLACE_DELETED_ENTRY}")
                             } else {
-                                format!("{name} has no creature. Its package entry was deleted. Choose a replacement in the roster.")
+                                format!("{name} has no creature. Its package entry was deleted. {REPLACE_DELETED_ENTRY}")
                             },
                                 |note| if note.old_layout { note.word.clone() } else { format!("{}. Open in {} to fix it.", note.word, if crate::world::repair_in_world(&note.path) { "World" } else { "Library" }) })
                     })?;
@@ -3354,12 +3357,11 @@ impl Encounters {
         }
         self.refresh_validation_error(false);
         if let Some(e) = &self.error {
-            let tone =
-                if e.ends_with("package entry was deleted. Choose a replacement in the roster.") {
-                    Tone::Warning
-                } else {
-                    Tone::Error
-                };
+            let tone = if e.ends_with(REPLACE_DELETED_ENTRY) {
+                Tone::Warning
+            } else {
+                Tone::Error
+            };
             design::message(ui, tone, e);
         }
         let Some(snapshot) = &self.snapshot else {
