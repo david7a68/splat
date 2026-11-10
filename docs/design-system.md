@@ -239,7 +239,7 @@ column, above the choices. World Overwrite saves valid text; invalid text return
 editor without a write. World Reload keeps the replaced draft for one `Undo reload` on its message line until
 the next edit. If the note changes again on disk before that edit, the held draft comes back as unsaved work and
 the choices show again: Overwrite writes only the DM's own changes over the newest file, with Undo, and Reload
-holds the draft again for `Undo reload`. A deleted note does not bring the held draft back. A run offers `Save as a new run`, then an `L` gap and red `Replace the file with this run`, in `message_with_actions`: both start at the message text.
+holds the draft again for `Undo reload`. A deleted note does not bring the held draft back. A run offers `Save as a new run`, then an `L` gap (16 px in all, egui's item spacing included) and red `Replace the file with this run`, in `message_with_actions`: both start at the message text. An encounter, group or encounter creature draft (`src/encounters/disk.rs`) draws `Overwrite with my draft`, an `L` gap and red `Reload and lose my draft` (or `Let it go` when the file is gone) the same way, under the last of its messages: a note that another file uses the same identity comes before the choices.
 
 Session conflicts call the item a note in the warning. Keep Record available because audio uses its own file.
 Show draft and disk text side by side in Write's styled source face. Hide the plan and use the whole session
@@ -744,7 +744,8 @@ condition and whole multiword sync states. Hidden-condition counts always keep t
 including beside sync state. Move sync state first if the row needs more room. If the required words still
 cannot share one line, sync state continues on its own line; the row includes its full height.
 At minimum width, mandatory state words may use the empty left part of the HP bar slot; the bar stays below HP
-and at least `XL` long. Compact rows put sync last after an `XS` gap, apart from conditions. If required state words still do not fit, use the run mark type size on the second line. If that still needs the whole row width, move the HP bar below the detail with an `S` allowance; keep every state word and the first condition. No initiative uses
+and at least `XL` long. Compact rows put sync last after an `XS` gap, apart from conditions. Alone on the second line, sync starts at
+the line's edge with no gap, like Bloodied on the rows below. If required state words still do not fit, use the run mark type size on the second line. If that still needs the whole row width, move the HP bar below the detail with an `S` allowance; keep every state word and the first condition. No initiative uses
 the same underline as other row links. When the state column cannot fit, such as 960×640 beside a panel, move
 its words to line two so the name stays whole.
 
@@ -863,6 +864,8 @@ Only zero valid members blocks Initiative and Add. Invalid Initiative retains te
 the field to roll.` as a warning `small_message` (amber icon and bar, text-colour words), and blocks Add and drop. Campaign → Packages opens repair.
 In the group editor, a missing member's `Campaign → Packages` is a notice action under its warning
 (`message_with_actions`): the link's words start at the warning text, and its icon hangs in the gutter before them.
+Arrivals and the Encounters list draw a member fault's repair (`Campaign → Packages` or `Edit group`) the same way
+when it goes below the fault; when there is room, it sits beside the fault after an `L` gap.
 
 Join status parts on one line with dot separators beside the group name when they fit, else before the first member. Use a separate line only when neither has room. `Changed` keeps its muted pencil. Member names stay intact. A line never ends with a separator: the `·` moves to the next line with the part after it. Keep `at`
 with its total in arrival messages. Live group notices name only the group and its initiative totals. Member names and roll details stay in Log. Arrival faults use `message`: an amber icon and bar with text-colour words. Live initiative notices name who joins and the total. Before the current turn,
@@ -1080,7 +1083,7 @@ Compact rows omit a missing spell save DC; wide tables keep the empty cell. Spel
 A stopped-sync notice sits below the Party header, across the page. Its bar starts at the pane edge;
 Dismiss sits at the right end of its first line. Sheet pages use Small tabs on one line, with later pages in More.
 
-Local-edit notices measure the full message inset, including its bar, icon and gaps. The Party header owns Connect to refresh. Signed-out notices say replacement keeps the DM’s version as a copy, and put a secondary `Connect D&D Beyond` before Show file; it opens the same place as the header link. Local-edit warnings name the character and say replacement keeps a copy. Keep each notice within `LIST_MEASURE`. Actions follow its text after an `L` gap, or wrap below, aligned with the text. The affected row says Local edits; replacement names the character, offers Show file for the kept
+Local-edit notices measure the full message inset, including its bar, icon and gaps. The Party header owns Connect to refresh, except while a signed-out local-edit notice shows: then the notice's secondary `Connect D&D Beyond`, before Show file, is the one way to connect, and the header shows only the state (`Not connected · Fetched 3 h ago`). One action has one control and one name on a screen. Signed-out notices say replacement keeps the DM’s version as a copy. Local-edit warnings name the character and say replacement keeps a copy. Keep each notice within `LIST_MEASURE`. Actions follow its text after an `L` gap, or wrap below, aligned with the text. The affected row says Local edits; replacement names the character, offers Show file for the kept
 version and Dismiss. Empty Party has one Connect D&D Beyond action. An offline Party now line offers Connect
 to sync; first-sheet-read help keeps Settings inside its Small sentence. Spell levels have counts without an
 extra Spells heading; cantrips omit Prepared and use one-line rows. Coins sit below Equipment & coins. Party
