@@ -5288,11 +5288,24 @@ pub mod session_notes {
                 })
                 .collect();
             assert!(!controls.is_empty());
+            // Fight and Long rest are always one click away; More shows whenever the rest fold.
+            let required = ["Add Fight", ADD_LONG_REST];
+            let required_shown = required.iter().all(|name| {
+                nodes
+                    .iter()
+                    .any(|node| node.name == *name && node.fully_in_view())
+            });
+            let more_ok = controls.len() == names.len()
+                || nodes
+                    .iter()
+                    .any(|node| node.name == "More Add actions" && node.fully_in_view());
             d.observe(
                 "iter-5-A-Timeline-strip",
-                controls
-                    .iter()
-                    .all(|node| (node.rect.top() - controls[0].rect.top()).abs() < 1.0),
+                required_shown
+                    && more_ok
+                    && controls
+                        .iter()
+                        .all(|node| (node.rect.top() - controls[0].rect.top()).abs() < 1.0),
                 "The Timeline's visible Add actions keep one line",
             );
             if !d.has("More Add actions") {

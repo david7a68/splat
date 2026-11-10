@@ -331,7 +331,7 @@ pub(super) fn check_preview(
                     .all(|line| rows.iter().any(|row| row.name == line));
                 let height = if long {
                     // At 960x640, the header and actions take precedence over the 60% goal.
-                    full || pane.rect.height() >= if size == SMALL { size.1 * 0.4 } else { size.1 * 0.6 - 24.0 }
+                    full || pane.rect.height() >= if size == SMALL { size.1 * 0.5 } else { size.1 * 0.6 - 24.0 }
                 } else {
                     // A short source ends immediately above the reserved scroll bar.
                     bottom_gap < 1.0
