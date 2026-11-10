@@ -4434,6 +4434,16 @@ impl Run {
         } else {
             0.0
         };
+        // While a field has focus, keep the columns of the last frame without focus, so a
+        // typed total never moves the field under the cursor; the change lands on blur.
+        let slot_widths = egui::Id::new("setup_slot_widths");
+        let (tie, place) = if ui.memory(|memory| memory.focused().is_some()) {
+            ui.data(|data| data.get_temp::<(f32, f32)>(slot_widths))
+                .unwrap_or((tie, place))
+        } else {
+            ui.data_mut(|data| data.insert_temp(slot_widths, (tie, place)));
+            (tie, place)
+        };
         let roll = if npc { design::L * 4.0 } else { 0.0 };
         let presence = design::number_width(
             ui,
@@ -6649,16 +6659,25 @@ mod tests {
     #[test]
     fn iter7_b_death_saves_follow_party_and_recorded_counts() {
         use egui_kittest::kittest::Queryable;
-        for (side, successes, failures, shown) in [
-            ("party", 0, 0, true),
-            ("enemies", 0, 0, false),
-            ("enemies", 1, 0, true),
-            ("other", 0, 1, true),
+        for (side, linked, successes, failures, shown) in [
+            ("party", false, 0, 0, true),
+            ("enemies", false, 0, 0, false),
+            ("enemies", false, 1, 0, true),
+            ("other", false, 0, 1, true),
+            // A linked player sheet on a side the DM named makes death saves too.
+            ("heroes", true, 0, 0, true),
         ] {
             let mut run = super::super::tests::run();
             run.selected = 0;
             run.panel = Panel::Reference;
             let p = &mut run.state.participants[0];
+            if linked {
+                let mut definition = (*p.definition).clone();
+                definition
+                    .fields
+                    .insert("splat_external".into(), "dndbeyond:1".into());
+                p.definition = std::sync::Arc::new(definition);
+            }
             p.side = side.into();
             p.hp = Some(0);
             p.successes = successes;

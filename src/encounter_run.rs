@@ -290,7 +290,12 @@ impl Participant {
     }
     /// Keep existing counts visible even when the participant is not on the party side.
     fn shows_death_saves(&self) -> bool {
-        self.hp == Some(0) && (self.side == "party" || self.successes > 0 || self.failures > 0)
+        // A linked player sheet makes death saves on any side name the DM chose.
+        self.hp == Some(0)
+            && (self.side == "party"
+                || self.definition.fields.contains_key("splat_external")
+                || self.successes > 0
+                || self.failures > 0)
     }
 
     #[cfg(test)]
