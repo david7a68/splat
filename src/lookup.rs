@@ -23,10 +23,6 @@ use crate::matching::{self, Rank, Typed, names_lower_word};
 const RESULT_ROW: f32 = design::XXL;
 const PANEL_MARGIN: f32 = design::M;
 
-/// Where the panel was drawn last, for Back and Forward beside the Library.
-fn rect_id() -> egui::Id {
-    egui::Id::new("lookup_rect")
-}
 pub const SEARCH_NAME: &str = "Search everything";
 /// How many lines of a long note show where the words were found.
 const FOUND_LINES: usize = 3;
@@ -1379,6 +1375,8 @@ pub struct Lookup {
     reading_written: Option<usize>,
     /// Identity, because a rebuilt index can change positions.
     trail: Trail<Uuid>,
+    /// Where the panel was drawn last, for Back and Forward beside the Library.
+    panel_rect: Option<egui::Rect>,
     waiting_for: Option<Uuid>,
     focus_search: bool,
     results_open: bool,
@@ -1694,18 +1692,15 @@ impl Lookup {
         if !self.open {
             return;
         }
-        let here = |pos: egui::Pos2| {
-            ctx.data(|data| data.get_temp::<egui::Rect>(rect_id()))
-                .is_some_and(|rect| rect.contains(pos))
-        };
+        let over_panel = |pos: egui::Pos2| self.panel_rect.is_some_and(|rect| rect.contains(pos));
         let step = history::take_if(ctx, |source| {
             !library_page
                 || match source {
-                    history::Source::Key => ctx
+                    history::Request::Key => ctx
                         .memory(|memory| memory.focused())
                         .and_then(|id| ctx.read_response(id))
-                        .is_some_and(|response| here(response.rect.center())),
-                    history::Source::Button(pos) => here(pos),
+                        .is_some_and(|response| over_panel(response.rect.center())),
+                    history::Request::Button(pos) => over_panel(pos),
                 }
         });
         if let Some(step) = step {
@@ -1729,7 +1724,7 @@ impl Lookup {
     fn panel(&mut self, ui: &mut egui::Ui) {
         // With the margin, so a press anywhere on the panel counts as here.
         let panel = ui.max_rect().expand(PANEL_MARGIN);
-        ui.ctx().data_mut(|data| data.insert_temp(rect_id(), panel));
+        self.panel_rect = Some(panel);
         ui.ctx().data_mut(|data| {
             data.insert_temp(egui::Id::new("reader_surface"), egui::Id::new("lookup"))
         });
@@ -2455,10 +2450,11 @@ mod tests {
     fn beside_the_library_a_side_button_acts_where_the_pointer_is() {
         let press = |lookup: &mut Lookup, x: f32, library_page: bool| {
             let back = history::tests::press(egui::PointerButton::Extra1, egui::pos2(x, 50.0));
+            lookup.panel_rect = Some(egui::Rect::from_min_max(
+                egui::pos2(300.0, 0.0),
+                egui::pos2(600.0, 400.0),
+            ));
             history::tests::frame(vec![back], |ctx| {
-                let panel =
-                    egui::Rect::from_min_max(egui::pos2(300.0, 0.0), egui::pos2(600.0, 400.0));
-                ctx.data_mut(|data| data.insert_temp(rect_id(), panel));
                 lookup.history_input(ctx, library_page);
                 history::take_if(ctx, |_| true)
             })

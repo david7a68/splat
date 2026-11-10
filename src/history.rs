@@ -12,10 +12,10 @@ pub enum Step {
     Forward,
 }
 
-/// Where a request came from. A key goes to the reader with focus; a button press goes
+/// How a step was asked for. A key goes to the reader with focus; a button press goes
 /// to the reader under the pointer.
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub enum Source {
+pub enum Request {
     Key,
     Button(egui::Pos2),
 }
@@ -26,13 +26,6 @@ impl Step {
             egui::Key::ArrowLeft => Some(Step::Back),
             egui::Key::ArrowRight => Some(Step::Forward),
             _ => None,
-        }
-    }
-
-    fn key(self) -> egui::Key {
-        match self {
-            Step::Back => egui::Key::ArrowLeft,
-            Step::Forward => egui::Key::ArrowRight,
         }
     }
 
@@ -92,27 +85,36 @@ impl<T> Trail<T> {
             Step::Back => self.at.checked_sub(1)?,
             Step::Forward => self.at,
         };
-        let found = find(self.steps.get(slot)?);
-        let (target, kept) = match here.filter(|_| found.is_some()) {
-            Some(here) => (std::mem::replace(&mut self.steps[slot], here), true),
-            None => (self.steps.remove(slot), false),
+        let Some(found) = find(self.steps.get(slot)?) else {
+            self.steps.remove(slot);
+            self.at = slot;
+            return None;
         };
-        self.at = slot + usize::from(kept && step == Step::Forward);
-        Some((target, found?))
+        let target = match here {
+            Some(here) => {
+                self.at = slot + usize::from(step == Step::Forward);
+                std::mem::replace(&mut self.steps[slot], here)
+            }
+            None => {
+                self.at = slot;
+                self.steps.remove(slot)
+            }
+        };
+        Some((target, found))
     }
 }
 
-/// The side-button presses set aside for one pass, and that pass's number.
-type Presses = (u64, Vec<(Step, egui::Pos2)>);
+/// The first side-button press set aside, and the number of the pass it is for.
+type Press = (u64, Step, egui::Pos2);
 
-fn presses_id() -> egui::Id {
-    egui::Id::new("history_button_presses")
+fn press_id() -> egui::Id {
+    egui::Id::new("history_button_press")
 }
 
-/// Take the side buttons out of this frame's raw input, and keep their presses for
+/// Take the side buttons out of this frame's raw input, and keep the first press for
 /// `take_if` in the coming pass only.
 pub fn set_aside(ctx: &egui::Context, events: &mut Vec<egui::Event>) {
-    let mut presses = Vec::new();
+    let mut first = None;
     events.retain(|event| match event {
         egui::Event::PointerButton {
             pos,
@@ -122,7 +124,7 @@ pub fn set_aside(ctx: &egui::Context, events: &mut Vec<egui::Event>) {
         } => match Step::of_button(*button) {
             Some(step) => {
                 if *pressed {
-                    presses.push((step, *pos));
+                    first.get_or_insert((step, *pos));
                 }
                 false
             }
@@ -130,19 +132,15 @@ pub fn set_aside(ctx: &egui::Context, events: &mut Vec<egui::Event>) {
         },
         _ => true,
     });
-    let pass = ctx.cumulative_pass_nr();
-    ctx.data_mut(|data| {
-        if presses.is_empty() {
-            data.remove::<Presses>(presses_id());
-        } else {
-            data.insert_temp::<Presses>(presses_id(), (pass, presses));
-        }
-    });
+    if let Some((step, pos)) = first {
+        let pass = ctx.cumulative_pass_nr();
+        ctx.data_mut(|data| data.insert_temp::<Press>(press_id(), (pass, step, pos)));
+    }
 }
 
 /// Take the first Back or Forward request waiting in this pass, if `accept` wants it,
 /// so no other reader acts on it too.
-pub fn take_if(ctx: &egui::Context, accept: impl FnOnce(Source) -> bool) -> Option<Step> {
+pub fn take_if(ctx: &egui::Context, accept: impl FnOnce(Request) -> bool) -> Option<Step> {
     let key = ctx.input(|input| {
         input.events.iter().find_map(|event| match event {
             egui::Event::Key {
@@ -150,28 +148,23 @@ pub fn take_if(ctx: &egui::Context, accept: impl FnOnce(Source) -> bool) -> Opti
                 pressed: true,
                 modifiers,
                 ..
-            } if modifiers.matches_logically(egui::Modifiers::ALT) => Step::of_key(*key),
+            } if modifiers.matches_logically(egui::Modifiers::ALT) => {
+                Some((Step::of_key(*key)?, *key))
+            }
             _ => None,
         })
     });
-    if let Some(step) = key {
-        let taken = accept(Source::Key)
-            && ctx.input_mut(|input| input.consume_key(egui::Modifiers::ALT, step.key()));
+    if let Some((step, key)) = key {
+        let taken = accept(Request::Key)
+            && ctx.input_mut(|input| input.consume_key(egui::Modifiers::ALT, key));
         return taken.then_some(step);
     }
     let pass = ctx.cumulative_pass_nr();
-    let (step, pos) = ctx
-        .data(|data| data.get_temp::<Presses>(presses_id()))
-        .filter(|(set_in, _)| *set_in == pass)?
-        .1
-        .first()
-        .copied()?;
-    accept(Source::Button(pos)).then(|| {
-        ctx.data_mut(|data| {
-            data.get_temp_mut_or_default::<Presses>(presses_id())
-                .1
-                .remove(0)
-        });
+    let (_, step, pos) = ctx
+        .data(|data| data.get_temp::<Press>(press_id()))
+        .filter(|(set_for, ..)| *set_for == pass)?;
+    accept(Request::Button(pos)).then(|| {
+        ctx.data_mut(|data| data.remove::<Press>(press_id()));
         step
     })
 }
@@ -300,7 +293,7 @@ pub(crate) mod tests {
     fn a_refused_request_waits_for_another_reader() {
         let taken = frame(vec![press(egui::PointerButton::Extra1, AT)], |ctx| {
             let refused = take_if(ctx, |source| {
-                assert_eq!(source, Source::Button(AT));
+                assert_eq!(source, Request::Button(AT));
                 false
             });
             (refused, take_if(ctx, |_| true))

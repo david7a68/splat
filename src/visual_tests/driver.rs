@@ -1427,7 +1427,7 @@ impl<'a> Driver<'a> {
             node.name == over
         });
         let caption = format!("Press: mouse {button:?} over {over}");
-        self.film_caption(&caption);
+        self.film_aim(rect, &caption);
         let mut raw = egui::RawInput {
             events: vec![egui::Event::PointerButton {
                 pos: rect.center(),
