@@ -24,6 +24,11 @@ pub fn menu_button(ui: &mut Ui, word: &str, selected: bool) -> Response {
     response
 }
 
+/// The width `menu_button` takes for this word.
+pub fn menu_button_width(ui: &Ui, word: &str) -> f32 {
+    Action::quiet(&format!("{word}    ")).natural_width(ui)
+}
+
 /// One line of text cut to fit, with an ellipsis. The tree still has the full text.
 pub fn one_line(
     ui: &Ui,

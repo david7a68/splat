@@ -35,6 +35,7 @@ pub mod formats;
 pub mod layout;
 pub mod legacy;
 pub mod list_formats;
+pub mod loot;
 mod markdown;
 pub use markdown::{body_text, inline_text};
 mod shared;

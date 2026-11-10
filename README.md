@@ -542,6 +542,34 @@ must cover what the dice can roll. A bad table says so, and the rest of the note
 **Roll** and a box for a typed result, for a player's own dice, sit under the table. During a run the result goes in the
 run's log, and Undo takes it back. Otherwise it only shows.
 
+### Loot
+
+An encounter's **Loot** list, under its roster, holds what the party finds when the fight is over. Type in **Add loot**
+and press Enter to add the words as a line, such as `30 gp`. While you type, the field offers the campaign's roll
+tables and Library items; the arrow keys and Enter, or a click, choose one. **Roll on a table** lists every table.
+A roll line has a count and its table, and a key that no table has says **Cannot roll** before play. Each line's
+**⋯** menu has **Remove**, with Undo. The note keeps the list as `## Loot`, which Obsidian shows too:
+
+```markdown
+## Loot
+
+- 30 gp
+- [[Potion of Healing]]
+- Roll 2× gems
+```
+
+One creature can carry loot of its own. Open **Changes** on its roster row or group member, and use the same list
+under **Loot**. The table's Changes cell keeps it last, so its words can hold commas:
+`HP +5, Loot Iron key; Roll goblin-pockets`. A line there cannot hold `;`. The row's Changes link says **Loot**, and
+names any table key that cannot roll. Each creature that an encounter group adds carries its member's loot.
+
+In a run, a creature's card shows its loot in one line. When the creature drops to 0 HP, its row says **Loot** and its
+card lists the loot with a **Roll** button for each roll. When the fight ends, the ended view lists the encounter's loot
+and the loot of each creature at 0 HP, with how many rolls are left. **Roll all** makes every roll as one step.
+A result takes the place of its button, the saved run keeps it, and Undo takes it back. Rolls still work after the
+end, because that is when the party searches. **Copy loot** copies the list, with the results, as Markdown for the
+session note. Loot on creatures still standing is under **more creatures carry loot**.
+
 **New NPC** and **New location** in Lookup create a note from the typed words, in `NPCs/` or `Locations/`. **Make world
 entry** gives an existing note an identity, and its text does not change. An entry has a `type` (`npc`, `location`, or a
 word of your own), and can have `aliases`, `status`, `in` (the place it is in) and `creature` (a stat block):

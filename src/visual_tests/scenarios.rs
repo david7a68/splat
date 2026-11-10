@@ -9,7 +9,7 @@ use super::{
     fixture::{
         CAMPAIGN, GROUP_ARENA, GROUP_GOBLINS, GROUP_LOST, GROUP_ORPHAN, GROUP_RIVALS, GROUP_SHRINE,
         GROUP_WATCH, MODULE, PAST_SESSION, QUIET_CAMPAIGN, RUN, RUN_12, RUN_20, RUN_ARENA, RUN_OLD,
-        RUN_PAST, UNLINKED_CAMPAIGN,
+        RUN_PAST, RUN_VAULT, UNLINKED_CAMPAIGN,
     },
     steps::*,
 };
@@ -7654,6 +7654,86 @@ pub mod run_overrides {
             "A new run starts with the slot's changes, and its setup row says so",
         );
         d.goal("start a run with a changed creature");
+    }
+}
+
+/// Loot: the editor builds a list from typed words and the campaign's tables, a creature that
+/// is down says so on its row, its card lists what it carries, and the ended view lists all of
+/// it with a button for each roll.
+pub mod run_loot {
+    use super::*;
+    const ADD: &str = "Add loot to the encounter";
+    const GUARD: &str = "Vault Guard";
+    const ROLL_ENCOUNTER: &str = "Roll 2× gems for Sunken Vault";
+    const UNDO_ROLLS: &str = "Undo: 2 loot rolls on gems";
+
+    pub fn run(d: &mut Driver<'_>) {
+        resume_run(d, RUN_VAULT);
+        let row = d.row_words(GUARD).replace('\u{a0}', " ");
+        d.observe(
+            "T14.8",
+            row.contains("0 HP") && row.contains("Loot"),
+            format!("A creature at 0 HP with loot says so on its row: {row}"),
+        );
+        d.click_row(GUARD);
+        d.expect("Vault key");
+        d.state("loot-on-the-card", Sizes::All);
+        d.observe(
+            "T14.8",
+            d.has("Roll gems for Vault Guard"),
+            "The card lists the creature's loot, with a button for its roll",
+        );
+        d.goal("see what a fallen creature carries");
+
+        d.begin_task();
+        d.click("End encounter…");
+        d.click("End encounter");
+        d.expect("Outcome: ");
+        d.expect("120 gp in a locked coffer");
+        d.state("ended-with-loot", Sizes::All);
+        d.observe(
+            "T14.8",
+            d.has(ROLL_ENCOUNTER) && d.has("Roll gems for Vault Guard"),
+            "The ended view lists the encounter's loot and the loot of each creature that is down",
+        );
+        d.click(ROLL_ENCOUNTER);
+        d.expect(" on 1d4");
+        d.state("loot-rolled", Sizes::Default);
+        d.observe(
+            "T14.8",
+            d.has_containing(UNDO_ROLLS),
+            "Each loot roll is one step that Undo takes back, after the fight has ended",
+        );
+        d.goal("roll the loot after a fight");
+
+        // The editor: typed words are a line, and a table comes from the campaign's list.
+        d.begin_task();
+        close_run(d);
+        open_saved_encounter(d, RUN);
+        d.type_into(ADD, "120 gp in a locked coffer");
+        d.press(Key::Enter);
+        d.type_into(ADD, "roll");
+        d.expect("gems · 1d4 · Treasure.md");
+        d.state("loot-table-suggestion", Sizes::Default);
+        d.observe(
+            "T14.8",
+            d.has_containing("the encounter loot line 1"),
+            "Enter adds the typed words as a line, and the field offers the campaign's tables",
+        );
+        d.click_containing("gems · 1d4 · Treasure.md");
+        d.type_into(ADD, "Roll coins");
+        d.press(Key::Enter);
+        d.type_into(ADD, "veil");
+        d.click_containing("Veilglass Lantern ·");
+        d.state("loot-in-the-editor", Sizes::All);
+        d.observe(
+            "T14.8",
+            d.has("Rolls on gems, the encounter loot line 2")
+                && d.has_containing("No roll table has the key coins.")
+                && d.has("Library item"),
+            "A roll names its table and count, a key with no table says so before play, and a Library item is a line of its own",
+        );
+        d.goal("add loot and a roll on a campaign table");
     }
 }
 
