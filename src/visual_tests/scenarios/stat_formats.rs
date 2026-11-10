@@ -10,7 +10,7 @@ pub fn run(d: &mut Driver<'_>) {
     d.expect("Bite.");
     d.state("schema-2-creature-library", Sizes::All);
     search_library(d, "Flagged Wolf");
-    d.expect("1 flagged value");
+    d.expect("1 value not read");
     d.click_containing("Flagged Wolf · ");
     d.expect("Hit Points \"about twenty\" not read (line 19). Use a number first.");
     d.expect("about twenty");
@@ -23,7 +23,7 @@ pub fn run(d: &mut Driver<'_>) {
     d.state("flagged-hp-cell", Sizes::All);
 
     search_library(d, "Flagged Spark");
-    d.expect("1 flagged value");
+    d.expect("1 value not read");
     d.click_containing("Flagged Spark · ");
     d.expect("Level \"many\" not read (line 15). Use a number from 0 to 9.");
     d.expect("Keep the spark effect.");

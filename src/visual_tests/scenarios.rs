@@ -1748,10 +1748,16 @@ pub mod settings {
         );
         // Each state through the same fields a real attempt sets.
         let mut words = true;
+        let mut targets = Vec::new();
         for (state, word) in ACCOUNT_WORDS {
             d.app_mut().settings.simulate(state);
             d.settle();
             words &= d.in_view_containing(word);
+            targets.push((
+                word,
+                [SMALL, DEFAULT, LARGE]
+                    .map(|size| d.at_size(size, session_recording::rail_targets)),
+            ));
             // Not connected and failed already have their captures, from real attempts.
             match state {
                 Account::Busy => d.state("account-connecting", Sizes::Default),
@@ -1778,6 +1784,26 @@ pub mod settings {
                             })
                         },
                     );
+                    // AD2: this state really takes two lines, so the target check below compares
+                    // a one-line account with a two-line one at every size.
+                    let line = crate::design::Type::Small.line();
+                    let heights = [SMALL, DEFAULT, LARGE].map(|size| {
+                        d.at_size(size, |d| {
+                            session_recording::account_rect(d).map(|rect| rect.height())
+                        })
+                    });
+                    d.observe(
+                        "iter-11-C-AD2-two-lines",
+                        heights
+                            .iter()
+                            .all(|height| height.is_some_and(|h| h >= 2.0 * line - 0.5)),
+                        format!(
+                            "The keyring warning's account status is at least {} tall at each \
+                             size: {heights:?}",
+                            2.0 * line
+                        ),
+                    );
+                    session_recording::check_rail_anchor(d, "iter-11-C-AD2-anchor");
                 }
                 Account::NotConnected | Account::Failed | Account::RefreshFailing => {}
             }
@@ -1786,6 +1812,22 @@ pub mod settings {
             "T10.3",
             words,
             "Busy, connected, not connected, failed and keyring warning each have words, from a test session",
+        );
+        // AD2: the account slot holds two lines, so Lookup, Notes and Settings stay where they are
+        // when the account status takes one line or two.
+        let first = targets[0].1;
+        d.observe(
+            "iter-11-C-AD2",
+            targets
+                .iter()
+                .any(|(word, _)| word.contains("not remembered"))
+                && targets.iter().all(|(_, at)| {
+                    at.iter().all(Option::is_some)
+                        && at.iter().zip(first.iter()).all(|(now, was)| now == was)
+                }),
+            format!(
+                "Lookup, Notes and Settings keep their tops in every account state: {targets:?}"
+            ),
         );
         d.app_mut().settings.simulate(Account::NotConnected);
         d.settle();
@@ -6977,9 +7019,92 @@ pub mod session_recording {
         }
     }
 
+    /// Each party bar item's accessible node, and its first name with the words painted in it.
+    pub(crate) fn party_bar_items(
+        d: &mut Driver<'_>,
+    ) -> (
+        Vec<crate::visual_tests::driver::Found>,
+        Vec<(String, String)>,
+    ) {
+        let items: Vec<_> = d
+            .nodes()
+            .into_iter()
+            .filter(|node| node.name.contains("Passive Perception"))
+            .collect();
+        let painted = items
+            .iter()
+            .map(|item| {
+                (
+                    item.name
+                        .split_whitespace()
+                        .next()
+                        .unwrap_or_default()
+                        .to_owned(),
+                    d.painted_lines_in(item.rect).join(" "),
+                )
+            })
+            .collect();
+        (items, painted)
+    }
+
+    /// Every party bar item paints its first name, and a state word that hover names stays.
+    pub(crate) fn check_party_names(
+        d: &mut Driver<'_>,
+        id: &str,
+        items: &[crate::visual_tests::driver::Found],
+        painted: &[(String, String)],
+    ) {
+        let states = items.iter().zip(painted).all(|(item, (_, words))| {
+            ["Bloodied", "0 HP"]
+                .into_iter()
+                .all(|state| !item.name.contains(state) || words.contains(state))
+        });
+        d.observe(
+            id,
+            items.len() >= 4
+                && painted
+                    .iter()
+                    .all(|(first, words)| words.split_whitespace().any(|word| word == first))
+                && states,
+            format!("Every party bar item shows its first name and state word: {painted:?}"),
+        );
+    }
+
+    /// The tops of Lookup, Notes and Settings in the rail, rounded to whole points.
+    pub(crate) fn rail_targets(d: &Driver<'_>) -> Option<[i32; 3]> {
+        let nodes = d.nodes();
+        let top = |name: &str| {
+            nodes
+                .iter()
+                .filter(|node| node.name == name)
+                .min_by(|a, b| a.rect.left().total_cmp(&b.rect.left()))
+                .map(|node| node.rect.top().round() as i32)
+        };
+        Some([top("Lookup")?, top("Notes")?, top("Settings")?])
+    }
+
     /// FT-6: Lookup, Notes, Settings and the account line keep fixed places at the rail's
     /// bottom edge. The status slot grows upward above Lookup and never reaches under it.
-    fn check_rail_anchor(d: &mut Driver<'_>, id: &str) {
+    /// The account status in the rail: every node below Settings, together.
+    pub(crate) fn account_rect(d: &Driver<'_>) -> Option<egui::Rect> {
+        let nodes = d.nodes();
+        let settings = nodes
+            .iter()
+            .filter(|node| node.name == "Settings")
+            .min_by(|a, b| a.rect.left().total_cmp(&b.rect.left()))?
+            .rect;
+        nodes
+            .iter()
+            .filter(|node| {
+                node.rect.top() >= settings.bottom() - 0.5
+                    && node.rect.right() <= settings.right() + 1.0
+                    && node.rect.height() < 100.0
+            })
+            .map(|node| node.rect)
+            .reduce(|a, b| a.union(b))
+    }
+
+    pub(crate) fn check_rail_anchor(d: &mut Driver<'_>, id: &str) {
         let nodes = d.nodes();
         let (_, height) = d.window_size();
         let lookup = nodes
@@ -6992,33 +7117,53 @@ pub mod session_recording {
         };
         let rail =
             |rect: &egui::Rect| rect.right() <= lookup.right() + 1.0 && rect.height() < 100.0;
-        let lower: Vec<_> = nodes
+        let settings = nodes
             .iter()
-            .filter(|node| rail(&node.rect) && node.rect.top() >= lookup.top() - 0.5)
-            .collect();
-        let settings = lower.iter().find(|node| node.name == "Settings");
-        let bottom = lower
-            .iter()
-            .map(|node| node.rect.bottom())
-            .fold(f32::MIN, f32::max);
-        let account = lower
-            .iter()
-            .find(|node| (node.rect.bottom() - bottom).abs() < 0.5);
+            .any(|node| node.name == "Settings" && rail(&node.rect));
         let slot_clear = nodes.iter().all(|node| {
             !rail(&node.rect)
                 || node.rect.top() >= lookup.top() - 0.5
                 || node.rect.bottom() <= lookup.top() + 0.5
         });
+        // AD2: the account slot holds two `Small` lines and ends at the rail's bottom edge. The
+        // status starts at the slot's top. One painted line leaves the second line empty.
         let expected = height - crate::design::S;
+        let line = crate::design::Type::Small.line();
+        let account = account_rect(d);
+        // Painted rows at distinct heights: the icon's own column is not another line.
+        let mut tops: Vec<f32> = Vec::new();
+        if let Some(rect) = account {
+            d.each_painted_text(|text, _| {
+                for row in &text.galley.rows {
+                    let row = row.rect().translate(text.pos.to_vec2());
+                    if rect.contains(row.center())
+                        && !tops.iter().any(|top| (top - row.top()).abs() < line / 2.0)
+                    {
+                        tops.push(row.top());
+                    }
+                }
+            });
+        }
+        let lines = tops.len();
+        let bottom = if lines >= 2 {
+            expected
+        } else {
+            expected - line
+        };
         d.observe(
             id,
-            settings.is_some()
-                && account.is_some_and(|account| account.name != "Settings")
-                && (bottom - expected).abs() <= 0.5
-                && slot_clear,
+            settings
+                && slot_clear
+                && (1..=2).contains(&lines)
+                && account.is_some_and(|rect| {
+                    (rect.top() - (expected - 2.0 * line)).abs() <= 0.5
+                        && (rect.bottom() - bottom).abs() <= 0.5
+                }),
             format!(
-                "The account line ends at the rail's bottom edge ({bottom} vs {expected}), below \
-                 Settings, and no status reaches under Lookup (top {})",
+                "The account status ({lines} lines, {account:?}) starts at the top of its two-line \
+                 slot ({}) and ends at {bottom}, below Settings; no status reaches under Lookup \
+                 (top {})",
+                expected - 2.0 * line,
                 lookup.top()
             ),
         );
@@ -7059,6 +7204,57 @@ pub mod session_recording {
         );
     }
 
+    /// FT-3, AT2: a clean result in the session list is a status: the check icon, then
+    /// `Processed` in the success colour, as on the recording's own row.
+    fn check_clean_row(d: &mut Driver<'_>, id: &str) {
+        let rows: Vec<_> = d
+            .nodes()
+            .into_iter()
+            .filter(|node| {
+                node.in_view()
+                    && node.name.starts_with("Session ")
+                    && node.name.contains(" · ")
+                    && node.name.contains("Processed")
+                    && !node.name.contains("with a warning")
+            })
+            .collect();
+        let success = crate::design::colors().result.success;
+        let word = format!("{} Processed", crate::design::icons::OK);
+        let mut seen = Vec::new();
+        let clean = rows.iter().all(|row| {
+            // The spoken name says Processed without the icon's private character.
+            let spoken = !row.name.contains(crate::design::icons::OK)
+                && (row.name.contains(" · Processed") || row.name.contains("\nProcessed"));
+            let mut colored = false;
+            d.each_painted_text(|text, _| {
+                if !row.rect.contains(text.visual_bounding_rect().center()) {
+                    return;
+                }
+                let job = &text.galley.job;
+                let all = job.text.replace('\u{a0}', " ");
+                for section in &job.sections {
+                    let words = &job.text[section.byte_range.clone()];
+                    if words.contains("Processed") {
+                        seen.push((all.clone(), section.format.color));
+                        colored |= all.contains(&word) && section.format.color == success;
+                    }
+                }
+            });
+            colored && spoken
+        });
+        let names: Vec<_> = rows.iter().map(|row| row.name.clone()).collect();
+        d.observe(
+            id,
+            !rows.is_empty() && clean,
+            format!(
+                "Each clean Processed row shows the check icon and Processed in the success \
+                 colour, and its name says Processed without the icon: {} rows, {seen:?}, \
+                 {names:?}",
+                rows.len()
+            ),
+        );
+    }
+
     fn check_result_row(d: &mut Driver<'_>) {
         let rows: Vec<_> = d
             .nodes()
@@ -7072,6 +7268,9 @@ pub mod session_recording {
         assert_eq!(rows.len(), 1, "The processed session row is visible");
         let lines = d.painted_lines_in(rows[0].rect);
         assert!(!lines.is_empty(), "The processed row has laid-out text");
+        if !rows[0].name.contains("with a warning") {
+            check_clean_row(d, "iter-11-C-FT3");
+        }
         d.observe(
             "iter-9-C2-FT4-lines",
             lines.iter().all(|line| !line.trim_start().starts_with('·')),
@@ -7144,7 +7343,12 @@ pub mod session_recording {
         d.click_starting("Recordings");
         d.expect(&format!("{} Recording", crate::design::icons::RECORD));
         d.expect("0:00 recorded · Hearing sound");
-        d.state("recording-listed", Sizes::Default);
+        d.state_prepared("recording-listed", Sizes::Default, |d| {
+            // AT1: with no fight open, the party bar keeps every first name at 960. Portraits give
+            // way before names; HP and state words stay.
+            let (items, painted) = party_bar_items(d);
+            check_party_names(d, "iter-11-C-AT1", &items, &painted);
+        });
         let tabs_top = |d: &Driver<'_>| {
             d.place_of("Plan")
                 .or_else(|| d.place_of("Plan and notes"))
@@ -7528,6 +7732,7 @@ pub mod session_recording {
         d.expect("These events were suggested from the transcript. Only events you add go on the timeline.");
         d.state_prepared("marker-added", Sizes::All, |d| {
             check_marker_columns(d);
+            check_clean_row(d, "iter-11-C-FT3-marker");
             let size = d.window_size();
             let before = marker_positions
                 .iter()
@@ -7660,7 +7865,30 @@ pub mod session_recording {
         d.click_containing("More actions for 2026-01-01");
         d.click_containing("Process again:");
         d.expect("Replace the results");
-        d.state("process-again-confirm", Sizes::Default);
+        d.state_prepared("process-again-confirm", Sizes::Default, |d| {
+            // ST1: the confirmation keeps the reader's measure, with both choices together below.
+            let mut message = None;
+            d.each_painted_text(|text, _| {
+                if text.galley.job.text.contains("The audio is not sent again") {
+                    message = Some(text.visual_bounding_rect());
+                }
+            });
+            let buttons = d.place_of("Not now").zip(d.place_of("Replace the results"));
+            d.observe(
+                "iter-11-C-ST1",
+                message.zip(buttons).is_some_and(|(message, (not_now, replace))| {
+                    message.width() <= crate::design::READER_MEASURE + 0.5
+                        && not_now.top() >= message.bottom()
+                        && (not_now.center().y - replace.center().y).abs() < 1.0
+                        && replace.left() > not_now.right()
+                        && replace.left() - not_now.right() <= crate::design::L + crate::design::S
+                }),
+                format!(
+                    "The confirmation is at most {} wide, with Not now and Replace the results together below it: {message:?} {buttons:?}",
+                    crate::design::READER_MEASURE
+                ),
+            );
+        });
         d.click("Not now");
 
         d.click_containing("More actions for 2026-01-01");
@@ -7878,6 +8106,7 @@ pub mod session_recording {
                 d.in_view(resume),
                 "A paused timeline fight has a visible Resume"
             );
+            check_clean_row(d, "iter-11-C-AT2");
         });
         d.begin_task();
         assert!(
@@ -9872,32 +10101,8 @@ pub mod session_plan {
         }
         d.state_prepared("session-party-bar", Sizes::All, |d| {
             // FT-1: each item names its player before HP. Stats give way first, together.
-            let items: Vec<_> = d
-                .nodes()
-                .into_iter()
-                .filter(|node| node.name.contains("Passive Perception"))
-                .collect();
-            let painted: Vec<(String, String)> = items
-                .iter()
-                .map(|item| {
-                    (
-                        item.name
-                            .split_whitespace()
-                            .next()
-                            .unwrap_or_default()
-                            .to_owned(),
-                        d.painted_lines_in(item.rect).join(" "),
-                    )
-                })
-                .collect();
-            d.observe(
-                "iter-10-C-FT1",
-                items.len() >= 4
-                    && painted
-                        .iter()
-                        .all(|(first, words)| words.split_whitespace().any(|word| word == first)),
-                format!("Every party bar item shows its first name: {painted:?}"),
-            );
+            let (items, painted) = session_recording::party_bar_items(d);
+            session_recording::check_party_names(d, "iter-10-C-FT1", &items, &painted);
             let stats = |words: &str| {
                 ["AC", "Per", "Ins"]
                     .into_iter()

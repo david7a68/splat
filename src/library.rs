@@ -5553,6 +5553,11 @@ mod tests {
                 "spell",
                 "## Spell\n\n| Field | Value |\n| --- | --- |\n| Level | many |\n",
             ),
+            (
+                "Bear",
+                "creature",
+                "## Stat block\n\n| Stat | Value |\n| --- | --- |\n| Armor Class | thick fur |\n| Hit Points | about forty |\n",
+            ),
         ] {
             fs::write(module.path.join(format!("{name}.md")), format!(
                 "---\nsplat_schema: 2\nsplat_id: {}\nsplat_kind: {kind}\nsplat_name: {name}\n---\n\n{table}", Uuid::new_v4()
@@ -5566,8 +5571,19 @@ mod tests {
                 .iter()
                 .position(|note| note.name() == name)
                 .unwrap();
-            assert!(loaded.subtitles()[at].contains("1 flagged value"));
+            assert!(loaded.subtitles()[at].contains("1 value not read"));
         }
+        // FD5: the Library row uses World's words, in the plural too.
+        let bear = loaded
+            .notes
+            .iter()
+            .position(|note| note.name() == "Bear")
+            .unwrap();
+        assert!(
+            loaded.subtitles()[bear].contains("2 values not read"),
+            "{}",
+            loaded.subtitles()[bear]
+        );
         let mut library = Library {
             loaded: Some(loaded),
             ..Default::default()
@@ -5586,7 +5602,7 @@ mod tests {
                     .show(ctx, |ui| library.show(ui, &mut Campaigns::default()));
             },
         );
-        assert!(output.shapes.iter().any(|shape| matches!(&shape.shape, egui::Shape::Text(text) if text.galley.job.text.contains("2 files need fixing"))));
+        assert!(output.shapes.iter().any(|shape| matches!(&shape.shape, egui::Shape::Text(text) if text.galley.job.text.contains("3 files need fixing"))));
         let diagnostics = &library.loaded.as_ref().unwrap().diagnostics;
         assert!(
             diagnostics
