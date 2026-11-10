@@ -170,7 +170,7 @@ pub fn run(d: &mut Driver<'_>) {
     d.state("flagged-group-in-the-plan", Sizes::All);
     d.click(NAV_ENCOUNTERS);
     run_saved_encounter(d, "Shrine of Cinders");
-    fight_tab(d, "Arrivals");
+    open_arrivals(d);
     d.expect("Scout (as Goblin Warrior) needs fixing");
     d.expect("Edit group");
     d.state("flagged-group-in-arrivals", Sizes::All);
@@ -268,8 +268,60 @@ pub fn run(d: &mut Driver<'_>) {
     d.settle();
     assert!(d.is_disabled("Begin combat"));
     d.expect("Changes: HP lots not read");
+    for size in [SMALL, DEFAULT, (1920.0, 1080.0)] {
+        let fits = d.at_size(size, |d| {
+            let warning = d
+                .nodes()
+                .into_iter()
+                .find(|node| node.name.contains("Changes: HP lots not read"));
+            let header = d.place_of("Begin combat").unwrap();
+            warning.is_some_and(|node| node.rect.top() > header.bottom())
+                && d.visible_text("Fix the unread row first.")
+                && d.in_view("Initiative for Ember Cultist 2")
+                && !d.visible_text("below, 1 needs initiative")
+        });
+        d.observe(
+            "iter-5-B-FD8",
+            fits,
+            format!("Setup warning follows the header and keeps roster room at {size:?}"),
+        );
+    }
     d.state("unread-roster-kept-in-setup", Sizes::All);
     assert_eq!(fs::read_to_string(&roster_path).unwrap(), flagged_roster);
+    // Two unread rows name one file: its name and actions show once.
+    let one_row = d
+        .nodes()
+        .iter()
+        .filter(|node| node.name.contains("Changes: HP lots not read"))
+        .count();
+    let mut two_flagged = flagged_roster.clone();
+    let first = &splat::content::layout::Document::new(&flagged_roster)
+        .table(splat::content::list_formats::ROSTER)
+        .unwrap()
+        .rows[0][3];
+    two_flagged.replace_range(first.range.clone(), "HP lots");
+    fs::write(&roster_path, &two_flagged).unwrap();
+    d.app_mut()
+        .encounters
+        .run_mut()
+        .unwrap()
+        .guard_campaign(&campaign.path);
+    d.settle();
+    let warnings = d
+        .nodes()
+        .iter()
+        .filter(|node| node.name.contains("Changes: HP lots not read"))
+        .count();
+    let show_file = d
+        .nodes()
+        .iter()
+        .filter(|node| node.name == "Show file")
+        .count();
+    d.observe(
+        "iter-5-B-FD8-two-rows",
+        one_row > 0 && warnings == 2 * one_row && show_file == 1,
+        format!("Two unread rows: {warnings} warnings, {show_file} Show file"),
+    );
     fs::write(&roster_path, &roster_text).unwrap();
     close_run(d);
 

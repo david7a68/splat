@@ -902,6 +902,14 @@ impl Run {
                     .blocked(nobody_present.then_some(NOBODY_PRESENT))
                     .show(ui)
                     .clicked();
+                // As the strip pairs Back to run with Next turn: one height, one small gap.
+                ui.add_space(design::S);
+                // A narrow roster keeps its room for the turn's name.
+                let words = ui.max_rect().width() >= DOCK_ALL_WORDS_FROM;
+                if self.add_to_fight(words, Density::Glance).show(ui).clicked() {
+                    self.show_arrivals();
+                }
+                ui.add_space(design::S);
                 ui.with_layout(Layout::left_to_right(Align::Center), |ui| {
                     let response = ui.label(
                         Type::Round
@@ -2312,15 +2320,50 @@ impl Run {
             ui.spacing_mut().item_spacing.x = 0.0;
             let mut closing = false;
             let mut ending = false;
-            let close_width = ["Close run", "End encounter…", "Keys", "Saved", "Sync party"]
-                .iter()
-                .map(|word| design::number_width(ui, word, &Type::Strong.font(ui)) + design::L)
-                .sum::<f32>()
-                + design::L
-                + self.copy_label.as_ref().map_or(0.0, |copy| {
-                    design::number_width(ui, copy, &Type::Small.font(ui)) + design::L
-                });
-            let menu_needed = ui.available_width() < close_width;
+            let blocked = self.close_block();
+            let close_word = if blocked.is_some() {
+                "Close after sync"
+            } else {
+                "Close run"
+            };
+            let status = self.save_status_value();
+            let saved_word = self.copy_label.as_ref().map_or_else(
+                || status.word.to_owned(),
+                |copy| format!("{} · {copy}", status.word),
+            );
+            let status_width = design::number_width(
+                ui,
+                &format!("{} {saved_word}", status.icon),
+                &Type::Small.font(ui),
+            );
+            let keys = if compact {
+                Action::quiet("Keys")
+            } else {
+                Action::quiet("Keys").icon(icons::KEYS)
+            }
+            .density(Density::Read);
+            let right_width = status_width
+                + keys.natural_width(ui)
+                + self
+                    .party_sync_action()
+                    .map_or(0.0, |action| action.natural_width(ui));
+            let close_width = Action::quiet(close_word)
+                .density(Density::Read)
+                .natural_width(ui)
+                + Action::quiet("End encounter…")
+                    .density(Density::Read)
+                    .natural_width(ui)
+                + right_width
+                + design::L;
+            let end_word = if ui.available_width() < close_width {
+                "End…"
+            } else {
+                "End encounter…"
+            };
+            let short_width = close_width
+                - design::number_width(ui, "End encounter…", &Type::Strong.font(ui))
+                + design::number_width(ui, "End…", &Type::Strong.font(ui));
+            let menu_needed = ui.available_width() < short_width;
             let end_menu = menu_needed && self.copy_label.is_some();
             let mut controls = |ui: &mut egui::Ui| {
                 let blocked = self.close_block();
@@ -2335,9 +2378,10 @@ impl Run {
                 .show(ui)
                 .clicked();
                 if !end_menu {
-                    ending = Action::quiet("End encounter…")
+                    ending = Action::quiet(end_word)
+                        .name("End encounter…")
                         .density(Density::Read)
-                        .hint("Set an outcome. You can undo this.")
+                        .hint("End encounter… Set an outcome. You can undo this.")
                         .show(ui)
                         .clicked();
                 }
@@ -2631,12 +2675,12 @@ impl Run {
     }
 
     /// One action for the whole party (T3.3). The run works fully without it.
-    fn sync_party_button(&mut self, ui: &mut egui::Ui) {
+    fn party_sync_action(&self) -> Option<Action<'static>> {
         if self.linked_participants().is_empty() {
-            return;
+            return None;
         }
         let stopping = matches!(self.party_sync_plan(), PartySync::Stop(_));
-        if Action::quiet(if stopping { "Stop sync" } else { "Sync party" })
+        Some(Action::quiet(if stopping { "Stop sync" } else { "Sync party" })
             .icon(icons::SYNC_ON)
             .density(Density::Read)
             .name(if stopping {
@@ -2648,9 +2692,13 @@ impl Run {
             .blocked_if(
                 !self.connected && !self.simulate_connection,
                 "Connect to D&D Beyond in Settings to sync.",
-            )
-            .show(ui)
-            .clicked()
+            ))
+    }
+
+    fn sync_party_button(&mut self, ui: &mut egui::Ui) {
+        if self
+            .party_sync_action()
+            .is_some_and(|action| action.show(ui).clicked())
         {
             self.toggle_party_sync();
             self.return_focus = self.lookup_open;
@@ -2776,6 +2824,23 @@ impl Run {
         self.panel_body(ui, index, self.panel);
     }
 
+    /// Add to fight opens Arrivals. It is beside the fight's own controls, not among the
+    /// panel's tabs, so that the DM finds it when something arrives. It takes the height of
+    /// the controls in its row. Without words, its icon is its label, as on a split
+    /// action's caret.
+    fn add_to_fight(&self, words: bool, density: Density) -> Action<'static> {
+        let action = if words {
+            Action::secondary("Add to fight").icon(icons::ADD)
+        } else {
+            Action::secondary(icons::ADD)
+        };
+        action
+            .name("Add to fight")
+            .hint("Add an encounter group or a creature (Ctrl+G)")
+            .density(density)
+            .selected(self.panel == Panel::Groups && !self.hide_panel)
+    }
+
     /// One row, with participant controls on the left and fight controls on the right.
     fn fight_panel_title(&self) -> &'static str {
         match self.panel {
@@ -2797,11 +2862,8 @@ impl Run {
         if reference.is_some() {
             participant.push((Panel::Record, "Correct"));
         }
-        let fight = [
-            (Panel::Log, "Log"),
-            (Panel::Encounter, "Prep"),
-            (Panel::Groups, "Arrivals"),
-        ];
+        // Arrivals has no tab. Add to fight, beside the fight's controls, opens it.
+        let fight = [(Panel::Log, "Log"), (Panel::Encounter, "Prep")];
         let width = |items: &[(Panel, &str)]| {
             items
                 .iter()
@@ -2831,11 +2893,6 @@ impl Run {
                     egui::Popup::menu(&button).show(|ui| {
                         for (panel, label) in fight {
                             let action = egui::Button::new(label).selected(self.panel == panel);
-                            let action = if panel == Panel::Groups {
-                                action.shortcut_text("Ctrl+G")
-                            } else {
-                                action
-                            };
                             if ui.add(action).clicked() {
                                 self.panel = panel;
                                 ui.close();
@@ -2962,7 +3019,10 @@ impl Run {
                                 })
                                 .map(|before| (first, Self::roll_block_first(&self.state, before)))
                         });
-                    let line = self.state.log.last().cloned().unwrap_or_default();
+                    let group_line = self.group_arrival_notice(start);
+                    let line = group_line
+                        .as_deref()
+                        .unwrap_or_else(|| self.state.log.last().map_or("", String::as_str));
                     if let Some((first, before)) = tied {
                         let name =
                             Self::roll_block_name(&self.state, &self.state.participants[before]);
@@ -2973,8 +3033,14 @@ impl Run {
                                 .iter()
                                 .position(|i| *i == before)
                                 .is_some_and(|at| at <= self.state.cursor);
+                        let total = self.state.participants[first].initiative.unwrap();
+                        let tie = if group_line.is_some() {
+                            format!(" Tied with {name} at\u{a0}{total}\u{a0}· placed after")
+                        } else {
+                            String::new()
+                        };
                         let line = format!(
-                            "{line}{}",
+                            "{line}{tie}{}",
                             if waits {
                                 "\u{a0}· acts next round if moved before"
                             } else {
@@ -3010,7 +3076,7 @@ impl Run {
                             }
                         });
                     } else {
-                        design::message(ui, Tone::Success, &line);
+                        design::message(ui, Tone::Success, line);
                     }
                 } else if let Some(line) = self
                     .state
@@ -3026,6 +3092,24 @@ impl Run {
         if let Some(id) = add {
             self.add_group_from_panel(id);
         }
+    }
+
+    /// The roster shows members; this notice keeps just the group and its totals.
+    /// Roll details and member names remain in the unmodified Log.
+    fn group_arrival_notice(&self, start: usize) -> Option<String> {
+        let added = self.state.participants.get(start..)?;
+        let origin = added.first()?.added_from.as_ref()?;
+        if origin.group.is_empty() {
+            return None;
+        }
+        let totals: std::collections::BTreeSet<_> =
+            added.iter().filter_map(|p| p.initiative).collect();
+        let totals = totals
+            .iter()
+            .map(ToString::to_string)
+            .collect::<Vec<_>>()
+            .join(", ");
+        Some(format!("{} joined at\u{a0}{totals}.", origin.group))
     }
 
     /// Returns the group the DM chooses to add. Those in tonight's plan come first.
@@ -3953,29 +4037,6 @@ impl Run {
 
     fn setup_body(&mut self, ui: &mut egui::Ui) -> bool {
         self.refresh_roster_faults();
-        if let Some(path) = &self.roster_source {
-            for fault in &self.roster_faults {
-                design::message(
-                    ui,
-                    Tone::Warning,
-                    &format!(
-                        "{} · {}, line {}: {}",
-                        fault.name,
-                        path.file_name().unwrap_or_default().to_string_lossy(),
-                        fault.line,
-                        fault.problem
-                    ),
-                );
-            }
-            if !self.roster_faults.is_empty() {
-                crate::world::entry_file_actions(
-                    ui,
-                    path.parent().unwrap_or(path),
-                    &path.file_name().unwrap_or_default().to_string_lossy(),
-                    true,
-                );
-            }
-        }
         let mut closed = false;
         let missing_initiative = self
             .state
@@ -4135,16 +4196,31 @@ impl Run {
             vec2(ui.available_width(), Density::Read.control()),
             Layout::right_to_left(Align::Center),
             |ui| {
+                // Add to fight keeps its room beside Undo, which shortens first.
+                let add = self.add_to_fight(true, Density::Read);
+                let undo_room = ui.available_width() - add.natural_width(ui) - design::S;
                 let label = self.undo_label();
-                let undo = if self.history.is_empty() {
-                    self.empty_undo(ui)
-                } else {
-                    self.undo_action(&label)
-                        .name(&label)
-                        .hint(&label)
-                        .show(ui)
-                        .clicked()
-                };
+                let undo = ui
+                    .allocate_ui_with_layout(
+                        vec2(undo_room, Density::Read.control()),
+                        Layout::right_to_left(Align::Center),
+                        |ui| {
+                            if self.history.is_empty() {
+                                self.empty_undo(ui)
+                            } else {
+                                self.undo_action(&label)
+                                    .name(&label)
+                                    .hint(&label)
+                                    .show(ui)
+                                    .clicked()
+                            }
+                        },
+                    )
+                    .inner;
+                ui.add_space(design::S);
+                if add.show(ui).clicked() {
+                    self.show_arrivals();
+                }
                 if undo {
                     self.undo();
                     self.return_focus = self.lookup_open;
@@ -4152,6 +4228,58 @@ impl Run {
             },
         );
         design::rule(ui);
+        if let Some(path) = &self.roster_source {
+            let filename = path.file_name().unwrap_or_default().to_string_lossy();
+            for (index, fault) in self.roster_faults.iter().enumerate() {
+                let words = format!("{} · line {}: {}", fault.name, fault.line, fault.problem);
+                // One file names every unread row, so its name and actions show once.
+                if index > 0 {
+                    design::message(ui, Tone::Warning, &words);
+                    continue;
+                }
+                ui.scope(|ui| {
+                    ui.spacing_mut().item_spacing.y = design::XS;
+                    let gap = ui.spacing().item_spacing.x;
+                    let inset = design::S
+                        + design::HAIRLINE_WIDTH
+                        + design::number_width(ui, icons::WARN, &Type::Body.font(ui))
+                        + gap * 2.0
+                        - design::XS;
+                    let message_width =
+                        design::number_width(ui, &words, &Type::Body.font(ui)) + inset;
+                    let file_width = design::number_width(ui, &filename, &Type::Small.font(ui))
+                        + design::number_width(ui, "Edit in Obsidian", &Type::Body.font(ui))
+                        + design::number_width(ui, "Show file", &Type::Body.font(ui))
+                        + gap * 2.0;
+                    if message_width + design::L + file_width <= ui.available_width() {
+                        ui.horizontal_top(|ui| {
+                            ui.allocate_ui_with_layout(
+                                vec2(message_width, 0.0),
+                                Layout::top_down(Align::Min),
+                                |ui| {
+                                    design::message(ui, Tone::Warning, &words);
+                                },
+                            );
+                            ui.add_space(design::L - gap);
+                            crate::world::entry_file_parts(
+                                ui,
+                                path.parent().unwrap_or(path),
+                                &filename,
+                                true,
+                            );
+                        });
+                    } else {
+                        design::message(ui, Tone::Warning, &words);
+                        crate::world::entry_file_actions(
+                            ui,
+                            path.parent().unwrap_or(path),
+                            &filename,
+                            true,
+                        );
+                    }
+                });
+            }
+        }
         self.error_line(ui);
         if let Some(words) = self.carry_missing() {
             design::message(ui, Tone::Warning, &words);
@@ -5237,27 +5365,34 @@ pub(crate) fn group_fault(ui: &mut egui::Ui, fault: &str) -> bool {
         },
         color: colors().accent,
     };
-    let words = format!("{} {fault}", icons::WARN);
-    let text_width = design::number_width(ui, &words, &Type::Small.font(ui));
+    let gap = ui.spacing().item_spacing.x;
+    let inset = design::S
+        + design::HAIRLINE_WIDTH
+        + design::number_width(ui, icons::WARN, &Type::Body.font(ui))
+        + gap * 2.0
+        - design::XS;
+    let text_width = design::number_width(ui, fault, &Type::Body.font(ui)) + inset;
     let link_width = design::number_width(
         ui,
         &format!("{} {}", status.icon, status.word),
         &Type::Small.font(ui),
     );
-    let label = |ui: &mut egui::Ui| {
-        ui.add(
-            egui::Label::new(Type::Small.rich(ui, &words).color(colors().result.warning)).wrap(),
-        );
-    };
-    if text_width + design::S + link_width <= ui.available_width() {
-        ui.horizontal(|ui| {
-            label(ui);
+    if text_width + design::L + link_width <= ui.available_width() {
+        ui.horizontal_top(|ui| {
+            ui.allocate_ui_with_layout(vec2(text_width, 0.0), Layout::top_down(Align::Min), |ui| {
+                design::message(ui, Tone::Warning, fault);
+            });
+            ui.add_space(design::L - gap);
             design::status_link(ui, status).clicked()
         })
         .inner
     } else {
-        label(ui);
-        design::status_link(ui, status).clicked()
+        design::message(ui, Tone::Warning, fault);
+        ui.horizontal(|ui| {
+            ui.add_space((inset - gap).max(0.0));
+            design::status_link(ui, status).clicked()
+        })
+        .inner
     }
 }
 
@@ -6894,6 +7029,45 @@ mod tests {
                 }
             });
         });
+    }
+
+    #[test]
+    fn iter5_b_arrival_fault_uses_text_colour_and_warning_mark() {
+        let fault = "Member 2, Cinder Wolf: Changes: HP lots not read";
+        let mut harness = egui_kittest::Harness::new(|ctx| {
+            egui::CentralPanel::default().show(ctx, |ui| {
+                group_fault(ui, fault);
+            });
+        });
+        design::theme::install(&harness.ctx);
+        harness.run_steps(2);
+        let texts: Vec<_> = harness
+            .output()
+            .shapes
+            .iter()
+            .filter_map(|shape| match &shape.shape {
+                egui::Shape::Text(text) if text.galley.text().contains(fault) => Some(text),
+                _ => None,
+            })
+            .collect();
+        assert!(!texts.is_empty());
+        for text in texts {
+            assert!(
+                text.galley
+                    .job
+                    .sections
+                    .iter()
+                    .all(|section| section.format.color == colors().text)
+            );
+        }
+        assert!(
+            harness
+                .output()
+                .shapes
+                .iter()
+                .any(|shape| matches!(&shape.shape,
+            egui::Shape::Rect(rect) if rect.fill == colors().result.warning))
+        );
     }
 
     #[test]

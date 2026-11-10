@@ -2908,7 +2908,7 @@ pub mod run_sync_conflict {
         d.click(NEXT_TURN);
         d.observe(
             "T3.4",
-            !d.has("Log") && !d.has_containing(UNDO_CLEARED),
+            !d.has("Dismiss this message") && !d.has_containing(UNDO_CLEARED),
             "The next turn clears the old notice",
         );
         fight_tab(d, "Log");
@@ -3074,7 +3074,8 @@ pub mod party_from_run {
         // A caster's page, so that the capture shows the state it names.
         d.click_row(CASTER);
         d.click(SHEET_SUBPAGE);
-        d.state("sheet-spells-beside-run", Sizes::Default);
+        d.expect("Spell text shows the printed numbers. Splat does not work out upcasting or this character’s own bonuses.");
+        d.state("sheet-spells-beside-run", Sizes::All);
         d.observe(
             "Spells beside run",
             d.visible_text("Fire Bolt"),
@@ -3944,7 +3945,24 @@ pub mod run_edge_states {
             resumed_copy,
             "Resume opens the recovery copy closed last",
         );
-        d.state("resumed-last-closed-copy", Sizes::Default);
+        d.observe_both(
+            "iter-5-B-FT1",
+            "A recovery copy keeps End visible beside Close run",
+            |d| {
+                d.in_view("End encounter…")
+                    && (d.visible_text("End…") || d.visible_text("End encounter…"))
+            },
+        );
+        d.state("resumed-last-closed-copy", Sizes::All);
+        for size in [SMALL, DEFAULT, (1920.0, 1080.0)] {
+            d.set_base(size);
+            assert!(d.in_view("End encounter…"));
+            assert!(d.visible_text("End…") || d.visible_text("End encounter…"));
+            d.click("End encounter…");
+            d.expect("Outcome");
+            d.click("Keep playing");
+        }
+        d.set_base(SMALL);
         d.unreached(
             "HP unknown on a live row",
             "the setup view, because a live run requires known HP (Run::open and Begin refuse otherwise)",
@@ -6632,7 +6650,6 @@ pub mod session_recording {
 pub mod encounter_groups {
     use super::*;
     const LIST_HEADING: &str = "GROUPS";
-    const GROUPS_TAB: &str = "Arrivals";
     const NEW_GROUP: &str = "New group";
     const SAVE_GROUP: &str = "Save group";
     const SAVED_NOTE: &str = "Group saved.";
@@ -6766,7 +6783,7 @@ pub mod encounter_groups {
 
         // At the table: the panel, with members and XP.
         resume_run(d, RUN);
-        fight_tab(d, GROUPS_TAB);
+        open_arrivals(d);
         d.expect(&add_group(GROUP_GOBLINS));
         d.state("group-panel", Sizes::AllAndHiDpi);
         d.check_tab_order("run, group panel");
@@ -6847,6 +6864,15 @@ pub mod encounter_groups {
                 .any(|node| node.name.contains(RIVAL_NAME) && node.name.contains("Initiative 14")),
             "A typed total places the group, with no roll",
         );
+        d.observe_both(
+            "iter-5-B-FT3",
+            "The arrival notice names only the group and total; the tie action stays",
+            |d| {
+                d.visible_text("Rival Team joined at\u{a0}14.")
+                    && !d.visible_text("entered by the DM")
+                    && d.in_view("Move Rival Team before Kestrel Dunmoor")
+            },
+        );
         d.state("group-added-with-a-total", Sizes::All);
         d.observe(
             "T13.2",
@@ -6863,7 +6889,7 @@ pub mod encounter_groups {
         d.click("Stat block");
         d.expect("Changed · arrived with Rival Team");
         d.state("card-of-an-added-member", Sizes::Default);
-        fight_tab(d, GROUPS_TAB);
+        open_arrivals(d);
 
         // The same group again, by dragging it onto the initiative list.
         let rows_before = roster_places(d).len();
@@ -6889,7 +6915,7 @@ pub mod encounter_groups {
         d.click(NEXT_TURN);
         d.observe(
             "T13.2",
-            !d.has_containing("Encounter group "),
+            !d.has_containing("Encounter group ") && !d.has_containing(" joined at"),
             "The panel's line about an addition ends with the next step",
         );
         for _ in 0..25 {
@@ -6925,7 +6951,7 @@ pub mod encounter_groups {
         // Setup has the same panel.
         close_run(d);
         run_saved_encounter(d, "Shrine of Cinders");
-        fight_tab(d, GROUPS_TAB);
+        open_arrivals(d);
         d.state("group-panel-in-setup", Sizes::Default);
         d.click(&add_group(GROUP_GOBLINS));
         d.expect(FIRST_GOBLIN);
@@ -7069,7 +7095,6 @@ pub mod encounter_history {
 pub mod encounter_owned_groups {
     use super::*;
     const SHRINE: &str = "Shrine of Cinders";
-    const GROUPS_TAB: &str = "Arrivals";
     const BELONGS_DROPDOWN: usize = 2;
     const NEW_FOR_ENCOUNTER: &str = "New group for this encounter";
     const NEW_NAME: &str = "Ash Hounds";
@@ -7193,7 +7218,7 @@ pub mod encounter_owned_groups {
 
         // At the table: its own first, then those for any encounter.
         run_saved_encounter(d, SHRINE);
-        fight_tab(d, GROUPS_TAB);
+        open_arrivals(d);
         d.expect(&add_group(GROUP_SHRINE));
         d.state("group-panel-for-one-encounter", Sizes::All);
         d.check_tab_order("run, groups for one encounter");
@@ -7224,7 +7249,7 @@ pub mod encounter_owned_groups {
         }
         d.click("Begin combat");
         d.expect(NEXT_TURN);
-        fight_tab(d, GROUPS_TAB);
+        open_arrivals(d);
         d.expect(&add_group(NEW_NAME));
         d.state("own-groups-in-combat", Sizes::Default);
         d.type_into(&format!("Initiative total for {NEW_NAME}"), "14");
@@ -7254,7 +7279,7 @@ pub mod encounter_owned_groups {
 
         // A save from before this cannot say which encounter it is, so it hides nothing.
         resume_run(d, RUN);
-        fight_tab(d, GROUPS_TAB);
+        open_arrivals(d);
         d.expect(&add_group(GROUP_GOBLINS));
         d.state("group-panel-of-an-older-save", Sizes::Default);
         d.observe(
@@ -7358,7 +7383,7 @@ pub mod run_no_groups {
 
     pub fn run(d: &mut Driver<'_>) {
         resume_run(d, RUN);
-        fight_tab(d, "Arrivals");
+        open_arrivals(d);
         d.expect("No groups yet. Make one on Encounters with");
         d.state("no-groups", Sizes::Default);
         d.goal("see that a campaign has no groups");
@@ -7394,7 +7419,7 @@ pub mod run_add_creature {
 
     pub fn run(d: &mut Driver<'_>) {
         resume_run(d, RUN);
-        fight_tab(d, "Arrivals");
+        open_arrivals(d);
         d.expect(FIELD);
         d.state("arrivals-empty", Sizes::All);
         d.check_tab_order("run, arrivals panel");
@@ -7438,7 +7463,7 @@ pub mod run_add_creature {
         d.state("made-up-creature-after-damage", Sizes::Default);
         d.click_containing("Undo: 5 damage");
         d.begin_task();
-        fight_tab(d, "Arrivals");
+        open_arrivals(d);
         d.expect(FIELD);
         d.observe(
             "T13.7",
@@ -7597,7 +7622,7 @@ pub mod session_plan_groups {
 
         d.click(NAV_ENCOUNTERS);
         resume_run(d, RUN);
-        fight_tab(d, "Arrivals");
+        open_arrivals(d);
         d.expect("IN TONIGHT'S PLAN");
         d.state("arrivals-tonight-first", Sizes::All);
         d.observe(
