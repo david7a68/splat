@@ -417,7 +417,7 @@ impl Reader {
         }
     }
 
-    /// Undo for a Cancel that dropped changes, while the DM reads that entry again.
+    /// Undo for a Discard that dropped changes, while the DM reads that entry again.
     pub(super) fn discarded_notice(&mut self, ui: &mut egui::Ui, id: Uuid) {
         if let Some((at, draft)) = &self.discarded
             && *at == id
@@ -563,7 +563,9 @@ impl Reader {
                         egui::TextEdit::multiline(&mut draft.now.text)
                             .id(egui::Id::new(("world_edit_text", id)))
                             .font(font)
-                            .desired_width(ui.available_width() - 2.0 * design::S)
+                            .desired_width(
+                                ui.available_width().min(design::FORM_WIDTH) - 2.0 * design::S,
+                            )
                             .desired_rows(8)
                             .margin(egui::vec2(design::S, design::S)),
                     )
@@ -585,35 +587,41 @@ impl Reader {
                 && ui.input_mut(|i| i.consume_key(egui::Modifiers::COMMAND, egui::Key::S)));
         let mut cancel = false;
         ui.add_space(design::S);
-        ui.horizontal_wrapped(|ui| {
-            // Save is primary unless a run in live play owns Next turn on this screen.
-            save |= (if self.live {
-                Action::secondary("Save changes")
-            } else {
-                Action::primary("Save changes")
-            })
-            .density(Density::Read)
-            .key("Ctrl+S")
-            .blocked(reason)
-            .show(ui)
-            .clicked();
-            if dirty {
-                design::status(
-                    ui,
-                    design::Status {
-                        icon: design::icons::DRAFT,
-                        word: "Unsaved",
-                        color: colors().document.unsaved,
-                    },
-                );
-            }
-            ui.add_space(design::L);
-            cancel = Action::quiet("Cancel")
+        ui.horizontal(|ui| {
+            ui.set_max_width(ui.available_width().min(design::FORM_WIDTH));
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                // Save is primary unless a live run owns Next turn on this screen.
+                save |= (if self.live {
+                    Action::secondary("Save changes")
+                } else {
+                    Action::primary("Save changes")
+                })
                 .density(Density::Read)
+                .key("Ctrl+S")
+                .blocked(reason)
                 .show(ui)
                 .clicked();
+                ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
+                    let state = if dirty {
+                        design::Status {
+                            icon: design::icons::DRAFT,
+                            word: "Unsaved",
+                            color: colors().document.unsaved,
+                        }
+                    } else {
+                        design::Status {
+                            icon: design::icons::OK,
+                            word: "No changes",
+                            color: colors().muted,
+                        }
+                    };
+                    // A clean form can also be closed without writing.
+                    cancel = design::save_row_state(ui, state, true, None);
+                });
+            });
         });
         if cancel {
+            self.error = None;
             self.picker = None;
             self.form_focused = false;
             if draft.dirty() {
@@ -660,6 +668,82 @@ mod tests {
             "# Patrol\nAt midnight.\n"
         );
         assert_eq!(split_text("---\na: 1\n---", "Rook").unwrap().1, "");
+    }
+
+    #[test]
+    fn iter8_fd5_object_groups_are_rejected_by_the_note_reader() {
+        let file = format!(
+            "---\nsplat_schema: 2\nsplat_id: {}\nsplat_kind: world\nsplat_name: Rook\nsplat_type: npc\nsplat_part_of:\n- '[[Zarel|the Archdevil]]'\n- {{id: {}, link: '[[Lost Guild|the lost]]'}}\n---\n",
+            Uuid::new_v4(),
+            Uuid::new_v4()
+        );
+        let entry = Entry::parse("NPCs/Rook.md", &file).unwrap();
+        assert!(
+            entry
+                .flags
+                .iter()
+                .any(|flag| flag.message.contains("Part of")
+                    && flag.message.contains("Use a list of names or links")),
+            "FD-5-object-input: an object group is explicitly flagged"
+        );
+        assert!(
+            super::super::part_of(&entry).is_empty(),
+            "FD-5-object-input: rejected values never reach stored_value"
+        );
+    }
+
+    #[test]
+    fn iter8_fd5_adding_a_group_keeps_untouched_stored_values() {
+        let dir = tempfile::tempdir().unwrap();
+        let campaign = Campaign {
+            id: Uuid::new_v4(),
+            name: "Sample".into(),
+            path: dir.path().into(),
+            dndbeyond_campaign_id: None,
+            dndbeyond_campaign_name: None,
+        };
+        super::super::create_entry(&campaign, "Zarel", "npc").unwrap();
+        super::super::create_entry(&campaign, "Arena Guild", "faction").unwrap();
+        let id = super::super::create_entry(&campaign, "Rook", "npc").unwrap();
+        let path = dir.path().join("NPCs/Rook.md");
+        let missing = Uuid::new_v4();
+        let file = format!(
+            "---\nsplat_schema: 2\nsplat_id: {id}\nsplat_kind: world\nsplat_name: Rook\nsplat_type: npc\nsplat_part_of:\n- '[[Zarel|the Archdevil]]'\n- '[[Lost Guild|the lost]] %% splat id={missing} %%'\n---\n\n# Rook\n\nKeeps the gate.\n"
+        );
+        fs::write(&path, &file).unwrap();
+        let index = ContentIndex::load(&[], Some(&campaign)).unwrap();
+        let entry = &index.items[index.position(id).unwrap()].entry;
+        let before: Vec<_> = super::super::part_of(entry).into_iter().cloned().collect();
+        assert_eq!(
+            before.len(),
+            2,
+            "FD-5-fixture: both original groups must be read"
+        );
+        assert_eq!(before[0].as_str(), Some("[[Zarel|the Archdevil]]"));
+        assert_eq!(
+            before[1].as_str(),
+            Some(format!("[[Lost Guild|the lost]] %% splat id={missing} %%").as_str())
+        );
+        let mut draft = EditDraft::open(&campaign, entry).unwrap();
+        draft
+            .now
+            .groups
+            .push(Value::String("[[Arena Guild]]".into()));
+        let change = draft.save(&campaign, &index, None).unwrap().unwrap();
+        let after = fs::read_to_string(&path).unwrap();
+        let saved = Entry::parse("NPCs/Rook.md", &after).unwrap();
+        for (position, value) in before.iter().enumerate() {
+            assert_eq!(
+                serde_yaml_ng::to_string(super::super::part_of(&saved)[position])
+                    .unwrap()
+                    .as_bytes(),
+                serde_yaml_ng::to_string(value).unwrap().as_bytes(),
+                "FD-5-untouched-{position}: stored group text must be byte-identical"
+            );
+        }
+        assert_eq!(super::super::part_of(&saved).len(), 3);
+        change.undo(&campaign).unwrap();
+        assert_eq!(fs::read_to_string(&path).unwrap(), file);
     }
 
     #[test]

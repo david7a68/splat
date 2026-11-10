@@ -830,7 +830,12 @@ impl WorldPage {
                 } else {
                     String::new()
                 };
-                let selected = self.selected == Some(entry.id);
+                let selected = self.view == View::Reader
+                    && self.repair.is_none()
+                    && self.new_kind.is_none()
+                    && self.generated.is_none()
+                    && self.error.is_none()
+                    && self.selected == Some(entry.id);
                 ui.horizontal(|ui| {
                     ui.add_space(depth as f32 * design::S);
                     let response = if detail.is_empty() {

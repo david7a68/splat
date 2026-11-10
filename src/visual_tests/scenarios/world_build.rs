@@ -110,6 +110,11 @@ pub fn broken(d: &mut Driver<'_>) {
     let unfinished = format!("{external}\nMy unfinished draft.\n");
     let outside = format!("{external}\nNew words on disk.\n");
     d.replace_text_in("Note text", &unfinished);
+    d.observe(
+        "iter-8-D-FD2-repair",
+        d.visible_text("World repair draft") && !d.visible_text("World draft"),
+        "A repair-only draft has one repair rail status",
+    );
     d.click("1 note cannot be read");
     assert_eq!(d.editor_text().as_deref(), Some(unfinished.as_str()));
     fs::write(&path, &outside).unwrap();
@@ -395,6 +400,14 @@ pub fn facts(d: &mut Driver<'_>) {
             format!("A lore reader omits every empty field at {size:?}"),
         );
     }
+    d.observe(
+        "iter-8-D-FD1",
+        d.has("Horn Rings · ")
+            && !d.visible_text("Place not found")
+            && !d.has_containing("note needs fixing")
+            && !d.has_containing("notes need fixing"),
+        "An empty optional place has no list warning",
+    );
     d.state("lines-from-other-pages", Sizes::All);
     d.expect("Edit Horn Rings");
     d.click("Edit Horn Rings");
@@ -438,12 +451,22 @@ pub fn facts(d: &mut Driver<'_>) {
             format!("The text and focus survive the pane boundary at {size:?}"),
         );
     }
-    d.click("Cancel");
+    d.click("Discard");
+    d.observe(
+        "iter-8-D-FD11-discard",
+        !d.has("Save changes") && !d.visible_text("World draft") && !d.visible_text("Unsaved"),
+        "Discard closes the form and clears its draft state",
+    );
     assert_eq!(fs::read_to_string(&lore_path).unwrap(), unchanged);
     d.expect("Undo discard of Horn Rings");
     d.click("Undo discard of Horn Rings");
     assert_eq!(d.editor_text().as_ref(), Some(&draft_text));
     d.expect("Arena Guild, The Arena");
+    d.observe(
+        "iter-8-D-FD11-undo",
+        d.has("Save changes") && d.visible_text("Unsaved") && d.visible_text("World draft"),
+        "Undo discard restores the form and draft state",
+    );
     d.state("group-draft-restored", Sizes::All);
     d.click("Status");
     d.press_ctrl(Key::S);
@@ -563,6 +586,18 @@ pub fn facts(d: &mut Driver<'_>) {
 
     d.click_containing("Open questions · ");
     d.expect("Can a horn ring be sold?");
+    for size in [SMALL, DEFAULT, LARGE] {
+        let unselected = d.at_size(size, |d| {
+            d.expect("Zarel · alive");
+            d.control_frame("Zarel · alive")
+                .is_none_or(|frame| frame.fill != design::colors().selected)
+        });
+        d.observe(
+            "iter-8-D-SD2",
+            unselected,
+            format!("Open questions leaves the remembered note without selected fill at {size:?}"),
+        );
+    }
     d.state("open-questions", Sizes::All);
     d.click("Can a horn ring be sold?");
     d.observe(
@@ -764,7 +799,7 @@ pub fn round_trip(d: &mut Driver<'_>) {
     for size in [SMALL, DEFAULT, LARGE] {
         let primary = d.at_size(size, |d| {
             d.expect("Save changes");
-            d.expect("Cancel");
+            d.expect("Discard");
             d.expect("Unsaved");
             !d.has(NEXT_TURN)
                 && d.control_frame("Save changes").is_some_and(|frame| {
@@ -778,7 +813,71 @@ pub fn round_trip(d: &mut Driver<'_>) {
             format!("World Save owns primary without a live run at {size:?}"),
         );
     }
+    for size in [SMALL, DEFAULT, LARGE] {
+        let aligned = d.at_size(size, |d| {
+            for name in ["Status", "Text", "Save changes", "Discard"] {
+                d.expect(name);
+            }
+            let nodes = d.nodes();
+            let status = nodes
+                .iter()
+                .find(|node| node.name == "Status" && node.role == Role::TextInput)
+                .expect("Status input")
+                .rect;
+            let text = nodes
+                .iter()
+                .find(|node| node.name == "Text" && node.role == Role::MultilineTextInput)
+                .expect("Text input")
+                .rect;
+            let save = d.place_of("Save changes").unwrap();
+            let discard = d.place_of("Discard").unwrap();
+            let unsaved = d
+                .painted_rect_in("Unsaved", egui::Rect::EVERYTHING)
+                .unwrap();
+            (status.right() - text.right()).abs() <= 1.0
+                && (save.right() - status.right()).abs() <= 1.0
+                && unsaved.left() < discard.left()
+                && discard.right() < save.left()
+        });
+        d.observe("iter-8-D-FD11", aligned, format!("The World form shares one right edge and puts state and Discard before Save at {size:?}"));
+    }
+    d.observe(
+        "iter-8-D-FD2-edit",
+        d.visible_text("World draft") && !d.visible_text("World repair draft"),
+        "An unsaved World edit has its own rail status",
+    );
     d.state("world-edit-without-run", Sizes::All);
+    let repair_path = root(d).join("Notes/Rail repair.md");
+    fs::write(&repair_path, "---\nsplat_schema: 2\nsplat_id: [\n---\n").unwrap();
+    reload(d);
+    d.click_containing("Notes/Rail repair.md · ");
+    let repair_text = format!("{}\nUnsent repair words.\n", d.editor_text().unwrap());
+    d.replace_text_in("Note text", &repair_text);
+    for size in [SMALL, DEFAULT, LARGE] {
+        let one_status = d.at_size(size, |d| {
+            let statuses: Vec<_> = d
+                .nodes()
+                .into_iter()
+                .filter(|node| node.role == Role::Label && node.name.contains("World repair draft"))
+                .collect();
+            !statuses.is_empty()
+                && statuses.len() == 1
+                && statuses.iter().all(|node| node.in_view())
+                && !d.visible_text("World draft")
+        });
+        d.observe(
+            "iter-8-D-FD2-both",
+            one_status,
+            format!("A repair and an edit share one repair rail status at {size:?}"),
+        );
+    }
+    d.state("world-edit-and-repair-drafts", Sizes::All);
+    d.click("Discard");
+    d.expect("World draft");
+    fs::remove_file(repair_path).unwrap();
+    reload(d);
+    d.click_containing("Ashfall Faction · ");
+    d.expect("Unsaved");
     d.click("Status");
     d.press_ctrl(Key::S);
     d.wait_for_text("Changes saved.");
@@ -1003,7 +1102,7 @@ pub fn npc_in_lookup(d: &mut Driver<'_>) {
         let one_primary = d.at_size(size, |d| {
             d.expect("Save changes");
             d.expect(NEXT_TURN);
-            d.expect("Cancel");
+            d.expect("Discard");
             d.expect("Unsaved");
             d.control_frame("Save changes").is_some_and(|frame| {
                 frame.stroke.color == design::colors().field_border
