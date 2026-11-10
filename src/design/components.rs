@@ -2055,6 +2055,7 @@ pub fn draft_comparison(ui: &mut Ui, draft: &str, disk: &str, id: impl std::hash
 }
 
 /// Consecutive differing lines are one destination for Next difference.
+#[cfg(test)]
 pub fn comparison_changes(draft: &str, disk: &str) -> (usize, Vec<usize>) {
     let comparison = Comparison::new([draft, disk]);
     (comparison.changed, comparison.groups)
