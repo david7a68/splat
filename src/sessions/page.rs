@@ -36,9 +36,7 @@ use std::{
 };
 use uuid::Uuid;
 
-/// Beside Raw transcript when the check ran and gave nothing back. A check that never ran is a
-/// different event, so it has different words.
-const CHECK_EMPTY: &str = "Check returned no result";
+const MOVE_FILES: &str = "Move files and save";
 const UNDO_ADD_FOR: Duration = Duration::from_secs(30);
 const SAVED_WORD_FOR: Duration = Duration::from_secs(8);
 const LIST_WIDTH: f32 = 216.0;
@@ -5100,7 +5098,8 @@ impl Sessions {
                 shown.on_hover_text(recorder_said(said));
             }
         }
-        if let Some(warning) = recording.warning.as_ref().filter(|_| !live && !processing) {
+        let warning_shown = !live && !processing;
+        if let Some(warning) = recording.warning.as_ref().filter(|_| warning_shown) {
             ui.add(egui::Label::new(Type::Small.rich(ui, warning).color(c.muted)).wrap());
         }
         let job_here = self
@@ -5126,8 +5125,14 @@ impl Sessions {
                     {
                         open = Some(made);
                     }
-                    if made == Made::Transcript && recording.check_missing() {
-                        ui.label(Type::Small.rich(ui, CHECK_EMPTY).color(c.muted));
+                    // While processing hides the warning line, the old results still need
+                    // their reason, in the same words. Never both at once.
+                    if made == Made::Transcript && !warning_shown && recording.check_missing() {
+                        ui.label(
+                            Type::Small
+                                .rich(ui, processing::NO_CHECK_LABEL)
+                                .color(c.muted),
+                        );
                     }
                 }
             });
@@ -6723,7 +6728,14 @@ impl Sessions {
         }
     }
 
-    pub fn folder_view(&mut self, ui: &mut egui::Ui, book: &Book, locked: Option<&str>) {
+    /// `details_open`: the campaign details form, with its own primary save, is in view above.
+    pub fn folder_view(
+        &mut self,
+        ui: &mut egui::Ui,
+        book: &Book,
+        locked: Option<&str>,
+        details_open: bool,
+    ) {
         // Earlier sections can have a wider minimum rect. Give this form its own column.
         let rect = egui::Rect::from_min_size(
             ui.cursor().min,
@@ -6733,11 +6745,17 @@ impl Sessions {
             ),
         );
         ui.scope_builder(egui::UiBuilder::new().max_rect(rect), |ui| {
-            self.folder_form(ui, book, locked);
+            self.folder_form(ui, book, locked, details_open);
         });
     }
 
-    fn folder_form(&mut self, ui: &mut egui::Ui, book: &Book, locked: Option<&str>) {
+    fn folder_form(
+        &mut self,
+        ui: &mut egui::Ui,
+        book: &Book,
+        locked: Option<&str>,
+        details_open: bool,
+    ) {
         let c = colors();
         let Some(campaign) = self.campaign.clone() else {
             return;
@@ -6895,10 +6913,16 @@ impl Sessions {
                 }
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     if has_files {
-                        move_files = Action::secondary("Move files and save")
-                            .blocked(blocked)
-                            .show(ui)
-                            .clicked();
+                        // One primary in view: the open details form owns its own save.
+                        // While a run is open, `reserve_primary` keeps Next turn the only one.
+                        move_files = (if details_open {
+                            Action::secondary(MOVE_FILES)
+                        } else {
+                            Action::primary(MOVE_FILES)
+                        })
+                        .blocked(blocked)
+                        .show(ui)
+                        .clicked();
                         Action::quiet("Save without moving")
                             .blocked(blocked)
                             .show(ui)
