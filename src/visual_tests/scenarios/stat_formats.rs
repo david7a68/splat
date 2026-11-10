@@ -12,7 +12,7 @@ pub fn run(d: &mut Driver<'_>) {
     search_library(d, "Flagged Wolf");
     d.expect("1 value not read");
     d.click_containing("Flagged Wolf · ");
-    d.expect("Hit Points \"about twenty\" not read (line 19). Use a number first.");
+    d.expect("Hit Points \"about twenty\" not read (line 19). Start with a number, such as 22 (4d8 + 4).");
     d.expect("about twenty");
     d.expect("HIT POINTS");
     d.observe(

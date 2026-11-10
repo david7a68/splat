@@ -655,7 +655,7 @@ fn fmt_f2_malformed_cells_stay_first_alias_wins_and_old_yaml_is_ignored() {
     );
     assert!(entry.fields["splat_stats"].get("save_dexterity").is_none());
     for words in [
-        "Hit Points \"about twenty\" not read (line 21). Use a number first.",
+        "Hit Points \"about twenty\" not read (line 21). Start with a number, such as 22 (4d8 + 4).",
         "Duplicate Hit Points",
         "Save needs",
         "Old data ignored",
@@ -2110,5 +2110,31 @@ fn loot_is_the_last_term_of_a_changes_cell_in_a_roster_and_a_group() {
         super::legacy::parse("Rook.md", &empty).unwrap().flags[0]
             .message
             .contains("Loot needs")
+    );
+}
+
+#[test]
+fn fmt_f2_hit_points_hint_shows_the_shape_and_other_numbers_keep_theirs() {
+    let (_, new) = creature_pair();
+    let bad = new
+        .replace("| Hit Points | 22 (4d8 + 4) |", "| HP | about twenty |")
+        .replace("| Armor Class | 13 |", "| Armor Class | about fifteen |");
+    let entry = super::legacy::parse("Rook.md", &bad).unwrap();
+    let messages: Vec<&str> = entry.flags.iter().map(|f| f.message.as_str()).collect();
+    // The alias row still names the stat by its full name, with the example.
+    assert!(
+        messages
+            .iter()
+            .any(|m| m.starts_with("Hit Points \"about twenty\" not read")
+                && m.ends_with(". Start with a number, such as 22 (4d8 + 4).")),
+        "{messages:?}"
+    );
+    // Only Hit Points changed: Armor Class keeps the short hint.
+    assert!(
+        messages
+            .iter()
+            .any(|m| m.starts_with("Armor Class \"about fifteen\" not read")
+                && m.ends_with(". Use a number first.")),
+        "{messages:?}"
     );
 }

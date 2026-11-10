@@ -533,8 +533,8 @@ pub mod library_author {
         d.click(UNDO_DISCARD);
         d.observe(
             "Discard undo",
-            draft_here(d, "no front matter at all"),
-            "Undo brings back the discarded draft",
+            draft_here(d, "no front matter at all") && !d.has(UNDO_DISCARD),
+            "Undo brings back the discarded draft, and the discard message goes",
         );
         let editor_top = d
             .nodes()
@@ -543,6 +543,11 @@ pub mod library_author {
             .expect("editor before discard")
             .rect
             .top();
+        let editor_at = |d: &Driver<'_>| d.place_of("Markdown editor").map(|rect| rect.top());
+        let dirty_tops: Vec<_> = [SMALL, DEFAULT, LARGE]
+            .into_iter()
+            .map(|size| (size, d.at_size(size, editor_at)))
+            .collect();
         d.click(DISCARD);
         let discarded_top = d
             .nodes()
@@ -556,6 +561,52 @@ pub mod library_author {
             editor_top == discarded_top,
             format!("Discard keeps the editor at the same height: {editor_top} to {discarded_top}"),
         );
+        d.state_prepared("library-draft-discarded", Sizes::All, |d| {
+            // iter-12-E-FD3: the Library uses the shared discard message in its reason slot.
+            let size = d.window_size();
+            let words = "Ash Exposure draft discarded.";
+            let window = egui::Rect::from_min_size(pos2(0.0, 0.0), egui::vec2(size.0, size.1));
+            let editor = d.place_of("Markdown editor").expect("The editor stays open");
+            let Some(text) = d.painted_rect_in(words, window) else {
+                panic!("At {size:?}, the discard message is painted");
+            };
+            let icon = d
+                .painted_rect_in(
+                    crate::design::icons::INFO,
+                    egui::Rect::from_min_max(
+                        pos2(editor.left(), text.top() - 2.0),
+                        pos2(text.left(), text.bottom() + 2.0),
+                    ),
+                )
+                .is_some();
+            let painted = d.painted_size(text, words);
+            let colour = d.painted_color(words);
+            d.observe(
+                "iter-12-E-FD3",
+                icon && painted == Some(crate::design::Type::Body.size())
+                    && colour == Some(crate::design::colors().text),
+                format!(
+                    "At {size:?}, the discard line has the info icon, Body text and the text colour: {painted:?}, {colour:?}"
+                ),
+            );
+            d.observe(
+                "iter-12-E-FD3-slot",
+                text.top() < editor.top() && text.left() > editor.left(),
+                format!("At {size:?}, the message sits in the reason slot above the editor: {text:?}, {editor:?}"),
+            );
+            check_undo_icon(d, UNDO_DISCARD, "iter-12-E-FD3-undo");
+            // Must stay true: the editor does not move when the reason becomes the message.
+            let before = dirty_tops
+                .iter()
+                .find(|(at, _)| *at == size)
+                .and_then(|(_, top)| *top);
+            let after = editor_at(d);
+            d.observe(
+                "iter-12-E-FD3-steady",
+                before.is_some() && before == after,
+                format!("At {size:?}, Discard keeps the editor top: {before:?} to {after:?}"),
+            );
+        });
         d.goal("try each way out of a failed save");
 
         d.click(PACKAGE_ACTIONS);
@@ -642,7 +693,37 @@ pub mod library_navigation {
         d.open_combo_at(LIBRARY_PACKAGE_DROPDOWN);
         d.click(MODULE);
         d.click_starting("Ash Exposure · ");
+        // iter-12-E-FD2: the broken link counts in the header, as World counts its notes.
+        let rows: Vec<_> = d
+            .nodes()
+            .into_iter()
+            .filter(|node| node.name.starts_with("Ash Exposure · "))
+            .collect();
+        d.observe(
+            "iter-12-E-FD2",
+            !rows.is_empty()
+                && rows.iter().all(|row| row.name.contains("1 broken link"))
+                && d.in_view("1 file needs fixing"),
+            "The row's broken link also counts in the Library header",
+        );
         d.state("homebrew-reference", Sizes::All);
+        // From another entry, the header count's menu opens the entry with the broken link.
+        d.click_starting("Ashfall · ");
+        d.wait_for_text("Hot ash falls");
+        assert!(
+            !d.visible_text("Captain Varra knows the road through the ash fields."),
+            "fixture: another entry is open"
+        );
+        d.click("1 file needs fixing");
+        d.expect("Rules/Ash Exposure.md: 1 broken link");
+        d.state("broken-link-menu", Sizes::Default);
+        d.click("Rules/Ash Exposure.md: 1 broken link");
+        d.wait_for_text("Captain Varra knows the road through the ash fields.");
+        d.observe(
+            "iter-12-E-FD2-menu",
+            !d.visible_text("Hot ash falls") && !d.has("Rules/Ash Exposure.md: 1 broken link"),
+            "The header count's menu opens the entry with the broken link, and closes",
+        );
         d.click("Copy Captain Varra to Ashen Marches");
         d.wait_for_text("Dependency copied and linked.");
         d.observe(
