@@ -84,14 +84,35 @@ pub(crate) fn manifest_path_in(folder: &content::Folder, module: &Module) -> Str
             return error.path.clone();
         }
     }
-    // Ordinary notes stay ignored by the shared reader. Only a registered package
-    // without a package entry treats a root manifest name as a repair candidate.
+    // A name alone does not make a plain README a manifest. Empty files and
+    // files with front matter or Splat fields remain repair candidates.
     for path in ["Package.md", "Module.md"] {
-        if module.path.join(path).exists() {
+        let full = module.path.join(path);
+        if full.exists() && !plain_package_readme(&full) {
             return path.into();
         }
     }
-    "Package.md".into()
+    ["Package.md", "Module.md"]
+        .into_iter()
+        .find(|path| !module.path.join(path).exists())
+        .unwrap_or("Package.md")
+        .into()
+}
+
+/// Plain prose belongs to the DM, even when its file has a manifest name.
+fn plain_package_readme(path: &Path) -> bool {
+    fs::read_to_string(path).is_ok_and(|text| {
+        !text.trim().is_empty()
+            && !text
+                .lines()
+                .any(|line| line.trim() == "---" || line.trim_start().starts_with("splat_"))
+    })
+}
+
+/// Whether this path holds a manifest candidate, rather than a plain README.
+pub(crate) fn manifest_file_exists(module: &Module, path: &str) -> bool {
+    let full = module.path.join(path);
+    full.exists() && !plain_package_readme(&full)
 }
 
 /// A copied note gets its file's name in the same write as its new identity.
@@ -371,7 +392,14 @@ impl ManifestWrite {
         })
     }
 
+    #[cfg(test)]
     pub fn write(module: &Module) -> Result<Self, String> {
+        let path = package_manifest_path(module);
+        let replace = manifest_file_exists(module, &path);
+        Self::write_as(module, &path, replace)
+    }
+
+    pub fn write_as(module: &Module, expected_path: &str, replace: bool) -> Result<Self, String> {
         let catalogue = Catalogue::load(std::slice::from_ref(module), None)?;
         if !catalogue.manifest_problems.contains_key(&module.id) {
             return Err(format!(
@@ -394,12 +422,21 @@ impl ManifestWrite {
             &[("splat_id", Some(module.id.to_string().into()))],
         )?;
         let relative = package_manifest_path(module);
+        if relative != expected_path {
+            return Err("The package files changed. Reload before writing the manifest.".into());
+        }
         let path = module.path.join(&relative);
+        if plain_package_readme(&path) {
+            return Err("Package.md and Module.md already contain notes. Move one note before writing the manifest again.".into());
+        }
         let before = match fs::read_to_string(path) {
             Ok(text) => Some(text),
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => None,
             Err(error) => return Err(error.to_string()),
         };
+        if before.is_some() != replace {
+            return Err("The package files changed. Reload before writing the manifest.".into());
+        }
         write_note(&module.path, &relative, before.as_deref(), &after)?;
         Ok(Self {
             root: module.path.clone(),
@@ -1170,6 +1207,7 @@ impl Catalogue {
                     .text(&manifest_path)
                     .map(str::to_owned)
                     .or_else(|| fs::read_to_string(module.path.join(&manifest_path)).ok())
+                    .filter(|_| manifest_file_exists(module, &manifest_path))
                 {
                     let (_, line) = crate::campaign_content::repair_problem(&manifest_path, &text);
                     format!(
@@ -1181,6 +1219,8 @@ impl Catalogue {
                         },
                         line.map_or(String::new(), |line| format!(" (line {line})"))
                     )
+                } else if manifest_file_exists(module, &manifest_path) {
+                    format!("{manifest_path} cannot be read")
                 } else {
                     DELETED_MANIFEST.into()
                 };

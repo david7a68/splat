@@ -695,6 +695,10 @@ registrations are stored in user settings; package notes remain in their own fol
 New packages write their manifest as `Package.md`. Existing `Module.md` files keep their name;
 repair messages for existing files and Undo actions name the file. A deleted manifest uses
 **The package manifest was deleted** and **Write the manifest again**, because its old file name is not stored.
+Its title uses the registered package name. The owner line says **Manifest deleted** and offers
+**Show folder**. Plain prose without front matter or `splat_` lines in `Package.md` or `Module.md`
+stays a README. Writing a missing manifest uses the first free name, `Package.md` then `Module.md`.
+It stops if both names hold notes. The result names the file written. README bytes stay unchanged.
 A copied folder offers **Register as a new package** beside its warning. **Add folder**
 stays blocked until you choose another folder.
 Unregistering a package leaves its files in place. Campaign keeps its last known name and offers **Remove from this campaign** or **Find the folder…** if it becomes unavailable. Package IDs stay under **Technical details**. Package and campaign folders must
@@ -702,13 +706,16 @@ be separate. Register My Homebrew in your preferred location for shared homebrew
 
 Local packages support new entries and Markdown editing. **About <package name>** opens the manifest and selects its About row. **New entry** shows the folder, kind and path before it writes a note, then opens its editor. Kind templates include a reader skeleton. A new subfolder is created when the note is saved.
 
-**Use in this campaign** starts on for new entries, new packages and copies to packages. It saves the package choice too, so the content can be found in the encounter editor. The reader shows whether an entry is used here and offers the same action when it is not. **Save** checks note
+**Use in this campaign** starts on for new entries, new packages and copies to packages. It saves the package choice too, so the content can be found in the encounter editor. The reader shows whether an entry is used here and offers the same action when it is not.
+**Use every entry** shows its result and **Undo package use** above the reader tabs. **Save** checks note
 structure, keeps existing UUIDs and kinds, rejects duplicate identities, and checks
 for external edits before replacing a file. The header validation count opens messages for unresolved
 references; a package-only check can report references to other packages as unresolved.
 Invalid entry notes remain available for repair. Edit Markdown scrolls to the error line and puts the caret there.
-The owner line says **Cannot be read** once. A deleted manifest shows only its missing-file warning and repair action;
-a manifest that exists without front matter still shows its parse error. Saving a repair restores the campaign-use state at once. If the file changed on disk, the save stops
+The owner line says **Cannot be read** once. The error below the title offers **Fix in Edit Markdown**.
+The repair error sits directly below Save, above the source. Manifest repair opens the package's warning
+About row and shows a bordered replacement action with its consequence below it. Empty or malformed
+manifest files stay in repair. A deleted manifest keeps its missing-file warning and repair action. Saving a repair restores the campaign-use state at once. If the file changed on disk, the save stops
 and shows disk and draft side by side, with marked lines and **Next difference**. Choose **Overwrite with my draft** or **Reload and lose my draft**.
 **Discard** takes one press and offers **Undo discard** until the next edit or disk change. If the file was deleted, **Overwrite with my draft** creates it again. Changing
 pages keeps the draft in memory.
