@@ -1,5 +1,5 @@
 //! Links in a Markdown paragraph are each their own control, in World and in the Library, and
-//! short links side by side keep their own press targets.
+//! short links side by side keep their own press targets, in Problems and in prose.
 use super::*;
 use eframe::egui::accesskit::Role;
 use std::fs;
@@ -9,6 +9,10 @@ const FIRST: &str = "the ferry master (opens Wren)";
 const SECOND: &str = "the bell keeper (opens Oskar)";
 /// Words that only the second link's note has.
 const SECOND_TEXT: &str = "Oskar keeps the bell ropes dry.";
+/// A note whose prose starts with two short links side by side.
+const HANDS: &str = "Ferry Hands";
+const JO: &str = "Jo (opens Jo)";
+const LI: &str = "Li (opens Li)";
 
 fn root(d: &Driver<'_>) -> std::path::PathBuf {
     d.root.join("campaigns/emberfall")
@@ -52,42 +56,9 @@ fn keyboard_follows_the_second_link(d: &mut Driver<'_>, place: &str, capture: &s
     );
 }
 
-pub fn run(d: &mut Driver<'_>) {
-    fs::create_dir_all(root(d).join("People")).unwrap();
-    // A Splat note, so the Library lists it too, and two realistic two-letter names that sit
-    // side by side in Problems.
-    for (path, name, kind, body) in [
-        (
-            format!("{NOTE}.md"),
-            NOTE,
-            "place",
-            "Ask [[Wren|the ferry master]] or [[Oskar|the bell keeper]] about the bells.",
-        ),
-        (
-            "People/Wren.md".into(),
-            "Wren",
-            "npc",
-            "Wren runs the ferry at dusk.",
-        ),
-        (
-            "People/Oskar.md".into(),
-            "Oskar",
-            "npc",
-            "Oskar keeps the bell ropes dry.",
-        ),
-        (
-            "People/Jo.md".into(),
-            "Jo",
-            "npc",
-            "A ferry hand on the inner sea.",
-        ),
-        (
-            "People/Li.md".into(),
-            "Li",
-            "npc",
-            "A ferry hand on the inner sea.",
-        ),
-    ] {
+/// Write World notes into the campaign and wait for Lookup to read them.
+fn write_notes<const N: usize>(d: &mut Driver<'_>, notes: [(String, &str, &str, &str); N]) {
+    for (path, name, kind, body) in notes {
         let id = splat::character::stable_id(&path);
         let text = format!(
             "---\nsplat_schema: 1\nsplat_id: {id}\nsplat_kind: world\nsplat_name: {name}\n\
@@ -98,6 +69,68 @@ pub fn run(d: &mut Driver<'_>) {
     }
     d.app_mut().lookup.refresh();
     d.settle();
+}
+
+/// Two links in view, at a window size: each target is at least XL square, the first ends
+/// before the second begins, and they share a line.
+fn pair_holds_xl(d: &mut Driver<'_>, first: &str, second: &str, size: (f32, f32)) -> bool {
+    d.at_size(size, |d| {
+        let nodes = d.nodes();
+        let link = |name: &str| {
+            nodes
+                .iter()
+                .find(|node| node.name == name && node.role == Role::Link && node.in_view())
+                .map(|node| node.rect)
+        };
+        link(first).zip(link(second)).is_some_and(|(a, b)| {
+            (a.center().y - b.center().y).abs() < 1.0
+                && a.right() <= b.left()
+                && [a, b].iter().all(|rect| {
+                    rect.width() >= crate::design::XL && rect.height() >= crate::design::XL
+                })
+        })
+    })
+}
+
+pub fn run(d: &mut Driver<'_>) {
+    fs::create_dir_all(root(d).join("People")).unwrap();
+    // A Splat note, so the Library lists it too, and two realistic two-letter names that sit
+    // side by side in Problems.
+    write_notes(
+        d,
+        [
+            (
+                format!("{NOTE}.md"),
+                NOTE,
+                "place",
+                "Ask [[Wren|the ferry master]] or [[Oskar|the bell keeper]] about the bells.",
+            ),
+            (
+                "People/Wren.md".into(),
+                "Wren",
+                "npc",
+                "Wren runs the ferry at dusk.",
+            ),
+            (
+                "People/Oskar.md".into(),
+                "Oskar",
+                "npc",
+                "Oskar keeps the bell ropes dry.",
+            ),
+            (
+                "People/Jo.md".into(),
+                "Jo",
+                "npc",
+                "A ferry hand on the inner sea.",
+            ),
+            (
+                "People/Li.md".into(),
+                "Li",
+                "npc",
+                "A ferry hand on the inner sea.",
+            ),
+        ],
+    );
 
     // SD1: two short links side by side never share a press target.
     d.click(NAV_WORLD);
@@ -144,7 +177,43 @@ pub fn run(d: &mut Driver<'_>) {
             })
         },
     );
+    let large = pair_holds_xl(d, "Jo", "Li", LARGE);
+    d.observe(
+        "iter-17-A-AD1-problems-1920",
+        large,
+        "At 1920, Jo and Li in Problems each have an XL target, and Jo's ends before Li's begins",
+    );
     d.state("short-links-side-by-side", Sizes::All);
+
+    // A note that links Jo and Li takes them out of Problems, so it comes after those checks.
+    write_notes(
+        d,
+        [(
+            format!("{HANDS}.md"),
+            HANDS,
+            "place",
+            "[[Jo]][[Li]] work the inner ferry for [[Wren]].",
+        )],
+    );
+    // AD1 in prose: two short links side by side each reserve an XL target in the paragraph.
+    d.click_starting(&format!("{HANDS} · "));
+    d.expect(JO);
+    for (size, at) in [(SMALL, "960"), (LARGE, "1920")] {
+        let held = pair_holds_xl(d, JO, LI, size);
+        d.observe(
+            &format!("iter-17-A-AD1-prose-{at}"),
+            held,
+            format!("At {at}, Jo and Li in the paragraph each have an XL target, and Jo's ends before Li's begins"),
+        );
+    }
+    // The first link starts the line, and its focus ring stays inside the paragraph.
+    let focused = d.tab_to(JO);
+    d.observe(
+        "iter-17-A-AD1-prose-tab",
+        focused,
+        "Tab reaches Jo, the first of the side-by-side links",
+    );
+    d.state("prose-short-links-first-focused", Sizes::All);
 
     // AD1 in World.
     d.click_starting(&format!("{NOTE} · "));
