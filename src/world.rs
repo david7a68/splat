@@ -423,6 +423,20 @@ fn reader_field<'a>(entry: &'a Entry, key: &str) -> Option<&'a Value> {
     world_field(entry, key).filter(|value| !empty_optional(value))
 }
 
+/// The line under a duplicate's repair action. A duplicate of another kind can leave a World
+/// note with only its own path, so the first action may have no other file to name.
+fn duplicate_consequence(paths: &[String], at: usize) -> Option<String> {
+    if at == 0 {
+        paths
+            .get(1)
+            .map(|other| format!("Existing links keep {other}."))
+    } else {
+        paths
+            .first()
+            .map(|first| format!("Existing links will then use {first}."))
+    }
+}
+
 fn empty_optional(value: &Value) -> bool {
     value.is_null() || value.as_str().is_some_and(|text| text.trim().is_empty())
 }
@@ -1562,18 +1576,9 @@ impl Reader {
                             Err(error) => self.error = Some(error),
                         }
                     }
-                    ui.label(
-                        Type::Small
-                            .rich(
-                                ui,
-                                if at == 0 {
-                                    format!("Existing links keep {}.", paths[1])
-                                } else {
-                                    format!("Existing links will then use {}.", paths[0])
-                                },
-                            )
-                            .color(colors().muted),
-                    );
+                    if let Some(consequence) = duplicate_consequence(&paths, at) {
+                        ui.label(Type::Small.rich(ui, consequence).color(colors().muted));
+                    }
                 }
             }
         }
@@ -2829,6 +2834,23 @@ fn add_form(
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn iter9_lead_duplicate_with_one_path_names_no_other_file() {
+        // Rook.md (world), Rook item.md (same id, an item) and Rook copy.md (world) leave
+        // Rook copy.md with one duplicate path; its first action must not read a second one.
+        let one = vec!["Rook copy.md".to_string()];
+        assert_eq!(duplicate_consequence(&one, 0), None);
+        let two = vec!["Rook.md".to_string(), "Rook copy.md".to_string()];
+        assert_eq!(
+            duplicate_consequence(&two, 0).as_deref(),
+            Some("Existing links keep Rook copy.md.")
+        );
+        assert_eq!(
+            duplicate_consequence(&two, 1).as_deref(),
+            Some("Existing links will then use Rook.md.")
+        );
+    }
+
     use super::*;
 
     #[test]

@@ -503,6 +503,10 @@ impl Reader {
             design::field(ui, label, None, None, |ui| {
                 ui.horizontal_wrapped(|ui| {
                     ui.label(match &*slot {
+                        // Empty and null are both unset, so both read `not set` in muted text.
+                        Some(value) if super::empty_optional(value) => {
+                            Type::Body.rich(ui, "not set").color(colors().muted)
+                        }
                         Some(value) => Type::Body.rich(ui, value_name(index, value, label)),
                         None => Type::Body.rich(ui, "not set").color(colors().muted),
                     });
