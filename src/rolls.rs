@@ -720,11 +720,12 @@ pub(crate) struct LineResult<'a> {
     pub apply: Option<String>,
 }
 
-/// The height of an action line: chips, then the result.
-pub(crate) const LINE_HEIGHT: f32 = 2.0 * 28.0 + design::XS;
+/// The height of an action line: one control line.
+pub(crate) const LINE_HEIGHT: f32 = 28.0;
 
-/// Chips for each action, a bonus field, and under them the last result and what can
-/// follow it. One fixed height, so nothing below it moves when a result arrives.
+/// One line: the chips, the last result and what can follow it, and a bonus field at the
+/// right. After a roll only the rolled chip stays in view and the rest go in `More`, so the
+/// result has the room. One fixed height, so nothing near it moves when a result arrives.
 pub(crate) fn action_line(
     ui: &mut egui::Ui,
     salt: impl std::hash::Hash,
@@ -734,50 +735,40 @@ pub(crate) fn action_line(
 ) -> Option<LineEvent> {
     let mut event = None;
     let id = ui.id().with(("action_line", salt));
-    ui.allocate_ui_with_layout(
-        egui::vec2(ui.available_width(), LINE_HEIGHT),
-        egui::Layout::top_down(egui::Align::Min),
-        |ui| {
-            ui.set_min_height(LINE_HEIGHT);
-            ui.spacing_mut().item_spacing.y = design::XS;
-            ui.horizontal(|ui| {
-                ui.set_height(28.0);
+    ui.horizontal(|ui| {
+        ui.set_height(LINE_HEIGHT);
+        ui.spacing_mut().item_spacing.x = design::S;
+        // The bonus field keeps the right end; the chips and the result share what is left.
+        let room = (ui.available_width() - BONUS - design::L).max(0.0);
+        ui.allocate_ui_with_layout(
+            egui::vec2(room, LINE_HEIGHT),
+            egui::Layout::left_to_right(egui::Align::Center),
+            |ui| {
+                ui.set_width(room);
                 ui.spacing_mut().item_spacing.x = design::XS;
                 let active = result.outcome.map(|outcome| &outcome.link);
-                event = chip_row(ui, id, chips, active).or(event.take());
-            });
-            ui.horizontal(|ui| {
-                ui.set_height(28.0);
+                event = chip_row(ui, id, chips, active);
+                ui.add_space(design::S);
                 ui.spacing_mut().item_spacing.x = design::S;
-                // The bonus field keeps the right end; the result fits in what is left.
-                let room = ui.available_width() - BONUS - design::L;
-                ui.allocate_ui_with_layout(
-                    egui::vec2(room, 28.0),
-                    egui::Layout::left_to_right(egui::Align::Center),
-                    |ui| {
-                        ui.set_width(room);
-                        ui.spacing_mut().item_spacing.x = design::S;
-                        event = result_row(ui, result, bonus).or(event.take());
-                    },
-                );
-                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    ui.spacing_mut().item_spacing.x = design::XS;
-                    let field = design::text_input(ui, "Bonus", bonus, "1d4", BONUS - 12.0);
-                    field.on_hover_text(
-                        "A bonus for this creature's d20 rolls, such as 1d4 for Bless. It stays until you clear it.",
-                    );
-                    ui.label(Type::Body.rich(ui, "+").color(colors().muted));
-                });
-            });
-        },
-    );
+                event = result_row(ui, result, bonus).or(event.take());
+            },
+        );
+        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            ui.spacing_mut().item_spacing.x = design::XS;
+            let field = design::text_input(ui, "Bonus", bonus, "1d4", BONUS - 12.0);
+            field.on_hover_text(
+                "A bonus for this creature's d20 rolls, such as 1d4 for Bless. It stays until you clear it.",
+            );
+            ui.label(Type::Body.rich(ui, "+").color(colors().muted));
+        });
+    });
     event
 }
 
 /// The width of the bonus field and its `+`.
 const BONUS: f32 = 64.0;
 
-/// The chips that fit, and `More` for the rest.
+/// The chips that fit, and `More` for the rest. With a result, only the rolled chip shows.
 fn chip_row(
     ui: &mut egui::Ui,
     id: Id,
@@ -786,25 +777,35 @@ fn chip_row(
 ) -> Option<LineEvent> {
     let mut event = None;
     let more = Action::quiet("More").density(Density::Read);
-    let room = ui.available_width() - more.natural_width(ui);
-    let mut used = 0.0;
-    let mut shown = 0;
-    for chip in chips {
-        let action = Action::secondary(&chip.label).density(Density::Read);
-        let width = action.natural_width(ui) + design::XS;
-        let last = shown + 1 == chips.len();
-        let limit = if last {
-            room + more.natural_width(ui)
-        } else {
-            room
-        };
-        if used + width > limit {
-            break;
+    // With no result, the chips may use the line; with one, the rolled chip alone.
+    let shown: Vec<&Chip> = match active.and_then(|link| chips.iter().find(|c| &c.link == link)) {
+        Some(chip) => vec![chip],
+        None => {
+            let room = (ui.available_width() - more.natural_width(ui)).max(0.0);
+            let mut used = 0.0;
+            let mut fit = Vec::new();
+            for (at, chip) in chips.iter().enumerate() {
+                let width = Action::secondary(&chip.label)
+                    .density(Density::Read)
+                    .natural_width(ui)
+                    + design::XS;
+                let limit = if at + 1 == chips.len() {
+                    room + more.natural_width(ui)
+                } else {
+                    room
+                };
+                if used + width > limit {
+                    break;
+                }
+                used += width;
+                fit.push(chip);
+            }
+            fit
         }
-        used += width;
-        shown += 1;
-        // The chip rolled last is marked, so its result needs no name.
-        let response = action
+    };
+    for chip in &shown {
+        let response = Action::secondary(&chip.label)
+            .density(Density::Read)
             .selected(active == Some(&chip.link))
             .hint(&hint(&chip.link))
             .show(ui);
@@ -815,10 +816,14 @@ fn chip_row(
             ));
         }
     }
-    if shown < chips.len() {
+    let rest: Vec<&Chip> = chips
+        .iter()
+        .filter(|chip| !shown.iter().any(|shown| shown.link == chip.link))
+        .collect();
+    if !rest.is_empty() {
         let button = more.name("More actions").show(ui);
         egui::Popup::menu(&button).id(id.with("more")).show(|ui| {
-            for chip in &chips[shown..] {
+            for chip in rest {
                 if ui
                     .button(&chip.label)
                     .on_hover_text(hint(&chip.link))
@@ -836,7 +841,7 @@ fn chip_row(
     if chips.is_empty() {
         ui.label(
             Type::Small
-                .rich(ui, "No attacks or saves found in this text.")
+                .rich(ui, "No attacks or saves in this text.")
                 .color(colors().muted),
         );
     }

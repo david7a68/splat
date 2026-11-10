@@ -3317,7 +3317,13 @@ pub mod run_large_roster {
         );
         // At the minimum, 12 rows hold their places, use the room, and share a pitch.
         let places = roster_places(d);
-        let dock = d.place_of("Amount").map_or(0.0, |rect| rect.min.y);
+        // The selected row's action strip is the top line of the dock band.
+        let dock = d
+            .place_of("More actions")
+            .or_else(|| d.place_of("Bonus"))
+            .map_or(0.0, |rect| {
+                rect.min.y - (crate::rolls::LINE_HEIGHT - rect.height()) / 2.0
+            });
         let bottom = places
             .iter()
             .fold(0.0_f32, |low, place| low.max(place.1.max.y));
@@ -3328,7 +3334,9 @@ pub mod run_large_roster {
             });
         d.observe(
             "Large roster",
-            places.len() == 12 && dock - bottom < 12.0 && tall - short <= 3.0,
+            // The action strip takes one control line, so a row whose bar sits below its detail
+            // can stand up to 4 px taller than the others.
+            places.len() == 12 && dock - bottom < 12.0 && tall - short <= 4.0,
             format!(
                 "12 rows at 960x640 leave {:.0} px above the dock, and are {short:.1} to {tall:.1} px tall",
                 dock - bottom

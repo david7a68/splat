@@ -652,6 +652,7 @@ impl Run {
                             - header_height(design::RUN_REGULAR)
                             - 32.0
                             - DOCK_HEIGHT
+                            - super::rolling::STRIP_HEIGHT
                             - self.footer_height(),
                         ui.available_width(),
                         self.state.order.len(),
@@ -665,7 +666,10 @@ impl Run {
                     if stat_error.is_none() {
                         self.error_line(ui);
                     }
-                    let room = ui.available_height() - DOCK_HEIGHT - self.footer_height();
+                    let room = ui.available_height()
+                        - DOCK_HEIGHT
+                        - super::rolling::STRIP_HEIGHT
+                        - self.footer_height();
                     let error_room = if stat_error.is_some() && !self.has_disk_conflict() {
                         Density::Read.control() + design::XS
                     } else {
@@ -885,6 +889,17 @@ impl Run {
                     }
                     // Each control band starts with fresh bounds. A child above can widen
                     // its parent's minimum rect, which set_width cannot shrink again.
+                    // The selected row's actions, on one fixed line above the dock: rows never
+                    // move when the selection does.
+                    let strip_rect = Rect::from_min_size(
+                        ui.cursor().min,
+                        vec2(roster_width, super::rolling::STRIP_HEIGHT),
+                    );
+                    ui.scope_builder(egui::UiBuilder::new().max_rect(strip_rect), |ui| {
+                        ui.set_min_height(super::rolling::STRIP_HEIGHT);
+                        let row = self.selected;
+                        self.action_strip(ui, row);
+                    });
                     let dock_rect =
                         Rect::from_min_size(ui.cursor().min, vec2(roster_width, DOCK_HEIGHT));
                     ui.scope_builder(egui::UiBuilder::new().max_rect(dock_rect), |ui| {
@@ -1433,13 +1448,6 @@ impl Run {
     /// `room` is what the list has now, and `lent` what a message under it has taken. A list
     /// that fits leaves that much free at all times, so a message moves none of its rows.
     fn roster(&mut self, ui: &mut egui::Ui, room: f32, lent: f32) {
-        // The selected row's action strip is part of the list, so the rows fit around it.
-        let full = room;
-        let room = if self.strip_shown() {
-            room - super::rolling::STRIP_HEIGHT
-        } else {
-            room
-        };
         let current = self.current();
         let next_up = self.next_up();
         let count = self.state.order.len();
@@ -1499,7 +1507,7 @@ impl Run {
                 ))
             );
         }
-        let list_height = if overflow { full - OVERFLOW_LINE } else { full };
+        let list_height = if overflow { room - OVERFLOW_LINE } else { room };
         let mut clicked = None;
         let mut apply = None;
         let mut rule = None;
@@ -1813,18 +1821,6 @@ impl Run {
                     }
                     if turn == TurnMark::Next {
                         next_rect = Some(rect);
-                    }
-                    if self.selected == index && self.strip_shown() {
-                        let indent = layout.name_left;
-                        ui.horizontal(|ui| {
-                            ui.add_space(indent);
-                            ui.vertical(|ui| {
-                                ui.set_width(width - indent - design::S);
-                                ui.add_space(design::XS);
-                                self.action_strip(ui, index);
-                                ui.add_space(design::S - design::XS);
-                            });
-                        });
                     }
                 }
                 if scroll && let Some(rect) = selected_rect {

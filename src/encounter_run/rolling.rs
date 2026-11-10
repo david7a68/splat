@@ -3,8 +3,7 @@
 //! rolls its damage and every creature's save, shown where each row's AC is. Damage waits
 //! until the DM clicks a target's HP, which applies it as one step of Undo. A roll changes
 //! no participant by itself: it goes to the Log, and Undo keeps it.
-use super::{Command, Phase, Run};
-use crate::design;
+use super::{Command, Run};
 use crate::rolls::{self, Ask, Chip, LineEvent, LineResult, Mode, Outcome, Rolled};
 use eframe::egui;
 use splat::content::Entry;
@@ -247,11 +246,6 @@ impl Run {
         }
     }
 
-    /// A strip shows under the selected row only in live play.
-    pub(super) fn strip_shown(&self) -> bool {
-        matches!(self.state.phase, Phase::Running)
-    }
-
     /// The selection moved: the action belongs to the row it was rolled for.
     pub(super) fn forget_turn_unless(&mut self, row: usize) {
         if self.turn.as_ref().is_some_and(|turn| turn.actor != row) {
@@ -287,8 +281,8 @@ impl Run {
     }
 }
 
-/// The strip's height, for the roster's room.
-pub(super) const STRIP_HEIGHT: f32 = rolls::LINE_HEIGHT + design::S;
+/// The strip's height above the dock, which the roster's room leaves for it.
+pub(super) const STRIP_HEIGHT: f32 = rolls::LINE_HEIGHT;
 
 #[cfg(test)]
 mod tests {
