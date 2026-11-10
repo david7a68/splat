@@ -23,7 +23,7 @@ use uuid::Uuid;
 /// Sheets refresh in the background, so the campaign package needs another look now and then.
 const CHECK_EVERY: Duration = Duration::from_secs(5 * 60);
 
-struct Snapshot {
+pub(crate) struct Snapshot {
     document: CampaignDocument,
     catalogue: Catalogue,
     /// The closure of these selections. It is too slow to calculate on every frame.
@@ -432,56 +432,7 @@ impl CampaignContent {
         self.pending = Some(rx);
         let ctx = ctx.clone();
         std::thread::spawn(move || {
-            let repairs: Vec<Repair> = splat::content::read_directory(&campaign.path)
-                .map(|(_, errors)| {
-                    errors
-                        .into_iter()
-                        .filter_map(|e| {
-                            let text = fs::read_to_string(note_path(&campaign.path, &e.path).ok()?)
-                                .ok()?;
-                            Some((e.path, text.clone(), text))
-                        })
-                        .collect()
-                })
-                .unwrap_or_default();
-            let result =
-                CampaignDocument::load_with_modules(&campaign, &modules).and_then(|document| {
-                    let catalogue = Catalogue::load(&modules, Some(&campaign))?;
-                    let closure = catalogue.closure(&document.selections, document.campaign.id);
-                    Ok(Snapshot {
-                        closure: (document.selections.clone(), closure),
-                        document,
-                        subtitles: crate::library::catalogue_subtitles(&catalogue),
-                        catalogue,
-                    })
-                });
-            let mut old_files: BTreeSet<_> = other_old_files(
-                std::iter::once(campaign.path.clone())
-                    .chain(modules.iter().map(|module| module.path.clone())),
-            )
-            .into_iter()
-            .collect();
-            old_files.extend(
-                repairs
-                    .iter()
-                    .filter(|(path, _, draft)| {
-                        Entry::parse(path, draft)
-                            .err()
-                            .is_some_and(|error| crate::formats_ui::is_old(&error))
-                    })
-                    .map(|(path, _, _)| campaign.path.join(path)),
-            );
-            if let Ok(snapshot) = &result {
-                old_files.extend(
-                    snapshot
-                        .catalogue
-                        .unreadable
-                        .values()
-                        .filter(|note| note.old_layout)
-                        .map(|note| note.path.clone()),
-                );
-            }
-            let _ = tx.send((repairs, old_files.into_iter().collect(), result));
+            let _ = tx.send(load_snapshot(&campaign, &modules));
             ctx.request_repaint();
         });
     }
@@ -2030,6 +1981,64 @@ impl CampaignContent {
                 }
             });
     }
+}
+
+/// Read what the Packages page shows: invalid notes to repair, and the campaign's packages.
+pub(crate) fn load_snapshot(campaign: &Campaign, modules: &[Module]) -> Loaded {
+    let repairs: Vec<Repair> = splat::content::read_folder(&campaign.path)
+        .map(|folder| {
+            folder
+                .errors
+                .iter()
+                .filter_map(|e| {
+                    let path = note_path(&campaign.path, &e.path).ok()?;
+                    let text = match folder.text(&e.path) {
+                        Some(text) => text.to_owned(),
+                        None => fs::read_to_string(path).ok()?,
+                    };
+                    Some((e.path.clone(), text.clone(), text))
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+    let result = CampaignDocument::load_with_modules(campaign, modules).and_then(|document| {
+        let catalogue = Catalogue::load(modules, Some(campaign))?;
+        let closure = catalogue.closure(&document.selections, document.campaign.id);
+        Ok(Snapshot {
+            closure: (document.selections.clone(), closure),
+            document,
+            subtitles: crate::library::catalogue_subtitles(&catalogue),
+            catalogue,
+        })
+    });
+    // Every old-layout file in the campaign and its packages, for one combined warning.
+    let mut old_files: BTreeSet<_> = other_old_files(
+        std::iter::once(campaign.path.clone())
+            .chain(modules.iter().map(|module| module.path.clone())),
+    )
+    .into_iter()
+    .collect();
+    old_files.extend(
+        repairs
+            .iter()
+            .filter(|(path, _, draft)| {
+                Entry::parse(path, draft)
+                    .err()
+                    .is_some_and(|error| crate::formats_ui::is_old(&error))
+            })
+            .map(|(path, _, _)| campaign.path.join(path)),
+    );
+    if let Ok(snapshot) = &result {
+        old_files.extend(
+            snapshot
+                .catalogue
+                .unreadable
+                .values()
+                .filter(|note| note.old_layout)
+                .map(|note| note.path.clone()),
+        );
+    }
+    (repairs, old_files.into_iter().collect(), result)
 }
 
 #[cfg(test)]
