@@ -722,6 +722,17 @@ mod tests {
             short: "Tonight",
             color: colors().muted,
         };
+        draw_with(ctx, width, glances, fight, &source)
+    }
+
+    /// One frame of the bar in `ctx` with this source.
+    fn draw_with(
+        ctx: &egui::Context,
+        width: f32,
+        glances: &[Glance],
+        fight: Option<Uuid>,
+        source: &Source,
+    ) -> Drawn {
         let output = ctx.run(
             egui::RawInput {
                 screen_rect: Some(egui::Rect::from_min_size(
@@ -732,7 +743,7 @@ mod tests {
             },
             |ctx| {
                 egui::CentralPanel::default().show(ctx, |ui| {
-                    show(ui, glances, &source, fight);
+                    show(ui, glances, source, fight);
                 });
             },
         );
@@ -1101,14 +1112,23 @@ mod tests {
     /// Round 14 FT1: the source is measured by itself, after the items are fitted. It shows
     /// whenever the room the items leave holds it, at any level: in full, or else in its short
     /// form, and never overlaps an item or Hide the party. Its accessible name keeps the full
-    /// words. Before, it showed only when the fullest level fitted beside it.
+    /// words. Before, it showed only when the fullest level fitted beside it. It never takes
+    /// room from an item: a source that fits at no width, full or short, leaves every item and
+    /// `N more` exactly where they are with the usual source.
     #[test]
     fn the_source_shows_whenever_the_room_after_the_items_holds_it() {
         let (full, short) = (
             format!("{} From tonight", icons::OK),
             format!("{} Tonight", icons::OK),
         );
-        let (mut below_fullest, mut shortened) = (0, 0);
+        // Wider than the widest bar tested, in both forms.
+        let never = Source {
+            icon: icons::OK,
+            word: "Never fits ".repeat(300),
+            short: Box::leak("Never ".repeat(400).into_boxed_str()),
+            color: colors().muted,
+        };
+        let (mut below_fullest, mut shortened, mut compared) = (0, 0, 0);
         for (count, bloodied, temp) in [(5, 3, 2), (5, 0, 0), (6, 6, 6)] {
             let glances = party(count, bloodied, temp);
             let drawn: Vec<_> = (30..=200)
@@ -1128,6 +1148,27 @@ mod tests {
                 short_width < full_width,
                 "{case}: the short form is shorter"
             );
+            // First, at every width: the items and `N more` are where they are with a source
+            // that never fits.
+            for (bar, at) in &drawn {
+                let ctx = egui::Context::default();
+                design::theme::install(&ctx);
+                ctx.enable_accesskit();
+                let without = draw_with(&ctx, *bar, &glances, None, &never);
+                assert!(
+                    without.source.is_none()
+                        && without.source_words.is_none()
+                        && without.items == at.items
+                        && without.more_rect == at.more_rect,
+                    "{case}: the source takes no room from the items at {bar}: with it \
+                     {:?} {:?}, with one that never fits {:?} {:?}",
+                    at.items,
+                    at.more_rect,
+                    without.items,
+                    without.more_rect
+                );
+                compared += usize::from(!at.items.is_empty());
+            }
             let fullest = drawn.last().unwrap().1.parts();
             let mut shown = 0;
             for (bar, at) in &drawn {
@@ -1172,6 +1213,8 @@ mod tests {
                 "{case}: the narrowest bar has no room for the source"
             );
         }
+        // The comparison above saw real items, not two empty bars.
+        assert!(compared > 400, "{compared} bars with items compared");
         assert!(
             below_fullest > 10 && shortened > 3,
             "the source shows at levels below the fullest, in short form where full words do \
