@@ -420,7 +420,9 @@ or folder choice states which file or folder an encounter will keep or use, in `
 `XS` gap below its own action. Library, World and Lookup draw the choices and these lines through
 `message_with_actions`, so they start at the message text edge, not at the warning bar. The Library reader
 draws the warning and its choices after the title, inside its scroll area, so they scroll with the entry;
-Edit Markdown keeps them above the editor.
+Edit Markdown keeps them above the editor. A file's warnings share this one place: the first-heading
+warning and its `Use <name>` action come directly above the duplicate warning, so no warning moves the
+title. `Undo heading change` takes the same place as a `line_start` quiet action.
 An `L` gap separates choices. Name the folder when filenames match. Making an entry separate also sets
 its name and matching first heading to its file stem. Other actions name encounters whose source will
 change; results explaining which entry an encounter will use are Small muted text below the action.

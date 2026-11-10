@@ -1748,11 +1748,17 @@ pub fn package_rename(d: &mut Driver<'_>) {
     );
     d.click("Use Watch Ashfall");
     d.wait_for_text("Undo heading change");
+    // An unsaved fix changes every later step, so this check stops the scenario on failure.
+    let saved = fs::read_to_string(&renamed_path)
+        .unwrap()
+        .contains("# Watch Ashfall");
+    assert!(
+        saved,
+        "iter-16-E-FD7-saved: Use Watch Ashfall in the reader did not save the fixed heading"
+    );
     d.observe(
         "iter-16-E-FD7-saved",
-        fs::read_to_string(&renamed_path)
-            .unwrap()
-            .contains("# Watch Ashfall"),
+        saved,
         "Use Watch Ashfall in the reader saves the fixed heading to the file",
     );
     d.observe_both(
