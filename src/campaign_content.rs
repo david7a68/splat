@@ -1062,29 +1062,37 @@ impl CampaignContent {
                 } else {
                     format!("Write {path} again")
                 };
-                let pressed = design::locked(ui, manifest_locked, |ui| {
-                    design::message_with_action(
-                        ui,
-                        Tone::Warning,
-                        &format!(
-                            "{}: {problem}{}",
-                            module.name,
-                            if problem == crate::content_workspace::DELETED_MANIFEST {
-                                ""
-                            } else {
-                                " Entries are still available."
-                            }
-                        ),
-                        &label,
-                    )
-                });
-                if exists {
-                    ui.label(
-                        Type::Small
-                            .rich(ui, "Keeps the package name and its links. Replaces the other contents of Package.md, including its description. The entries stay unchanged.")
-                            .color(colors().muted),
-                    );
-                }
+                let message = format!(
+                    "{}: {problem}{}",
+                    module.name,
+                    if problem == crate::content_workspace::DELETED_MANIFEST {
+                        ""
+                    } else {
+                        ". Entries are still available."
+                    }
+                );
+                let mut open = false;
+                let pressed = if exists {
+                    design::message_with_actions(ui, Tone::Warning, &message, |ui| {
+                        let mut pressed = false;
+                        ui.horizontal_wrapped(|ui| {
+                            open = Action::secondary("Open in Library").show(ui).clicked();
+                            pressed = design::locked(ui, manifest_locked, |ui| {
+                                Action::secondary(&label).show(ui).clicked()
+                            });
+                        });
+                        ui.label(
+                            Type::Small
+                                .rich(ui, "Keeps the package name and its links. Replaces the other contents of Package.md, including its description. The entries stay unchanged.")
+                                .color(colors().muted),
+                        );
+                        pressed
+                    })
+                } else {
+                    design::locked(ui, manifest_locked, |ui| {
+                        design::message_with_action(ui, Tone::Warning, &message, &label)
+                    })
+                };
                 if pressed {
                     match crate::content_workspace::ManifestWrite::write(module) {
                         Ok(write) => {
@@ -1094,7 +1102,7 @@ impl CampaignContent {
                         Err(error) => self.error = Some(error),
                     }
                 }
-                if exists && Action::quiet("Open in Library").show(ui).clicked() {
+                if open {
                     ui.ctx().data_mut(|data| {
                         data.insert_temp(
                             egui::Id::new("open_library_repair"),
