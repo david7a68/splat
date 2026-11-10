@@ -4983,11 +4983,7 @@ pub mod session_notes {
         d.expect("Copied");
         d.expect("MENTIONED IN");
         d.state_prepared("timeline-event", Sizes::AllAndHiDpi, |d| {
-            let label_visible = d.nodes().iter().any(|node| {
-                node.role == egui::accesskit::Role::Label
-                    && node.name.eq_ignore_ascii_case("Title")
-                    && node.fully_in_view()
-            });
+            let label_visible = d.visible_text("TITLE") || d.visible_text("Title");
             d.observe(
                 "iter-2-C-FT12",
                 label_visible,
@@ -6063,9 +6059,17 @@ pub mod session_recording {
         );
         d.expect("Remove speech key (OpenAI)");
         d.state_prepared("key-for-another-service", Sizes::All, |d| {
-            d.scroll_until(pos2(600.0, 400.0), "Remove transcript and summary key (OpenAI): LLM API key", 12);
+            d.scroll_until(
+                pos2(600.0, 400.0),
+                "Remove transcript and summary key (OpenAI): LLM API key",
+                12,
+            );
             d.expect("Remove transcript and summary key (OpenAI)");
-            d.observe("iter-2-C-AT5", d.has_containing("Remove transcript and summary key (OpenAI)"), "The key removal action names the transcript and summary task");
+            d.observe(
+                "iter-2-C-AT5",
+                d.has_containing("Remove transcript and summary key (OpenAI)"),
+                "The key removal action names the transcript and summary task",
+            );
         });
         d.click("LLM service");
         d.click("Codex CLI, GPT-6.1 Sol");

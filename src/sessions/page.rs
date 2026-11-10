@@ -825,7 +825,15 @@ fn compact_plan_for_reading(
                 .any(|fight| fight.name.eq_ignore_ascii_case(name))
         })
         .count();
-    let group_count = lines.len() - fight_count;
+    // The working plan lists a linked group once, even when its link is repeated.
+    let group_count = linked_names(&plan)
+        .iter()
+        .filter(|name| {
+            !fights
+                .iter()
+                .any(|fight| fight.name.eq_ignore_ascii_case(name))
+        })
+        .count();
     let counts = [
         (fight_count, "fight", "fights"),
         (group_count, "group", "groups"),
@@ -6866,7 +6874,7 @@ mod tests {
         for (links, count) in [
             ("- [[ash pack|The wolves]]", "1 group"),
             ("- [[Ash Pack]]\n- [[Bridge Ambush]]", "1 fight and 1 group"),
-            ("- [[Ash Pack]]\n- [[Ash Pack]]", "2 groups"),
+            ("- [[Ash Pack]]\n- [[Ash Pack]]", "1 group"),
         ] {
             let source = format!(
                 "## Plan for tonight\n\n{links}\n\n## What happened\n\nWe reached the mill.\n"

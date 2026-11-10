@@ -517,6 +517,8 @@ entries. Changing the scope never changes the active campaign. Editing, save sta
 `Copy to…` stay in the same page. Package actions are inline. The word `module` is gone
 from the interface.
 
+Missing dependencies lead with the owner and retained member name, such as Lost Patrol needs Scout, which was deleted. If no name is known, say Lost Patrol needs a creature that cannot be found. Each issue offers a repair link to the referring file; the raw reference stays in Technical details.
+
 ## Icons
 
 `egui-phosphor` (MIT, Phosphor Regular). `.gitignore` forbids committed images, so all
@@ -612,7 +614,7 @@ Every reader resolves `[[Name]]`, `[[Name#Heading]]` and `[[Name|text]]` against
 
 A package manifest opens from About followed by its name. It is not an entry row. Creation forms show their destination path. Creating a package opens its first entry form. Folder suggestions include existing folders, and saving can create a new subfolder. Reader pictures are 64 px thumbnails beside the title and meta line. Run-in titles use bold text. Sheet tabs use Small as a second level.
 
-An unavailable package keeps its last known display name in the campaign selection. Older selections without a name say A package that is no longer on this computer. The message counts affected campaign entries when the selected references are known, with Remove from this campaign and Find the folder… beside it. The folder picker checks the package identity before restoring its registration. Only Technical details shows its ID. Missing dependencies lead with the owner and retained member name, such as Lost Patrol needs Scout, which was deleted. If no name is known, say Lost Patrol needs a creature that cannot be found. Each issue offers a repair link to the referring file; the raw reference stays in Technical details.
+An unavailable package keeps its last known display name in the campaign selection. Older selections without a name say A package that is no longer on this computer. The message counts affected campaign entries when the selected references are known, with Remove from this campaign and Find the folder… beside it. The folder picker checks the package identity before restoring its registration. Only Technical details shows its ID.
 
 Package and campaign readers keep their owner status in both Read and Edit Markdown.
 Their file line offers Show file; entries in a vault also offer Edit in Obsidian.
