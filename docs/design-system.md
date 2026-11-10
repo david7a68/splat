@@ -158,8 +158,9 @@ eye during long sessions.
 | HP | `hp_bar`, `hp_readout`, `hp_state` | Fixed slots; separate temporary HP |
 | Empty state | `empty_state` | Icon, serif title, purpose and one next step at the top of an empty pane or page, with normal padding |
 | Group heading | `group_heading` | `Label` capitals and muted, nonzero count; no rule; serif headings belong to readers and stat blocks |
+| Submenu | `menu_submenu` | Match quiet Read actions: `S` horizontal padding, Strong type and Read height |
 | Row menu | `row_menu` | Quiet `⋯` at the right, named `More actions for <name>`; holds Remove and Delete |
-| Add strip | `hanging_add_strip` | `Add` in its own Label column; quiet icon-and-word buttons wrap at the first button's left edge: Fight, Group (plan only), Day, Long rest, Short rest, Travel, Major event |
+| Add strip | `hanging_add_strip` | `Add` in its own Label column; one line of quiet icon-and-word buttons. Show all seven actions when they fit. Otherwise keep Fight, Group (plan only) and Long rest visible; put Day, Short rest, Travel and Major event in one `More` menu. Let this row wrap only when those visible controls cannot fit |
 | Message | `message`, `message_with_action`, `Tone` | Inline icon and bar; cap the notice at `LIST_MEASURE`; actions follow text after an `L` gap or wrap below, aligned with the text; measure the whole action with padding; move it below and align it with the text if it cannot fit; actions without icons use a secondary border |
 | Side panel | `side_panel_width`, `panel_header` | One width rule for Lookup, Notes and the run; separate participant and fight tabs |
 | Column | `Column::left / right / panel` | Rail, page lists and panels; inner-edge drag handle; natural width until dragged or moved with keys, then saved width across restarts; preserve page room and `RUN_LIST_KEEPS`; adjacent content reaches the column edge, with text measured inside it |
@@ -242,6 +243,8 @@ have Edit in Obsidian. An unreadable entry shows `Cannot be read` once below its
 out of prose. Empty readers say `No entry open` or `No note open`, then “Choose one from the list, or make a
 new one.” Library omits the creation offer without a campaign or package destination.
 
+Ordinary bold and bold italic keep the prose colour and emphasis. A bold phrase links to Lookup only when
+it resolves to one entry. Explicit Markdown and wiki links stay interactive.
 Reader links use accent text and an underline. Library links open in place; other readers open them in Lookup.
 Every reader resolves `[[Name]]`, `[[Name#Heading]]` and `[[Name|text]]` against World notes and entries the
 campaign can use. Duplicate names open a chooser. Missing names keep their words, a dotted underline and `Not
@@ -753,7 +756,10 @@ action on the name line, fixed right-aligned action slot and separate menu slot.
 align with the name and use Timeline form parts. A caret and accessible expanded state mark open rows; a
 hairline follows details after `S`. New events stay closed with kind as title. Open rows show Title and Notes;
 duration and place stay on Timeline. The Add strip stays directly below Tonight (or This session), above
-messages and scrolling rows. It stays in place when messages or rows change. Empty plans use empty_state
+messages and scrolling rows. Fight, Group and Long rest stay visible. If all seven actions do not fit on one line,
+More holds Day, Short rest, Travel and Major event. If the visible controls and More cannot fit, that one row
+may wrap at the first action's left edge. Long rest stays one click away (T11.2). Timeline uses the same width rule.
+It stays in place when messages or rows change. Empty plans use empty_state
 below the strip. Add-strip messages stay below Add. In notes ends at the button
 text's inner edge.
 

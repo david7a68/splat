@@ -3362,6 +3362,25 @@ pub mod gallery {
         d.click("Markdown");
         d.state("markdown", Sizes::AllAndHiDpi);
         d.click(COMPONENTS);
+        d.scroll_until(pos2(600.0, 300.0), "Group actions", 30);
+        d.state_prepared("submenu-spacing", Sizes::All, |d| {
+            d.press(Key::Escape);
+            d.click("Group actions");
+            d.expect("Move to…");
+            let edges = (
+                d.painted_left("Move to…"),
+                d.painted_left("Make available to any encounter"),
+            );
+            d.observe(
+                "iter-4-A-FD-13",
+                edges
+                    .0
+                    .zip(edges.1)
+                    .is_some_and(|(a, b)| (a - b).abs() < 1.0),
+                format!("The submenu and quiet menu action share a text edge: {edges:?}"),
+            );
+        });
+        d.press(Key::Escape);
         d.scroll_until(pos2(600.0, 300.0), "More actions for Bridge Ambush", 30);
         d.click("More actions for Bridge Ambush");
         d.state("row-menu", Sizes::Default);
@@ -3496,7 +3515,7 @@ pub mod column_resize {
             format!("Longest line in a wide window: {write} in Write, {read} in Read"),
         );
         d.state("session-read-fills-its-column", Sizes::All);
-        d.click("Add Major event");
+        d.click_add_event("Add Major event");
         d.wait_for_text("Major event added to Session");
         d.wait_for_text("Add to notes");
         let action = d
@@ -5011,13 +5030,20 @@ pub mod session_notes {
             d.wait_for_text("Bridge Ambush");
         });
         d.press(Key::Escape);
+        d.state_prepared("plan-more-add-actions", Sizes::All, |d| {
+            d.press(Key::Escape);
+            d.click("More Add actions");
+            d.expect(ADD_SHORT_REST);
+            d.expect(ADD_LONG_REST);
+        });
+        d.press(Key::Escape);
         d.begin_task();
-        d.click(ADD_LONG_REST);
+        d.click_add_event(ADD_LONG_REST);
         d.wait_for_text("Long rest added. Everyone starts the next fight at full.");
         d.goal_within("T11.2", "put a long rest on the timeline", 2);
         d.expect("Long rest added. Everyone starts the next fight at full.");
         d.state("session-event-added", Sizes::Default);
-        d.click(ADD_SHORT_REST);
+        d.click_add_event(ADD_SHORT_REST);
         d.observe(
             "T11.2",
             d.has_containing("Short rest added to Session 1."),
@@ -5035,7 +5061,7 @@ pub mod session_notes {
         d.click("More actions for Short rest");
         d.click("Remove this event");
         d.click(NAV_SESSIONS);
-        d.click(ADD_TRAVEL);
+        d.click_add_event(ADD_TRAVEL);
         d.observe(
             "iter-2-S2",
             !d.has("Title"),
@@ -5055,7 +5081,7 @@ pub mod session_notes {
             "A new event starts with its kind as its title",
         );
         d.state("plan-event-title", Sizes::Default);
-        d.click(ADD_EVENT);
+        d.click_add_event(ADD_EVENT);
         d.state("session-events", Sizes::Default);
         d.click("Add to notes: Long rest");
         d.expect("In notes");
@@ -5105,7 +5131,7 @@ pub mod session_notes {
         d.expect("Everyone at full");
         d.state("timeline-session-events", Sizes::All);
         d.check_tab_order("timeline");
-        d.click(ADD_DAY);
+        d.click_add_event(ADD_DAY);
         d.type_text("Harvest Eve");
         // A day opens what follows it, so move it to the top.
         d.scroll_until(pos2(850.0, 550.0), "Place this event after", 12);
@@ -7917,7 +7943,7 @@ pub mod session_plan {
         );
         close_run(d);
         show_plan(d);
-        d.click("Add Long rest");
+        d.click_add_event("Add Long rest");
         d.observe(
             "S4",
             d.has("Undo add") && !d.has("Undo everyone to full"),
@@ -7929,7 +7955,7 @@ pub mod session_plan {
             !d.has("Everyone at full"),
             "Undo removes both the rest and the full-HP ruling",
         );
-        d.click("Add Long rest");
+        d.click_add_event("Add Long rest");
         assert!(d.has("Long rest added. Everyone starts the next fight at full."));
         d.state("long-rest-restores", Sizes::All);
         d.click("Long rest");
@@ -8004,11 +8030,11 @@ pub mod session_plan {
         d.click("Long rest");
         d.click("Mark not at full");
         d.click(NAV_TIMELINE);
-        d.click("Add Long rest");
+        d.click_add_event("Add Long rest");
         d.expect("Long rest added. Everyone starts the next fight at full.");
         d.click("Undo add");
         assert!(!crate::timeline::party_state(&d.app_mut().timeline.events, session).rested);
-        d.click("Add Long rest");
+        d.click_add_event("Add Long rest");
         d.expect("Everyone at full");
         assert!(d.has("Long rest added. Everyone starts the next fight at full."));
         d.observe_both(

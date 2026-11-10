@@ -94,27 +94,30 @@ pub fn quick_add(
     first: impl FnOnce(&mut egui::Ui),
 ) -> Option<String> {
     let blocked = book.unreadable.is_some();
-    let mut added = None;
-    design::hanging_add_strip(ui, |ui| {
-        first(ui);
-        for &kind in kinds {
-            if Action::quiet(kind.word())
+    let names: Vec<_> = kinds
+        .iter()
+        .map(|kind| format!("Add {}", kind.word()))
+        .collect();
+    let actions = kinds
+        .iter()
+        .zip(&names)
+        .map(|(kind, name)| {
+            Action::quiet(kind.word())
                 .icon(kind.icon())
-                .name(&format!("Add {}", kind.word()))
+                .name(name)
                 .density(Density::Read)
                 .blocked_if(blocked, "The timeline file must be repaired first.")
-                .show(ui)
-                .clicked()
-            {
-                added = Some(if kind == Kind::LongRest {
-                    book.add_long_rest(session)
-                } else {
-                    book.add(kind, session)
-                });
-            }
+        })
+        .collect();
+    let always_visible = kinds.iter().position(|kind| *kind == Kind::LongRest);
+    design::hanging_add_strip(ui, first, actions, always_visible).map(|index| {
+        let kind = kinds[index];
+        if kind == Kind::LongRest {
+            book.add_long_rest(session)
+        } else {
+            book.add(kind, session)
         }
-    });
-    added
+    })
 }
 
 pub enum RestRulingAction {

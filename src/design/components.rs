@@ -1913,23 +1913,75 @@ pub fn focus_and_select(ui: &Ui, id: Id, text: &str) {
     }
 }
 
-/// The shared Add strip. Callers supply quiet, worded actions in their screen's order.
-pub fn add_strip(ui: &mut Ui, actions: impl FnOnce(&mut Ui)) {
-    ui.horizontal_wrapped(|ui| {
+/// Keep frequent Add actions visible. Other actions share More when space is short.
+/// `always_visible` names an extra action that stays beside the caller's frequent actions.
+/// Returns the chosen action's original index, whether inline or in the menu.
+pub fn hanging_add_strip(
+    ui: &mut Ui,
+    first: impl FnOnce(&mut Ui),
+    actions: Vec<Action<'_>>,
+    always_visible: Option<usize>,
+) -> Option<usize> {
+    let mut chosen = None;
+    ui.horizontal(|ui| {
         ui.spacing_mut().item_spacing.x = XS;
         ui.label(Type::Label.rich(ui, "Add").color(colors().muted));
-        actions(ui);
-    });
-}
-
-/// The Add label has its own column, so wrapped actions share one left edge.
-pub fn hanging_add_strip(ui: &mut Ui, actions: impl FnOnce(&mut Ui)) {
-    add_strip(ui, |ui| {
         ui.horizontal_wrapped(|ui| {
             ui.spacing_mut().item_spacing.x = XS;
-            actions(ui);
+            first(ui);
+            let width = actions
+                .iter()
+                .map(|action| action.natural_width(ui))
+                .sum::<f32>()
+                + XS * actions.len().saturating_sub(1) as f32;
+            if width <= ui.available_size_before_wrap().x {
+                for (index, action) in actions.into_iter().enumerate() {
+                    if action.show(ui).clicked() {
+                        chosen = Some(index);
+                    }
+                }
+            } else {
+                let mut overflow = Vec::new();
+                for (index, action) in actions.into_iter().enumerate() {
+                    if Some(index) == always_visible {
+                        if action.show(ui).clicked() {
+                            chosen = Some(index);
+                        }
+                    } else {
+                        overflow.push((index, action));
+                    }
+                }
+                let response = Action::quiet(&format!("More {}", icons::DOWN))
+                    .name("More Add actions")
+                    .density(Density::Read)
+                    .show(ui);
+                egui::Popup::menu(&response).show(|ui| {
+                    for (index, action) in overflow {
+                        if action.show(ui).clicked() {
+                            chosen = Some(index);
+                            ui.close();
+                        }
+                    }
+                });
+            }
         });
     });
+    chosen
+}
+
+/// A submenu with the same left inset, type and height as a quiet Read action.
+#[allow(dead_code, reason = "Encounter group menus adopt this helper in parallel package B.")]
+pub fn menu_submenu<R>(
+    ui: &mut Ui,
+    word: &str,
+    contents: impl FnOnce(&mut Ui) -> R,
+) -> egui::InnerResponse<Option<R>> {
+    ui.scope(|ui| {
+        ui.spacing_mut().button_padding = vec2(S, XS);
+        ui.spacing_mut().interact_size.y = Density::Read.control();
+        ui.menu_button(Type::Strong.rich(ui, word), contents)
+    })
+    .inner
 }
 
 /// Sheet tabs keep one line. Less frequent pages move to a named menu when needed.

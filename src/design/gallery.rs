@@ -336,22 +336,46 @@ pub fn components(ui: &mut egui::Ui) {
         });
     });
     let _ = draft_discarded(ui, "Fireball");
-    hanging_add_strip(ui, |ui| {
-        use crate::timeline::Kind;
-        for (word, icon) in [
-            ("Fight", icons::ENCOUNTERS),
-            ("Group", icons::GROUP),
-            ("Day", Kind::Day.icon()),
-            ("Long rest", Kind::LongRest.icon()),
-            ("Short rest", Kind::ShortRest.icon()),
-            ("Travel", Kind::Travel.icon()),
-            ("Major event", Kind::Event.icon()),
-        ] {
-            let _ = Action::quiet(word)
-                .icon(icon)
+    use crate::timeline::Kind;
+    hanging_add_strip(
+        ui,
+        |ui| {
+            for (word, icon) in [("Fight", icons::ENCOUNTERS), ("Group", icons::GROUP)] {
+                let _ = Action::quiet(word)
+                    .icon(icon)
+                    .density(Density::Read)
+                    .show(ui);
+            }
+        },
+        [
+            Kind::Day,
+            Kind::LongRest,
+            Kind::ShortRest,
+            Kind::Travel,
+            Kind::Event,
+        ]
+        .iter()
+        .map(|kind| {
+            Action::quiet(kind.word())
+                .icon(kind.icon())
+                .density(Density::Read)
+        })
+        .collect(),
+        Some(1),
+    );
+    let menu = Action::quiet("Group actions").show(ui);
+    egui::Popup::menu(&menu).show(|ui| {
+        menu_submenu(ui, "Move to…", |ui| {
+            let _ = Action::quiet("Bridge Ambush")
                 .density(Density::Read)
                 .show(ui);
-        }
+        });
+        let _ = Action::quiet("Make available to any encounter")
+            .density(Density::Read)
+            .show(ui);
+        let _ = Action::quiet("Delete group…")
+            .density(Density::Read)
+            .show(ui);
     });
     design_group(ui, "Paused runs");
     ui.horizontal_top(|ui| {
