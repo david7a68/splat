@@ -780,9 +780,7 @@ impl CampaignContent {
                     .then_some("Close the run before converting files."),
                 |ui| design::message_with_action(ui, Tone::Warning, &message, "Convert files…"),
             ) {
-                // Open with every listed file's owner checked, so the defaults convert the
-                // files that block Save too.
-                self.layouts.scan_paths(campaigns, &old.clone());
+                self.layouts.scan(campaigns);
             }
         }
         for (path, baseline, draft) in &mut self.repairs {
