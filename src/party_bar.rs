@@ -103,7 +103,9 @@ pub enum Choice {
 
 /// One item's parts, measured once with every stat. The fit keeps the first few stats.
 struct Item {
-    /// The first name, so that the DM need not know each portrait. It goes after every stat.
+    /// The portrait goes after every stat, before the name, so that words name each item.
+    portrait: bool,
+    /// The first name, so that the DM need not know each portrait. It goes after the portrait.
     name: Option<Arc<egui::Galley>>,
     hp_width: f32,
     temp: Option<Arc<egui::Galley>>,
@@ -149,6 +151,7 @@ impl Item {
             })
             .collect();
         Self {
+            portrait: true,
             name,
             hp_width,
             temp,
@@ -160,8 +163,11 @@ impl Item {
     /// The width with the first `shown` stats.
     fn width(&self, shown: usize) -> f32 {
         design::XS
-            + PORTRAIT
-            + design::XS
+            + if self.portrait {
+                PORTRAIT + design::XS
+            } else {
+                0.0
+            }
             + self.name.as_ref().map_or(0.0, |g| g.size().x + design::S)
             + self.hp_width
             + self.temp.as_ref().map_or(0.0, |g| design::XS + g.size().x)
@@ -193,7 +199,7 @@ pub fn show(ui: &mut egui::Ui, glances: &[Glance], source: &Source) -> Option<Ch
         .size()
         .x;
     let mut items: Vec<Item> = glances.iter().map(|g| Item::measure(ui, g)).collect();
-    let needed = |shown: usize| {
+    let needed = |items: &[Item], shown: usize| {
         items.iter().map(|item| item.width(shown)).sum::<f32>()
             + gap * items.len().saturating_sub(1) as f32
     };
@@ -205,16 +211,25 @@ pub fn show(ui: &mut egui::Ui, glances: &[Glance], source: &Source) -> Option<Ch
     let most = items.iter().map(|item| item.stats.len()).max().unwrap_or(0);
     let shown = (0..=most)
         .rev()
-        .find(|&shown| needed(shown) <= room)
+        .find(|&shown| needed(&items, shown) <= room)
         .unwrap_or(0);
-    let show_source = needed(shown) <= with_source;
+    let show_source = needed(&items, shown) <= with_source;
     let room = if show_source { with_source } else { room };
-    // Names give way last, all together, and only when no stat is left. Hover keeps them.
-    let names = needed(shown) <= room;
+    // Then portraits give way, all together, so that the words still name each item. Names go
+    // last, and only when they do not fit even without portraits; then the portraits come back.
+    // Hover keeps both.
     for item in &mut items {
         item.stats.truncate(shown);
-        if !names {
-            item.name = None;
+    }
+    if needed(&items, shown) > room {
+        for item in &mut items {
+            item.portrait = false;
+        }
+        if needed(&items, shown) > room {
+            for item in &mut items {
+                item.portrait = true;
+                item.name = None;
+            }
         }
     }
     ui.horizontal_centered(|ui| {
@@ -283,10 +298,12 @@ fn paint(ui: &mut egui::Ui, glance: &Glance, item: Item, source: &str) -> egui::
     }
     let y = rect.center().y;
     let mut x = rect.left() + design::XS;
-    let picture =
-        egui::Rect::from_min_size(pos2(x, y - PORTRAIT / 2.0), egui::Vec2::splat(PORTRAIT));
-    crate::art::portrait(ui, picture, glance.portrait.as_deref(), &glance.name, None);
-    x = picture.right() + design::XS;
+    if item.portrait {
+        let picture =
+            egui::Rect::from_min_size(pos2(x, y - PORTRAIT / 2.0), egui::Vec2::splat(PORTRAIT));
+        crate::art::portrait(ui, picture, glance.portrait.as_deref(), &glance.name, None);
+        x = picture.right() + design::XS;
+    }
     if let Some(name) = item.name {
         let width = name.size().x;
         painter.galley(pos2(x, y - 1.0 - name.size().y / 2.0), name, c.text);

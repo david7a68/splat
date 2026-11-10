@@ -424,6 +424,15 @@ fn recording_destination(settings: &ProcessingSettings, recording: &Recording) -
     }
 }
 
+/// A clean result: the same status in the session list as on the recording's own row.
+fn processed_clean() -> Status<'static> {
+    Status {
+        icon: icons::OK,
+        word: "Processed",
+        color: colors().result.success,
+    }
+}
+
 pub fn processed_warning() -> Status<'static> {
     Status {
         icon: icons::WARN,
@@ -3207,19 +3216,20 @@ impl Sessions {
                         };
                         // A warned result is a status like its siblings: icon, word and colour.
                         // The full words stay in hover and in the row's name.
+                        // A clean result is a status too, in the success colour.
                         let warned = state.is_none() && result == Some(note.id) && self.job_warned;
                         let state = if warned {
                             Some(Status {
                                 word: "Processed",
                                 ..processed_warning()
                             })
+                        } else if state.is_none() && result == Some(note.id) {
+                            Some(processed_clean())
                         } else {
                             state
                         };
                         let detail = if let Some(state) = state {
                             format!("{} {}", state.icon, state.word)
-                        } else if result == Some(note.id) {
-                            "Processed".to_owned()
                         } else {
                             note.date.clone()
                         };
@@ -4970,7 +4980,8 @@ impl Sessions {
                 (status.icon, status.word, status.color)
             }
         } else if recording.summary {
-            (icons::OK, "Processed", c.result.success)
+            let status = processed_clean();
+            (status.icon, status.word, status.color)
         } else if recording.transcript {
             (icons::DRAFT, "Partly processed", c.muted)
         } else {
@@ -5250,22 +5261,27 @@ impl Sessions {
             });
         }
         if self.confirm_again.as_deref() == Some(recording.path.as_path()) {
-            design::message(
-                ui,
-                Tone::Info,
-                &format!(
-                    "This sends the raw transcript, this session's name, notes and events to {} twice. The audio is not sent again. It replaces the summary, the clean transcript and what the check changed. Events you added stay on the timeline.",
-                    processing_llm(settings)
-                ),
-            );
-            ui.horizontal(|ui| {
-                if Action::secondary("Not now").show(ui).clicked() {
-                    self.confirm_again = None;
-                }
-                ui.add_space(design::L);
-                process = Action::destructive("Replace the results")
-                    .show(ui)
-                    .clicked();
+            // Processing help keeps the reader's measure, as the destination line above does.
+            // Not now and Replace the results stay together below the message.
+            ui.scope(|ui| {
+                ui.set_max_width(ui.available_width().min(design::READER_MEASURE));
+                design::message(
+                    ui,
+                    Tone::Info,
+                    &format!(
+                        "This sends the raw transcript, this session's name, notes and events to {} twice. The audio is not sent again. It replaces the summary, the clean transcript and what the check changed. Events you added stay on the timeline.",
+                        processing_llm(settings)
+                    ),
+                );
+                ui.horizontal(|ui| {
+                    if Action::secondary("Not now").show(ui).clicked() {
+                        self.confirm_again = None;
+                    }
+                    ui.add_space(design::L);
+                    process = Action::destructive("Replace the results")
+                        .show(ui)
+                        .clicked();
+                });
             });
         }
         if stop {

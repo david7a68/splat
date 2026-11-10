@@ -131,9 +131,11 @@ by an accent line. Left and Right move its edge by `L`. Home restores its natura
 window again. The chosen width is saved after a drag or key press. Each handle has an accessible name and
 key help. At the table, the rail uses its natural width; a wider desk width stays saved.
 
-Lookup, Notes, Settings and the account line keep fixed places at the rail's bottom edge. Rail statuses
-(recording, processing, unsaved words, sync) fill one slot that grows upward above Lookup, so a status that
-comes, goes or wraps never moves these targets. Tab order still follows reading order.
+Lookup, Notes, Settings and the account line keep fixed places at the rail's bottom edge. The account line
+has a slot of two `Small` lines below Settings; a one-line status leaves the second line empty, so an account
+status that wraps never moves Lookup, Notes or Settings. Rail statuses (recording, processing, unsaved words,
+sync) fill one slot that grows upward above Lookup, so a status that comes, goes or wraps never moves these
+targets. Tab order still follows reading order.
 
 ## Widgets
 
@@ -935,8 +937,9 @@ player's first name in `Small` text colour, an `hp_readout` at `Numeral` over `S
 the item's bottom edge, temporary HP with its shield, the run's `Bloodied` or `0 HP` icon, word and colour, then stats in `Small`: a muted label, a space and
 the value, in the Party list's order `AC`, `Per`, `Ins`, `DC`. `DC` is left out for a player with no spell
 save DC. Items sit `M` apart, with no boxes. All items show the same number of stats; when they do not fit,
-the source status gives way first, then stats drop from the end, then the names go together. HP and its
-state word stay. Hover shows the full name in `Strong`, then one fact to a muted `Small` line: HP, AC and DC, passive scores, conditions, and the
+the source status gives way first, then stats drop from the end, then the portraits go together, so words
+still name each item. Only when first names do not fit even without portraits do the names go, and the
+portraits come back. HP, temporary HP and the state word stay. Hover shows the full name in `Strong`, then one fact to a muted `Small` line: HP, AC and DC, passive scores, conditions, and the
 source. Hover fill and the 2 px focus ring use `RADIUS_CONTROL`. A click opens the sheet on Party.
 
 ### Timeline
@@ -1057,10 +1060,12 @@ again. With a partial transcript, name remaining audio parts and destination.
 Reserve Process again… for replacing results, in the row menu above Delete… with inline confirmation. One info
 message names transcript and context sent to the LLM and says audio is not sent again. Confirmation uses
 secondary Not now and red Replace the results; Keep the recording is secondary. Processing help keeps
-READER_MEASURE. Clean and warned results say Processed in the rail until a later recording or processing replaces the result.
+READER_MEASURE; the Process again message sits in a scope capped at it, with Not now and Replace the results
+together below. Clean and warned results say Processed in the rail until a later recording or processing replaces the result.
 Opening the session acknowledges the completion notice and keeps the result and its warning. Warnings retain icon and colour. The
 session list shows the warning icon and Processed in warning colour, then ` · Playing` on the same line, as
-its sibling states do; the recording row, list hover and accessible name use Processed, with a warning. On the timeline is a success link for added events
+its sibling states do. A clean result is a status too: the check icon and Processed in the success colour, as
+on the recording row; the recording row, list hover and accessible name use Processed, with a warning. On the timeline is a success link for added events
 and transcript markers. Marker text takes its content width, capped at READER_MEASURE. One action column
 sits an L gap after it. Add and On the timeline align left in that column. Row rules span only the combined width. The After placement line does not affect that column’s width and wraps below the facts.
 
