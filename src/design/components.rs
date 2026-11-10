@@ -1970,7 +1970,10 @@ pub fn hanging_add_strip(
 }
 
 /// A submenu with the same left inset, type and height as a quiet Read action.
-#[allow(dead_code, reason = "Encounter group menus adopt this helper in parallel package B.")]
+#[allow(
+    dead_code,
+    reason = "Encounter group menus adopt this helper in parallel package B."
+)]
 pub fn menu_submenu<R>(
     ui: &mut Ui,
     word: &str,
