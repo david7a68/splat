@@ -63,6 +63,19 @@ fn words<'a>(value: &'a Value, key: &str) -> &'a str {
     value.get(key).and_then(Value::as_str).unwrap_or("")
 }
 
+fn unread_change(term: &str) -> String {
+    let example = term.split_whitespace().next().and_then(|stat| {
+        STATS
+            .iter()
+            .find(|(label, _)| label.eq_ignore_ascii_case(stat))
+    });
+    let repair = example.map_or_else(
+        || "Write a change such as HP +5.".to_owned(),
+        |(stat, _)| format!("Use a number, such as {stat} +5."),
+    );
+    format!("the change \"{term}\" was not read. {repair}")
+}
+
 pub fn changes(text: &str, name: &str, note: &str) -> Result<Mapping, String> {
     let mut out = Mapping::new();
     if !name.is_empty() {
@@ -87,7 +100,7 @@ pub fn changes(text: &str, name: &str, note: &str) -> Result<Mapping, String> {
             let (_, key) = STATS
                 .iter()
                 .find(|(label, _)| label.eq_ignore_ascii_case(stat))
-                .ok_or_else(|| format!("Changes: {term} not read"))?;
+                .ok_or_else(|| unread_change(term))?;
             let amount = if *key == "speed" {
                 rest.trim()
                     .strip_suffix(" ft.")
@@ -96,9 +109,7 @@ pub fn changes(text: &str, name: &str, note: &str) -> Result<Mapping, String> {
             } else {
                 rest.trim()
             };
-            let number: i64 = amount
-                .parse()
-                .map_err(|_| format!("Changes: {term} not read"))?;
+            let number: i64 = amount.parse().map_err(|_| unread_change(term))?;
             if out.contains_key(*key) {
                 return Err(format!("Changes: duplicate {stat}"));
             }
@@ -116,7 +127,7 @@ pub fn changes(text: &str, name: &str, note: &str) -> Result<Mapping, String> {
         } else if term.chars().all(|c| c.is_alphabetic() || c == '-') {
             conditions.push(Value::from(term));
         } else {
-            return Err(format!("Changes: {term} not read"));
+            return Err(unread_change(term));
         }
     }
     if !conditions.is_empty() {
@@ -584,7 +595,7 @@ pub fn read(text: &str, fields: &mut Mapping, flags: &mut Vec<Flag>) {
                             .parse::<i64>()
                             .ok()
                             .filter(|hp| *hp >= 0)
-                            .ok_or_else(|| format!("Changes: {term} not read"))?;
+                            .ok_or_else(|| unread_change(term))?;
                         if start_hp.replace(hp).is_some() {
                             return Err("Changes: duplicate Start HP".into());
                         }
@@ -1933,4 +1944,15 @@ pub fn with_prose(text: &str, notes: &str) -> Result<String, String> {
     } else {
         after
     })
+}
+
+#[cfg(test)]
+mod iter6_b {
+    #[test]
+    fn unread_change_names_the_value_and_a_number_repair() {
+        assert_eq!(
+            super::changes("HP lots", "", "").unwrap_err(),
+            "the change \"HP lots\" was not read. Use a number, such as HP +5."
+        );
+    }
 }

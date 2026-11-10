@@ -12,6 +12,10 @@ state, and the app reopens on the last page or the open run. Drag the edge of th
 change its width. Tab also focuses the edge: Left and Right move it by 16 px, and
 Home restores its natural width. The app keeps a chosen width after a restart. Simulation is later work.
 
+The run's **Add to fight** button keeps its plus icon and the word **Add** at narrow widths.
+Turn headings drop “’s turn” before shortening a name and keep each creature's copy number.
+Party sheet tabs stay on one line; later pages appear in **More**. Stopped-sync notices sit below the Party header.
+
 ## Development
 
 Install Nix and devenv, then run:

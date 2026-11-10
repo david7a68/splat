@@ -161,7 +161,7 @@ eye during long sessions.
 | Submenu | `menu_submenu` | Match quiet Read actions: `S` horizontal padding, Strong type and Read height |
 | Row menu | `row_menu` | Quiet `⋯` at the right, named `More actions for <name>`; holds Remove and Delete |
 | Add strip | `hanging_add_strip` | `Add` in its own Label column; one line of quiet icon-and-word buttons. Show all seven actions when they fit. Otherwise keep Fight, Group (plan only) and Long rest visible; put Day, Short rest, Travel and Major event in one compact `⋯⌄` menu named `More Add actions`; hover text names its actions. Keep the strip on one line |
-| Message | `message`, `message_with_action`, `Tone` | Inline icon and bar; cap the notice at `LIST_MEASURE`; actions follow text after an `L` gap or wrap below, aligned with the text; measure the whole action with padding; move it below and align it with the text if it cannot fit; actions without icons use a secondary border |
+| Message | `message`, `small_message`, `message_with_action`, `Tone` | Inline icon and bar; cap the notice at `LIST_MEASURE`; actions follow text after an `L` gap or wrap below, aligned with the text; measure the whole action with padding; move it below and align it with the text if it cannot fit; actions without icons use a secondary border |
 | Side panel | `side_panel_width`, `panel_header` | One width rule for Lookup, Notes and the run; separate participant and fight tabs |
 | Column | `Column::left / right / panel` | Rail, page lists and panels; inner-edge drag handle; natural width until dragged or moved with keys, then saved width across restarts; preserve page room and `RUN_LIST_KEEPS`; adjacent content reaches the column edge, with text measured inside it |
 | Link | `link` | Real `Link` role, at least 24 px high |
@@ -644,7 +644,9 @@ Correct holds correction fields.
 
 ### Header, dock and panels
 
-The header has two lines. Round and current turn use bold sans larger than row names, beside Next turn. Line
+The header has two lines. Round and current turn use bold sans larger than row names, beside Next turn.
+When the turn heading does not fit, drop `’s turn` before shortening the name. Keep the final copy number,
+such as `Cinder… 1`. Hover and accessibility keep the full name. Line
 two keeps a result icon and notice at the left and Undo at the right. Measure notice first; Undo gets the
 remainder less `L`. Drop `Undo:` before shortening the target; retain copy numbers, action words, amounts and
 condition directions. Hover and accessibility keep the full action. Empty history says Nothing to undo or
@@ -659,7 +661,8 @@ its full target in hover and accessibility. An empty Undo can omit its adjacent 
 the control keeps that reason in hover and accessibility. Keep the
 next participant visible when Undo is empty. Sheet notices fit after conflict with Log and Dismiss when
 possible; shorten to character name and first changed value, with full text in hover and Log. Otherwise show
-once below the roster, keeping Undo visible. Stat-block errors use the notice icon and one fitted line, with
+once below the roster, keeping Undo visible. Sheet-change notices use `small_message`: warning icon and bar,
+text-colour words. Stat-block errors use the notice icon and one fitted line, with
 full error on hover.
 
 Long local effects show four words and more; Undo keeps four when they fit. Narrow Undo keeps Undo add or Undo
@@ -679,8 +682,7 @@ Other pages keep the strip's turn, conflict, secondary Back to run and primary N
 The panel has participant tabs Stat block or Sheet, Conditions, Correct, then `L`, then fight tabs Log and
 Prep. Arrivals has no tab: a secondary Add to fight button opens it, selected while Arrivals is open. In live
 play it is `S` left of Next turn, at the same height, as the strip pairs Back to run with Next turn. Below the
-dock's all-words width it is the plus icon alone, as a split action's caret is, so the turn's name keeps its
-room. In setup it is `S` left of Undo, at Undo's height, and Undo shortens first. Ctrl+G also opens it. Fight-tab titles name only that tab in setup and live play. Titles stay on one line and retain copy
+dock's all-words width it keeps the plus icon and the word Add. The full accessible name stays Add to fight. In setup it is `S` left of Undo, at Undo's height, and Undo shortens first. Ctrl+G also opens it. Fight-tab titles name only that tab in setup and live play. Titles stay on one line and retain copy
 numbers when shortened. When tight, fight tabs share a Fight caret menu with tab underline. Never wrap the tab
 row. Death-save counts and actions occupy one line below tabs at zero HP; clicking a count edits it. Sheet
 shows live death saves once, with correct singular and plural words. Correct has no duplicate fields; HP owns
@@ -712,8 +714,8 @@ Exclude missing, unread and invalid members. Say `1 of 3 can join`, `Will add: 1
 Only zero valid members blocks Initiative and Add. Invalid Initiative retains text, says `Enter a whole number, or clear
 the field to roll.`, and blocks Add and drop. Campaign → Packages opens repair.
 
-Join status parts on one line with dot separators beside the group name when they fit, else before the first member. Use a separate line only when neither has room. `Changed` keeps its muted pencil. Member names stay intact. Never end a line with a separator; keep separators with their preceding word and `at` with
-its total in arrival messages. Live group notices name only the group and its initiative totals. Member names and roll details stay in Log. Arrival faults use `message`: an amber icon and bar with text-colour words. Live initiative notices name who joins and the total. Before the current turn,
+Join status parts on one line with dot separators beside the group name when they fit, else before the first member. Use a separate line only when neither has room. `Changed` keeps its muted pencil. Member names stay intact. A line never ends with a separator: the `·` moves to the next line with the part after it. Keep `at`
+with its total in arrival messages. Live group notices name only the group and its initiative totals. Member names and roll details stay in Log. Arrival faults use `message`: an amber icon and bar with text-colour words. Live initiative notices name who joins and the total. Before the current turn,
 add acts next round. Tied arrivals name both participants and offer Move before with Undo, before the first
 member of a shared-roll block. Keep tie details in Arrivals and Log, outside the Undo label.
 
@@ -802,8 +804,8 @@ is not a planned note link.
 Find the saved run by its run ID among all unfinished runs. Delete the saved run stays in the menu;
 Start a new run is available when a planned encounter supplies its source. Open fights use a status link
 while the strip owns primary. Planned, played and running
-summaries use space below actions up to the menu. Keep summary parts and Ended · Round 1 whole; join
-separators to the next part and wrap without trailing dots. Group summaries wrap to two lines, then shorten
+summaries use space below actions up to the menu. Keep summary parts and Ended · Round 1 whole.
+A line never ends with a separator: the `·` moves to the next line with the part after it. Group summaries wrap to two lines, then shorten
 with full hover text. Plan and Timeline share fight summaries: open fights show round as a run status link
 without Paused; ended, named and custom results keep stored words. Played fights show result and last round
 once on line two, then final party HP in a grid of two or three first-name cells, quiet Log, Whole run and
@@ -880,6 +882,9 @@ edges, in two or three columns; skills sort A to Z and fill columns top to botto
 taller height. Use a true minus for negative modifiers. Rows without detail use one Read row. At eight entries
 or fewer, omit filters and separate count lines; count in the group heading. Death-save counts use words.
 Compact rows omit a missing spell save DC; wide tables keep the empty cell. Spell help says: “Spell text shows the printed numbers. Splat does not work out upcasting or this character’s own bonuses.”
+
+A stopped-sync notice sits below the Party header, across the page. Its bar starts at the pane edge;
+Dismiss sits at the right end of its first line. Sheet pages use Small tabs on one line, with later pages in More.
 
 Local-edit notices measure the full message inset, including its bar, icon and gaps. The Party header owns Connect to refresh. Signed-out notices say replacement keeps the DM’s version as a copy. Local-edit warnings name the character and say replacement keeps a copy. Keep each notice within `LIST_MEASURE`. Actions follow its text after an `L` gap, or wrap below, aligned with the text. The affected row says Local edits; replacement names the character, offers Show file for the kept
 version and Dismiss. Empty Party has one Connect D&D Beyond action. An offline Party now line offers Connect

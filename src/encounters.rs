@@ -133,6 +133,23 @@ pub(crate) struct RosterFault {
     pub problem: String,
 }
 
+impl RosterFault {
+    pub(crate) fn words(&self) -> String {
+        let (problem, repair) = self.problem.split_once(". ").unwrap_or((&self.problem, ""));
+        format!(
+            "{}: {} (line {}).{}",
+            self.name,
+            problem,
+            self.line,
+            if repair.is_empty() {
+                String::new()
+            } else {
+                format!(" {repair}")
+            }
+        )
+    }
+}
+
 /// Read rejected rows from a fresh parse, before catalogue reference resolution.
 pub(crate) fn roster_faults(entry: &Entry, known: &BTreeMap<String, String>) -> Vec<RosterFault> {
     let Some(table) = splat::content::layout::Document::new(&entry.body)
@@ -3455,7 +3472,9 @@ impl Encounters {
         if unfinished.is_some() {
             blocked_reason(
                 ui,
-                Some("Changes apply to the next fight. Add to this fight from Arrivals."),
+                Some(
+                    "Changes apply to the next fight. To add to this fight, use Add to fight in the run.",
+                ),
             );
         }
         design::rule(ui);

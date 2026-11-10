@@ -1218,6 +1218,7 @@ pub fn package_duplicate_id(d: &mut Driver<'_>) {
     go_encounters(d);
     open_saved_encounter(d, "Bridge Ambush");
     d.expect("These two files claim to be the same entry: Cinder Wolf copy.md and Cinder Wolf.md.");
+    d.expect("Changes apply to the next fight. To add to this fight, use Add to fight in the run.");
     d.state("duplicate-package-in-roster", Sizes::All);
     d.click("Open in Library");
     d.expect("Make Cinder Wolf copy.md a separate entry");

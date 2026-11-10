@@ -761,23 +761,6 @@ impl Run {
                                 } else {
                                     notice.as_str()
                                 };
-                                let tone = if self.notice_summary.is_some() {
-                                    colors().result.warning
-                                } else {
-                                    colors().result.success
-                                };
-                                ui.label(
-                                    Type::Small
-                                        .rich(
-                                            ui,
-                                            if self.notice_summary.is_some() {
-                                                icons::WARN
-                                            } else {
-                                                icons::SUCCESS
-                                            },
-                                        )
-                                        .color(tone),
-                                );
                                 let text_room = ui.available_width() - design::L * 6.0 - design::S;
                                 let fitted = sheet_notice_words(
                                     ui,
@@ -795,15 +778,14 @@ impl Run {
                                         vec2(text_room, notice_height),
                                         Layout::left_to_right(Align::TOP),
                                         |ui| {
-                                            ui.add(
-                                                egui::Label::new(
-                                                    Type::Small.rich(ui, shown).color(tone),
-                                                )
-                                                .wrap_mode(if self.notice_summary.is_some() {
-                                                    egui::TextWrapMode::Extend
+                                            design::small_message(
+                                                ui,
+                                                if self.notice_summary.is_some() {
+                                                    Tone::Warning
                                                 } else {
-                                                    egui::TextWrapMode::Wrap
-                                                }),
+                                                    Tone::Success
+                                                },
+                                                shown,
                                             )
                                         },
                                     )
@@ -923,33 +905,23 @@ impl Run {
                         &format!("Run · {} · Round {}", self.name, self.state.round),
                     );
                     ui.add_space(design::S);
-                    // The first answer on the screen, and larger than any row's name. It gives
-                    // up a little size, then the later words of a long name. The row, the panel
-                    // and the dock's hover have the whole name.
-                    let room = ui.available_width() - 1.0;
-                    let suffix = "’s turn";
-                    let full = format!("{name}{suffix}");
-                    let least = (scale.name + 1.0).min(turn_size);
+                    // Drop the turn suffix before shortening the identifying name.
+                    let room = ui.available_width() - design::HAIRLINE_WIDTH;
+                    let least = (scale.name + design::HAIRLINE_WIDTH).min(turn_size);
+                    let full = format!("{name}’s turn");
                     let font = Type::Name.sized(ui, turn_size);
                     let fit = |text: &str| {
-                        let width = design::number_width(ui, text, &font);
-                        (turn_size * room / width).min(turn_size)
+                        (turn_size * room / design::number_width(ui, text, &font)).min(turn_size)
                     };
-                    let full_size = fit(&full);
-                    let (text, size) = if full_size >= least {
-                        (full, full_size)
+                    let (text, size) = if fit(&full) >= least {
+                        (full.clone(), fit(&full))
+                    } else if fit(name) >= least {
+                        (name.to_owned(), fit(name))
                     } else {
-                        let words = design::words_that_fit(
-                            ui,
-                            name,
-                            &font,
-                            room - design::number_width(ui, suffix, &font),
-                        );
-                        let short = format!("{words}{suffix}");
-                        let size = fit(&short).max(least);
-                        (short, size)
+                        let font = Type::Name.sized(ui, least);
+                        (dock_name(ui, name, &font, room), least)
                     };
-                    ui.add(
+                    let response = ui.add(
                         egui::Label::new(
                             Type::Name
                                 .rich(ui, text)
@@ -958,6 +930,8 @@ impl Run {
                         )
                         .truncate(),
                     );
+                    design::named(ui, &response, &full);
+                    response.on_hover_text(&full);
                 });
             },
         );
@@ -1091,7 +1065,7 @@ impl Run {
                         + design::number_width(ui, " Log ", &Type::Body.font(ui))
                         + Density::Read.control()
                         + design::L
-                        + design::S
+                        + design::S * 2.0
                 };
                 let sheet = self
                     .notice_summary
@@ -1249,11 +1223,7 @@ impl Run {
                         }));
                     }
                     if let Some(summary) = &sheet {
-                        let response = ui.label(
-                            Type::Small
-                                .rich(ui, format!("{} {summary}", icons::WARN))
-                                .color(c.result.warning),
-                        );
+                        let response = design::small_message(ui, Tone::Warning, summary);
                         let detail = self.notice.as_deref().unwrap_or(summary);
                         design::named(ui, &response, detail);
                         response.on_hover_text(detail);
@@ -2826,13 +2796,12 @@ impl Run {
 
     /// Add to fight opens Arrivals. It is beside the fight's own controls, not among the
     /// panel's tabs, so that the DM finds it when something arrives. It takes the height of
-    /// the controls in its row. Without words, its icon is its label, as on a split
-    /// action's caret.
+    /// the controls in its row. Narrow layouts keep the icon and the word Add.
     fn add_to_fight(&self, words: bool, density: Density) -> Action<'static> {
         let action = if words {
             Action::secondary("Add to fight").icon(icons::ADD)
         } else {
-            Action::secondary(icons::ADD)
+            Action::secondary("Add").icon(icons::ADD)
         };
         action
             .name("Add to fight")
@@ -2942,7 +2911,10 @@ impl Run {
                                     Some(item.entry.id) == self.source
                                         && item.entry.kind == "encounter"
                                 })
-                            }) && Action::quiet("Edit encounter").show(ui).clicked()
+                            }) && Action::quiet("Edit encounter")
+                                .line_start()
+                                .show(ui)
+                                .clicked()
                             {
                                 ui.ctx().data_mut(|data| {
                                     data.insert_temp(
@@ -3035,14 +3007,14 @@ impl Run {
                                 .is_some_and(|at| at <= self.state.cursor);
                         let total = self.state.participants[first].initiative.unwrap();
                         let tie = if group_line.is_some() {
-                            format!(" Tied with {name} at\u{a0}{total}\u{a0}· placed after")
+                            format!(" Tied with {name} at\u{a0}{total}, placed after.")
                         } else {
                             String::new()
                         };
                         let line = format!(
                             "{line}{tie}{}",
                             if waits {
-                                "\u{a0}· acts next round if moved before"
+                                " ·\u{a0}acts next round if moved before"
                             } else {
                                 ""
                             }
@@ -4231,7 +4203,7 @@ impl Run {
         if let Some(path) = &self.roster_source {
             let filename = path.file_name().unwrap_or_default().to_string_lossy();
             for (index, fault) in self.roster_faults.iter().enumerate() {
-                let words = format!("{} · line {}: {}", fault.name, fault.line, fault.problem);
+                let words = fault.words();
                 // One file names every unread row, so its name and actions show once.
                 if index > 0 {
                     design::message(ui, Tone::Warning, &words);
@@ -4542,7 +4514,7 @@ impl Run {
                 .split(" · ")
                 .map(|part| part.replace(' ', "\u{a0}"))
                 .collect::<Vec<_>>()
-                .join("\u{a0}· ");
+                .join(" ·\u{a0}");
             let status =
                 hp_word(&p).map(|(icon, word, color)| (format!("{icon}\u{a0}{word}"), color));
             let detail = design::status_in_text(
@@ -5847,7 +5819,7 @@ impl RowLayout {
         let mut add = |text: &str, color: egui::Color32| {
             if !first {
                 job.append(
-                    "\u{a0}· ",
+                    " ·\u{a0}",
                     0.0,
                     egui::TextFormat {
                         font_id: font.clone(),
@@ -6586,6 +6558,124 @@ fn optional_number(
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn iter6_b_turn_heading_keeps_each_of_five_copy_numbers_and_add_word() {
+        for number in 1..=5 {
+            for width in [442.0, 760.0] {
+                let mut run = super::super::tests::run();
+                let base = run.state.participants[0].clone();
+                run.state.participants = (1..=5)
+                    .map(|n| {
+                        let mut p = base.clone();
+                        p.name = format!("Cinder Wolf {n}");
+                        p.key = format!("wolf-{n}");
+                        p.initiative = Some(20 - n);
+                        p
+                    })
+                    .collect();
+                run.state.order = (0..5).collect();
+                run.state.cursor = number - 1;
+                run.state.phase = Phase::Running;
+                run.state.round = 1;
+                let mut harness = egui_kittest::Harness::builder()
+                    .with_size(vec2(width, 640.0))
+                    .build(move |ctx| {
+                        egui::CentralPanel::default().show(ctx, |ui| {
+                            run.live_header(ui, design::RUN_REGULAR);
+                        });
+                    });
+                design::theme::install(&harness.ctx);
+                harness.run_steps(2);
+                let texts: Vec<_> = harness
+                    .output()
+                    .shapes
+                    .iter()
+                    .filter_map(|shape| match &shape.shape {
+                        egui::Shape::Text(text) => Some(text),
+                        _ => None,
+                    })
+                    .collect();
+                let heading = texts
+                    .iter()
+                    .find(|text| {
+                        text.galley
+                            .job
+                            .sections
+                            .iter()
+                            .any(|section| section.format.color == colors().turn.current)
+                    })
+                    .expect("turn heading");
+                assert!(
+                    heading.galley.text().contains(&number.to_string()),
+                    "iter6-B-FT1: {}",
+                    heading.galley.text()
+                );
+                assert!(
+                    !heading.galley.elided,
+                    "iter6-B-FT1: the fitted heading stays whole"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn iter6_b_narrow_header_keeps_add_word() {
+        let mut run = super::super::tests::run();
+        let mut harness = egui_kittest::Harness::builder()
+            .with_size(vec2(442.0, 640.0))
+            .build(move |ctx| {
+                egui::CentralPanel::default().show(ctx, |ui| {
+                    run.live_header(ui, design::RUN_REGULAR);
+                });
+            });
+        design::theme::install(&harness.ctx);
+        harness.run_steps(2);
+        assert!(
+            harness
+                .output()
+                .shapes
+                .iter()
+                .any(|shape| matches!(&shape.shape,
+            egui::Shape::Text(text) if text.galley.text().contains("Add") && !text.galley.elided)),
+            "iter6-B-AT2: Add keeps a whole word"
+        );
+    }
+
+    #[test]
+    fn iter6_b_sheet_notice_keeps_text_colour_and_warning_bar() {
+        let words = "Brannoch Vale's sheet changed: HP 58 → 54, temp HP 5 → 0";
+        let mut harness = egui_kittest::Harness::new(|ctx| {
+            egui::CentralPanel::default().show(ctx, |ui| {
+                design::small_message(ui, Tone::Warning, words);
+            });
+        });
+        design::theme::install(&harness.ctx);
+        harness.run_steps(2);
+        let texts: Vec<_> = harness
+            .output()
+            .shapes
+            .iter()
+            .filter_map(|shape| match &shape.shape {
+                egui::Shape::Text(text) if text.galley.text() == words => Some(text),
+                _ => None,
+            })
+            .collect();
+        assert!(
+            !texts.is_empty(),
+            "iter6-B-FT3: the sheet notice is painted"
+        );
+        assert!(
+            texts.iter().all(|text| text
+                .galley
+                .job
+                .sections
+                .iter()
+                .all(|section| section.format.color == colors().text)),
+            "iter6-B-FT3: words use text colour"
+        );
+        assert!(harness.output().shapes.iter().any(|shape| matches!(&shape.shape, egui::Shape::Rect(rect) if rect.fill == colors().result.warning)), "iter6-B-FT3: warning bar");
+    }
+
     use super::*;
     use serde_yaml_ng::Mapping;
     use splat::content::{Entry, overrides::Overrides};
@@ -6832,14 +6922,15 @@ mod tests {
                         for row in &galley.rows {
                             assert_ne!(row.glyphs.last().map(|glyph| glyph.chr), Some('·'));
                             assert!(
-                                !row.glyphs.first().is_some_and(|glyph| {
-                                    glyph.chr == '·' || glyph.chr.is_ascii_digit()
-                                }) || row
-                                    .glyphs
-                                    .iter()
-                                    .map(|glyph| glyph.chr)
-                                    .collect::<String>()
-                                    .starts_with("2 ×")
+                                !row.glyphs
+                                    .first()
+                                    .is_some_and(|glyph| { glyph.chr.is_ascii_digit() })
+                                    || row
+                                        .glyphs
+                                        .iter()
+                                        .map(|glyph| glyph.chr)
+                                        .collect::<String>()
+                                        .starts_with("2 ×")
                             );
                             assert!(row.size.x <= width + 1.0);
                         }

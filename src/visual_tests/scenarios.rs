@@ -942,6 +942,31 @@ pub mod party {
         go_party(d);
         d.expect(FIRST_MEMBER);
         d.expect(OFFLINE);
+        for size in [SMALL, DEFAULT, (1920.0, 1080.0)] {
+            let one_line = d.at_size(size, |d| {
+                let first = d.place_of("Overview").unwrap();
+                let tabs: Vec<_> = [
+                    "Overview",
+                    "Actions",
+                    "Spells",
+                    "Equipment",
+                    "Features",
+                    "Background",
+                    "More",
+                ]
+                .iter()
+                .filter_map(|name| d.place_of(name))
+                .collect();
+                tabs.len() >= 2
+                    && tabs.iter().all(|tab| (tab.top() - first.top()).abs() < 1.0)
+                    && (d.in_view("Background") || d.in_view("More"))
+            });
+            d.observe(
+                "iter6-B-SD2",
+                one_line,
+                format!("Sheet tabs stay on one line at {size:?}"),
+            );
+        }
         d.state("list-and-sheet", Sizes::AllAndHiDpi);
         d.check_tab_order("party, character sheet");
         d.goal("see the party and a sheet");
@@ -1747,7 +1772,26 @@ pub mod settings {
             "Party sync stopped when D&D Beyond disconnected. Connect, then turn sync on in Party.",
         );
         d.expect("Party");
-        d.state("sync-stopped-recovery", Sizes::Default);
+        for size in [SMALL, DEFAULT, (1920.0, 1080.0)] {
+            let aligned = d.at_size(size, |d| {
+                let header = d.nodes().into_iter().filter(|node| node.name == "Party")
+                    .max_by(|a, b| a.rect.left().total_cmp(&b.rect.left())).unwrap().rect;
+                let notice = d.place_of("Combat sync stopped when the connection to D&D Beyond ended. Changes not yet sent did not reach D&D Beyond. Connect in Settings, and sync starts again.").unwrap();
+                let dismiss = d.place_of("Dismiss this message").unwrap();
+                notice.left() < header.left() + crate::design::L * 3.0
+                    && dismiss.left() > notice.left()
+                    && dismiss.top() < notice.top() + crate::design::L
+            });
+            d.observe(
+                "iter6-B-FD9",
+                aligned,
+                format!("Party notice starts at the page edge with a trailing dismiss at {size:?}"),
+            );
+        }
+        d.state("sync-stopped-recovery", Sizes::All);
+        assert!(d.in_view("Dismiss this message"));
+        d.click("Dismiss this message");
+        assert!(!d.has_containing("Combat sync stopped when the connection"));
 
         go_settings(d);
         d.click("Touchpad");
@@ -2608,6 +2652,21 @@ pub mod run_large_roster {
                     && d.in_view_containing("Sync off for the party")
             },
         );
+        for size in [SMALL, DEFAULT, (1920.0, 1080.0)] {
+            let (heading, add) = d.at_size(size, |d| {
+                let words = d.painted_in(d.header_rect());
+                (
+                    words.contains("Cinder") && words.contains('1'),
+                    words.contains("Add"),
+                )
+            });
+            d.observe(
+                "iter6-B-FT1",
+                heading,
+                format!("The current Cinder Wolf copy number stays in the heading at {size:?}"),
+            );
+            d.observe("iter6-B-AT2", add, format!("Add keeps a word at {size:?}"));
+        }
         d.state("roster-of-12", Sizes::All);
         d.goal("open a run with 12 participants");
 
@@ -2660,6 +2719,12 @@ pub mod run_large_roster {
                 "With 12 rows at 960x640, no row moves on Next turn: {places:?} then {after:?}"
             ),
         );
+
+        assert!(d.in_view("Add to fight"));
+        d.click("Add to fight");
+        d.expect("This fight · Arrivals");
+        d.click("Stat block");
+        d.begin_task();
 
         close_run(d);
         d.begin_task();
@@ -7129,6 +7194,7 @@ pub mod encounter_groups {
                     && d.in_view("Move Rival Team before Kestrel Dunmoor")
             },
         );
+        d.expect("Tied with Kestrel Dunmoor at\u{a0}14, placed after.");
         d.state("group-added-with-a-total", Sizes::All);
         d.observe(
             "T13.2",
@@ -8640,6 +8706,20 @@ pub mod npc_in_encounter {
         fight_tab(d, "Prep");
         d.expect("No prep notes yet");
         d.expect("Edit encounter");
+        for size in [SMALL, DEFAULT, (1920.0, 1080.0)] {
+            let aligned = d.at_size(size, |d| {
+                let title = d.painted_left("No prep notes yet").unwrap();
+                let action = d.painted_left("Edit encounter").unwrap();
+                (title - action).abs() < 1.0 && d.in_view("Edit encounter")
+            });
+            d.observe(
+                "iter6-B-FD12",
+                aligned,
+                format!("Prep action text aligns with its title at {size:?}"),
+            );
+        }
+        d.state("empty-prep-action-aligned", Sizes::All);
+        assert!(d.in_view("Edit encounter"));
         d.click("Edit encounter");
         d.expect("Back to run");
         d.expect("Rook's ambush");

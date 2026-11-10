@@ -2472,21 +2472,16 @@ fn unread_member(
         .wrap(),
     );
     design::named(ui, &summary, &detail);
-    let problem = member
-        .flag
-        .message
-        .strip_prefix("Changes: ")
-        .and_then(|text| text.strip_suffix(" not read"))
-        .map_or_else(
-            || member.flag.message.clone(),
-            |term| format!("Changes \"{term}\" not read"),
-        );
     design::message(
         ui,
         Tone::Warning,
-        &format!("Line {}: {problem}.", member.flag.line),
+        &format!(
+            "Line {}: {}",
+            member.flag.line,
+            member.flag.message.trim_end_matches('.').to_owned() + "."
+        ),
     );
-    let blocked = if member.flag.message.starts_with("Changes:") {
+    let blocked = if splat::content::list_formats::changes(&raw, "", "").is_err() {
         "This member cannot join a fight until its Changes cell is fixed. Other members can join."
     } else {
         "This member cannot join a fight until this row is fixed. Other members can join."

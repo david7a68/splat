@@ -225,6 +225,23 @@ impl Party {
                 }
             }
         });
+        if self.sync_stopped {
+            let mut dismiss = false;
+            ui.horizontal_top(|ui| {
+                let room = ui.available_width() - Density::Read.control() - design::S;
+                ui.allocate_ui_with_layout(
+                    egui::vec2(room, 0.0),
+                    egui::Layout::top_down(egui::Align::Min),
+                    |ui| {
+                        design::message(ui, Tone::Warning, SYNC_STOPPED);
+                    },
+                );
+                dismiss = design::icon_button(ui, icons::CLOSE, "Dismiss this message").clicked();
+            });
+            if dismiss {
+                self.sync_stopped = false;
+            }
+        }
         if linked && session.is_some() {
             design::blocked_reason(ui, can_refresh);
         }
@@ -493,16 +510,6 @@ impl Party {
         if let Some(error) = self.reader.errors.get(id) {
             design::message(ui, Tone::Error, error);
         }
-        if self.sync_stopped {
-            let mut dismiss = false;
-            ui.horizontal(|ui| {
-                dismiss = design::icon_button(ui, icons::CLOSE, "Dismiss this message").clicked();
-                design::message(ui, Tone::Warning, SYNC_STOPPED);
-            });
-            if dismiss {
-                self.sync_stopped = false;
-            }
-        }
         if let Some(record) = newer(self.combat.record(), self.reader.sheets.get(id)) {
             let portrait = self.portrait(Some(record));
             ui.horizontal(|ui| {
@@ -555,7 +562,7 @@ impl Party {
             return;
         };
         let before = self.page;
-        design::segmented(ui, &mut self.page, &SHEET_PAGES);
+        design::overflow_tabs_small(ui, &mut self.page, &SHEET_PAGES);
         if before != self.page {
             self.search.clear();
         }

@@ -1543,6 +1543,29 @@ pub fn message(ui: &mut Ui, tone: Tone, text: &str) -> Response {
     inner.inner
 }
 
+/// A compact run notice. Tone marks the icon and bar; words keep the text colour.
+pub fn small_message(ui: &mut Ui, tone: Tone, text: &str) -> Response {
+    let (icon, color) = tone.parts();
+    ui.horizontal_top(|ui| {
+        let start = ui.cursor().min;
+        ui.add_space(S + HAIRLINE_WIDTH);
+        ui.label(Type::Small.rich(ui, icon).color(color));
+        ui.add_space(-XS);
+        let response =
+            ui.add(egui::Label::new(Type::Small.rich(ui, text).color(colors().text)).wrap());
+        ui.painter().rect_filled(
+            Rect::from_min_max(
+                start,
+                pos2(start.x + HAIRLINE_WIDTH * 3.0, response.rect.bottom()),
+            ),
+            0.0,
+            color,
+        );
+        response
+    })
+    .inner
+}
+
 /// A message whose marked fragments use the code font.
 pub fn message_with_code(ui: &mut Ui, tone: Tone, text: &str) -> Response {
     let (icon, color) = tone.parts();
