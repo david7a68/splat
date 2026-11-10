@@ -8427,7 +8427,34 @@ pub mod encounter_owned_groups {
         run_saved_encounter(d, SHRINE);
         open_arrivals(d);
         d.expect(&add_group(GROUP_SHRINE));
-        d.state("group-panel-for-one-encounter", Sizes::All);
+        d.state_prepared("group-panel-for-one-encounter", Sizes::All, |d| {
+            // SD5: every group's Initiative and Add block shares one column.
+            let groups = [
+                NEW_NAME,
+                GROUP_SHRINE,
+                GROUP_GOBLINS,
+                GROUP_LOST,
+                GROUP_RIVALS,
+            ];
+            let buttons = groups.map(|name| {
+                d.place_of(&add_group(name))
+                    .expect("Required group Add control")
+            });
+            let fields = groups.map(|name| {
+                d.place_of(&format!("Initiative total for {name}"))
+                    .expect("Required group Initiative field")
+            });
+            d.observe(
+                "iter10-B-SD5-column",
+                buttons
+                    .iter()
+                    .all(|b| (b.right() - buttons[0].right()).abs() <= 1.0)
+                    && fields
+                        .iter()
+                        .all(|f| (f.left() - fields[0].left()).abs() <= 1.0),
+                format!("Initiative and Add share one column: {fields:?} {buttons:?}"),
+            );
+        });
         d.check_tab_order("run, groups for one encounter");
         d.observe(
             "T13.5",

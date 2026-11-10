@@ -827,16 +827,21 @@ pub fn stepper(
     value: &mut i64,
     range: std::ops::RangeInclusive<i64>,
 ) -> bool {
-    stepper_with_density(ui, name, value, range, Density::Read)
+    stepper_with_density(ui, name, value, range, Density::Read, None, None)
 }
 
-/// The shared stepper at the control height of its row.
+/// The shared stepper at the control height of its row. At a limit, the disabled − or + says
+/// why on hover and in its accessible description when the caller gives that limit's reason
+/// (`low_reason`, `high_reason`). With None, the button is only disabled. An enclosing lock's
+/// reason comes first.
 pub fn stepper_with_density(
     ui: &mut Ui,
     name: &str,
     value: &mut i64,
     range: std::ops::RangeInclusive<i64>,
     density: Density,
+    low_reason: Option<&str>,
+    high_reason: Option<&str>,
 ) -> bool {
     let button = |ui: &mut Ui, icon: &str, name: &str| {
         if density == Density::Read {
@@ -869,11 +874,27 @@ pub fn stepper_with_density(
     let (low, high) = ((*range.start()).min(before), (*range.end()).max(before));
     ui.horizontal(|ui| {
         ui.spacing_mut().item_spacing.x = XS / 2.0;
-        let down = ui
-            .add_enabled_ui(*value > low, |ui| {
-                button(ui, icons::SUBTRACT, &format!("Decrease {name}"))
-            })
-            .inner;
+        // A button at its limit is disabled. When its caller says why, the button says so on
+        // hover and in its description, unless an enclosing lock already gives its own reason.
+        let limited = |ui: &mut Ui, open: bool, reason: Option<&str>, icon: &str, label: &str| {
+            let response = ui.add_enabled_ui(open, |ui| button(ui, icon, label)).inner;
+            match reason.filter(|_| !open && ui.is_enabled()) {
+                Some(reason) => {
+                    ui.ctx().accesskit_node_builder(response.id, |node| {
+                        node.set_description(reason.to_owned());
+                    });
+                    response.on_disabled_hover_text(reason)
+                }
+                None => response,
+            }
+        };
+        let down = limited(
+            ui,
+            *value > low,
+            low_reason,
+            icons::SUBTRACT,
+            &format!("Decrease {name}"),
+        );
         if down.clicked() {
             *value -= 1;
         }
@@ -895,11 +916,13 @@ pub fn stepper_with_density(
             })
             .inner;
         named(ui, &field, name);
-        let up = ui
-            .add_enabled_ui(*value < high, |ui| {
-                button(ui, icons::ADD, &format!("Increase {name}"))
-            })
-            .inner;
+        let up = limited(
+            ui,
+            *value < high,
+            high_reason,
+            icons::ADD,
+            &format!("Increase {name}"),
+        );
         if up.clicked() {
             *value += 1;
         }
@@ -3116,6 +3139,58 @@ pub fn draft_comparison_labeled(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn iter10_b_stepper_limit_reasons_are_optional_and_yield_to_a_lock() {
+        let describe = |low: Option<&str>, high: Option<&str>, lock: Option<&str>, value: i64| {
+            let ctx = egui::Context::default();
+            super::super::theme::install(&ctx);
+            ctx.enable_accesskit();
+            let output = ctx.run(Default::default(), |ctx| {
+                egui::CentralPanel::default().show(ctx, |ui| {
+                    locked(ui, lock, |ui| {
+                        let mut value = value;
+                        stepper_with_density(
+                            ui,
+                            "Level",
+                            &mut value,
+                            0..=6,
+                            Density::Scan,
+                            low,
+                            high,
+                        );
+                    });
+                });
+            });
+            let nodes = output.platform_output.accesskit_update.unwrap().nodes;
+            ["Decrease Level", "Increase Level"].map(|label| {
+                let (_, node) = nodes
+                    .iter()
+                    .find(|(_, node)| node.label() == Some(label))
+                    .unwrap();
+                (node.is_disabled(), node.description().map(str::to_owned))
+            })
+        };
+        // Existing callers pass None: disabled at the limit, with no description, as before.
+        assert_eq!(describe(None, None, None, 0), [(true, None), (false, None)]);
+        assert_eq!(describe(None, None, None, 6), [(false, None), (true, None)]);
+        // With reasons, only the button at its limit says why.
+        let reasons = (Some("Already 0."), Some("Stops at 6."));
+        assert_eq!(
+            describe(reasons.0, reasons.1, None, 0),
+            [(true, Some("Already 0.".into())), (false, None)]
+        );
+        assert_eq!(
+            describe(reasons.0, reasons.1, None, 6),
+            [(false, None), (true, Some("Stops at 6.".into()))]
+        );
+        // An enclosing lock's reason comes first, on both buttons.
+        let locked = Some("Close the run first.".to_owned());
+        assert_eq!(
+            describe(reasons.0, reasons.1, Some("Close the run first."), 6),
+            [(true, locked.clone()), (true, locked)]
+        );
+    }
 
     #[test]
     fn enclosing_lock_describes_each_control_and_stays_inside_its_scope() {
