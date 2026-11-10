@@ -37,6 +37,7 @@ mod markdown_view;
 mod matching;
 mod npc_generator;
 mod party;
+mod party_bar;
 mod party_stream;
 mod party_sync;
 mod persistence;
@@ -260,6 +261,7 @@ impl Splat {
         design::restore_column_widths(ctx, saved.column_widths);
         self.touchpad_speed = saved.touchpad_speed;
         self.sessions.restored_session = saved.playing;
+        self.sessions.party_bar = saved.party_bar;
         let active = self.campaigns.active_campaign();
         self.page =
             saved
@@ -288,6 +290,7 @@ impl Splat {
         let state = ui_state::UiState {
             column_widths: design::column_widths(ctx),
             touchpad_speed: self.touchpad_speed,
+            party_bar: self.sessions.party_bar,
             // With a run open, the page it began on: Close run goes back there after a restart.
             page: Some(
                 if self.page == Page::Run {
@@ -1382,6 +1385,50 @@ impl Splat {
             });
     }
 
+    /// The party at a glance, on the Session page while a session is played.
+    fn party_bar(&mut self, ctx: &egui::Context) {
+        let here = self.page == Page::Sessions
+            && self.campaigns.active_campaign().is_some()
+            && self.party.has_members();
+        let shows = here && self.sessions.party_bar_shows();
+        // The Session page's header offers the bar back.
+        self.sessions.party_hidden = here && !shows;
+        if !shows {
+            return;
+        }
+        let run = self
+            .encounters
+            .run()
+            .map(encounter_run::Run::party_now)
+            .unwrap_or_default();
+        let glances = self.party.glances(&run);
+        let source = self.party.glance_source(!run.is_empty());
+        let mut choice = None;
+        // A band of the page, not a raised layer: the panel's own hairline closes it.
+        egui::TopBottomPanel::top("party_bar")
+            .resizable(false)
+            .exact_height(party_bar::height() + 2.0 * design::XS)
+            .frame(
+                egui::Frame::new()
+                    .fill(colors().page)
+                    .inner_margin(egui::Margin::symmetric(design::M as i8, design::XS as i8)),
+            )
+            .show(ctx, |ui| {
+                if self.copy_dialog.is_some() || self.confirm_close {
+                    ui.disable();
+                }
+                choice = party_bar::show(ui, &glances, &source);
+            });
+        match choice {
+            Some(party_bar::Choice::Open(id)) => {
+                self.party.choose(id);
+                self.page = Page::Party;
+            }
+            Some(party_bar::Choice::Hide) => self.sessions.party_bar = Some(false),
+            None => {}
+        }
+    }
+
     fn no_campaign(&mut self, ui: &mut egui::Ui) {
         let no_campaigns = self.campaigns.all().is_empty();
         design::page_header(ui, self.page.name(), None, |_| {});
@@ -2300,6 +2347,7 @@ impl eframe::App for Splat {
         design::reserve_primary(ctx, false);
         self.lookup.back_key(ctx, self.page == Page::Library);
         self.run_strip(ctx);
+        self.party_bar(ctx);
         design::reserve_primary(ctx, self.encounters.has_run() && self.page != Page::Run);
         // With no panel left, going on typing must reach the note and never change the run.
         if self.notes_gave_way && !self.lookup.open {

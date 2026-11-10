@@ -310,6 +310,13 @@ evening is in `artifacts/dm-audit/README.md`.
 When a fight ends, the party searches it. The ended view lists the encounter's loot and the loot of each creature
 at 0 HP, and each roll on a loot table is one button, with Undo.
 
+While a session is played, a party bar stays above the Session page: each player's portrait and HP, then AC,
+passive Perception and Insight, and spell save DC, as many as the width allows, with the rest on hover. A click
+opens the sheet. The numbers come from the open fight, then tonight's fights, then the sheets, and the bar says
+which. A session is played when a fight is open, a recording is live, or the current session is not dated
+before today. The DM can hide or show the bar, and Splat remembers it. The Run page has no bar: its rows
+already show the party.
+
 **Done well:** T12.0 to T12.9, T14.1 to T14.5, T14.7 and T14.8.
 
 ## 3. Information architecture

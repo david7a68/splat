@@ -1056,10 +1056,19 @@ impl<'a> Driver<'a> {
 
     /// The page's title: the first label at the top of the page, right of the rail.
     pub fn page_title(&self) -> Option<String> {
-        self.nodes()
+        let nodes = self.nodes();
+        // The party bar stands above the Session page's title, so the title starts below it.
+        let top = nodes
+            .iter()
+            .find(|node| node.name == "Hide the party")
+            .map_or(0.0, |node| node.rect.max.y + crate::design::XS);
+        nodes
             .into_iter()
             .filter(|node| {
-                node.role == Role::Label && node.rect.min.x > 140.0 && node.rect.min.y < 40.0
+                node.role == Role::Label
+                    && node.rect.min.x > 140.0
+                    && node.rect.min.y >= top
+                    && node.rect.min.y < top + 40.0
             })
             .min_by(|a, b| a.rect.min.x.total_cmp(&b.rect.min.x))
             .map(|node| node.name)
@@ -1980,6 +1989,16 @@ impl<'a> Driver<'a> {
 
     /// Capture the current state with the pointer resting on a control.
     pub fn state_hovering(&mut self, name: &str, target: &str) {
+        self.capture_hovering(name, target, 2);
+    }
+
+    /// Capture the current state with the pointer resting on a control until its tooltip shows.
+    pub fn state_with_tooltip(&mut self, name: &str, target: &str) {
+        // A tooltip waits half a second, and one frame here is a quarter second.
+        self.capture_hovering(name, target, 6);
+    }
+
+    fn capture_hovering(&mut self, name: &str, target: &str, steps: usize) {
         self.finish_capture_saves();
         self.states += 1;
         let label = format!("{:02}-{name}", self.states);
@@ -1987,7 +2006,7 @@ impl<'a> Driver<'a> {
             node.name == target && !matches!(node.role, Role::Label | Role::TextRun)
         });
         self.harness.hover_at(rect.center());
-        self.harness.run_steps(2);
+        self.harness.run_steps(steps);
         let expect_same = self.expect_same.take();
         self.capture(&label, self.base, 1.0, expect_same, Capture::Save);
         self.harness.remove_cursor();

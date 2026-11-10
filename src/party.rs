@@ -168,6 +168,109 @@ impl Party {
             })
     }
 
+    /// The party has members to show.
+    pub fn has_members(&self) -> bool {
+        !self.reader.members.is_empty()
+    }
+
+    /// Each member at a glance. An open fight's values come first, then tonight's fights,
+    /// then the sheet.
+    pub fn glances(
+        &self,
+        run: &std::collections::BTreeMap<uuid::Uuid, crate::encounter_run::FightRow>,
+    ) -> Vec<crate::party_bar::Glance> {
+        self.reader
+            .members
+            .iter()
+            .map(|member| {
+                let record = self.reader.sheets.get(&member.id);
+                let in_run = record.and_then(|r| run.get(&r.definition.splat_id));
+                let (hp, temp) = in_run
+                    .map(|row| (row.hp, row.temporary_hp))
+                    .or_else(|| {
+                        let (hp, temp) = self.tonight_values(record?)?;
+                        Some((Some(hp), temp))
+                    })
+                    .unwrap_or_else(|| {
+                        (
+                            record.map(|r| r.initial.hp),
+                            record.map_or(0, |r| r.initial.temporary_hp),
+                        )
+                    });
+                let stat = |key| record.and_then(|r| r.stat(key));
+                crate::party_bar::Glance {
+                    id: member.id.clone(),
+                    name: member.name.clone(),
+                    portrait: self.portrait(record),
+                    hp,
+                    max_hp: in_run.and_then(|row| row.max_hp).or(stat("max_hp")),
+                    temp,
+                    ac: stat("armor_class"),
+                    perception: stat("passive_perception"),
+                    insight: stat("passive_insight"),
+                    investigation: stat("passive_investigation"),
+                    spell_dc: record.and_then(spell_dc),
+                    conditions: in_run.map_or_else(
+                        || record.map_or_else(Vec::new, sheet_conditions),
+                        |row| row.conditions.clone(),
+                    ),
+                }
+            })
+            .collect()
+    }
+
+    /// Where the bar's numbers come from, as a status.
+    pub fn glance_source(&self, from_run: bool) -> crate::party_bar::Source {
+        let c = colors();
+        if from_run {
+            return crate::party_bar::Source {
+                icon: icons::RUN,
+                word: "From the open fight".to_owned(),
+                color: c.muted,
+            };
+        }
+        if let Some(carry) = self
+            .tonight
+            .as_ref()
+            .filter(|carry| carry.full || !carry.values.is_empty())
+        {
+            return crate::party_bar::Source {
+                icon: if carry.values.is_empty() {
+                    icons::LONG_REST
+                } else {
+                    icons::ENCOUNTERS
+                },
+                word: format!("After {}", carry.from),
+                color: c.muted,
+            };
+        }
+        match self
+            .reader
+            .sheets
+            .values()
+            .min_by_key(|record| record.source.fetched_at)
+        {
+            Some(oldest) => {
+                let fresh = freshness(oldest, self.connected);
+                crate::party_bar::Source {
+                    icon: fresh.icon,
+                    word: format!("Sheets fetched {}", record_age(oldest)),
+                    color: fresh.color,
+                }
+            }
+            None => crate::party_bar::Source {
+                icon: icons::WARN,
+                word: "No sheets yet".to_owned(),
+                color: c.muted,
+            },
+        }
+    }
+
+    /// Open this member's sheet the next time the page shows.
+    pub fn choose(&mut self, id: String) {
+        self.reader.select(id);
+    }
+
     pub fn show(&mut self, ui: &mut egui::Ui, session: Option<Session>, linked: bool) {
         let c = colors();
         let fetched = self
@@ -652,12 +755,7 @@ impl Party {
                         temporary_hp,
                         death_saves: record.initial.death_saves.clone(),
                         death_saves_shown: false,
-                        conditions: record
-                            .initial
-                            .conditions
-                            .iter()
-                            .filter_map(|condition| condition["name"].as_str().map(str::to_owned))
-                            .collect(),
+                        conditions: sheet_conditions(record),
                     });
                 sheet_page(ui, record, self.page, &self.search, live.as_ref());
                 if self.page == 0 {
@@ -810,12 +908,7 @@ impl SheetNow {
             max_hp: record.stat("max_hp").unwrap_or(record.initial.hp),
             temporary_hp: record.initial.temporary_hp,
             armor_class: record.stat("armor_class"),
-            conditions: record
-                .initial
-                .conditions
-                .iter()
-                .filter_map(|condition| condition["name"].as_str().map(str::to_owned))
-                .collect(),
+            conditions: sheet_conditions(record),
             slots,
         }
     }
@@ -929,15 +1022,29 @@ fn compare_right(hp_right: f32, at: usize) -> f32 {
     hp_right - HP_WIDTH - AC_WIDTH - (2 - at) as f32 * COMPARE_WIDTH
 }
 
+/// The conditions a sheet names.
+fn sheet_conditions(record: &EntitySnapshot) -> Vec<String> {
+    record
+        .initial
+        .conditions
+        .iter()
+        .filter_map(|condition| condition["name"].as_str().map(str::to_owned))
+        .collect()
+}
+
+/// The highest spell save DC on a sheet, for a caster.
+fn spell_dc(record: &EntitySnapshot) -> Option<i64> {
+    array(&record.character.casting["saveDcs"])
+        .iter()
+        .filter_map(|value| value["value"].as_i64())
+        .max()
+}
+
 fn compare_values(record: Option<&EntitySnapshot>) -> [String; 3] {
     let Some(record) = record else {
         return ["—"; 3].map(str::to_owned);
     };
-    let dc = array(&record.character.casting["saveDcs"])
-        .iter()
-        .filter_map(|value| value["value"].as_i64())
-        .max()
-        .map_or_else(|| "—".to_owned(), |dc| dc.to_string());
+    let dc = spell_dc(record).map_or_else(|| "—".to_owned(), |dc| dc.to_string());
     [
         val(record, "passive_perception"),
         val(record, "passive_insight"),
@@ -1006,13 +1113,7 @@ fn member_row(
             .collect::<Vec<_>>()
             .join(" / ")
     });
-    let conditions: Vec<String> = record.map_or_else(Vec::new, |r| {
-        r.initial
-            .conditions
-            .iter()
-            .filter_map(|condition| condition["name"].as_str().map(str::to_owned))
-            .collect()
-    });
+    let conditions = record.map_or_else(Vec::new, sheet_conditions);
     let mut summary = [
         level.map(|n| format!("Level {n}")).unwrap_or_default(),
         classes,

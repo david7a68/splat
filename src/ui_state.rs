@@ -60,6 +60,9 @@ pub struct UiState {
     /// How far a touchpad scroll moves content on this computer.
     #[serde(default)]
     pub touchpad_speed: crate::touchpad::TouchpadSpeed,
+    /// The DM showed or hid the party bar on the Session page.
+    #[serde(default)]
+    pub party_bar: Option<bool>,
 }
 
 #[derive(Default)]
@@ -154,6 +157,7 @@ mod tests {
             }),
             column_widths: BTreeMap::from([("navigation".to_owned(), 240.0)]),
             touchpad_speed: crate::touchpad::TouchpadSpeed::Twelve,
+            party_bar: Some(false),
         };
         store.save(&state);
         assert_eq!(Store::at(path.clone()).load(), state);

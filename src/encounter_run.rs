@@ -2168,6 +2168,15 @@ impl Run {
             name: self.name.clone(),
         }
     }
+    /// Each player in this fight as they are now, by the character's identity.
+    pub fn party_now(&self) -> BTreeMap<Uuid, FightRow> {
+        self.state
+            .participants
+            .iter()
+            .filter(|p| is_player(p))
+            .map(|p| (p.definition.id, FightRow::from(p)))
+            .collect()
+    }
     /// What the timeline records about this run.
     pub fn timeline_fact(&self) -> crate::timeline::RunFact {
         crate::timeline::RunFact {
@@ -3772,6 +3781,25 @@ pub struct FightRow {
     pub present: bool,
 }
 
+/// A player's character, rather than a creature.
+fn is_player(p: &Participant) -> bool {
+    p.definition.fields.contains_key("splat_external")
+}
+
+impl From<&Participant> for FightRow {
+    fn from(p: &Participant) -> Self {
+        Self {
+            name: p.name.clone(),
+            player: is_player(p),
+            hp: p.hp,
+            max_hp: p.max_hp,
+            temporary_hp: p.temporary_hp,
+            conditions: p.conditions.clone(),
+            present: p.present,
+        }
+    }
+}
+
 /// Check the same saved-run model as normal loading, without opening a campaign.
 pub(crate) fn check_saved_text(text: &str) -> Result<(), String> {
     let saved: SavedRun =
@@ -3802,7 +3830,7 @@ pub fn party_at_end(path: &Path, campaign: Uuid) -> Result<BTreeMap<Uuid, (i64, 
         .state
         .participants
         .iter()
-        .filter(|p| p.definition.fields.contains_key("splat_external"))
+        .filter(|p| is_player(p))
         .filter_map(|p| Some((p.definition.id, (p.hp?, p.temporary_hp))))
         .collect())
 }
@@ -3817,15 +3845,7 @@ pub fn fight_summary(path: &Path, campaign: Uuid) -> Result<FightSummary, String
             .order
             .iter()
             .filter_map(|index| state.participants.get(*index))
-            .map(|p| FightRow {
-                name: p.name.clone(),
-                player: p.definition.fields.contains_key("splat_external"),
-                hp: p.hp,
-                max_hp: p.max_hp,
-                temporary_hp: p.temporary_hp,
-                conditions: p.conditions.clone(),
-                present: p.present,
-            })
+            .map(FightRow::from)
             .collect(),
         log: state.log.iter().rev().cloned().collect(),
     })
