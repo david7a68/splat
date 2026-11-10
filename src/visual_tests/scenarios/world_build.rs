@@ -169,7 +169,7 @@ pub fn broken(d: &mut Driver<'_>) {
         "A new edit ends Undo reload and keeps the newly typed draft",
     );
     d.expect_same("Editing after reload restores the same draft as Undo reload; the recovery control is gone in both states.");
-    d.state("repair-edited-after-reload", Sizes::All);
+    d.assert_state_matches("repair-edited-after-reload", "repair-reload-undone");
     d.observe_both(
         "iter-18-A-world-lock",
         "A World repair states the campaign switch lock",
@@ -709,7 +709,10 @@ pub fn package_rename(d: &mut Driver<'_>) {
     d.click("Read the watch spell");
     d.wait_for_text("Watch Ashfall");
     d.expect_same("Restoring the moved package preserves the same linked reader content.");
-    d.state("package-folder-restored-with-links", Sizes::All);
+    d.assert_state_matches(
+        "package-folder-restored-with-links",
+        "renamed-entry-heading-fixed",
+    );
     let package = moved;
     search_library(d, "Ash Exposure");
     d.click_starting("Ash Exposure · ");
@@ -767,7 +770,7 @@ pub fn package_about(d: &mut Driver<'_>) {
     d.click("Undo package use");
     d.wait_for_text("Used here · 5 of 6 entries");
     d.expect_same("Undo package use restores the original package selection and About reader.");
-    d.state("package-use-undone", Sizes::All);
+    d.assert_state_matches("package-use-undone", "package-about");
     d.click(EDIT_MARKDOWN);
     let original = d.editor_text().unwrap();
     let renamed = crate::content_workspace::patch_fields(
@@ -909,7 +912,10 @@ pub fn package_manifest_broken(d: &mut Driver<'_>) {
     d.expect("Cinder Wolf");
     assert!(!d.has_containing("Not found"));
     d.expect_same("Deleting the manifest keeps the encounter's creature entries as before.");
-    d.state("manifest-restored-encounter-keeps-creatures", Sizes::All);
+    d.assert_state_matches(
+        "manifest-restored-encounter-keeps-creatures",
+        "manifest-invalid-encounter-keeps-creatures",
+    );
 }
 
 pub fn package_file_changed(d: &mut Driver<'_>) {
@@ -1191,7 +1197,7 @@ pub fn package_delete_entry(d: &mut Driver<'_>) {
     d.expect("No entry open");
     assert!(!d.has_containing("Ash Exposure · "));
     d.expect_same("The deleted entry stays absent after focus returns.");
-    d.state("deleted-draft-after-focus", Sizes::All);
+    d.assert_state_matches("deleted-draft-after-focus", "deleted-draft-let-go");
 }
 
 /// A copied file keeps its own save target until the DM repairs its identity.
@@ -1273,7 +1279,7 @@ pub fn package_duplicate_id(d: &mut Driver<'_>) {
         original_id
     );
     d.expect_same("Undo restores both identity warnings and the original copy reader.");
-    d.state("duplicate-identity-restored", Sizes::All);
+    d.assert_state_matches("duplicate-identity-restored", "duplicate-copy-reader");
     d.click("Make Cinder Wolf copy.md a separate entry");
     d.wait_for_text("Undo separate entry");
     d.expect("Cinder Wolf copy.md is now a separate entry.");
@@ -1807,7 +1813,10 @@ pub fn package_folder_copied(d: &mut Driver<'_>) {
     d.click_containing("· ashen-marches/");
     d.expect("Make Cinder Wolf.md in ashen-marches-copy/ a separate entry");
     d.expect_same("The duplicate identity view already selects this file and names both folders.");
-    d.state("same-filenames-name-the-folder", Sizes::All);
+    d.assert_state_matches(
+        "same-filenames-name-the-folder",
+        "manifest-only-hand-repair-keeps-both-files",
+    );
     let (copied_entries, _) = splat::content::read_directory(&copied).unwrap();
     let count = copied_entries
         .iter()
@@ -1826,7 +1835,10 @@ pub fn package_folder_copied(d: &mut Driver<'_>) {
     d.expect_same(
         "Undo restores the same duplicate identities and folder-specific repair actions.",
     );
-    d.state("copied-folder-identities-undone", Sizes::All);
+    d.assert_state_matches(
+        "copied-folder-identities-undone",
+        "manifest-only-hand-repair-keeps-both-files",
+    );
     d.click(&format!(
         "Make all {count} files in ashen-marches-copy/ separate entries"
     ));

@@ -19,6 +19,7 @@ mod formats_ui;
 mod hermetic;
 mod library;
 mod lookup;
+mod loot_editor;
 mod markdown_source;
 mod markdown_view;
 mod npc_generator;

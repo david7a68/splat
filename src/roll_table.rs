@@ -34,6 +34,20 @@ impl TableRoll {
         format!("{word} {value} on {}: {row}", self.dice)
     }
 
+    /// The number and its row's words, rolled on this stream or typed.
+    pub fn draw(&self, random: &mut Random) -> Result<(i64, String), String> {
+        let value = match self.typed {
+            Some(value) => value,
+            None => Dice::parse(&self.dice)?.roll(random, false)?.total,
+        };
+        let row = self
+            .rows
+            .iter()
+            .find(|row| (row.min..=row.max).contains(&value))
+            .ok_or_else(|| format!("{} rolled {value}, and no row has it.", self.dice))?;
+        Ok((value, row.text.clone()))
+    }
+
     /// Roll, or take the typed result, on this stream of dice.
     pub fn resolve(&self, random: &mut Random) -> Result<String, String> {
         if let Some(value) = self.typed {
