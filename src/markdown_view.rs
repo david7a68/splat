@@ -141,9 +141,7 @@ fn show_with_density(ui: &mut egui::Ui, markdown: &str, dense: bool) {
             "reader_link_index",
         ))
     });
-    let from = ui
-        .ctx()
-        .data(|data| data.get_temp::<uuid::Uuid>(egui::Id::new("reader_document")));
+    let from = reader_document(ui);
     // Each reader's links have their own ids, so another reader with the same words cannot
     // take a link's focus.
     target.reader = from;
@@ -721,9 +719,7 @@ fn reader_table(
                 } else {
                     egui::scroll_area::ScrollBarVisibility::AlwaysHidden
                 };
-                let document = ui
-                    .ctx()
-                    .data(|data| data.get_temp::<uuid::Uuid>(egui::Id::new("reader_document")));
+                let document = reader_document(ui);
                 let surface = ui
                     .ctx()
                     .data(|data| data.get_temp::<egui::Id>(egui::Id::new("reader_surface")));
@@ -1071,17 +1067,12 @@ fn draw_with_links(
             })
             .collect();
         if parts.first().is_some_and(egui::Response::has_focus) {
-            // The ring sits just outside the words, so it never cuts a letter, and inside the
-            // paragraph, so a link at the start of a line does not reach past the text edge.
+            // The ring sits `XS / 2` outside the words, so it never covers a letter, even for a
+            // link at the start of a line. It stays inside the reader's visible area, which
+            // keeps a gutter beside the text for it.
             for part in &words[index] {
                 let ring = part.rect.expand2(egui::vec2(design::XS / 2.0, 0.0));
-                design::focus_ring(
-                    ui,
-                    ring.intersect(egui::Rect::from_x_y_ranges(
-                        response.rect.x_range(),
-                        ring.y_range(),
-                    )),
-                );
+                design::focus_ring(ui, ring.intersect(ui.clip_rect()));
             }
         }
         // A click by key or pointer wins over the pointer resting on another row of the link.
@@ -1094,9 +1085,7 @@ fn draw_with_links(
         };
         match press(ui, pressed, destination) {
             Some(LinkTarget::Note(note)) => {
-                let from = ui
-                    .ctx()
-                    .data(|data| data.get_temp::<uuid::Uuid>(egui::Id::new("reader_document")));
+                let from = reader_document(ui);
                 send_note_link(ui.ctx(), note.clone(), from);
             }
             Some(LinkTarget::Lookup(words)) => ui.ctx().data_mut(|data| {
@@ -1201,6 +1190,15 @@ fn lift_link_rows(
     job: &mut LayoutJob,
     links: &[(std::ops::Range<usize>, LinkTarget)],
 ) {
+    // Reader prose is already `XL` tall, so it needs no second layout.
+    if job.sections.iter().all(|section| {
+        section
+            .format
+            .line_height
+            .is_some_and(|line| line >= design::XL)
+    }) {
+        return;
+    }
     let mut measure = job.clone();
     // The width the paragraph's label wraps at.
     measure.wrap.max_width = ui.available_width();
@@ -1261,6 +1259,43 @@ fn lift_link_rows(
         }
     }
     job.sections = sections;
+}
+
+/// The document the reader being drawn shows, if it shows one. A page with a document sets
+/// `reader_document` just before its reader. The first reader to read it takes it, with the pass
+/// and the panel it was taken in, so the rest of that page's reader shares it. A reader in
+/// another panel or a later pass, with no new value, has no document: it never takes the one
+/// that another page left behind (Sessions notes and Lookup's written-note card have none).
+fn reader_document(ui: &egui::Ui) -> Option<uuid::Uuid> {
+    #[derive(Clone, Copy)]
+    struct Taken {
+        pass: u64,
+        panel: egui::Id,
+        document: uuid::Uuid,
+    }
+    let pass = ui.ctx().cumulative_pass_nr();
+    let panel = ui
+        .stack()
+        .iter()
+        .find(|frame| frame.is_panel_ui() || frame.is_area_ui())
+        .map_or(egui::Id::NULL, |frame| frame.id);
+    let taken_id = egui::Id::new("markdown_reader_document_taken");
+    ui.ctx().data_mut(|data| {
+        if let Some(document) = data.remove_temp::<uuid::Uuid>(egui::Id::new("reader_document")) {
+            data.insert_temp(
+                taken_id,
+                Taken {
+                    pass,
+                    panel,
+                    document,
+                },
+            );
+            return Some(document);
+        }
+        data.get_temp::<Taken>(taken_id)
+            .filter(|taken| taken.pass == pass && taken.panel == panel)
+            .map(|taken| taken.document)
+    })
 }
 
 /// The paragraph's links keep their ids, and so keyboard focus, when the layout around them
@@ -1440,9 +1475,7 @@ pub(crate) fn press<'a>(
             data.get_temp::<Arc<crate::lookup::ContentIndex>>(egui::Id::new("reader_link_index"))
         })
     {
-        let from = ui
-            .ctx()
-            .data(|data| data.get_temp::<uuid::Uuid>(egui::Id::new("reader_document")));
+        let from = reader_document(ui);
         if let crate::world::Go::Item(at, _) = index.resolve_link(note, from)
             && !index.items[at].summary().is_empty()
         {
@@ -2359,7 +2392,7 @@ mod tests {
         None
     }
 
-    const SHORT_LINK_CASES: [&str; 7] = [
+    const SHORT_LINK_CASES: [&str; 8] = [
         // Side by side, with no space between them.
         "[Jo](splat-note:Jo)[Li](splat-note:Li)",
         "Ask [Jo](splat-note:Jo) or [Li](splat-note:Li) about the ferry.",
@@ -2373,15 +2406,33 @@ mod tests {
         "[Jo](splat-missing:Jo)[Li](splat-note:Li) and [Oskar](splat-note:Oskar).",
         // The longest realistic words around short ones, so the paragraph wraps.
         "On the second crossing [Jo](splat-note:Jo) hands the rope to [the ferry master of the inner sea and the outer islands](splat-note:Wren), then [Li](splat-note:Li) ties it off.",
+        // Short links in bold.
+        "**[Jo](splat-note:Jo)** rows and **[Li](splat-note:Li)** steers.",
     ];
 
     /// The links each case holds, by their first part.
-    const SHORT_LINK_COUNTS: [usize; 7] = [2, 2, 1, 3, 26, 3, 3];
+    const SHORT_LINK_COUNTS: [usize; 8] = [2, 2, 1, 3, 26, 3, 3, 2];
+
+    /// Every case, with a short `[[Name|Li]]` alias as World notes write it.
+    fn short_link_cases() -> Vec<(&'static str, usize)> {
+        let alias: &'static str = Box::leak(
+            crate::world::with_links(
+                "[[Lianne Marsh|Li]] and [[Jo]] row the ferry.",
+                &std::collections::HashMap::new(),
+            )
+            .into_boxed_str(),
+        );
+        assert!(alias.contains("splat-note:"), "AD1-alias-case: {alias}");
+        SHORT_LINK_CASES
+            .into_iter()
+            .zip(SHORT_LINK_COUNTS)
+            .chain([(alias, 2)])
+            .collect()
+    }
 
     #[test]
     fn iter17_a_ad1_every_link_target_is_24_square_on_its_own_row() {
-        for (case, (markdown, links)) in SHORT_LINK_CASES.iter().zip(SHORT_LINK_COUNTS).enumerate()
-        {
+        for (case, (markdown, links)) in short_link_cases().into_iter().enumerate() {
             // Reader prose (24 px lines), compact prose (22 px) and compact rows (18 px).
             for (width, dense) in [(480.0, false), (360.0, false), (480.0, true)] {
                 let harness = reader_at(markdown, width, dense);
@@ -2645,7 +2696,7 @@ mod tests {
     }
 
     #[test]
-    fn iter17_a_limit3_the_ring_stays_inside_the_paragraph_for_a_line_start_link() {
+    fn iter17_a_limit3_the_ring_never_covers_a_letter_of_a_line_start_link() {
         let mut harness = reader("[Wren](splat-note:Wren) runs the ferry at dusk.");
         harness.key_press(egui::Key::Tab);
         harness.run_ok();
@@ -2654,25 +2705,108 @@ mod tests {
             Some("Wren (opens Wren)"),
             "L3-focus"
         );
-        let rings: Vec<egui::Rect> = harness
+        let rings: Vec<(egui::Rect, egui::Rect)> = harness
             .output()
             .shapes
             .iter()
             .filter_map(|shape| match &shape.shape {
-                egui::Shape::Rect(rect) if rect.stroke.color == colors().focus => Some(rect.rect),
+                egui::Shape::Rect(rect) if rect.stroke.color == colors().focus => {
+                    Some((rect.rect, shape.clip_rect))
+                }
                 _ => None,
             })
             .collect();
-        let paragraph = galleys_in(&harness)
-            .iter()
+        // Every glyph of the link's words, on the screen.
+        let (pos, galley) = galleys_in(&harness)
+            .into_iter()
             .find(|(_, galley)| galley.job.text == "Wren runs the ferry at dusk.")
-            .map(|(pos, galley)| galley.rect.translate(pos.to_vec2()))
             .expect("the paragraph is drawn");
+        let row = &galley.rows[0];
+        let glyphs: Vec<egui::Rect> = row.glyphs[..4]
+            .iter()
+            .map(|glyph| {
+                egui::Rect::from_x_y_ranges(
+                    pos.x + row.pos.x + glyph.pos.x
+                        ..=pos.x + row.pos.x + glyph.pos.x + glyph.advance_width,
+                    pos.y + row.pos.y..=pos.y + row.pos.y + row.size.y,
+                )
+            })
+            .collect();
+        assert_eq!(rings.len(), 1, "L3-one-ring: {rings:?}");
+        let (ring, clip) = rings[0];
+        let inner = ring.shrink(design::FOCUS_WIDTH);
         assert!(
-            rings.len() == 1
-                && rings[0].left() >= paragraph.left() - 0.01
-                && rings[0].right() <= paragraph.right() + 0.01,
-            "L3-ring-inside: rings {rings:?}, paragraph {paragraph:?}"
+            glyphs.iter().all(|glyph| {
+                inner.left() >= ring.left()
+                    && glyph.left() >= inner.left() - 0.01
+                    && glyph.right() <= inner.right() + 0.01
+            }),
+            "L3-ring-off-letters: ring {ring:?}, inner {inner:?}, glyphs {glyphs:?}"
+        );
+        assert!(
+            clip.contains_rect(ring),
+            "L3-ring-in-clip: ring {ring:?}, clip {clip:?}"
+        );
+    }
+
+    #[test]
+    fn iter17_a_limit1_a_reader_without_a_document_keeps_its_ids_beside_one_with_a_document() {
+        const SESSION: &str =
+            "Ask [Wren](splat-note:Wren) or [Oskar](splat-note:Oskar) about the bells.";
+        let document = uuid::Uuid::from_u128(7);
+        // Lookup, a side panel, draws before the page. Its reader shows a document.
+        let mut harness = egui_kittest::Harness::builder()
+            .with_size(egui::vec2(900.0, 480.0))
+            .build_state(
+                move |ctx, lookup: &mut bool| {
+                    if *lookup {
+                        egui::SidePanel::right("lookup").show(ctx, |ui| {
+                            ctx.data_mut(|data| {
+                                data.insert_temp(egui::Id::new("reader_document"), document)
+                            });
+                            show_reader(ui, "Wren runs the ferry at dusk.");
+                        });
+                    }
+                    egui::CentralPanel::default().show(ctx, |ui| show_reader(ui, SESSION));
+                },
+                false,
+            );
+        design::theme::install(&harness.ctx);
+        harness.run_ok();
+        harness.key_press(egui::Key::Tab);
+        harness.run_ok();
+        harness.key_press(egui::Key::Tab);
+        harness.run_ok();
+        assert_eq!(
+            focused(&harness).as_deref(),
+            Some("Oskar (opens Oskar)"),
+            "L1-panel-start"
+        );
+        *harness.state_mut() = true;
+        harness.run_ok();
+        assert_eq!(
+            focused(&harness).as_deref(),
+            Some("Oskar (opens Oskar)"),
+            "L1-panel-focus-stays"
+        );
+        harness.key_press(egui::Key::Enter);
+        harness.step();
+        assert_eq!(
+            take_note_link(&harness.ctx).as_deref(),
+            Some("Oskar"),
+            "L1-panel-enter"
+        );
+        let from = harness.ctx.data(|data| {
+            data.get_temp::<Option<uuid::Uuid>>(egui::Id::new("clicked_reader_document"))
+        });
+        assert_eq!(from, Some(None), "L1-panel-from-none");
+        // A document set once and then not again does not stay with a later pass.
+        *harness.state_mut() = false;
+        harness.run_ok();
+        assert_eq!(
+            focused(&harness).as_deref(),
+            Some("Oskar (opens Oskar)"),
+            "L1-panel-after"
         );
     }
 }

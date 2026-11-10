@@ -71,6 +71,35 @@ fn write_notes<const N: usize>(d: &mut Driver<'_>, notes: [(String, &str, &str, 
     d.settle();
 }
 
+/// The one focus ring, on Jo at the start of the line: its inner edge is outside each of Jo's
+/// glyphs, and the whole ring is inside the clip of the pane it is painted in.
+fn ring_clear_of_letters(d: &mut Driver<'_>, size: (f32, f32)) -> (bool, String) {
+    d.at_size(size, |d| {
+        let rings = d.focus_rings();
+        let mut glyphs = Vec::new();
+        d.each_painted_text(|text, _| {
+            if text.galley.job.text.contains("work the inner ferry") {
+                let row = &text.galley.rows[0];
+                for glyph in row.glyphs.iter().take(2) {
+                    let left = text.pos.x + row.pos.x + glyph.pos.x;
+                    glyphs.push((glyph.chr, left, left + glyph.advance_width));
+                }
+            }
+        });
+        let detail = format!("rings {rings:?}, glyphs {glyphs:?}");
+        let [(ring, clip)] = rings[..] else {
+            return (false, detail);
+        };
+        let inner = ring.shrink(crate::design::FOCUS_WIDTH);
+        let off_letters = glyphs.len() == 2
+            && glyphs.iter().map(|(chr, _, _)| *chr).eq(['J', 'o'])
+            && glyphs.iter().all(|(_, left, right)| {
+                *left >= inner.left() - 0.01 && *right <= inner.right() + 0.01
+            });
+        (off_letters && clip.contains_rect(ring), detail)
+    })
+}
+
 /// Two links in view, at a window size: each target is at least XL square, the first ends
 /// before the second begins, and they share a line.
 fn pair_holds_xl(d: &mut Driver<'_>, first: &str, second: &str, size: (f32, f32)) -> bool {
@@ -213,6 +242,16 @@ pub fn run(d: &mut Driver<'_>) {
         focused,
         "Tab reaches Jo, the first of the side-by-side links",
     );
+    for (size, at) in [(SMALL, "960"), (LARGE, "1920")] {
+        let (clear, detail) = ring_clear_of_letters(d, size);
+        d.observe(
+            &format!("iter-17-A-AD1-ring-{at}"),
+            clear,
+            format!(
+                "At {at}, Jo's focus ring covers no letter and stays inside the reader: {detail}"
+            ),
+        );
+    }
     d.state("prose-short-links-first-focused", Sizes::All);
 
     // AD1 in World.

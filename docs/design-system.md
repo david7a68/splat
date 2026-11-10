@@ -286,8 +286,10 @@ starts after that space. The line wraps if it must. Two links side by side have 
 keeps its own underline. Where the body line is shorter than 24 px (compact prose and compact rows), a line that
 holds a link grows to 24 px and keeps its baselines. So every link target is at least 24 × 24 px, stays on its
 own line, and never overlaps another link's target. Links 24 px or wider keep their layout, and the paragraph's
-words do not change. The focus ring of a link at the start of a line stays inside the paragraph. Focus stays on
-the link when the layout around it changes, and another reader with the same words does not take it.
+words do not change. The focus ring sits `XS / 2` outside the link's words, so it never covers a letter, even at
+the start of a line, and it stays inside the reader's visible area (World and Library keep an `L` gutter beside
+the text). Focus stays on the link when the layout around it changes, and another reader with the same words, or
+a reader with a document beside one without (Lookup beside a Sessions note), does not take it.
 Every reader resolves `[[Name]]`, `[[Name#Heading]]` and `[[Name|text]]` against World notes and entries the
 campaign can use. Duplicate names open a chooser. Missing names keep their words, a dotted underline and `Not
 found in this campaign` on hover. Broken campaign and package links also have a warning icon before the dotted
