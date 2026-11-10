@@ -198,7 +198,9 @@ same words as the close dialog.
 
 Run cards show current and maximum HP and one compact **Add by hand** summary.
 Live run rows keep their first condition and shorten change bonuses first. Setup
-shows places once every present participant has initiative. Recording recovery
+reserves the place column from the start and shows places once every present participant has initiative,
+even while the last field has focus. Only the tie column waits for blur. Hidden-condition counts keep
+the word **more**, including beside sync state. Recording recovery
 keeps its state in the session list; a missing input offers **Choose an input**.
 **Process again** reuses the raw transcript and names what it sends in its confirmation.
 **Continue processing** also names what it sends. With a complete transcript, it says
@@ -359,6 +361,7 @@ Close the open run before saving run settings.
 The run panel groups participant tabs and fight tabs. `Correct` changes a participant's
 values. A blocked Undo shows **Nothing to undo**, or **Nothing to undo since reopening**.
 `Add to fight` opens the Arrivals panel for a creature or a prepared group; a blank initiative total rolls it.
+Group Add buttons share a fixed slot, so all Initiative fields align.
 `Ctrl+G` opens the same panel in one step.
 Unsaved runs offer **Save as a new run and close** in the close dialog.
 Automatic combat resolution and simulation integration remain later work.
