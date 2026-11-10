@@ -24,6 +24,61 @@ pub mod world_build;
 const READER: Pos2 = pos2(720.0, 400.0);
 const ENTRY_LIST: Pos2 = pos2(400.0, 400.0);
 
+/// iter-15-E: a file-conflict message's choices start at its text edge, not at its bar. The safe
+/// choice comes first; the red one follows exactly `L` after it on the same line (every captured
+/// size has room for both). `below`, when given, is text that must stay under both choices. The
+/// check runs at the size being captured.
+fn choices_at_text(
+    d: &mut Driver<'_>,
+    id: &str,
+    message: &str,
+    safe: &str,
+    red: &str,
+    below: Option<&str>,
+) {
+    let text = d.painted_rect_in(message, egui::Rect::EVERYTHING);
+    let (safe_rect, red_rect) = (d.place_of(safe), d.place_of(red));
+    let below_rect = below.map(|words| d.painted_rect_in(words, egui::Rect::EVERYTHING));
+    let size = d.window_size();
+    let (ok, detail) = match (text, safe_rect, red_rect) {
+        (Some(text), Some(safe_rect), Some(red_rect)) => {
+            let at_text = (safe_rect.left() - text.left()).abs() < 1.0;
+            let one_line = (safe_rect.center().y - red_rect.center().y).abs() < 1.0;
+            let gap = red_rect.left() - safe_rect.right();
+            let red_placed = one_line && (gap - crate::design::L).abs() < 0.5;
+            let stays_below = match below_rect {
+                None => true,
+                Some(Some(rect)) => rect.top() >= safe_rect.bottom().max(red_rect.bottom()),
+                Some(None) => false,
+            };
+            (
+                at_text && red_placed && stays_below && text.bottom() <= safe_rect.top(),
+                format!(
+                    "At {size:?}: text x {:.1}, {safe} x {:.1}; {red} x {:.1}, {} gap {gap:.1}; {}",
+                    text.left(),
+                    safe_rect.left(),
+                    red_rect.left(),
+                    if one_line {
+                        "same line,"
+                    } else {
+                        "not on one line,"
+                    },
+                    match below {
+                        Some(words) if stays_below => format!("{words} stays below"),
+                        Some(words) => format!("{words} is not below"),
+                        None => "nothing below to check".into(),
+                    }
+                ),
+            )
+        }
+        _ => (
+            false,
+            format!("At {size:?}: missing message text, {safe} or {red}"),
+        ),
+    };
+    d.observe(id, ok, detail);
+}
+
 /// FT-2: the run's Undo button always shows the word Undo, at every captured size, and keeps
 /// its full action as its accessible name.
 fn undo_keeps_its_word(d: &mut Driver<'_>, action: &str) {
@@ -468,6 +523,14 @@ pub mod library_author {
             "An external change keeps the draft's words, and offers overwrite, reload and the disk version",
         );
         d.state_prepared("save-conflict", Sizes::All, |d| {
+            choices_at_text(
+                d,
+                "iter-15-E-AD3-library",
+                CHANGED_ON_DISK,
+                OVERWRITE,
+                RELOAD_DISK,
+                Some("YOUR DRAFT"),
+            );
             // Each column is (width - gap) / 2 wide, so the second starts (width + gap) / 2 after
             // the first; the theme's gap is S. At 1920x1080 the side-by-side comparison takes the
             // full pane, wider than the source editor (a 720 px cap measures exactly 720).
